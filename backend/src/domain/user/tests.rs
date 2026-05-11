@@ -10,6 +10,7 @@ use serde_json::json;
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 const VALID_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+const VALID_CREATED_AT: &str = "2026-05-01T12:00:00Z";
 
 #[derive(Debug, Clone)]
 struct TestUserId(String);
@@ -91,6 +92,11 @@ fn valid_display_name() -> TestDisplayName {
     TestDisplayName::valid()
 }
 
+fn valid_created_at() -> Result<chrono::DateTime<chrono::Utc>, chrono::ParseError> {
+    chrono::DateTime::parse_from_rfc3339(VALID_CREATED_AT)
+        .map(|value| value.with_timezone(&chrono::Utc))
+}
+
 #[rstest]
 fn accepts_minimum_length(valid_id: TestUserId) {
     let name = "a".repeat(DISPLAY_NAME_MIN);
@@ -166,11 +172,18 @@ fn try_new_rejects_too_long_display_name(valid_id: TestUserId) {
 }
 
 #[rstest]
-fn try_new_accepts_valid_inputs(valid_id: TestUserId, valid_display_name: TestDisplayName) {
-    let user = User::try_from_strings(valid_id.as_ref(), valid_display_name.as_ref())
-        .expect("valid inputs");
+fn try_new_accepts_valid_inputs(
+    valid_id: TestUserId,
+    valid_display_name: TestDisplayName,
+) -> TestResult {
+    let created_at = valid_created_at()?;
+    let user =
+        User::try_from_strings_at(valid_id.as_ref(), valid_display_name.as_ref(), created_at)
+            .expect("valid inputs");
     assert_eq!(user.id().as_ref(), valid_id.as_ref());
     assert_eq!(user.display_name().as_ref(), valid_display_name.as_ref());
+    assert_eq!(user.created_at(), created_at);
+    Ok(())
 }
 
 #[rstest]
@@ -203,11 +216,13 @@ fn display_name_rejects_forbidden_characters(valid_id: TestUserId) {
 fn serde_round_trips_alias(valid_id: TestUserId, valid_display_name: TestDisplayName) {
     let camel = json!({
         "id": valid_id.as_ref(),
-        "displayName": valid_display_name.as_ref()
+        "displayName": valid_display_name.as_ref(),
+        "createdAt": VALID_CREATED_AT
     });
     let snake = json!({
         "id": valid_id.as_ref(),
-        "display_name": valid_display_name.as_ref()
+        "display_name": valid_display_name.as_ref(),
+        "created_at": VALID_CREATED_AT
     });
     let from_camel: User = serde_json::from_value(camel).expect("camelCase");
     let from_snake: User = serde_json::from_value(snake).expect("snake_case");
@@ -218,7 +233,28 @@ fn serde_round_trips_alias(valid_id: TestUserId, valid_display_name: TestDisplay
         value.get("displayName").and_then(|v| v.as_str()),
         Some(valid_display_name.as_ref())
     );
+    assert_eq!(
+        value.get("createdAt").and_then(|v| v.as_str()),
+        Some(VALID_CREATED_AT)
+    );
     assert!(value.get("display_name").is_none());
+    assert!(value.get("created_at").is_none());
+}
+
+#[rstest]
+fn serde_accepts_legacy_payload_without_created_at(
+    valid_id: TestUserId,
+    valid_display_name: TestDisplayName,
+) {
+    let value = json!({
+        "id": valid_id.as_ref(),
+        "displayName": valid_display_name.as_ref()
+    });
+
+    let user: User = serde_json::from_value(value).expect("legacy user payload");
+
+    assert_eq!(user.id().as_ref(), valid_id.as_ref());
+    assert_eq!(user.display_name().as_ref(), valid_display_name.as_ref());
 }
 
 #[given("a valid user payload")]

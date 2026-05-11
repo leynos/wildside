@@ -229,7 +229,7 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
 
 ### 4.2. Endpoint adoption
 
-- [ ] 4.2.1. Replace offset pagination in `GET /api/users` with the new crate,
+- [x] 4.2.1. Replace offset pagination in `GET /api/users` with the new crate,
   including Diesel filters that respect `(created_at, id)` ordering and bb8
   connection pooling.
 - [ ] 4.2.2. Update the repository layer to surface pagination-aware errors

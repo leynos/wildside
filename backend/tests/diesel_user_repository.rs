@@ -13,9 +13,11 @@
 //! for each step.
 use std::sync::{Arc, Mutex};
 
-use backend::domain::ports::{UserPersistenceError, UserRepository};
-use backend::domain::{DisplayName, User, UserId};
+use backend::domain::ports::{ListUsersPageRequest, UserPersistenceError, UserRepository};
+use backend::domain::{DisplayName, User, UserCursorKey, UserId};
 use backend::outbound::persistence::{DbPool, DieselUserRepository, PoolConfig};
+use chrono::{DateTime, Utc};
+use pagination::{Cursor, Direction};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
@@ -43,7 +45,18 @@ fn sample_display_name() -> DisplayName {
 
 #[fixture]
 fn sample_user(sample_user_id: UserId, sample_display_name: DisplayName) -> User {
-    User::new(sample_user_id, sample_display_name)
+    User::with_current_timestamp(sample_user_id, sample_display_name)
+}
+
+fn fixture_timestamp(value: &str) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(value)
+        .expect("fixture timestamp is valid")
+        .with_timezone(&Utc)
+}
+
+fn paginated_user(id: &str, display_name: &str, created_at: &str) -> User {
+    User::try_from_strings_at(id, display_name, fixture_timestamp(created_at))
+        .expect("fixture user is valid")
 }
 
 // -----------------------------------------------------------------------------
@@ -282,6 +295,69 @@ fn diesel_find_nonexistent_returns_none(diesel_world: Option<SharedContext>) {
     assert!(
         result.expect("query succeeds").is_none(),
         "nonexistent user should return None"
+    );
+}
+
+#[rstest]
+fn diesel_list_page_uses_created_at_id_keyset_order(diesel_world: Option<SharedContext>) {
+    let Some(world) = diesel_world else {
+        eprintln!("SKIP-TEST-CLUSTER: diesel_list_page_uses_created_at_id_keyset_order skipped");
+        return;
+    };
+
+    let users = vec![
+        paginated_user(
+            "11111111-1111-1111-1111-111111111111",
+            "Ada One",
+            "2026-01-01T00:00:00Z",
+        ),
+        paginated_user(
+            "22222222-2222-2222-2222-222222222222",
+            "Ada Two",
+            "2026-01-02T00:00:00Z",
+        ),
+        paginated_user(
+            "33333333-3333-3333-3333-333333333333",
+            "Ada Three",
+            "2026-01-03T00:00:00Z",
+        ),
+        paginated_user(
+            "44444444-4444-4444-4444-444444444444",
+            "Ada Four",
+            "2026-01-04T00:00:00Z",
+        ),
+    ];
+
+    with_context_async(
+        &world,
+        |_| users,
+        |repo, users| async move {
+            for user in users.iter().rev() {
+                repo.upsert(user).await?;
+            }
+
+            let first_page = repo.list_page(ListUsersPageRequest::new(None, 2)).await?;
+            assert_eq!(first_page.as_slice(), &users[0..3]);
+
+            let next_cursor =
+                Cursor::with_direction(UserCursorKey::from(&users[0]), Direction::Next);
+            let next_page = repo
+                .list_page(ListUsersPageRequest::new(Some(next_cursor), 2))
+                .await?;
+            assert_eq!(next_page.as_slice(), &users[1..4]);
+
+            let prev_cursor =
+                Cursor::with_direction(UserCursorKey::from(&users[3]), Direction::Prev);
+            let prev_page = repo
+                .list_page(ListUsersPageRequest::new(Some(prev_cursor), 2))
+                .await?;
+            assert_eq!(prev_page.as_slice(), &users[0..3]);
+
+            Ok::<(), UserPersistenceError>(())
+        },
+        |_, result| {
+            result.expect("paginated list succeeds");
+        },
     );
 }
 

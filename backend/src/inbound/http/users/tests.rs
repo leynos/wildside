@@ -198,16 +198,90 @@ async fn list_users_returns_camel_case_json() -> TestResult {
     assert!(users_res.status().is_success());
     let body = actix_test::read_body(users_res).await;
     let value: Value = serde_json::from_slice(&body)?;
+    assert_eq!(value.get("limit").and_then(Value::as_u64), Some(20));
+    let links = value
+        .get("links")
+        .and_then(Value::as_object)
+        .ok_or_else(|| io::Error::other("expected links object"))?;
+    assert!(
+        links
+            .get("self")
+            .and_then(Value::as_str)
+            .is_some_and(|link| link.ends_with("/api/v1/users?limit=20"))
+    );
+    assert!(links.get("next").is_none());
+    assert!(links.get("prev").is_none());
+
     let first = value
-        .as_array()
-        .ok_or_else(|| io::Error::other("expected users response array"))?
+        .get("data")
+        .and_then(Value::as_array)
+        .ok_or_else(|| io::Error::other("expected users response data array"))?
         .first()
         .ok_or_else(|| io::Error::other("expected at least one user in response"))?;
     assert_eq!(
         first.get("displayName").and_then(Value::as_str),
         Some("Ada Lovelace")
     );
+    assert!(first.get("createdAt").is_some());
     assert!(first.get("display_name").is_none());
+    Ok(())
+}
+
+#[rstest]
+#[case("/api/v1/users?limit=0")]
+#[case("/api/v1/users?limit=200")]
+#[case("/api/v1/users?limit=not-a-number")]
+#[actix_web::test]
+async fn list_users_rejects_invalid_limits(#[case] path: &str) -> TestResult {
+    let app = actix_test::init_service(test_app()).await;
+    let cookie = login_and_get_cookie(&app).await?;
+
+    let users_req = actix_test::TestRequest::get()
+        .uri(path)
+        .cookie(cookie)
+        .to_request();
+    let users_res = actix_test::call_service(&app, users_req).await;
+
+    assert_eq!(users_res.status(), actix_web::http::StatusCode::BAD_REQUEST);
+    let body = actix_test::read_body(users_res).await;
+    let value: Value = serde_json::from_slice(&body)?;
+    assert_eq!(
+        value.get("message").and_then(Value::as_str),
+        Some("limit must be between 1 and 100")
+    );
+    let details = get_details_object(&value)?;
+    assert_eq!(details.get("field").and_then(Value::as_str), Some("limit"));
+    assert_eq!(
+        details.get("code").and_then(Value::as_str),
+        Some("invalid_limit")
+    );
+    Ok(())
+}
+
+#[actix_web::test]
+async fn list_users_rejects_invalid_cursor() -> TestResult {
+    let app = actix_test::init_service(test_app()).await;
+    let cookie = login_and_get_cookie(&app).await?;
+
+    let users_req = actix_test::TestRequest::get()
+        .uri("/api/v1/users?cursor=not-a-cursor")
+        .cookie(cookie)
+        .to_request();
+    let users_res = actix_test::call_service(&app, users_req).await;
+
+    assert_eq!(users_res.status(), actix_web::http::StatusCode::BAD_REQUEST);
+    let body = actix_test::read_body(users_res).await;
+    let value: Value = serde_json::from_slice(&body)?;
+    assert_eq!(
+        value.get("message").and_then(Value::as_str),
+        Some("cursor is invalid")
+    );
+    let details = get_details_object(&value)?;
+    assert_eq!(details.get("field").and_then(Value::as_str), Some("cursor"));
+    assert_eq!(
+        details.get("code").and_then(Value::as_str),
+        Some("invalid_cursor")
+    );
     Ok(())
 }
 

@@ -24,7 +24,7 @@ impl UserProfileQuery for FixtureUserProfileQuery {
     async fn fetch_profile(&self, user_id: &UserId) -> Result<User, Error> {
         let display_name = DisplayName::new("Ada Lovelace")
             .map_err(|err| Error::internal(format!("invalid fixture display name: {err}")))?;
-        Ok(User::new(user_id.clone(), display_name))
+        Ok(User::with_current_timestamp(user_id.clone(), display_name))
     }
 }
 
