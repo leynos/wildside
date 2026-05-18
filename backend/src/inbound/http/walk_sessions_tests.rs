@@ -1,5 +1,7 @@
 //! Tests for walk session HTTP handlers.
 
+#![cfg(test)]
+
 use super::*;
 use crate::domain::ports::{
     FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureLoginService,

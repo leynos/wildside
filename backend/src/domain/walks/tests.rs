@@ -1,5 +1,7 @@
 //! Regression coverage for walk session domain types.
 
+#![cfg(test)]
+
 use std::{error::Error as StdError, io};
 
 use chrono::{Duration, TimeZone, Utc};

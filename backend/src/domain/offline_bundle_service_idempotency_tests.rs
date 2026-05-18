@@ -1,5 +1,7 @@
 //! Additional idempotency and device validation tests for offline bundle service.
 
+#![cfg(test)]
+
 use std::{error::Error as StdError, io, sync::Arc};
 
 use chrono::{DateTime, Utc};

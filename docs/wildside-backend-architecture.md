@@ -1552,9 +1552,12 @@ before invoking a port. Canonical examples include:
   validation, duration bounds, and non-empty interest selections.
 - `InterestThemeId` and `UserId` — newtypes around UUIDs guaranteeing correct
   namespace usage and enabling compile-time distinction between identifiers.
-- `CacheKey` — encapsulates the canonical hash input for caching so that the
-  service, rather than the handler, is responsible for namespacing and TTL
-  rules.
+- `RouteCacheKey` — owns canonical cache-key derivation for route requests
+  via `RouteCacheKey::for_route_request`, which applies namespacing and
+  request normalization inside the domain layer. The outbound adapter
+  (`backend/src/outbound/cache/redis_route_cache.rs`, type `RedisRouteCache`)
+  only stores and retrieves pre-derived `RouteCacheKey` values; handlers and
+  the Redis adapter never canonicalize payloads themselves.
 - `LoginCredentials` — trims usernames, zeroizes passwords via the `zeroize`
   crate, and exposes `LoginCredentials::try_from_parts` so `POST /api/v1/login`
   handlers never poke at DTO fields directly.
@@ -1916,12 +1919,18 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
    pauses requests after repeated failures. Responses merge into `pois` through
    the same `UPSERT` path.
 3. **Route caching:** Completed routes persist in PostgreSQL and are cached in
-   Redis using canonicalised keys. The canonical form sorts interest IDs,
-   rounds coordinates to five decimal places, serialises JSON with stable key
+   Redis using canonicalized keys. The canonical form sorts the three theme
+   arrays (`themes`, which holds slug-style names, plus `themeIds` and
+   `interestThemeIds`, which hold UUID identifiers),
+   rounds coordinates to five decimal places, serializes JSON with stable key
    ordering, and hashes the payload with SHA-256. Cache keys follow
    `route:v1:<sha256>`; anonymous routes expire after 24 hours with ±10 %
    jitter while saved routes remove the TTL. Rotate the namespace (`v2`,
    `v3`, …) whenever schema or engine changes invalidate cached content.
+   The canonicalization seam lives in `backend/src/domain/ports/cache_key.rs`,
+   which performs the array sorting and coordinate rounding before hashing;
+   `backend/src/outbound/cache/redis_route_cache.rs` only persists the derived
+   key and never re-canonicalizes payloads.
 
 This workflow ensures first-run requests succeed quickly while the dataset
 improves automatically for subsequent users.
