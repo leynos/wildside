@@ -518,11 +518,13 @@ docker-down:
         cd deploy && docker compose down
 ```
 
-Use `make audit` to validate the audit exception allowlist against its schema
-and expiry dates. The shared helper tries `pnpm audit --json` first and falls
-back to npm's bulk advisory endpoint when the registry retires pnpm's legacy
-audit endpoints. Enable Corepack (`corepack enable` and `corepack prepare
-pnpm@10.15.1 --activate`) so `pnpm` is available in local and CI environments.
+Use `make audit` to audit frontend and Rust dependencies. The frontend audit
+validates the audit exception allowlist against its schema and expiry dates.
+The shared helper tries `pnpm audit --json` first and falls back to npm's bulk
+advisory endpoint when the registry retires pnpm's legacy audit endpoints.
+The Rust audit runs `cargo audit` against the consolidated root `Cargo.lock`.
+Enable Corepack (`corepack enable` and `corepack prepare pnpm@10.15.1
+--activate`) so `pnpm` is available in local and CI environments.
 
 ### pnpm setup sequence
 

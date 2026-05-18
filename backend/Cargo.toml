@@ -37,9 +37,9 @@ apalis-postgres = "1.0.0-rc.6"
 sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio-rustls"] }
 
 # Diesel ORM with PostgreSQL and async support
-diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }
-diesel-async = { version = "0.5", features = ["bb8", "postgres"] }
-diesel_migrations = "2.2"
+diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }
+diesel-async = { version = "0.8", features = ["bb8", "postgres"] }
+diesel_migrations = "2.3"
 chrono = { version = "0.4", features = ["serde"] }
 mockable = { version = "0.3", features = ["clock"] }
 wildside-data = { git = "https://github.com/leynos/wildside-engine.git", package = "wildside-data", rev = "2db6cbfb8ec68b611bc74fef6504f044c377b851" }
@@ -103,12 +103,12 @@ libc = "0.2"
 tempfile = "3"
 
 [[bin]]
-name = "openapi-dump"
-path = "src/bin/openapi_dump.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
-name = "er-snapshots"
-path = "src/bin/er_snapshots.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
 name = "ingest-osm"

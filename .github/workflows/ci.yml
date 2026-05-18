@@ -91,6 +91,9 @@ jobs:
           mmdc --version
           bun --version
 
+      - name: Install cargo-audit
+        run: cargo binstall --no-confirm cargo-audit
+
       - name: Audit
         run: make audit
 
