@@ -62,11 +62,9 @@ pub trait UsersQuery: Send + Sync {
     /// Return one keyset-ordered users page for the authenticated user.
     async fn list_users_page(
         &self,
-        _authenticated_user: &UserId,
-        _request: ListUsersPageRequest,
-    ) -> Result<UsersPage, Error> {
-        Err(Error::internal("paginated users query is not implemented"))
-    }
+        authenticated_user: &UserId,
+        request: ListUsersPageRequest,
+    ) -> Result<UsersPage, Error>;
 }
 
 /// Temporary fixture users query used until persistence is wired.
