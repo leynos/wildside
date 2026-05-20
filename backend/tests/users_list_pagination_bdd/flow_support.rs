@@ -8,6 +8,7 @@ use actix_web::body::BoxBody;
 use actix_web::cookie::{Cookie, Key, SameSite};
 use actix_web::dev::{Service, ServiceResponse};
 use actix_web::{App, test as actix_test, web};
+use backend::domain::TRACE_ID_HEADER;
 use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
 use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{LoginRequest, list_users, login};
@@ -49,6 +50,7 @@ pub(crate) struct World {
 #[derive(Clone, Debug)]
 struct Snapshot {
     status: u16,
+    trace_id: Option<String>,
     body: Option<Value>,
 }
 
@@ -172,8 +174,14 @@ where
         request = request.cookie(cookie);
     }
     let response = actix_test::call_service(app, request.to_request()).await;
+    let trace_id = response
+        .headers()
+        .get(TRACE_ID_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(ToOwned::to_owned);
     Snapshot {
         status: response.status().as_u16(),
+        trace_id,
         body: parse_json_body(actix_test::read_body(response).await.as_ref()),
     }
 }
@@ -350,5 +358,21 @@ pub(crate) fn assert_error(world: &mut World, status: u16, detail_code: &str) {
         let response = world.last_response.as_ref().expect("response");
         assert_eq!(response.status, status);
         assert_eq!(error_detail_code(response), Some(detail_code));
+    });
+}
+
+pub(crate) fn assert_error_trace_id(world: &mut World) {
+    with_world(world, |world| {
+        let response = world.last_response.as_ref().expect("response");
+        let trace_id = response.trace_id.as_deref().expect("trace id header");
+        assert!(!trace_id.is_empty());
+        assert_eq!(
+            response
+                .body
+                .as_ref()
+                .and_then(|body| body.get("traceId"))
+                .and_then(Value::as_str),
+            Some(trace_id)
+        );
     });
 }

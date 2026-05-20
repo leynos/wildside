@@ -93,7 +93,7 @@ fn trim_overflow_row(rows: &mut Vec<User>, limit: usize, direction: Direction) {
 #[cfg(test)]
 mod tests {
     //! Regression coverage for users query mapping and response shape.
-    use std::{error::Error as StdError, sync::Mutex};
+    use std::{error::Error as StdError, num::NonZeroUsize, sync::Mutex};
 
     use super::*;
     use crate::domain::ErrorCode;
@@ -226,7 +226,7 @@ mod tests {
     fn request_with_cursor(
         user: &User,
         direction: Direction,
-        limit: usize,
+        limit: NonZeroUsize,
     ) -> ListUsersPageRequest {
         ListUsersPageRequest::new(
             Some(Cursor::with_direction(UserCursorKey::from(user), direction)),
@@ -282,7 +282,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case(Direction::Next, None, 0, 2)]
+    #[case(Direction::Next, Some(0usize), 0, 2)]
     #[case(Direction::Prev, Some(2usize), 1, 3)]
     #[tokio::test]
     async fn list_users_page_trims_overflow_row(
@@ -311,10 +311,11 @@ mod tests {
         let repository = Arc::new(StubUserRepository::with_page_rows(rows.clone()));
         let query = DieselUsersQuery::from_repository(repository);
         let limit = rows.len() - 1;
-        let request = match cursor_index {
-            None => ListUsersPageRequest::new(None, limit),
-            Some(i) => request_with_cursor(&rows[i], direction, limit),
-        };
+        let request = request_with_cursor(
+            &rows[cursor_index.expect("cursor-backed trimming case")],
+            direction,
+            NonZeroUsize::new(limit).expect("non-zero test page limit"),
+        );
 
         let page = query.list_users_page(rows[0].id(), request).await?;
 
@@ -338,7 +339,10 @@ mod tests {
         let err = query
             .list_users_page(
                 &user_id("11111111-1111-1111-1111-111111111111")?,
-                ListUsersPageRequest::new(None, 20),
+                ListUsersPageRequest::new(
+                    None,
+                    NonZeroUsize::new(20).expect("non-zero test page limit"),
+                ),
             )
             .await
             .expect_err("repository failures should map to domain errors");

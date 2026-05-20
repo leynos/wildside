@@ -1,4 +1,6 @@
 //! Port abstraction for user persistence adapters and their errors.
+use std::num::NonZeroUsize;
+
 use async_trait::async_trait;
 use pagination::Cursor;
 
@@ -20,7 +22,7 @@ define_port_error! {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListUsersPageRequest {
     cursor: Option<Cursor<UserCursorKey>>,
-    limit: usize,
+    limit: NonZeroUsize,
 }
 
 impl ListUsersPageRequest {
@@ -29,14 +31,17 @@ impl ListUsersPageRequest {
     /// # Examples
     ///
     /// ```
+    /// use std::num::NonZeroUsize;
+    ///
     /// use backend::domain::ports::ListUsersPageRequest;
     ///
-    /// let request = ListUsersPageRequest::new(None, 20);
+    /// let limit = NonZeroUsize::new(20).expect("non-zero limit");
+    /// let request = ListUsersPageRequest::new(None, limit);
     /// assert_eq!(request.limit(), 20);
     /// assert!(request.cursor().is_none());
     /// ```
     #[must_use]
-    pub const fn new(cursor: Option<Cursor<UserCursorKey>>, limit: usize) -> Self {
+    pub const fn new(cursor: Option<Cursor<UserCursorKey>>, limit: NonZeroUsize) -> Self {
         Self { cursor, limit }
     }
 
@@ -49,12 +54,12 @@ impl ListUsersPageRequest {
     /// Return the caller-normalized page size.
     #[must_use]
     pub const fn limit(&self) -> usize {
-        self.limit
+        self.limit.get()
     }
 
     /// Consume the request into its cursor and limit components.
     #[must_use]
-    pub fn into_parts(self) -> (Option<Cursor<UserCursorKey>>, usize) {
+    pub fn into_parts(self) -> (Option<Cursor<UserCursorKey>>, NonZeroUsize) {
         (self.cursor, self.limit)
     }
 }

@@ -120,9 +120,12 @@ mod tests {
 
     #[tokio::test]
     async fn fixture_users_query_returns_first_paginated_page() {
+        use std::num::NonZeroUsize;
+
         let query = FixtureUsersQuery;
         let user_id = UserId::new("11111111-1111-1111-1111-111111111111").expect("fixture user id");
-        let request = ListUsersPageRequest::new(None, 20);
+        let request =
+            ListUsersPageRequest::new(None, NonZeroUsize::new(20).expect("non-zero page limit"));
 
         let page = query
             .list_users_page(&user_id, request)

@@ -429,8 +429,9 @@ The pagination crate (`backend/crates/pagination`) provides:
   `PaginationLinks::from_request(url, params, next, prev)` for link
   generation.
 
-It is **not** yet declared in `backend/Cargo.toml`. Add it as
-`pagination = { path = "crates/pagination" }`.
+The dependency is already declared in `backend/Cargo.toml` as
+`pagination = { path = "crates/pagination" }`, reflecting the historical
+adoption work for this endpoint.
 
 User-visible response shape today is a raw JSON array. After the change it
 becomes:

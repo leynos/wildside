@@ -4,6 +4,8 @@
 //! construction, and OpenAPI response tokens. Domain ports receive decoded,
 //! transport-neutral pagination requests.
 
+use std::num::NonZeroUsize;
+
 use actix_web::HttpRequest;
 use pagination::{Cursor, Direction, MAX_LIMIT, PageParams, Paginated, PaginationLinks};
 use serde::Deserialize;
@@ -63,10 +65,29 @@ pub struct PaginatedUsersResponse {
     links: PaginationLinksSchema,
 }
 
+/// Direction implied by a users page request.
+///
+/// # Examples
+///
+/// ```
+/// use backend::inbound::http::users_pagination::UsersPageDirection;
+///
+/// let direction = UsersPageDirection::Next;
+/// let label = match direction {
+///     UsersPageDirection::First => "first",
+///     UsersPageDirection::Next => "next",
+///     UsersPageDirection::Prev => "prev",
+/// };
+///
+/// assert_eq!(label, "next");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsersPageDirection {
+    /// The first page was requested without a cursor.
     First,
+    /// A forward cursor was requested.
     Next,
+    /// A backward cursor was requested.
     Prev,
 }
 
@@ -76,6 +97,29 @@ pub enum UsersPageDirection {
 ///
 /// Returns an invalid request error when `limit` is malformed, zero, above
 /// [`MAX_LIMIT`], or when `cursor` is not an opaque users cursor.
+///
+/// # Examples
+///
+/// ```ignore
+/// use backend::domain::ports::ListUsersPageRequest;
+/// use backend::inbound::http::users_pagination::{
+///     PageParams, UsersListQueryParams, UsersPageDirection, parse_users_page_params,
+/// };
+///
+/// let query = UsersListQueryParams {
+///     cursor: None,
+///     limit: Some("2".to_owned()),
+/// };
+/// let (params, request, direction): (
+///     PageParams,
+///     ListUsersPageRequest,
+///     UsersPageDirection,
+/// ) = parse_users_page_params(query).expect("valid users pagination params");
+///
+/// assert_eq!(params.limit(), 2);
+/// assert_eq!(request.limit(), 2);
+/// assert_eq!(direction, UsersPageDirection::First);
+/// ```
 pub fn parse_users_page_params(
     params: UsersListQueryParams,
 ) -> Result<(PageParams, ListUsersPageRequest, UsersPageDirection), Error> {
@@ -91,7 +135,9 @@ pub fn parse_users_page_params(
     let direction = cursor
         .as_ref()
         .map_or(UsersPageDirection::First, cursor_direction);
-    let request = ListUsersPageRequest::new(cursor, page_params.limit());
+    let limit = NonZeroUsize::new(page_params.limit())
+        .ok_or_else(|| invalid_limit_error(params.limit.as_deref()))?;
+    let request = ListUsersPageRequest::new(cursor, limit);
     Ok((page_params, request, direction))
 }
 
@@ -101,6 +147,43 @@ pub fn parse_users_page_params(
 ///
 /// Returns an internal error if cursor encoding or request URL reconstruction
 /// fails.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::test::TestRequest;
+/// use backend::domain::ports::UsersPage;
+/// use backend::domain::User;
+/// use backend::inbound::http::users_pagination::{
+///     UsersPageDirection, build_users_page_response,
+/// };
+/// use pagination::{PageParams, Paginated};
+///
+/// let request = TestRequest::default()
+///     .uri("/api/v1/users?limit=2")
+///     .to_http_request();
+/// let params = PageParams::new(None, Some(2)).expect("valid page params");
+/// let user = User::try_from_strings_at(
+///     "11111111-1111-1111-1111-111111111111",
+///     "Ada One",
+///     "2026-01-01T00:00:00Z".parse().expect("timestamp"),
+/// )
+/// .expect("valid user");
+/// let page = UsersPage::new(vec![user], false);
+///
+/// let response: Paginated<User> = build_users_page_response(
+///     &request,
+///     &params,
+///     page,
+///     UsersPageDirection::First,
+/// )
+/// .expect("users page response");
+///
+/// assert_eq!(response.data.len(), 1);
+/// assert_eq!(response.limit, 2);
+/// assert!(response.links.next.is_none());
+/// assert!(response.links.prev.is_none());
+/// ```
 pub fn build_users_page_response(
     request: &HttpRequest,
     params: &PageParams,

@@ -34,3 +34,4 @@ Feature: Users list pagination
     Given db-present startup mode with five ordered users
     When the client requests the users list without a session
     Then the users response is unauthorised
+    And the users error response includes a trace id

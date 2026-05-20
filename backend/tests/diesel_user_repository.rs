@@ -11,6 +11,7 @@
 //! synchronous steps and reuses a shared Tokio runtime in the test context.
 //! This keeps database operations deterministic and avoids recreating a runtime
 //! for each step.
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
 use backend::domain::ports::{ListUsersPageRequest, UserPersistenceError, UserRepository};
@@ -319,7 +320,7 @@ fn diesel_list_page_uses_created_at_id_keyset_order(diesel_world: Option<SharedC
         paginated_user(
             "33333333-3333-3333-3333-333333333333",
             "Ada Three",
-            "2026-01-03T00:00:00Z",
+            "2026-01-02T00:00:00Z",
         ),
         paginated_user(
             "44444444-4444-4444-4444-444444444444",
@@ -336,22 +337,26 @@ fn diesel_list_page_uses_created_at_id_keyset_order(diesel_world: Option<SharedC
                 repo.upsert(user).await?;
             }
 
-            let first_page = repo.list_page(ListUsersPageRequest::new(None, 2)).await?;
+            let limit = NonZeroUsize::new(2).expect("non-zero test page limit");
+
+            let first_page = repo
+                .list_page(ListUsersPageRequest::new(None, limit))
+                .await?;
             assert_eq!(first_page.as_slice(), &users[0..3]);
 
             let next_cursor =
-                Cursor::with_direction(UserCursorKey::from(&users[0]), Direction::Next);
+                Cursor::with_direction(UserCursorKey::from(&users[1]), Direction::Next);
             let next_page = repo
-                .list_page(ListUsersPageRequest::new(Some(next_cursor), 2))
+                .list_page(ListUsersPageRequest::new(Some(next_cursor), limit))
                 .await?;
-            assert_eq!(next_page.as_slice(), &users[1..4]);
+            assert_eq!(next_page.as_slice(), &users[2..4]);
 
             let prev_cursor =
-                Cursor::with_direction(UserCursorKey::from(&users[3]), Direction::Prev);
+                Cursor::with_direction(UserCursorKey::from(&users[2]), Direction::Prev);
             let prev_page = repo
-                .list_page(ListUsersPageRequest::new(Some(prev_cursor), 2))
+                .list_page(ListUsersPageRequest::new(Some(prev_cursor), limit))
                 .await?;
-            assert_eq!(prev_page.as_slice(), &users[0..3]);
+            assert_eq!(prev_page.as_slice(), &users[0..2]);
 
             Ok::<(), UserPersistenceError>(())
         },

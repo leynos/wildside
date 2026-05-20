@@ -11,10 +11,10 @@ use support::handle_cluster_setup_failure;
 mod flow_support;
 
 use flow_support::{
-    ORDERED_USER_IDS, World, assert_error, assert_full_traversal, assert_next_only,
-    assert_prev_only, assert_status, assert_users, run_authenticated_request, run_first_page,
-    run_follow_next_to_final, run_next_then_prev, run_unauthenticated_request, seed_users,
-    setup_db_context, skip, store_db,
+    ORDERED_USER_IDS, World, assert_error, assert_error_trace_id, assert_full_traversal,
+    assert_next_only, assert_prev_only, assert_status, assert_users, run_authenticated_request,
+    run_first_page, run_follow_next_to_final, run_next_then_prev, run_unauthenticated_request,
+    seed_users, setup_db_context, skip, store_db,
 };
 
 #[fixture]
@@ -111,6 +111,11 @@ fn the_users_response_is_bad_request_with_invalid_cursor_details(world: &mut Wor
 #[then("the users response is unauthorised")]
 fn the_users_response_is_unauthorised(world: &mut World) {
     assert_status(world, 401);
+}
+
+#[then("the users error response includes a trace id")]
+fn the_users_error_response_includes_a_trace_id(world: &mut World) {
+    assert_error_trace_id(world);
 }
 
 #[scenario(

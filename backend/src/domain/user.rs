@@ -244,6 +244,17 @@ pub struct User {
 
 impl User {
     /// Build a new [`User`] from validated components.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::{DisplayName, User, UserId};
+    /// let id = UserId::new("00000000-0000-0000-0000-000000000000").expect("valid id");
+    /// let name = DisplayName::new("Ada Lovelace").expect("valid display name");
+    /// let created_at = "2026-01-01T00:00:00Z".parse().expect("timestamp");
+    /// let user = User::new(id, name, created_at);
+    /// assert_eq!(user.created_at(), created_at);
+    /// ```
     pub fn new(id: UserId, display_name: DisplayName, created_at: DateTime<Utc>) -> Self {
         Self {
             id,
@@ -253,6 +264,16 @@ impl User {
     }
 
     /// Build a new [`User`] from validated components with the current time.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::{DisplayName, User, UserId};
+    /// let id = UserId::new("00000000-0000-0000-0000-000000000000").expect("valid id");
+    /// let name = DisplayName::new("Ada Lovelace").expect("valid display name");
+    /// let user = User::with_current_timestamp(id.clone(), name);
+    /// assert_eq!(user.id(), &id);
+    /// ```
     pub fn with_current_timestamp(id: UserId, display_name: DisplayName) -> Self {
         Self::new(id, display_name, Utc::now())
     }
@@ -269,7 +290,13 @@ impl User {
 
     /// Fallible constructor enforcing identifier and display name invariants.
     ///
-    /// Prefer [`User::new`] when components are already validated.
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::User;
+    /// let user = User::try_from_strings("00000000-0000-0000-0000-000000000000", "Ada").expect("valid user");
+    /// assert_eq!(user.display_name().as_ref(), "Ada");
+    /// ```
     pub fn try_from_strings(
         id: impl AsRef<str>,
         display_name: impl Into<String>,
@@ -279,7 +306,14 @@ impl User {
 
     /// Fallible constructor enforcing invariants with an explicit timestamp.
     ///
-    /// Prefer [`User::new`] when components are already validated.
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::User;
+    /// let created_at = "2026-01-01T00:00:00Z".parse().expect("timestamp");
+    /// let user = User::try_from_strings_at("00000000-0000-0000-0000-000000000000", "Ada", created_at).expect("valid user");
+    /// assert_eq!(user.created_at(), created_at);
+    /// ```
     pub fn try_from_strings_at(
         id: impl AsRef<str>,
         display_name: impl Into<String>,
@@ -302,6 +336,15 @@ impl User {
     }
 
     /// Timestamp when the user was first created.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::User;
+    /// # let created_at = "2026-01-01T00:00:00Z".parse().expect("timestamp");
+    /// # let user = User::try_from_strings_at("00000000-0000-0000-0000-000000000000", "Ada", created_at).expect("valid user");
+    /// assert_eq!(user.created_at(), created_at);
+    /// ```
     pub fn created_at(&self) -> DateTime<Utc> {
         self.created_at
     }
