@@ -35,18 +35,58 @@ impl UsersPage {
     }
 
     /// Borrow the users in this page.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::User;
+    /// use backend::domain::ports::UsersPage;
+    ///
+    /// let user = User::try_from_strings("00000000-0000-0000-0000-000000000000", "Ada")
+    ///     .expect("valid user");
+    /// let page = UsersPage::new(vec![user], false);
+    ///
+    /// let rows = page.rows();
+    /// assert_eq!(rows.len(), 1);
+    /// assert_eq!(rows[0].display_name().as_ref(), "Ada");
+    /// ```
     #[must_use]
     pub fn rows(&self) -> &[User] {
         &self.rows
     }
 
     /// Consume the page and return its users.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::User;
+    /// use backend::domain::ports::UsersPage;
+    ///
+    /// let user = User::try_from_strings("00000000-0000-0000-0000-000000000000", "Ada")
+    ///     .expect("valid user");
+    /// let page = UsersPage::new(vec![user], true);
+    ///
+    /// let rows = page.into_rows();
+    /// assert_eq!(rows.len(), 1);
+    /// assert_eq!(rows[0].display_name().as_ref(), "Ada");
+    /// ```
     #[must_use]
     pub fn into_rows(self) -> Vec<User> {
         self.rows
     }
 
     /// Whether another page exists in the requested direction.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::ports::UsersPage;
+    ///
+    /// let page = UsersPage::new(Vec::new(), true);
+    ///
+    /// assert!(page.has_more());
+    /// ```
     #[must_use]
     pub const fn has_more(&self) -> bool {
         self.has_more
@@ -60,6 +100,31 @@ pub trait UsersQuery: Send + Sync {
     async fn list_users(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error>;
 
     /// Return one keyset-ordered users page for the authenticated user.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn example() -> Result<(), backend::domain::Error> {
+    /// use std::num::NonZeroUsize;
+    ///
+    /// use backend::domain::UserId;
+    /// use backend::domain::ports::{FixtureUsersQuery, ListUsersPageRequest, UsersQuery};
+    ///
+    /// let query = FixtureUsersQuery;
+    /// let authenticated_user =
+    ///     UserId::new("11111111-1111-1111-1111-111111111111").expect("valid user id");
+    /// let request = ListUsersPageRequest::new(
+    ///     None,
+    ///     NonZeroUsize::new(20).expect("non-zero page limit"),
+    /// );
+    ///
+    /// let page = query.list_users_page(&authenticated_user, request).await?;
+    ///
+    /// assert_eq!(page.rows().len(), 1);
+    /// assert!(!page.has_more());
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn list_users_page(
         &self,
         authenticated_user: &UserId,
