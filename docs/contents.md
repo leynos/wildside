@@ -30,6 +30,9 @@
 - [Wildside front-end roadmap](frontend-roadmap.md) – GIST-aligned
   implementation roadmap for the Progressive Web Application (PWA) front-end.
   _Audience: frontend developers and project planners._
+- [Front-end source authority catalogue](frontend-source-authority-catalogue.md)
+  – ownership map for front-end requirements and reconciliation follow-ups.
+  _Audience: frontend developers, reviewers, and project planners._
 - [Pure, accessible, and localizable React components](pure-accessible-and-localizable-react-components.md)
   – building accessible, localizable components with Radix, TanStack, and
   DaisyUI. _Audience: frontend developers._

@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -164,10 +164,27 @@ tool behaviour, which is outside the expected scope.
   this plan-only change. `css-view --help` succeeded, and `bunx playwright
   --version` reported version 1.60.0, but no executable front-end surface was
   changed.
-- [ ] Await explicit user approval before implementing roadmap item 0.1.1.
-- [ ] Implement the source authority catalogue after approval.
-- [ ] Validate, run CodeRabbit, commit, push, and open or update the pull
-  request for the implementation branch after approval.
+- [x] (2026-05-20T19:43:26Z) Receive explicit user approval to implement
+  roadmap item 0.1.1 from this ExecPlan.
+- [x] (2026-05-20T20:02:00Z) Draft
+  `docs/frontend-source-authority-catalogue.md` with source classifications,
+  topic authorities, reconciliation follow-ups, skills, and validation notes.
+- [x] (2026-05-20T20:02:00Z) Mark roadmap item 0.1.1 done and cite the
+  catalogue from `docs/frontend-roadmap.md`.
+- [x] (2026-05-20T20:02:00Z) Add the catalogue to
+  `docs/developers-guide.md` and `docs/contents.md`.
+- [x] (2026-05-20T20:05:00Z) Run `make fmt` and `make markdownlint`; both
+  passed for the documentation update.
+- [x] (2026-05-20T20:12:00Z) Run `coderabbit review --agent`; the review
+  completed successfully with zero findings.
+- [x] (2026-05-20T20:15:00Z) Run `make nixie`; all diagrams validated
+  successfully.
+- [x] (2026-05-20T20:16:00Z) Run `css-view --help`; the installed command is a
+  Playwright-backed CSS snapshot CLI that requires a URL, and no executable
+  front-end surface changed in this documentation-only item.
+- [x] (2026-05-20T21:57:00Z) Run `make check-fmt`, `make lint`, and
+  `make test`; all repository gates passed.
+- [ ] Commit, push, and update the pull request for the implementation branch.
 
 ## Surprises & discoveries
 
@@ -217,6 +234,22 @@ tool behaviour, which is outside the expected scope.
   not carry incidental dependency churn. Future executable front-end validation
   should use the repository's committed Playwright command once one exists.
 
+- Observation: `docs/developers-guide.md` named `make build-frontend`, but the
+  repository Makefile exposes the front-end build target as `make fe-build`.
+  Evidence: the Makefile has an `fe-build` target and no `build-frontend`
+  target.
+  Impact: the implementation updates the developers' guide while adding the
+  new source-authority reference so contributors receive executable workflow
+  guidance.
+
+- Observation: `css-view` is available but requires a page URL and snapshots a
+  rendered page through Playwright.
+  Evidence: `css-view --help` prints `Usage: css-view [options] <url>` and
+  describes capturing computed CSS snapshots for a page.
+  Impact: item 0.1.1 changes only documentation and has no rendered front-end
+  surface for `css-view` or Playwright to exercise. The catalogue preserves
+  those tools as mandatory future gates for executable front-end changes.
+
 ## Decision log
 
 - Decision: keep this ExecPlan in DRAFT until the user explicitly approves
@@ -252,6 +285,21 @@ tool behaviour, which is outside the expected scope.
   follow this draft after approval.
   Date/Author: 2026-05-20T18:36:00Z / Codex.
 
+- Decision: move this ExecPlan from DRAFT to IN PROGRESS after explicit user
+  approval.
+  Rationale: the user asked to proceed with implementation of this approved
+  plan, so the approval gate has been satisfied and roadmap item 0.1.1 can now
+  be implemented within the recorded tolerances.
+  Date/Author: 2026-05-20T19:43:26Z / Codex.
+
+- Decision: update `docs/developers-guide.md` and `docs/contents.md` alongside
+  the catalogue.
+  Rationale: the catalogue changes contributor navigation and documentation
+  ownership for front-end work, so the developer guide and documentation index
+  should point to it. The developers' guide update also corrects the existing
+  front-end build target name to match the Makefile.
+  Date/Author: 2026-05-20T20:02:00Z / Codex.
+
 ## Outcomes & retrospective
 
 This section is not complete. During implementation, update it after the
@@ -271,6 +319,25 @@ CodeRabbit could not complete because the service returned a usage-credit rate
 limit before reporting findings. Playwright was available through `bunx` and
 reported version 1.60.0, but there was no rendered front-end surface to test
 for this plan-only change.
+
+During implementation, CodeRabbit completed successfully for the catalogue
+draft and reported zero findings.
+
+The implementation created `docs/frontend-source-authority-catalogue.md`,
+marked roadmap item 0.1.1 done in `docs/frontend-roadmap.md`, added the
+catalogue to `docs/developers-guide.md` and `docs/contents.md`, and kept this
+ExecPlan current.
+
+The following implementation validation commands have passed:
+
+- `make fmt`
+- `make markdownlint`
+- `make nixie`
+- `css-view --help`
+- `coderabbit review --agent`
+- `make check-fmt`
+- `make lint`
+- `make test`
 
 ## Context and orientation
 

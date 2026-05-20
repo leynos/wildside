@@ -38,7 +38,8 @@ This step answers which document owns each front-end requirement and where
 contradictions need a design-document or Architecture Decision Record update.
 The outcome informs the source documents that phases 1-5 should cite.
 
-- [ ] 0.1.1. Build a front-end source authority catalogue.
+- [x] 0.1.1. Build a front-end source authority catalogue. See
+      `docs/frontend-source-authority-catalogue.md`.
   - Classify `docs/v2a-front-end-stack.md`, `docs/wildside-pwa-design.md`,
     `docs/wildside-pwa-data-model.md`, `docs/wildside-ux-state-graph-v0.1.json`,
     `docs/sitemap.md`, `spec/openapi.json`, `spec/asyncapi.yaml`, and relevant

@@ -57,6 +57,10 @@ decisions that have not yet been implemented.
 
 Canonical front-end references:
 
+- [Front-end source authority catalogue](frontend-source-authority-catalogue.md)
+  identifies the authoritative source or reconciliation follow-up for each
+  front-end platform, data, user experience, API, styling, accessibility,
+  localization, and testing topic.
 - [v2a front-end stack](v2a-front-end-stack.md) documents the current package
   state and the target v2a stack boundary.
 - [Wildside front-end roadmap](frontend-roadmap.md) is the implementation task
@@ -106,7 +110,7 @@ Run front-end commands through workspace or Makefile targets unless debugging a
 package-local failure:
 
 ```bash
-make build-frontend
+make fe-build
 make test-frontend
 make lint-frontend
 make typecheck
@@ -493,6 +497,9 @@ Related domain helpers:
 - No feature flags required; BDD tests are in the `tests/` integration
   harness and run unconditionally with `cargo test`
 
+To run BDD tests locally:
+
+```bash
 ### RedisTestServer harness
 
 Integration tests use `RedisTestServer` from `backend/src/test_support/redis.rs`:
