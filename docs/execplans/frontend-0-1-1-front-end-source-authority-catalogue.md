@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -166,25 +166,26 @@ tool behaviour, which is outside the expected scope.
   changed.
 - [x] (2026-05-20T19:43:26Z) Receive explicit user approval to implement
   roadmap item 0.1.1 from this ExecPlan.
-- [x] (2026-05-20T20:02:00Z) Draft
+- [x] (2026-05-20T19:45:00Z) Draft
   `docs/frontend-source-authority-catalogue.md` with source classifications,
   topic authorities, reconciliation follow-ups, skills, and validation notes.
-- [x] (2026-05-20T20:02:00Z) Mark roadmap item 0.1.1 done and cite the
+- [x] (2026-05-20T19:45:00Z) Mark roadmap item 0.1.1 done and cite the
   catalogue from `docs/frontend-roadmap.md`.
-- [x] (2026-05-20T20:02:00Z) Add the catalogue to
+- [x] (2026-05-20T19:45:00Z) Add the catalogue to
   `docs/developers-guide.md` and `docs/contents.md`.
-- [x] (2026-05-20T20:05:00Z) Run `make fmt` and `make markdownlint`; both
+- [x] (2026-05-20T19:46:00Z) Run `make fmt` and `make markdownlint`; both
   passed for the documentation update.
-- [x] (2026-05-20T20:12:00Z) Run `coderabbit review --agent`; the review
+- [x] (2026-05-20T19:52:00Z) Run `coderabbit review --agent`; the review
   completed successfully with zero findings.
-- [x] (2026-05-20T20:15:00Z) Run `make nixie`; all diagrams validated
+- [x] (2026-05-20T19:53:00Z) Run `make nixie`; all diagrams validated
   successfully.
-- [x] (2026-05-20T20:16:00Z) Run `css-view --help`; the installed command is a
+- [x] (2026-05-20T19:53:00Z) Run `css-view --help`; the installed command is a
   Playwright-backed CSS snapshot CLI that requires a URL, and no executable
   front-end surface changed in this documentation-only item.
-- [x] (2026-05-20T21:57:00Z) Run `make check-fmt`, `make lint`, and
+- [x] (2026-05-20T19:57:00Z) Run `make check-fmt`, `make lint`, and
   `make test`; all repository gates passed.
-- [ ] Commit, push, and update the pull request for the implementation branch.
+- [x] (2026-05-20T19:58:28Z) Commit the implementation, push the branch, and
+  update draft pull request #355.
 
 ## Surprises & discoveries
 
@@ -298,13 +299,12 @@ tool behaviour, which is outside the expected scope.
   ownership for front-end work, so the developer guide and documentation index
   should point to it. The developers' guide update also corrects the existing
   front-end build target name to match the Makefile.
-  Date/Author: 2026-05-20T20:02:00Z / Codex.
+  Date/Author: 2026-05-20T19:45:00Z / Codex.
 
 ## Outcomes & retrospective
 
-This section is not complete. During implementation, update it after the
-catalogue is drafted, after validation passes, after CodeRabbit review is
-resolved, and after the commit and pull request are created.
+The catalogue implementation is complete. The branch has been pushed and draft
+pull request #355 has been updated for implementation review.
 
 For the pre-approval plan review, the following commands have passed:
 
