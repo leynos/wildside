@@ -176,7 +176,6 @@ fn round_coordinate(number: &Number) -> Number {
 }
 
 #[cfg(test)]
-#[cfg_attr(any(), expect(no_expect_outside_tests, reason = "unit test expects"))]
 mod tests {
     //! Validates cache key parsing, canonicalization, and whitespace
     //! constraints.

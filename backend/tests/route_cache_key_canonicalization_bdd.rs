@@ -4,8 +4,6 @@
 //! These scenarios require a live `redis-server` binary on `PATH`; when absent
 //! or `SKIP_REDIS_TESTS=1` is set, they are skipped at runtime.
 
-#![cfg_attr(any(), expect(no_expect_outside_tests, reason = "BDD helper expects"))]
-
 use std::sync::Arc;
 
 use backend::{
