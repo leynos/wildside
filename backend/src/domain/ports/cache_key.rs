@@ -62,11 +62,7 @@ impl RouteCacheKey {
         let hash = canonicalize_and_hash(&normalized)?.to_hex();
 
         // Enforce the namespace/digest contract before the key is accepted.
-        if hash.len() != 64
-            || !hash
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        {
+        if !is_lowercase_hex_digest(&hash) {
             return Err(RouteCacheKeyDerivationError::Validation(
                 RouteCacheKeyValidationError::MalformedDigest,
             ));
@@ -173,6 +169,14 @@ fn round_coordinate(number: &Number) -> Number {
     let canonical = if rounded == 0.0 { 0.0 } else { rounded };
 
     Number::from_f64(canonical).unwrap_or_else(|| number.clone())
+}
+
+/// Returns `true` when `hash` is a 64-character lowercase hexadecimal string.
+fn is_lowercase_hex_digest(hash: &str) -> bool {
+    hash.len() == 64
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 #[cfg(test)]
