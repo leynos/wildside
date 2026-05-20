@@ -183,6 +183,8 @@ fn is_lowercase_hex_digest(hash: &str) -> bool {
 mod tests {
     //! Validates cache key parsing, canonicalization, and whitespace
     //! constraints.
+    //! TODO: Add property-based tests for canonicalization invariants across
+    //! generated key ordering, theme arrays, and coordinate rounding cases.
     use serde_json::json;
 
     use super::{

@@ -422,7 +422,7 @@ Implementation details within `outbound::cache`:
 Related domain helpers:
 
 - `RouteCacheKey::for_route_request(...)` derives canonical
-  `route:v1:<digest>` keys by normalising route payloads before hashing.
+  `route:v1:<digest>` keys by normalizing route payloads before hashing.
 - `RouteCacheKeyDerivationError` reports `Hash` and `Validation` failures from
   key derivation.
 
@@ -443,7 +443,7 @@ The Redis adapter test suite uses a dual-mode approach:
 - Require a `redis-server` binary on `PATH`
 - Marked with `#[ignore = "requires redis-server binary..."]`
 - Run explicitly with: `cargo test -- --ignored`
-- Behavioural coverage for route-key canonicalisation lives in
+- Behavioural coverage for route-key canonicalization lives in
   `backend/tests/route_cache_key_canonicalization_bdd.rs`.
 
 ### RedisTestServer harness
