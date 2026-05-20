@@ -2,10 +2,10 @@
 //! adapters.
 
 use serde_json::{Number, Value};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::domain::canonicalize_and_hash;
-use crate::domain::idempotency::PayloadHashError;
+use crate::domain::idempotency::{PayloadHash, PayloadHashError};
 
 const ROUTE_CACHE_NAMESPACE: &str = "route:v1";
 const COORDINATE_PRECISION_FACTOR: f64 = 100_000.0;
@@ -58,8 +58,7 @@ impl RouteCacheKey {
     /// assert!(first_key.as_str().starts_with("route:v1:"));
     /// ```
     pub fn for_route_request(payload: &Value) -> Result<Self, RouteCacheKeyDerivationError> {
-        let normalized = normalize_route_request_value(payload, None);
-        let hash = canonicalize_and_hash(&normalized)?.to_hex();
+        let hash = hash_route_request_value(payload)?.to_hex();
 
         // Enforce the namespace/digest contract before the key is accepted.
         if !is_lowercase_hex_digest(&hash) {
@@ -113,6 +112,17 @@ pub enum RouteCacheKeyDerivationError {
     /// The generated cache key failed validation.
     #[error(transparent)]
     Validation(RouteCacheKeyValidationError),
+}
+
+fn hash_route_request_value(value: &Value) -> Result<PayloadHash, PayloadHashError> {
+    let normalized = normalize_route_request_value(value, None);
+    let json_bytes =
+        serde_json::to_vec(&normalized).map_err(|err| PayloadHashError::Serialization {
+            message: err.to_string(),
+        })?;
+    let hash = Sha256::digest(&json_bytes);
+    let hash_bytes: [u8; 32] = hash.into();
+    Ok(PayloadHash::from_bytes(hash_bytes))
 }
 
 fn normalize_route_request_value(value: &Value, current_key: Option<&str>) -> Value {
@@ -185,7 +195,10 @@ mod tests {
     //! constraints.
     //! TODO: Add property-based tests for canonicalization invariants across
     //! generated key ordering, theme arrays, and coordinate rounding cases.
+    use insta::assert_snapshot;
     use serde_json::json;
+
+    use crate::domain::idempotency::PayloadHashError;
 
     use super::{
         ROUNDED_COORDINATE_KEYS, RouteCacheKey, RouteCacheKeyDerivationError,
@@ -240,13 +253,32 @@ mod tests {
     }
 
     #[test]
-    fn malformed_digest_error_documents_defensive_route_key_guard() {
-        let error =
-            RouteCacheKeyDerivationError::Validation(RouteCacheKeyValidationError::MalformedDigest);
-
-        assert_eq!(
-            error.to_string(),
-            "route cache key digest must be a 64-character lowercase hex string"
+    fn route_cache_error_messages_match_snapshots() {
+        assert_snapshot!(
+            RouteCacheKeyValidationError::Empty.to_string(),
+            @"route cache key must not be empty"
+        );
+        assert_snapshot!(
+            RouteCacheKeyValidationError::ContainsWhitespace.to_string(),
+            @"route cache key must not contain surrounding whitespace"
+        );
+        assert_snapshot!(
+            RouteCacheKeyValidationError::MalformedDigest.to_string(),
+            @"route cache key digest must be a 64-character lowercase hex string"
+        );
+        assert_snapshot!(
+            RouteCacheKeyDerivationError::Hash(PayloadHashError::Serialization {
+                message: "not representable as canonical JSON".to_owned(),
+            })
+            .to_string(),
+            @"failed to serialize canonical JSON payload: not representable as canonical JSON"
+        );
+        assert_snapshot!(
+            RouteCacheKeyDerivationError::Validation(
+                RouteCacheKeyValidationError::MalformedDigest,
+            )
+            .to_string(),
+            @"route cache key digest must be a 64-character lowercase hex string"
         );
     }
 
