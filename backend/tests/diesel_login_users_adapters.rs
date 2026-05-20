@@ -111,8 +111,14 @@ fn parse_body(bytes: &[u8]) -> Option<Value> {
     }
 }
 
+fn users_data(body: &Value) -> &[Value] {
+    body.get("data")
+        .and_then(Value::as_array)
+        .expect("users data array")
+}
+
 fn classify_users(body: &Value) -> UsersMode {
-    let users = body.as_array().expect("users array");
+    let users = users_data(body);
     if users.iter().any(|user| {
         user.get("id").and_then(Value::as_str) == Some(FIXTURE_USERS_ID)
             && user.get("displayName").and_then(Value::as_str) == Some(FIXTURE_USERS_NAME)
@@ -305,7 +311,7 @@ fn db_present_mode_supports_login_and_users_with_stable_contracts() {
     let users_body = users_snapshot.body.as_ref().expect("users body");
     let mode = classify_users(users_body);
     assert_eq!(mode, UsersMode::Db);
-    let users = users_body.as_array().expect("users array");
+    let users = users_data(users_body);
     assert!(users.iter().any(|user| {
         user.get("id").and_then(Value::as_str) == Some(FIXTURE_AUTH_ID)
             && user.get("displayName").and_then(Value::as_str) == Some(DB_AUTH_DISPLAY_NAME)

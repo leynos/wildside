@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex};
 use super::recording_double_macro::recording_double;
 use async_trait::async_trait;
 use backend::domain::ports::{
-    LoginService, UpdateUserInterestsRequest, UserInterestsCommand, UserProfileQuery, UsersQuery,
+    ListUsersPageRequest, LoginService, UpdateUserInterestsRequest, UserInterestsCommand,
+    UserProfileQuery, UsersPage, UsersQuery,
 };
 use backend::domain::{Error, LoginCredentials, User, UserId, UserInterests};
 
@@ -60,20 +61,60 @@ impl LoginService for RecordingLoginService {
     }
 }
 
-recording_double! {
-    /// Configurable success or failure outcome for RecordingUsersQuery.
-    pub(crate) enum UsersResponse {
-        Ok(Vec<User>),
-        Err(Error),
+/// Configurable success or failure outcome for RecordingUsersQuery.
+#[derive(Clone)]
+pub(crate) enum UsersResponse {
+    Ok(Vec<User>),
+    Err(Error),
+}
+
+#[derive(Clone)]
+pub(crate) struct RecordingUsersQuery {
+    calls: Arc<Mutex<Vec<String>>>,
+    response: Arc<Mutex<UsersResponse>>,
+}
+
+impl RecordingUsersQuery {
+    pub(crate) fn new(response: UsersResponse) -> Self {
+        Self {
+            calls: Arc::new(Mutex::new(Vec::new())),
+            response: Arc::new(Mutex::new(response)),
+        }
     }
 
-    pub(crate) struct RecordingUsersQuery {
-        calls: String,
-        trait: UsersQuery,
-        method: list_users(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error>,
-        record: authenticated_user.to_string(),
-        calls_lock: "users calls lock",
-        response_lock: "users response lock",
+    pub(crate) fn calls(&self) -> Vec<String> {
+        self.calls.lock().expect("users calls lock").clone()
+    }
+
+    pub(crate) fn set_response(&self, response: UsersResponse) {
+        *self.response.lock().expect("users response lock") = response;
+    }
+
+    fn respond(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error> {
+        self.calls
+            .lock()
+            .expect("users calls lock")
+            .push(authenticated_user.to_string());
+        match self.response.lock().expect("users response lock").clone() {
+            UsersResponse::Ok(users) => Ok(users),
+            UsersResponse::Err(error) => Err(error),
+        }
+    }
+}
+
+#[async_trait]
+impl UsersQuery for RecordingUsersQuery {
+    async fn list_users(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error> {
+        self.respond(authenticated_user)
+    }
+
+    async fn list_users_page(
+        &self,
+        authenticated_user: &UserId,
+        _request: ListUsersPageRequest,
+    ) -> Result<UsersPage, Error> {
+        self.respond(authenticated_user)
+            .map(|users| UsersPage::new(users, false))
     }
 }
 

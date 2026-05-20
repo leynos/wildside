@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+use chrono::{DateTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -228,6 +229,7 @@ impl TryFrom<String> for DisplayName {
 /// ## Invariants
 /// - `id` must be a valid UUID string.
 /// - `display_name` must be non-empty once trimmed of whitespace.
+/// - `created_at` records when the user was first created.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -236,12 +238,44 @@ pub struct User {
     id: UserId,
     #[serde(alias = "display_name")]
     display_name: DisplayName,
+    #[serde(alias = "created_at")]
+    created_at: DateTime<Utc>,
 }
 
 impl User {
     /// Build a new [`User`] from validated components.
-    pub fn new(id: UserId, display_name: DisplayName) -> Self {
-        Self { id, display_name }
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::{DisplayName, User, UserId};
+    /// let id = UserId::new("00000000-0000-0000-0000-000000000000").expect("valid id");
+    /// let name = DisplayName::new("Ada Lovelace").expect("valid display name");
+    /// let created_at = "2026-01-01T00:00:00Z".parse().expect("timestamp");
+    /// let user = User::new(id, name, created_at);
+    /// assert_eq!(user.created_at(), created_at);
+    /// ```
+    pub fn new(id: UserId, display_name: DisplayName, created_at: DateTime<Utc>) -> Self {
+        Self {
+            id,
+            display_name,
+            created_at: truncate_to_microseconds(created_at),
+        }
+    }
+
+    /// Build a new [`User`] from validated components with the current time.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::{DisplayName, User, UserId};
+    /// let id = UserId::new("00000000-0000-0000-0000-000000000000").expect("valid id");
+    /// let name = DisplayName::new("Ada Lovelace").expect("valid display name");
+    /// let user = User::with_current_timestamp(id.clone(), name);
+    /// assert_eq!(user.id(), &id);
+    /// ```
+    pub fn with_current_timestamp(id: UserId, display_name: DisplayName) -> Self {
+        Self::new(id, display_name, Utc::now())
     }
 
     /// Build a new [`User`] from string inputs, panicking if validation fails.
@@ -256,15 +290,39 @@ impl User {
 
     /// Fallible constructor enforcing identifier and display name invariants.
     ///
-    /// Prefer [`User::new`] when components are already validated.
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::User;
+    /// let user = User::try_from_strings("00000000-0000-0000-0000-000000000000", "Ada").expect("valid user");
+    /// assert_eq!(user.display_name().as_ref(), "Ada");
+    /// ```
     pub fn try_from_strings(
         id: impl AsRef<str>,
         display_name: impl Into<String>,
     ) -> Result<Self, UserValidationError> {
+        Self::try_from_strings_at(id, display_name, Utc::now())
+    }
+
+    /// Fallible constructor enforcing invariants with an explicit timestamp.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::User;
+    /// let created_at = "2026-01-01T00:00:00Z".parse().expect("timestamp");
+    /// let user = User::try_from_strings_at("00000000-0000-0000-0000-000000000000", "Ada", created_at).expect("valid user");
+    /// assert_eq!(user.created_at(), created_at);
+    /// ```
+    pub fn try_from_strings_at(
+        id: impl AsRef<str>,
+        display_name: impl Into<String>,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, UserValidationError> {
         let id = UserId::new(id)?;
         let display_name = DisplayName::new(display_name)?;
 
-        Ok(Self::new(id, display_name))
+        Ok(Self::new(id, display_name, created_at))
     }
 
     /// Stable user identifier.
@@ -276,6 +334,27 @@ impl User {
     pub fn display_name(&self) -> &DisplayName {
         &self.display_name
     }
+
+    /// Timestamp when the user was first created.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::User;
+    /// # let created_at = "2026-01-01T00:00:00Z".parse().expect("timestamp");
+    /// # let user = User::try_from_strings_at("00000000-0000-0000-0000-000000000000", "Ada", created_at).expect("valid user");
+    /// assert_eq!(user.created_at(), created_at);
+    /// ```
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+}
+
+fn truncate_to_microseconds(value: DateTime<Utc>) -> DateTime<Utc> {
+    match value.with_nanosecond(value.timestamp_subsec_micros() * 1_000) {
+        Some(truncated) => truncated,
+        None => value,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -284,14 +363,21 @@ struct UserDto {
     id: String,
     #[serde(alias = "display_name")]
     display_name: String,
+    #[serde(default, alias = "created_at")]
+    created_at: Option<DateTime<Utc>>,
 }
 
 impl From<User> for UserDto {
     fn from(value: User) -> Self {
-        let User { id, display_name } = value;
+        let User {
+            id,
+            display_name,
+            created_at,
+        } = value;
         Self {
             id: id.to_string(),
             display_name: display_name.into(),
+            created_at: Some(created_at),
         }
     }
 }
@@ -300,7 +386,10 @@ impl TryFrom<UserDto> for User {
     type Error = UserValidationError;
 
     fn try_from(value: UserDto) -> Result<Self, Self::Error> {
-        User::try_from_strings(value.id, value.display_name)
+        match value.created_at {
+            Some(created_at) => User::try_from_strings_at(value.id, value.display_name, created_at),
+            None => User::try_from_strings(value.id, value.display_name),
+        }
     }
 }
 

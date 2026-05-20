@@ -103,6 +103,7 @@ fn map_seed_users(
         user_rows.push(NewUserRow {
             id: *user.id().as_uuid(),
             display_name: user.display_name().as_ref(),
+            created_at: user.created_at(),
         });
 
         let revision = i32::try_from(preferences.revision)

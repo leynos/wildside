@@ -25,6 +25,7 @@ use crate::inbound::http::offline::{
 use crate::inbound::http::schemas::{
     ErrorCodeSchema, ErrorSchema, InterestThemeIdSchema, UserInterestsSchema, UserSchema,
 };
+use crate::inbound::http::users_pagination::{PaginatedUsersResponse, PaginationLinksSchema};
 use crate::inbound::http::walk_sessions::{
     CreateWalkSessionRequestBody, CreateWalkSessionResponseBody, WalkCompletionSummaryResponseBody,
     WalkPrimaryStatBody, WalkSecondaryStatBody,
@@ -92,6 +93,8 @@ impl Modify for SecurityAddon {
         UserSchema,
         UserInterestsSchema,
         InterestThemeIdSchema,
+        PaginationLinksSchema,
+        PaginatedUsersResponse,
         ErrorSchema,
         ErrorCodeSchema,
         ExploreCatalogueResponse,

@@ -19,7 +19,7 @@ impl UserOnboardingService {
         let display_name = display_name.into();
         match DisplayName::new(display_name.clone()) {
             Ok(display_name) => {
-                let user = User::new(UserId::random(), display_name);
+                let user = User::with_current_timestamp(UserId::random(), display_name);
                 UserEvent::UserCreated(UserCreatedEvent { trace_id, user })
             }
             Err(error) => {
