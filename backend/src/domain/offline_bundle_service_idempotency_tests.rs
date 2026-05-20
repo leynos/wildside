@@ -26,13 +26,20 @@ pub(super) async fn assert_list_bundles_rejects_invalid_device_id(device_id: &st
     repo.expect_list_for_owner_and_device().times(0);
 
     let service = make_query_service(repo);
-    let error = service
+    let error = match service
         .list_bundles(ListOfflineBundlesRequest {
             owner_user_id: Some(crate::domain::UserId::random()),
             device_id: device_id.to_owned(),
         })
         .await
-        .expect_err("invalid device id should be rejected");
+    {
+        Ok(_) => {
+            return Err(Box::new(io::Error::other(
+                "invalid device id should be rejected",
+            )));
+        }
+        Err(error) => error,
+    };
 
     assert_eq!(error.code(), crate::domain::ErrorCode::InvalidRequest);
     Ok(())
@@ -155,14 +162,17 @@ pub(super) async fn assert_upsert_returns_conflict_when_duplicate_key_race_finds
         Arc::new(idempotency_repo),
         Arc::new(DefaultClock),
     );
-    let error = service
+    let error = match service
         .upsert_bundle(UpsertOfflineBundleRequest {
             user_id,
             bundle: payload,
             idempotency_key: Some(idempotency_key),
         })
         .await
-        .expect_err("conflict");
+    {
+        Ok(_) => return Err(Box::new(io::Error::other("conflict"))),
+        Err(error) => error,
+    };
 
     assert_eq!(error.code(), crate::domain::ErrorCode::Conflict);
     Ok(())

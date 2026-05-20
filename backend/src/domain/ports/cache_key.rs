@@ -59,7 +59,18 @@ impl RouteCacheKey {
     /// ```
     pub fn for_route_request(payload: &Value) -> Result<Self, RouteCacheKeyDerivationError> {
         let normalized = normalize_route_request_value(payload, None);
-        let hash = canonicalize_and_hash(&normalized)?;
+        let hash = canonicalize_and_hash(&normalized)?.to_hex();
+
+        // Enforce the namespace/digest contract before the key is accepted.
+        if hash.len() != 64
+            || !hash
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(RouteCacheKeyDerivationError::Validation(
+                RouteCacheKeyValidationError::MalformedDigest,
+            ));
+        }
 
         Self::new(format!("{ROUTE_CACHE_NAMESPACE}:{hash}"))
             .map_err(RouteCacheKeyDerivationError::Validation)
@@ -92,6 +103,9 @@ pub enum RouteCacheKeyValidationError {
     /// Key contains leading or trailing whitespace.
     #[error("route cache key must not contain surrounding whitespace")]
     ContainsWhitespace,
+    /// The hash digest embedded in the key is not a 64-character lowercase hex string.
+    #[error("route cache key digest must be a 64-character lowercase hex string")]
+    MalformedDigest,
 }
 
 /// Errors returned while deriving canonical route cache keys.
@@ -162,13 +176,15 @@ fn round_coordinate(number: &Number) -> Number {
 }
 
 #[cfg(test)]
+#[cfg_attr(any(), expect(no_expect_outside_tests, reason = "unit test expects"))]
 mod tests {
     //! Validates cache key parsing, canonicalization, and whitespace
     //! constraints.
     use serde_json::json;
 
     use super::{
-        ROUNDED_COORDINATE_KEYS, RouteCacheKey, RouteCacheKeyValidationError, SORTED_ARRAY_KEYS,
+        ROUNDED_COORDINATE_KEYS, RouteCacheKey, RouteCacheKeyDerivationError,
+        RouteCacheKeyValidationError, SORTED_ARRAY_KEYS,
     };
     use rstest::rstest;
 
@@ -216,6 +232,17 @@ mod tests {
                 .all(|character| character.is_ascii_hexdigit())
         );
         assert_eq!(digest, digest.to_ascii_lowercase());
+    }
+
+    #[test]
+    fn malformed_digest_error_documents_defensive_route_key_guard() {
+        let error =
+            RouteCacheKeyDerivationError::Validation(RouteCacheKeyValidationError::MalformedDigest);
+
+        assert_eq!(
+            error.to_string(),
+            "route cache key digest must be a 64-character lowercase hex string"
+        );
     }
 
     #[rstest]
