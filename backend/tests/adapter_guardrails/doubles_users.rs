@@ -89,11 +89,8 @@ impl RecordingUsersQuery {
     pub(crate) fn set_response(&self, response: UsersResponse) {
         *self.response.lock().expect("users response lock") = response;
     }
-}
 
-#[async_trait]
-impl UsersQuery for RecordingUsersQuery {
-    async fn list_users(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error> {
+    fn respond(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error> {
         self.calls
             .lock()
             .expect("users calls lock")
@@ -103,20 +100,21 @@ impl UsersQuery for RecordingUsersQuery {
             UsersResponse::Err(error) => Err(error),
         }
     }
+}
+
+#[async_trait]
+impl UsersQuery for RecordingUsersQuery {
+    async fn list_users(&self, authenticated_user: &UserId) -> Result<Vec<User>, Error> {
+        self.respond(authenticated_user)
+    }
 
     async fn list_users_page(
         &self,
         authenticated_user: &UserId,
         _request: ListUsersPageRequest,
     ) -> Result<UsersPage, Error> {
-        self.calls
-            .lock()
-            .expect("users calls lock")
-            .push(authenticated_user.to_string());
-        match self.response.lock().expect("users response lock").clone() {
-            UsersResponse::Ok(users) => Ok(UsersPage::new(users, false)),
-            UsersResponse::Err(error) => Err(error),
-        }
+        self.respond(authenticated_user)
+            .map(|users| UsersPage::new(users, false))
     }
 }
 
