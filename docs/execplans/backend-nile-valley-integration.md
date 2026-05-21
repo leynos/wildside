@@ -610,8 +610,17 @@ strategy before continuing.
   `4e3083f Move health observation into domain`.
 - [x] 2026-05-21: Ran `coderabbit review --agent` for the health milestone;
   CodeRabbit completed with zero findings.
-- [ ] Harden the backend container image.
-- [ ] Harden the backend container image.
+- [x] 2026-05-21: Hardened the backend container image definition by moving
+  to an edition-2024-capable Rust builder, a Debian slim runtime, a non-root
+  UID/GID, explicit runtime libraries, `HOST`/`PORT` defaults, and
+  `/health/live` as the image liveness check.
+- [x] 2026-05-21: Added a root `.dockerignore` so local build artefacts,
+  VCS metadata, frontend output, and dependency trees are excluded from image
+  contexts.
+- [x] 2026-05-21: Ran container milestone gates successfully:
+  `make check-fmt`, `make lint`, and `make test`; the Docker image build
+  remains blocked locally because Docker is not installed in this environment.
+- [ ] Run CodeRabbit review for the container milestone and clear concerns.
 - [ ] Align the Helm chart with Nile Valley.
 - [ ] Add local `k3d` orchestration.
 - [ ] Update design, user, developer, architecture, contents, and roadmap docs.
@@ -639,6 +648,11 @@ strategy before continuing.
 - `rstest-bdd` async scenarios need an explicit async test runtime. The health
   probe BDD test uses `#[tokio::test(flavor = "current_thread")]` so async
   Actix route tests do not attempt to start a nested runtime.
+- Docker is not installed in this environment. The container milestone cannot
+  run
+  `docker build -f deploy/docker/backend.Dockerfile -t wildside-backend:local .`
+  here; validation must rely on static review and the repository gates until a
+  Docker-enabled host runs the image build.
 
 ## Decision Log
 
@@ -679,6 +693,13 @@ strategy before continuing.
   alias for `backend::domain::ProcessHealth` during the refactor.
   Rationale: existing server wiring and callers can keep their current import
   path while the actual health semantics and state live in the domain layer.
+
+- 2026-05-21: Use a Debian slim runtime image rather than continuing the
+  Alpine musl image.
+  Rationale: the backend depends on PostgreSQL, OpenSSL, and SQLite-linked
+  crates. A glibc runtime with explicit `libpq5`, `libssl3`, and
+  `libsqlite3-0` packages keeps the container build simpler and avoids the
+  brittle exact Alpine package pins that were already stale.
 
 ## Outcomes & Retrospective
 
