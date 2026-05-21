@@ -643,6 +643,10 @@ strategy before continuing.
   blocker because `k3d` and `kubectl` are not installed in this environment.
 - [x] 2026-05-21: Ran local preview milestone gates successfully:
   `make check-fmt`, `make lint`, and `make test`.
+- [x] 2026-05-21: Committed the local preview milestone as
+  `5aaf44f Add local k3d preview workflow`.
+- [x] 2026-05-21: Ran `coderabbit review --agent` for the local preview
+  milestone; CodeRabbit completed with zero findings.
 - [ ] Update design, user, developer, architecture, contents, and roadmap docs.
 - [ ] Run full quality gates and close out the plan.
 
