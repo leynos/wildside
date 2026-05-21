@@ -1,5 +1,7 @@
 //! Unit tests for session configuration parsing.
 
+#![cfg(test)]
+
 use super::test_utils::TempKeyFile;
 use super::*;
 use mockable::{Env as MockableEnv, MockEnv};

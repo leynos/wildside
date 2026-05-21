@@ -1,5 +1,7 @@
 //! Tests for users API handlers.
 
+#![cfg(test)]
+
 use super::*;
 use crate::domain::ports::{
     FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureLoginService,

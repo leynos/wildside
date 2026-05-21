@@ -1,5 +1,7 @@
 //! Tests for offline bundle HTTP handlers.
 
+#![cfg(test)]
+
 use super::*;
 use crate::domain::ports::{
     FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureLoginService,

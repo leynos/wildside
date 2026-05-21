@@ -1,5 +1,7 @@
 //! Tests for walk session service.
 
+#![cfg(test)]
+
 use std::{error::Error as StdError, sync::Arc};
 
 use chrono::{DateTime, Utc};
