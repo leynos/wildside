@@ -606,8 +606,10 @@ strategy before continuing.
   adapter as HTTP response mapping.
 - [x] 2026-05-21: Ran health milestone gates successfully:
   `make check-fmt`, `make lint`, and `make test`.
-- [ ] Commit the health milestone.
-- [ ] Run CodeRabbit review for the health milestone and clear concerns.
+- [x] 2026-05-21: Committed the health milestone as
+  `4e3083f Move health observation into domain`.
+- [x] 2026-05-21: Ran `coderabbit review --agent` for the health milestone;
+  CodeRabbit completed with zero findings.
 - [ ] Harden the backend container image.
 - [ ] Harden the backend container image.
 - [ ] Align the Helm chart with Nile Valley.
