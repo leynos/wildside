@@ -635,7 +635,14 @@ strategy before continuing.
   `66cf831 Align Helm chart with Nile Valley`.
 - [x] 2026-05-21: Ran `coderabbit review --agent` for the Helm milestone;
   CodeRabbit completed with zero findings.
-- [ ] Add local `k3d` orchestration.
+- [x] 2026-05-21: Added local `k3d` orchestration scaffolding with a
+  Cyclopts CLI, Makefile targets, configuration, validation, k3d,
+  Kubernetes, and Helm deployment helpers.
+- [x] 2026-05-21: Validated the local preview CLI help and pure Python
+  validation tests; `make local-k8s-status` now reports the expected local
+  blocker because `k3d` and `kubectl` are not installed in this environment.
+- [x] 2026-05-21: Ran local preview milestone gates successfully:
+  `make check-fmt`, `make lint`, and `make test`.
 - [ ] Update design, user, developer, architecture, contents, and roadmap docs.
 - [ ] Run full quality gates and close out the plan.
 
@@ -669,6 +676,9 @@ strategy before continuing.
 - This Helm binary defaults `helm template` capabilities to Kubernetes v1.20,
   while the chart declares `kubeVersion: >=1.26.0-0 <1.32.0-0`; Helm renders
   need `--kube-version 1.31.0` in this environment.
+- Local preview cluster validation cannot create or inspect a cluster in this
+  environment because `k3d` and `kubectl` are not installed. The CLI preflight
+  now reports that blocker concisely.
 
 ## Decision Log
 
