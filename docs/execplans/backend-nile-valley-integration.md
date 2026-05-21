@@ -5,9 +5,9 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
-This plan must be approved before implementation starts.
+This plan was approved for implementation on 2026-05-21.
 
 ## Purpose / big picture
 
@@ -595,10 +595,20 @@ strategy before continuing.
 - [x] 2026-05-21: Attempted `coderabbit review --agent` twice for the planning
   milestone; both attempts were blocked by the external CodeRabbit usage rate
   limit before any review findings were returned.
-- [ ] Await explicit user approval before implementation.
-- [ ] Record approval and set `Status: IN PROGRESS`.
-- [ ] Establish failing health tests.
-- [ ] Move health semantics into the domain layer.
+- [x] 2026-05-21: Received explicit user approval to proceed with
+  implementation as set out in this ExecPlan.
+- [x] 2026-05-21: Recorded approval and set `Status: IN PROGRESS`.
+- [x] 2026-05-21: Established health unit and BDD coverage for domain state,
+  Actix probe mapping, unhealthy liveness, unready readiness, and
+  `Cache-Control: no-store`.
+- [x] 2026-05-21: Moved health semantics into a domain-owned
+  `ProcessHealth` implementation and `HealthObserver` port, keeping the Actix
+  adapter as HTTP response mapping.
+- [x] 2026-05-21: Ran health milestone gates successfully:
+  `make check-fmt`, `make lint`, and `make test`.
+- [ ] Commit the health milestone.
+- [ ] Run CodeRabbit review for the health milestone and clear concerns.
+- [ ] Harden the backend container image.
 - [ ] Harden the backend container image.
 - [ ] Align the Helm chart with Nile Valley.
 - [ ] Add local `k3d` orchestration.
@@ -624,6 +634,9 @@ strategy before continuing.
 - `coderabbit review --agent` can return exit code 0 while reporting a
   recoverable rate-limit error in its JSON output. The planning milestone could
   not obtain CodeRabbit findings after two attempts on 2026-05-21.
+- `rstest-bdd` async scenarios need an explicit async test runtime. The health
+  probe BDD test uses `#[tokio::test(flavor = "current_thread")]` so async
+  Actix route tests do not attempt to start a nested runtime.
 
 ## Decision Log
 
@@ -653,6 +666,17 @@ strategy before continuing.
   a broad algorithmic state space. This decision must be revisited if the
   implementation introduces retry or state invariants that merit stronger
   verification.
+
+- 2026-05-21: Begin implementation with the domain health port and HTTP
+  adapter tests.
+  Rationale: this is the architecture-bearing change. Container, Helm, and
+  local preview work should depend on stable health semantics rather than the
+  current adapter-owned state.
+
+- 2026-05-21: Keep `backend::inbound::http::health::HealthState` as a type
+  alias for `backend::domain::ProcessHealth` during the refactor.
+  Rationale: existing server wiring and callers can keep their current import
+  path while the actual health semantics and state live in the domain layer.
 
 ## Outcomes & Retrospective
 
