@@ -620,7 +620,10 @@ strategy before continuing.
 - [x] 2026-05-21: Ran container milestone gates successfully:
   `make check-fmt`, `make lint`, and `make test`; the Docker image build
   remains blocked locally because Docker is not installed in this environment.
-- [ ] Run CodeRabbit review for the container milestone and clear concerns.
+- [x] 2026-05-21: Committed the container milestone as
+  `4b41354 Harden backend container image`.
+- [x] 2026-05-21: Ran `coderabbit review --agent` for the container
+  milestone; CodeRabbit completed with zero findings.
 - [ ] Align the Helm chart with Nile Valley.
 - [ ] Add local `k3d` orchestration.
 - [ ] Update design, user, developer, architecture, contents, and roadmap docs.
