@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 This plan was approved for implementation on 2026-05-21.
 
@@ -652,7 +652,15 @@ strategy before continuing.
   integration contracts.
 - [x] 2026-05-21: Ran documentation validation successfully: `make fmt`,
   `make markdownlint`, and `make nixie`.
-- [ ] Run full quality gates and close out the plan.
+- [x] 2026-05-21: Committed the documentation milestone as
+  `fea1a1d Document Nile Valley preview integration`.
+- [x] 2026-05-21: Ran `coderabbit review --agent` for the documentation
+  milestone; CodeRabbit completed with zero findings.
+- [x] 2026-05-21: Ran final gates successfully: `make check-fmt`,
+  `make lint`, and `make test`.
+- [x] 2026-05-21: Closed this ExecPlan after all implementation, validation,
+  documentation, roadmap, and review requirements were satisfied except for
+  environment-blocked Docker/k3d execution.
 
 ## Surprises & discoveries
 
@@ -746,5 +754,54 @@ strategy before continuing.
 
 ## Outcomes & Retrospective
 
-Not started. This section must be completed after implementation and final
-validation.
+Implemented.
+
+Wildside now has a domain-owned health observation model and port, with Actix
+Web probe handlers mapping that policy to `/health/live` and `/health/ready`.
+The backend container image uses a multi-stage build, a Debian slim non-root
+runtime, explicit runtime libraries, stable `HOST`/`PORT` defaults, and a
+`/health/live` image health check.
+
+The Helm chart now supports Nile Valley-oriented deployment concerns:
+ExternalSecret rendering, effective Secret name resolution, optional live
+Secret validation, service account configuration, local and host-based ingress
+forms, schema validation, and Kubernetes probes aligned with the runtime health
+contract.
+
+The repository now provides `make local-k8s-up`, `make local-k8s-status`,
+`make local-k8s-logs`, and `make local-k8s-down` targets backed by a
+Cyclopts/`uv` Python helper. The helper preflights Docker, Helm, `k3d`, and
+`kubectl`; builds and imports the local backend image; and installs the chart
+with `values.local.yaml` when the required tools are present.
+
+Documentation now covers user-facing server and preview behaviour in
+`docs/users-guide.md`, the local preview and Nile Valley design in
+`docs/local-k8s-preview-design.md`, and internal conventions in the developer,
+architecture, repository-structure, contents, and roadmap documents. The
+backend roadmap entry for Nile Valley preview and GitOps alignment is marked
+done.
+
+Validation completed:
+
+- `make check-fmt`
+- `make lint`
+- `make test`
+- `make fmt`
+- `make markdownlint`
+- `make nixie`
+- `helm lint deploy/charts/wildside`
+- `helm template deploy/charts/wildside --kube-version 1.31.0`
+- local values and ExternalSecret Helm render checks
+- local preview CLI help and Python unit tests
+- CodeRabbit reviews for health, container, Helm, local preview, and
+  documentation milestones, all with zero findings
+
+Residual environment gaps:
+
+- Docker is not installed in this environment, so the backend image build could
+  not be executed here.
+- `k3d` and `kubectl` are not installed in this environment, so the full local
+  preview cluster lifecycle could not be executed here.
+
+Both gaps are covered by preflight checks and documented as local environment
+requirements.
