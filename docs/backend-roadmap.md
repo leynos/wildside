@@ -338,3 +338,7 @@ publish events and metrics through their ports only.
 Deployment automation, preview environment workflows, and operational runbooks
 are maintained in the Nile Valley repository. Coordinate roadmap changes with
 that repository when deployment or infrastructure behaviour needs updates.
+
+- [x] 7.1. Align Wildside with Nile Valley preview and GitOps workflows by
+  hardening the backend health contract, container image, Helm chart, and
+  repository-local k3d preview helper.

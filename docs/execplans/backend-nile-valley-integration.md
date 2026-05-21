@@ -647,7 +647,11 @@ strategy before continuing.
   `5aaf44f Add local k3d preview workflow`.
 - [x] 2026-05-21: Ran `coderabbit review --agent` for the local preview
   milestone; CodeRabbit completed with zero findings.
-- [ ] Update design, user, developer, architecture, contents, and roadmap docs.
+- [x] 2026-05-21: Updated design, user, developer, architecture, contents,
+  repository-structure, and roadmap docs for the local preview and Nile Valley
+  integration contracts.
+- [x] 2026-05-21: Ran documentation validation successfully: `make fmt`,
+  `make markdownlint`, and `make nixie`.
 - [ ] Run full quality gates and close out the plan.
 
 ## Surprises & discoveries
@@ -683,6 +687,9 @@ strategy before continuing.
 - Local preview cluster validation cannot create or inspect a cluster in this
   environment because `k3d` and `kubectl` are not installed. The CLI preflight
   now reports that blocker concisely.
+- `make nixie` runs `bun install`, which attempted to refresh `bun.lock` for
+  the unrelated `ip-address` override. That lockfile change was excluded from
+  the documentation milestone.
 
 ## Decision Log
 

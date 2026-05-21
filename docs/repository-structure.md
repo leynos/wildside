@@ -199,8 +199,17 @@ ______________________________________________________________________
 #### Flow
 
 ```text
-Rust types + handlers  →  OpenAPI (utoipa)  →  orval  →  Typed TS client  →  React + TanStack Query
+Rust event payloads (serde + schemars)
+  → AsyncAPI (YAML)
+  → Docs & stubs
+  → Frontend WS client + TanStack Query/SWR
 ```
+
+> Tip: Reuse the same serde structs for both OpenAPI bodies and AsyncAPI
+> message payloads; derive JSON Schema via `schemars` if you want runtime
+> validation or to feed generator pipelines.
+
+______________________________________________________________________
 
 ### 2.2 Actix WebSocket/Events → AsyncAPI → Consumers
 
@@ -491,6 +500,13 @@ to this chart.
 Deployment automation for clusters and preview environments lives in the Nile
 Valley repository. Refer to its documentation for GitOps workflows and
 infrastructure state handling.
+
+This repository also provides a developer-local k3d preview helper:
+`scripts/local_k8s.py` and `scripts/local_k8s/*`. The helper builds the
+backend image, imports it into a local `k3d` cluster, and installs the Wildside
+chart with `deploy/charts/wildside/values.local.yaml`. It validates the
+application packaging contract; Nile Valley remains the owner of shared
+cluster and GitOps automation.
 
 ______________________________________________________________________
 

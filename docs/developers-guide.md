@@ -26,6 +26,27 @@ All suites run through the same quality gateways:
 - `make audit`
 - `make test`
 
+
+## Local Kubernetes preview
+
+Use the repository-local k3d preview when validating the backend image and Helm
+chart before handing values to Nile Valley. The preview workflow is documented
+in [Local k3d preview and Nile Valley integration
+design](local-k8s-preview-design.md).
+
+```bash
+make local-k8s-up
+make local-k8s-status
+make local-k8s-logs
+make local-k8s-down
+```
+
+The Makefile targets call `uv run scripts/local_k8s.py ...`. Keep helper logic
+in `scripts/local_k8s/`, unit-test pure validation behaviour under
+`scripts/local_k8s/unittests/`, and keep cluster creation idempotent. The
+helper must fail before making changes when required tools such as Docker,
+Helm, `k3d`, or `kubectl` are missing.
+
 ## Front-end development
 
 The Wildside Progressive Web Application (PWA) lives under `frontend-pwa/`.
@@ -467,26 +488,15 @@ Related domain helpers:
 - `RouteCacheKeyDerivationError` reports `Hash` and `Validation` failures from
   key derivation.
 
-### Test infrastructure
+#### Test infrastructure
 
-The Redis adapter test suite uses a dual-mode approach:
+- `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
+- No feature flags required; BDD tests are in the `tests/` integration
+  harness and run unconditionally with `cargo test`
 
-**Mock-based unit tests** (run by default):
+To run BDD tests locally:
 
-- Located in `backend/src/outbound/cache/tests/mock_tests.rs`
-- Use `FakeProvider` – an in-memory `ConnectionProvider` double
-- Fast, deterministic, no external dependencies
-- Run as part of the standard `cargo test` / `make test` gate
-
-**Live Redis integration tests** (opt-in):
-
-- Located in `backend/src/outbound/cache/tests/live_tests.rs`
-- Require a `redis-server` binary on `PATH`
-- Marked with `#[ignore = "requires redis-server binary..."]`
-- Run explicitly with: `cargo test -- --ignored`
-- Behavioural coverage for route-key canonicalization lives in
-  `backend/tests/route_cache_key_canonicalization_bdd.rs`.
-
+```bash
 ### RedisTestServer harness
 
 Integration tests use `RedisTestServer` from `backend/src/test_support/redis.rs`:
@@ -520,17 +530,19 @@ The cache adapter requires:
 
 #### Production dependencies
 
-- `bb8-redis` – Connection pooling for `redis-rs`
-- `serde` / `serde_json` – Payload serialization
+- `apalis-core` – Core Apalis job-queue primitives
+- `apalis-postgres` – PostgreSQL storage backend for Apalis
+- `sqlx` (features: `postgres`, `runtime-tokio-rustls`) – Async PostgreSQL
+  pool used by `ApalisPostgresProvider`
+- `serde` / `serde_json` – Payload serialisation
 
 #### Test infrastructure
 
-- `test-support` feature flag – Enables `RedisRouteCache::new()` constructor
-  and `RedisTestServer::pool()` for test injection
-- `redis-server` binary – Required for live integration tests (not for unit
-tests using `FakeProvider`)
+- `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
+- No feature flags required; BDD tests are in the `tests/` integration
+  harness and run unconditionally with `cargo test`
 
-To run live Redis tests locally:
+To run BDD tests locally:
 
 ```bash
 # Ensure redis-server is available
