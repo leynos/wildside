@@ -631,6 +631,10 @@ strategy before continuing.
 - [x] 2026-05-21: Validated the Helm milestone with `helm lint`,
   `helm template --kube-version 1.31.0`, local values rendering, and an
   ExternalSecret render in `/tmp/helm-template-wildside-backend-nile-valley-integration.out`.
+- [x] 2026-05-21: Committed the Helm milestone as
+  `66cf831 Align Helm chart with Nile Valley`.
+- [x] 2026-05-21: Ran `coderabbit review --agent` for the Helm milestone;
+  CodeRabbit completed with zero findings.
 - [ ] Add local `k3d` orchestration.
 - [ ] Update design, user, developer, architecture, contents, and roadmap docs.
 - [ ] Run full quality gates and close out the plan.
