@@ -624,7 +624,13 @@ strategy before continuing.
   `4b41354 Harden backend container image`.
 - [x] 2026-05-21: Ran `coderabbit review --agent` for the container
   milestone; CodeRabbit completed with zero findings.
-- [ ] Align the Helm chart with Nile Valley.
+- [x] 2026-05-21: Aligned the Helm chart with Nile Valley conventions:
+  ExternalSecret rendering, effective Secret name resolution, optional live
+  Secret validation, service account support, hostless/local ingress values,
+  schema validation, and `/health/live` startup probes.
+- [x] 2026-05-21: Validated the Helm milestone with `helm lint`,
+  `helm template --kube-version 1.31.0`, local values rendering, and an
+  ExternalSecret render in `/tmp/helm-template-wildside-backend-nile-valley-integration.out`.
 - [ ] Add local `k3d` orchestration.
 - [ ] Update design, user, developer, architecture, contents, and roadmap docs.
 - [ ] Run full quality gates and close out the plan.
@@ -656,6 +662,9 @@ strategy before continuing.
   `docker build -f deploy/docker/backend.Dockerfile -t wildside-backend:local .`
   here; validation must rely on static review and the repository gates until a
   Docker-enabled host runs the image build.
+- This Helm binary defaults `helm template` capabilities to Kubernetes v1.20,
+  while the chart declares `kubeVersion: >=1.26.0-0 <1.32.0-0`; Helm renders
+  need `--kube-version 1.31.0` in this environment.
 
 ## Decision Log
 
@@ -703,6 +712,12 @@ strategy before continuing.
   crates. A glibc runtime with explicit `libpq5`, `libssl3`, and
   `libsqlite3-0` packages keeps the container build simpler and avoids the
   brittle exact Alpine package pins that were already stale.
+
+- 2026-05-21: Keep live Secret lookup validation opt-in through
+  `validateExistingSecret`.
+  Rationale: GitOps, CI, and local preview renders must work without access to
+  the target cluster, while operators can still request a live lookup when
+  installing against a cluster that already contains the Secret.
 
 ## Outcomes & Retrospective
 

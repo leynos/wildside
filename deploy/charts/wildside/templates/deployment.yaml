@@ -25,15 +25,20 @@ spec:
         {{- include "wildside.labels" . | nindent 8 }}
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: {{ .Chart.Name }}
+      {{- if or .Values.config .Values.sessionSecret.enabled }}
       annotations:
-        checksum/config: {{ if .Values.config }}{{ toYaml .Values.config | sha256sum }}{{ end }}
+        {{- if .Values.config }}
+        checksum/config: {{ toYaml .Values.config | sha256sum }}
+        {{- end }}
         {{- if .Values.sessionSecret.enabled }}
         {{- $secret := lookup "v1" "Secret" .Release.Namespace (.Values.sessionSecret.name | default "wildside-session-key") }}
         {{- if $secret }}
         checksum/session-secret: {{ $secret.data | toYaml | sha256sum }}
         {{- end }}
         {{- end }}
+      {{- end }}
     spec:
+      serviceAccountName: {{ include "wildside.serviceAccountName" . }}
       terminationGracePeriodSeconds: 30
       {{- with .Values.podSecurityContext }}
       securityContext:
@@ -66,7 +71,7 @@ spec:
               containerPort: 8080
           {{- $cfg := .Values.config | default dict }}
           {{- $sec := .Values.secretEnvFromKeys | default dict }}
-          {{- $name := .Values.existingSecretName }}
+          {{- $name := include "wildside.effectiveSecretName" . }}
           {{- include "wildside.validateSecrets" . -}}
           {{- if or (gt (len $cfg) 0) (gt (len $sec) 0) }}
           env:
@@ -84,23 +89,23 @@ spec:
                   name: {{ $name | quote }}
                   key: {{ $secretKey | quote }}
                   optional: {{ $.Values.allowMissingSecret | default true }}
-           {{- end }}
-         {{- end }}
+            {{- end }}
+          {{- end }}
 {{- with .Values.securityContext }}
           securityContext:
 {{ toYaml . | replace "drop:\n  -" "drop:\n    -" | nindent 12 }}
 {{- end }}
 {{- with .Values.container.readinessProbe }}
-            readinessProbe:
-{{- toYaml . | nindent 14 }}
+          readinessProbe:
+{{- toYaml . | nindent 12 }}
 {{- end }}
 {{- with .Values.container.livenessProbe }}
-            livenessProbe:
-{{- toYaml . | nindent 14 }}
+          livenessProbe:
+{{- toYaml . | nindent 12 }}
 {{- end }}
 {{- with .Values.container.startupProbe }}
-            startupProbe:
-{{- toYaml . | nindent 14 }}
+          startupProbe:
+{{- toYaml . | nindent 12 }}
 {{- end }}
           {{- with .Values.resources }}
           resources:

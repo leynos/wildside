@@ -13,24 +13,36 @@ spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . | quote }}
   {{- end }}
-  {{- with .Values.ingress.hostname }}
-  {{- if $.Values.ingress.tlsSecretName }}
-  tls:
-    - hosts:
-        - {{ . | quote }}
-      secretName: {{ $.Values.ingress.tlsSecretName | quote }}
+  {{- $hosts := .Values.ingress.hosts | default list }}
+  {{- if and (eq (len $hosts) 0) .Values.ingress.hostname }}
+  {{- $hosts = list (dict "host" .Values.ingress.hostname "paths" (list (dict "path" "/" "pathType" "Prefix"))) }}
   {{- end }}
+  {{- $tls := .Values.ingress.tls | default list }}
+  {{- if and (eq (len $tls) 0) .Values.ingress.tlsSecretName .Values.ingress.hostname }}
+  {{- $tls = list (dict "secretName" .Values.ingress.tlsSecretName "hosts" (list .Values.ingress.hostname)) }}
+  {{- end }}
+  {{- if $tls }}
+  tls:
+    {{- toYaml $tls | nindent 4 }}
+  {{- end }}
+  {{- if $hosts }}
   rules:
-    - host: {{ . | quote }}
+    {{- range $hostConfig := $hosts }}
+    - {{- with $hostConfig.host }}
+      host: {{ . | quote }}
+      {{- end }}
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          {{- range $path := ($hostConfig.paths | default (list (dict "path" "/" "pathType" "Prefix"))) }}
+          - path: {{ $path.path | default "/" | quote }}
+            pathType: {{ $path.pathType | default "Prefix" }}
             backend:
               service:
                 name: {{ include "wildside.fullname" $ }}
                 port:
                   name: {{ $.Values.service.portName | default "http" | quote }}
+          {{- end }}
+    {{- end }}
   {{- else }}
   # Leave host unset to apply the rule to all hosts
   rules:

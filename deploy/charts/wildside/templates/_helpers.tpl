@@ -28,11 +28,26 @@ app.kubernetes.io/name: {{ include "wildside.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
+{{- define "wildside.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "wildside.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "wildside.effectiveSecretName" -}}
+{{- $externalSecret := .Values.externalSecret | default dict -}}
+{{- $externalSecretEnabled := $externalSecret.enabled | default false -}}
+{{- $externalSecretTarget := $externalSecret.targetName | default "" -}}
+{{- .Values.existingSecretName | default (ternary (default (include "wildside.fullname" .) $externalSecretTarget) "" $externalSecretEnabled) -}}
+{{- end -}}
+
 {{/*
 Validate that secretEnvFromKeys references an existing Secret when set.
 
-- Requires .Values.existingSecretName when secretEnvFromKeys has entries.
-- Optionally fails if the Secret is missing and allowMissingSecret is false.
+- Requires an effective Secret name when secretEnvFromKeys has entries.
+- Optionally validates the live Secret when validateExistingSecret is true.
 - Validates that listed keys exist within the referenced Secret.
 */}}
 {{- define "wildside.validateSecrets" -}}
@@ -41,12 +56,22 @@ Validate that secretEnvFromKeys references an existing Secret when set.
 {{- fail (printf "secretEnvFromKeys must be a map, got %s" (typeOf $raw)) -}}
 {{- end -}}
 {{- $sec := $raw | default dict -}}
-{{- $name := .Values.existingSecretName -}}
+{{- $name := include "wildside.effectiveSecretName" . -}}
 {{- $allowMissing := .Values.allowMissingSecret | default true -}}
+{{- $validateExistingSecret := .Values.validateExistingSecret | default false -}}
 {{- if and (gt (len $sec) 0) (not $name) -}}
-{{- fail "existingSecretName is required when secretEnvFromKeys is set" -}}
+{{- fail "existingSecretName (or externalSecret.targetName / externalSecret.enabled) is required when secretEnvFromKeys is set" -}}
 {{- end -}}
-{{- if and (gt (len $sec) 0) $name -}}
+{{- if gt (len $sec) 0 -}}
+{{- range $k, $secretKey := $sec -}}
+{{- if not (regexMatch "^[A-Za-z_][A-Za-z0-9_]*$" $k) -}}
+{{- fail (printf "secretEnvFromKeys has invalid env var name %q (must match ^[A-Za-z_][A-Za-z0-9_]*$)" $k) -}}
+{{- end -}}
+{{- if not $secretKey -}}
+{{- fail (printf "secretEnvFromKeys maps %q to an empty secret key" $k) -}}
+{{- end -}}
+{{- end -}}
+{{- if and $validateExistingSecret $name -}}
 {{- if not (semverCompare ">=3.2.0" .Capabilities.HelmVersion.Version) -}}
 {{- fail "wildside.validateSecrets requires Helm >= 3.2.0" -}}
 {{- end -}}
@@ -60,18 +85,13 @@ Validate that secretEnvFromKeys references an existing Secret when set.
 {{- $stringData := (get $found "stringData") | default dict -}}
 {{- $missing := list -}}
 {{- range $k, $secretKey := $sec -}}
-{{- if not (regexMatch "^[A-Za-z_][A-Za-z0-9_]*$" $k) -}}
-{{- fail (printf "secretEnvFromKeys has invalid env var name %q (must match ^[A-Za-z_][A-Za-z0-9_]*$)" $k) -}}
-{{- end -}}
-{{- if not $secretKey -}}
-{{- fail (printf "secretEnvFromKeys maps %q to an empty secret key" $k) -}}
-{{- end -}}
 {{- if not (or (hasKey $data $secretKey) (hasKey $stringData $secretKey)) -}}
 {{- $missing = append $missing $secretKey -}}
 {{- end -}}
 {{- end -}}
 {{- if gt (len $missing) 0 -}}
 {{- fail (printf "Secret %q missing keys: %s" $name (join ", " $missing)) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
