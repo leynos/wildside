@@ -64,12 +64,19 @@ def helm_upgrade(config: PreviewConfig) -> None:
     )
 
 
+def _image_ref_lacks_tag(repository: str, separator: str, tag: str) -> bool:
+    """Return True when the parsed parts do not form a valid image:tag reference."""
+    return not separator or "/" in tag or not repository or not tag
+
+
 def image_repository_and_tag(image_name: str) -> tuple[str, str]:
     """Split a Docker image reference into Helm repository and tag values."""
 
     repository, separator, tag = image_name.rpartition(":")
-    if not separator or "/" in tag or not repository or not tag:
-        raise LocalK8sError("WILDSIDE_IMAGE must include a tag, for example wildside-backend:local")
+    if _image_ref_lacks_tag(repository, separator, tag):
+        raise LocalK8sError(
+            "WILDSIDE_IMAGE must include a tag, for example wildside-backend:local"
+        )
     return repository, tag
 
 
