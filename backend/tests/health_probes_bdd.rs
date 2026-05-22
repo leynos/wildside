@@ -26,7 +26,7 @@ impl HealthProbeWorld {
         }
     }
 
-    async fn request_readiness(&self) {
+    async fn request_probe(&self, uri: &str) {
         let app = test::init_service(
             App::new()
                 .app_data(self.health.clone())
@@ -34,7 +34,7 @@ impl HealthProbeWorld {
                 .service(live),
         )
         .await;
-        let request = test::TestRequest::get().uri("/health/ready").to_request();
+        let request = test::TestRequest::get().uri(uri).to_request();
         let response = test::call_service(&app, request).await;
         let response = ProbeResponse {
             status: response.status(),
@@ -43,21 +43,12 @@ impl HealthProbeWorld {
         *self.response.borrow_mut() = Some(response);
     }
 
+    async fn request_readiness(&self) {
+        self.request_probe("/health/ready").await;
+    }
+
     async fn request_liveness(&self) {
-        let app = test::init_service(
-            App::new()
-                .app_data(self.health.clone())
-                .service(ready)
-                .service(live),
-        )
-        .await;
-        let request = test::TestRequest::get().uri("/health/live").to_request();
-        let response = test::call_service(&app, request).await;
-        let response = ProbeResponse {
-            status: response.status(),
-            cache_control: response.headers().get(CACHE_CONTROL).cloned(),
-        };
-        *self.response.borrow_mut() = Some(response);
+        self.request_probe("/health/live").await;
     }
 
     fn with_response<F>(&self, f: F)
