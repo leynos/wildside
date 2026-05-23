@@ -23,6 +23,7 @@ All suites run through the same quality gateways:
 
 - `make check-fmt`
 - `make lint`
+- `make audit`
 - `make test`
 
 ## Front-end development
@@ -64,8 +65,12 @@ TypeScript, tokens, and documentation gates aligned:
 make deps
 make fmt
 make lint
+make audit
 make test
 ```
+
+`make audit` checks frontend and Rust dependencies. It expects Corepack to be
+enabled so `pnpm` is available locally and in CI.
 
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.2`,
 React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`,
