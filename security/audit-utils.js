@@ -10,6 +10,13 @@ const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
 const COMMAND_MAX_BUFFER = 64 * 1024 * 1024;
 const DEPENDENCY_SECTION_NAMES = ['dependencies', 'devDependencies', 'optionalDependencies'];
 const RETIRED_AUDIT_ENDPOINT_MESSAGE = 'This endpoint is being retired. Use the bulk advisory endpoint instead.';
+const defaultAuditIo = {
+  execFileSync,
+  fetch: (...args) => fetch(...args),
+  setTimeout,
+  clearTimeout,
+  spawnSync,
+};
 
 /** Parse command JSON and optionally reject blank responses.
  * @param {string | undefined | null} payloadText Raw command output. @param {string} commandLabel Label used in parse errors. @param {{ requireNonEmpty?: boolean }} [options={}] Parsing options.
@@ -126,8 +133,8 @@ function buildVersionMap(packageTrees) {
 /** Collect installed package versions from `pnpm ls` for bulk advisory lookups.
  * @returns {Record<string, string[]>} Sorted installed versions keyed by package name. @example // With `pnpm ls` returning one installed validator version: collectInstalledPackageVersions(); // { validator: ['13.15.23'] }
  */
-function collectInstalledPackageVersions() {
-  const result = spawnSync('pnpm', LIST_ARGS, { encoding: 'utf8', maxBuffer: COMMAND_MAX_BUFFER, stdio: ['ignore', 'pipe', 'inherit'] });
+function collectInstalledPackageVersions(auditIo = defaultAuditIo) {
+  const result = auditIo.spawnSync('pnpm', LIST_ARGS, { encoding: 'utf8', maxBuffer: COMMAND_MAX_BUFFER, stdio: ['ignore', 'pipe', 'inherit'] });
   if (result.error) {
     throw result.error;
   }
@@ -169,14 +176,14 @@ function normalizeRegistryUrl(rawRegistry) {
 /** Read the npm registry URL from the environment or pnpm config.
  * @returns {string} Normalised registry URL, or the npm default when lookup fails. @example // With `npm_config_registry=https://registry.npmjs.org`: readRegistryUrl(); // 'https://registry.npmjs.org/'
  */
-function readRegistryUrl() {
+function readRegistryUrl(auditIo = defaultAuditIo) {
   const envRegistry = process.env.npm_config_registry ?? process.env.NPM_CONFIG_REGISTRY;
   if (envRegistry) {
     return normalizeRegistryUrl(envRegistry);
   }
   try {
     return normalizeRegistryUrl(
-      execFileSync('pnpm', ['config', 'get', 'registry'], {
+      auditIo.execFileSync('pnpm', ['config', 'get', 'registry'], {
         encoding: 'utf8',
       }),
     );
@@ -262,11 +269,11 @@ function normalizeBulkAdvisories(bulkPayload) {
  * @returns {Promise<{ response: Response, responseText: string }>} HTTP response and response body text.
  * @example const { responseText } = await fetchBulkAdvisories(new URL('https://registry.npmjs.org/-/npm/v1/security/advisories/bulk'), { validator: ['13.15.23'] }); console.log(responseText); // '{}'
  */
-async function fetchBulkAdvisories(endpoint, packageVersions) {
+async function fetchBulkAdvisories(endpoint, packageVersions, auditIo = defaultAuditIo) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), BULK_AUDIT_TIMEOUT_MS);
+  const timeoutId = auditIo.setTimeout(() => controller.abort(), BULK_AUDIT_TIMEOUT_MS);
   try {
-    const response = await fetch(endpoint, {
+    const response = await auditIo.fetch(endpoint, {
       method: 'POST',
       headers: {
         accept: 'application/json',
@@ -283,7 +290,7 @@ async function fetchBulkAdvisories(endpoint, packageVersions) {
     }
     throw error;
   } finally {
-    clearTimeout(timeoutId);
+    auditIo.clearTimeout(timeoutId);
   }
 }
 
@@ -298,12 +305,13 @@ function toAdvisoryResult(advisories) {
 /** Query the npm bulk advisory endpoint using the installed PNPM dependency tree.
  * @returns {Promise<{ json: { advisories: Record<string, unknown> }, status: number }>} Bulk advisory payload and derived exit status. @example // With a successful bulk advisory response containing one advisory: await runBulkAdvisoryAudit(); // { json: { advisories: { 'GHSA-vghf-hv5q-vc2g': { ... } } }, status: 1 }
  */
-async function runBulkAdvisoryAudit() {
-  const registryUrl = readRegistryUrl();
+async function runBulkAdvisoryAudit(auditIo = defaultAuditIo) {
+  const registryUrl = readRegistryUrl(auditIo);
   const endpoint = new URL(BULK_ADVISORY_PATH, registryUrl);
   const { response, responseText } = await fetchBulkAdvisories(
     endpoint,
-    collectInstalledPackageVersions(),
+    collectInstalledPackageVersions(auditIo),
+    auditIo,
   );
 
   if (!response.ok) {
@@ -320,8 +328,8 @@ async function runBulkAdvisoryAudit() {
 /** Run `pnpm audit --json`, falling back to the bulk advisory endpoint when needed.
  * @returns {Promise<{ json: { advisories?: Record<string, unknown> }, status: number }>} Parsed audit output and pnpm exit status. @example const { json, status } = await runAuditJson(); console.log(status, Object.keys(json.advisories ?? {}));
  */
-export async function runAuditJson() {
-  const result = spawnSync('pnpm', AUDIT_ARGS, {
+export async function runAuditJson(auditIo = defaultAuditIo) {
+  const result = auditIo.spawnSync('pnpm', AUDIT_ARGS, {
     encoding: 'utf8',
     maxBuffer: COMMAND_MAX_BUFFER,
     stdio: ['ignore', 'pipe', 'inherit'],
@@ -337,7 +345,7 @@ export async function runAuditJson() {
 
   const json = parseJsonOutput(stdout, 'pnpm audit');
   if (isRetiredAuditEndpoint(json)) {
-    return runBulkAdvisoryAudit();
+    return runBulkAdvisoryAudit(auditIo);
   }
 
   return { json, status };

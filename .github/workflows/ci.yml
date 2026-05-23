@@ -92,7 +92,7 @@ jobs:
           bun --version
 
       - name: Install cargo-audit
-        run: cargo binstall --no-confirm cargo-audit
+        run: cargo binstall --no-confirm cargo-audit@0.22.1
 
       - name: Audit
         run: make audit

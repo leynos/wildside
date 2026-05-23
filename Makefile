@@ -214,11 +214,11 @@ typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,--noEm
 audit: audit-node rust-audit
 
 audit-node: deps
-	pnpm -r install
 	pnpm -r --if-present run audit
 	pnpm run audit:validate
 
 rust-audit:
+	@command -v cargo-audit >/dev/null 2>&1 || { echo "Error: cargo-audit is required. Install it with 'cargo binstall --no-confirm cargo-audit@0.22.1'."; exit 1; }
 	# RUSTSEC-2023-0071 is in SQLx's optional MySQL support; this workspace only enables PostgreSQL.
 	$(CARGO) audit --file Cargo.lock $(CARGO_AUDIT_IGNORES)
 

@@ -17,7 +17,7 @@ overrides:
   minimatch: 10.2.3
   lodash-es: 4.18.1
   pino: 9.13.1
-  qs: 6.14.2
+  qs: 6.15.2
   rollup: 4.59.0
   basic-ftp: 5.3.1
   dompurify: 3.4.0
@@ -2588,8 +2588,8 @@ packages:
     deprecated: < 24.15.0 is no longer supported
     hasBin: true
 
-  qs@6.14.2:
-    resolution: {integrity: sha512-V/yCWTTF7VJ9hIh18Ugr2zhJMP01MY7c5kh4J870L7imm6/DIzBsNLTXzMwUA3yZ5b/KBqLx8Kp3uRvd7xSe3Q==}
+  qs@6.15.2:
+    resolution: {integrity: sha512-Rzq0KEyX/w/tEybncDgdkZrJgVUsUMk3xjh3t5bv3S1HTAtg+uOYt72+ZfwiQwKdysThkTBdL/rTi6HDmX9Ddw==}
     engines: {node: '>=0.6'}
 
   queue-microtask@1.2.3:
@@ -5887,7 +5887,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  qs@6.14.2:
+  qs@6.15.2:
     dependencies:
       side-channel: 1.1.0
 
@@ -6339,7 +6339,7 @@ snapshots:
   url@0.11.4:
     dependencies:
       punycode: 1.4.1
-      qs: 6.14.2
+      qs: 6.15.2
 
   use-sync-external-store@1.5.0(react@19.1.1):
     dependencies:

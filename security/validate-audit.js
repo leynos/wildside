@@ -74,8 +74,8 @@ function assertValidSchema(entries) {
  *   },
  * ]);
  */
-function assertNoExpired(entries) {
-  const today = new Date().toISOString().slice(0, 10);
+function assertNoExpired(entries, currentDate = new Date()) {
+  const today = currentDate.toISOString().slice(0, 10);
   const expired = entries.filter((e) => e.expiresAt < today);
   const inverted = entries.filter((e) => e.addedAt > e.expiresAt);
   if (expired.length > 0) {
