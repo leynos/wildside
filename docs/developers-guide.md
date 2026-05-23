@@ -70,7 +70,8 @@ make test
 ```
 
 `make audit` checks frontend and Rust dependencies. It expects Corepack to be
-enabled so `pnpm` is available locally and in CI.
+enabled so `pnpm` is available locally and in CI, and it requires
+`cargo-audit` for the Rust dependency check.
 
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.2`,
 React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`,
