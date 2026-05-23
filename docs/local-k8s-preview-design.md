@@ -20,8 +20,8 @@ Web server and exposes two unauthenticated health endpoints:
 
 Health semantics live in the domain layer through `ProcessHealth` and the
 `HealthObserver` port. The HTTP adapter only maps domain observations to HTTP
-status codes and cache headers. This keeps Kubernetes, Actix Web, and other
-transport concerns outside the domain.
+status codes, cache headers, and a small JSON health envelope. This keeps
+Kubernetes, Actix Web, and other transport concerns outside the domain.
 
 ## Container image contract
 

@@ -9,7 +9,9 @@ preview tooling:
 - `GET /health/ready` returns `200 OK` after startup completes and `503
   Service Unavailable` while the process is not ready.
 
-Both endpoints send `Cache-Control: no-store`.
+Both endpoints send `Cache-Control: no-store` and a JSON body with a top-level
+`status` field (`pass` or `fail`) plus a `checks` object keyed by `liveness` or
+`readiness`.
 
 ## Local k3d preview
 

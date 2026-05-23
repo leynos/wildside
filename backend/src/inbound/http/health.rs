@@ -1,6 +1,8 @@
 //! Health endpoints: liveness & readiness probes for orchestration and load balancers.
 //! Document endpoints in OpenAPI via Utoipa.
 use actix_web::{HttpResponse, get, http::header, web};
+use serde::Serialize;
+use std::collections::BTreeMap;
 
 use crate::domain::ProcessHealth;
 use crate::domain::ports::HealthObserver;
@@ -8,7 +10,26 @@ use crate::domain::ports::HealthObserver;
 /// Backwards-compatible name for the domain-owned process health state.
 pub type HealthState = ProcessHealth;
 
-fn probe_response(probe_ok: bool) -> HttpResponse {
+#[derive(Serialize)]
+struct HealthProbeCheck {
+    status: &'static str,
+}
+
+#[derive(Serialize)]
+struct HealthProbeBody {
+    status: &'static str,
+    checks: BTreeMap<&'static str, HealthProbeCheck>,
+}
+
+impl HealthProbeBody {
+    fn new(check_name: &'static str, probe_ok: bool) -> Self {
+        let status = if probe_ok { "pass" } else { "fail" };
+        let checks = BTreeMap::from([(check_name, HealthProbeCheck { status })]);
+        Self { status, checks }
+    }
+}
+
+fn probe_response(check_name: &'static str, probe_ok: bool) -> HttpResponse {
     let mut response = if probe_ok {
         HttpResponse::Ok()
     } else {
@@ -17,7 +38,7 @@ fn probe_response(probe_ok: bool) -> HttpResponse {
 
     response
         .insert_header((header::CACHE_CONTROL, "no-store"))
-        .finish()
+        .json(HealthProbeBody::new(check_name, probe_ok))
 }
 
 /// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.
@@ -37,7 +58,7 @@ fn probe_response(probe_ok: bool) -> HttpResponse {
 )]
 #[get("/health/ready")]
 pub async fn ready(state: web::Data<HealthState>) -> HttpResponse {
-    probe_response(state.observe_readiness().is_healthy())
+    probe_response("readiness", state.observe_readiness().is_healthy())
 }
 
 /// Liveness probe. Return 200 while the process is marked alive and 503 once draining.
@@ -61,7 +82,7 @@ pub async fn ready(state: web::Data<HealthState>) -> HttpResponse {
 )]
 #[get("/health/live")]
 pub async fn live(state: web::Data<HealthState>) -> HttpResponse {
-    probe_response(state.observe_liveness().is_healthy())
+    probe_response("liveness", state.observe_liveness().is_healthy())
 }
 
 #[cfg(test)]

@@ -219,7 +219,8 @@ injected state rather than importing outbound modules directly.
   defines `HealthObserver`, while `backend/src/domain/health.rs` provides the
   process-local `ProcessHealth` implementation. The Actix adapter in
   `backend/src/inbound/http/health.rs` only maps those observations to
-  `/health/live` and `/health/ready` responses.
+  `/health/live` and `/health/ready` HTTP status codes, cache headers, and JSON
+  response envelopes.
 
 The intended runtime wiring pattern is:
 

@@ -14,6 +14,12 @@ Feature: Health probes
     Then the probe response status is 200
     And the probe response is not cacheable
 
+  Scenario: Liveness accepts traffic while the runtime is live
+    Given a live Wildside runtime
+    When the liveness probe is requested
+    Then the probe response status is 200
+    And the probe response is not cacheable
+
   Scenario: Liveness fails after the runtime is marked unhealthy
     Given a live Wildside runtime
     And the runtime is unhealthy
