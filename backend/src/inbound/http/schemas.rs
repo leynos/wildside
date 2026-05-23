@@ -46,7 +46,7 @@ pub enum ErrorCodeSchema {
 #[schema(as = crate::domain::Error)]
 #[expect(
     dead_code,
-    reason = "Used only for OpenAPI schema generation via utoipa"
+    reason = "Used only for OpenAPI schema generation via utoipa; tracked by docs/backend-roadmap.md 3.5.1"
 )]
 pub struct ErrorSchema {
     /// Stable machine-readable error code.
@@ -69,7 +69,7 @@ pub struct ErrorSchema {
 #[schema(as = crate::domain::User)]
 #[expect(
     dead_code,
-    reason = "Used only for OpenAPI schema generation via utoipa"
+    reason = "Used only for OpenAPI schema generation via utoipa; tracked by docs/backend-roadmap.md 3.5.1"
 )]
 pub struct UserSchema {
     /// Stable user identifier.
@@ -124,7 +124,7 @@ pub struct InterestThemeIdSchema(pub String);
 #[schema(as = crate::domain::UserInterests)]
 #[expect(
     dead_code,
-    reason = "Used only for OpenAPI schema generation via utoipa"
+    reason = "Used only for OpenAPI schema generation via utoipa; tracked by docs/backend-roadmap.md 3.5.1"
 )]
 pub struct UserInterestsSchema {
     /// Stable user identifier.

@@ -35,7 +35,7 @@ struct RuntimeHandle(Arc<Runtime>);
 struct DatabaseHandle(
     #[expect(
         dead_code,
-        reason = "keeps the temporary database alive for roadmap 2.4.3 BDD coverage"
+        reason = "keeps the temporary database alive for docs/backend-roadmap.md 2.4.3 BDD coverage"
     )]
     Arc<TemporaryDatabase>,
 );
