@@ -153,6 +153,7 @@ front-end gates plus the repository-wide commit gates:
 ```bash
 make check-fmt
 make lint
+make audit
 make test
 ```
 
@@ -273,8 +274,8 @@ When adding a new behaviour:
    `#[then]`.
 3. Add or update the scenario binding function with `#[scenario(...)]`.
 4. Keep fixture naming consistent across scenario binding and step functions.
-5. Run all three gates before commit:
-   `make check-fmt`, `make lint`, and `make test`.
+5. Run all commit gates before commit:
+   `make check-fmt`, `make lint`, `make audit`, and `make test`.
 
 When migrating existing suites, prefer incremental edits that preserve scenario
 intent and avoid broad rewrites that obscure regressions.
@@ -391,10 +392,11 @@ When adding a new shared workspace crate:
 9. Ensure all test files stay under 400 lines; split by feature when
    needed.
 10. Run the repository quality gates before committing: `make check-fmt`
-    to verify formatting, `make lint` to verify linting, and `make test` to
-    run the test suites. Documentation build and validation is performed
-    separately via the `RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc -p
-    <crate-name> --no-deps` command described in step 4 above.
+    to verify formatting, `make lint` to verify linting, `make audit` to
+    verify dependency audits, and `make test` to run the test suites.
+    Documentation build and validation is performed separately via the
+    `RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc -p <crate-name>
+    --no-deps` command described in step 4 above.
 
 ## Redis cache adapter testing
 
