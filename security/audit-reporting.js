@@ -1,4 +1,12 @@
-/** @file Reporting helpers for dependency audit advisory output. */
+/**
+ * @file Owns advisory partitioning and stderr formatting for audit validation.
+ *
+ * Exports `partitionAdvisoriesById` for splitting expected and unexpected
+ * advisories, and `reportUnexpectedAdvisories` for writing validation failures
+ * to stderr. `security/audit-utils.js` re-exports these helpers so callers can
+ * use one audit utility surface while the reporting step stays isolated in the
+ * dependency-auditing pipeline.
+ */
 
 /** Return `true` when an advisory's GHSA ID is present in the allow-set.
  * @param {{ github_advisory_id?: string }} advisory Advisory to check. @param {Set<string>} allowed Set of permitted advisory IDs. @returns {boolean}

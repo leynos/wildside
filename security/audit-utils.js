@@ -135,15 +135,37 @@ function buildVersionMap(packageTrees) {
   return versionsByPackage;
 }
 
-/** Collect installed package versions from `pnpm ls` for bulk advisory lookups.
- * @returns {Record<string, string[]>} Sorted installed versions keyed by package name. @example // With `pnpm ls` returning one installed validator version: collectInstalledPackageVersions(); // { validator: ['13.15.23'] }
+/** Ensure a child-process result exited normally.
+ * @param {{ error?: Error, signal?: string | null, status?: number | null }} result Spawn result from an audit command.
+ * @param {string} commandLabel Label used in thrown errors.
+ * @returns {number} Process exit status.
+ * @example assertCompletedProcess({ status: 0, signal: null }, 'pnpm audit'); // 0
  */
-function collectInstalledPackageVersions(auditIo = defaultAuditIo) {
-  const result = auditIo.spawnSync('pnpm', LIST_ARGS, { encoding: 'utf8', maxBuffer: COMMAND_MAX_BUFFER, stdio: ['ignore', 'pipe', 'inherit'] });
+function assertCompletedProcess(result, commandLabel) {
   if (result.error) {
     throw result.error;
   }
-  const status = result.status ?? 0;
+  if (result.signal) {
+    throw new Error(`${commandLabel} was terminated by signal ${result.signal}.`);
+  }
+  if (result.status === null) {
+    throw new Error(`${commandLabel} was terminated before reporting an exit status.`);
+  }
+  return result.status;
+}
+
+/** Collect installed package versions from `pnpm ls` for bulk advisory lookups.
+ * Throws when `pnpm ls` fails, is signalled, or returns invalid JSON.
+ * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
+ * @returns {Record<string, string[]>} Sorted installed versions keyed by package name.
+ * @example // Normal usage with `pnpm ls` returning one installed validator version:
+ * collectInstalledPackageVersions(); // { validator: ['13.15.23'] }
+ * @example const auditIo = { ...defaultAuditIo, spawnSync: () => ({ status: 0, stdout: '[{"dependencies":{"validator":{"version":"13.15.23"}}}]' }) };
+ * collectInstalledPackageVersions(auditIo); // { validator: ['13.15.23'] }
+ */
+function collectInstalledPackageVersions(auditIo = defaultAuditIo) {
+  const result = auditIo.spawnSync('pnpm', LIST_ARGS, { encoding: 'utf8', maxBuffer: COMMAND_MAX_BUFFER, stdio: ['ignore', 'pipe', 'inherit'] });
+  const status = assertCompletedProcess(result, 'pnpm ls');
   if (status !== 0) {
     throw new Error(`pnpm ls failed without producing a dependency tree (exit status ${status}).`);
   }
@@ -179,7 +201,10 @@ function normalizeRegistryUrl(rawRegistry) {
 }
 
 /** Read the npm registry URL from the environment or pnpm config.
- * @returns {string} Normalised registry URL, or the npm default when lookup fails. @example // With `npm_config_registry=https://registry.npmjs.org`: readRegistryUrl(); // 'https://registry.npmjs.org/'
+ * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
+ * @returns {string} Normalised registry URL, or the npm default when lookup fails.
+ * @example // With `npm_config_registry=https://registry.npmjs.org`: readRegistryUrl(); // 'https://registry.npmjs.org/'
+ * @example const auditIo = { ...defaultAuditIo, execFileSync: () => 'https://registry.npmjs.org\n' }; readRegistryUrl(auditIo); // 'https://registry.npmjs.org/'
  */
 function readRegistryUrl(auditIo = defaultAuditIo) {
   const envRegistry = process.env.npm_config_registry ?? process.env.NPM_CONFIG_REGISTRY;
@@ -271,8 +296,10 @@ function normalizeBulkAdvisories(bulkPayload) {
 
 /** Post package versions to the npm bulk advisory endpoint and return the raw response.
  * @param {URL} endpoint Bulk advisory endpoint URL. @param {Record<string, string[]>} packageVersions Installed package versions keyed by package name.
+ * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
  * @returns {Promise<{ response: Response, responseText: string }>} HTTP response and response body text.
  * @example const { responseText } = await fetchBulkAdvisories(new URL('https://registry.npmjs.org/-/npm/v1/security/advisories/bulk'), { validator: ['13.15.23'] }); console.log(responseText); // '{}'
+ * @example const auditIo = { ...defaultAuditIo, fetch: async () => ({ text: async () => '{}' }), setTimeout: () => 1, clearTimeout: () => undefined }; await fetchBulkAdvisories(new URL('https://registry.npmjs.org/-/npm/v1/security/advisories/bulk'), {}, auditIo); // { response: ..., responseText: '{}' }
  */
 async function fetchBulkAdvisories(endpoint, packageVersions, auditIo = defaultAuditIo) {
   const controller = new AbortController();
@@ -308,7 +335,11 @@ function toAdvisoryResult(advisories) {
 }
 
 /** Query the npm bulk advisory endpoint using the installed PNPM dependency tree.
- * @returns {Promise<{ json: { advisories: Record<string, unknown> }, status: number }>} Bulk advisory payload and derived exit status. @example // With a successful bulk advisory response containing one advisory: await runBulkAdvisoryAudit(); // { json: { advisories: { 'GHSA-vghf-hv5q-vc2g': { ... } } }, status: 1 }
+ * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
+ * @returns {Promise<{ json: { advisories: Record<string, unknown> }, status: number }>} Bulk advisory payload and derived exit status.
+ * @example // With a successful bulk advisory response containing one advisory:
+ * await runBulkAdvisoryAudit(); // { json: { advisories: { 'GHSA-vghf-hv5q-vc2g': { ... } } }, status: 1 }
+ * @example const auditIo = { ...defaultAuditIo, spawnSync: () => ({ status: 0, stdout: '[{"dependencies":{}}]' }), fetch: async () => ({ ok: true, text: async () => '{}' }) }; await runBulkAdvisoryAudit(auditIo); // { json: { advisories: {} }, status: 0 }
  */
 async function runBulkAdvisoryAudit(auditIo = defaultAuditIo) {
   const registryUrl = readRegistryUrl(auditIo);
@@ -331,7 +362,11 @@ async function runBulkAdvisoryAudit(auditIo = defaultAuditIo) {
 }
 
 /** Run `pnpm audit --json`, falling back to the bulk advisory endpoint when needed.
- * @returns {Promise<{ json: { advisories?: Record<string, unknown> }, status: number }>} Parsed audit output and pnpm exit status. @example const { json, status } = await runAuditJson(); console.log(status, Object.keys(json.advisories ?? {}));
+ * Throws when `pnpm audit` fails to start or is signalled.
+ * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
+ * @returns {Promise<{ json: { advisories?: Record<string, unknown> }, status: number }>} Parsed audit output and pnpm exit status.
+ * @example const { json, status } = await runAuditJson(); console.log(status, Object.keys(json.advisories ?? {}));
+ * @example const auditIo = { ...defaultAuditIo, spawnSync: () => ({ status: 0, stdout: '{"advisories":{}}' }) }; await runAuditJson(auditIo); // { json: { advisories: {} }, status: 0 }
  */
 export async function runAuditJson(auditIo = defaultAuditIo) {
   const result = auditIo.spawnSync('pnpm', AUDIT_ARGS, {
@@ -339,10 +374,7 @@ export async function runAuditJson(auditIo = defaultAuditIo) {
     maxBuffer: COMMAND_MAX_BUFFER,
     stdio: ['ignore', 'pipe', 'inherit'],
   });
-  if (result.error) {
-    throw result.error;
-  }
-  const status = result.status ?? 0;
+  const status = assertCompletedProcess(result, 'pnpm audit');
   const stdout = result.stdout ? result.stdout.trim() : '';
   if (!stdout) {
     return { json: { advisories: {} }, status };

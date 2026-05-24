@@ -16,14 +16,15 @@ const originalFetch = globalThis.fetch;
 
 /**
  * Create a pnpm-like child-process result for audit command tests.
- * @param {{ status?: number, stdout?: string, error?: Error | undefined }} [options={}] Result overrides.
- * @param {number} [options.status=0] Process exit status.
+ * @param {{ status?: number | null, stdout?: string, error?: Error | undefined, signal?: string | null }} [options={}] Result overrides.
+ * @param {number | null} [options.status=0] Process exit status.
  * @param {string} [options.stdout=''] Command stdout payload.
  * @param {Error | undefined} [options.error=undefined] Spawn error to surface.
- * @returns {{ error: Error | undefined, status: number, stdout: string }} Mocked pnpm result object.
+ * @param {string | null} [options.signal=null] Signal that terminated the process.
+ * @returns {{ error: Error | undefined, signal: string | null, status: number | null, stdout: string }} Mocked pnpm result object.
  */
-function createPnpmResult({ status = 0, stdout = '', error = undefined } = {}) {
-  return { error, status, stdout };
+function createPnpmResult({ status = 0, stdout = '', error = undefined, signal = null } = {}) {
+  return { error, signal, status, stdout };
 }
 
 /**
@@ -141,6 +142,41 @@ describe('runAuditJson', () => {
     });
     expect(fetch).not.toHaveBeenCalled();
     expect(execFileSyncMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      command: 'audit',
+      expectedError: 'pnpm audit was terminated by signal SIGTERM.',
+      firstResult: createPnpmResult({ status: null, signal: 'SIGTERM' }),
+    },
+    {
+      command: 'ls',
+      expectedError: 'pnpm ls was terminated by signal SIGTERM.',
+      firstResult: createPnpmResult({
+        status: 1,
+        stdout: JSON.stringify({
+          error: {
+            code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
+            message:
+              'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
+          },
+        }),
+      }),
+      secondResult: createPnpmResult({ status: null, signal: 'SIGTERM' }),
+    },
+  ])('throws when pnpm $command is signalled', async ({
+    expectedError,
+    firstResult,
+    secondResult,
+  }) => {
+    spawnSyncMock.mockReturnValueOnce(firstResult);
+    if (secondResult) {
+      spawnSyncMock.mockReturnValueOnce(secondResult);
+    }
+    const { runAuditJson } = await loadAuditUtils();
+
+    await expect(runAuditJson()).rejects.toThrow(expectedError);
   });
 
   it('falls back to the bulk advisory endpoint when pnpm audit hits the retired endpoint', async () => {
