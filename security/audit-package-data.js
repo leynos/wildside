@@ -56,6 +56,22 @@ function addPackageVersion(versionsByPackage, packageName, version) {
   versionsByPackage.set(packageName, knownVersions);
 }
 
+/** Process a single entry from a pnpm ls dependency section.
+ * @param {string} packageName Package name.
+ * @param {unknown} dependency Raw dependency value from the section.
+ * @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
+ * @returns {void}
+ */
+function processDependencyEntry(packageName, dependency, versionsByPackage) {
+  if (!dependency || typeof dependency !== 'object') {
+    return;
+  }
+  if (typeof dependency.version === 'string') {
+    addPackageVersion(versionsByPackage, packageName, dependency.version);
+  }
+  walkDependencies(dependency, versionsByPackage);
+}
+
 /** Walk one dependency section from `pnpm ls` and record installed versions.
  * @param {Record<string, unknown> | undefined} section Dependency section keyed by package name. @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
  * @returns {void} @example const versions = new Map(); walkDependencySection({ validator: { version: '13.15.23' } }, versions); console.log(versions.get('validator').has('13.15.23')); // true
@@ -65,13 +81,7 @@ function walkDependencySection(section, versionsByPackage) {
     return;
   }
   for (const [packageName, dependency] of Object.entries(section)) {
-    if (!dependency || typeof dependency !== 'object') {
-      continue;
-    }
-    if (typeof dependency.version === 'string') {
-      addPackageVersion(versionsByPackage, packageName, dependency.version);
-    }
-    walkDependencies(dependency, versionsByPackage);
+    processDependencyEntry(packageName, dependency, versionsByPackage);
   }
 }
 
@@ -88,14 +98,6 @@ function walkDependencies(node, versionsByPackage) {
   }
 }
 
-/** Check whether `pnpm ls` returned a dependency tree object.
- * @param {unknown} value Parsed `pnpm ls` payload value.
- * @returns {boolean} `true` when the value can be walked as one dependency tree. @example isDependencyTreeNode({ dependencies: {} }); // true
- */
-function isDependencyTreeNode(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /** Build the installed package-version map from parsed `pnpm ls` output.
  * @param {Record<string, unknown> | Record<string, unknown>[] | undefined} packageTrees Parsed `pnpm ls` output as one tree or many. @returns {Map<string, Set<string>>} Installed versions keyed by package name. @example const versions = buildVersionMap([{ dependencies: { validator: { version: '13.15.23' } } }]); console.log(versions.get('validator').has('13.15.23')); // true
  */
@@ -103,7 +105,7 @@ export function buildVersionMap(packageTrees) {
   const versionsByPackage = new Map();
   const trees = Array.isArray(packageTrees) ? packageTrees : [packageTrees];
   for (const tree of trees) {
-    if (!isDependencyTreeNode(tree)) {
+    if (typeof tree !== 'object' || tree === null || Array.isArray(tree)) {
       throw new TypeError('pnpm ls returned an invalid dependency tree payload.');
     }
     walkDependencies(tree, versionsByPackage);
@@ -190,25 +192,51 @@ function deriveAdvisoryKey(packageName, advisory) {
  */
 function isPlainAdvisoryObject(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 
+/** Validate and merge one advisory into the shared accumulator.
+ * @param {string} packageName Package name from the bulk advisory payload.
+ * @param {unknown} advisory Raw advisory object; must be a plain object.
+ * @param {number} index Position within the package advisory array.
+ * @param {Record<string, unknown>} advisories Accumulator mutated in place.
+ * @returns {void}
+ */
+function mergeOneAdvisory(packageName, advisory, index, advisories) {
+  if (!isPlainAdvisoryObject(advisory)) {
+    throw new Error(`Invalid advisory for package ${packageName} at index ${index}: expected object`);
+  }
+  const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
+  if (Object.hasOwn(advisories, key)) {
+    return;
+  }
+  advisories[key] = {
+    ...advisory,
+    github_advisory_id: githubAdvisoryId,
+    package_name: packageName,
+  };
+}
+
 /** Merge advisories for one package into the shared accumulator.
  * @param {string} packageName Package name from the bulk advisory payload. @param {unknown[]} packageAdvisories Validated array of raw advisory objects. @param {Record<string, unknown>} advisories Accumulator mutated in place.
  * @returns {void} @example const advisories = {}; addPackageAdvisories('validator', [{ id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g', title: 'Validator SSRF' }], advisories); console.log(advisories['GHSA-vghf-hv5q-vc2g'].package_name); // 'validator'
  */
 function addPackageAdvisories(packageName, packageAdvisories, advisories) {
   for (const [index, advisory] of packageAdvisories.entries()) {
-    if (!isPlainAdvisoryObject(advisory)) {
-      throw new Error(`Invalid advisory for package ${packageName} at index ${index}: expected object`);
-    }
-    const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
-    if (Object.hasOwn(advisories, key)) {
-      continue;
-    }
-    advisories[key] = {
-      ...advisory,
-      github_advisory_id: githubAdvisoryId,
-      package_name: packageName,
-    };
+    mergeOneAdvisory(packageName, advisory, index, advisories);
   }
+}
+
+/** Validate and merge one package's advisory array into the accumulator.
+ * @param {string} packageName Package name from the bulk advisory payload.
+ * @param {unknown} packageAdvisories Raw value for this package; must be an array.
+ * @param {Record<string, unknown>} advisories Accumulator mutated in place.
+ * @returns {void}
+ */
+function mergePackageAdvisories(packageName, packageAdvisories, advisories) {
+  if (!Array.isArray(packageAdvisories)) {
+    throw new TypeError(
+      `Invalid bulk advisory entry for package ${packageName}: expected array, received ${JSON.stringify(packageAdvisories)}`,
+    );
+  }
+  addPackageAdvisories(packageName, packageAdvisories, advisories);
 }
 
 /** Normalize bulk advisory responses into the shared advisory object shape.
@@ -221,10 +249,7 @@ export function normalizeBulkAdvisories(bulkPayload) {
   }
   const advisories = {};
   for (const [packageName, packageAdvisories] of Object.entries(bulkPayload)) {
-    if (!Array.isArray(packageAdvisories)) {
-      throw new TypeError(`Invalid bulk advisory entry for package ${packageName}: expected array, received ${JSON.stringify(packageAdvisories)}`);
-    }
-    addPackageAdvisories(packageName, packageAdvisories, advisories);
+    mergePackageAdvisories(packageName, packageAdvisories, advisories);
   }
 
   return advisories;
