@@ -160,6 +160,18 @@ fn ensure_stable_password() {
             std::env::set_var("PG_PASSWORD", "wildside_embedded_test");
         }
     }
+    if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
+        // SAFETY: called before the library spawns any threads. The shared
+        // cluster singleton serializes access with a `Mutex`, so this runs at
+        // most once per process.
+        unsafe {
+            // Pin the release source to Theseus to avoid transient fetch issues in CI
+            std::env::set_var(
+                "POSTGRESQL_RELEASES_URL",
+                "https://github.com/theseus-rs/postgresql-binaries",
+            );
+        }
+    }
 }
 
 /// Reads the postmaster PID from the `postmaster.pid` file in `data_dir`.
@@ -287,12 +299,38 @@ mod tests {
 
     #[test]
     fn ensure_stable_password_does_not_overwrite_existing_value() {
-        let _guard = env_lock::lock_env([("PG_PASSWORD", Some("custom_value"))]);
+        let _guard = env_lock::lock_env([
+            ("PG_PASSWORD", Some("custom_value")),
+            (
+                "POSTGRESQL_RELEASES_URL",
+                Some("https://example.invalid/postgresql-binaries"),
+            ),
+        ]);
         super::ensure_stable_password();
         assert_eq!(
             std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
             "custom_value",
             "ensure_stable_password should not overwrite an existing PG_PASSWORD"
+        );
+        assert_eq!(
+            std::env::var("POSTGRESQL_RELEASES_URL")
+                .expect("POSTGRESQL_RELEASES_URL should be set"),
+            "https://example.invalid/postgresql-binaries",
+            "ensure_stable_password should not overwrite an existing release URL"
+        );
+    }
+
+    #[test]
+    fn ensure_stable_password_sets_release_url_when_missing() {
+        let _guard = env_lock::lock_env([
+            ("PG_PASSWORD", Some("custom_value")),
+            ("POSTGRESQL_RELEASES_URL", None),
+        ]);
+        super::ensure_stable_password();
+        assert_eq!(
+            std::env::var("POSTGRESQL_RELEASES_URL")
+                .expect("POSTGRESQL_RELEASES_URL should be set"),
+            "https://github.com/theseus-rs/postgresql-binaries"
         );
     }
 
