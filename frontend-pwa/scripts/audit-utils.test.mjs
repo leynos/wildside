@@ -22,6 +22,7 @@ const originalFetch = globalThis.fetch;
  * @param {Error | undefined} [options.error=undefined] Spawn error to surface.
  * @param {string | null} [options.signal=null] Signal that terminated the process.
  * @returns {{ error: Error | undefined, signal: string | null, status: number | null, stdout: string }} Mocked pnpm result object.
+ * @example createPnpmResult({ status: 1, stdout: 'foo', error: new Error('boom'), signal: null }); // { error: Error('boom'), signal: null, status: 1, stdout: 'foo' }
  */
 function createPnpmResult({ status = 0, stdout = '', error = undefined, signal = null } = {}) {
   return { error, signal, status, stdout };

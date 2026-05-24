@@ -1,4 +1,17 @@
-/** @file Shared helpers for dependency audits and advisory filtering. */
+/**
+ * @file Shared helpers for dependency audits and advisory filtering.
+ *
+ * Provides the audit pipeline's JSON parsing, PNPM command execution, installed
+ * package-version collection, bulk-advisory fallback, and advisory flattening
+ * utilities. Pure helpers accept parsed JSON-shaped objects and return normalised
+ * maps or arrays; effectful helpers cross the IO boundary through `auditIo`,
+ * whose default implementation wraps filesystem, CLI, timer, and fetch effects.
+ * `audit-reporting.js` owns advisory partitioning and stderr formatting, while
+ * `validate-audit.js` applies policy to these normalised audit results. Callers
+ * can assume exported helpers either return parsed audit data in the documented
+ * shapes or throw explicit errors for failed, signalled, malformed, or
+ * unavailable audit inputs.
+ */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 
