@@ -172,6 +172,9 @@ jobs:
         env:
           # Increase GitHub API rate limits for postgresql_embedded downloads.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin the embedded PostgreSQL version so postgresql_archive skips release-listing queries.
+          # Use the semver "exact" prefix so no wildcard resolution is attempted.
+          POSTGRESQL_VERSION: "=16.10.0"
           # Keep backend selection explicit for strict PG_TEST_BACKEND validation.
           PG_TEST_BACKEND: postgresql_embedded
           # Root-path bootstrap requires the worker binary for privilege demotion.
