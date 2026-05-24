@@ -172,7 +172,7 @@ lint-actions:
 
 PG_WORKER_PATH ?= $(CURDIR)/target/pg_worker
 PG_WORKER_INSTALL_ROOT ?= $(CURDIR)/target/pg-worker-root
-PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.0
+PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.1
 NEXTEST_TEST_THREADS ?= 1
 
 test: test-rust test-frontend
