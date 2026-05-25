@@ -80,36 +80,30 @@ describe('reportUnexpectedAdvisories', () => {
   });
 
   it('returns false and writes nothing for an empty report', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reportingIo = { error: vi.fn() };
 
-    expect(reportUnexpectedAdvisories([], 'Unexpected advisories:')).toBe(false);
-    expect(errorSpy).not.toHaveBeenCalled();
-
-    errorSpy.mockRestore();
+    expect(reportUnexpectedAdvisories([], 'Unexpected advisories:', reportingIo)).toBe(false);
+    expect(reportingIo.error).not.toHaveBeenCalled();
   });
 
-  it('formats unexpected advisory output consistently', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  it('reports unexpected advisories to the injected reportingIo adapter', () => {
+    const errorLines = [];
+    const reportingIo = { error: (...args) => errorLines.push(args.join(' ')) };
 
     expect(
       reportUnexpectedAdvisories(
-        [
-          advisory('GHSA-vghf-hv5q-vc2g', 'Validator SSRF'),
-          { title: 'Missing identifier' },
-        ],
-        'pnpm audit reported vulnerabilities without exceptions:',
+        [advisory('GHSA-1', 'Example')],
+        'Unexpected advisories:',
+        reportingIo,
       ),
     ).toBe(true);
 
-    expect(errorSpy.mock.calls.map(([line]) => line)).toMatchInlineSnapshot(`
+    expect(errorLines).toMatchInlineSnapshot(`
       [
-        "pnpm audit reported vulnerabilities without exceptions:",
-        "- GHSA-vghf-hv5q-vc2g: Validator SSRF",
-        "- UNKNOWN: Missing identifier",
+        "Unexpected advisories:",
+        "- GHSA-1: Example",
       ]
     `);
-
-    errorSpy.mockRestore();
   });
 });
 

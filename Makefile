@@ -217,8 +217,9 @@ audit-node: deps
 	pnpm run audit:validate
 
 rust-audit:
-	@command -v cargo-audit >/dev/null 2>&1 || { echo "Error: cargo-audit is required. Install it with 'cargo binstall --no-confirm cargo-audit@0.22.1'."; exit 1; }
+	$(call ensure_tool,cargo-audit)
 	# RUSTSEC-2023-0071 is in SQLx's optional MySQL support; this workspace only enables PostgreSQL.
+	# Install cargo-audit with: cargo binstall --no-confirm cargo-audit@0.22.1
 	$(CARGO) audit --file Cargo.lock $(CARGO_AUDIT_IGNORES)
 
 lockfile:

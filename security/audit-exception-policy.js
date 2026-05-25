@@ -1,4 +1,24 @@
-/** @file Audit exception ledger policy checks shared by validator tests. */
+/**
+ * @file Audit exception ledger policy: validates time-bound dependency-audit
+ * exception entries and enforces expiry at validation time.
+ *
+ * Owns the `assertNoExpired` export, which reads an array of exception entries
+ * (each carrying `id`, `package`, `addedAt`, and `expiresAt` ISO-date fields),
+ * computes today's date relative to an injected `currentDate`, and exits with
+ * status 1 when any entry has expired or carries an invalid date range
+ * (`addedAt` later than `expiresAt`).
+ *
+ * Relationships:
+ * - `security/validate-audit.js` imports `assertNoExpired` and invokes it after
+ *   loading `security/audit-exceptions.json` through AJV schema validation.
+ * - Test suites (`scripts/security-audit-reporting.test.mjs`) import
+ *   `assertNoExpired` directly with injected `policyIo` adapters to exercise
+ *   expiry and inverted-range paths without calling `process.exit`.
+ *
+ * IO effects are isolated behind the `policyIo` adapter (`error`, `exit`); the
+ * `defaultPolicyIo` implementation delegates to `console.error` and
+ * `process.exit`.
+ */
 
 const defaultPolicyIo = {
   error: (...args) => console.error(...args),

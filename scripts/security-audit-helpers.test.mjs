@@ -366,3 +366,96 @@ describe('runAuditJson audit IO boundary', () => {
     );
   });
 });
+
+describe('fetchBulkAdvisories timeout and abort handling', () => {
+  /** Build an auditIo that triggers the retired-endpoint code path.
+   * @param {{ fetchStub: Function, timeoutStub?: Function, clearTimeoutStub?: Function }} options Test doubles for bulk advisory IO.
+   * @returns {object} Audit IO adapter.
+   */
+  function retiredEndpointAuditIo({
+    fetchStub,
+    timeoutStub = vi.fn(() => 99),
+    clearTimeoutStub = vi.fn(),
+  }) {
+    return {
+      clearTimeout: clearTimeoutStub,
+      execFileSync: vi.fn(() => {
+        throw new Error('pnpm config should not be called');
+      }),
+      fetch: fetchStub,
+      getEnv: vi.fn((name) =>
+        name === 'npm_config_registry' ? 'https://registry.example.test/' : undefined,
+      ),
+      setTimeout: timeoutStub,
+      spawnSync: vi
+        .fn()
+        .mockReturnValueOnce(
+          createCompletedResult(
+            JSON.stringify({
+              error: {
+                code: 'ERR_PNPM_AUDIT_BAD_RESPONSE',
+                message:
+                  'The audit endpoint responded with 410: {"error":"This endpoint is being retired. Use the bulk advisory endpoint instead."}',
+              },
+            }),
+          ),
+        )
+        .mockReturnValueOnce(createCompletedResult('[{"dependencies":{}}]')),
+    };
+  }
+
+  it('throws a timeout message when the fetch is aborted via AbortController', async () => {
+    const fetchStub = vi.fn(async () => {
+      throw new DOMException('The operation was aborted.', 'AbortError');
+    });
+
+    const auditIo = retiredEndpointAuditIo({ fetchStub });
+
+    await expect(runAuditJson(auditIo)).rejects.toThrow(
+      /Bulk advisory audit timed out after \d+ms at/,
+    );
+    expect(auditIo.clearTimeout).toHaveBeenCalledWith(99);
+  });
+
+  it('calls clearTimeout even when response.text() throws an AbortError', async () => {
+    const fetchStub = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => {
+        throw new DOMException('The operation was aborted.', 'AbortError');
+      },
+    }));
+
+    const auditIo = retiredEndpointAuditIo({ fetchStub });
+
+    await expect(runAuditJson(auditIo)).rejects.toThrow(
+      /Bulk advisory audit timed out after \d+ms at/,
+    );
+    expect(auditIo.clearTimeout).toHaveBeenCalledWith(99);
+  });
+
+  it('always calls clearTimeout regardless of fetch outcome', async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.boolean(), async (shouldAbort) => {
+        const clearTimeoutStub = vi.fn();
+        const fetchStub = vi.fn(async () => {
+          if (shouldAbort) {
+            throw new DOMException('The operation was aborted.', 'AbortError');
+          }
+          return { ok: true, status: 200, statusText: 'OK', text: async () => '{}' };
+        });
+
+        const auditIo = retiredEndpointAuditIo({ fetchStub, clearTimeoutStub });
+
+        try {
+          await runAuditJson(auditIo);
+        } catch {
+          // Timeout throws are expected in the abort path.
+        }
+
+        expect(clearTimeoutStub).toHaveBeenCalledWith(99);
+      }),
+    );
+  });
+});

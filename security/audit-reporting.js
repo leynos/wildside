@@ -47,18 +47,23 @@ function formatAdvisoryLine(advisory) {
   return `- ${id}${suffix}`;
 }
 
+const defaultReportingIo = {
+  error: (...args) => console.error(...args),
+};
+
 /** Report unexpected advisories to stderr.
  * @param {Array<{ github_advisory_id?: string, title?: string }>} unexpected Advisories that were not permitted. @param {string} heading Descriptive heading for the error output.
+ * @param {{ error: (...args: unknown[]) => void }} [reportingIo=defaultReportingIo] IO adapter for stderr output.
  * @returns {boolean} Whether any advisories were reported. @example const hadUnexpected = reportUnexpectedAdvisories([{ github_advisory_id: 'GHSA-1', title: 'Example' }], 'Unexpected advisories:'); console.log(hadUnexpected); // true
  */
-export function reportUnexpectedAdvisories(unexpected, heading) {
+export function reportUnexpectedAdvisories(unexpected, heading, reportingIo = defaultReportingIo) {
   if (unexpected.length === 0) {
     return false;
   }
 
-  console.error(heading);
+  reportingIo.error(heading);
   for (const advisory of unexpected) {
-    console.error(formatAdvisoryLine(advisory));
+    reportingIo.error(formatAdvisoryLine(advisory));
   }
   return true;
 }

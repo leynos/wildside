@@ -43,7 +43,7 @@ describe('Makefile audit targets', () => {
     const stdout = await dryRunMake('rust-audit');
 
     expect(stdout).toContain('command -v cargo-audit');
-    expect(stdout).toContain('cargo-audit is required');
+    expect(stdout).toContain('printf "Error: \'%s\' is required, but not installed\\n" "cargo-audit"');
     expect(stdout).toContain('cargo-audit@0.22.1');
   });
 
