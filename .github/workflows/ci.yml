@@ -135,10 +135,15 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.theseus/postgresql
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache PostgreSQL embedded binaries
+        uses: ubicloud/cache@v4
+        with:
+          path: ~/.theseus/postgresql
+          key: ${{ runner.os }}-pg-embedded-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-pg-embedded-
       - name: Rust build
         run: cargo check --locked --manifest-path backend/Cargo.toml --all-targets --all-features
       - name: Rust fmt check
