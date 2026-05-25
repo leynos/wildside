@@ -1,7 +1,7 @@
 /**
  * @file Package-tree and advisory-normalization helpers for audit utilities.
  *
- * Owns `pnpm ls` serialisation, installed-version map construction, and npm
+ * Owns `pnpm ls` serialization, installed-version map construction, and npm
  * bulk-advisory response normalization. Callers provide parsed JSON-shaped
  * objects for pure helpers or an `auditIo` adapter for command execution.
  */
