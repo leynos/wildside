@@ -50,6 +50,14 @@ describe('parseJsonOutput', () => {
       /^Failed to parse pnpm audit JSON:/,
     );
   });
+
+  it.each([
+    ['literal null', 'null', null],
+    ['literal false', 'false', false],
+    ['numeric zero', '0', 0],
+  ])('preserves valid JSON edge case %#: %s', (_label, payload, expected) => {
+    expect(parseJsonOutput(payload, 'pnpm audit')).toBe(expected);
+  });
 });
 
 describe('buildVersionMap', () => {
@@ -79,6 +87,17 @@ describe('buildVersionMap', () => {
       nanoid: ['3.3.11'],
       validator: ['13.15.23'],
       vitest: ['3.2.4'],
+    });
+  });
+
+  it('accepts a single null-prototype package tree', () => {
+    const tree = Object.create(null);
+    tree.dependencies = {
+      validator: { version: '13.15.23' },
+    };
+
+    expect(mapToSortedObject(buildVersionMap(tree))).toEqual({
+      validator: ['13.15.23'],
     });
   });
 
@@ -221,6 +240,32 @@ describe('normalizeBulkAdvisories', () => {
         url: 'https://example.test/advisories/100001',
       },
     });
+  });
+
+  it('snapshots a normalized bulk advisory transformation', () => {
+    expect(
+      normalizeBulkAdvisories({
+        ws: [
+          {
+            id: 110001,
+            severity: 'moderate',
+            title: 'Uninitialized memory disclosure',
+            url: 'https://github.com/advisories/GHSA-58QX-3VCG-4XPX',
+          },
+        ],
+      }),
+    ).toMatchInlineSnapshot(`
+      {
+        "GHSA-58qx-3vcg-4xpx": {
+          "github_advisory_id": "GHSA-58qx-3vcg-4xpx",
+          "id": 110001,
+          "package_name": "ws",
+          "severity": "moderate",
+          "title": "Uninitialized memory disclosure",
+          "url": "https://github.com/advisories/GHSA-58QX-3VCG-4XPX",
+        },
+      }
+    `);
   });
 
   it('rejects malformed bulk advisory payloads', () => {

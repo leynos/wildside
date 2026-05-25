@@ -4,6 +4,10 @@ import fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
 import { assertNoExpired } from '../security/audit-exception-policy.js';
 import {
+  partitionAdvisoriesById as partitionAdvisoriesByIdFromUtils,
+  reportUnexpectedAdvisories as reportUnexpectedAdvisoriesFromUtils,
+} from '../security/audit-utils.js';
+import {
   partitionAdvisoriesById,
   reportUnexpectedAdvisories,
 } from '../security/audit-reporting.js';
@@ -33,6 +37,10 @@ function throwingPolicyIo() {
 }
 
 describe('partitionAdvisoriesById', () => {
+  it('is re-exported from the shared audit utility surface', () => {
+    expect(partitionAdvisoriesByIdFromUtils).toBe(partitionAdvisoriesById);
+  });
+
   it('partitions advisories without reordering either group', () => {
     const first = advisory('GHSA-1111-2222-3333');
     const second = advisory('GHSA-4444-5555-6666');
@@ -67,6 +75,10 @@ describe('partitionAdvisoriesById', () => {
 });
 
 describe('reportUnexpectedAdvisories', () => {
+  it('is re-exported from the shared audit utility surface', () => {
+    expect(reportUnexpectedAdvisoriesFromUtils).toBe(reportUnexpectedAdvisories);
+  });
+
   it('returns false and writes nothing for an empty report', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -102,6 +114,19 @@ describe('reportUnexpectedAdvisories', () => {
 });
 
 describe('assertNoExpired', () => {
+  it('uses the injected current date instead of wall-clock time', () => {
+    const policyIo = throwingPolicyIo();
+
+    assertNoExpired(
+      [exceptionEntry({ addedAt: '2024-01-01', expiresAt: '2024-01-31' })],
+      new Date('2024-01-30T00:00:00.000Z'),
+      policyIo,
+    );
+
+    expect(policyIo.exit).not.toHaveBeenCalled();
+    expect(policyIo.error).not.toHaveBeenCalled();
+  });
+
   it('allows exceptions expiring on or after the current date', () => {
     fc.assert(
       fc.property(fc.date({ min: new Date('2024-01-01'), max: new Date('2030-12-31') }), (date) => {

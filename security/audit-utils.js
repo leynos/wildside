@@ -203,7 +203,7 @@ export async function runAuditJson(auditIo = defaultAuditIo) {
 
   const json = parseJsonOutput(stdout, 'pnpm audit');
   if (isRetiredAuditEndpoint(json)) {
-    return runBulkAdvisoryAudit(auditIo);
+    return await runBulkAdvisoryAudit(auditIo);
   }
 
   return { json, status };
