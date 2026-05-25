@@ -12,7 +12,7 @@ from .validation import LocalK8sError, require_tools
 def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
     """Build the image and install or upgrade the Wildside Helm release."""
 
-    require_tools(("docker", "helm", "k3d", "kubectl"))
+    require_tools(_deploy_preview_tools(skip_build=skip_build))
     ensure_cluster(config)
     ensure_namespace(config)
     if not skip_build:
@@ -20,6 +20,14 @@ def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
     import_image(config)
     helm_upgrade(config)
     print_status(config)
+
+
+def _deploy_preview_tools(*, skip_build: bool) -> tuple[str, ...]:
+    """Return the required command-line tools for the requested deploy mode."""
+
+    if skip_build:
+        return ("helm", "k3d", "kubectl")
+    return ("docker", "helm", "k3d", "kubectl")
 
 
 def build_image(config: PreviewConfig) -> None:
