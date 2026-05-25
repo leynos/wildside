@@ -161,14 +161,15 @@ fn ensure_stable_password() {
         }
     }
     if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
+        // Pin to Theseus binaries to prevent transient fetch failures in CI
+        // (misreported by reqwest as "error decoding response body").
         // SAFETY: called before the library spawns any threads. The shared
         // cluster singleton serializes access with a `Mutex`, so this runs at
         // most once per process.
         unsafe {
-            // Pin the release source to Theseus to avoid transient fetch issues in CI
             std::env::set_var(
                 "POSTGRESQL_RELEASES_URL",
-                "https://github.com/theseus-rs/postgresql-binaries",
+                "https://github.com/theseus-rs/postgresql-binaries/releases",
             );
         }
     }
@@ -330,7 +331,7 @@ mod tests {
         assert_eq!(
             std::env::var("POSTGRESQL_RELEASES_URL")
                 .expect("POSTGRESQL_RELEASES_URL should be set"),
-            "https://github.com/theseus-rs/postgresql-binaries"
+            "https://github.com/theseus-rs/postgresql-binaries/releases"
         );
     }
 
