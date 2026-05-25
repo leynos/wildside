@@ -124,35 +124,29 @@ describe('assertNoExpired', () => {
     );
   });
 
-  it('exits when an exception expires before the current date', () => {
+  it.each([
+    [
+      'expires before the current date',
+      exceptionEntry({ addedAt: '2024-01-01', expiresAt: '2024-01-31' }),
+      new Date('2024-02-01T00:00:00.000Z'),
+      [
+        'Audit exceptions have expired:',
+        '- exception-1 (validator) expired on 2024-01-31',
+      ],
+    ],
+    [
+      'has an inverted date range',
+      exceptionEntry({ addedAt: '2024-02-01', expiresAt: '2024-01-31' }),
+      new Date('2024-01-15T00:00:00.000Z'),
+      [
+        'Audit exceptions have invalid date ranges (addedAt > expiresAt):',
+        '- exception-1 (validator) addedAt 2024-02-01 > expiresAt 2024-01-31',
+      ],
+    ],
+  ])('exits when an exception %s', (_description, entry, currentDate, expectedErrors) => {
     const policyIo = throwingPolicyIo();
 
-    expect(() =>
-      assertNoExpired(
-        [exceptionEntry({ addedAt: '2024-01-01', expiresAt: '2024-01-31' })],
-        new Date('2024-02-01T00:00:00.000Z'),
-        policyIo,
-      ),
-    ).toThrow('exit 1');
-    expect(policyIo.error.mock.calls.map(([line]) => line)).toEqual([
-      'Audit exceptions have expired:',
-      '- exception-1 (validator) expired on 2024-01-31',
-    ]);
-  });
-
-  it('exits when an exception date range is inverted', () => {
-    const policyIo = throwingPolicyIo();
-
-    expect(() =>
-      assertNoExpired(
-        [exceptionEntry({ addedAt: '2024-02-01', expiresAt: '2024-01-31' })],
-        new Date('2024-01-15T00:00:00.000Z'),
-        policyIo,
-      ),
-    ).toThrow('exit 1');
-    expect(policyIo.error.mock.calls.map(([line]) => line)).toEqual([
-      'Audit exceptions have invalid date ranges (addedAt > expiresAt):',
-      '- exception-1 (validator) addedAt 2024-02-01 > expiresAt 2024-01-31',
-    ]);
+    expect(() => assertNoExpired([entry], currentDate, policyIo)).toThrow('exit 1');
+    expect(policyIo.error.mock.calls.map(([line]) => line)).toEqual(expectedErrors);
   });
 });
