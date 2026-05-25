@@ -41,11 +41,10 @@ YAMLLINT_VERSION ?= 1.35.1
 OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test test-rust test-frontend typecheck deps lockfile lint-specs \
-        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit audit-node rust-audit \
-        lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile lint-actions \
-        lint-architecture workspace-sync
-.PHONY: audit audit-node rust-audit
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test test-rust test-frontend typecheck deps lockfile lint-specs audit \
+	check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit-node rust-audit \
+	lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile lint-actions \
+	lint-architecture workspace-sync
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
