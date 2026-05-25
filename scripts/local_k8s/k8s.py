@@ -17,6 +17,15 @@ def ensure_namespace(config: PreviewConfig) -> None:
     run("kubectl", ["create", "namespace", config.namespace])
 
 
+def _helm_fullname(config: PreviewConfig) -> str:
+    """Return the chart fullname used for Kubernetes object names."""
+
+    chart_name = config.chart_path.name
+    if config.release_name == chart_name:
+        return chart_name
+    return f"{config.release_name}-{chart_name}"[:63].rstrip("-")
+
+
 def print_kubernetes_status(config: PreviewConfig) -> None:
     """Print namespace, service, and pod status for the preview release."""
 
@@ -36,5 +45,15 @@ def print_kubernetes_status(config: PreviewConfig) -> None:
         ],
     )
     print(pods.stdout.strip() or "pods: none")
-    services = run("kubectl", ["-n", config.namespace, "get", "service", config.release_name, "--ignore-not-found"])
+    services = run(
+        "kubectl",
+        [
+            "-n",
+            config.namespace,
+            "get",
+            "service",
+            _helm_fullname(config),
+            "--ignore-not-found",
+        ],
+    )
     print(services.stdout.strip() or "service: none")
