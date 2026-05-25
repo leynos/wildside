@@ -330,4 +330,37 @@ describe('runAuditJson', () => {
       'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk',
     );
   });
+
+  it('omits github advisory IDs when the bulk payload lacks a GHSA URL', async () => {
+    setupRetiredEndpointFallback();
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () =>
+        JSON.stringify({
+          validator: [
+            {
+              id: 100000,
+              url: 'https://example.test/advisories/100000',
+              title: 'Registry advisory',
+            },
+          ],
+        }),
+    });
+    const { runAuditJson } = await loadAuditUtils();
+
+    const result = await runAuditJson();
+
+    expect(result.json.advisories).toEqual({
+      'validator:100000': expect.objectContaining({
+        id: 100000,
+        [packageNameKey]: 'validator',
+        title: 'Registry advisory',
+        url: 'https://example.test/advisories/100000',
+      }),
+    });
+    expect(result.json.advisories['validator:100000']).not.toHaveProperty(githubAdvisoryIdKey);
+    assertFallbackSpawnCalls();
+  });
 });

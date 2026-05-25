@@ -221,9 +221,11 @@ function mergeOneAdvisory(packageName, advisory, index, advisories) {
   }
   advisories[key] = {
     ...advisory,
-    github_advisory_id: githubAdvisoryId,
     package_name: packageName,
   };
+  if (githubAdvisoryId != null) {
+    advisories[key].github_advisory_id = githubAdvisoryId;
+  }
 }
 
 /** Merge advisories for one package into the shared accumulator.
