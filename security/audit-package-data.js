@@ -107,7 +107,11 @@ function walkDependencies(node, versionsByPackage) {
  * @example isValidTreeNode([]);                   // false
  */
 function isValidTreeNode(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 /** Build the installed package-version map from parsed `pnpm ls` output.

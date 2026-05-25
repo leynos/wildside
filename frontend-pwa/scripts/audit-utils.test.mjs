@@ -63,6 +63,16 @@ async function loadAuditUtils() {
   return module;
 }
 
+describe('buildVersionMap', () => {
+  it('rejects non-plain dependency tree objects', async () => {
+    const { buildVersionMap } = await loadAuditUtils();
+
+    expect(() => buildVersionMap(new Map())).toThrow(
+      'pnpm ls returned an invalid dependency tree payload.',
+    );
+  });
+});
+
 describe('runAuditJson', () => {
   beforeEach(() => {
     vi.resetModules();
