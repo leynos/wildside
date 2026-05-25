@@ -98,6 +98,17 @@ function walkDependencies(node, versionsByPackage) {
   }
 }
 
+/** Return `true` when a value is a non-null, non-array object.
+ * @param {unknown} value Value to test.
+ * @returns {boolean}
+ * @example isNonNullObject({ dependencies: {} }); // true
+ * @example isNonNullObject(null);                 // false
+ * @example isNonNullObject([]);                   // false
+ */
+function isNonNullObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /** Return `true` when a value is a valid `pnpm ls` dependency tree node
  * (a non-null, non-array plain object).
  * @param {unknown} value Value to test.
@@ -107,7 +118,7 @@ function walkDependencies(node, versionsByPackage) {
  * @example isValidTreeNode([]);                   // false
  */
 function isValidTreeNode(value) {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isNonNullObject(value)) {
     return false;
   }
   const prototype = Object.getPrototypeOf(value);
@@ -206,7 +217,7 @@ function deriveAdvisoryKey(packageName, advisory) {
  * @param {unknown} value Value to test. @returns {boolean}
  * @example isPlainAdvisoryObject({ id: 1 }); // true
  */
-function isPlainAdvisoryObject(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
+function isPlainAdvisoryObject(value) { return isNonNullObject(value); }
 
 /** Validate and merge one advisory into the shared accumulator.
  * @param {string} packageName Package name from the bulk advisory payload.
