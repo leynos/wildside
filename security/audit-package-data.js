@@ -119,6 +119,17 @@ function isPlainObject(value) {
   return isNonNullObject(value) && !Array.isArray(value);
 }
 
+/**
+ * Return `true` when `value`'s prototype is `Object.prototype` or `null`
+ * (i.e. a plain object literal or `Object.create(null)`).
+ * @param {object} value Non-null object to test.
+ * @returns {boolean}
+ */
+function hasPlainObjectPrototype(value) {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
 /** Return `true` when a value is a valid `pnpm ls` dependency tree node
  * (a non-null, non-array plain object).
  * @param {unknown} value Value to test.
@@ -128,11 +139,7 @@ function isPlainObject(value) {
  * @example isValidTreeNode([]);                   // false
  */
 function isValidTreeNode(value) {
-  if (!isPlainObject(value)) {
-    return false;
-  }
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  return isPlainObject(value) && hasPlainObjectPrototype(value);
 }
 
 /** Build the installed package-version map from parsed `pnpm ls` output.
@@ -223,12 +230,14 @@ function deriveAdvisoryKey(packageName, advisory) {
   return { key, githubAdvisoryId };
 }
 
-/** Return `true` when a value is a plain (non-array, non-null) object.
+/** Return `true` when a value is a plain (non-array, non-null) object with a plain
+ * prototype (`Object.prototype` or `null`).
  * @param {unknown} value Value to test. @returns {boolean}
- * @example isPlainAdvisoryObject({ id: 1 }); // true
+ * @example isPlainAdvisoryObject({ id: 1 });    // true
+ * @example isPlainAdvisoryObject(new Map());    // false
  */
 function isPlainAdvisoryObject(value) {
-  return isPlainObject(value);
+  return isPlainObject(value) && hasPlainObjectPrototype(value);
 }
 
 /** Validate and merge one advisory into the shared accumulator.
