@@ -1,0 +1,158 @@
+/** @file Unit and property tests for audit reporting and exception policy. */
+
+import fc from 'fast-check';
+import { describe, expect, it, vi } from 'vitest';
+import { assertNoExpired } from '../security/audit-exception-policy.js';
+import {
+  partitionAdvisoriesById,
+  reportUnexpectedAdvisories,
+} from '../security/audit-reporting.js';
+
+function advisory(id, title = `Advisory ${id}`) {
+  return { github_advisory_id: id, title };
+}
+
+function exceptionEntry({ addedAt, expiresAt, id = 'exception-1' }) {
+  return {
+    addedAt,
+    advisory: 'GHSA-vghf-hv5q-vc2g',
+    expiresAt,
+    id,
+    package: 'validator',
+    reason: 'Regression test fixture',
+  };
+}
+
+function throwingPolicyIo() {
+  return {
+    error: vi.fn(),
+    exit: vi.fn((code) => {
+      throw new Error(`exit ${code}`);
+    }),
+  };
+}
+
+describe('partitionAdvisoriesById', () => {
+  it('partitions advisories without reordering either group', () => {
+    const first = advisory('GHSA-1111-2222-3333');
+    const second = advisory('GHSA-4444-5555-6666');
+    const third = { title: 'Missing GHSA' };
+
+    expect(partitionAdvisoriesById([first, second, third], [second.github_advisory_id])).toEqual({
+      expected: [second],
+      unexpected: [first, third],
+    });
+  });
+
+  it('keeps every generated advisory in exactly one partition', () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.uuid(), { minLength: 1, maxLength: 30 }),
+        fc.array(fc.boolean(), { minLength: 1, maxLength: 30 }),
+        (ids, flags) => {
+          const advisories = ids.map((id) => advisory(id));
+          const allowedIds = ids.filter((_, index) => flags[index % flags.length]);
+          const { expected, unexpected } = partitionAdvisoriesById(advisories, allowedIds);
+
+          expect(expected).toHaveLength(new Set(allowedIds).size);
+          expect([...expected, ...unexpected].sort((left, right) =>
+            left.github_advisory_id.localeCompare(right.github_advisory_id),
+          )).toEqual([...advisories].sort((left, right) =>
+            left.github_advisory_id.localeCompare(right.github_advisory_id),
+          ));
+        },
+      ),
+    );
+  });
+});
+
+describe('reportUnexpectedAdvisories', () => {
+  it('returns false and writes nothing for an empty report', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(reportUnexpectedAdvisories([], 'Unexpected advisories:')).toBe(false);
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+  });
+
+  it('formats unexpected advisory output consistently', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(
+      reportUnexpectedAdvisories(
+        [
+          advisory('GHSA-vghf-hv5q-vc2g', 'Validator SSRF'),
+          { title: 'Missing identifier' },
+        ],
+        'pnpm audit reported vulnerabilities without exceptions:',
+      ),
+    ).toBe(true);
+
+    expect(errorSpy.mock.calls.map(([line]) => line)).toMatchInlineSnapshot(`
+      [
+        "pnpm audit reported vulnerabilities without exceptions:",
+        "- GHSA-vghf-hv5q-vc2g: Validator SSRF",
+        "- UNKNOWN: Missing identifier",
+      ]
+    `);
+
+    errorSpy.mockRestore();
+  });
+});
+
+describe('assertNoExpired', () => {
+  it('allows exceptions expiring on or after the current date', () => {
+    fc.assert(
+      fc.property(fc.date({ min: new Date('2024-01-01'), max: new Date('2030-12-31') }), (date) => {
+        const today = date.toISOString().slice(0, 10);
+        const policyIo = throwingPolicyIo();
+
+        assertNoExpired(
+          [
+            exceptionEntry({
+              addedAt: '2024-01-01',
+              expiresAt: today,
+            }),
+          ],
+          date,
+          policyIo,
+        );
+
+        expect(policyIo.exit).not.toHaveBeenCalled();
+      }),
+    );
+  });
+
+  it('exits when an exception expires before the current date', () => {
+    const policyIo = throwingPolicyIo();
+
+    expect(() =>
+      assertNoExpired(
+        [exceptionEntry({ addedAt: '2024-01-01', expiresAt: '2024-01-31' })],
+        new Date('2024-02-01T00:00:00.000Z'),
+        policyIo,
+      ),
+    ).toThrow('exit 1');
+    expect(policyIo.error.mock.calls.map(([line]) => line)).toEqual([
+      'Audit exceptions have expired:',
+      '- exception-1 (validator) expired on 2024-01-31',
+    ]);
+  });
+
+  it('exits when an exception date range is inverted', () => {
+    const policyIo = throwingPolicyIo();
+
+    expect(() =>
+      assertNoExpired(
+        [exceptionEntry({ addedAt: '2024-02-01', expiresAt: '2024-01-31' })],
+        new Date('2024-01-15T00:00:00.000Z'),
+        policyIo,
+      ),
+    ).toThrow('exit 1');
+    expect(policyIo.error.mock.calls.map(([line]) => line)).toEqual([
+      'Audit exceptions have invalid date ranges (addedAt > expiresAt):',
+      '- exception-1 (validator) addedAt 2024-02-01 > expiresAt 2024-01-31',
+    ]);
+  });
+});

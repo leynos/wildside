@@ -5,6 +5,7 @@ import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { VALIDATOR_ADVISORY_ID, VALIDATOR_MIN_SAFE_VERSION } from './constants.js';
 import { isValidatorPatched } from './validator-patch.js';
+import { assertNoExpired } from './audit-exception-policy.js';
 import {
   collectAdvisories,
   partitionAdvisoriesById,
@@ -54,42 +55,6 @@ const validate = ajv.compile(schema);
 function assertValidSchema(entries) {
   if (!validate(entries)) {
     console.error('Audit exceptions failed schema validation:', validate.errors);
-    process.exit(1);
-  }
-}
-
-/**
- * Exit with error if any audit exceptions are past their expiry date.
- *
- * @param {typeof data} entries Entries to inspect.
- * @example
- * assertNoExpired([
- *   {
- *     id: "1",
- *     package: "pkg",
- *     advisory: "ADV-1",
- *     reason: "Justified",
- *     addedAt: "2024-01-01",
- *     expiresAt: "2099-01-01",
- *   },
- * ]);
- */
-function assertNoExpired(entries, currentDate = new Date()) {
-  const today = currentDate.toISOString().slice(0, 10);
-  const expired = entries.filter((e) => e.expiresAt < today);
-  const inverted = entries.filter((e) => e.addedAt > e.expiresAt);
-  if (expired.length > 0) {
-    console.error('Audit exceptions have expired:');
-    for (const { id, package: pkg, expiresAt } of expired) {
-      console.error(`- ${id} (${pkg}) expired on ${expiresAt}`);
-    }
-    process.exit(1);
-  }
-  if (inverted.length > 0) {
-    console.error('Audit exceptions have invalid date ranges (addedAt > expiresAt):');
-    for (const { id, package: pkg, addedAt, expiresAt } of inverted) {
-      console.error(`- ${id} (${pkg}) addedAt ${addedAt} > expiresAt ${expiresAt}`);
-    }
     process.exit(1);
   }
 }

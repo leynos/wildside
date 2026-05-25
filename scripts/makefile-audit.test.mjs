@@ -1,68 +1,52 @@
-/** @file Tests the Makefile audit target contracts. */
+/** @file Functional dry-run tests for the Makefile audit target contracts. */
 
-import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
-const makefilePath = new URL('../Makefile', import.meta.url);
+const execFileAsync = promisify(execFile);
+const repositoryRoot = new URL('../', import.meta.url);
 
 /**
- * Read the repository Makefile for contract checks.
- *
- * @returns {Promise<string>} The Makefile source.
+ * Ask Make to print a target's execution plan without running the recipes.
+ * @param {string} target Make target to dry-run.
+ * @returns {Promise<string>} Commands Make would execute for the target.
  */
-async function readMakefile() {
-  return readFile(makefilePath, 'utf8');
-}
-
-/**
- * Extract a Make target recipe body from Makefile source.
- *
- * @param {string} source - The Makefile source.
- * @param {string} target - The target name to extract.
- * @returns {string} The target recipe body.
- */
-function extractTarget(source, target) {
-  const match = source.match(
-    new RegExp(`^${target}:[^\\n]*(?:\\n\\t[^\\n]*)*`, 'm'),
-  );
-  return match?.[0] ?? '';
+async function dryRunMake(target) {
+  const { stdout } = await execFileAsync('make', ['--dry-run', '--always-make', target], {
+    cwd: repositoryRoot,
+  });
+  return stdout;
 }
 
 describe('Makefile audit targets', () => {
-  it('wires the aggregate audit target through node and Rust audits', async () => {
-    const makefile = await readMakefile();
+  it('executes the aggregate audit target through node and Rust audits', async () => {
+    const stdout = await dryRunMake('audit');
 
-    expect(makefile).toMatch(/^audit: audit-node rust-audit$/m);
+    expect(stdout).toContain('pnpm -r --if-present run audit');
+    expect(stdout).toContain('pnpm run audit:validate');
+    expect(stdout).toContain('cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071');
   });
 
   it('does not reinstall node dependencies inside audit-node', async () => {
-    const makefile = await readMakefile();
-    const target = extractTarget(makefile, 'audit-node');
+    const stdout = await dryRunMake('audit-node');
 
-    expect(target).toContain('audit-node: deps');
-    expect(target).toContain('pnpm -r --if-present run audit');
-    expect(target).toContain('pnpm run audit:validate');
-    expect(target).not.toContain('pnpm -r install');
+    expect(stdout).toContain('pnpm -r --if-present run audit');
+    expect(stdout).toContain('pnpm run audit:validate');
+    expect(stdout).not.toContain('pnpm -r install');
   });
 
   it('checks cargo-audit availability before running the Rust audit', async () => {
-    const makefile = await readMakefile();
-    const target = extractTarget(makefile, 'rust-audit');
+    const stdout = await dryRunMake('rust-audit');
 
-    expect(target).toContain('command -v cargo-audit');
-    expect(target).toContain('cargo-audit is required');
-    expect(target).toContain('cargo-audit@0.22.1');
+    expect(stdout).toContain('command -v cargo-audit');
+    expect(stdout).toContain('cargo-audit is required');
+    expect(stdout).toContain('cargo-audit@0.22.1');
   });
 
-  it('runs cargo audit against Cargo.lock with the configured ignores', async () => {
-    const makefile = await readMakefile();
-    const target = extractTarget(makefile, 'rust-audit');
+  it('runs cargo audit against Cargo.lock with configured ignores', async () => {
+    const stdout = await dryRunMake('rust-audit');
 
-    expect(makefile).toMatch(
-      /^CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071$/m,
-    );
-    expect(target).toContain(
-      '$(CARGO) audit --file Cargo.lock $(CARGO_AUDIT_IGNORES)',
-    );
+    expect(stdout).toContain('cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071');
   });
 });

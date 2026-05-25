@@ -161,6 +161,36 @@ When a phase introduces a new lint, accessibility, Playwright, or semantic CSS
 gate, update this guide and the corresponding phase ExecPlan under
 `docs/execplans/` in the same change.
 
+### Dependency audit helper modules
+
+The JavaScript dependency-audit flow is split by responsibility:
+
+- `security/audit-utils.js` is the orchestration surface used by package
+  scripts. It exports `runAuditJson(auditIo?)` and
+  `collectAdvisories(auditJson)`, and re-exports the lower-level package-data
+  and reporting helpers.
+- `security/audit-package-data.js` owns pure JSON parsing, `pnpm ls` package
+  tree handling, installed-version maps, and npm bulk-advisory normalization.
+  Its public helpers are `parseJsonOutput(payloadText, commandLabel, options?)`,
+  `loadPackageTrees(auditIo, assertCompletedProcess)`,
+  `buildVersionMap(packageTrees)`,
+  `collectInstalledPackageVersions(auditIo, assertCompletedProcess)`, and
+  `normalizeBulkAdvisories(bulkPayload)`.
+- `security/audit-reporting.js` owns advisory partitioning and stderr output.
+  Its public helpers are `partitionAdvisoriesById(advisories, allowedIds)` and
+  `reportUnexpectedAdvisories(unexpected, heading)`.
+- `security/audit-exception-policy.js` owns exception-ledger date policy. Its
+  public helper is `assertNoExpired(entries, currentDate?, policyIo?)`.
+- `security/validate-audit.js` applies repository policy to the parsed audit
+  results and the exception ledger.
+
+Effectful audit helpers must receive external dependencies through the
+`auditIo` adapter rather than reading process state directly. The default
+adapter wraps `spawnSync`, `execFileSync`, `fetch`, timers, and `getEnv(name)`;
+tests should inject an adapter with the same methods when they need to control
+command results, registry configuration, network responses, or timeout
+behaviour.
+
 ## Embedded PostgreSQL integration tests
 
 Backend integration and behavioural suites that require PostgreSQL use the

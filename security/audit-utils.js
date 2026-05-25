@@ -41,6 +41,7 @@ const RETIRED_AUDIT_ENDPOINT_MESSAGE = 'This endpoint is being retired. Use the 
 const defaultAuditIo = {
   execFileSync,
   fetch: (...args) => fetch(...args),
+  getEnv: (name) => process.env[name],
   setTimeout,
   clearTimeout,
   spawnSync,
@@ -96,10 +97,10 @@ function normalizeRegistryUrl(rawRegistry) {
  * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
  * @returns {string} Normalised registry URL, or the npm default when lookup fails.
  * @example // With `npm_config_registry=https://registry.npmjs.org`: readRegistryUrl(); // 'https://registry.npmjs.org/'
- * @example const auditIo = { ...defaultAuditIo, execFileSync: () => 'https://registry.npmjs.org\n' }; readRegistryUrl(auditIo); // 'https://registry.npmjs.org/'
+ * @example const auditIo = { ...defaultAuditIo, getEnv: () => undefined, execFileSync: () => 'https://registry.npmjs.org\n' }; readRegistryUrl(auditIo); // 'https://registry.npmjs.org/'
  */
 function readRegistryUrl(auditIo = defaultAuditIo) {
-  const envRegistry = process.env.npm_config_registry ?? process.env.NPM_CONFIG_REGISTRY;
+  const envRegistry = auditIo.getEnv?.('npm_config_registry') ?? auditIo.getEnv?.('NPM_CONFIG_REGISTRY');
   if (envRegistry) {
     return normalizeRegistryUrl(envRegistry);
   }
