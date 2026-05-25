@@ -98,6 +98,18 @@ function walkDependencies(node, versionsByPackage) {
   }
 }
 
+/** Return `true` when a value is a valid `pnpm ls` dependency tree node
+ * (a non-null, non-array plain object).
+ * @param {unknown} value Value to test.
+ * @returns {boolean}
+ * @example isValidTreeNode({ dependencies: {} }); // true
+ * @example isValidTreeNode(null);                 // false
+ * @example isValidTreeNode([]);                   // false
+ */
+function isValidTreeNode(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /** Build the installed package-version map from parsed `pnpm ls` output.
  * @param {Record<string, unknown> | Record<string, unknown>[] | undefined} packageTrees Parsed `pnpm ls` output as one tree or many. @returns {Map<string, Set<string>>} Installed versions keyed by package name. @example const versions = buildVersionMap([{ dependencies: { validator: { version: '13.15.23' } } }]); console.log(versions.get('validator').has('13.15.23')); // true
  */
@@ -105,7 +117,7 @@ export function buildVersionMap(packageTrees) {
   const versionsByPackage = new Map();
   const trees = Array.isArray(packageTrees) ? packageTrees : [packageTrees];
   for (const tree of trees) {
-    if (typeof tree !== 'object' || tree === null || Array.isArray(tree)) {
+    if (!isValidTreeNode(tree)) {
       throw new TypeError('pnpm ls returned an invalid dependency tree payload.');
     }
     walkDependencies(tree, versionsByPackage);
