@@ -204,14 +204,20 @@ told that other agents may be editing the repository.
   `make check-fmt`, `make lint`, and `make test`.
   All passed. The full test gate reported 1220 Rust tests passed with 4
   skipped, followed by passing frontend/workspace tests.
-- [ ] Update architecture, developer, and roadmap documentation after
-  implementation evidence exists.
-- [ ] Run `coderabbit review --agent` after the implementation milestone and
-  clear all concerns.
-- [ ] Run and record final quality gates:
+- [x] (2026-05-26) Committed Stage C as `ce7e588` and ran
+  `coderabbit review --agent`; the agent review completed with 0 findings.
+- [x] (2026-05-26) Updated architecture, developer, and roadmap documentation
+  after implementation evidence existed. No `docs/users-guide.md` update was
+  made because this item preserves operator-visible server behaviour and the
+  repository has no existing `docs/users-guide.md` file.
+- [x] (2026-05-26) Re-ran final quality gates after documentation updates:
   `make check-fmt`, `make lint`, and `make test`.
-- [ ] Mark roadmap item 3.5.5 done only after the implementation and all gates
-  succeed.
+  All passed. The full test gate reported 1220 Rust tests passed with 4
+  skipped, followed by passing frontend/workspace tests.
+- [ ] Run final CodeRabbit review after the documentation milestone and clear
+  all concerns.
+- [ ] Push the branch and update the draft PR with the final implementation
+  summary and validation evidence.
 
 ## Surprises & discoveries
 

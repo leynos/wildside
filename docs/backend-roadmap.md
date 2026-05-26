@@ -203,10 +203,17 @@ so persistence details stay confined to outbound adapters.
 - [x] 3.5.4. Define and implement the revision-safe interests update strategy
   (for example optimistic concurrency via expected revision checks), including
   the persistence contract and error mapping for stale-write conflicts.
-- [ ] 3.5.5. Harden `backend/src/server/state_builders.rs` startup-mode
+- [x] 3.5.5. Harden `backend/src/server/state_builders.rs` startup-mode
   composition with explicit helper seams and regression assertions so
   DB-present versus fixture-fallback adapter selection remains deterministic as
   user-state wiring evolves.
+  - Execution note (2026-05-26): implementation added the private
+    `compose_user_state_ports` helper seam and `UserStatePortsBundle`, then
+    strengthened `backend/tests/startup_mode_composition_bdd.rs` with
+    adapter-selection assertions at the HTTP boundary. `make check-fmt`,
+    `make lint`, `make test`, and CodeRabbit agent review passed before
+    closure; evidence is tracked in
+    `docs/execplans/backend-3-5-5-harden-startup-mode-composition.md`.
 - [ ] 3.5.6. Expand behavioural and repository-level regression coverage for the
   full login/users/profile/interests startup matrix, and include
   revision-conflict interests scenarios after 3.5.4 lands.
