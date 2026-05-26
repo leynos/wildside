@@ -286,7 +286,7 @@ queue, cache, and repository ports defined in section 1.
 
 ### 5.2. Queue adapter (Apalis)
 
-- [ ] 5.2.1. Implement `RouteQueue` using Apalis with PostgreSQL backend,
+- [x] 5.2.1. Implement `RouteQueue` using Apalis with PostgreSQL backend,
   replacing the current stub adapter.
 - [ ] 5.2.2. Define job structs for `GenerateRouteJob` and `EnrichmentJob`.
 - [ ] 5.2.3. Implement retry policies with exponential backoff and dead-letter

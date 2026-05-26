@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 This plan covers roadmap item 5.2.1 only:
 `Implement RouteQueue using Apalis with PostgreSQL backend, replacing the
@@ -475,9 +475,16 @@ operation.
   (`/tmp/backend-5-2-1-test.out`); all passed. The Rust nextest portion ran
   1220 tests with 1220 passed and 4 skipped, and the frontend/workspace tests
   also passed.
-- [ ] Run CodeRabbit after full gates.
-- [ ] Mark roadmap item 5.2.1 done after gates pass.
-- [ ] Complete outcomes and retrospective.
+- [x] 2026-05-26: Ran `coderabbit review --agent` after full gates; review
+  completed with 0 findings.
+- [x] 2026-05-26: Marked only `docs/backend-roadmap.md` item 5.2.1 done.
+- [x] 2026-05-26: Ran final closure gates after the roadmap update:
+  `make check-fmt` (`/tmp/backend-5-2-1-final-check-fmt.out`), `make lint`
+  (`/tmp/backend-5-2-1-final-lint.out`), and `make test`
+  (`/tmp/backend-5-2-1-final-test.out`); all passed. The Rust nextest portion
+  ran 1220 tests with 1220 passed and 4 skipped, and the frontend/workspace
+  tests also passed.
+- [x] 2026-05-26: Completed outcomes and retrospective.
 
 ## Surprises & discoveries
 
@@ -559,5 +566,23 @@ operation.
 
 ## Outcomes & Retrospective
 
-Not yet populated. This section must be completed after approved execution,
-full validation, CodeRabbit review, roadmap closure, and pull request updates.
+5.2.1 is complete as a validation-and-closure milestone. The current backend
+already contained the Apalis/PostgreSQL `RouteQueue` adapter, so the approved
+implementation work verified that adapter against focused `rstest` unit tests,
+PostgreSQL-backed `rstest-bdd` scenarios, and full repository gates rather
+than rewriting working code.
+
+The only documentation defect found was in `docs/developers-guide.md`, which
+described `GenericApalisRouteQueue<P, Q>` as internal even though the backend
+module re-exports it for the BDD harness seam. That guide now matches the
+actual public adapter surface and still directs production code to prefer the
+`ApalisRouteQueue<P>` alias.
+
+No user-facing server behaviour changed, and this worktree does not contain
+`docs/users-guide.md`, so no user-guide update was applicable. Route-submission
+dispatch, worker consumption, retry policy, trace propagation, and route-engine
+invocation remain explicitly deferred to later roadmap items.
+
+CodeRabbit returned 0 findings after targeted adapter verification,
+documentation reconciliation, and full quality gates. `docs/backend-roadmap.md`
+now marks only item 5.2.1 as done.
