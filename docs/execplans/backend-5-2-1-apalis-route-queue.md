@@ -467,7 +467,14 @@ operation.
 - [x] 2026-05-26: Confirmed `docs/users-guide.md` is absent and that 5.2.1
   does not change user-facing server behaviour, so no user-guide update is
   applicable.
-- [ ] Run full `make check-fmt`, `make lint`, and `make test` gates.
+- [x] 2026-05-26: Ran `coderabbit review --agent` after documentation
+  reconciliation; review completed with 0 findings.
+- [x] 2026-05-26: Ran full gates: `make check-fmt`
+  (`/tmp/backend-5-2-1-check-fmt.out`), `make lint`
+  (`/tmp/backend-5-2-1-lint.out`), and `make test`
+  (`/tmp/backend-5-2-1-test.out`); all passed. The Rust nextest portion ran
+  1220 tests with 1220 passed and 4 skipped, and the frontend/workspace tests
+  also passed.
 - [ ] Run CodeRabbit after full gates.
 - [ ] Mark roadmap item 5.2.1 done after gates pass.
 - [ ] Complete outcomes and retrospective.
