@@ -121,3 +121,32 @@ pub(crate) fn assert_profile_response(snapshot: &Snapshot, expected_display_name
         Some(expected_display_name)
     );
 }
+
+/// Assert that user-state endpoints expose one deterministic adapter choice.
+pub(crate) fn assert_user_state_adapter_selection(world: &World, expected_display_name: &str) {
+    let profile = world.profile.as_ref().expect("profile snapshot");
+    assert_profile_response(profile, expected_display_name);
+
+    let users_list = world.users_list.as_ref().expect("users_list snapshot");
+    assert_eq!(users_list.status, 200);
+    let users = users_list
+        .body
+        .as_ref()
+        .and_then(|body| body.get("data"))
+        .and_then(Value::as_array)
+        .expect("users data array");
+    assert!(
+        users.iter().any(|user| {
+            user.get("displayName").and_then(Value::as_str) == Some(expected_display_name)
+        }),
+        "users list should expose the selected user-state adapter data"
+    );
+
+    let preferences = world.preferences.as_ref().expect("preferences snapshot");
+    assert_eq!(preferences.status, 200);
+    let preferences_body = preferences.body.as_ref().expect("preferences body");
+    assert_eq!(
+        preferences_body.get("userId").and_then(Value::as_str),
+        Some(FIXTURE_AUTH_ID)
+    );
+}

@@ -191,7 +191,19 @@ told that other agents may be editing the repository.
   `make check-fmt`, `make lint`, and `make test` all passed. The full test
   gate again reported 1220 Rust tests passed with 4 skipped, followed by
   passing frontend/workspace tests.
-- [ ] Strengthen startup-mode behavioural regression assertions.
+- [x] (2026-05-26) Ran CodeRabbit after Stage B helper-seam commit
+  `af4d5d6`; the agent review completed with 0 findings.
+- [x] (2026-05-26) Strengthened startup-mode behavioural regression
+  assertions with a shared user-state adapter-selection helper that verifies
+  current-user, users-list, and preferences evidence at the HTTP boundary.
+- [x] (2026-05-26) Ran Stage C targeted BDD checks. The drafted filtered
+  command selected 0 generated scenarios, so
+  `cargo test -p backend --test startup_mode_composition_bdd -- --nocapture`
+  was run instead and passed all 12 tests.
+- [x] (2026-05-26) Ran Stage C milestone gates before CodeRabbit:
+  `make check-fmt`, `make lint`, and `make test`.
+  All passed. The full test gate reported 1220 Rust tests passed with 4
+  skipped, followed by passing frontend/workspace tests.
 - [ ] Update architecture, developer, and roadmap documentation after
   implementation evidence exists.
 - [ ] Run `coderabbit review --agent` after the implementation milestone and
@@ -238,6 +250,16 @@ told that other agents may be editing the repository.
   `cargo test -p backend --test state_builders_composition_unit -- --nocapture`
   for the helper-seam milestone.
 
+- Observation: filtering the startup-mode BDD binary with
+  `startup_mode_composition` selected support tests only and filtered out all
+  generated scenarios.
+  Evidence:
+  `cargo test -p backend startup_mode_composition --test startup_mode_composition_bdd -- --nocapture`
+  reported 0 executed tests and 12 filtered out.
+  Impact: use
+  `cargo test -p backend --test startup_mode_composition_bdd -- --nocapture`
+  for this suite when validating generated `rstest-bdd` scenarios.
+
 ## Decision log
 
 - Decision: keep this PR as a pre-implementation planning PR.
@@ -257,6 +279,14 @@ told that other agents may be editing the repository.
   over two startup modes, which is better captured by table-driven `rstest`
   and behaviour-level `rstest-bdd` assertions.
   Date/Author: 2026-05-21 / Codex.
+
+- Decision: assert users-list adapter selection by display-name evidence
+  rather than by authenticated user ID in the shared startup-mode helper.
+  Rationale: fixture fallback exposes the current user profile and users-list
+  fixture as separate fixture records, while DB-present mode exposes the seeded
+  database display name through both endpoints. Preferences still assert the
+  authenticated fixture UUID to keep identity wiring covered.
+  Date/Author: 2026-05-26 / Codex.
 
 - Decision: document Firecrawl findings as supporting context, not as
   authoritative design input.
