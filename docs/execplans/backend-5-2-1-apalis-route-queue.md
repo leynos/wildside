@@ -274,7 +274,9 @@ Review and update only documentation that is stale or inaccurate:
 - `docs/wildside-backend-architecture.md` must explain that 5.2.1 covers the
   driven queue adapter, not worker consumption or request dispatch.
 - `docs/developers-guide.md` must explain adapter boundaries, dependency
-  visibility, and how to run the queue tests.
+  visibility, and how to run the queue tests. In the approved implementation
+  baseline, `GenericApalisRouteQueue<P, Q>` is re-exported for the BDD harness
+  seam even though production code should prefer `ApalisRouteQueue<P>`.
 - `docs/pg-embed-setup-unpriv-users-guide.md` must be updated only if the
   embedded PostgreSQL setup expectations changed.
 - `docs/users-guide.md` must be updated if it exists and user-facing server
@@ -456,7 +458,15 @@ operation.
   (`/tmp/backend-5-2-1-pre-coderabbit-markdownlint.out`); both passed.
 - [x] 2026-05-26: Ran `coderabbit review --agent` after targeted adapter
   verification; review completed with 0 findings.
-- [ ] Reconcile architecture and developer documentation if needed.
+- [x] 2026-05-26: Reconciled `docs/developers-guide.md` with the current
+  queue adapter API by documenting that `GenericApalisRouteQueue<P, Q>` is
+  re-exported for the BDD harness seam.
+- [x] 2026-05-26: Ran documentation checks after documentation
+  reconciliation: `make markdownlint` (`/tmp/backend-5-2-1-markdownlint.out`)
+  and `make nixie` (`/tmp/backend-5-2-1-nixie.out`); both passed.
+- [x] 2026-05-26: Confirmed `docs/users-guide.md` is absent and that 5.2.1
+  does not change user-facing server behaviour, so no user-guide update is
+  applicable.
 - [ ] Run full `make check-fmt`, `make lint`, and `make test` gates.
 - [ ] Run CodeRabbit after full gates.
 - [ ] Mark roadmap item 5.2.1 done after gates pass.
@@ -486,6 +496,15 @@ operation.
   The adapter exists in the outbound queue module, the domain-facing
   `RouteQueue` port remains the published contract, and request-path dispatch
   remains out of scope.
+
+- 2026-05-26: `docs/developers-guide.md` incorrectly described
+  `GenericApalisRouteQueue<P, Q>` as not re-exported. The code re-exports it
+  from `backend/src/outbound/queue/mod.rs`, and the Apalis BDD test harness
+  imports that re-export directly.
+
+- 2026-05-26: `make nixie` runs `bun install`, which rewrote `bun.lock` to
+  bump the `ip-address` override from `10.1.1` to `10.2.0`. That lockfile
+  change was unrelated to 5.2.1 and was removed from this milestone.
 
 ## Decision Log
 
@@ -521,6 +540,14 @@ operation.
   with the planned functionality, and the baseline audit confirms that the
   adapter already exists and the remaining work is to validate, repair any
   defects found, reconcile documentation, and close the roadmap item.
+  Date/Author: 2026-05-26 / implementation agent.
+
+- Decision: Keep the current `GenericApalisRouteQueue<P, Q>` re-export and
+  document it as a BDD harness seam.
+  Rationale: changing visibility would be an API adjustment rather than a
+  required 5.2.1 behaviour fix. The re-export is already used by the
+  PostgreSQL-backed BDD test, while production code still has the clearer
+  `ApalisRouteQueue<P>` alias.
   Date/Author: 2026-05-26 / implementation agent.
 
 ## Outcomes & Retrospective

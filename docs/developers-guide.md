@@ -769,7 +769,7 @@ The hexagonal boundary is enforced via visibility:
 |--------------------------------------|---------------------------|--------------------------------------------|
 | `ApalisRouteQueue<P>`                | `pub`                     | Public adapter for domain use              |
 | `ApalisPostgresProvider`             | `pub`                     | Production `QueueProvider` implementation  |
-| `GenericApalisRouteQueue<P, Q>`      | Internal; not re-exported | Generic adapter implementation             |
+| `GenericApalisRouteQueue<P, Q>`      | `pub`                     | Generic adapter and BDD harness seam       |
 | `QueueProvider`                      | `pub(crate)`              | Test seam for provider abstraction         |
 | `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only)  | In-memory test double                      |
 | `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only)  | Always-failing test double                 |
@@ -791,10 +791,10 @@ Public production API:
 
 Implementation details within `outbound::queue`:
 
-- `GenericApalisRouteQueue<P, Q>` – Declared `pub` inside the private
-  `apalis_route_queue` module, but not re-exported at crate root. It
+- `GenericApalisRouteQueue<P, Q>` – Re-exported beside the production alias
+  because the BDD harness constructs the adapter with a test provider. It
   parameterises the adapter over the queue provider type `Q` so tests can
-  substitute doubles.
+  substitute doubles, while production code should prefer `ApalisRouteQueue<P>`.
 - `QueueProvider` – Declared `pub(crate)` inside the private
   `apalis_route_queue` module. Defines `async fn push_job(&self,
   payload: serde_json::Value) -> Result<(), JobDispatchError>` as the test
