@@ -19,6 +19,8 @@ max-threads = 1
 filter = """
   binary(diesel_user_repository)
   | binary(diesel_user_preferences_repository)
+  | binary(diesel_login_users_adapters)
+  | binary(diesel_profile_interests_adapters)
   | binary(diesel_route_annotation_repository)
   | binary(diesel_example_data_runs_repository)
   | binary(er_snapshots_bdd)
@@ -29,9 +31,18 @@ filter = """
   | binary(catalogue_descriptor_ingestion_bdd)
   | binary(catalogue_descriptor_read_models_bdd)
   | binary(offline_bundle_walk_session_bdd)
+  | binary(osm_ingestion_bdd)
+  | binary(overpass_enrichment_bdd)
   | binary(ports_behaviour)
   | binary(pg_embed_isolation)
+  | binary(route_queue_apalis_bdd)
   | binary(schema_baseline_bdd)
+  | binary(startup_mode_composition_bdd)
+  | binary(user_interests_revision_conflicts_bdd)
+  | binary(user_state_profile_interests_startup_modes_bdd)
+  | binary(user_state_schema_audit_bdd)
+  | binary(user_state_startup_modes_bdd)
+  | binary(users_list_pagination_bdd)
 """
 test-group = "pg-embed"
 threads-required = 4

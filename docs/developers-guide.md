@@ -250,6 +250,10 @@ test usage remains coherent:
   rerunning migrations per test.
 - Use `CleanupMode::None` only for explicit debugging sessions where retained
   files are required; keep deterministic cleanup defaults for normal runs.
+- Continuous Integration (CI) warms the `pg-embed-setup-unpriv` binary cache
+  with `scripts/warm-pg-embedded-cache.sh` before running `cargo nextest`.
+  Cache both `~/.theseus/postgresql` and `~/.cache/pg-embedded/binaries` when
+  changing CI runners or cache providers.
 
 ## Rust behavioural tests with `rstest-bdd` v0.5.0
 

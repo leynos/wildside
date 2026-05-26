@@ -123,23 +123,30 @@ describe('assertNoExpired', () => {
 
   it('allows exceptions expiring on or after the current date', () => {
     fc.assert(
-      fc.property(fc.date({ min: new Date('2024-01-01'), max: new Date('2030-12-31') }), (date) => {
-        const today = date.toISOString().slice(0, 10);
-        const policyIo = throwingPolicyIo();
+      fc.property(
+        fc.date({
+          max: new Date('2030-12-31'),
+          min: new Date('2024-01-01'),
+          noInvalidDate: true,
+        }),
+        (date) => {
+          const today = date.toISOString().slice(0, 10);
+          const policyIo = throwingPolicyIo();
 
-        assertNoExpired(
-          [
-            exceptionEntry({
-              addedAt: '2024-01-01',
-              expiresAt: today,
-            }),
-          ],
-          date,
-          policyIo,
-        );
+          assertNoExpired(
+            [
+              exceptionEntry({
+                addedAt: '2024-01-01',
+                expiresAt: today,
+              }),
+            ],
+            date,
+            policyIo,
+          );
 
-        expect(policyIo.exit).not.toHaveBeenCalled();
-      }),
+          expect(policyIo.exit).not.toHaveBeenCalled();
+        },
+      ),
     );
   });
 
