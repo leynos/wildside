@@ -7,7 +7,9 @@
 use std::num::NonZeroUsize;
 
 use actix_web::HttpRequest;
-use pagination::{Cursor, Direction, MAX_LIMIT, PageParams, Paginated, PaginationLinks};
+use pagination::{
+    Cursor, CursorError, Direction, MAX_LIMIT, PageParams, Paginated, PaginationLinks,
+};
 use serde::Deserialize;
 use serde_json::json;
 use url::Url;
@@ -131,7 +133,7 @@ pub fn parse_users_page_params(
         .as_deref()
         .map(Cursor::<UserCursorKey>::decode)
         .transpose()
-        .map_err(|_| invalid_cursor_error())?;
+        .map_err(map_cursor_error)?;
     let direction = cursor
         .as_ref()
         .map_or(UsersPageDirection::First, cursor_direction);
@@ -273,6 +275,21 @@ fn current_request_url(request: &HttpRequest) -> Result<Url, Error> {
 fn invalid_cursor_error() -> Error {
     Error::invalid_request("cursor is invalid")
         .with_details(json!({ "field": "cursor", "code": "invalid_cursor" }))
+}
+
+fn unsupported_direction_error() -> Error {
+    Error::invalid_request("cursor direction is unsupported")
+        .with_details(json!({ "field": "cursor", "code": "unsupported_direction" }))
+}
+
+fn map_cursor_error(error: CursorError) -> Error {
+    match error {
+        CursorError::UnsupportedDirection { .. } => unsupported_direction_error(),
+        CursorError::InvalidBase64 { .. } | CursorError::Deserialize { .. } => {
+            invalid_cursor_error()
+        }
+        CursorError::Serialize { .. } => Error::internal("failed to decode users cursor"),
+    }
 }
 
 fn invalid_limit_error(value: Option<&str>) -> Error {

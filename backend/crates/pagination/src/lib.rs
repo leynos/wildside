@@ -128,6 +128,7 @@
 //! |---------------------|------------------|-----------------|-------------------------|
 //! | [`CursorError`]     | `InvalidBase64`  | 400 Bad Request | `invalid_cursor`        |
 //! | [`CursorError`]     | `Deserialize`    | 400 Bad Request | `invalid_cursor`        |
+//! | [`CursorError`]     | `UnsupportedDirection` | 400 Bad Request | `unsupported_direction` |
 //! | [`CursorError`]     | `Serialize`      | 500 Internal    | `internal_error`        |
 //! | [`PageParamsError`] | `InvalidLimit`   | 400 Bad Request | `invalid_page_params`   |
 //!

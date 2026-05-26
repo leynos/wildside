@@ -165,11 +165,37 @@ errors.
 - [x] 2026-05-26: Implementation approved by the user. Baseline confirmed on
   branch `backend-4-2-2-surface-pagination-aware-errors` with a clean
   worktree before code changes.
+- [x] 2026-05-26: Added `UserPaginationError` and the
+  `UserPersistenceError::Pagination` wrapper so user repository ports can
+  distinguish client pagination failures from connection and query failures.
+- [x] 2026-05-26: Mapped repository-originated invalid cursor and unsupported
+  direction failures to HTTP-safe invalid-request errors with stable
+  `details.code` values of `invalid_cursor` and `unsupported_direction`.
+- [x] 2026-05-26: Extended the pagination crate with
+  `CursorError::UnsupportedDirection` so decoded cursor payloads with an
+  unsupported `dir` value are no longer collapsed into generic deserialization
+  failures.
+- [x] 2026-05-26: Added `rstest-bdd` coverage proving that
+  `GET /api/v1/users` returns HTTP `400` with `unsupported_direction` details
+  for an opaque cursor whose decoded `dir` is unsupported. A duplicate
+  Actix-level unit test was removed after `make lint` showed it pushed the
+  legacy users test module over the 400-line module limit.
+- [x] 2026-05-26: Focused checks passed:
+  `cargo test -p pagination -- --nocapture`,
+  `cargo test -p backend user_persistence_error -- --nocapture`,
+  `cargo test -p backend diesel_users_query -- --nocapture`,
+  and
+  `cargo test -p backend --test users_list_pagination_bdd
+  unsupported_users_cursor_direction_is_rejected -- --nocapture`.
+- [x] 2026-05-26: Full deterministic gates passed after lint-driven
+  refactoring: `make check-fmt`, `make lint`, and `make test`. The full test
+  gate ran 1227 Rust tests with 1227 passing and 4 skipped, followed by the
+  frontend/workspace test commands.
 - [x] M0: Approval received and baseline established.
-- [ ] Implementation milestone M1 completed and committed.
-- [ ] Implementation milestone M2 completed and committed.
-- [ ] Implementation milestone M3 completed and committed.
-- [ ] Implementation milestone M4 completed and committed.
+- [x] Implementation milestone M1 completed.
+- [x] Implementation milestone M2 completed.
+- [x] Implementation milestone M3 completed.
+- [x] Implementation milestone M4 completed.
 - [ ] Implementation milestone M5 completed and committed.
 - [ ] M6: Validation and closure completed.
 - [ ] Roadmap item 4.2.2 marked done after all gates pass.
@@ -200,6 +226,34 @@ errors.
   and `PageParamsError` mapping guidelines.
   Impact: The implementation should align adapter mappings with the existing
   crate contract rather than inventing a new policy.
+
+- Observation: Unsupported direction can be classified before deserializing a
+  typed `Cursor<Key>` by first parsing the decoded payload as
+  `serde_json::Value` and inspecting the optional `dir` field.
+  Evidence: `backend/crates/pagination/src/cursor.rs::decode` now rejects
+  unsupported `dir` values before calling `serde_json::from_value`.
+  Impact: Legacy cursors with no `dir`, and supported `Next`/`Prev` cursors,
+  keep their existing behaviour while unsupported direction receives a stable
+  client-facing error code.
+
+- Observation: The users pagination BDD support requires request paths with a
+  static lifetime.
+  Evidence: `run_authenticated_request` rejected a formatted temporary path
+  for the unsupported-direction cursor; using `concat!` for the full opaque
+  cursor URL satisfies the helper contract.
+  Impact: Future BDD cursor fixtures should prefer static opaque tokens when
+  the request helper does not need runtime data.
+
+- Observation: `make lint` enforces module size and self-named-module rules
+  across test code.
+  Evidence: The first lint run rejected `user_repository.rs` for items after a
+  test module and `cursor.rs` for exceeding 400 lines; the second lint run
+  rejected `cursor.rs` plus `cursor/tests.rs` as a self-named module layout
+  and rejected the legacy users Actix test module at 401 lines.
+  Impact: Cursor code now lives under `cursor/mod.rs` with tests in
+  `cursor/tests.rs`, user repository tests sit at the end of the file, and the
+  unsupported-direction HTTP contract is covered by BDD rather than another
+  Actix unit test.
 
 ## Decision Log
 
@@ -236,6 +290,25 @@ errors.
   Rationale: The user explicitly approved implementation on 2026-05-26, and
   the branch already tracks
   `origin/backend-4-2-2-surface-pagination-aware-errors`.
+  Date/Author: 2026-05-26 / Codex.
+
+- Decision: Use a dedicated `UserPaginationError` enum wrapped by
+  `UserPersistenceError::Pagination`, rather than adding multiple pagination
+  variants directly to `UserPersistenceError`.
+  Rationale: The wrapper keeps pagination policy grouped while preserving the
+  existing connection/query split for persistence failures.
+  Date/Author: 2026-05-26 / Codex.
+
+- Decision: Add `CursorError::UnsupportedDirection` to the shared pagination
+  crate.
+  Rationale: HTTP adapters should not string-match serde errors to decide
+  whether a cursor failure is an invalid token or an unsupported direction.
+  Date/Author: 2026-05-26 / Codex.
+
+- Decision: Commit M1-M4 together after the full source gates pass.
+  Rationale: The port variant, HTTP-safe mapping, cursor classification, and
+  externally visible behaviour are tightly coupled and were developed as one
+  coherent error-surfacing change.
   Date/Author: 2026-05-26 / Codex.
 
 ## Outcomes & Retrospective

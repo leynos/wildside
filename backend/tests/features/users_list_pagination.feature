@@ -30,6 +30,11 @@ Feature: Users list pagination
     When the client requests the users list with an invalid cursor
     Then the users response is bad request with invalid_cursor details
 
+  Scenario: Unsupported users cursor direction is rejected
+    Given db-present startup mode with five ordered users
+    When the client requests the users list with an unsupported cursor direction
+    Then the users response is bad request with unsupported_direction details
+
   Scenario: Users list requires a session
     Given db-present startup mode with five ordered users
     When the client requests the users list without a session

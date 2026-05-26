@@ -9,12 +9,24 @@ use crate::domain::{User, UserCursorKey, UserId};
 use super::define_port_error;
 
 define_port_error! {
+    /// Pagination errors caused by caller-provided page boundaries.
+    pub enum UserPaginationError {
+        /// Cursor text could not be decoded into the expected users cursor.
+        InvalidCursorFormat { message: String } => "invalid users cursor: {message}",
+        /// Cursor direction is not supported by the repository query.
+        UnsupportedDirection { direction: String } => "unsupported users cursor direction: {direction}",
+    }
+}
+
+define_port_error! {
     /// Persistence errors raised by user repository adapters.
     pub enum UserPersistenceError {
         /// Repository connection could not be established.
         Connection { message: String } => "user repository connection failed: {message}",
         /// Query or mutation failed during execution.
         Query { message: String } => "user repository query failed: {message}",
+        /// Pagination request failed because the caller supplied an invalid page boundary.
+        Pagination { error: UserPaginationError } => "user repository pagination failed: {error}",
     }
 }
 
@@ -84,5 +96,41 @@ pub trait UserRepository: Send + Sync {
         Err(UserPersistenceError::query(
             "paginated user listing is not implemented",
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Regression coverage for user repository port error constructors.
+
+    use super::{UserPaginationError, UserPersistenceError};
+
+    #[test]
+    fn pagination_error_constructors_preserve_client_failure_context() {
+        let invalid = UserPaginationError::invalid_cursor_format("base64 decode failed");
+        assert_eq!(
+            invalid.to_string(),
+            "invalid users cursor: base64 decode failed"
+        );
+
+        let unsupported = UserPaginationError::unsupported_direction("sideways");
+        assert_eq!(
+            unsupported.to_string(),
+            "unsupported users cursor direction: sideways"
+        );
+    }
+
+    #[test]
+    fn persistence_error_can_wrap_pagination_failures() {
+        let error = UserPersistenceError::pagination(UserPaginationError::unsupported_direction(
+            "sideways",
+        ));
+
+        assert!(matches!(
+            error,
+            UserPersistenceError::Pagination {
+                error: UserPaginationError::UnsupportedDirection { .. }
+            }
+        ));
     }
 }

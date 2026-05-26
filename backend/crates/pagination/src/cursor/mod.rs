@@ -1,0 +1,247 @@
+//! Opaque cursor encoding and decoding helpers.
+//!
+//! This module provides the [`Cursor<Key>`] type for encoding pagination
+//! positions as opaque base64url-encoded JSON tokens, and the [`Direction`]
+//! enum for bidirectional navigation. Cursors are transport-neutral and can be
+//! used with any HTTP framework or serialization format.
+//!
+//! The base64url JSON encoding format ensures cursors are URL-safe and do not
+//! require additional escaping in query parameters. The `dir` field is optional
+//! in the JSON representation for backward compatibility with clients that omit
+//! it (the default direction is `Next`).
+//!
+//! **Security consideration**: cursors are opaque but not signed or encrypted.
+//! They encode the ordering key only, not any access control information.
+//! Consumers must validate that the requesting user has permission to access
+//! the underlying data.
+
+use base64::{
+    Engine as _,
+    engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
+};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use thiserror::Error;
+
+/// Direction of pagination relative to the cursor.
+///
+/// Indicates whether the cursor represents a position for fetching
+/// the next page (forward in sort order) or the previous page
+/// (backward in sort order).
+///
+/// # Examples
+///
+/// ```
+/// use pagination::Direction;
+///
+/// let forward = Direction::Next;
+/// let backward = Direction::Prev;
+///
+/// assert_ne!(forward, backward);
+/// ```
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Direction {
+    /// Forward in the sort order (e.g., newer items if sorting ascending).
+    #[default]
+    Next,
+    /// Backward in the sort order (e.g., older items).
+    Prev,
+}
+
+/// Cursor wrapper for an ordered boundary key with direction.
+///
+/// The encoded representation is base64url JSON and must be treated as opaque
+/// by clients. The direction indicates whether this cursor is meant for
+/// fetching the next page (forward) or previous page (backward).
+///
+/// # Example
+///
+/// ```
+/// use pagination::{Cursor, Direction};
+/// use serde::{Deserialize, Serialize};
+///
+/// #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// struct UserKey {
+///     created_at: String,
+///     id: String,
+/// }
+///
+/// let cursor = Cursor::new(UserKey {
+///     created_at: "2026-03-22T10:30:00Z".to_owned(),
+///     id: "8b116c56-0a58-4c55-b7d7-06ee6bbddb8c".to_owned(),
+/// });
+/// let encoded = cursor.encode().expect("cursor encoding succeeds");
+/// let decoded = Cursor::<UserKey>::decode(&encoded).expect("cursor decoding succeeds");
+///
+/// assert_eq!(decoded.key(), cursor.key());
+/// assert_eq!(decoded.direction(), Direction::Next);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cursor<Key> {
+    key: Key,
+    #[serde(default)]
+    dir: Direction,
+}
+
+/// Errors raised while encoding or decoding opaque cursors.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum CursorError {
+    /// The cursor key could not be serialized into JSON.
+    #[error("cursor JSON serialization failed: {message}")]
+    Serialize {
+        /// Human-readable serialization failure details.
+        message: String,
+    },
+    /// The encoded token was not valid base64url.
+    #[error("cursor is not valid base64url: {message}")]
+    InvalidBase64 {
+        /// Human-readable base64 decoding failure details.
+        message: String,
+    },
+    /// The decoded JSON payload did not match the expected key shape.
+    #[error("cursor JSON deserialization failed: {message}")]
+    Deserialize {
+        /// Human-readable deserialization failure details.
+        message: String,
+    },
+    /// The decoded JSON payload used a direction this crate cannot navigate.
+    #[error("cursor direction is unsupported: {direction}")]
+    UnsupportedDirection {
+        /// Direction value found in the cursor payload.
+        direction: String,
+    },
+}
+
+impl<Key> Cursor<Key> {
+    /// Construct a cursor from one ordering key with the default direction (`Next`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::new("my-key");
+    /// assert_eq!(cursor.direction(), Direction::Next);
+    /// ```
+    #[must_use]
+    pub const fn new(key: Key) -> Self {
+        Self {
+            key,
+            dir: Direction::Next,
+        }
+    }
+
+    /// Construct a cursor from one ordering key with an explicit direction.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
+    /// assert_eq!(cursor.direction(), Direction::Prev);
+    /// ```
+    #[must_use]
+    pub const fn with_direction(key: Key, dir: Direction) -> Self {
+        Self { key, dir }
+    }
+
+    /// Borrow the cursor key.
+    #[must_use]
+    pub const fn key(&self) -> &Key {
+        &self.key
+    }
+
+    /// Access the pagination direction.
+    #[must_use]
+    pub const fn direction(&self) -> Direction {
+        self.dir
+    }
+
+    /// Consume the cursor and return the inner key.
+    #[must_use]
+    pub fn into_inner(self) -> Key {
+        self.key
+    }
+
+    /// Decompose the cursor into its constituent parts (key and direction).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
+    /// let (key, dir) = cursor.into_parts();
+    /// assert_eq!(key, "my-key");
+    /// assert_eq!(dir, Direction::Prev);
+    /// ```
+    #[must_use]
+    pub fn into_parts(self) -> (Key, Direction) {
+        (self.key, self.dir)
+    }
+}
+
+impl<Key> Cursor<Key>
+where
+    Key: Serialize,
+{
+    /// Encode the cursor to an opaque base64url JSON token.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CursorError::Serialize`] when the cursor key cannot be
+    /// serialized into JSON.
+    pub fn encode(&self) -> Result<String, CursorError> {
+        let payload = serde_json::to_vec(self).map_err(|error| CursorError::Serialize {
+            message: error.to_string(),
+        })?;
+        Ok(URL_SAFE_NO_PAD.encode(payload))
+    }
+}
+
+impl<Key> Cursor<Key>
+where
+    Key: DeserializeOwned,
+{
+    /// Decode a cursor from an opaque base64url JSON token.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CursorError::InvalidBase64`] when `value` is not valid
+    /// base64url, [`CursorError::UnsupportedDirection`] when `dir` is present
+    /// but not one of the supported directions, and [`CursorError::Deserialize`]
+    /// when the decoded JSON does not match the expected cursor shape.
+    pub fn decode(value: &str) -> Result<Self, CursorError> {
+        let payload = URL_SAFE_NO_PAD
+            .decode(value)
+            .or_else(|_| URL_SAFE.decode(value))
+            .map_err(|error| CursorError::InvalidBase64 {
+                message: error.to_string(),
+            })?;
+        let cursor_json: serde_json::Value =
+            serde_json::from_slice(&payload).map_err(|error| CursorError::Deserialize {
+                message: error.to_string(),
+            })?;
+        reject_unsupported_direction(&cursor_json)?;
+        serde_json::from_value(cursor_json).map_err(|error| CursorError::Deserialize {
+            message: error.to_string(),
+        })
+    }
+}
+
+fn reject_unsupported_direction(cursor_json: &serde_json::Value) -> Result<(), CursorError> {
+    let Some(direction) = cursor_json.get("dir") else {
+        return Ok(());
+    };
+    if matches!(direction.as_str(), Some("Next" | "Prev")) {
+        return Ok(());
+    }
+    Err(CursorError::UnsupportedDirection {
+        direction: direction
+            .as_str()
+            .map_or_else(|| direction.to_string(), str::to_owned),
+    })
+}
+
+#[cfg(test)]
+mod tests;
