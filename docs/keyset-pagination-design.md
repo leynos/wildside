@@ -769,6 +769,36 @@ We also update any Postman collections or documentation pages to reflect that
 the response is now an object with `data` and `links`, etc., and that clients
 should use the provided `next/prev` URLs rather than manipulating offsets.
 
+## Pagination error mapping
+
+Pagination failures caused by caller input are semantic client errors. The
+shared pagination crate classifies malformed cursor tokens as
+`CursorError::InvalidBase64` or `CursorError::Deserialize`, and decoded cursor
+payloads whose `dir` field is not supported as
+`CursorError::UnsupportedDirection`. Inbound adapters map these cases to HTTP
+`400 Bad Request` using the existing Wildside error envelope.
+
+The repository layer also exposes pagination-aware port errors, so a query or
+repository adapter can return the same client-error semantics when it detects
+an invalid page boundary below the HTTP parser. The user repository port wraps
+these failures in `UserPersistenceError::Pagination`, keeping them distinct
+from connection failures and ordinary database query failures.
+
+Adapters must preserve the following mapping:
+
+- Malformed cursor tokens or structurally invalid cursor JSON return
+  `400 Bad Request` with `details.code = "invalid_cursor"`.
+- Unsupported cursor directions return `400 Bad Request` with
+  `details.code = "unsupported_direction"`.
+- Repository connection failures return the existing `503 Service Unavailable`
+  envelope.
+- Unexpected database query failures return the existing redacted
+  `500 Internal Server Error` envelope.
+
+This keeps raw cursor parsing at the inbound HTTP boundary while allowing
+repository-facing pagination failures to remain inspectable without string
+matching or persistence-detail leakage.
+
 ## Future Enhancements and Conclusion
 
 This pagination crate lays the groundwork for a consistent, efficient paging

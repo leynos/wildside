@@ -45,3 +45,49 @@ the Helm chart's `image.repository` and `image.tag` settings.
 Nile Valley owns shared preview and GitOps automation. The local preview in
 this repository is for developer validation of the Wildside chart and runtime
 contract.
+
+# Wildside server users guide
+
+This guide records user-visible server behaviour for Wildside API consumers.
+It focuses on contracts that clients can rely on when calling the backend.
+
+
+## Users list pagination
+
+`GET /api/v1/users` returns a paginated users response. Clients should follow
+the `links.next` and `links.prev` URLs returned by the server instead of
+building cursor values themselves.
+
+The endpoint accepts:
+
+- `cursor`: an opaque base64url cursor returned by a previous users list
+  response.
+- `limit`: page size. The shared pagination default is 20 and the maximum is
+  100.
+
+Successful responses include the existing paginated envelope:
+
+```json
+{
+  "data": [],
+  "limit": 20,
+  "links": {
+    "self": "/api/v1/users",
+    "next": null,
+    "prev": null
+  }
+}
+```
+
+Pagination input errors use the standard Wildside error envelope and return
+HTTP `400 Bad Request`:
+
+| Condition                                  | Message                             | `details.field` | `details.code`          |
+|--------------------------------------------|-------------------------------------|-----------------|-------------------------|
+| Cursor text is not a valid users cursor    | `cursor is invalid`                 | `cursor`        | `invalid_cursor`        |
+| Cursor direction is not supported          | `cursor direction is unsupported`   | `cursor`        | `unsupported_direction` |
+
+Authentication and infrastructure errors keep their existing meanings.
+Unauthenticated requests return `401`, repository availability failures return
+`503`, and unexpected persistence query failures return a redacted `500`
+response.

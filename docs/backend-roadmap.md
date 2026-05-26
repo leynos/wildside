@@ -232,7 +232,7 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
 - [x] 4.2.1. Replace offset pagination in `GET /api/v1/users` with the new crate,
   including Diesel filters that respect `(created_at, id)` ordering and bb8
   connection pooling.
-- [ ] 4.2.2. Update the repository layer to surface pagination-aware errors
+- [x] 4.2.2. Update the repository layer to surface pagination-aware errors
   (for example, invalid cursor format and unsupported direction) with HTTP 400
   responses.
 - [ ] 4.2.3. Ensure pagination telemetry records page size, cursor direction,

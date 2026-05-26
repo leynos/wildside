@@ -191,14 +191,24 @@ errors.
   refactoring: `make check-fmt`, `make lint`, and `make test`. The full test
   gate ran 1227 Rust tests with 1227 passing and 4 skipped, followed by the
   frontend/workspace test commands.
+- [x] 2026-05-26: Committed M1-M4 as `40a85ed` after deterministic gates
+  passed.
+- [x] 2026-05-26: CodeRabbit reviewed the implementation milestone and
+  reported zero findings.
+- [x] 2026-05-26: Updated the pagination design, backend architecture,
+  developers guide, new server users guide, documentation index, and roadmap
+  entry to document the pagination-aware error contract.
+- [x] 2026-05-26: Documentation closure gates passed after the user guide
+  table alignment fix: `make fmt`, `make check-fmt`, `make markdownlint`,
+  `make lint`, and `make test`.
 - [x] M0: Approval received and baseline established.
 - [x] Implementation milestone M1 completed.
 - [x] Implementation milestone M2 completed.
 - [x] Implementation milestone M3 completed.
 - [x] Implementation milestone M4 completed.
-- [ ] Implementation milestone M5 completed and committed.
+- [x] Implementation milestone M5 completed.
 - [ ] M6: Validation and closure completed.
-- [ ] Roadmap item 4.2.2 marked done after all gates pass.
+- [x] Roadmap item 4.2.2 marked done after all gates pass.
 - [ ] Draft implementation pull request opened or updated after approval work
   lands.
 

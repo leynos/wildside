@@ -2034,6 +2034,22 @@ JSON), backward-compatibility behaviour of the `dir` field, link construction
 query parameter preservation, and automatic limit normalization via the
 Deserialize implementation.
 
+Roadmap 4.2.2 adds the pagination-aware error contract for endpoint adoption.
+The pagination crate now distinguishes unsupported decoded cursor directions
+from generic deserialization failures with `CursorError::UnsupportedDirection`.
+Inbound HTTP adapters map malformed cursor tokens to `invalid_cursor` and
+unsupported directions to `unsupported_direction`, both as HTTP `400 Bad
+Request` responses in the existing Wildside error envelope.
+
+Repository and query ports may also surface pagination-aware errors when an
+adapter detects an invalid page boundary below the HTTP parser. For the users
+listing path, `UserPersistenceError::Pagination` carries
+`UserPaginationError`, and the outbound query adapter maps those failures to
+HTTP-safe invalid-request errors. Connection failures remain `503`, and
+ordinary database query failures remain redacted `500` responses. Inbound
+adapters must not import Diesel or outbound modules to make this mapping; the
+semantic error travels through the port surface.
+
 ##### 3.4.3 Pagination Compatibility Requirements (Phase 4, Future Work)
 
 Opaque pagination remains deferred future work. The current public contract for
