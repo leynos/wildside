@@ -77,8 +77,9 @@ Observable success means:
 - Run `coderabbit review --agent` after each major milestone and clear all
   concerns before moving to the next milestone.
 - If `docs/users-guide.md` remains absent, record that no user-guide update was
-  possible and update the nearest relevant user-facing document only if
-  behaviour changes are actually visible to users.
+  possible and update the nearest relevant operator-facing document only if
+  behaviour changes are visible to operators of the Wildside server
+  application.
 
 ## Tolerances (exception triggers)
 
@@ -171,6 +172,8 @@ told that other agents may be editing the repository.
 - [x] (2026-05-21) Used Firecrawl to check current public references for
   `rstest`, `rstest-bdd`, `proptest`, and Rust ports-and-adapters prior art.
 - [x] (2026-05-21) Drafted this pre-implementation ExecPlan.
+- [x] (2026-05-26) Clarified that `docs/users-guide.md` references server
+      operators, not end users of the product experience.
 - [ ] Obtain explicit user approval for this plan.
 - [ ] Implement the approved helper seams and regression assertions.
 - [ ] Update architecture, developer, and roadmap documentation after
@@ -188,8 +191,9 @@ told that other agents may be editing the repository.
   Evidence: `fd 'users.*guide|user.*guide' docs` found specific tool guides
   but no repository-wide `docs/users-guide.md`.
   Impact: this plan records that user-guide updates are conditional. If
-  implementation changes user-visible server behaviour, update the relevant
-  existing user-facing document or create a separate documentation decision.
+  implementation changes server behaviour that an operator of the Wildside
+  server application should know about, update the relevant existing
+  operator-facing document or create a separate documentation decision.
 
 - Observation: `backend/tests/features/startup_mode_composition.feature`
   already states that it covers all HTTP-facing ports for roadmap item 3.5.5.
@@ -233,6 +237,13 @@ told that other agents may be editing the repository.
   general public prior art. Public references only confirmed that the existing
   tools and ports-as-traits approach remain appropriate.
   Date/Author: 2026-05-21 / Codex.
+
+- Decision: interpret `docs/users-guide.md` as an operator guide for the
+  Wildside server application.
+  Rationale: the implementation plan needs to distinguish server operator
+  behaviour from product end-user behaviour when deciding whether a user-guide
+  update is required.
+  Date/Author: 2026-05-26 / Codex, based on user clarification.
 
 ## Outcomes & retrospective
 
@@ -413,10 +424,11 @@ Update `docs/developers-guide.md` if the implementation introduces a reusable
 startup-mode test convention, helper naming convention, or BDD layout practice
 that future contributors need to follow.
 
-Update `docs/users-guide.md` only if that file exists or if a user-visible
-server behaviour change is introduced. If it remains absent and behaviour is
-unchanged, record this in the plan rather than creating a generic guide solely
-for this item.
+Update `docs/users-guide.md` only if that file exists or if a server behaviour
+change is introduced that an operator of the Wildside server application should
+know about. If it remains absent and operator-visible behaviour is unchanged,
+record this in the plan rather than creating a generic guide solely for this
+item.
 
 Update `docs/backend-roadmap.md` to mark 3.5.5 done only after the helper seam,
 tests, CodeRabbit review, and full gates succeed. Follow the style used by
@@ -591,3 +603,8 @@ Initial draft created on 2026-05-21. The draft captures roadmap item 3.5.5
 scope, current code anchors, test strategy, Firecrawl research findings,
 Wyvern reconnaissance, approval gate, and implementation tolerances. No
 implementation has been performed under this plan.
+
+Revision on 2026-05-26 clarifies that `docs/users-guide.md` means an operator
+guide for the Wildside server application. This narrows user-guide update
+requirements to operator-visible server behaviour and leaves implementation
+scope otherwise unchanged.
