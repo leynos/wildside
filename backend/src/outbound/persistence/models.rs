@@ -23,7 +23,7 @@ pub(crate) struct UserRow {
     pub created_at: DateTime<Utc>,
     #[expect(
         dead_code,
-        reason = "schema field for future audit trail support tracked by docs/backend-roadmap.md 3.5.1"
+        reason = "schema field for future audit trail support tracked by docs/backend-roadmap.md 3.5.1 (see `#360`)"
     )]
     pub updated_at: DateTime<Utc>,
 }
@@ -184,12 +184,12 @@ pub(crate) struct WalkSessionRow {
     pub highlighted_poi_ids: Vec<Uuid>,
     #[expect(
         dead_code,
-        reason = "schema field for auditing support tracked by docs/backend-roadmap.md 3.5.1"
+        reason = "schema field for auditing support tracked by docs/backend-roadmap.md 3.5.1 (see `#360`)"
     )]
     pub created_at: DateTime<Utc>,
     #[expect(
         dead_code,
-        reason = "schema field for auditing support tracked by docs/backend-roadmap.md 3.5.1"
+        reason = "schema field for auditing support tracked by docs/backend-roadmap.md 3.5.1 (see `#360`)"
     )]
     pub updated_at: DateTime<Utc>,
 }
