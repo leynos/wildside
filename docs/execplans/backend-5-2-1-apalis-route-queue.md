@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 This plan covers roadmap item 5.2.1 only:
 `Implement RouteQueue using Apalis with PostgreSQL backend, replacing the
@@ -436,9 +436,26 @@ operation.
   passed, 4 skipped).
 - [x] 2026-05-21: Attempted `coderabbit review --agent` twice for the plan
   milestone; both attempts were blocked by a recoverable service rate limit.
-- [ ] Await explicit approval before implementation or roadmap closure.
-- [ ] Run targeted queue unit and behavioural tests.
-- [ ] Run CodeRabbit after targeted adapter verification.
+- [x] 2026-05-26: Received explicit approval to implement this ExecPlan.
+- [x] 2026-05-26: Confirmed branch
+  `backend-5-2-1-apalis-route-queue`, clean worktree, and existing Leta
+  workspace.
+- [x] 2026-05-26: Completed baseline audit. `ApalisRouteQueue` and
+  `GenericApalisRouteQueue` are present under `backend/src/outbound/queue`,
+  current documentation describes the Apalis/PostgreSQL boundary, and
+  `docs/backend-roadmap.md` still lists 5.2.1 as open.
+- [x] 2026-05-26: Ran targeted queue unit tests with
+  `cargo test -p backend outbound::queue --lib`
+  (`/tmp/backend-5-2-1-queue-unit.out`); 5 passed.
+- [x] 2026-05-26: Ran targeted Apalis queue BDD tests with
+  `cargo test -p backend --test route_queue_apalis_bdd`
+  (`/tmp/backend-5-2-1-queue-bdd.out`); 9 passed.
+- [x] 2026-05-26: Ran applicable pre-review gates:
+  `make check-fmt` (`/tmp/backend-5-2-1-pre-coderabbit-check-fmt.out`) and
+  `make markdownlint`
+  (`/tmp/backend-5-2-1-pre-coderabbit-markdownlint.out`); both passed.
+- [x] 2026-05-26: Ran `coderabbit review --agent` after targeted adapter
+  verification; review completed with 0 findings.
 - [ ] Reconcile architecture and developer documentation if needed.
 - [ ] Run full `make check-fmt`, `make lint`, and `make test` gates.
 - [ ] Run CodeRabbit after full gates.
@@ -464,6 +481,11 @@ operation.
   milestone because the service returned a recoverable rate-limit error on two
   attempts. No CodeRabbit concerns were produced. Approved implementation must
   retry CodeRabbit before moving beyond the first implementation milestone.
+
+- 2026-05-26: The implementation baseline still matches the planning audit.
+  The adapter exists in the outbound queue module, the domain-facing
+  `RouteQueue` port remains the published contract, and request-path dispatch
+  remains out of scope.
 
 ## Decision Log
 
@@ -493,6 +515,13 @@ operation.
   than the repository pins, but dependency upgrades are implementation work and
   need evidence from gates before they are justified.
   Date/Author: 2026-05-21 / planning agent.
+
+- Decision: Start approved execution as a validation-and-closure activity.
+  Rationale: the user's 2026-05-26 instruction explicitly approves proceeding
+  with the planned functionality, and the baseline audit confirms that the
+  adapter already exists and the remaining work is to validate, repair any
+  defects found, reconcile documentation, and close the roadmap item.
+  Date/Author: 2026-05-26 / implementation agent.
 
 ## Outcomes & Retrospective
 
