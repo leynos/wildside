@@ -178,7 +178,10 @@ The JavaScript dependency-audit flow is split by responsibility:
   `normalizeBulkAdvisories(bulkPayload)`.
 - `security/audit-reporting.js` owns advisory partitioning and stderr output.
   Its public helpers are `partitionAdvisoriesById(advisories, allowedIds)` and
-  `reportUnexpectedAdvisories(unexpected, heading)`.
+  `reportUnexpectedAdvisories(unexpected, heading, reportingIo = defaultReportingIo)`.
+  The optional `reportingIo` adapter must expose an `error(...args)` method;
+  pass a custom adapter in tests to capture output without writing to stderr.
+  When omitted, `defaultReportingIo` delegates to `console.error`.
 - `security/audit-exception-policy.js` owns exception-ledger date policy. Its
   public helper is `assertNoExpired(entries, currentDate?, policyIo?)`.
 - `security/validate-audit.js` applies repository policy to the parsed audit
