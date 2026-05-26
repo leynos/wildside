@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT; AWAITING APPROVAL
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -162,7 +162,10 @@ errors.
   external malformed cursors already return `400`, but repository-facing errors
   cannot yet distinguish pagination client failures from generic query
   failures.
-- [ ] M0: Approval received and baseline established.
+- [x] 2026-05-26: Implementation approved by the user. Baseline confirmed on
+  branch `backend-4-2-2-surface-pagination-aware-errors` with a clean
+  worktree before code changes.
+- [x] M0: Approval received and baseline established.
 - [ ] Implementation milestone M1 completed and committed.
 - [ ] Implementation milestone M2 completed and committed.
 - [ ] Implementation milestone M3 completed and committed.
@@ -227,6 +230,13 @@ errors.
 - Decision: The plan pull request is a draft, pre-implementation review PR.
   Rationale: The user explicitly required plan approval before implementation.
   Date/Author: 2026-05-20 / Codex.
+
+- Decision: Start implementation on the existing plan branch and keep the
+  planning pull request as the review vehicle.
+  Rationale: The user explicitly approved implementation on 2026-05-26, and
+  the branch already tracks
+  `origin/backend-4-2-2-surface-pagination-aware-errors`.
+  Date/Author: 2026-05-26 / Codex.
 
 ## Outcomes & Retrospective
 
@@ -599,4 +609,4 @@ message matching.
 
 Revision note: initial draft created on 2026-05-20 from roadmap item 4.2.2,
 repository inspection, Wyvern planning notes, and Firecrawl prior-art review.
-The plan is not approved for implementation.
+Implementation was approved on 2026-05-26.
