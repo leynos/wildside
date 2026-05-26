@@ -203,6 +203,8 @@ errors.
   `make lint`, and `make test`.
 - [x] 2026-05-26: CodeRabbit reviewed the documentation and roadmap closure
   milestone and reported zero findings.
+- [x] 2026-05-26: Draft PR #356 was updated after implementation with the
+  ExecPlan link, validation record, and Lody session reference.
 - [x] M0: Approval received and baseline established.
 - [x] Implementation milestone M1 completed.
 - [x] Implementation milestone M2 completed.
@@ -211,7 +213,7 @@ errors.
 - [x] Implementation milestone M5 completed.
 - [x] M6: Validation and closure completed.
 - [x] Roadmap item 4.2.2 marked done after all gates pass.
-- [ ] Draft implementation pull request opened or updated after approval work
+- [x] Draft implementation pull request opened or updated after approval work
   lands.
 
 ## Surprises & Discoveries
