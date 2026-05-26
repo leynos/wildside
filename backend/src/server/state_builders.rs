@@ -82,6 +82,19 @@ struct ServicePairFactory<S, Cmd: ?Sized, Query: ?Sized> {
     cast: ServiceCast<S, Cmd, Query>,
 }
 
+/// User-state ports selected together so DB-present mode cannot drift one port
+/// at a time as HTTP state wiring evolves.
+struct UserStatePortsBundle {
+    login: Arc<dyn LoginService>,
+    users: Arc<dyn UsersQuery>,
+    profile: Arc<dyn UserProfileQuery>,
+    interests: Arc<dyn UserInterestsCommand>,
+    preferences: Arc<dyn UserPreferencesCommand>,
+    preferences_query: Arc<dyn UserPreferencesQuery>,
+    route_annotations: Arc<dyn RouteAnnotationsCommand>,
+    route_annotations_query: Arc<dyn RouteAnnotationsQuery>,
+}
+
 pub(super) fn build_login_users_pair_with_pool<Pool>(
     pool: &Option<Pool>,
     make_pair: impl FnOnce(&Pool) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>),
@@ -232,6 +245,24 @@ build_idempotent_pair!(
     FixtureRouteAnnotationsQuery
 );
 
+fn compose_user_state_ports(config: &ServerConfig) -> UserStatePortsBundle {
+    let (login, users) = build_login_users_pair(config);
+    let (profile, interests) = build_profile_interests_pair(config);
+    let (preferences, preferences_query) = build_user_preferences_pair(config);
+    let (route_annotations, route_annotations_query) = build_route_annotations_pair(config);
+
+    UserStatePortsBundle {
+        login,
+        users,
+        profile,
+        interests,
+        preferences,
+        preferences_query,
+        route_annotations,
+        route_annotations_query,
+    }
+}
+
 fn build_offline_bundles_pair(
     config: &ServerConfig,
 ) -> (Arc<dyn OfflineBundleCommand>, Arc<dyn OfflineBundleQuery>) {
@@ -312,10 +343,16 @@ pub fn build_http_state(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
 ) -> web::Data<HttpState> {
-    let (login, users) = build_login_users_pair(config);
-    let (profile, interests) = build_profile_interests_pair(config);
-    let (preferences, preferences_query) = build_user_preferences_pair(config);
-    let (route_annotations, route_annotations_query) = build_route_annotations_pair(config);
+    let UserStatePortsBundle {
+        login,
+        users,
+        profile,
+        interests,
+        preferences,
+        preferences_query,
+        route_annotations,
+        route_annotations_query,
+    } = compose_user_state_ports(config);
     let (offline_bundles, offline_bundles_query) = build_offline_bundles_pair(config);
     let (walk_sessions, walk_sessions_query) = build_walk_sessions_pair(config);
     let enrichment_provenance = build_enrichment_provenance_repository(config);

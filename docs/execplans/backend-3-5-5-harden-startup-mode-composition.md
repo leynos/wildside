@@ -5,10 +5,10 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT (awaiting approval before implementation)
+Status: IN PROGRESS (implementation approved on 2026-05-26)
 
-This plan covers roadmap item 3.5.5 only. It must be explicitly approved before
-any implementation work begins.
+This plan covers roadmap item 3.5.5 only. Implementation began after explicit
+approval on 2026-05-26.
 
 ## Purpose / big picture
 
@@ -174,8 +174,24 @@ told that other agents may be editing the repository.
 - [x] (2026-05-21) Drafted this pre-implementation ExecPlan.
 - [x] (2026-05-26) Clarified that `docs/users-guide.md` references server
       operators, not end users of the product experience.
-- [ ] Obtain explicit user approval for this plan.
-- [ ] Implement the approved helper seams and regression assertions.
+- [x] (2026-05-26) Obtained explicit user approval for this plan.
+- [x] (2026-05-26) Ran Stage A baseline gates before implementation:
+  `make check-fmt`, `make lint`, and `make test` all passed. The full test
+  gate reported 1220 Rust tests passed with 4 skipped, followed by passing
+  frontend/workspace tests.
+- [x] (2026-05-26) Implemented the private `UserStatePortsBundle` and
+  `compose_user_state_ports` seam in `backend/src/server/state_builders.rs`
+  without changing the public `build_http_state` signature.
+- [x] (2026-05-26) Ran Stage B targeted checks:
+  `cargo test -p backend startup_modes_reject_invalid_credentials_with_unauthorised_envelope -- --nocapture`
+  passed 2 selected tests, and
+  `cargo test -p backend --test state_builders_composition_unit -- --nocapture`
+  passed the fixture-mode composition unit test.
+- [x] (2026-05-26) Ran Stage B milestone gates before CodeRabbit:
+  `make check-fmt`, `make lint`, and `make test` all passed. The full test
+  gate again reported 1220 Rust tests passed with 4 skipped, followed by
+  passing frontend/workspace tests.
+- [ ] Strengthen startup-mode behavioural regression assertions.
 - [ ] Update architecture, developer, and roadmap documentation after
   implementation evidence exists.
 - [ ] Run `coderabbit review --agent` after the implementation milestone and
@@ -211,6 +227,17 @@ told that other agents may be editing the repository.
   Impact: this item should avoid moving route submission unless a regression
   test proves the current split prevents deterministic user-state composition.
 
+- Observation: the Stage B targeted command named in the draft plan selects
+  existing invalid-credential adapter tests rather than the
+  `state_builders_composition_unit` test.
+  Evidence:
+  `cargo test -p backend startup_modes_reject_invalid_credentials_with_unauthorised_envelope -- --nocapture`
+  passed two selected tests from `diesel_login_users_adapters.rs` and filtered
+  out the state-builder composition test.
+  Impact: keep the drafted command as historical evidence, but also run
+  `cargo test -p backend --test state_builders_composition_unit -- --nocapture`
+  for the helper-seam milestone.
+
 ## Decision log
 
 - Decision: keep this PR as a pre-implementation planning PR.
@@ -244,6 +271,12 @@ told that other agents may be editing the repository.
   behaviour from product end-user behaviour when deciding whether a user-guide
   update is required.
   Date/Author: 2026-05-26 / Codex, based on user clarification.
+
+- Decision: keep `compose_user_state_ports` private.
+  Rationale: `build_http_state` remains the public composition entrypoint, and
+  integration tests can verify observable fixture/DB behaviour without
+  widening helper visibility.
+  Date/Author: 2026-05-26 / Codex.
 
 ## Outcomes & retrospective
 
