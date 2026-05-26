@@ -1,36 +1,51 @@
-/** @file Shared helpers for dependency audits and advisory filtering. */
+/**
+ * @file Shared helpers for dependency audits and advisory filtering.
+ *
+ * Provides the audit pipeline's JSON parsing, PNPM command execution, installed
+ * package-version collection, bulk-advisory fallback, and advisory flattening
+ * utilities. Pure helpers accept parsed JSON-shaped objects and return normalised
+ * maps or arrays; effectful helpers cross the IO boundary through `auditIo`,
+ * whose default implementation wraps filesystem, CLI, timer, and fetch effects.
+ * `audit-reporting.js` owns advisory partitioning and stderr formatting, while
+ * `validate-audit.js` applies policy to these normalised audit results. Callers
+ * can assume exported helpers either return parsed audit data in the documented
+ * shapes or throw explicit errors for failed, signalled, malformed, or
+ * unavailable audit inputs.
+ */
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  collectInstalledPackageVersions,
+  normalizeBulkAdvisories,
+  parseJsonOutput,
+} from './audit-package-data.js';
+
+export {
+  buildVersionMap,
+  collectInstalledPackageVersions,
+  loadPackageTrees,
+  normalizeBulkAdvisories,
+  parseJsonOutput,
+} from './audit-package-data.js';
+export {
+  partitionAdvisoriesById,
+  reportUnexpectedAdvisories,
+} from './audit-reporting.js';
 
 const AUDIT_ARGS = ['audit', '--json'];
-const LIST_ARGS = ['ls', '--json', '--depth', 'Infinity'];
 const BULK_ADVISORY_PATH = '-/npm/v1/security/advisories/bulk';
 const BULK_AUDIT_TIMEOUT_MS = 30_000;
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
 const COMMAND_MAX_BUFFER = 64 * 1024 * 1024;
-const DEPENDENCY_SECTION_NAMES = ['dependencies', 'devDependencies', 'optionalDependencies'];
 const RETIRED_AUDIT_ENDPOINT_MESSAGE = 'This endpoint is being retired. Use the bulk advisory endpoint instead.';
-
-/** Parse command JSON and optionally reject blank responses.
- * @param {string | undefined | null} payloadText Raw command output. @param {string} commandLabel Label used in parse errors. @param {{ requireNonEmpty?: boolean }} [options={}] Parsing options.
- * @returns {Record<string, unknown> | unknown[]} Parsed JSON value, or `{}` for optional blank output. @example parseJsonOutput('{"advisories":{}}', 'pnpm audit'); // { advisories: {} }
- */
-function parseJsonOutput(payloadText, commandLabel, options = {}) {
-  const { requireNonEmpty = false } = options;
-  const text = payloadText?.trim?.() ?? '';
-  if (!text) {
-    if (requireNonEmpty) {
-      throw new Error(`Failed to parse ${commandLabel} JSON: response body was empty.`);
-    }
-    return {};
-  }
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    error.message = `Failed to parse ${commandLabel} JSON: ${error.message}`;
-    throw error;
-  }
-}
+const defaultAuditIo = {
+  execFileSync,
+  fetch: (...args) => fetch(...args),
+  getEnv: (name) => process.env[name],
+  setTimeout,
+  clearTimeout,
+  spawnSync,
+};
 
 /** Detect whether pnpm reported the retired audit endpoint.
  * @param {unknown} payload Parsed `pnpm audit --json` payload.
@@ -43,111 +58,23 @@ function isRetiredAuditEndpoint(payload) {
     payload.error.message.includes(RETIRED_AUDIT_ENDPOINT_MESSAGE));
 }
 
-/** Check whether a version points at a local workspace dependency.
- * @param {string} version Package version or workspace reference.
- * @returns {boolean} `true` when the version should be ignored for registry audits. @example isLocalWorkspaceVersion('workspace:*'); // true
+/** Ensure a child-process result exited normally.
+ * @param {{ error?: Error, signal?: string | null, status?: number | null }} result Spawn result from an audit command.
+ * @param {string} commandLabel Label used in thrown errors.
+ * @returns {number} Process exit status.
+ * @example assertCompletedProcess({ status: 0, signal: null }, 'pnpm audit'); // 0
  */
-function isLocalWorkspaceVersion(version) {
-  return (
-    version.startsWith('file:') ||
-    version.startsWith('link:') ||
-    version.startsWith('workspace:'));
-}
-
-/** Record an installed package version unless it is missing or workspace-local.
- * @param {Map<string, Set<string>>} versionsByPackage Installed versions keyed by package name. @param {string} packageName Package name from `pnpm ls`. @param {string} version Installed package version.
- * @returns {void} @example const versions = new Map(); addPackageVersion(versions, 'validator', '13.15.23'); console.log([...versions.get('validator')]); // ['13.15.23']
- */
-function addPackageVersion(versionsByPackage, packageName, version) {
-  const isMissing = !packageName || !version;
-  if (isMissing || isLocalWorkspaceVersion(version)) {
-    return;
-  }
-  const knownVersions = versionsByPackage.get(packageName) ?? new Set();
-  knownVersions.add(version);
-  versionsByPackage.set(packageName, knownVersions);
-}
-
-/** Walk one dependency section from `pnpm ls` and record installed versions.
- * @param {Record<string, unknown> | undefined} section Dependency section keyed by package name. @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
- * @returns {void} @example const versions = new Map(); walkDependencySection({ validator: { version: '13.15.23' } }, versions); console.log(versions.get('validator').has('13.15.23')); // true
- */
-function walkDependencySection(section, versionsByPackage) {
-  if (!section || typeof section !== 'object') {
-    return;
-  }
-  for (const [packageName, dependency] of Object.entries(section)) {
-    if (!dependency || typeof dependency !== 'object') {
-      continue;
-    }
-    if (typeof dependency.version === 'string') {
-      addPackageVersion(versionsByPackage, packageName, dependency.version);
-    }
-    walkDependencies(dependency, versionsByPackage);
-  }
-}
-
-/** Walk a `pnpm ls` tree and record every installed package version.
- * @param {Record<string, unknown> | undefined} node Dependency tree node from `pnpm ls`. @param {Map<string, Set<string>>} versionsByPackage Collected versions keyed by package name.
- * @returns {void} @example const versions = new Map(); walkDependencies({ dependencies: { validator: { version: '13.15.23' } } }, versions); console.log([...versions.get('validator')]); // ['13.15.23']
- */
-function walkDependencies(node, versionsByPackage) {
-  if (!node || typeof node !== 'object') {
-    return;
-  }
-  for (const sectionName of DEPENDENCY_SECTION_NAMES) {
-    walkDependencySection(node[sectionName], versionsByPackage);
-  }
-}
-
-/** Check whether `pnpm ls` returned a dependency tree object.
- * @param {unknown} value Parsed `pnpm ls` payload value.
- * @returns {boolean} `true` when the value can be walked as one dependency tree. @example isDependencyTreeNode({ dependencies: {} }); // true
- */
-function isDependencyTreeNode(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** Build the installed package-version map from parsed `pnpm ls` output.
- * @param {Record<string, unknown> | Record<string, unknown>[] | undefined} packageTrees Parsed `pnpm ls` output as one tree or many. @returns {Map<string, Set<string>>} Installed versions keyed by package name. @example const versions = buildVersionMap([{ dependencies: { validator: { version: '13.15.23' } } }]); console.log(versions.get('validator').has('13.15.23')); // true
- */
-function buildVersionMap(packageTrees) {
-  const versionsByPackage = new Map();
-  const trees = Array.isArray(packageTrees) ? packageTrees : [packageTrees];
-  for (const tree of trees) {
-    if (!isDependencyTreeNode(tree)) {
-      throw new TypeError('pnpm ls returned an invalid dependency tree payload.');
-    }
-    walkDependencies(tree, versionsByPackage);
-  }
-  return versionsByPackage;
-}
-
-/** Collect installed package versions from `pnpm ls` for bulk advisory lookups.
- * @returns {Record<string, string[]>} Sorted installed versions keyed by package name. @example // With `pnpm ls` returning one installed validator version: collectInstalledPackageVersions(); // { validator: ['13.15.23'] }
- */
-function collectInstalledPackageVersions() {
-  const result = spawnSync('pnpm', LIST_ARGS, { encoding: 'utf8', maxBuffer: COMMAND_MAX_BUFFER, stdio: ['ignore', 'pipe', 'inherit'] });
+function assertCompletedProcess(result, commandLabel) {
   if (result.error) {
     throw result.error;
   }
-  const status = result.status ?? 0;
-  if (status !== 0) {
-    throw new Error(`pnpm ls failed without producing a dependency tree (exit status ${status}).`);
+  if (result.signal) {
+    throw new Error(`${commandLabel} was terminated by signal ${result.signal}.`);
   }
-  const stdout = result.stdout?.trim();
-  if (!stdout) {
-    throw new Error('pnpm ls failed without producing a dependency tree.');
+  if (result.status === null) {
+    throw new Error(`${commandLabel} was terminated before reporting an exit status.`);
   }
-
-  const packageTrees = parseJsonOutput(stdout, 'pnpm ls');
-  const versionsByPackage = buildVersionMap(packageTrees);
-
-  return Object.fromEntries(
-    [...versionsByPackage.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([packageName, versions]) => [packageName, [...versions].sort()]),
-  );
+  return result.status;
 }
 
 /** Return `true` when a raw registry string is a real URL and not a placeholder.
@@ -167,16 +94,19 @@ function normalizeRegistryUrl(rawRegistry) {
 }
 
 /** Read the npm registry URL from the environment or pnpm config.
- * @returns {string} Normalised registry URL, or the npm default when lookup fails. @example // With `npm_config_registry=https://registry.npmjs.org`: readRegistryUrl(); // 'https://registry.npmjs.org/'
+ * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
+ * @returns {string} Normalised registry URL, or the npm default when lookup fails.
+ * @example // With `npm_config_registry=https://registry.npmjs.org`: readRegistryUrl(); // 'https://registry.npmjs.org/'
+ * @example const auditIo = { ...defaultAuditIo, getEnv: () => undefined, execFileSync: () => 'https://registry.npmjs.org\n' }; readRegistryUrl(auditIo); // 'https://registry.npmjs.org/'
  */
-function readRegistryUrl() {
-  const envRegistry = process.env.npm_config_registry ?? process.env.NPM_CONFIG_REGISTRY;
+function readRegistryUrl(auditIo = defaultAuditIo) {
+  const envRegistry = auditIo.getEnv?.('npm_config_registry') ?? auditIo.getEnv?.('NPM_CONFIG_REGISTRY');
   if (envRegistry) {
     return normalizeRegistryUrl(envRegistry);
   }
   try {
     return normalizeRegistryUrl(
-      execFileSync('pnpm', ['config', 'get', 'registry'], {
+      auditIo.execFileSync('pnpm', ['config', 'get', 'registry'], {
         encoding: 'utf8',
       }),
     );
@@ -185,88 +115,18 @@ function readRegistryUrl() {
   }
 }
 
-/** Extract a GitHub advisory identifier from an advisory URL.
- * @param {unknown} advisoryUrl Advisory URL from pnpm or npm audit output.
- * @returns {string | undefined} Matching GHSA identifier when one is present. @example extractGithubAdvisoryId('https://github.com/advisories/GHSA-vghf-hv5q-vc2g'); // 'GHSA-vghf-hv5q-vc2g'
- */
-function extractGithubAdvisoryId(advisoryUrl) {
-  if (typeof advisoryUrl !== 'string') {
-    return undefined;
-  }
-  const match = advisoryUrl.match(/GHSA-([0-9a-z]{4})-([0-9a-z]{4})-([0-9a-z]{4})/i);
-  if (!match) {
-    return undefined;
-  }
-  const [, first, second, third] = match;
-  return `GHSA-${first.toLowerCase()}-${second.toLowerCase()}-${third.toLowerCase()}`;
-}
-
-/** Derive the advisory key used to deduplicate bulk advisory responses.
- * @param {string} packageName Advisory package name. @param {{ id?: unknown, url?: unknown }} advisory Raw advisory object.
- * @returns {{ key: string, githubAdvisoryId: string | undefined }} Stable advisory key and extracted GHSA identifier. @example deriveAdvisoryKey('validator', { id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' }); // { key: 'GHSA-vghf-hv5q-vc2g', githubAdvisoryId: 'GHSA-vghf-hv5q-vc2g' }
- */
-function deriveAdvisoryKey(packageName, advisory) {
-  const githubAdvisoryId = extractGithubAdvisoryId(advisory?.url);
-  const key = githubAdvisoryId ?? `${packageName}:${String(advisory?.id ?? 'unknown')}`;
-  return { key, githubAdvisoryId };
-}
-
-/** Return `true` when a value is a plain (non-array, non-null) object.
- * @param {unknown} value Value to test. @returns {boolean}
- * @example isPlainAdvisoryObject({ id: 1 }); // true
- */
-function isPlainAdvisoryObject(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
-
-/** Merge advisories for one package into the shared accumulator.
- * @param {string} packageName Package name from the bulk advisory payload. @param {unknown[]} packageAdvisories Validated array of raw advisory objects. @param {Record<string, unknown>} advisories Accumulator mutated in place.
- * @returns {void} @example const advisories = {}; addPackageAdvisories('validator', [{ id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g', title: 'Validator SSRF' }], advisories); console.log(advisories['GHSA-vghf-hv5q-vc2g'].package_name); // 'validator'
- */
-function addPackageAdvisories(packageName, packageAdvisories, advisories) {
-  for (const [index, advisory] of packageAdvisories.entries()) {
-    if (!isPlainAdvisoryObject(advisory)) {
-      throw new Error(`Invalid advisory for package ${packageName} at index ${index}: expected object`);
-    }
-    const { key, githubAdvisoryId } = deriveAdvisoryKey(packageName, advisory);
-    if (Object.hasOwn(advisories, key)) {
-      continue;
-    }
-    advisories[key] = {
-      ...advisory,
-      github_advisory_id: githubAdvisoryId,
-      package_name: packageName,
-    };
-  }
-}
-
-/** Normalize bulk advisory responses into the shared advisory object shape.
- * @param {Record<string, unknown> | undefined} bulkPayload Bulk advisory payload keyed by package name.
- * @returns {Record<string, unknown>} Deduplicated advisories keyed by GHSA identifier or package fallback. @example normalizeBulkAdvisories({ validator: [{ id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' }] }); // { 'GHSA-vghf-hv5q-vc2g': { github_advisory_id: 'GHSA-vghf-hv5q-vc2g', package_name: 'validator', id: 100000, url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g' } }
- */
-function normalizeBulkAdvisories(bulkPayload) {
-  if (!isPlainAdvisoryObject(bulkPayload)) {
-    throw new TypeError('Invalid bulk advisory payload: expected an object keyed by package name.');
-  }
-  const advisories = {};
-  for (const [packageName, packageAdvisories] of Object.entries(bulkPayload)) {
-    if (!Array.isArray(packageAdvisories)) {
-      throw new TypeError(`Invalid bulk advisory entry for package ${packageName}: expected array, received ${JSON.stringify(packageAdvisories)}`);
-    }
-    addPackageAdvisories(packageName, packageAdvisories, advisories);
-  }
-
-  return advisories;
-}
-
 /** Post package versions to the npm bulk advisory endpoint and return the raw response.
  * @param {URL} endpoint Bulk advisory endpoint URL. @param {Record<string, string[]>} packageVersions Installed package versions keyed by package name.
+ * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
  * @returns {Promise<{ response: Response, responseText: string }>} HTTP response and response body text.
  * @example const { responseText } = await fetchBulkAdvisories(new URL('https://registry.npmjs.org/-/npm/v1/security/advisories/bulk'), { validator: ['13.15.23'] }); console.log(responseText); // '{}'
+ * @example const auditIo = { ...defaultAuditIo, fetch: async () => ({ text: async () => '{}' }), setTimeout: () => 1, clearTimeout: () => undefined }; await fetchBulkAdvisories(new URL('https://registry.npmjs.org/-/npm/v1/security/advisories/bulk'), {}, auditIo); // { response: ..., responseText: '{}' }
  */
-async function fetchBulkAdvisories(endpoint, packageVersions) {
+async function fetchBulkAdvisories(endpoint, packageVersions, auditIo = defaultAuditIo) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), BULK_AUDIT_TIMEOUT_MS);
+  const timeoutId = auditIo.setTimeout(() => controller.abort(), BULK_AUDIT_TIMEOUT_MS);
   try {
-    const response = await fetch(endpoint, {
+    const response = await auditIo.fetch(endpoint, {
       method: 'POST',
       headers: {
         accept: 'application/json',
@@ -283,7 +143,7 @@ async function fetchBulkAdvisories(endpoint, packageVersions) {
     }
     throw error;
   } finally {
-    clearTimeout(timeoutId);
+    auditIo.clearTimeout(timeoutId);
   }
 }
 
@@ -296,14 +156,19 @@ function toAdvisoryResult(advisories) {
 }
 
 /** Query the npm bulk advisory endpoint using the installed PNPM dependency tree.
- * @returns {Promise<{ json: { advisories: Record<string, unknown> }, status: number }>} Bulk advisory payload and derived exit status. @example // With a successful bulk advisory response containing one advisory: await runBulkAdvisoryAudit(); // { json: { advisories: { 'GHSA-vghf-hv5q-vc2g': { ... } } }, status: 1 }
+ * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
+ * @returns {Promise<{ json: { advisories: Record<string, unknown> }, status: number }>} Bulk advisory payload and derived exit status.
+ * @example // With a successful bulk advisory response containing one advisory:
+ * await runBulkAdvisoryAudit(); // { json: { advisories: { 'GHSA-vghf-hv5q-vc2g': { ... } } }, status: 1 }
+ * @example const auditIo = { ...defaultAuditIo, spawnSync: () => ({ status: 0, stdout: '[{"dependencies":{}}]' }), fetch: async () => ({ ok: true, text: async () => '{}' }) }; await runBulkAdvisoryAudit(auditIo); // { json: { advisories: {} }, status: 0 }
  */
-async function runBulkAdvisoryAudit() {
-  const registryUrl = readRegistryUrl();
+async function runBulkAdvisoryAudit(auditIo = defaultAuditIo) {
+  const registryUrl = readRegistryUrl(auditIo);
   const endpoint = new URL(BULK_ADVISORY_PATH, registryUrl);
   const { response, responseText } = await fetchBulkAdvisories(
     endpoint,
-    collectInstalledPackageVersions(),
+    collectInstalledPackageVersions(auditIo, assertCompletedProcess),
+    auditIo,
   );
 
   if (!response.ok) {
@@ -318,18 +183,19 @@ async function runBulkAdvisoryAudit() {
 }
 
 /** Run `pnpm audit --json`, falling back to the bulk advisory endpoint when needed.
- * @returns {Promise<{ json: { advisories?: Record<string, unknown> }, status: number }>} Parsed audit output and pnpm exit status. @example const { json, status } = await runAuditJson(); console.log(status, Object.keys(json.advisories ?? {}));
+ * Throws when `pnpm audit` fails to start or is signalled.
+ * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
+ * @returns {Promise<{ json: { advisories?: Record<string, unknown> }, status: number }>} Parsed audit output and pnpm exit status.
+ * @example const { json, status } = await runAuditJson(); console.log(status, Object.keys(json.advisories ?? {}));
+ * @example const auditIo = { ...defaultAuditIo, spawnSync: () => ({ status: 0, stdout: '{"advisories":{}}' }) }; await runAuditJson(auditIo); // { json: { advisories: {} }, status: 0 }
  */
-export async function runAuditJson() {
-  const result = spawnSync('pnpm', AUDIT_ARGS, {
+export async function runAuditJson(auditIo = defaultAuditIo) {
+  const result = auditIo.spawnSync('pnpm', AUDIT_ARGS, {
     encoding: 'utf8',
     maxBuffer: COMMAND_MAX_BUFFER,
     stdio: ['ignore', 'pipe', 'inherit'],
   });
-  if (result.error) {
-    throw result.error;
-  }
-  const status = result.status ?? 0;
+  const status = assertCompletedProcess(result, 'pnpm audit');
   const stdout = result.stdout ? result.stdout.trim() : '';
   if (!stdout) {
     return { json: { advisories: {} }, status };
@@ -337,7 +203,7 @@ export async function runAuditJson() {
 
   const json = parseJsonOutput(stdout, 'pnpm audit');
   if (isRetiredAuditEndpoint(json)) {
-    return runBulkAdvisoryAudit();
+    return await runBulkAdvisoryAudit(auditIo);
   }
 
   return { json, status };
@@ -349,59 +215,4 @@ export async function runAuditJson() {
  */
 export function collectAdvisories(auditJson) {
   return Object.values(auditJson.advisories ?? {});
-}
-
-/** Return `true` when an advisory's GHSA ID is present in the allow-set.
- * @param {{ github_advisory_id?: string }} advisory Advisory to check. @param {Set<string>} allowed Set of permitted advisory IDs. @returns {boolean}
- * @example isExpectedAdvisory({ github_advisory_id: 'GHSA-vghf-hv5q-vc2g' }, new Set(['GHSA-vghf-hv5q-vc2g'])); // true
- */
-function isExpectedAdvisory(advisory, allowed) {
-  const id = advisory.github_advisory_id;
-  return Boolean(id) && allowed.has(id);
-}
-
-/** Split advisories into allowed and unexpected groups.
- * @param {Array<{ github_advisory_id?: string }>} advisories Advisories to partition. @param {Iterable<string>} allowedIds Advisory IDs the caller expects.
- * @returns {{ expected: typeof advisories, unexpected: typeof advisories }} Partitioned advisories.
- * @example const { expected, unexpected } = partitionAdvisoriesById([{ github_advisory_id: 'GHSA-1' }, { github_advisory_id: 'GHSA-2' }], ['GHSA-2']); console.log(expected.length); // 1
- * @example console.log(unexpected.length); // 1
- */
-export function partitionAdvisoriesById(advisories, allowedIds) {
-  const allowed = new Set(allowedIds);
-  const expected = [];
-  const unexpected = [];
-  for (const advisory of advisories) {
-    if (isExpectedAdvisory(advisory, allowed)) {
-      expected.push(advisory);
-    } else {
-      unexpected.push(advisory);
-    }
-  }
-
-  return { expected, unexpected };
-}
-
-/** Format one advisory as a report line.
- * @param {{ github_advisory_id?: string, title?: string }} advisory Advisory to print. @returns {string} Human-readable bullet line for the advisory. @example formatAdvisoryLine({ github_advisory_id: 'GHSA-1', title: 'Example' }); // "- GHSA-1: Example"
- */
-function formatAdvisoryLine(advisory) {
-  const id = advisory.github_advisory_id ?? 'UNKNOWN';
-  const suffix = advisory.title ? `: ${advisory.title}` : '';
-  return `- ${id}${suffix}`;
-}
-
-/** Report unexpected advisories to stderr.
- * @param {Array<{ github_advisory_id?: string, title?: string }>} unexpected Advisories that were not permitted. @param {string} heading Descriptive heading for the error output.
- * @returns {boolean} Whether any advisories were reported. @example const hadUnexpected = reportUnexpectedAdvisories([{ github_advisory_id: 'GHSA-1', title: 'Example' }], 'Unexpected advisories:'); console.log(hadUnexpected); // true
- */
-export function reportUnexpectedAdvisories(unexpected, heading) {
-  if (unexpected.length === 0) {
-    return false;
-  }
-
-  console.error(heading);
-  for (const advisory of unexpected) {
-    console.error(formatAdvisoryLine(advisory));
-  }
-  return true;
 }

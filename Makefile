@@ -1,7 +1,9 @@
 SHELL := bash
 BUN_PATH := $(HOME)/.bun/bin:$(PATH)
+CARGO ?= cargo
 KUBE_VERSION ?= 1.31.0
 export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go/bin:$(CURDIR)/node_modules/.bin:$(PATH)
+CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
@@ -39,10 +41,10 @@ YAMLLINT_VERSION ?= 1.35.1
 OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test test-rust test-frontend typecheck deps lockfile lint-specs \
-        check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit \
-        lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile lint-actions \
-        lint-architecture workspace-sync
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down fmt lint test test-rust test-frontend typecheck deps lockfile lint-specs audit \
+	check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit-node rust-audit \
+	lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile lint-actions \
+	lint-architecture workspace-sync
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -208,10 +210,17 @@ $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
 
 typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,--noEmit -p $$dir/tsconfig.json,typescript@$(TSC_VERSION)) || exit 1; done
 
-audit: deps
-	pnpm -r install
+audit: audit-node rust-audit
+
+audit-node: deps
 	pnpm -r --if-present run audit
 	pnpm run audit:validate
+
+rust-audit:
+	$(call ensure_tool,cargo-audit)
+	# RUSTSEC-2023-0071 is in SQLx's optional MySQL support; this workspace only enables PostgreSQL.
+	# Install cargo-audit with: cargo binstall --no-confirm cargo-audit@0.22.1
+	$(CARGO) audit --file Cargo.lock $(CARGO_AUDIT_IGNORES)
 
 lockfile:
 	pnpm install --lockfile-only

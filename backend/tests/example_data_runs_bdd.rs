@@ -32,7 +32,13 @@ struct RuntimeHandle(Arc<Runtime>);
 /// The inner field is never read directly; it exists to keep the temporary
 /// database alive for the duration of the test.
 #[derive(Clone)]
-struct DatabaseHandle(#[expect(dead_code)] Arc<TemporaryDatabase>);
+struct DatabaseHandle(
+    #[expect(
+        dead_code,
+        reason = "keeps the temporary database alive for docs/backend-roadmap.md 2.4.3 BDD coverage"
+    )]
+    Arc<TemporaryDatabase>,
+);
 
 /// Test world holding repository and test results.
 #[derive(Default, ScenarioState)]

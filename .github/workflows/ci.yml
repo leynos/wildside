@@ -59,7 +59,7 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@c2b856998a4438bfdaa71c90cde1b03044e5d260
+        uses: leynos/shared-actions/.github/actions/setup-rust@e4c6b0e200a057edf927c45c298e7ddf229b3934
 
       - name: Install uv
         id: setup-uv
@@ -90,6 +90,9 @@ jobs:
           which mmdc
           mmdc --version
           bun --version
+
+      - name: Install cargo-audit
+        run: cargo binstall --no-confirm cargo-audit@0.22.1
 
       - name: Audit
         run: make audit
@@ -153,6 +156,9 @@ jobs:
           whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
           whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
 
+      - name: Architecture lint
+        run: make lint-architecture
+
       - name: Install nextest
         uses: taiki-e/install-action@db22c42b5af88356329b9a8056bb2c2f026d5a10
         with:
@@ -166,6 +172,9 @@ jobs:
         env:
           # Increase GitHub API rate limits for postgresql_embedded downloads.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin the embedded PostgreSQL version so postgresql_archive skips release-listing queries.
+          # Use the semver "exact" prefix so no wildcard resolution is attempted.
+          POSTGRESQL_VERSION: "=16.10.0"
           # Keep backend selection explicit for strict PG_TEST_BACKEND validation.
           PG_TEST_BACKEND: postgresql_embedded
           # Root-path bootstrap requires the worker binary for privilege demotion.

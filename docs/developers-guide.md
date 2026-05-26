@@ -23,6 +23,7 @@ All suites run through the same quality gateways:
 
 - `make check-fmt`
 - `make lint`
+- `make audit`
 - `make test`
 
 ## Front-end development
@@ -64,8 +65,13 @@ TypeScript, tokens, and documentation gates aligned:
 make deps
 make fmt
 make lint
+make audit
 make test
 ```
+
+`make audit` checks frontend and Rust dependencies. It expects Corepack to be
+enabled so `pnpm` is available locally and in CI, and it requires
+`cargo-audit` for the Rust dependency check.
 
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.2`,
 React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`,
@@ -147,12 +153,46 @@ front-end gates plus the repository-wide commit gates:
 ```bash
 make check-fmt
 make lint
+make audit
 make test
 ```
 
 When a phase introduces a new lint, accessibility, Playwright, or semantic CSS
 gate, update this guide and the corresponding phase ExecPlan under
 `docs/execplans/` in the same change.
+
+### Dependency audit helper modules
+
+The JavaScript dependency-audit flow is split by responsibility:
+
+- `security/audit-utils.js` is the orchestration surface used by package
+  scripts. It exports `runAuditJson(auditIo?)` and
+  `collectAdvisories(auditJson)`, and re-exports the lower-level package-data
+  and reporting helpers.
+- `security/audit-package-data.js` owns pure JSON parsing, `pnpm ls` package
+  tree handling, installed-version maps, and npm bulk-advisory normalization.
+  Its public helpers are `parseJsonOutput(payloadText, commandLabel, options?)`,
+  `loadPackageTrees(auditIo, assertCompletedProcess)`,
+  `buildVersionMap(packageTrees)`,
+  `collectInstalledPackageVersions(auditIo, assertCompletedProcess)`, and
+  `normalizeBulkAdvisories(bulkPayload)`.
+- `security/audit-reporting.js` owns advisory partitioning and stderr output.
+  Its public helpers are `partitionAdvisoriesById(advisories, allowedIds)` and
+  `reportUnexpectedAdvisories(unexpected, heading, reportingIo = defaultReportingIo)`.
+  The optional `reportingIo` adapter must expose an `error(...args)` method;
+  pass a custom adapter in tests to capture output without writing to stderr.
+  When omitted, `defaultReportingIo` delegates to `console.error`.
+- `security/audit-exception-policy.js` owns exception-ledger date policy. Its
+  public helper is `assertNoExpired(entries, currentDate?, policyIo?)`.
+- `security/validate-audit.js` applies repository policy to the parsed audit
+  results and the exception ledger.
+
+Effectful audit helpers must receive external dependencies through the
+`auditIo` adapter rather than reading process state directly. The default
+adapter wraps `spawnSync`, `execFileSync`, `fetch`, timers, and `getEnv(name)`;
+tests should inject an adapter with the same methods when they need to control
+command results, registry configuration, network responses, or timeout
+behaviour.
 
 ## Embedded PostgreSQL integration tests
 
@@ -267,8 +307,8 @@ When adding a new behaviour:
    `#[then]`.
 3. Add or update the scenario binding function with `#[scenario(...)]`.
 4. Keep fixture naming consistent across scenario binding and step functions.
-5. Run all three gates before commit:
-   `make check-fmt`, `make lint`, and `make test`.
+5. Run all commit gates before commit:
+   `make check-fmt`, `make lint`, `make audit`, and `make test`.
 
 When migrating existing suites, prefer incremental edits that preserve scenario
 intent and avoid broad rewrites that obscure regressions.
@@ -385,10 +425,11 @@ When adding a new shared workspace crate:
 9. Ensure all test files stay under 400 lines; split by feature when
    needed.
 10. Run the repository quality gates before committing: `make check-fmt`
-    to verify formatting, `make lint` to verify linting, and `make test` to
-    run the test suites. Documentation build and validation is performed
-    separately via the `RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc -p
-    <crate-name> --no-deps` command described in step 4 above.
+    to verify formatting, `make lint` to verify linting, `make audit` to
+    verify dependency audits, and `make test` to run the test suites.
+    Documentation build and validation is performed separately via the
+    `RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc -p <crate-name>
+    --no-deps` command described in step 4 above.
 
 ## Redis cache adapter testing
 
