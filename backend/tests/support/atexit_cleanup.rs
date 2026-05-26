@@ -161,10 +161,10 @@ fn ensure_stable_password() {
         }
     }
     if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
-        // Pin to Theseus binaries to prevent transient fetch failures in CI
-        // (misreported by reqwest as "error decoding response body").
-        // SAFETY: called before the library spawns any threads. The shared
-        // cluster singleton serializes access with a `Mutex`, so this runs at
+        // Pin to Theseus binaries to avoid transient fetch failures in CI that
+        // reqwest misreports as "error decoding response body".
+        // SAFETY: called before the library spawns any threads. The shared-
+        // cluster singleton serialises access with a Mutex, so this runs at
         // most once per process.
         unsafe {
             std::env::set_var(
