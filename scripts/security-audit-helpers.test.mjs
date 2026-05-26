@@ -448,10 +448,12 @@ describe('fetchBulkAdvisories timeout and abort handling', () => {
 
         const auditIo = retiredEndpointAuditIo({ fetchStub, clearTimeoutStub });
 
-        try {
-          await runAuditJson(auditIo);
-        } catch {
-          // Timeout throws are expected in the abort path.
+        if (shouldAbort) {
+          await expect(runAuditJson(auditIo)).rejects.toThrow(
+            /Bulk advisory audit timed out after \d+ms at/,
+          );
+        } else {
+          await expect(runAuditJson(auditIo)).resolves.toMatchObject({ status: 0 });
         }
 
         expect(clearTimeoutStub).toHaveBeenCalledWith(99);
