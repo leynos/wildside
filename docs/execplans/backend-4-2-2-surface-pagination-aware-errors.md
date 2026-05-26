@@ -201,13 +201,15 @@ errors.
 - [x] 2026-05-26: Documentation closure gates passed after the user guide
   table alignment fix: `make fmt`, `make check-fmt`, `make markdownlint`,
   `make lint`, and `make test`.
+- [x] 2026-05-26: CodeRabbit reviewed the documentation and roadmap closure
+  milestone and reported zero findings.
 - [x] M0: Approval received and baseline established.
 - [x] Implementation milestone M1 completed.
 - [x] Implementation milestone M2 completed.
 - [x] Implementation milestone M3 completed.
 - [x] Implementation milestone M4 completed.
 - [x] Implementation milestone M5 completed.
-- [ ] M6: Validation and closure completed.
+- [x] M6: Validation and closure completed.
 - [x] Roadmap item 4.2.2 marked done after all gates pass.
 - [ ] Draft implementation pull request opened or updated after approval work
   lands.
