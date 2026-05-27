@@ -183,7 +183,9 @@ told that other agents may be editing the repository.
   `compose_user_state_ports` seam in `backend/src/server/state_builders.rs`
   without changing the public `build_http_state` signature.
 - [x] (2026-05-26) Ran Stage B targeted checks:
-  `cargo test -p backend startup_modes_reject_invalid_credentials_with_unauthorised_envelope -- --nocapture`
+  `cargo test -p backend`
+  `startup_modes_reject_invalid_credentials_with_unauthorised_envelope`
+  `-- --nocapture`
   passed 2 selected tests, and
   `cargo test -p backend --test state_builders_composition_unit -- --nocapture`
   passed the fixture-mode composition unit test.
@@ -254,7 +256,9 @@ told that other agents may be editing the repository.
   existing invalid-credential adapter tests rather than the
   `state_builders_composition_unit` test.
   Evidence:
-  `cargo test -p backend startup_modes_reject_invalid_credentials_with_unauthorised_envelope -- --nocapture`
+  `cargo test -p backend`
+  `startup_modes_reject_invalid_credentials_with_unauthorised_envelope`
+  `-- --nocapture`
   passed two selected tests from `diesel_login_users_adapters.rs` and filtered
   out the state-builder composition test.
   Impact: keep the drafted command as historical evidence, but also run
@@ -265,7 +269,9 @@ told that other agents may be editing the repository.
   `startup_mode_composition` selected support tests only and filtered out all
   generated scenarios.
   Evidence:
-  `cargo test -p backend startup_mode_composition --test startup_mode_composition_bdd -- --nocapture`
+  `cargo test -p backend`
+  `startup_mode_composition`
+  `--test startup_mode_composition_bdd -- --nocapture`
   reported 0 executed tests and 12 filtered out.
   Impact: use
   `cargo test -p backend --test startup_mode_composition_bdd -- --nocapture`
