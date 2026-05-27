@@ -89,9 +89,9 @@ cargo binstall pg-embed-setup-unpriv
    Ownership fix-ups occur on every call so running the tool twice remains
    idempotent.
 
-4. Pass the resulting paths and credentials to your tests. If you use
-   `postgresql_embedded` directly after the setup step, it can reuse the staged
-   binaries and data directory without needing `root`.
+4. Pass the resulting paths and credentials to the test suite. Direct
+   `postgresql_embedded` use after the setup step can reuse the staged binaries
+   and data directory without needing `root`.
 
 ## Bootstrap for test suites
 
@@ -130,8 +130,8 @@ rather than when PostgreSQL launches.
 `bootstrap_for_tests()` also inserts a small set of PostgreSQL server
 configuration entries into `bootstrap.settings.configuration` to minimize
 background and parallel worker processes for ephemeral test clusters. Override
-these values by mutating the configuration map before starting the cluster if
-your tests need different behaviour.
+these values by mutating the configuration map before starting the cluster when
+tests require different behaviour.
 
 ## Resource Acquisition Is Initialization (RAII) test clusters
 
@@ -184,14 +184,14 @@ from within a runtime" because it creates its own internal Tokio runtime. Async
 contexts require enabling the `async-api` feature and using the async
 constructor and shutdown methods.
 
-Enable the feature in your `Cargo.toml`:
+Enable the feature in the test crate's `Cargo.toml`:
 
 ```toml
 [dev-dependencies]
-pg-embed-setup-unpriv = { version = "0.2", features = ["async-api"] }
+pg-embed-setup-unpriv = { version = "0.5.1", features = ["async-api"] }
 ```
 
-Then use `start_async()` and `stop_async()` in your async tests:
+Then use `start_async()` and `stop_async()` in async tests:
 
 ```rust,no_run
 use pg_embedded_setup_unpriv::{TestCluster, error::BootstrapResult};
@@ -345,8 +345,8 @@ overhead from seconds to milliseconds.
 `TestCluster::connection()` exposes `TestClusterConnection`, a lightweight view
 over the running cluster's connection metadata. Use it to read the host, port,
 superuser name, generated password, or the `.pgpass` path without cloning the
-entire bootstrap struct. When you need to persist those values beyond the guard
-you can call `metadata()` to obtain an owned `ConnectionMetadata`.
+entire bootstrap struct. When those values must persist beyond the guard, call
+`metadata()` to obtain an owned `ConnectionMetadata`.
 
 Enable the `diesel-support` feature to call `diesel_connection()` and obtain a
 ready-to-use `diesel::PgConnection`. The default feature set keeps Diesel
@@ -498,8 +498,8 @@ let template_name = format!("template_{}", &hash[..8]);
 # }
 ```
 
-If you already track a migration version, include it in the template name
-instead (for example, `format!("template_v{SCHEMA_VERSION}")`). This keeps
+If the project already tracks a migration version, include it in the template
+name instead (for example, `format!("template_v{SCHEMA_VERSION}")`). This keeps
 template invalidation explicit without hashing the migration directory.
 
 ### Performance comparison
@@ -657,8 +657,8 @@ still running as `root`, follow these steps:
   without interactive prompts. The
   `bootstrap_for_tests().environment.pgpass_file` helper returns the path if
   the bootstrap ran inside the test process.
-- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for your
-  distribution) if you are running the CLI. The library helper sets `TZ`
+- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for the target
+  distribution) when running the CLI. The library helper sets `TZ`
   automatically and, on Unix-like hosts, also seeds `TZDIR` when it discovers a
   valid timezone database.
 
@@ -677,13 +677,13 @@ Harden CI in three places:
    `$HOME/.cache/pg-embedded/binaries`, and finally
    `/tmp/pg-embedded/binaries`. `postgresql_embedded` also uses
    `$HOME/.theseus/postgresql` for runtime installations. Cache both persistent
-   locations when your workflow can use both crates, but keep those paths out
-   of a Cargo registry or `target` cache whose key changes on every
+   locations when the workflow can use both crates, but keep those paths out of
+   a Cargo registry or `target` cache whose key changes on every
    `Cargo.lock` update.
 2. Pin the release source in test bootstrap:
 
    ```bash
-   export POSTGRESQL_RELEASES_URL="https://github.com/theseus-rs/postgresql-binaries/releases"
+   export POSTGRESQL_RELEASES_URL="https://github.com/theseus-rs/postgresql-binaries"
    ```
 
    If a test harness sets environment variables itself, set the value only when
@@ -701,7 +701,7 @@ Supply `GITHUB_TOKEN` in CI so GitHub release requests avoid anonymous rate
 limits. GitHub Actions exposes this token by default as
 `${{ secrets.GITHUB_TOKEN }}`.
 
-If your test runner starts several PostgreSQL-backed test binaries, serialize
+If the test runner starts several PostgreSQL-backed test binaries, serialize
 the first-use bootstrap or warm the cache before running tests. `cargo-nextest`
 users can assign those binaries to a test group with `max-threads = 1`, or run
 the job with `NEXTEST_TEST_THREADS=1` when the suite cannot safely share a
@@ -710,11 +710,11 @@ cluster bootstrap concurrently.
 ## Known issues and mitigations
 
 - **TimeZone errors**: The embedded cluster loads timezone data from the host
-  `tzdata` package. Install it inside the execution environment if you see
-  `invalid value for parameter "TimeZone": "UTC"`.
+  `tzdata` package. Install it inside the execution environment when
+  `invalid value for parameter "TimeZone": "UTC"` appears.
 - **Download rate limits**: `postgresql_embedded` fetches binaries from the
-  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable if you
-  hit rate limits in CI.
+  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable when CI
+  hits rate limits.
 - **Download stalls misreported as body decoding errors**: Warm and cache
   PostgreSQL binaries before tests, pin `POSTGRESQL_RELEASES_URL`, and keep the
   PostgreSQL binary cache independent from Cargo caches. This prevents unrelated

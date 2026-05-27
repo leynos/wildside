@@ -169,7 +169,7 @@ fn ensure_stable_password() {
         unsafe {
             std::env::set_var(
                 "POSTGRESQL_RELEASES_URL",
-                "https://github.com/theseus-rs/postgresql-binaries/releases",
+                "https://github.com/theseus-rs/postgresql-binaries",
             );
         }
     }
@@ -331,7 +331,7 @@ mod tests {
         assert_eq!(
             std::env::var("POSTGRESQL_RELEASES_URL")
                 .expect("POSTGRESQL_RELEASES_URL should be set"),
-            "https://github.com/theseus-rs/postgresql-binaries/releases"
+            "https://github.com/theseus-rs/postgresql-binaries"
         );
     }
 

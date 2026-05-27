@@ -274,7 +274,7 @@ The warm-up step pins:
 
 - `POSTGRESQL_VERSION="=16.10.0"` so archive resolution does not need wildcard
   release discovery.
-- `POSTGRESQL_RELEASES_URL=https://github.com/theseus-rs/postgresql-binaries/releases`
+- `POSTGRESQL_RELEASES_URL=https://github.com/theseus-rs/postgresql-binaries`
   so the binary source cannot drift when crate defaults change.
 - `GITHUB_TOKEN` so GitHub release requests use the Actions token and avoid
   anonymous rate limits.
