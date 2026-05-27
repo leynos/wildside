@@ -30,7 +30,7 @@ tool and integrate it into automated test flows.
 `PG_TEST_BACKEND` selects the backend used by `bootstrap_for_tests()` and
 `TestCluster`. Supported values are:
 
-- unset: `postgresql_embedded`
+- unset or empty: `postgresql_embedded`
 - `postgresql_embedded`: run the embedded PostgreSQL backend
 
 Any other value triggers a `SKIP-TEST-CLUSTER` error, so test harnesses can
@@ -40,7 +40,7 @@ The embedded backend downloads PostgreSQL binaries, initializes the data
 directory, and writes to the configured runtime and data paths. It requires
 outbound network access. On Linux, root workflows must supply
 `PG_EMBEDDED_WORKER` so the helper can drop privileges. On macOS, root
-execution is unsupported and expected to fail fast; on Windows, the backend
+execution is unsupported and expected to fail fast; on Windows the backend
 always runs in-process.
 
 Troubleshooting guidance:
@@ -51,6 +51,13 @@ Troubleshooting guidance:
   binary.
 
 ## Quick start
+
+On Linux `x86_64` and `aarch64`, tagged releases publish both CLI binaries in a
+`cargo binstall` archive. Install them with:
+
+```bash
+cargo binstall pg-embed-setup-unpriv
+```
 
 1. Choose directories for the staged PostgreSQL distribution and the cluster’s
    data files. They must be writable by whichever user will run the helper; the
@@ -73,16 +80,18 @@ Troubleshooting guidance:
 3. Run the helper (`cargo run --release --bin pg_embedded_setup_unpriv`). The
    command downloads the specified PostgreSQL release, ensures the directories
    exist, applies PostgreSQL-compatible permissions (0755 for the installation
-   cache, 0700 for the runtime and data directories), and initializes the
-   cluster with the provided credentials. Invocations that begin as `root`
-   prepare directories for `nobody` and execute lifecycle commands through the
-   worker helper, so the privileged operations run entirely under the sandbox
-   user. Ownership fix-ups occur on every call, so running the tool twice
-   remains idempotent.
+   cache, 0700 for the runtime and data directories), and initialises the
+   cluster with the provided credentials via `initdb`. The PostgreSQL server is
+   **not** started — the installation is left ready for subsequent use by
+   `TestCluster` or other tools. Invocations that begin as `root` prepare
+   directories for `nobody` and execute lifecycle commands through the worker
+   helper, so the privileged operations run entirely under the sandbox user.
+   Ownership fix-ups occur on every call so running the tool twice remains
+   idempotent.
 
-4. Pass the resulting paths and credentials to the test suite. If
-   `postgresql_embedded` is used directly after the setup step, it can reuse
-   the staged binaries and data directory without needing `root`.
+4. Pass the resulting paths and credentials to your tests. If you use
+   `postgresql_embedded` directly after the setup step, it can reuse the staged
+   binaries and data directory without needing `root`.
 
 ## Bootstrap for test suites
 
@@ -122,7 +131,7 @@ rather than when PostgreSQL launches.
 configuration entries into `bootstrap.settings.configuration` to minimize
 background and parallel worker processes for ephemeral test clusters. Override
 these values by mutating the configuration map before starting the cluster if
-the test suite needs different behaviour.
+your tests need different behaviour.
 
 ## Resource Acquisition Is Initialization (RAII) test clusters
 
@@ -140,7 +149,7 @@ fn exercise_cluster() -> BootstrapResult<()> {
     let cluster = TestCluster::new()?;
     let url = cluster.settings().url("app_db");
     // Issue queries using any preferred client here.
-    drop(cluster); // PostgreSQL shuts down automatically.
+drop(cluster); // PostgreSQL shuts down automatically.
     Ok(())
 }
 ```
@@ -164,9 +173,8 @@ drop(cluster);
 ```
 
 Shared clusters created with `test_support::shared_test_cluster()` are
-intentionally leaked for the process lifetime via `std::mem::forget` in the
-test helper, and therefore do not perform cleanup on drop. This behaviour is
-intentional because process-wide reuse is required for shared fixtures.
+intentionally leaked for the process lifetime and therefore do not perform
+cleanup on drop.
 
 ### Async API for `#[tokio::test]` contexts
 
@@ -176,14 +184,14 @@ from within a runtime" because it creates its own internal Tokio runtime. Async
 contexts require enabling the `async-api` feature and using the async
 constructor and shutdown methods.
 
-Enable the feature in the test crate's `Cargo.toml`:
+Enable the feature in your `Cargo.toml`:
 
 ```toml
 [dev-dependencies]
-pg-embed-setup-unpriv = { version = "0.5.0", features = ["async-api"] }
+pg-embed-setup-unpriv = { version = "0.2", features = ["async-api"] }
 ```
 
-Then use `start_async()` and `stop_async()` in async tests:
+Then use `start_async()` and `stop_async()` in your async tests:
 
 ```rust,no_run
 use pg_embedded_setup_unpriv::{TestCluster, error::BootstrapResult};
@@ -321,7 +329,7 @@ assert!(std::ptr::eq(cluster, cluster2));
 # }
 ```
 
-#### When to use each fixture
+**When to use each fixture:**
 
 | Fixture               | Use case                                          |
 | --------------------- | ------------------------------------------------- |
@@ -337,8 +345,8 @@ overhead from seconds to milliseconds.
 `TestCluster::connection()` exposes `TestClusterConnection`, a lightweight view
 over the running cluster's connection metadata. Use it to read the host, port,
 superuser name, generated password, or the `.pgpass` path without cloning the
-entire bootstrap struct. When persistence of those values beyond the guard is
-required, call `metadata()` to obtain an owned `ConnectionMetadata`.
+entire bootstrap struct. When you need to persist those values beyond the guard
+you can call `metadata()` to obtain an owned `ConnectionMetadata`.
 
 Enable the `diesel-support` feature to call `diesel_connection()` and obtain a
 ready-to-use `diesel::PgConnection`. The default feature set keeps Diesel
@@ -490,7 +498,7 @@ let template_name = format!("template_{}", &hash[..8]);
 # }
 ```
 
-If a migration version is already tracked, include it in the template name
+If you already track a migration version, include it in the template name
 instead (for example, `format!("template_v{SCHEMA_VERSION}")`). This keeps
 template invalidation explicit without hashing the migration directory.
 
@@ -504,7 +512,7 @@ The following table compares test isolation approaches:
 | Shared cluster, fresh database | Once      | 1–5 seconds       | Database  |
 | Shared cluster, template clone | Once      | 10–50 ms          | Database  |
 
-#### When to use each approach
+**When to use each approach:**
 
 - **Per-test cluster (`test_cluster` fixture):** Use when tests modify
   cluster-level settings, require specific PostgreSQL versions, or need
@@ -605,7 +613,7 @@ let temp_db = cluster.temporary_database_from_template("test_db", "migrated_temp
 # }
 ```
 
-#### Drop behaviour
+**Drop behaviour:**
 
 - `drop_database()` — Explicitly drop the database, failing if connections
   exist. Consumes the guard.
@@ -649,19 +657,68 @@ still running as `root`, follow these steps:
   without interactive prompts. The
   `bootstrap_for_tests().environment.pgpass_file` helper returns the path if
   the bootstrap ran inside the test process.
-- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for the target
-  distribution) when running the CLI. The library helper sets `TZ`
+- Provide `TZDIR=/usr/share/zoneinfo` (or the correct path for your
+  distribution) if you are running the CLI. The library helper sets `TZ`
   automatically and, on Unix-like hosts, also seeds `TZDIR` when it discovers a
   valid timezone database.
+
+## Continuous Integration cache hardening
+
+CI failures that surface as `postgresql_embedded::setup()` timeouts, or as
+`error decoding response body`, are often binary-download failures rather than
+PostgreSQL startup failures. The latter message can be emitted when the HTTP
+client reports a stalled release-asset download through a body-decoding error.
+
+Harden CI in three places:
+
+1. Cache PostgreSQL binary archives independently from Cargo dependencies.
+   `pg-embed-setup-unpriv` stores release archives under
+   `PG_BINARY_CACHE_DIR`, then `$XDG_CACHE_HOME/pg-embedded/binaries`, then
+   `$HOME/.cache/pg-embedded/binaries`, and finally
+   `/tmp/pg-embedded/binaries`. `postgresql_embedded` also uses
+   `$HOME/.theseus/postgresql` for runtime installations. Cache both persistent
+   locations when your workflow can use both crates, but keep those paths out
+   of a Cargo registry or `target` cache whose key changes on every
+   `Cargo.lock` update.
+2. Pin the release source in test bootstrap:
+
+   ```bash
+   export POSTGRESQL_RELEASES_URL="https://github.com/theseus-rs/postgresql-binaries/releases"
+   ```
+
+   If a test harness sets environment variables itself, set the value only when
+   it is currently absent so callers can override it intentionally.
+3. Pin the PostgreSQL version used by CI, preferably with an exact requirement:
+
+   ```bash
+   export POSTGRESQL_VERSION="=16.10.0"
+   ```
+
+   Exact versions avoid release-list discovery during every CI run and keep the
+   binary cache key tied to the tested PostgreSQL version.
+
+Supply `GITHUB_TOKEN` in CI so GitHub release requests avoid anonymous rate
+limits. GitHub Actions exposes this token by default as
+`${{ secrets.GITHUB_TOKEN }}`.
+
+If your test runner starts several PostgreSQL-backed test binaries, serialize
+the first-use bootstrap or warm the cache before running tests. `cargo-nextest`
+users can assign those binaries to a test group with `max-threads = 1`, or run
+the job with `NEXTEST_TEST_THREADS=1` when the suite cannot safely share a
+cluster bootstrap concurrently.
 
 ## Known issues and mitigations
 
 - **TimeZone errors**: The embedded cluster loads timezone data from the host
-  `tzdata` package. Install it inside the execution environment if the error
-  `invalid value for parameter "TimeZone": "UTC"` appears.
+  `tzdata` package. Install it inside the execution environment if you see
+  `invalid value for parameter "TimeZone": "UTC"`.
 - **Download rate limits**: `postgresql_embedded` fetches binaries from the
-  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable if rate
-  limits are encountered in CI.
+  Theseus GitHub releases. Supply a `GITHUB_TOKEN` environment variable if you
+  hit rate limits in CI.
+- **Download stalls misreported as body decoding errors**: Warm and cache
+  PostgreSQL binaries before tests, pin `POSTGRESQL_RELEASES_URL`, and keep the
+  PostgreSQL binary cache independent from Cargo caches. This prevents unrelated
+  dependency updates from forcing cold release downloads during test execution.
 - **CLI arguments in tests**: `PgEnvCfg::load()` ignores `std::env::args` during
   library use so Cargo test filters (for example,
   `bootstrap_privileges::bootstrap_as_root`) do not trip the underlying Clap

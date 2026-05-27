@@ -250,10 +250,46 @@ test usage remains coherent:
   rerunning migrations per test.
 - Use `CleanupMode::None` only for explicit debugging sessions where retained
   files are required; keep deterministic cleanup defaults for normal runs.
-- Continuous Integration (CI) warms the `pg-embed-setup-unpriv` binary cache
-  with `scripts/warm-pg-embedded-cache.sh` before running `cargo nextest`.
-  Cache both `~/.theseus/postgresql` and `~/.cache/pg-embedded/binaries` when
-  changing CI runners or cache providers.
+
+
+### Embedded PostgreSQL CI bootstrap stability
+
+Continuous Integration (CI) warms the `pg-embed-setup-unpriv` binary cache with
+`scripts/warm-pg-embedded-cache.sh` before running `cargo nextest`. Keep this
+warm-up step before `Rust tests`; it turns PostgreSQL binary acquisition into a
+short, explicit CI step instead of letting the first integration test perform a
+cold download inside `postgresql_embedded::setup()`.
+
+The CI cache step must include both binary-cache locations used by the two
+embedded PostgreSQL layers:
+
+- `~/.theseus/postgresql` for `postgresql_embedded` runtime installations.
+- `~/.cache/pg-embedded/binaries` for `pg-embed-setup-unpriv` release archives.
+
+Do not co-locate those paths inside the Cargo registry/cache archive. Cargo
+dependency updates and `Cargo.lock` churn otherwise evict the PostgreSQL
+binary cache and force a fresh download during unrelated test changes.
+
+The warm-up step pins:
+
+- `POSTGRESQL_VERSION="=16.10.0"` so archive resolution does not need wildcard
+  release discovery.
+- `POSTGRESQL_RELEASES_URL=https://github.com/theseus-rs/postgresql-binaries/releases`
+  so the binary source cannot drift when crate defaults change.
+- `GITHUB_TOKEN` so GitHub release requests use the Actions token and avoid
+  anonymous rate limits.
+
+Keep PostgreSQL-backed nextest binaries in the `pg-embedded` test group in
+`.config/nextest.toml`, and keep that group serialised. First-use cluster
+bootstrap is process-local and expensive; serial execution avoids concurrent
+setup attempts competing for the same warmed cache, filesystem paths, and
+worker process.
+
+If CI reports `error decoding response body`, treat it as a likely download
+stall or timeout from `reqwest` rather than as JSON/body corruption. Check the
+`Cache PostgreSQL embedded binaries` and `Warm PostgreSQL embedded binary
+cache` steps first, then verify that the `Rust tests` step is still exporting
+`PG_EMBEDDED_WORKER`, `GITHUB_TOKEN`, and `NEXTEST_TEST_THREADS=1`.
 
 ## Rust behavioural tests with `rstest-bdd` v0.5.0
 
