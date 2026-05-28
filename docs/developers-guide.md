@@ -26,7 +26,6 @@ All suites run through the same quality gateways:
 - `make audit`
 - `make test`
 
-
 ## Local Kubernetes preview
 
 Use the repository-local k3d preview when validating the backend image and Helm
