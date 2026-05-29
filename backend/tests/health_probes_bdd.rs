@@ -152,6 +152,14 @@ fn probe_response_is_not_cacheable(world: &HealthProbeWorld) {
     });
 }
 
+fn apply_probe_setup(world: &HealthProbeWorld, setup: ProbeSetup) {
+    match setup {
+        ProbeSetup::Default => {}
+        ProbeSetup::Ready => world.health.mark_ready(),
+        ProbeSetup::Unhealthy => world.health.mark_unhealthy(),
+    }
+}
+
 #[rstest]
 #[case::readiness_not_ready("/health/ready", ProbeSetup::Default)]
 #[case::readiness_ready("/health/ready", ProbeSetup::Ready)]
@@ -163,11 +171,7 @@ async fn health_probe_responses_match_snapshots(
     #[case] setup: ProbeSetup,
 ) {
     let world = HealthProbeWorld::new();
-    match setup {
-        ProbeSetup::Default => {}
-        ProbeSetup::Ready => world.health.mark_ready(),
-        ProbeSetup::Unhealthy => world.health.mark_unhealthy(),
-    }
+    apply_probe_setup(&world, setup);
 
     world.request_probe(uri).await;
 

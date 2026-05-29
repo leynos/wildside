@@ -154,7 +154,28 @@
           "additionalProperties": false
         },
         "targetName": { "type": "string" },
-        "data": { "type": "array", "items": { "type": "object" } }
+        "data": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["secretKey", "remoteRef"],
+            "properties": {
+              "secretKey": { "type": "string" },
+              "remoteRef": {
+                "type": "object",
+                "required": ["key"],
+                "properties": {
+                  "key": { "type": "string" },
+                  "property": { "type": "string" },
+                  "metadataPolicy": { "type": "string" },
+                  "conversionStrategy": { "type": "string" },
+                  "decodingStrategy": { "type": "string" },
+                  "nullBytePolicy": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
       },
       "required": ["enabled", "refreshInterval", "secretStoreRef", "data"],
       "additionalProperties": false,

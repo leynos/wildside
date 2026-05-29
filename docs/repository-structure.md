@@ -200,14 +200,15 @@ ______________________________________________________________________
 
 ```text
 Rust event payloads (serde + schemars)
-  → AsyncAPI (YAML)
+  → OpenAPI (YAML)
+  → orval client generation
   → Docs & stubs
-  → Frontend WS client + TanStack Query/SWR
+  → Frontend HTTP client (TanStack Query/SWR)
 ```
 
 > Tip: Reuse the same serde structs for both OpenAPI bodies and AsyncAPI
-> message payloads; derive JSON Schema via `schemars` if you want runtime
-> validation or to feed generator pipelines.
+> message payloads; derive JSON Schema via `schemars` when runtime
+> validation is required or to feed generator pipelines.
 
 ______________________________________________________________________
 

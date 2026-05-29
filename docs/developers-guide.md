@@ -496,6 +496,8 @@ Related domain helpers:
 To run BDD tests locally:
 
 ```bash
+```
+
 ### RedisTestServer harness
 
 Integration tests use `RedisTestServer` from `backend/src/test_support/redis.rs`:
@@ -527,14 +529,6 @@ The harness spawns a real `redis-server` process with:
 
 The cache adapter requires:
 
-#### Production dependencies
-
-- `apalis-core` – Core Apalis job-queue primitives
-- `apalis-postgres` – PostgreSQL storage backend for Apalis
-- `sqlx` (features: `postgres`, `runtime-tokio-rustls`) – Async PostgreSQL
-  pool used by `ApalisPostgresProvider`
-- `serde` / `serde_json` – Payload serialisation
-
 #### Test infrastructure
 
 - `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
@@ -544,11 +538,14 @@ The cache adapter requires:
 To run BDD tests locally:
 
 ```bash
-# Ensure redis-server is available
-which redis-server
+# Ensure pg-embedded-setup-unpriv is available
+pg-embedded-setup-unpriv --help
 
-# Run ignored tests explicitly
-cargo test -p backend --lib outbound::cache -- --ignored
+# Start the embedded PG cluster (adjust data directory as needed)
+pg-embedded-setup-unpriv start
+
+# Run integration BDD tests
+cargo test -p backend --test '*'
 ```
 
 ### Adapter boundaries
@@ -566,6 +563,16 @@ The hexagonal boundary is enforced via visibility:
 
 Domain code depends only on the `RouteCache` port trait. The Redis adapter
 implements this port without exposing `bb8-redis` types in the public API.
+
+### Queue / Apalis dependencies
+
+The queue adapter requires:
+
+- `apalis-core` – Core Apalis job-queue primitives
+- `apalis-postgres` – PostgreSQL storage backend for Apalis
+- `sqlx` (features: `postgres`, `runtime-tokio-rustls`) – Async PostgreSQL
+  pool used by `ApalisPostgresProvider`
+- `serde` / `serde_json` – Payload serialisation
 
 ## Queue adapter testing
 

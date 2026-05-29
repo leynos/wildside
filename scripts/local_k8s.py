@@ -32,32 +32,28 @@ def _run(operation: str, func: object) -> None:
 def up(skip_build: bool = False) -> None:
     """Create or update the local preview environment."""
 
-    config = PreviewConfig.from_env()
-    _run("local preview up", lambda: deploy_preview(config, skip_build=skip_build))
+    _run("local preview up", lambda: deploy_preview(PreviewConfig.from_env(), skip_build=skip_build))
 
 
 @app.command
 def down() -> None:
     """Delete the local preview cluster."""
 
-    config = PreviewConfig.from_env()
-    _run("local preview down", lambda: delete_cluster(config))
+    _run("local preview down", lambda: delete_cluster(PreviewConfig.from_env()))
 
 
 @app.command
 def status() -> None:
     """Print cluster, namespace, Helm release, and pod status."""
 
-    config = PreviewConfig.from_env()
-    _run("local preview status", lambda: print_status(config))
+    _run("local preview status", lambda: print_status(PreviewConfig.from_env()))
 
 
 @app.command
 def logs(follow: bool = False) -> None:
     """Print logs from the Wildside backend pods."""
 
-    config = PreviewConfig.from_env()
-    _run("local preview logs", lambda: print_logs(config, follow=follow))
+    _run("local preview logs", lambda: print_logs(PreviewConfig.from_env(), follow=follow))
 
 
 if __name__ == "__main__":

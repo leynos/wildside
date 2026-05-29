@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import typing
-from pathlib import Path
 from types import SimpleNamespace
 
 from local_k8s.config import PreviewConfig
@@ -15,19 +14,10 @@ if typing.TYPE_CHECKING:
 
 def test_print_kubernetes_status_uses_helm_fullname_for_service(
     monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
 ) -> None:
     """Verify that status queries the Helm-derived Service name."""
-    config = PreviewConfig(
-        repository_root=Path("/repo"),
-        cluster_name="wildside-preview",
-        namespace="wildside",
-        release_name="preview",
-        image_name="wildside-backend:local",
-        ingress_port=8088,
-        chart_path=Path("/repo/deploy/charts/wildside"),
-        local_values_path=Path("/repo/deploy/charts/wildside/values.local.yaml"),
-        dockerfile_path=Path("/repo/deploy/docker/backend.Dockerfile"),
-    )
+    config = preview_config
     calls: list[tuple[str, list[str]]] = []
 
     def fake_run(command: str, args: list[str]) -> SimpleNamespace:

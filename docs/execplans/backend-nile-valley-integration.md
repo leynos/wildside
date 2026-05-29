@@ -719,7 +719,7 @@ strategy before continuing.
 
 - 2026-05-21: Plan to create `docs/users-guide.md`.
   Rationale: the user explicitly requested that file, and the repository does
-  not currently have a global users guide covering server and deployment
+  not currently have a global user guide covering server and deployment
   behaviour.
 
 - 2026-05-21: Do not plan Verus, Kani, or proptest work for the initial scope.
