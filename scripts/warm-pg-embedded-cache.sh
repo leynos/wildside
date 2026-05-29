@@ -18,19 +18,57 @@ DOWNLOAD_WORK_DIR=''
 EXIT_CLEANUP_REGISTERED=false
 PREVIOUS_EXIT_HANDLER=''
 
+# Write an informational message to stderr.
+#
+# Arguments:
+#   $* - message text.
+#
+# Outputs:
+#   Writes the formatted log line to stderr.
+#
+# Returns:
+#   0 on success.
 log() {
   printf '[pg-embedded-cache] %s\n' "$*" >&2
 }
 
+# Write a warning message to stderr.
+#
+# Arguments:
+#   $* - message text.
+#
+# Outputs:
+#   Writes the formatted warning line to stderr.
+#
+# Returns:
+#   0 on success.
 warn() {
   printf '[pg-embedded-cache] warning: %s\n' "$*" >&2
 }
 
+# Write an error message to stderr and terminate.
+#
+# Arguments:
+#   $* - message text.
+#
+# Outputs:
+#   Writes the formatted error line to stderr.
+#
+# Returns:
+#   Does not return; exits with status 1.
 fail() {
   printf '[pg-embedded-cache] error: %s\n' "$*" >&2
   exit 1
 }
 
+# Remove the active download work directory when one exists.
+#
+# Extended detail:
+#   The path is tracked globally so the EXIT trap can clean up interrupted
+#   downloads without knowing which helper created the directory.
+#
+# Returns:
+#   0 on success.
 cleanup_download_work_dir() {
   if [[ -n "$DOWNLOAD_WORK_DIR" ]]; then
     rm -rf "$DOWNLOAD_WORK_DIR"
@@ -38,6 +76,18 @@ cleanup_download_work_dir() {
   fi
 }
 
+# Resolve and validate the PostgreSQL version.
+#
+# Extended detail:
+#   `PG_EMBEDDED_VERSION` takes precedence over `POSTGRESQL_VERSION`. A leading
+#   exact-version marker (`=`) is accepted for compatibility with
+#   `postgresql_embedded` and removed before use.
+#
+# Outputs:
+#   Writes the normalized version to stdout.
+#
+# Returns:
+#   0 on success, exits non-zero for non-numeric versions.
 normalise_version() {
   local raw_version="${PG_EMBEDDED_VERSION:-${POSTGRESQL_VERSION:-16.10.0}}"
   local version_pattern='^[0-9]+([.][0-9]+)*$'
@@ -50,6 +100,13 @@ normalise_version() {
   printf '%s\n' "$raw_version"
 }
 
+# Determine the Theseus platform triple for the current host.
+#
+# Outputs:
+#   Writes the supported platform triple to stdout.
+#
+# Returns:
+#   0 on success, exits non-zero for unsupported platforms.
 platform_triple() {
   case "$(uname -s):$(uname -m)" in
     Linux:x86_64)
@@ -70,6 +127,13 @@ platform_triple() {
   esac
 }
 
+# Resolve the pg-embed-setup-unpriv binary cache root.
+#
+# Outputs:
+#   Writes the cache directory path to stdout.
+#
+# Returns:
+#   0 on success.
 cache_dir() {
   if [[ -n "${PG_BINARY_CACHE_DIR:-}" ]]; then
     printf '%s\n' "$PG_BINARY_CACHE_DIR"
@@ -82,6 +146,17 @@ cache_dir() {
   fi
 }
 
+# Resolve the Theseus release repository base URL.
+#
+# Extended detail:
+#   A trailing `/releases` suffix is tolerated for compatibility, but the
+#   returned value is the repository URL required by `postgresql_archive`.
+#
+# Outputs:
+#   Writes the release repository URL to stdout.
+#
+# Returns:
+#   0 on success.
 release_base_url() {
   local raw_url="${POSTGRESQL_RELEASES_URL:-https://github.com/theseus-rs/postgresql-binaries}"
   raw_url="${raw_url%/}"
@@ -89,11 +164,28 @@ release_base_url() {
   printf '%s\n' "$raw_url"
 }
 
+# Check whether a version cache directory is ready for reuse.
+#
+# Arguments:
+#   $1 - version directory to inspect.
+#
+# Returns:
+#   0 when the cache is complete, 1 otherwise.
 cache_is_complete() {
   local version_dir="$1"
   [[ -f "${version_dir}/.complete" && -x "${version_dir}/bin/postgres" ]]
 }
 
+# Capture an existing EXIT trap so cleanup can compose with it.
+#
+# Extended detail:
+#   Bash reports trap bodies as shell-quoted strings. Evaluate only that
+#   already-installed handler so the new cleanup can compose with it. This
+#   assumes earlier EXIT handlers came from trusted code; an untrusted
+#   preinstalled EXIT trap would make this evaluation unsafe.
+#
+# Returns:
+#   0 on success.
 capture_existing_exit_handler() {
   local trap_spec
 
@@ -106,13 +198,18 @@ capture_existing_exit_handler() {
   trap_spec="${trap_spec#trap -- }"
   trap_spec="${trap_spec% EXIT}"
 
-  # Bash reports trap bodies as shell-quoted strings. Evaluate only that
-  # already-installed handler so the new cleanup can compose with it. This
-  # assumes earlier EXIT handlers came from trusted code; an untrusted
-  # preinstalled EXIT trap would make this evaluation unsafe.
   eval "PREVIOUS_EXIT_HANDLER=${trap_spec}"
 }
 
+# Run registered cleanup actions before process exit.
+#
+# Extended detail:
+#   Preserves the original exit status while deleting temporary downloads,
+#   releasing the lock directory, and invoking any previously registered EXIT
+#   trap.
+#
+# Returns:
+#   Exits with the original process status.
 run_exit_cleanup() {
   local status=$?
 
@@ -129,6 +226,10 @@ run_exit_cleanup() {
   exit "$status"
 }
 
+# Register the EXIT cleanup trap once.
+#
+# Returns:
+#   0 on success.
 register_exit_cleanup() {
   if [[ "$EXIT_CLEANUP_REGISTERED" == true ]]; then
     return
@@ -139,6 +240,16 @@ register_exit_cleanup() {
   EXIT_CLEANUP_REGISTERED=true
 }
 
+# Read the PID that owns a cache lock directory.
+#
+# Arguments:
+#   $1 - lock directory containing a `pid` file.
+#
+# Outputs:
+#   Writes the PID to stdout.
+#
+# Returns:
+#   0 when a numeric PID is readable, 1 otherwise.
 lock_owner_pid() {
   local lock_dir="$1"
   local pid
@@ -158,6 +269,16 @@ lock_owner_pid() {
   printf '%s\n' "$pid"
 }
 
+# Remove a stale cache lock whose owning process is gone.
+#
+# Arguments:
+#   $1 - lock directory to inspect and remove.
+#
+# Outputs:
+#   Writes a warning to stderr when a stale lock is removed.
+#
+# Returns:
+#   0 when the stale lock is removed, 1 when the lock is active or invalid.
 remove_stale_cache_lock() {
   local lock_dir="$1"
   local owner_pid
@@ -184,6 +305,21 @@ remove_stale_cache_lock() {
   rmdir "$lock_dir" 2>/dev/null
 }
 
+# Acquire the process-local cache lock directory.
+#
+# Extended detail:
+#   Lock contention is handled by polling the directory and removing only
+#   verified stale locks. The loop emits a wait message once and then every
+#   thirty seconds.
+#
+# Arguments:
+#   $1 - cache root directory.
+#
+# Outputs:
+#   Writes wait messages and stale-lock warnings to stderr.
+#
+# Returns:
+#   0 on success, exits non-zero on timeout or lock-owner write failure.
 acquire_cache_lock() {
   local root_dir="$1"
   local lock_dir="${root_dir}/.warm-pg-embedded-cache.lock"
@@ -219,6 +355,21 @@ acquire_cache_lock() {
   register_exit_cleanup
 }
 
+# Atomically install a prepared cache directory.
+#
+# Extended detail:
+#   The previous version directory is moved aside first and restored when the
+#   final install move fails.
+#
+# Arguments:
+#   $1 - prepared directory to install.
+#   $2 - final version directory.
+#
+# Outputs:
+#   Writes rollback warnings or install errors to stderr.
+#
+# Returns:
+#   0 on success, exits non-zero on install failure.
 install_cache_dir() {
   local prepared_dir="$1"
   local version_dir="$2"
@@ -253,6 +404,18 @@ install_cache_dir() {
   fail "failed to install PostgreSQL cache at ${version_dir}"
 }
 
+# Populate the cache from postgresql_embedded's Theseus installation cache.
+#
+# Arguments:
+#   $1 - PostgreSQL version.
+#   $2 - pg-embed-setup-unpriv version directory.
+#
+# Outputs:
+#   Writes copy progress to stderr.
+#
+# Returns:
+#   0 when copied, 1 when no reusable Theseus cache exists, exits non-zero on
+#   copy or completion-marker failures.
 populate_from_theseus_cache() {
   local version="$1"
   local version_dir="$2"
@@ -284,6 +447,18 @@ populate_from_theseus_cache() {
   install_cache_dir "$prepared_dir" "$version_dir"
 }
 
+# Verify a downloaded archive against its SHA-256 sidecar.
+#
+# Arguments:
+#   $1 - download work directory.
+#   $2 - archive asset name.
+#   $3 - platform triple used to select checksum tooling.
+#
+# Outputs:
+#   Writes checksum failure details to stderr.
+#
+# Returns:
+#   0 on success, exits non-zero on checksum failure.
 verify_checksum() {
   local work_dir="$1"
   local asset="$2"
@@ -302,6 +477,20 @@ verify_checksum() {
   fi
 }
 
+# Download, verify, extract, and install a PostgreSQL archive.
+#
+# Arguments:
+#   $1 - PostgreSQL version.
+#   $2 - final version directory.
+#   $3 - platform triple.
+#   $4 - release repository base URL.
+#
+# Outputs:
+#   Writes download progress and failure diagnostics to stderr.
+#
+# Returns:
+#   0 on success, exits non-zero on download, verification, extraction, or
+#   install failure.
 download_and_extract() {
   local version="$1"
   local version_dir="$2"
@@ -314,14 +503,23 @@ download_and_extract() {
   DOWNLOAD_WORK_DIR="$work_dir"
 
   log "downloading ${asset}"
+  local curl_status=0
   curl --fail --location --retry 5 --retry-all-errors \
     --connect-timeout 30 --max-time 600 --speed-time 60 --speed-limit 1024 \
     --output "${work_dir}/${asset}" \
-    "${base_url}/releases/download/${version}/${asset}"
+    "${base_url}/releases/download/${version}/${asset}" || curl_status=$?
+  if ((curl_status != 0)); then
+    fail "download failed for asset '${asset}' from '${base_url}/releases/download/${version}/${asset}' (curl exit ${curl_status}; connect-timeout 30s, max-time 600s, speed-limit 1024 B/s); cache root: ${version_dir%/*}"
+  fi
+
+  curl_status=0
   curl --fail --location --retry 5 --retry-all-errors \
     --connect-timeout 30 --max-time 600 --speed-time 60 --speed-limit 1024 \
     --output "${work_dir}/${asset}.sha256" \
-    "${base_url}/releases/download/${version}/${asset}.sha256"
+    "${base_url}/releases/download/${version}/${asset}.sha256" || curl_status=$?
+  if ((curl_status != 0)); then
+    fail "download failed for asset '${asset}.sha256' from '${base_url}/releases/download/${version}/${asset}.sha256' (curl exit ${curl_status}; connect-timeout 30s, max-time 600s, speed-limit 1024 B/s); cache root: ${version_dir%/*}"
+  fi
 
   verify_checksum "$work_dir" "$asset" "$triple"
 
@@ -346,29 +544,43 @@ download_and_extract() {
   cleanup_download_work_dir
 }
 
+# Warm the embedded PostgreSQL binary cache.
+#
+# Outputs:
+#   Writes cache status and completion diagnostics to stderr.
+#
+# Returns:
+#   0 on success, exits non-zero on cache preparation failure.
 main() {
   local version
   local root_dir
+  local triple
   local version_dir
 
   version="$(normalise_version)"
   root_dir="$(cache_dir)"
+  triple="$(platform_triple)"
   version_dir="${root_dir}/${version}"
   mkdir -p "$root_dir"
   acquire_cache_lock "$root_dir"
 
   if cache_is_complete "$version_dir"; then
     log "cache hit for PostgreSQL ${version} at ${version_dir}"
+    log "completed: platform=${triple} version=${version} cache=${version_dir}"
     return
   fi
 
   if populate_from_theseus_cache "$version" "$version_dir"; then
     log "cache warmed for PostgreSQL ${version} at ${version_dir}"
+    log "completed: platform=${triple} version=${version} cache=${version_dir}"
     return
   fi
 
-  download_and_extract "$version" "$version_dir" "$(platform_triple)" "$(release_base_url)"
+  download_and_extract "$version" "$version_dir" "$triple" "$(release_base_url)"
   log "cache warmed for PostgreSQL ${version} at ${version_dir}"
+  log "completed: platform=${triple} version=${version} cache=${version_dir}"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

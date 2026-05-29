@@ -32,21 +32,27 @@ use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
 const SHARED_CLUSTER_RETRIES: usize = 5;
 const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
 #[cfg(unix)]
+#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
 const SHARED_CLUSTER_LOCK_FILE: &str = "wildside-pg-embedded-shared-cluster.lock";
 
 /// Postmaster PID captured at registration time.
 #[cfg(unix)]
+#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
 static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
 
 /// Data directory for re-reading `postmaster.pid` at exit time.
 #[cfg(unix)]
+#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
 static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 #[cfg(unix)]
+#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
 static SHARED_CLUSTER_PROCESS_LOCK_FD: OnceLock<i32> = OnceLock::new();
 #[cfg(unix)]
+#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
 static SHARED_CLUSTER_PROCESS_LOCK_INIT: Mutex<()> = Mutex::new(());
 
 #[cfg(unix)]
+#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
 fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
     if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
         return Ok(());
@@ -120,8 +126,9 @@ fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
 ///     .expect("temporary database should be created");
 /// println!("connection URL: {}", temp_db.url());
 /// ```
+#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
-    ensure_stable_password();
+    ensure_stable_cluster_environment();
     #[cfg(unix)]
     acquire_shared_cluster_process_lock()?;
     let mut attempt = 1;
@@ -143,15 +150,20 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     }
 }
 
-/// Ensures `PG_PASSWORD` is set to a stable value so the password remains
-/// consistent across process invocations that reuse the same data directory.
+/// Ensures that `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are both set to
+/// stable values before the shared embedded cluster is initialised.
 ///
 /// `postgresql_embedded::Settings::default()` generates a random password on
 /// each call. When the data directory already exists, `setup()` skips `initdb`,
 /// leaving the cluster configured with the *original* password. Without a
 /// stable override, subsequent nextest processes fail with `28P01 password
 /// authentication failed`.
-fn ensure_stable_password() {
+///
+/// `POSTGRESQL_RELEASES_URL` is pinned to the Theseus binaries mirror so that
+/// the binary download source remains stable across crate upgrades and is not
+/// subject to transient GitHub Releases fetch failures (misreported by reqwest
+/// as "error decoding response body").
+fn ensure_stable_cluster_environment() {
     if std::env::var_os("PG_PASSWORD").is_none() {
         // SAFETY: called before the library spawns any threads. The shared
         // cluster singleton serializes access with a `Mutex`, so this runs at
@@ -190,6 +202,7 @@ fn read_postmaster_pid(data_dir: &std::path::Path) -> Option<i32> {
 /// when the on-disk PID still matches the stored value, guarding against PID
 /// reuse.
 #[cfg(unix)]
+#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
 extern "C" fn stop_postgres_on_exit() {
     let stored_pid = PG_POSTMASTER_PID.load(Ordering::Relaxed);
     if stored_pid <= 0 {
@@ -229,6 +242,7 @@ extern "C" fn stop_postgres_on_exit() {
 /// shared cluster is stopped when the test binary exits. Uses
 /// `compare_exchange` to ensure the handler is registered at most once.
 #[cfg(unix)]
+#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
 fn register_process_exit_cleanup(handle: &ClusterHandle) {
     let data_dir = &handle.settings().data_dir;
     let Some(pid) = read_postmaster_pid(data_dir) else {
@@ -299,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn ensure_stable_password_does_not_overwrite_existing_value() {
+    fn ensure_stable_cluster_environment_does_not_overwrite_existing_values() {
         let _guard = env_lock::lock_env([
             ("PG_PASSWORD", Some("custom_value")),
             (
@@ -307,27 +321,27 @@ mod tests {
                 Some("https://example.invalid/postgresql-binaries"),
             ),
         ]);
-        super::ensure_stable_password();
+        super::ensure_stable_cluster_environment();
         assert_eq!(
             std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
             "custom_value",
-            "ensure_stable_password should not overwrite an existing PG_PASSWORD"
+            "ensure_stable_cluster_environment should not overwrite an existing PG_PASSWORD"
         );
         assert_eq!(
             std::env::var("POSTGRESQL_RELEASES_URL")
                 .expect("POSTGRESQL_RELEASES_URL should be set"),
             "https://example.invalid/postgresql-binaries",
-            "ensure_stable_password should not overwrite an existing release URL"
+            "ensure_stable_cluster_environment should not overwrite an existing release URL"
         );
     }
 
     #[test]
-    fn ensure_stable_password_sets_release_url_when_missing() {
+    fn ensure_stable_cluster_environment_sets_release_url_when_missing() {
         let _guard = env_lock::lock_env([
             ("PG_PASSWORD", Some("custom_value")),
             ("POSTGRESQL_RELEASES_URL", None),
         ]);
-        super::ensure_stable_password();
+        super::ensure_stable_cluster_environment();
         assert_eq!(
             std::env::var("POSTGRESQL_RELEASES_URL")
                 .expect("POSTGRESQL_RELEASES_URL should be set"),
@@ -336,22 +350,17 @@ mod tests {
     }
 
     #[test]
-    fn retry_helpers_are_linked() {
-        let _ = SHARED_CLUSTER_RETRIES;
-        let _ = SHARED_CLUSTER_RETRY_DELAY;
-        let _ = shared_cluster_handle as fn() -> BootstrapResult<&'static ClusterHandle>;
-    }
+    fn retry_budget_is_within_expected_bounds() {
+        let retry_count = std::hint::black_box(SHARED_CLUSTER_RETRIES);
+        let retry_delay = std::hint::black_box(SHARED_CLUSTER_RETRY_DELAY);
 
-    #[cfg(unix)]
-    #[test]
-    fn unix_cleanup_helpers_are_linked() {
-        let _ = SHARED_CLUSTER_LOCK_FILE;
-        let _ = &PG_POSTMASTER_PID;
-        let _ = &PG_DATA_DIR;
-        let _ = &SHARED_CLUSTER_PROCESS_LOCK_FD;
-        let _ = &SHARED_CLUSTER_PROCESS_LOCK_INIT;
-        let _ = acquire_shared_cluster_process_lock as fn() -> BootstrapResult<()>;
-        let _ = stop_postgres_on_exit as extern "C" fn();
-        let _ = register_process_exit_cleanup as fn(&ClusterHandle);
+        assert!(
+            (3..=10).contains(&retry_count),
+            "retry count should be a small positive integer, got {retry_count}"
+        );
+        assert!(
+            retry_delay >= Duration::from_millis(100) && retry_delay <= Duration::from_secs(5),
+            "retry delay should be between 100 ms and 5 s, got {retry_delay:?}"
+        );
     }
 }
