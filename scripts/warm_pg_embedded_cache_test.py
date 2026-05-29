@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shutil
 import subprocess
 import tarfile
 from pathlib import Path
@@ -70,7 +69,10 @@ def test_normalise_version_rejects_non_numeric_values() -> None:
         env={"PG_EMBEDDED_VERSION": "", "POSTGRESQL_VERSION": "main"},
     )
 
-    assert result.returncode != 0
+    assert result.returncode != 0, (
+        f"normalise_version should reject non-numeric value; "
+        f"got returncode {result.returncode}, stderr: {result.stderr}"
+    )
     assert "expected an exact PostgreSQL version" in result.stderr
 
 

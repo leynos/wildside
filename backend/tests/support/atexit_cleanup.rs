@@ -354,13 +354,14 @@ mod tests {
         let retry_count = std::hint::black_box(SHARED_CLUSTER_RETRIES);
         let retry_delay = std::hint::black_box(SHARED_CLUSTER_RETRY_DELAY);
 
-        assert!(
-            (3..=10).contains(&retry_count),
-            "retry count should be a small positive integer, got {retry_count}"
+        assert_eq!(
+            retry_count, 5,
+            "SHARED_CLUSTER_RETRIES must equal 5; got {retry_count}"
         );
-        assert!(
-            retry_delay >= Duration::from_millis(100) && retry_delay <= Duration::from_secs(5),
-            "retry delay should be between 100 ms and 5 s, got {retry_delay:?}"
+        assert_eq!(
+            retry_delay,
+            Duration::from_millis(500),
+            "SHARED_CLUSTER_RETRY_DELAY must equal 500 ms; got {retry_delay:?}"
         );
     }
 }
