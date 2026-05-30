@@ -17,9 +17,16 @@ def test_validate_port_accepts_valid_tcp_ports(raw_value: str) -> None:
     assert validate_port(raw_value, default=8088, name="WILDSIDE_K3D_PORT") == int(raw_value)
 
 
-@pytest.mark.parametrize("raw_value", ["0", "65536", "not-a-port"])
-def test_validate_port_rejects_invalid_values(raw_value: str) -> None:
-    with pytest.raises(LocalK8sError):
+@pytest.mark.parametrize(
+    ("raw_value", "message_pattern"),
+    [
+        ("0", r"must be between 1 and 65535"),
+        ("65536", r"must be between 1 and 65535"),
+        ("not-a-port", r"must be an integer TCP port"),
+    ],
+)
+def test_validate_port_rejects_invalid_values(raw_value: str, message_pattern: str) -> None:
+    with pytest.raises(LocalK8sError, match=message_pattern):
         validate_port(raw_value, default=8088, name="WILDSIDE_K3D_PORT")
 
 
