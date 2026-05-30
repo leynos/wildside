@@ -60,7 +60,10 @@ def print_cluster_status(config: PreviewConfig) -> None:
 
 def _cluster_exists(cluster_name: str) -> bool:
     result = run("k3d", ["cluster", "list", "--output", "json"])
-    clusters = json.loads(result.stdout or "[]")
+    try:
+        clusters = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError as exc:
+        raise LocalK8sError("unexpected k3d cluster list JSON payload") from exc
     if not isinstance(clusters, list):
         raise LocalK8sError("unexpected k3d cluster list JSON shape")
     return any(isinstance(cluster, dict) and cluster.get("name") == cluster_name for cluster in clusters)
