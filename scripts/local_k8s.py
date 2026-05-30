@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from cyclopts import App
 
 from local_k8s.config import PreviewConfig
@@ -20,10 +22,9 @@ from local_k8s.validation import LocalK8sError
 app = App(help="Manage a local k3d Wildside preview environment.")
 
 
-def _run(operation: str, func: object) -> None:
+def _run(operation: str, func: Callable[[], None]) -> None:
     try:
-        if callable(func):
-            func()
+        func()
     except LocalK8sError as exc:
         raise SystemExit(f"{operation} failed: {exc}") from exc
 
