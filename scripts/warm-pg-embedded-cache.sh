@@ -17,6 +17,7 @@ CACHE_LOCK_DIR=''
 DOWNLOAD_WORK_DIR=''
 EXIT_CLEANUP_REGISTERED=false
 PREVIOUS_EXIT_HANDLER=''
+CURRENT_VERSION=''
 
 # Write an informational message to stderr.
 #
@@ -74,6 +75,9 @@ step_summary() {
 # Returns:
 #   Does not return; exits with status 1.
 fail() {
+  if [[ -n "${CURRENT_VERSION:-}" ]]; then
+    step_summary "❌ **PostgreSQL ${CURRENT_VERSION} cache warm failed** — see job log for details"
+  fi
   printf '[pg-embedded-cache] error: %s\n' "$*" >&2
   exit 1
 }
@@ -595,10 +599,8 @@ main() {
     return
   fi
 
-  if ! download_and_extract "$version" "$version_dir" "$triple" "$(release_base_url)"; then
-    step_summary "❌ **PostgreSQL ${version} cache warm failed** — see job log for details"
-    fail "cache preparation failed for PostgreSQL ${version}"
-  fi
+  CURRENT_VERSION="${version}"
+  download_and_extract "$version" "$version_dir" "$triple" "$(release_base_url)"
   log "cache warmed for PostgreSQL ${version} at ${version_dir}"
   step_summary "✅ **PostgreSQL ${version} cache warmed** — platform \`$(platform_triple)\`, root \`${version_dir}\`"
   log "completed: platform=${triple} version=${version} cache=${version_dir}"

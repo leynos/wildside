@@ -139,6 +139,10 @@ def test_normalise_version_rejects_all_non_numeric_versions(
         f"normalise_version should reject non-numeric version '{version}'; "
         f"got returncode {result.returncode}, stdout: {result.stdout!r}"
     )
+    assert "expected an exact PostgreSQL version" in result.stderr, (
+        f"normalise_version should reject '{version}' with the expected message; "
+        f"stderr: {result.stderr}"
+    )
 
 
 def test_acquire_cache_lock_removes_stale_lock(tmp_path: Path) -> None:
@@ -400,12 +404,11 @@ def test_main_warms_cache_from_local_fixtures(
     fixture_dir = tmp_path / "fixtures"
     fixture_dir.mkdir()
     version = "16.10.0"
-    triple = subprocess.run(
-        ["bash", "-c", f"source {SCRIPT_PATH} && platform_triple"],
-        text=True,
-        capture_output=True,
-        check=False,
-    ).stdout.strip() or "x86_64-unknown-linux-gnu"
+    triple_result = run_bash("platform_triple")
+    assert triple_result.returncode == 0, (
+        f"platform_triple failed; stderr: {triple_result.stderr}"
+    )
+    triple = triple_result.stdout.strip()
     asset = fixture_dir / f"postgresql-{version}-{triple}.tar.gz"
     write_archive(asset, include_postgres=True)
     write_checksum(asset)

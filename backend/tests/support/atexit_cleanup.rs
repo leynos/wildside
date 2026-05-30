@@ -32,27 +32,27 @@ use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
 const SHARED_CLUSTER_RETRIES: usize = 5;
 const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
 #[cfg(unix)]
-#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
+#[allow(dead_code, reason = "used by integration test binaries via support::atexit_cleanup; tracked in PR #355")]
 const SHARED_CLUSTER_LOCK_FILE: &str = "wildside-pg-embedded-shared-cluster.lock";
 
 /// Postmaster PID captured at registration time.
 #[cfg(unix)]
-#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
+#[allow(dead_code, reason = "used by integration test binaries via support::atexit_cleanup; tracked in PR #355")]
 static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
 
 /// Data directory for re-reading `postmaster.pid` at exit time.
 #[cfg(unix)]
-#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
+#[allow(dead_code, reason = "used by integration test binaries via support::atexit_cleanup; tracked in PR #355")]
 static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 #[cfg(unix)]
-#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
+#[allow(dead_code, reason = "used by integration test binaries via support::atexit_cleanup; tracked in PR #355")]
 static SHARED_CLUSTER_PROCESS_LOCK_FD: OnceLock<i32> = OnceLock::new();
 #[cfg(unix)]
-#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
+#[allow(dead_code, reason = "used by integration test binaries via support::atexit_cleanup; tracked in PR #355")]
 static SHARED_CLUSTER_PROCESS_LOCK_INIT: Mutex<()> = Mutex::new(());
 
 #[cfg(unix)]
-#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
+#[allow(dead_code, reason = "used by integration test binaries via support::atexit_cleanup; tracked in PR #355")]
 fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
     if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
         return Ok(());
@@ -138,7 +138,7 @@ fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
 ///     .expect("temporary database should be created");
 /// println!("connection URL: {}", temp_db.url());
 /// ```
-#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
+#[allow(dead_code, reason = "used by integration test binaries via support::atexit_cleanup; tracked in PR #355")]
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     ensure_stable_cluster_environment();
     #[cfg(unix)]
@@ -188,7 +188,7 @@ fn ensure_stable_cluster_environment() {
         // Pin to Theseus binaries to avoid transient fetch failures in CI that
         // reqwest misreports as "error decoding response body".
         // SAFETY: called before the library spawns any threads. The shared-
-        // cluster singleton serialises access with a Mutex, so this runs at
+        // cluster singleton serializes access with a Mutex, so this runs at
         // most once per process.
         unsafe {
             std::env::set_var(
@@ -214,7 +214,7 @@ fn read_postmaster_pid(data_dir: &std::path::Path) -> Option<i32> {
 /// when the on-disk PID still matches the stored value, guarding against PID
 /// reuse.
 #[cfg(unix)]
-#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
+#[allow(dead_code, reason = "used by integration test binaries via support::atexit_cleanup; tracked in PR #355")]
 extern "C" fn stop_postgres_on_exit() {
     let stored_pid = PG_POSTMASTER_PID.load(Ordering::Relaxed);
     if stored_pid <= 0 {
@@ -254,7 +254,7 @@ extern "C" fn stop_postgres_on_exit() {
 /// shared cluster is stopped when the test binary exits. Uses
 /// `compare_exchange` to ensure the handler is registered at most once.
 #[cfg(unix)]
-#[allow(dead_code)] // used by integration test binaries via support::atexit_cleanup
+#[allow(dead_code, reason = "used by integration test binaries via support::atexit_cleanup; tracked in PR #355")]
 fn register_process_exit_cleanup(handle: &ClusterHandle) {
     let data_dir = &handle.settings().data_dir;
     let Some(pid) = read_postmaster_pid(data_dir) else {
