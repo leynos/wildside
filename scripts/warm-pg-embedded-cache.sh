@@ -46,6 +46,23 @@ warn() {
   printf '[pg-embedded-cache] warning: %s\n' "$*" >&2
 }
 
+# Append a line to the GitHub Actions step summary when running in CI.
+#
+# Arguments:
+#   $1 - Markdown string to append.
+#
+# Outputs:
+#   Appends to $GITHUB_STEP_SUMMARY when set; silent otherwise.
+#
+# Returns:
+#   0 always.
+step_summary() {
+    local line="${1}"
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+        echo "${line}" >> "${GITHUB_STEP_SUMMARY}"
+    fi
+}
+
 # Write an error message to stderr and terminate.
 #
 # Arguments:
@@ -566,18 +583,24 @@ main() {
 
   if cache_is_complete "$version_dir"; then
     log "cache hit for PostgreSQL ${version} at ${version_dir}"
+    step_summary "✅ **PostgreSQL ${version} cache hit** — \`${version_dir}\`"
     log "completed: platform=${triple} version=${version} cache=${version_dir}"
     return
   fi
 
   if populate_from_theseus_cache "$version" "$version_dir"; then
     log "cache warmed for PostgreSQL ${version} at ${version_dir}"
+    step_summary "✅ **PostgreSQL ${version} cache warmed** — platform \`$(platform_triple)\`, root \`${version_dir}\`"
     log "completed: platform=${triple} version=${version} cache=${version_dir}"
     return
   fi
 
-  download_and_extract "$version" "$version_dir" "$triple" "$(release_base_url)"
+  if ! download_and_extract "$version" "$version_dir" "$triple" "$(release_base_url)"; then
+    step_summary "❌ **PostgreSQL ${version} cache warm failed** — see job log for details"
+    fail "cache preparation failed for PostgreSQL ${version}"
+  fi
   log "cache warmed for PostgreSQL ${version} at ${version_dir}"
+  step_summary "✅ **PostgreSQL ${version} cache warmed** — platform \`$(platform_triple)\`, root \`${version_dir}\`"
   log "completed: platform=${triple} version=${version} cache=${version_dir}"
 }
 

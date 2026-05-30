@@ -116,6 +116,18 @@ fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
 /// This is a thin wrapper around the library's `shared_cluster_handle()` that
 /// adds cross-process cleanup for nextest compatibility.
 ///
+/// # Failure caching
+///
+/// `pg_embedded_setup_unpriv::test_support::shared_cluster_handle()` stores
+/// its result in a library-internal `OnceLock`. Once a failure is recorded,
+/// every subsequent call within the same process returns the same cached error
+/// immediately — the retry loop below does **not** re-attempt the download.
+/// The retries exist solely to handle the race window where a parallel test
+/// thread's first-use bootstrap is still in progress. They provide no
+/// protection against a failed bootstrap; for that, ensure the binary cache
+/// is warm before the test process starts (see CI workflow and
+/// `scripts/warm-pg-embedded-cache.sh`).
+///
 /// # Examples
 ///
 /// ```rust,ignore

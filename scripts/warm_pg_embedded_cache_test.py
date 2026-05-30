@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run python
 # /// script
 # requires-python = ">=3.13"
-# dependencies = ["pytest"]
+# dependencies = ["pytest", "hypothesis"]
 # ///
 """Tests for the embedded PostgreSQL cache warm-up shell script."""
 
@@ -13,6 +13,8 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+from hypothesis import given, settings
+from hypothesis import strategies as st
 import pytest
 
 
@@ -84,6 +86,59 @@ def test_normalise_version_prefers_pg_embedded_version() -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "16.11.0"
+
+
+@given(
+    major=st.integers(min_value=1, max_value=99),
+    minor=st.integers(min_value=0, max_value=99),
+    patch=st.integers(min_value=0, max_value=99),
+)
+@settings(max_examples=50)
+def test_normalise_version_accepts_all_valid_numeric_versions(
+    major: int, minor: int, patch: int
+) -> None:
+    """normalise_version accepts any dot-separated numeric triple."""
+
+    version = f"{major}.{minor}.{patch}"
+    result = run_bash(
+        "normalise_version",
+        env={"POSTGRESQL_VERSION": version},
+    )
+
+    assert result.returncode == 0, (
+        f"normalise_version rejected valid version '{version}'; stderr: {result.stderr}"
+    )
+    assert result.stdout.strip() == version, (
+        f"normalise_version returned '{result.stdout.strip()}' for input '{version}'"
+    )
+
+
+@given(
+    version=st.one_of(
+        st.just("main"),
+        st.just("latest"),
+        st.just("16.a.0"),
+        st.just("alpha"),
+        st.from_regex(r"[^0-9.][^\s]*", fullmatch=True).filter(
+            lambda s: "\x00" not in s and s.strip() != ""
+        ),
+    )
+)
+@settings(max_examples=30)
+def test_normalise_version_rejects_all_non_numeric_versions(
+    version: str,
+) -> None:
+    """normalise_version rejects every non-numeric or non-exact version string."""
+
+    result = run_bash(
+        "normalise_version",
+        env={"POSTGRESQL_VERSION": version},
+    )
+
+    assert result.returncode != 0, (
+        f"normalise_version should reject non-numeric version '{version}'; "
+        f"got returncode {result.returncode}, stdout: {result.stdout!r}"
+    )
 
 
 def test_acquire_cache_lock_removes_stale_lock(tmp_path: Path) -> None:
@@ -328,3 +383,50 @@ def test_install_cache_dir_restores_previous_directory_when_final_mv_fails(
     assert (version_dir / "old").is_file()
     assert not (version_dir / "new").exists()
     assert not prepared_dir.exists()
+
+
+# NOTE: An end-to-end test that exercises the actual GitHub Releases download
+# boundary is infeasible in the unit test suite: it would require network access
+# to https://github.com/theseus-rs/postgresql-binaries/releases, introduce
+# non-deterministic latency, and duplicate the CI warm-up step itself.
+# The test below validates main() by stubbing curl with a local fixture.
+
+
+def test_main_warms_cache_from_local_fixtures(
+    tmp_path: Path, curl_stub: Path
+) -> None:
+    """main() installs a complete cache entry when given a stubbed curl."""
+
+    fixture_dir = tmp_path / "fixtures"
+    fixture_dir.mkdir()
+    version = "16.10.0"
+    triple = subprocess.run(
+        ["bash", "-c", f"source {SCRIPT_PATH} && platform_triple"],
+        text=True,
+        capture_output=True,
+        check=False,
+    ).stdout.strip() or "x86_64-unknown-linux-gnu"
+    asset = fixture_dir / f"postgresql-{version}-{triple}.tar.gz"
+    write_archive(asset, include_postgres=True)
+    write_checksum(asset)
+    cache_dir = tmp_path / "cache"
+    result = run_bash(
+        "main",
+        env={
+            "POSTGRESQL_VERSION": version,
+            "PG_BINARY_CACHE_DIR": str(cache_dir),
+            "POSTGRESQL_RELEASES_URL": "https://example.invalid/theseus",
+            "CURL_FIXTURE_DIR": str(fixture_dir),
+            "PATH": f"{curl_stub}:{os.environ['PATH']}",
+        },
+        timeout=15.0,
+    )
+
+    version_dir = cache_dir / version
+    assert result.returncode == 0, result.stderr
+    assert (version_dir / ".complete").is_file(), (
+        f"expected .complete marker in {version_dir}; stderr: {result.stderr}"
+    )
+    assert os.access(version_dir / "bin" / "postgres", os.X_OK), (
+        f"expected executable bin/postgres in {version_dir}"
+    )
