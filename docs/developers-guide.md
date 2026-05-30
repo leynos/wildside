@@ -493,11 +493,6 @@ Related domain helpers:
 - No feature flags required; BDD tests are in the `tests/` integration
   harness and run unconditionally with `cargo test`
 
-To run BDD tests locally:
-
-```bash
-```
-
 ### RedisTestServer harness
 
 Integration tests use `RedisTestServer` from `backend/src/test_support/redis.rs`:
@@ -572,7 +567,7 @@ The queue adapter requires:
 - `apalis-postgres` – PostgreSQL storage backend for Apalis
 - `sqlx` (features: `postgres`, `runtime-tokio-rustls`) – Async PostgreSQL
   pool used by `ApalisPostgresProvider`
-- `serde` / `serde_json` – Payload serialisation
+- `serde` / `serde_json` – Payload serialization
 
 ## Queue adapter testing
 
@@ -746,7 +741,7 @@ The queue adapter requires:
 - `apalis-postgres` – PostgreSQL storage backend for Apalis
 - `sqlx` (features: `postgres`, `runtime-tokio-rustls`) – Async PostgreSQL
   pool used by `ApalisPostgresProvider`
-- `serde` / `serde_json` – Payload serialisation
+- `serde` / `serde_json` – Payload serialization
 
 #### Test infrastructure
 

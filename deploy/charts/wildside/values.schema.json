@@ -160,12 +160,12 @@
             "type": "object",
             "required": ["secretKey", "remoteRef"],
             "properties": {
-              "secretKey": { "type": "string" },
+              "secretKey": { "type": "string", "minLength": 1 },
               "remoteRef": {
                 "type": "object",
                 "required": ["key"],
                 "properties": {
-                  "key": { "type": "string" },
+                  "key": { "type": "string", "minLength": 1 },
                   "property": { "type": "string" },
                   "metadataPolicy": { "type": "string" },
                   "conversionStrategy": { "type": "string" },
