@@ -8,7 +8,23 @@ from .validation import require_tools
 
 
 def ensure_namespace(config: PreviewConfig) -> None:
-    """Create the preview namespace when it does not already exist."""
+    """Create the preview namespace when absent.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Preview configuration carrying the target namespace.
+
+    Returns
+    -------
+    None
+        Mutates cluster state only when the namespace is missing.
+
+    Raises
+    ------
+    LocalK8sError
+        Raised when ``kubectl`` is unavailable or command execution fails.
+    """
 
     require_tools(("kubectl",))
     result = run("kubectl", ["get", "namespace", config.namespace, "--ignore-not-found"])
@@ -27,7 +43,23 @@ def _helm_fullname(config: PreviewConfig) -> str:
 
 
 def print_kubernetes_status(config: PreviewConfig) -> None:
-    """Print namespace, service, and pod status for the preview release."""
+    """Print Kubernetes status for the preview release.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Preview configuration containing the namespace and Helm release name.
+
+    Returns
+    -------
+    None
+        Status is printed to standard output.
+
+    Raises
+    ------
+    LocalK8sError
+        Raised when ``kubectl`` is unavailable or command execution fails.
+    """
 
     require_tools(("kubectl",))
     print(f"namespace: {config.namespace}")
