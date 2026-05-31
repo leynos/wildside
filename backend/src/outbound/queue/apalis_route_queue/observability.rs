@@ -1,6 +1,7 @@
 //! Queue observability instrumentation for enqueue operations.
 
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts};
@@ -15,6 +16,7 @@ struct QueueMetrics {
 }
 
 static OBSERVABILITY: OnceLock<Result<QueueMetrics, String>> = OnceLock::new();
+static METRICS_INIT_ERROR_REPORTED: AtomicBool = AtomicBool::new(false);
 
 impl QueueMetrics {
     fn new() -> Result<Self, String> {
@@ -59,7 +61,12 @@ pub(super) fn observe_enqueue(outcome: &str, latency: Duration) {
                 .observe(latency.as_secs_f64());
         }
         Err(error) => {
-            warn!(error = %error, outcome, "queue observability metrics unavailable");
+            if METRICS_INIT_ERROR_REPORTED
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                warn!(error = %error, outcome, "queue observability metrics unavailable");
+            }
         }
     }
 }

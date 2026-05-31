@@ -19,7 +19,7 @@ fn main() -> io::Result<()> {
     let stdout = io::stdout();
     let mut out = BufWriter::new(stdout.lock());
     to_writer_pretty(&mut out, &doc)
-        .map_err(|e| io::Error::other(format!("serialising OpenAPI document: {e}")))?;
+        .map_err(|e| io::Error::other(format!("serializing OpenAPI document: {e}")))?;
     writeln!(out)?;
     Ok(())
 }

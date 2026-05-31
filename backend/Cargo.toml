@@ -85,6 +85,7 @@ backend = { path = ".", features = ["test-support"] }
 example-data = { path = "../crates/example-data" }
 mockall = "0.13"
 mockable = { version = "0.3", features = ["clock", "mock"] }
+proptest = "1"
 actix-rt = "2"
 # Actix uses actix-http types for request/response plumbing in test utilities.
 actix-http = "3"
@@ -103,12 +104,12 @@ libc = "0.2"
 tempfile = "3"
 
 [[bin]]
-name = "openapi-dump"
-path = "src/bin/openapi_dump.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
-name = "er-snapshots"
-path = "src/bin/er_snapshots.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
 name = "ingest-osm"

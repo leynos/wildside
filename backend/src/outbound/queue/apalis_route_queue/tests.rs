@@ -2,13 +2,87 @@
 
 use super::*;
 use crate::outbound::queue::test_helpers::{FailingQueueProvider, FakeQueueProvider};
+use proptest::prelude::*;
 use rstest::rstest;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 
 /// Test plan type for unit tests.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TestPlan {
     name: String,
+}
+
+async fn assert_plan_round_trips(plan: TestPlan) {
+    let fake_provider = FakeQueueProvider::new();
+    let queue: GenericApalisRouteQueue<TestPlan, _> =
+        GenericApalisRouteQueue::new(fake_provider.clone());
+
+    let enqueue_result = queue.enqueue(&plan).await;
+    assert!(
+        enqueue_result.is_ok(),
+        "enqueue should succeed with fake provider: {enqueue_result:?}"
+    );
+
+    let pushed_jobs = match fake_provider.pushed_jobs() {
+        Ok(pushed_jobs) => pushed_jobs,
+        Err(error) => panic!("should be able to access pushed jobs: {error}"),
+    };
+    assert_eq!(pushed_jobs.len(), 1, "exactly one job should be pushed");
+
+    let deserialized: TestPlan = match serde_json::from_value(pushed_jobs[0].clone()) {
+        Ok(plan) => plan,
+        Err(error) => panic!("pushed payload should be valid JSON: {error}"),
+    };
+    assert_eq!(deserialized, plan, "deserialized plan should match");
+}
+
+async fn assert_failed_serialization_pushes_no_jobs(message: String) {
+    let fake_provider = FakeQueueProvider::new();
+    let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
+        GenericApalisRouteQueue::new(fake_provider.clone());
+
+    let result = queue.enqueue(&FailingSerializePlan { message }).await;
+    assert!(
+        result.is_err(),
+        "serialization failure should reject enqueue"
+    );
+
+    let pushed_jobs = match fake_provider.pushed_jobs() {
+        Ok(pushed_jobs) => pushed_jobs,
+        Err(error) => panic!("should be able to access pushed jobs: {error}"),
+    };
+    assert_eq!(
+        pushed_jobs.len(),
+        0,
+        "no jobs should be pushed when serialization fails"
+    );
+}
+
+fn block_on_property<F>(future: F)
+where
+    F: Future<Output = ()>,
+{
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => panic!("test runtime should start: {error}"),
+    };
+    runtime.block_on(future);
+}
+
+proptest! {
+    #[test]
+    fn apalis_queue_round_trips_arbitrary_plan_names(name in "\\PC*") {
+        block_on_property(assert_plan_round_trips(TestPlan { name }));
+    }
+
+    #[test]
+    fn apalis_queue_failed_serialization_pushes_no_jobs(message in "\\PC*") {
+        block_on_property(assert_failed_serialization_pushes_no_jobs(message));
+    }
 }
 
 #[rstest]
@@ -108,14 +182,16 @@ async fn apalis_queue_enqueues_multiple_plans() {
 
 /// Test plan type that always fails serialization.
 #[derive(Debug, Clone)]
-struct FailingSerializePlan;
+struct FailingSerializePlan {
+    message: String,
+}
 
 impl Serialize for FailingSerializePlan {
     fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        Err(serde::ser::Error::custom("simulated serialization failure"))
+        Err(serde::ser::Error::custom(&self.message))
     }
 }
 
@@ -126,7 +202,9 @@ async fn apalis_queue_maps_serialization_failure_to_rejected() {
     let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
         GenericApalisRouteQueue::new(fake_provider.clone());
 
-    let plan = FailingSerializePlan;
+    let plan = FailingSerializePlan {
+        message: "simulated serialization failure".to_string(),
+    };
 
     let result = queue.enqueue(&plan).await;
     assert!(
