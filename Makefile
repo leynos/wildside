@@ -114,6 +114,8 @@ lint-rust:
 lint-frontend:
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 
+
+.PHONY: lint-specs
 lint-specs: lint-asyncapi lint-openapi
 
 lint-architecture:
@@ -175,6 +177,8 @@ PG_WORKER_INSTALL_ROOT ?= $(CURDIR)/target/pg-worker-root
 PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.1
 NEXTEST_TEST_THREADS ?= 1
 
+
+.PHONY: test
 test: test-rust test-frontend
 
 test-rust: workspace-sync prepare-pg-worker
@@ -214,6 +218,8 @@ PNPM_LOCK_HASH := $(shell \
   fi)
 NODE_MODULES_STAMP := node_modules/.pnpm-install-$(PNPM_LOCK_HASH)
 
+
+.PHONY: deps
 deps: $(NODE_MODULES_STAMP)
 
 $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
@@ -224,6 +230,8 @@ $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
 
 typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,--noEmit -p $$dir/tsconfig.json,typescript@$(TSC_VERSION)) || exit 1; done
 
+
+.PHONY: audit
 audit: audit-node rust-audit
 
 audit-node: deps
