@@ -251,7 +251,6 @@ test usage remains coherent:
 - Use `CleanupMode::None` only for explicit debugging sessions where retained
   files are required; keep deterministic cleanup defaults for normal runs.
 
-
 ### Embedded PostgreSQL CI bootstrap stability
 
 Continuous Integration (CI) warms the `pg-embed-setup-unpriv` binary cache with
