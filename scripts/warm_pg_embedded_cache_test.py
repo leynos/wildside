@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shlex
 import subprocess
 import tarfile
 from pathlib import Path
@@ -571,8 +572,9 @@ def test_populate_from_theseus_cache_copies_when_source_complete(
 
     dest_dir = tmp_path / "cache" / version
     dest_dir.parent.mkdir()
+    quoted_dest_dir = shlex.quote(str(dest_dir))
     result = run_bash(
-        f"populate_from_theseus_cache {version} {dest_dir}",
+        f"populate_from_theseus_cache {version} {quoted_dest_dir}",
         env={"HOME": str(tmp_path)},
     )
     assert result.returncode == 0, result_diagnostics(result)
@@ -589,8 +591,9 @@ def test_populate_from_theseus_cache_skips_when_source_missing(
     dest_dir = tmp_path / "cache" / version
     theseus_root = tmp_path / ".theseus" / "postgresql"
     theseus_root.mkdir(parents=True)
+    quoted_dest_dir = shlex.quote(str(dest_dir))
     result = run_bash(
-        f"populate_from_theseus_cache {version} {dest_dir}",
+        f"populate_from_theseus_cache {version} {quoted_dest_dir}",
         env={"HOME": str(tmp_path)},
     )
     assert result.returncode != 0, result_diagnostics(result)
