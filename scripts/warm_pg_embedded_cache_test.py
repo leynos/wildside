@@ -572,7 +572,7 @@ def test_populate_from_theseus_cache_copies_when_source_complete(
     dest_dir = tmp_path / "cache" / version
     dest_dir.parent.mkdir()
     result = run_bash(
-        f"populate_from_theseus_cache {version} {dest_dir} {theseus_dir.parent.parent}",
+        f"populate_from_theseus_cache {version} {dest_dir}",
         env={"HOME": str(tmp_path)},
     )
     assert result.returncode == 0, result_diagnostics(result)
@@ -590,7 +590,7 @@ def test_populate_from_theseus_cache_skips_when_source_missing(
     theseus_root = tmp_path / ".theseus" / "postgresql"
     theseus_root.mkdir(parents=True)
     result = run_bash(
-        f"populate_from_theseus_cache {version} {dest_dir} {theseus_root.parent}",
+        f"populate_from_theseus_cache {version} {dest_dir}",
         env={"HOME": str(tmp_path)},
     )
     assert result.returncode != 0, result_diagnostics(result)
