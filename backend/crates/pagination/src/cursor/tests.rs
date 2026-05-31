@@ -153,6 +153,20 @@ fn invalid_direction_value_returns_unsupported_direction_error() {
     ));
 }
 
+#[test]
+fn non_string_direction_value_returns_unsupported_direction_error() {
+    let invalid_cursor_json =
+        r#"{"key":{"created_at":"2026-03-22T10:30:00Z","id":"test-id"},"dir":123}"#;
+    let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(invalid_cursor_json);
+
+    let result = Cursor::<FixtureKey>::decode(&encoded);
+
+    assert!(matches!(
+        result,
+        Err(CursorError::UnsupportedDirection { direction }) if direction == "123"
+    ));
+}
+
 #[rstest]
 #[case(Direction::Next)]
 #[case(Direction::Prev)]

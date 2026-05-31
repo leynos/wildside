@@ -11,13 +11,13 @@ Status: IN PROGRESS
 
 Roadmap task 4.2.2 requires the backend to surface pagination-aware repository
 errors, such as malformed cursor tokens and unsupported pagination direction,
-as HTTP `400 Bad Request` responses instead of treating them as generic
-persistence failures. After this work, a caller of `GET /api/v1/users` can pass
-an invalid pagination cursor and receive the existing Wildside error envelope
-with a stable invalid-request code, a `details.field` value of `cursor`, and a
-machine-readable pagination detail code. The same HTTP behaviour must be
-preserved when a repository or query adapter returns a semantic pagination
-failure from below the HTTP parser.
+as Hypertext Transfer Protocol (HTTP) `400 Bad Request` responses instead of
+treating them as generic persistence failures. After this work, a caller of
+`GET /api/v1/users` can pass an invalid pagination cursor and receive the
+existing Wildside error envelope with a stable invalid-request code, a
+`details.field` value of `cursor`, and a machine-readable pagination detail
+code. The same HTTP behaviour must be preserved when a repository or query
+adapter returns a semantic pagination failure from below the HTTP parser.
 
 This plan is pre-implementation only. Do not implement it until the user
 explicitly approves this ExecPlan. The implementation will be considered
@@ -76,7 +76,8 @@ errors.
 - Scope: stop and escalate if the implementation touches more than 18 files or
   exceeds roughly 700 net source lines excluding generated OpenAPI output,
   Gherkin feature text, and this ExecPlan.
-- Public API: stop and escalate before changing the public JSON shape of
+- Public application programming interface (API): stop and escalate before
+  changing the public JSON shape of
   successful `GET /api/v1/users` responses or changing the top-level Wildside
   error envelope fields.
 - Cursor compatibility: stop and escalate if the cursor crate change would make
@@ -215,6 +216,10 @@ errors.
 - [x] Roadmap item 4.2.2 marked done after all gates pass.
 - [x] Draft implementation pull request opened or updated after approval work
   lands.
+- [x] 2026-05-31: Addressed review comments by replacing the cursor decode
+  JSON value round trip with a wire-struct decode path, adding non-string
+  direction regression coverage, and centralizing pagination cursor error
+  envelope construction.
 
 ## Surprises & Discoveries
 
@@ -241,14 +246,15 @@ errors.
   Impact: The implementation should align adapter mappings with the existing
   crate contract rather than inventing a new policy.
 
-- Observation: Unsupported direction can be classified before deserializing a
-  typed `Cursor<Key>` by first parsing the decoded payload as
-  `serde_json::Value` and inspecting the optional `dir` field.
-  Evidence: `backend/crates/pagination/src/cursor.rs::decode` now rejects
-  unsupported `dir` values before calling `serde_json::from_value`.
-  Impact: Legacy cursors with no `dir`, and supported `Next`/`Prev` cursors,
-  keep their existing behaviour while unsupported direction receives a stable
-  client-facing error code.
+- Observation: Unsupported direction can be classified without deserializing
+  the whole cursor payload twice by using an internal cursor wire struct whose
+  `dir` field remains raw until direction validation.
+  Evidence: `backend/crates/pagination/src/cursor/mod.rs::decode` now decodes
+  base64url through `decode_base64_url`, deserializes to `CursorWire<Key>`,
+  and validates the optional raw `dir` value through `decode_direction`.
+  Impact: Legacy cursors with no `dir`, supported `Next`/`Prev` cursors, and
+  malformed non-string direction values keep their intended error
+  classification without a full `serde_json::Value` round trip.
 
 - Observation: The users pagination BDD support requires request paths with a
   static lifetime.
@@ -642,9 +648,9 @@ Firecrawl prior art used during planning:
   HTTP `400` client errors that identify the problematic parameter.
 - RFC 9457:
   `https://www.rfc-editor.org/rfc/rfc9457.html`. Relevant point:
-  machine-readable error details are useful for HTTP APIs, but Wildside already
-  has a stable JSON error envelope, so this work should enrich `details`
-  instead of changing media type or top-level shape.
+  machine-readable error details are useful for HTTP APIs, but Wildside
+  already has a stable JSON error envelope, so this work should enrich
+  `details` instead of changing media type or top-level shape.
 
 Wyvern agent findings used during planning:
 

@@ -15,6 +15,7 @@ use serde_json::json;
 use url::Url;
 use utoipa::ToSchema;
 
+use crate::domain::pagination_errors::{invalid_cursor_error, unsupported_direction_error};
 use crate::domain::ports::{ListUsersPageRequest, UsersPage};
 use crate::domain::{Error, User, UserCursorKey};
 use crate::inbound::http::schemas::UserSchema;
@@ -270,16 +271,6 @@ fn current_request_url(request: &HttpRequest) -> Result<Url, Error> {
         request.uri()
     );
     Url::parse(&url).map_err(|err| Error::internal(format!("failed to build request URL: {err}")))
-}
-
-fn invalid_cursor_error() -> Error {
-    Error::invalid_request("cursor is invalid")
-        .with_details(json!({ "field": "cursor", "code": "invalid_cursor" }))
-}
-
-fn unsupported_direction_error() -> Error {
-    Error::invalid_request("cursor direction is unsupported")
-        .with_details(json!({ "field": "cursor", "code": "unsupported_direction" }))
 }
 
 fn map_cursor_error(error: CursorError) -> Error {

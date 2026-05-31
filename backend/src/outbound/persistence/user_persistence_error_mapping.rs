@@ -1,8 +1,8 @@
 //! Shared mapping from user persistence failures to domain HTTP-safe errors.
 
 use crate::domain::Error;
+use crate::domain::pagination_errors::{invalid_cursor_error, unsupported_direction_error};
 use crate::domain::ports::{UserPaginationError, UserPersistenceError};
-use serde_json::json;
 
 pub(super) fn map_user_persistence_error(error: UserPersistenceError) -> Error {
     match error {
@@ -14,14 +14,8 @@ pub(super) fn map_user_persistence_error(error: UserPersistenceError) -> Error {
 
 fn map_user_pagination_error(error: UserPaginationError) -> Error {
     match error {
-        UserPaginationError::InvalidCursorFormat { .. } => {
-            Error::invalid_request("cursor is invalid")
-                .with_details(json!({ "field": "cursor", "code": "invalid_cursor" }))
-        }
-        UserPaginationError::UnsupportedDirection { .. } => {
-            Error::invalid_request("cursor direction is unsupported")
-                .with_details(json!({ "field": "cursor", "code": "unsupported_direction" }))
-        }
+        UserPaginationError::InvalidCursorFormat { .. } => invalid_cursor_error(),
+        UserPaginationError::UnsupportedDirection { .. } => unsupported_direction_error(),
     }
 }
 

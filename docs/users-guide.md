@@ -48,8 +48,9 @@ contract.
 
 # Wildside server users guide
 
-This guide records user-visible server behaviour for Wildside API consumers.
-It focuses on contracts that clients can rely on when calling the backend.
+This guide records user-visible server behaviour for Wildside application
+programming interface (API) consumers. It focuses on contracts that clients can
+rely on when calling the backend.
 
 
 ## Users list pagination
@@ -80,7 +81,7 @@ Successful responses include the existing paginated envelope:
 ```
 
 Pagination input errors use the standard Wildside error envelope and return
-HTTP `400 Bad Request`:
+Hypertext Transfer Protocol (HTTP) `400 Bad Request`:
 
 | Condition                                  | Message                             | `details.field` | `details.code`          |
 |--------------------------------------------|-------------------------------------|-----------------|-------------------------|

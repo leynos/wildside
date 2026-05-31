@@ -82,6 +82,13 @@ pub struct Cursor<Key> {
     dir: Direction,
 }
 
+#[derive(Debug, Deserialize)]
+struct CursorWire<Key> {
+    key: Key,
+    #[serde(default)]
+    dir: Option<serde_json::Value>,
+}
+
 /// Errors raised while encoding or decoding opaque cursors.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum CursorError {
@@ -212,34 +219,37 @@ where
     /// but not one of the supported directions, and [`CursorError::Deserialize`]
     /// when the decoded JSON does not match the expected cursor shape.
     pub fn decode(value: &str) -> Result<Self, CursorError> {
-        let payload = URL_SAFE_NO_PAD
-            .decode(value)
-            .or_else(|_| URL_SAFE.decode(value))
-            .map_err(|error| CursorError::InvalidBase64 {
-                message: error.to_string(),
-            })?;
-        let cursor_json: serde_json::Value =
+        let payload = decode_base64_url(value)?;
+        let wire: CursorWire<Key> =
             serde_json::from_slice(&payload).map_err(|error| CursorError::Deserialize {
                 message: error.to_string(),
             })?;
-        reject_unsupported_direction(&cursor_json)?;
-        serde_json::from_value(cursor_json).map_err(|error| CursorError::Deserialize {
-            message: error.to_string(),
+        Ok(Self {
+            key: wire.key,
+            dir: decode_direction(wire.dir)?,
         })
     }
 }
 
-fn reject_unsupported_direction(cursor_json: &serde_json::Value) -> Result<(), CursorError> {
-    let Some(direction) = cursor_json.get("dir") else {
-        return Ok(());
-    };
-    if matches!(direction.as_str(), Some("Next" | "Prev")) {
-        return Ok(());
-    }
-    Err(CursorError::UnsupportedDirection {
-        direction: direction
-            .as_str()
-            .map_or_else(|| direction.to_string(), str::to_owned),
+fn decode_base64_url(value: &str) -> Result<Vec<u8>, CursorError> {
+    URL_SAFE_NO_PAD
+        .decode(value)
+        .or_else(|_| URL_SAFE.decode(value))
+        .map_err(|error| CursorError::InvalidBase64 {
+            message: error.to_string(),
+        })
+}
+
+fn decode_direction(raw_direction: Option<serde_json::Value>) -> Result<Direction, CursorError> {
+    raw_direction.map_or(Ok(Direction::Next), |value| match value.as_str() {
+        Some("Next") => Ok(Direction::Next),
+        Some("Prev") => Ok(Direction::Prev),
+        Some(direction) => Err(CursorError::UnsupportedDirection {
+            direction: direction.to_owned(),
+        }),
+        None => Err(CursorError::UnsupportedDirection {
+            direction: value.to_string(),
+        }),
     })
 }
 
