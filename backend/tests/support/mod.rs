@@ -5,15 +5,15 @@
 //! provides a small, dependency-free (relative to the test crate) home for
 //! common test-only utilities.
 
+// Note: these modules use #[allow(dead_code)] rather than #[expect(dead_code)]
+// because each integration test file compiles support/mod.rs as its own crate.
+// In crates that use a helper the lint is absent, so #[expect] would fail with
+// "unfulfilled lint expectation". #[allow] is the only correct form here.
 #[allow(
     dead_code,
     reason = "shared cluster handle is only used by selected integration-test crates"
 )]
 pub mod atexit_cleanup;
-// Note: these modules use #[allow(dead_code)] rather than #[expect(dead_code)]
-// because each integration test file compiles support/mod.rs as its own crate.
-// In crates that use a helper the lint is absent, so #[expect] would fail with
-// "unfulfilled lint expectation". #[allow] is the only correct form here.
 #[allow(
     dead_code,
     reason = "cluster skip helpers are only used by selected integration-test crates"
