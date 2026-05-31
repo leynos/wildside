@@ -5,6 +5,10 @@
 //! provides a small, dependency-free (relative to the test crate) home for
 //! common test-only utilities.
 
+#[allow(
+    dead_code,
+    reason = "shared cluster handle is only used by selected integration-test crates"
+)]
 pub mod atexit_cleanup;
 // Note: these modules use #[allow(dead_code)] rather than #[expect(dead_code)]
 // because each integration test file compiles support/mod.rs as its own crate.
@@ -93,13 +97,6 @@ pub fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
 
 // Anchor shared helper reachability across independent integration-test crates.
 const _: fn(&str, &str) -> Result<(), String> = drop_table;
-
-// Anchor atexit_cleanup::shared_cluster_handle so the compiler sees it as
-// reachable in every test binary, eliminating the dead_code lint without
-// suppression. Modelled on the drop_table anchor above.
-const _: fn() -> pg_embedded_setup_unpriv::BootstrapResult<
-    &'static pg_embedded_setup_unpriv::ClusterHandle,
-> = atexit_cleanup::shared_cluster_handle;
 
 // Re-export skip helpers for integration test crates.
 // Not marked with #[expect(unused_imports)] because usage varies across

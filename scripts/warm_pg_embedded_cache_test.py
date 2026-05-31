@@ -22,6 +22,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "warm-pg-embedded-cache.sh"
 
 
+def result_diagnostics(result: subprocess.CompletedProcess[str]) -> str:
+    """Format subprocess output for actionable assertion failures."""
+
+    return (
+        f"returncode={result.returncode}; "
+        f"stdout={result.stdout!r}; stderr={result.stderr!r}"
+    )
+
+
 def run_bash(
     snippet: str,
     *,
@@ -61,8 +70,8 @@ def test_normalise_version_accepts_exact_versions(
 ) -> None:
     result = run_bash("normalise_version", env=env)
 
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == expected
+    assert result.returncode == 0, result_diagnostics(result)
+    assert result.stdout.strip() == expected, result_diagnostics(result)
 
 
 def test_normalise_version_rejects_non_numeric_values() -> None:
@@ -73,9 +82,11 @@ def test_normalise_version_rejects_non_numeric_values() -> None:
 
     assert result.returncode != 0, (
         f"normalise_version should reject non-numeric value; "
-        f"got returncode {result.returncode}, stderr: {result.stderr}"
+        f"got {result_diagnostics(result)}"
     )
-    assert "expected an exact PostgreSQL version" in result.stderr
+    assert "expected an exact PostgreSQL version" in result.stderr, (
+        result_diagnostics(result)
+    )
 
 
 def test_normalise_version_prefers_pg_embedded_version() -> None:
@@ -84,8 +95,8 @@ def test_normalise_version_prefers_pg_embedded_version() -> None:
         env={"PG_EMBEDDED_VERSION": "=16.11.0", "POSTGRESQL_VERSION": "16.10.0"},
     )
 
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "16.11.0"
+    assert result.returncode == 0, result_diagnostics(result)
+    assert result.stdout.strip() == "16.11.0", result_diagnostics(result)
 
 
 @given(
@@ -106,10 +117,12 @@ def test_normalise_version_accepts_all_valid_numeric_versions(
     )
 
     assert result.returncode == 0, (
-        f"normalise_version rejected valid version '{version}'; stderr: {result.stderr}"
+        f"normalise_version rejected valid version '{version}'; "
+        f"{result_diagnostics(result)}"
     )
     assert result.stdout.strip() == version, (
-        f"normalise_version returned '{result.stdout.strip()}' for input '{version}'"
+        f"normalise_version returned '{result.stdout.strip()}' for input '{version}'; "
+        f"{result_diagnostics(result)}"
     )
 
 
@@ -137,11 +150,11 @@ def test_normalise_version_rejects_all_non_numeric_versions(
 
     assert result.returncode != 0, (
         f"normalise_version should reject non-numeric version '{version}'; "
-        f"got returncode {result.returncode}, stdout: {result.stdout!r}"
+        f"got {result_diagnostics(result)}"
     )
     assert "expected an exact PostgreSQL version" in result.stderr, (
         f"normalise_version should reject '{version}' with the expected message; "
-        f"stderr: {result.stderr}"
+        f"{result_diagnostics(result)}"
     )
 
 
@@ -154,9 +167,11 @@ def test_acquire_cache_lock_removes_stale_lock(tmp_path: Path) -> None:
         f"acquire_cache_lock {tmp_path}; [[ -d \"$CACHE_LOCK_DIR\" ]] && echo acquired"
     )
 
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "acquired"
-    assert "removing stale PostgreSQL cache lock" in result.stderr
+    assert result.returncode == 0, result_diagnostics(result)
+    assert result.stdout.strip() == "acquired", result_diagnostics(result)
+    assert "removing stale PostgreSQL cache lock" in result.stderr, (
+        result_diagnostics(result)
+    )
 
 
 def test_acquire_cache_lock_waits_for_live_lock(tmp_path: Path) -> None:
@@ -168,8 +183,8 @@ def test_acquire_cache_lock_waits_for_live_lock(tmp_path: Path) -> None:
         f"sleep() {{ exit 77; }}; acquire_cache_lock {tmp_path}",
     )
 
-    assert result.returncode == 77
-    assert "waiting for cache lock" in result.stderr
+    assert result.returncode == 77, result_diagnostics(result)
+    assert "waiting for cache lock" in result.stderr, result_diagnostics(result)
 
 
 def test_acquire_cache_lock_treats_missing_pid_as_contended(tmp_path: Path) -> None:
@@ -179,8 +194,8 @@ def test_acquire_cache_lock_treats_missing_pid_as_contended(tmp_path: Path) -> N
         f"sleep() {{ exit 77; }}; acquire_cache_lock {tmp_path}",
     )
 
-    assert result.returncode == 77
-    assert "waiting for cache lock" in result.stderr
+    assert result.returncode == 77, result_diagnostics(result)
+    assert "waiting for cache lock" in result.stderr, result_diagnostics(result)
 
 
 def write_archive(path: Path, *, include_postgres: bool) -> None:
@@ -215,7 +230,7 @@ def test_verify_checksum_accepts_matching_sha256(tmp_path: Path) -> None:
         f"verify_checksum {tmp_path} {asset.name} x86_64-unknown-linux-gnu"
     )
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result_diagnostics(result)
 
 
 def test_verify_checksum_rejects_mismatched_sha256(tmp_path: Path) -> None:
@@ -229,8 +244,8 @@ def test_verify_checksum_rejects_mismatched_sha256(tmp_path: Path) -> None:
         f"verify_checksum {tmp_path} {asset.name} x86_64-unknown-linux-gnu"
     )
 
-    assert result.returncode != 0
-    assert "checksum verification failed" in result.stderr
+    assert result.returncode != 0, result_diagnostics(result)
+    assert "checksum verification failed" in result.stderr, result_diagnostics(result)
 
 
 def test_verify_checksum_rejects_missing_sha256(tmp_path: Path) -> None:
@@ -241,7 +256,7 @@ def test_verify_checksum_rejects_missing_sha256(tmp_path: Path) -> None:
         f"verify_checksum {tmp_path} {asset.name} x86_64-unknown-linux-gnu"
     )
 
-    assert result.returncode != 0
+    assert result.returncode != 0, result_diagnostics(result)
 
 
 @pytest.fixture
@@ -317,8 +332,10 @@ def test_download_and_extract_rejects_archive_without_postgres(
         tmp_path, curl_stub, include_postgres=False
     )
 
-    assert result.returncode != 0
-    assert "archive did not contain bin/postgres" in result.stderr
+    assert result.returncode != 0, result_diagnostics(result)
+    assert "archive did not contain bin/postgres" in result.stderr, (
+        result_diagnostics(result)
+    )
 
 
 def test_download_and_extract_installs_complete_cache(
@@ -327,7 +344,7 @@ def test_download_and_extract_installs_complete_cache(
     result = run_download_with_fixture(tmp_path, curl_stub, include_postgres=True)
 
     version_dir = tmp_path / "cache" / "16.10.0"
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result_diagnostics(result)
     assert (version_dir / ".complete").is_file()
     assert os.access(version_dir / "bin" / "postgres", os.X_OK)
 
@@ -343,11 +360,15 @@ def test_download_and_extract_reports_curl_failures(
         fail_asset=failed_asset,
     )
 
-    assert result.returncode != 0
-    assert failed_asset in result.stderr
-    assert "https://example.invalid/theseus/releases/download/16.10.0" in result.stderr
-    assert "curl exit 23" in result.stderr
-    assert f"cache root: {tmp_path / 'cache'}" in result.stderr
+    assert result.returncode != 0, result_diagnostics(result)
+    assert failed_asset in result.stderr, result_diagnostics(result)
+    assert "https://example.invalid/theseus/releases/download/16.10.0" in result.stderr, (
+        result_diagnostics(result)
+    )
+    assert "curl exit 23" in result.stderr, result_diagnostics(result)
+    assert f"cache root: {tmp_path / 'cache'}" in result.stderr, (
+        result_diagnostics(result)
+    )
 
 
 def test_install_cache_dir_replaces_existing_directory(tmp_path: Path) -> None:
@@ -360,7 +381,7 @@ def test_install_cache_dir_replaces_existing_directory(tmp_path: Path) -> None:
 
     result = run_bash(f"install_cache_dir {prepared_dir} {version_dir}")
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result_diagnostics(result)
     assert (version_dir / "new").is_file()
     assert not (version_dir / "old").exists()
     assert list(tmp_path.glob("16.10.0.previous.*")) == []
@@ -383,7 +404,7 @@ def test_install_cache_dir_restores_previous_directory_when_final_mv_fails(
         f"install_cache_dir {prepared_dir} {version_dir}"
     )
 
-    assert result.returncode != 0
+    assert result.returncode != 0, result_diagnostics(result)
     assert (version_dir / "old").is_file()
     assert not (version_dir / "new").exists()
     assert not prepared_dir.exists()
@@ -406,7 +427,7 @@ def test_main_warms_cache_from_local_fixtures(
     version = "16.10.0"
     triple_result = run_bash("platform_triple")
     assert triple_result.returncode == 0, (
-        f"platform_triple failed; stderr: {triple_result.stderr}"
+        f"platform_triple failed; {result_diagnostics(triple_result)}"
     )
     triple = triple_result.stdout.strip()
     asset = fixture_dir / f"postgresql-{version}-{triple}.tar.gz"
@@ -426,9 +447,9 @@ def test_main_warms_cache_from_local_fixtures(
     )
 
     version_dir = cache_dir / version
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result_diagnostics(result)
     assert (version_dir / ".complete").is_file(), (
-        f"expected .complete marker in {version_dir}; stderr: {result.stderr}"
+        f"expected .complete marker in {version_dir}; {result_diagnostics(result)}"
     )
     assert os.access(version_dir / "bin" / "postgres", os.X_OK), (
         f"expected executable bin/postgres in {version_dir}"

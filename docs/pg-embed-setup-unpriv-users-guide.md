@@ -80,7 +80,7 @@ cargo binstall pg-embed-setup-unpriv
 3. Run the helper (`cargo run --release --bin pg_embedded_setup_unpriv`). The
    command downloads the specified PostgreSQL release, ensures the directories
    exist, applies PostgreSQL-compatible permissions (0755 for the installation
-   cache, 0700 for the runtime and data directories), and initialises the
+   cache, 0700 for the runtime and data directories), and initializes the
    cluster with the provided credentials via `initdb`. The PostgreSQL server is
    **not** started — the installation is left ready for subsequent use by
    `TestCluster` or other tools. Invocations that begin as `root` prepare
@@ -671,7 +671,7 @@ client reports a stalled release-asset download through a body-decoding error.
 
 Harden CI in three places:
 
-1. Cache PostgreSQL binary archives independently from Cargo dependencies.
+1. Cache PostgreSQL binary archives independently of Cargo dependencies.
    `pg-embed-setup-unpriv` stores release archives under
    `PG_BINARY_CACHE_DIR`, then `$XDG_CACHE_HOME/pg-embedded/binaries`, then
    `$HOME/.cache/pg-embedded/binaries`, and finally
@@ -717,7 +717,7 @@ cluster bootstrap concurrently.
   hits rate limits.
 - **Download stalls misreported as body decoding errors**: Warm and cache
   PostgreSQL binaries before tests, pin `POSTGRESQL_RELEASES_URL`, and keep the
-  PostgreSQL binary cache independent from Cargo caches. This prevents unrelated
+  PostgreSQL binary cache independent of Cargo caches. This prevents unrelated
   dependency updates from forcing cold release downloads during test execution.
 - **CLI arguments in tests**: `PgEnvCfg::load()` ignores `std::env::args` during
   library use so Cargo test filters (for example,

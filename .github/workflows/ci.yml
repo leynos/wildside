@@ -199,8 +199,6 @@ jobs:
           PG_TEST_BACKEND: postgresql_embedded
           # Root-path bootstrap requires the worker binary for privilege demotion.
           PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
-          # Match the repository Makefile and avoid concurrent first-use cluster bootstrap.
-          NEXTEST_TEST_THREADS: "1"
         run: |
           # Clean stale pg-embed directories that may conflict with new runs.
           find target/ -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} + 2>/dev/null || true
