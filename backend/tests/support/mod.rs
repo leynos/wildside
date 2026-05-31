@@ -94,6 +94,13 @@ pub fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
 // Anchor shared helper reachability across independent integration-test crates.
 const _: fn(&str, &str) -> Result<(), String> = drop_table;
 
+// Anchor atexit_cleanup::shared_cluster_handle so the compiler sees it as
+// reachable in every test binary, eliminating the dead_code lint without
+// suppression. Modelled on the drop_table anchor above.
+const _: fn() -> pg_embedded_setup_unpriv::BootstrapResult<
+    &'static pg_embedded_setup_unpriv::ClusterHandle,
+> = atexit_cleanup::shared_cluster_handle;
+
 // Re-export skip helpers for integration test crates.
 // Not marked with #[expect(unused_imports)] because usage varies across
 // integration-test crates and unfulfilled expectations would break builds.
