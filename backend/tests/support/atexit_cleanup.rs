@@ -30,8 +30,7 @@ mod unix_atexit {
     use color_eyre::eyre::eyre;
     use pg_embedded_setup_unpriv::{BootstrapError, BootstrapResult, ClusterHandle};
 
-    pub(super) const SHARED_CLUSTER_LOCK_FILE: &str =
-        "wildside-pg-embedded-shared-cluster.lock";
+    pub(super) const SHARED_CLUSTER_LOCK_FILE: &str = "wildside-pg-embedded-shared-cluster.lock";
 
     /// Postmaster PID captured at registration time.
     pub(super) static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
@@ -46,12 +45,11 @@ mod unix_atexit {
             return Ok(());
         }
 
-        let _init_guard =
-            SHARED_CLUSTER_PROCESS_LOCK_INIT.lock().map_err(|error| {
-                BootstrapError::from(eyre!(
-                    "acquire shared cluster process lock init mutex: {error}"
-                ))
-            })?;
+        let _init_guard = SHARED_CLUSTER_PROCESS_LOCK_INIT.lock().map_err(|error| {
+            BootstrapError::from(eyre!(
+                "acquire shared cluster process lock init mutex: {error}"
+            ))
+        })?;
         if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
             return Ok(());
         }
@@ -101,11 +99,8 @@ mod unix_atexit {
 
     /// Reads the postmaster PID from the `postmaster.pid` file in `data_dir`.
     pub(super) fn read_postmaster_pid(data_dir: &std::path::Path) -> Option<i32> {
-        let dir = cap_std::fs::Dir::open_ambient_dir(
-            data_dir,
-            cap_std::ambient_authority(),
-        )
-        .ok()?;
+        let dir =
+            cap_std::fs::Dir::open_ambient_dir(data_dir, cap_std::ambient_authority()).ok()?;
         let content = dir.read_to_string("postmaster.pid").ok()?;
         content.lines().next()?.trim().parse().ok()
     }
@@ -123,10 +118,7 @@ mod unix_atexit {
         }
 
         // Re-read postmaster.pid to guard against PID reuse.
-        let pid = match PG_DATA_DIR
-            .get()
-            .and_then(|dir| read_postmaster_pid(dir))
-        {
+        let pid = match PG_DATA_DIR.get().and_then(|dir| read_postmaster_pid(dir)) {
             Some(current_pid) if current_pid == stored_pid => current_pid,
             _ => return,
         };
