@@ -66,6 +66,7 @@ pub mod er_diagram;
 pub mod error;
 #[cfg(feature = "example-data")]
 pub mod example_data;
+pub mod health;
 pub mod idempotency;
 pub mod interest_theme;
 pub mod localization;
@@ -111,6 +112,7 @@ pub use self::er_diagram::{
 pub use self::error::{Error, ErrorCode, ErrorValidationError};
 #[cfg(feature = "example-data")]
 pub use self::example_data::{ExampleDataSeedOutcome, ExampleDataSeeder, ExampleDataSeedingError};
+pub use self::health::{HealthObservation, HealthStatus, ProcessHealth};
 pub use self::idempotency::{
     IdempotencyConfig, IdempotencyKey, IdempotencyKeyValidationError, IdempotencyLookupQuery,
     IdempotencyLookupResult, IdempotencyRecord, MutationType, ParseMutationTypeError, PayloadHash,

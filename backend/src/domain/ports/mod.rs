@@ -12,6 +12,7 @@ mod enrichment_job_metrics;
 mod enrichment_provenance_repository;
 mod example_data_runs_repository;
 mod example_data_seed_repository;
+mod health_observer;
 mod idempotency_metrics;
 mod idempotency_repository;
 mod login_service;
@@ -92,6 +93,7 @@ pub use example_data_seed_repository::{
     ExampleDataSeedRepository, ExampleDataSeedRepositoryError, ExampleDataSeedRequest,
     ExampleDataSeedUser,
 };
+pub use health_observer::HealthObserver;
 pub use idempotency_metrics::{
     IdempotencyMetricLabels, IdempotencyMetrics, IdempotencyMetricsError, NoOpIdempotencyMetrics,
 };

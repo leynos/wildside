@@ -1,0 +1,11 @@
+.git
+.gitignore
+.tmp
+.uv-cache
+**/.terraform
+**/.uv-cache
+**/node_modules
+**/target
+coverage
+frontend-pwa/dist
+target

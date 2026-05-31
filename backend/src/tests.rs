@@ -8,6 +8,7 @@ use actix_web::cookie::{Key, SameSite};
 use actix_web::web;
 #[cfg(feature = "metrics")]
 use actix_web_prom::PrometheusMetricsBuilder;
+use backend::domain::ports::HealthObserver;
 use rstest::{fixture, rstest};
 use std::net::SocketAddr;
 use tokio::time::{Duration, timeout};
@@ -115,7 +116,10 @@ async fn assert_server_marks_ready(
     health_state: web::Data<HealthState>,
     server_config: ServerConfig,
 ) {
-    assert!(!health_state.is_ready(), "state should start unready");
+    assert!(
+        !health_state.observe_readiness().is_healthy(),
+        "state should start unready"
+    );
 
     let server = match create_server(health_state.clone(), server_config) {
         Ok(server) => server,
@@ -125,7 +129,7 @@ async fn assert_server_marks_ready(
     let server_join = actix_rt::spawn(server);
 
     assert!(
-        health_state.is_ready(),
+        health_state.observe_readiness().is_healthy(),
         "server creation should mark readiness"
     );
     if let Err(error) = timeout(Duration::from_secs(5), handle.stop(true)).await {

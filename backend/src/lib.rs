@@ -22,6 +22,6 @@ pub use middleware::Trace;
 
 /// Public OpenAPI surface used by Swagger UI and tooling.
 pub use doc::ApiDoc;
+pub use domain::ProcessHealth;
 pub use inbound::http;
 pub use inbound::http::error::ApiResult;
-pub use inbound::http::health::HealthState;

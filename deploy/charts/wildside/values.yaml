@@ -38,7 +38,9 @@ ingress:
   enabled: false
   className: ""
   hostname: ""
+  hosts: []
   tlsSecretName: ""
+  tls: []
   annotations: {}
 
 # Non-secret configuration. Keys become environment variables via a ConfigMap.
@@ -49,7 +51,19 @@ config:
 existingSecretName: ""
 # Allow rendering to proceed even if the Secret is missing; set to false to fail.
 allowMissingSecret: true
+# Validate existingSecretName against the live cluster. Leave false for GitOps
+# and offline renders.
+validateExistingSecret: false
 secretEnvFromKeys: {}
+
+externalSecret:
+  enabled: false
+  refreshInterval: 1h
+  secretStoreRef:
+    name: ""
+    kind: ClusterSecretStore
+  targetName: ""
+  data: []
 
 # Session signing key secret configuration for zero-downtime key rotation.
 # When enabled, the secret is mounted as a file at mountPath/session_key.
@@ -99,8 +113,13 @@ container:
     failureThreshold: 3
   startupProbe:
     httpGet:
-      path: /health/ready
+      path: /health/live
       port: http
     periodSeconds: 5
     timeoutSeconds: 2
     failureThreshold: 12
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}

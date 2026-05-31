@@ -202,9 +202,9 @@ flowchart TB
 
 #### Port usage examples
 
-Ports are defined in the domain and implemented by outbound adapters. Inbound
-adapters consume ports via injected state rather than importing outbound
-modules directly.
+Ports are defined in the domain and implemented by outbound adapters or by
+domain-owned default implementations. Inbound adapters consume ports via
+injected state rather than importing outbound modules directly.
 
 - **Port (domain):** `backend/src/domain/ports/user_repository.rs` defines the
   `UserRepository` trait and `UserPersistenceError`.
@@ -215,6 +215,12 @@ modules directly.
 - **Contract (tests):** `backend/tests/ports_behaviour.rs` exercises the port
   semantics against a Postgres-backed implementation using
   `pg-embed-setup-unpriv`.
+- **Health port (domain):** `backend/src/domain/ports/health_observer.rs`
+  defines `HealthObserver`, while `backend/src/domain/health.rs` provides the
+  process-local `ProcessHealth` implementation. The Actix adapter in
+  `backend/src/inbound/http/health.rs` only maps those observations to
+  `/health/live` and `/health/ready` HTTP status codes, cache headers, and JSON
+  response envelopes.
 
 The intended runtime wiring pattern is:
 

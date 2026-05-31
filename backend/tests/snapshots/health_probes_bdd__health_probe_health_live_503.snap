@@ -1,0 +1,20 @@
+---
+source: backend/tests/health_probes_bdd.rs
+expression: response.snapshot_payload()
+---
+{
+  "body": {
+    "checks": {
+      "liveness": {
+        "status": "fail"
+      }
+    },
+    "status": "fail"
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 503,
+  "uri": "/health/live"
+}

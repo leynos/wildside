@@ -1,0 +1,25 @@
+image:
+  repository: wildside-backend
+  tag: local
+  pullPolicy: IfNotPresent
+
+config:
+  APP_ENV: "local-k8s"
+
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: ""
+      paths:
+        - path: /
+          pathType: Prefix
+
+allowMissingSecret: true
+validateExistingSecret: false
+
+externalSecret:
+  enabled: false
+
+serviceAccount:
+  create: true
