@@ -20,6 +20,8 @@ const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
 
 #[cfg(unix)]
 mod unix_atexit {
+    //! Unix-only process-exit cleanup for the shared embedded PostgreSQL cluster.
+
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
     use std::path::PathBuf;
