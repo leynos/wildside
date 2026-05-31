@@ -793,13 +793,24 @@ Implementation details within `outbound::queue`:
 
 - `GenericApalisRouteQueue<P, Q>` – Re-exported beside the production alias
   because the BDD harness constructs the adapter with a test provider. It
-  parameterizes the adapter over the queue provider type `Q`, so tests can
+  can parameterize the adapter over the queue provider type `Q`, so tests can
   substitute doubles, while production code should prefer
   `ApalisRouteQueue<P>`.
 - `QueueProvider` – Declared `pub(crate)` inside the private
   `apalis_route_queue` module. Defines `async fn push_job(&self,
   payload: serde_json::Value) -> Result<(), JobDispatchError>` as the test
   seam; not part of the crate's supported public API.
+
+Queue observability:
+
+- `route_queue_enqueue_total{outcome=success|failure}` – A feature-gated
+  Prometheus counter for enqueue throughput and outcome.
+- `route_queue_enqueue_latency_seconds{outcome=success|failure}` – A
+  feature-gated Prometheus histogram for end-to-end queue enqueue latency in
+  seconds.
+- `tracing` – The adapter emits `info` on enqueue success and `warn` on
+  failure points (serialisation, push, and setup failures), including latency
+  and the adapter outcome.
 
 ### Queue build requirements
 
