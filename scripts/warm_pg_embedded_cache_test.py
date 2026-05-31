@@ -204,6 +204,22 @@ def test_acquire_cache_lock_treats_missing_pid_as_contended(tmp_path: Path) -> N
     assert "waiting for cache lock" in result.stderr, result_diagnostics(result)
 
 
+def test_remove_stale_cache_lock_reports_contention_when_dir_remains(
+    tmp_path: Path,
+) -> None:
+    lock_dir = tmp_path / ".warm-pg-embedded-cache.lock"
+    lock_dir.mkdir()
+    (lock_dir / "pid").write_text("99999999\n", encoding="utf-8")
+    (lock_dir / "unexpected").write_text("keeps rmdir from succeeding", encoding="utf-8")
+
+    result = run_bash(
+        f"remove_stale_cache_lock {lock_dir}",
+    )
+
+    assert result.returncode != 0, result_diagnostics(result)
+    assert lock_dir.exists(), "contended lock directory should remain for retry"
+
+
 def test_acquire_cache_lock_handles_concurrent_stale_removal(tmp_path: Path) -> None:
     """Two concurrent processes racing to remove a stale lock both succeed safely."""
     import threading

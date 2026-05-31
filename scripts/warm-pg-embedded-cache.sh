@@ -329,6 +329,7 @@ remove_stale_cache_lock() {
     if kill -0 "$new_pid" 2>/dev/null; then
       return 1 # fresh live lock; do not remove
     fi
+    return 1
   fi
 
   return 0
