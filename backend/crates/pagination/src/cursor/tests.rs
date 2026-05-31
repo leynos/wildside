@@ -1,6 +1,7 @@
 //! Unit tests for opaque cursor encoding and decoding.
 
 use base64::Engine as _;
+use proptest::{prelude::Just, prop_oneof, proptest, string::string_regex};
 use rstest::rstest;
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +29,30 @@ fn cursor_round_trips_through_opaque_token() {
     let decoded = Cursor::<FixtureKey>::decode(&encoded).expect("cursor decoding should succeed");
 
     assert_eq!(decoded, cursor);
+}
+
+proptest! {
+    #[test]
+    fn round_trips_through_cursor_encode_decode(
+        created_at in string_regex("[[:alnum:]-:.+T t]{1,32}")
+            .expect("created_at strategy should parse"),
+        id in string_regex("[[:alnum:]-_]{1,32}").expect("id strategy should parse"),
+        direction in prop_oneof![Just(Direction::Next), Just(Direction::Prev)],
+    ) {
+        let cursor = Cursor::with_direction(
+            FixtureKey {
+                created_at,
+                id,
+            },
+            direction,
+        );
+
+        let encoded = cursor.encode().expect("cursor encoding should succeed");
+        let decoded = Cursor::<FixtureKey>::decode(&encoded)
+            .expect("cursor decoding should succeed");
+
+        assert_eq!(decoded, cursor);
+    }
 }
 
 #[test]

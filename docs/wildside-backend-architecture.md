@@ -2036,7 +2036,8 @@ Deserialize implementation.
 
 Roadmap 4.2.2 adds the pagination-aware error contract for endpoint adoption.
 The pagination crate now distinguishes unsupported decoded cursor directions
-from generic deserialization failures with `CursorError::UnsupportedDirection`.
+from generic deserialization failures with
+`CursorError::UnsupportedDirection`.
 Inbound HTTP adapters map malformed cursor tokens to `invalid_cursor` and
 unsupported directions to `unsupported_direction`, both as HTTP `400 Bad
 Request` responses in the existing Wildside error envelope.

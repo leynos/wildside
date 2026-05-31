@@ -54,13 +54,13 @@ It focuses on contracts that clients can rely on when calling the backend.
 
 ## Users list pagination
 
-`GET /api/v1/users` returns a paginated users response. Clients should follow
+`GET /api/v1/users` returns a paginated user-list response. Clients should follow
 the `links.next` and `links.prev` URLs returned by the server instead of
 building cursor values themselves.
 
 The endpoint accepts:
 
-- `cursor`: an opaque base64url cursor returned by a previous users list
+- `cursor`: an opaque base64url cursor returned by a previous user-list
   response.
 - `limit`: page size. The shared pagination default is 20 and the maximum is
   100.
@@ -84,7 +84,7 @@ HTTP `400 Bad Request`:
 
 | Condition                                  | Message                             | `details.field` | `details.code`          |
 |--------------------------------------------|-------------------------------------|-----------------|-------------------------|
-| Cursor text is not a valid users cursor    | `cursor is invalid`                 | `cursor`        | `invalid_cursor`        |
+| Cursor text is not a valid user cursor    | `cursor is invalid`                 | `cursor`        | `invalid_cursor`        |
 | Cursor direction is not supported          | `cursor direction is unsupported`   | `cursor`        | `unsupported_direction` |
 
 Authentication and infrastructure errors keep their existing meanings.
