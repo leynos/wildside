@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 mod support;
 
-use support::atexit_cleanup::shared_cluster_handle;
+use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::embedded_postgres::drop_users_table;
 use support::format_postgres_error;
 use support::{handle_cluster_setup_failure, provision_template_database};
@@ -115,6 +115,7 @@ type SharedContext = Arc<Mutex<RepoContext>>;
 
 #[fixture]
 fn repo_context() -> Option<RepoContext> {
+    ensure_stable_cluster_environment();
     let cluster = match shared_cluster_handle() {
         Ok(c) => c,
         Err(reason) => return handle_cluster_setup_failure(reason),

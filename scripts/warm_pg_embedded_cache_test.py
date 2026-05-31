@@ -5,6 +5,12 @@
 # ///
 """Tests for the embedded PostgreSQL cache warm-up shell script."""
 
+# NOTE: backend/tests/support/atexit_cleanup.rs::shared_cluster_handle() is not
+# unit-tested here because it requires a live embedded PostgreSQL cluster.
+# Coverage is provided end-to-end by every integration-test binary in the
+# pg-embed nextest group (e.g., catalogue_descriptor_ingestion_bdd). A unit test
+# that mocks the cluster handle would not exercise any meaningful behaviour.
+
 from __future__ import annotations
 
 import hashlib
@@ -196,6 +202,44 @@ def test_acquire_cache_lock_treats_missing_pid_as_contended(tmp_path: Path) -> N
 
     assert result.returncode == 77, result_diagnostics(result)
     assert "waiting for cache lock" in result.stderr, result_diagnostics(result)
+
+
+def test_acquire_cache_lock_handles_concurrent_stale_removal(tmp_path: Path) -> None:
+    """Two concurrent processes racing to remove a stale lock both succeed safely."""
+    import threading
+
+    lock_dir = tmp_path / ".warm-pg-embedded-cache.lock"
+    # Seed a stale lock with a guaranteed-dead PID (PID 1 is init and is never
+    # dead, so use a PID well outside the kernel range that will never exist).
+    lock_dir.mkdir()
+    (lock_dir / "pid").write_text("999999999\n")
+
+    results: list[int] = []
+    lock = threading.Lock()
+
+    def run_removal() -> None:
+        result = run_bash(
+            f"remove_stale_cache_lock {lock_dir}",
+            timeout=5.0,
+        )
+        with lock:
+            results.append(result.returncode)
+
+    threads = [threading.Thread(target=run_removal) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    # At least one thread must have succeeded; zero failures are also acceptable
+    # (if the first thread already removed the lock, subsequent ones see ENOENT
+    # and return non-zero, which is the correct safe outcome).
+    assert any(result == 0 for result in results), (
+        f"at least one concurrent removal should succeed; results: {results}"
+    )
+    assert not lock_dir.exists(), (
+        f"lock directory should not exist after all removals; {lock_dir}"
+    )
 
 
 def write_archive(path: Path, *, include_postgres: bool) -> None:
@@ -408,6 +452,133 @@ def test_install_cache_dir_restores_previous_directory_when_final_mv_fails(
     assert (version_dir / "old").is_file()
     assert not (version_dir / "new").exists()
     assert not prepared_dir.exists()
+
+
+def test_cache_is_complete_returns_false_for_missing_marker(tmp_path: Path) -> None:
+    version_dir = tmp_path / "16.10.0"
+    version_dir.mkdir()
+    (version_dir / "bin").mkdir()
+    postgres = version_dir / "bin" / "postgres"
+    postgres.write_bytes(b"\x7fELF")
+    postgres.chmod(0o755)
+    result = run_bash(
+        f"cache_is_complete {version_dir}",
+    )
+    assert result.returncode != 0, (
+        f"cache_is_complete should return non-zero without .complete; "
+        f"{result_diagnostics(result)}"
+    )
+
+
+def test_cache_is_complete_returns_false_for_non_executable_postgres(
+    tmp_path: Path,
+) -> None:
+    version_dir = tmp_path / "16.10.0"
+    version_dir.mkdir()
+    (version_dir / "bin").mkdir()
+    postgres = version_dir / "bin" / "postgres"
+    postgres.write_bytes(b"\x7fELF")
+    postgres.chmod(0o644)
+    (version_dir / ".complete").write_text("")
+    result = run_bash(
+        f"cache_is_complete {version_dir}",
+    )
+    assert result.returncode != 0, (
+        f"cache_is_complete should return non-zero without executable postgres; "
+        f"{result_diagnostics(result)}"
+    )
+
+
+def test_cache_is_complete_returns_true_for_complete_cache(tmp_path: Path) -> None:
+    version_dir = tmp_path / "16.10.0"
+    version_dir.mkdir()
+    (version_dir / "bin").mkdir()
+    postgres = version_dir / "bin" / "postgres"
+    postgres.write_bytes(b"\x7fELF")
+    postgres.chmod(0o755)
+    (version_dir / ".complete").write_text("")
+    result = run_bash(
+        f"cache_is_complete {version_dir}",
+    )
+    assert result.returncode == 0, (
+        f"cache_is_complete should succeed for complete cache; "
+        f"{result_diagnostics(result)}"
+    )
+
+
+def test_platform_triple_returns_non_empty_string() -> None:
+    result = run_bash("platform_triple")
+    assert result.returncode == 0, (
+        f"platform_triple failed; {result_diagnostics(result)}"
+    )
+    triple = result.stdout.strip()
+    assert triple, "platform_triple should return a non-empty string"
+    assert "-" in triple, (
+        f"platform_triple should return a triple with hyphens, got '{triple}'"
+    )
+
+
+def test_release_base_url_defaults_to_theseus() -> None:
+    result = run_bash(
+        "release_base_url",
+        env={"POSTGRESQL_RELEASES_URL": ""},
+    )
+    assert result.returncode == 0, result_diagnostics(result)
+    url = result.stdout.strip()
+    assert "theseus-rs/postgresql-binaries" in url, (
+        f"default release URL should point to theseus-rs; got '{url}'"
+    )
+
+
+def test_release_base_url_respects_override() -> None:
+    custom = "https://example.invalid/custom-mirror"
+    result = run_bash(
+        "release_base_url",
+        env={"POSTGRESQL_RELEASES_URL": custom},
+    )
+    assert result.returncode == 0, result_diagnostics(result)
+    assert result.stdout.strip() == custom, (
+        f"release_base_url should return the override; got '{result.stdout.strip()}'"
+    )
+
+
+def test_populate_from_theseus_cache_copies_when_source_complete(
+    tmp_path: Path,
+) -> None:
+    version = "16.10.0"
+    theseus_dir = tmp_path / ".theseus" / "postgresql" / version
+    (theseus_dir / "bin").mkdir(parents=True)
+    postgres = theseus_dir / "bin" / "postgres"
+    postgres.write_bytes(b"\x7fELF")
+    postgres.chmod(0o755)
+    (theseus_dir / ".complete").write_text("")
+
+    dest_dir = tmp_path / "cache" / version
+    dest_dir.parent.mkdir()
+    result = run_bash(
+        f"populate_from_theseus_cache {version} {dest_dir} {theseus_dir.parent.parent}",
+        env={"HOME": str(tmp_path)},
+    )
+    assert result.returncode == 0, result_diagnostics(result)
+    assert (dest_dir / ".complete").is_file(), "dest should have .complete marker"
+    assert os.access(dest_dir / "bin" / "postgres", os.X_OK), (
+        "dest should have executable bin/postgres"
+    )
+
+
+def test_populate_from_theseus_cache_skips_when_source_missing(
+    tmp_path: Path,
+) -> None:
+    version = "16.10.0"
+    dest_dir = tmp_path / "cache" / version
+    theseus_root = tmp_path / ".theseus" / "postgresql"
+    theseus_root.mkdir(parents=True)
+    result = run_bash(
+        f"populate_from_theseus_cache {version} {dest_dir} {theseus_root.parent}",
+        env={"HOME": str(tmp_path)},
+    )
+    assert result.returncode != 0, result_diagnostics(result)
+    assert not dest_dir.exists(), "dest should not be created when source is missing"
 
 
 # NOTE: An end-to-end test that exercises the actual GitHub Releases download

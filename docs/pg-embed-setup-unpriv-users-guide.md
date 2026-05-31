@@ -70,7 +70,7 @@ cargo binstall pg-embed-setup-unpriv
    export PG_RUNTIME_DIR="/var/tmp/pg-embedded-setup-it/install"
    export PG_DATA_DIR="/var/tmp/pg-embedded-setup-it/data"
    export PG_SUPERUSER="postgres"
-   export PG_PASSWORD="postgres_pass"
+   export PG_PASSWORD="your_secure_password"   # replace with a strong secret; never use this literal
    ```
 
    Optionally set `PG_SHUTDOWN_TIMEOUT_SECS` to override the 15-second drop

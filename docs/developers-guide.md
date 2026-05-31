@@ -644,6 +644,29 @@ pnpm run test:workspaces
 
 `make test` runs both in sequence.
 
+### Python script tests
+
+Scripts that are better tested with Python use pytest. The test file lives
+alongside the script and is named `scripts/<name>_test.py` (note: underscore,
+not dot, so pytest can import it as a module).
+
+**Test file pattern:** `scripts/**/*_test.py`
+
+**Run all Python script tests:**
+
+```sh
+pytest scripts/
+```
+
+**Run a specific test file:**
+
+```sh
+pytest scripts/warm_pg_embedded_cache_test.py -v
+```
+
+Refer to `docs/scripting-standards.md` for Python tooling conventions,
+dependency declarations (PEP 723 inline metadata), and style guidance.
+
 ### Adding tests for a new script
 
 1. Create a test file alongside the script: `scripts/<name>.test.mjs`.

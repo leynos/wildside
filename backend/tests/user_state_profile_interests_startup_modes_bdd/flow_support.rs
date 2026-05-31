@@ -17,7 +17,7 @@ use postgres::{Client, NoTls};
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::support::atexit_cleanup::shared_cluster_handle;
+use super::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use super::support::profile_interests::{FIXTURE_AUTH_ID, build_session_middleware};
 use super::support::{format_postgres_error, provision_template_database};
 use super::{ServerConfig, build_http_state};
@@ -123,6 +123,7 @@ pub(crate) fn is_skipped(world: &World) -> bool {
 }
 
 pub(crate) fn setup_db_context() -> Result<DbContext, String> {
+    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();

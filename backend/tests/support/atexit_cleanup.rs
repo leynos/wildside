@@ -190,6 +190,13 @@ mod unix_atexit {
 /// This is a thin wrapper around the library's `shared_cluster_handle()` that
 /// adds cross-process cleanup for nextest compatibility.
 ///
+/// # Environment preconditions
+///
+/// Callers **must** invoke [`ensure_stable_cluster_environment()`] before
+/// calling this function. `shared_cluster_handle()` does not set up
+/// `PG_PASSWORD` or `POSTGRESQL_RELEASES_URL` itself; separating setup from
+/// access makes the command/query boundary explicit.
+///
 /// # Failure caching
 ///
 /// `pg_embedded_setup_unpriv::test_support::shared_cluster_handle()` stores
@@ -205,6 +212,7 @@ mod unix_atexit {
 /// # Examples
 ///
 /// ```rust,ignore
+/// ensure_stable_cluster_environment();
 /// let cluster = shared_cluster_handle()
 ///     .expect("embedded postgres cluster should be available");
 /// let temp_db = cluster
@@ -212,8 +220,12 @@ mod unix_atexit {
 ///     .expect("temporary database should be created");
 /// println!("connection URL: {}", temp_db.url());
 /// ```
+// Unit tests for this function are impractical: exercising the happy path
+// requires a live embedded PostgreSQL cluster. Coverage is provided
+// end-to-end by every BDD integration-test binary in the `pg-embed` nextest
+// group. The internal helpers (`ensure_stable_cluster_environment`,
+// `unix_atexit::read_postmaster_pid`, etc.) are unit-tested below.
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
-    ensure_stable_cluster_environment();
     #[cfg(unix)]
     unix_atexit::acquire_shared_cluster_process_lock()?;
     let mut attempt = 1;
@@ -248,7 +260,7 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
 /// the binary download source remains stable across crate upgrades and is not
 /// subject to transient GitHub Releases fetch failures (misreported by reqwest
 /// as "error decoding response body").
-fn ensure_stable_cluster_environment() {
+pub(crate) fn ensure_stable_cluster_environment() {
     if std::env::var_os("PG_PASSWORD").is_none() {
         // SAFETY: called before the library spawns any threads. The shared
         // cluster singleton serializes access with a `Mutex`, so this runs at

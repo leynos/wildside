@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 mod support;
 
-use support::atexit_cleanup::shared_cluster_handle;
+use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::{handle_cluster_setup_failure, provision_template_database};
 
 #[derive(Debug)]
@@ -98,6 +98,7 @@ fn skip_if_needed(world: &SnapshotWorld) -> bool {
 
 #[fixture]
 fn world() -> SnapshotWorld {
+    ensure_stable_cluster_environment();
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(reason) => {

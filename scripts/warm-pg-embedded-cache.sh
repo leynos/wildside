@@ -303,27 +303,35 @@ lock_owner_pid() {
 remove_stale_cache_lock() {
   local lock_dir="$1"
   local owner_pid
-  local current_pid
 
   if ! owner_pid="$(lock_owner_pid "$lock_dir")"; then
+    # Can't determine owner; treat as live.
     return 1
   fi
 
   if kill -0 "$owner_pid" 2>/dev/null; then
+    # Owner is still alive.
     return 1
   fi
 
-  if ! current_pid="$(lock_owner_pid "$lock_dir")"; then
-    return 1
-  fi
-
-  if [[ "$current_pid" != "$owner_pid" ]]; then
-    return 1
-  fi
-
+  # Owner appears gone. Attempt atomic removal: first unlink the pid file, then
+  # rmdir. Another racing process doing the same will get ENOENT on the unlink
+  # or ENOENT/ENOTEMPTY on the rmdir — both are safe outcomes.
   warn "removing stale PostgreSQL cache lock at ${lock_dir} for pid ${owner_pid}"
-  rm -f "${lock_dir}/pid"
-  rmdir "$lock_dir" 2>/dev/null
+  rm -f "${lock_dir}/pid" 2>/dev/null || true
+  rmdir "${lock_dir}" 2>/dev/null || true
+
+  # Confirm removal: if lock_dir still exists and now has a *different* live
+  # owner, another process created a fresh lock — respect it.
+  if [[ -d "$lock_dir" ]]; then
+    local new_pid
+    new_pid="$(lock_owner_pid "$lock_dir" 2>/dev/null)" || return 1
+    if kill -0 "$new_pid" 2>/dev/null; then
+      return 1 # fresh live lock; do not remove
+    fi
+  fi
+
+  return 0
 }
 
 # Acquire the process-local cache lock directory.
