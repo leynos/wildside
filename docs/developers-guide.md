@@ -793,8 +793,9 @@ Implementation details within `outbound::queue`:
 
 - `GenericApalisRouteQueue<P, Q>` – Re-exported beside the production alias
   because the BDD harness constructs the adapter with a test provider. It
-  parameterises the adapter over the queue provider type `Q` so tests can
-  substitute doubles, while production code should prefer `ApalisRouteQueue<P>`.
+  parameterizes the adapter over the queue provider type `Q`, so tests can
+  substitute doubles, while production code should prefer
+  `ApalisRouteQueue<P>`.
 - `QueueProvider` – Declared `pub(crate)` inside the private
   `apalis_route_queue` module. Defines `async fn push_job(&self,
   payload: serde_json::Value) -> Result<(), JobDispatchError>` as the test
