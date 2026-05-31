@@ -175,7 +175,7 @@ impact.
   - The lock is acquired before setting any environment variables.
   - The lock is released after restoring environment variables.
 - Performance:
-  - Tests that use `TestCluster` become serialised within a process.
+  - Tests that use `TestCluster` become serialized within a process.
   - This is acceptable because these tests are already heavyweight
     (process-spawning, filesystem-heavy, and frequently network bound).
 
@@ -269,7 +269,7 @@ By internalising the lock, the crate provides:
 - No migration is required.
 - Existing consumers benefit immediately.
 - The only observable behavioural change is that concurrent uses of
-  `TestCluster` (and other test helpers that mutate env) become serialised in a
+  `TestCluster` (and other test helpers that mutate env) become serialized in a
   single process.
 
 ## Testing plan

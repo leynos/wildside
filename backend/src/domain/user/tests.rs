@@ -230,7 +230,7 @@ fn serde_round_trips_alias(valid_id: TestUserId, valid_display_name: TestDisplay
     let from_snake: User = serde_json::from_value(snake).expect("snake_case");
     assert_eq!(from_camel, from_snake);
 
-    let value = serde_json::to_value(from_snake).expect("serialise to JSON");
+    let value = serde_json::to_value(from_snake).expect("serialize to JSON");
     assert_eq!(
         value.get("displayName").and_then(|v| v.as_str()),
         Some(valid_display_name.as_ref())

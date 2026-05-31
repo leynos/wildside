@@ -424,9 +424,9 @@ domain services or enqueuing jobs as needed.
   codes (400/403) and logged for
   auditing([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L53-L61)).
    The `/ws` entry point now lives in `backend/src/inbound/ws` as an inbound
-  adapter. Incoming JSON messages are deserialised into domain commands and
+  adapter. Incoming JSON messages are deserialized into domain commands and
   passed to `UserOnboardingService`, which emits domain events (e.g.,
-  `UserCreated`, `DisplayNameRejected`). The WebSocket handler only serialises
+  `UserCreated`, `DisplayNameRejected`). The WebSocket handler only serializes
   those events to wire payloads and maintains heartbeats, keeping transport
   concerns at the edge.
 
@@ -1920,7 +1920,7 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
    coverage for a request, it enqueues an `EnrichmentJob`. The worker queries
    Overpass with a descriptive `User-Agent` and `Contact` header, enforces the
    published quotas (≤10 000 requests/day, ≤1 GiB transfer, default 180 s
-   timeout), and serialises access via a semaphore (default two concurrent
+   timeout), and serializes access via a semaphore (default two concurrent
    calls). Retries use jittered exponential backoff, and a circuit breaker
    pauses requests after repeated failures. Responses merge into `pois` through
    the same `UPSERT` path.

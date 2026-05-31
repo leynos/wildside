@@ -52,14 +52,14 @@ fn serialize_primary_stats(
     session: &WalkSession,
 ) -> Result<serde_json::Value, WalkSessionRepositoryError> {
     serde_json::to_value(session.primary_stats())
-        .map_err(|err| WalkSessionRepositoryError::query(format!("serialise primary stats: {err}")))
+        .map_err(|err| WalkSessionRepositoryError::query(format!("serialize primary stats: {err}")))
 }
 
 fn serialize_secondary_stats(
     session: &WalkSession,
 ) -> Result<serde_json::Value, WalkSessionRepositoryError> {
     serde_json::to_value(session.secondary_stats()).map_err(|err| {
-        WalkSessionRepositoryError::query(format!("serialise secondary stats: {err}"))
+        WalkSessionRepositoryError::query(format!("serialize secondary stats: {err}"))
     })
 }
 

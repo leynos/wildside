@@ -8,8 +8,8 @@ define_port_error! {
     pub enum RouteCacheError {
         /// Cache backend is unavailable or timing out.
         Backend { message: String } => "route cache backend failure: {message}",
-        /// Serialisation or deserialisation of cached content failed.
-        Serialization { message: String } => "route cache serialisation failed: {message}",
+        /// Serialization or deserialization of cached content failed.
+        Serialization { message: String } => "route cache serialization failed: {message}",
     }
 }
 

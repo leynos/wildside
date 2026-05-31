@@ -165,10 +165,10 @@ impl OfflineBundleRepository for PgOfflineBundleRepository {
 impl WalkSessionRepository for PgWalkSessionRepository {
     async fn save(&self, session: &WalkSession) -> Result<(), WalkSessionRepositoryError> {
         let primary_stats = serde_json::to_string(session.primary_stats()).map_err(|err| {
-            WalkSessionRepositoryError::query(format!("serialise primary stats: {err}"))
+            WalkSessionRepositoryError::query(format!("serialize primary stats: {err}"))
         })?;
         let secondary_stats = serde_json::to_string(session.secondary_stats()).map_err(|err| {
-            WalkSessionRepositoryError::query(format!("serialise secondary stats: {err}"))
+            WalkSessionRepositoryError::query(format!("serialize secondary stats: {err}"))
         })?;
         let started_at = session.started_at().to_rfc3339();
         let ended_at = session.ended_at().map(|value| value.to_rfc3339());

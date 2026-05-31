@@ -13,7 +13,7 @@ use std::io::{self, BufWriter, Write};
 use utoipa::OpenApi;
 
 /// Write the OpenAPI document to stdout.
-/// Serialises with a two-space indent to match repo style.
+/// Serializes with a two-space indent to match repo style.
 fn main() -> io::Result<()> {
     let doc = ApiDoc::openapi();
     let stdout = io::stdout();

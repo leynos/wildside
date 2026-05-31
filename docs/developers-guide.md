@@ -809,7 +809,7 @@ Queue observability:
   feature-gated Prometheus histogram for end-to-end queue enqueue latency in
   seconds.
 - `tracing` – The adapter emits `info` on enqueue success and `warn` on
-  failure points (serialisation, push, and setup failures), including latency
+  failure points (serialization, push, and setup failures), including latency
   and the adapter outcome.
 
 ### Queue build requirements

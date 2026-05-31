@@ -161,7 +161,7 @@ where
         let payload = serde_json::to_value(plan).map_err(|error| {
             warn!(
                 error = %error,
-                "route queue serialisation failed"
+                "route queue serialization failed"
             );
             JobDispatchError::rejected(format!("Failed to serialize plan: {error}"))
         })?;

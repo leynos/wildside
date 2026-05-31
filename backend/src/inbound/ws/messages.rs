@@ -109,7 +109,7 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    fn serialises_user_created_event() {
+    fn serializes_user_created_event() {
         let created_at = chrono::DateTime::parse_from_rfc3339("2026-05-01T12:00:00Z")
             .expect("static timestamp must be valid")
             .with_timezone(&chrono::Utc);
@@ -128,7 +128,7 @@ mod tests {
     }
 
     #[rstest]
-    fn serialises_invalid_display_name_event() {
+    fn serializes_invalid_display_name_event() {
         let event = DisplayNameRejectedEvent {
             trace_id: TraceId::from_uuid(Uuid::nil()),
             attempted_name: "bad$char".into(),
