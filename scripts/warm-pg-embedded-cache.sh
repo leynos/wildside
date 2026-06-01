@@ -111,7 +111,7 @@ cleanup_download_work_dir() {
 #   0 on success, exits non-zero for non-numeric versions.
 normalise_version() {
   local raw_version="${PG_EMBEDDED_VERSION:-${POSTGRESQL_VERSION:-16.10.0}}"
-  local version_pattern='^[0-9]+([.][0-9]+)*$'
+  local version_pattern='^[0-9]+[.][0-9]+[.][0-9]+$'
   raw_version="${raw_version#=}"
 
   if [[ ! "$raw_version" =~ $version_pattern ]]; then
