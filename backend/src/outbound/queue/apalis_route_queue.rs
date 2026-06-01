@@ -172,7 +172,7 @@ where
         let latency = started.elapsed();
         match &result {
             Ok(()) => {
-                tracing::info!(
+                tracing::debug!(
                     outcome = "success",
                     latency_ms = latency.as_millis(),
                     "route queue enqueue succeeded"
