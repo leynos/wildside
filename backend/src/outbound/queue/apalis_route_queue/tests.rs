@@ -1,16 +1,10 @@
 //! Unit and property tests for `GenericApalisRouteQueue<P, Q>`.
-//!
 //! Deterministic `rstest`/Tokio tests cover named enqueue success, provider
 //! failure, serialization failure, tracing, and metrics scenarios. `proptest`
 //! property tests exercise arbitrary serialization round-trips and the
 //! invariant that serialization failures push no jobs.
-//!
-//! The tests use `FakeQueueProvider` to record pushed jobs in memory,
-//! `FailingQueueProvider` to return configurable provider errors, and
-//! `FailingSerializePlan` to force serializer errors.
-//!
-//! These tests exercise `GenericApalisRouteQueue` through the `RouteQueue` port
-//! interface. They do not test live Apalis or PostgreSQL integration.
+//! Helpers include `FakeQueueProvider`, `FailingQueueProvider`, and
+//! `FailingSerializePlan`. Tests use the `RouteQueue` port, not live Apalis.
 
 use super::*;
 use crate::domain::ports::NoOpRouteQueueMetrics;
@@ -201,6 +195,37 @@ async fn apalis_queue_enqueues_multiple_plans() {
 
     assert_eq!(deserialized1, plan1, "first plan should match");
     assert_eq!(deserialized2, plan2, "second plan should match");
+}
+
+#[tokio::test]
+async fn apalis_queue_accepts_concurrent_enqueues() {
+    let fake_provider = FakeQueueProvider::new();
+    let queue = GenericApalisRouteQueue::<TestPlan, _>::new(fake_provider.clone(), no_op_metrics());
+    let queue = Arc::new(queue);
+    let mut tasks = Vec::new();
+
+    for index in 0..16 {
+        let queue = Arc::clone(&queue);
+        tasks.push(tokio::spawn(async move {
+            let plan = TestPlan {
+                name: format!("plan-{index}"),
+            };
+            queue.enqueue(&plan).await
+        }));
+    }
+
+    for task in tasks {
+        task.await
+            .expect("enqueue task should not panic")
+            .expect("concurrent enqueue should succeed");
+    }
+
+    let pushed_jobs = fake_provider.pushed_jobs().expect("pushed jobs");
+    assert_eq!(
+        pushed_jobs.len(),
+        16,
+        "all concurrent jobs should be pushed"
+    );
 }
 
 /// Test plan type that always fails serialization.

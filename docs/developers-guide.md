@@ -803,12 +803,25 @@ Implementation details within `outbound::queue`:
 
 Queue observability:
 
+- `RouteQueueMetrics` – The domain-owned metrics port used by queue adapters
+  to record enqueue outcomes without depending on Prometheus or process-global
+  state.
+- `RouteQueueOutcome` – The bounded outcome label type for queue metrics. It
+  currently exposes only `success` and `failure`, keeping metric cardinality
+  predictable.
+- `NoOpRouteQueueMetrics` – The no-op implementation used by tests and
+  metrics-disabled builds. Prefer it whenever a test is not asserting metrics
+  behaviour.
+- `PrometheusRouteQueueMetrics` – The Prometheus adapter in
+  `outbound::metrics`. It accepts a `prometheus::Registry` at construction
+  time, allowing tests to use isolated registries while production passes the
+  default registry.
 - `route_queue_enqueue_total{outcome=success|failure}` – A feature-gated
   Prometheus counter for enqueue throughput and outcome.
 - `route_queue_enqueue_latency_seconds{outcome=success|failure}` – A
   feature-gated Prometheus histogram for end-to-end queue enqueue latency in
   seconds.
-- `tracing` – The adapter emits `info` on enqueue success and `warn` on
+- `tracing` – The adapter emits `debug` on enqueue success and `warn` on
   failure points (serialization, push, and setup failures), including latency
   and the adapter outcome.
 

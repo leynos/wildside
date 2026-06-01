@@ -80,3 +80,64 @@ impl RouteQueueMetrics for PrometheusRouteQueueMetrics {
             .observe(latency.as_secs_f64());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Tests for concurrent Prometheus route queue metric registration.
+
+    use std::sync::Arc;
+
+    use super::*;
+    use tokio::task::JoinHandle;
+
+    #[tokio::test]
+    async fn initialization_is_concurrency_safe_per_registry() {
+        let registry = Arc::new(Registry::new());
+        let mut tasks = Vec::new();
+
+        for _ in 0..8 {
+            tasks.push(spawn_metrics_registration(Arc::clone(&registry)));
+        }
+
+        let mut successes = 0;
+        for task in tasks {
+            successes += handle_registration_result(task.await.expect("metrics task"));
+        }
+
+        assert_eq!(successes, 1, "one registration should win per registry");
+    }
+
+    fn spawn_metrics_registration(
+        registry: Arc<Registry>,
+    ) -> JoinHandle<Result<PrometheusRouteQueueMetrics, prometheus::Error>> {
+        tokio::spawn(async move { new_metrics(&registry) })
+    }
+
+    fn new_metrics(registry: &Registry) -> Result<PrometheusRouteQueueMetrics, prometheus::Error> {
+        PrometheusRouteQueueMetrics::new(registry)
+    }
+
+    fn handle_registration_result(
+        result: Result<PrometheusRouteQueueMetrics, prometheus::Error>,
+    ) -> usize {
+        match result {
+            Ok(metrics) => {
+                metrics.observe_enqueue(RouteQueueOutcome::Success, Duration::from_millis(1));
+                1
+            }
+            Err(error) => {
+                assert_duplicate_registration(error);
+                0
+            }
+        }
+    }
+
+    fn assert_duplicate_registration(error: prometheus::Error) {
+        let message = error.to_string();
+        let normalized_message = message.to_lowercase();
+        assert!(
+            normalized_message.contains("already") || normalized_message.contains("duplicate"),
+            "duplicate registration should be reported clearly: {message}"
+        );
+    }
+}
