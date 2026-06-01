@@ -818,7 +818,7 @@ Queue observability:
   default registry.
 - Concurrency coverage – Queue tests spawn concurrent enqueue tasks through a
   shared `Arc<GenericApalisRouteQueue<_, _>>`, while metrics tests spawn
-  concurrent `PrometheusRouteQueueMetrics` initialisation attempts against an
+  concurrent `PrometheusRouteQueueMetrics` initialization attempts against an
   isolated registry. This keeps shared state and duplicate-registration
   behaviour covered without using process-global Prometheus state.
 - `route_queue_enqueue_total{outcome=success|failure}` – A feature-gated
