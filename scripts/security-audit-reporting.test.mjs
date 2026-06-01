@@ -125,8 +125,8 @@ describe('assertNoExpired', () => {
     fc.assert(
       fc.property(
         fc.date({
-          max: new Date('2030-12-31'),
           min: new Date('2024-01-01'),
+          max: new Date('2030-12-31'),
           noInvalidDate: true,
         }),
         (date) => {

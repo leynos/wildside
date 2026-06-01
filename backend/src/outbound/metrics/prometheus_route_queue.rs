@@ -18,10 +18,19 @@ use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts, Registry};
 
 use crate::domain::ports::{RouteQueueMetrics, RouteQueueOutcome};
 
+// Total enqueue attempts, labelled only by bounded `outcome` values:
+// "success" and "failure". No other labels are present, keeping cardinality
+// low.
 const QUEUE_ENQUEUE_TOTAL: &str = "route_queue_enqueue_total";
+// Enqueue latency histogram, labelled only by bounded `outcome` values:
+// "success" and "failure". No other labels are present, keeping cardinality
+// low.
 const QUEUE_ENQUEUE_LATENCY_SECONDS: &str = "route_queue_enqueue_latency_seconds";
-const ENQUEUE_LATENCY_BUCKETS_SECONDS: &[f64] =
-    &[0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1];
+// Fixed latency bucket ceilings, in seconds, used for route queue enqueue
+// observations.
+const ENQUEUE_LATENCY_BUCKETS_SECONDS: &[f64] = &[
+    0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
+];
 
 /// Prometheus-backed recorder for route queue enqueue outcomes.
 #[derive(Clone)]
