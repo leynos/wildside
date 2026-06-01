@@ -21,6 +21,7 @@ use base64::{
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
+use tracing::debug;
 
 /// Direction of pagination relative to the cursor.
 ///
@@ -199,8 +200,14 @@ where
     /// Returns [`CursorError::Serialize`] when the cursor key cannot be
     /// serialized into JSON.
     pub fn encode(&self) -> Result<String, CursorError> {
-        let payload = serde_json::to_vec(self).map_err(|error| CursorError::Serialize {
-            message: error.to_string(),
+        let payload = serde_json::to_vec(self).map_err(|error| {
+            debug!(
+                error_type = %std::any::type_name_of_val(&error),
+                "cursor encoding failed"
+            );
+            CursorError::Serialize {
+                message: error.to_string(),
+            }
         })?;
         Ok(URL_SAFE_NO_PAD.encode(payload))
     }
@@ -220,10 +227,16 @@ where
     /// when the decoded JSON does not match the expected cursor shape.
     pub fn decode(value: &str) -> Result<Self, CursorError> {
         let payload = decode_base64_url(value)?;
-        let wire: CursorWire<Key> =
-            serde_json::from_slice(&payload).map_err(|error| CursorError::Deserialize {
+        let wire: CursorWire<Key> = serde_json::from_slice(&payload).map_err(|error| {
+            debug!(
+                error_type = %std::any::type_name_of_val(&error),
+                payload_len = payload.len(),
+                "cursor JSON decoding failed"
+            );
+            CursorError::Deserialize {
                 message: error.to_string(),
-            })?;
+            }
+        })?;
         Ok(Self {
             key: wire.key,
             dir: decode_direction(wire.dir)?,
@@ -235,8 +248,15 @@ fn decode_base64_url(value: &str) -> Result<Vec<u8>, CursorError> {
     URL_SAFE_NO_PAD
         .decode(value)
         .or_else(|_| URL_SAFE.decode(value))
-        .map_err(|error| CursorError::InvalidBase64 {
-            message: error.to_string(),
+        .map_err(|error| {
+            debug!(
+                error_type = %std::any::type_name_of_val(&error),
+                token_len = value.len(),
+                "cursor base64 decoding failed"
+            );
+            CursorError::InvalidBase64 {
+                message: error.to_string(),
+            }
         })
 }
 
@@ -244,13 +264,17 @@ fn decode_direction(raw_direction: Option<serde_json::Value>) -> Result<Directio
     raw_direction.map_or(Ok(Direction::Next), |value| match value.as_str() {
         Some("Next") => Ok(Direction::Next),
         Some("Prev") => Ok(Direction::Prev),
-        Some(direction) => Err(CursorError::UnsupportedDirection {
-            direction: direction.to_owned(),
-        }),
-        None => Err(CursorError::UnsupportedDirection {
-            direction: value.to_string(),
-        }),
+        Some(direction) => unsupported_direction(direction.to_owned()),
+        None => unsupported_direction(value.to_string()),
     })
+}
+
+fn unsupported_direction(direction: String) -> Result<Direction, CursorError> {
+    debug!(
+        direction = %direction,
+        "cursor direction validation failed"
+    );
+    Err(CursorError::UnsupportedDirection { direction })
 }
 
 #[cfg(test)]
