@@ -73,30 +73,41 @@ pub fn format_postgres_error(error: &postgres::Error) -> String {
     summary
 }
 
-/// Drop a table by name from a test database.
-///
-/// The identifier is escaped so helpers can safely accept test-provided table
-/// names.
-///
-/// # Examples
-///
-/// ```ignore
-/// let url = "postgres://localhost/test";
-/// let result = crate::support::drop_table(url, "offline_bundles");
-/// assert!(result.is_ok());
-/// ```
-pub fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
-    let mut client = postgres::Client::connect(url, postgres::NoTls)
-        .map_err(|err| format_postgres_error(&err))?;
-    let escaped_name = table_name.replace('"', "\"\"");
-    let sql = format!(r#"DROP TABLE IF EXISTS "{escaped_name}""#);
-    client
-        .batch_execute(sql.as_str())
-        .map_err(|err| format_postgres_error(&err))
+#[allow(
+    dead_code,
+    reason = "table helpers are only used by selected integration-test crates"
+)]
+mod table_helpers {
+    use super::format_postgres_error;
+
+    /// Drop a table by name from a test database.
+    ///
+    /// The identifier is escaped so helpers can safely accept test-provided
+    /// table names.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let url = "postgres://localhost/test";
+    /// let result = crate::support::drop_table(url, "offline_bundles");
+    /// assert!(result.is_ok());
+    /// ```
+    pub fn drop_table(url: &str, table_name: &str) -> Result<(), String> {
+        let mut client = postgres::Client::connect(url, postgres::NoTls)
+            .map_err(|err| format_postgres_error(&err))?;
+        let escaped_name = table_name.replace('"', "\"\"");
+        let sql = format!(r#"DROP TABLE IF EXISTS "{escaped_name}""#);
+        client
+            .batch_execute(sql.as_str())
+            .map_err(|err| format_postgres_error(&err))
+    }
 }
 
-// Anchor shared helper reachability across independent integration-test crates.
-const _: fn(&str, &str) -> Result<(), String> = drop_table;
+#[allow(
+    unused_imports,
+    reason = "table helpers are only used by selected integration-test crates"
+)]
+pub use table_helpers::drop_table;
 
 // Re-export skip helpers for integration test crates.
 // Not marked with #[expect(unused_imports)] because usage varies across
