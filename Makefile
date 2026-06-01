@@ -41,12 +41,13 @@ YAMLLINT_VERSION ?= 1.35.1
 OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down \
-	local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
-	fmt lint test test-rust test-frontend typecheck deps lockfile lint-specs audit \
-	check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit-node rust-audit \
-	lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile lint-actions \
-	lint-architecture workspace-sync
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down
+.PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
+.PHONY: fmt lint test test-rust test-frontend typecheck deps lockfile
+.PHONY: lint-specs audit audit-node rust-audit
+.PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
+.PHONY: lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile
+.PHONY: lint-actions lint-architecture workspace-sync prepare-pg-worker
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -115,7 +116,6 @@ lint-frontend:
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 
 
-.PHONY: lint-specs
 lint-specs: lint-asyncapi lint-openapi
 
 lint-architecture:
@@ -178,7 +178,6 @@ PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.1
 NEXTEST_TEST_THREADS ?= 1
 
 
-.PHONY: test
 test: test-rust test-frontend
 
 test-rust: workspace-sync prepare-pg-worker
@@ -188,7 +187,6 @@ test-frontend: deps typecheck
 	pnpm run test
 	pnpm run test:workspaces
 
-.PHONY: prepare-pg-worker
 .ONESHELL: prepare-pg-worker
 define PREPARE_PG_WORKER_CMD
 set -euo pipefail
@@ -219,7 +217,6 @@ PNPM_LOCK_HASH := $(shell \
 NODE_MODULES_STAMP := node_modules/.pnpm-install-$(PNPM_LOCK_HASH)
 
 
-.PHONY: deps
 deps: $(NODE_MODULES_STAMP)
 
 $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
@@ -231,8 +228,7 @@ $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
 typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,--noEmit -p $$dir/tsconfig.json,typescript@$(TSC_VERSION)) || exit 1; done
 
 
-.PHONY: audit
-audit: audit-node rust-audit
+audit: deps audit-node rust-audit
 
 audit-node: deps
 	pnpm -r --if-present run audit

@@ -333,12 +333,10 @@ errors.
 
 ## Outcomes & Retrospective
 
-No implementation has been performed yet. The planning phase identified that
-the externally visible `400` path mostly exists for malformed users cursors,
-but the repository-facing error taxonomy is too coarse. The future
-implementation should therefore be small and careful: add semantic pagination
-errors to the port/query mapping, prove the HTTP response remains stable, and
-document the contract.
+Implementation is complete: semantic pagination errors now flow through the
+repository-facing error taxonomy and port/query mapping, the externally visible
+`400` path for malformed user cursors is preserved and validated, and the
+contract and documentation have been updated.
 
 ## Context and orientation
 

@@ -1,4 +1,4 @@
-# Wildside users' guide
+# Wildside server users guide
 
 ## Backend health endpoints
 
@@ -46,12 +46,9 @@ Nile Valley owns shared preview and GitOps automation. The local preview in
 this repository is for developer validation of the Wildside chart and runtime
 contract.
 
-# Wildside server users guide
-
 This guide records user-visible server behaviour for Wildside application
 programming interface (API) consumers. It focuses on contracts that clients can
 rely on when calling the backend.
-
 
 ## Users list pagination
 
