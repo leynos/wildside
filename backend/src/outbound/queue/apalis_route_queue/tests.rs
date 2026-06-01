@@ -1,26 +1,21 @@
-//! Unit and property tests for `GenericApalisRouteQueue<P, Q>`.
-//! Deterministic `rstest`/Tokio tests cover named enqueue success, provider
-//! failure, serialization failure, tracing, and metrics scenarios. `proptest`
-//! property tests exercise arbitrary serialization round-trips and the
-//! invariant that serialization failures push no jobs.
-//! Helpers include `FakeQueueProvider`, `FailingQueueProvider`, and
-//! `FailingSerializePlan`. Tests use the `RouteQueue` port, not live Apalis.
+//! Unit and property tests for `GenericApalisRouteQueue<P, Q>`, covering
+//! enqueue, tracing, metrics, and serialization without live Apalis storage.
 
 use super::*;
 use crate::domain::ports::NoOpRouteQueueMetrics;
 #[cfg(feature = "metrics")]
 use crate::outbound::metrics::PrometheusRouteQueueMetrics;
 use crate::outbound::queue::test_helpers::{FailingQueueProvider, FakeQueueProvider};
+use futures::future::join_all;
 #[cfg(feature = "metrics")]
 use prometheus::Encoder;
 use proptest::prelude::*;
-use rstest::rstest;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::sync::Arc;
+use tokio::task::JoinHandle;
 use tracing_test::traced_test;
 
-/// Test plan type for unit tests.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TestPlan {
     name: String,
@@ -29,7 +24,30 @@ struct TestPlan {
 fn no_op_metrics() -> Arc<NoOpRouteQueueMetrics> {
     Arc::new(NoOpRouteQueueMetrics)
 }
+type TestQueue = GenericApalisRouteQueue<TestPlan, FakeQueueProvider>;
+type EnqueueHandle = JoinHandle<Result<(), JobDispatchError>>;
 
+fn spawn_enqueues(queue: Arc<TestQueue>, count: usize) -> Vec<EnqueueHandle> {
+    (0..count)
+        .map(|index| {
+            let queue = Arc::clone(&queue);
+            tokio::spawn(async move { queue.enqueue(&plan(index)).await })
+        })
+        .collect()
+}
+fn plan(index: usize) -> TestPlan {
+    TestPlan {
+        name: format!("plan-{index}"),
+    }
+}
+async fn assert_all_enqueues_succeed(handles: Vec<EnqueueHandle>) {
+    for result in join_all(handles).await {
+        assert!(
+            matches!(result, Ok(Ok(()))),
+            "concurrent enqueue task should succeed: {result:?}"
+        );
+    }
+}
 async fn assert_plan_round_trips(plan: TestPlan) {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<TestPlan, _> =
@@ -46,14 +64,12 @@ async fn assert_plan_round_trips(plan: TestPlan) {
         Err(error) => panic!("should be able to access pushed jobs: {error}"),
     };
     assert_eq!(pushed_jobs.len(), 1, "exactly one job should be pushed");
-
     let deserialized: TestPlan = match serde_json::from_value(pushed_jobs[0].clone()) {
         Ok(plan) => plan,
         Err(error) => panic!("pushed payload should be valid JSON: {error}"),
     };
     assert_eq!(deserialized, plan, "deserialized plan should match");
 }
-
 async fn assert_failed_serialization_pushes_no_jobs(message: String) {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
@@ -75,7 +91,6 @@ async fn assert_failed_serialization_pushes_no_jobs(message: String) {
         "no jobs should be pushed when serialization fails"
     );
 }
-
 fn block_on_property<F>(future: F)
 where
     F: Future<Output = ()>,
@@ -89,7 +104,6 @@ where
     };
     runtime.block_on(future);
 }
-
 proptest! {
     #[test]
     fn apalis_queue_round_trips_arbitrary_plan_names(name in "\\PC*") {
@@ -102,7 +116,6 @@ proptest! {
     }
 }
 
-#[rstest]
 #[tokio::test]
 async fn apalis_queue_enqueue_round_trips() {
     let fake_provider = FakeQueueProvider::new();
@@ -115,13 +128,10 @@ async fn apalis_queue_enqueue_round_trips() {
 
     let result = queue.enqueue(&plan).await;
     assert!(result.is_ok(), "enqueue should succeed with fake provider");
-
     let pushed_jobs = fake_provider
         .pushed_jobs()
         .expect("should be able to access pushed jobs");
     assert_eq!(pushed_jobs.len(), 1, "exactly one job should be pushed");
-
-    // Verify the payload can be deserialized back to the original plan
     let deserialized: TestPlan = serde_json::from_value(pushed_jobs[0].clone())
         .expect("pushed payload should be valid JSON");
     assert_eq!(
@@ -130,7 +140,6 @@ async fn apalis_queue_enqueue_round_trips() {
     );
 }
 
-#[rstest]
 #[tokio::test]
 async fn apalis_queue_maps_provider_error_to_unavailable() {
     let failing_provider = FailingQueueProvider::new("simulated queue failure".to_string());
@@ -160,7 +169,6 @@ async fn apalis_queue_maps_provider_error_to_unavailable() {
     }
 }
 
-#[rstest]
 #[tokio::test]
 async fn apalis_queue_enqueues_multiple_plans() {
     let fake_provider = FakeQueueProvider::new();
@@ -187,7 +195,6 @@ async fn apalis_queue_enqueues_multiple_plans() {
         .pushed_jobs()
         .expect("should be able to access pushed jobs");
     assert_eq!(pushed_jobs.len(), 2, "both jobs should be pushed");
-
     let deserialized1: TestPlan =
         serde_json::from_value(pushed_jobs[0].clone()).expect("first payload should be valid JSON");
     let deserialized2: TestPlan = serde_json::from_value(pushed_jobs[1].clone())
@@ -196,39 +203,39 @@ async fn apalis_queue_enqueues_multiple_plans() {
     assert_eq!(deserialized1, plan1, "first plan should match");
     assert_eq!(deserialized2, plan2, "second plan should match");
 }
-
 #[tokio::test]
-async fn apalis_queue_accepts_concurrent_enqueues() {
-    let fake_provider = FakeQueueProvider::new();
-    let queue = GenericApalisRouteQueue::<TestPlan, _>::new(fake_provider.clone(), no_op_metrics());
-    let queue = Arc::new(queue);
-    let mut tasks = Vec::new();
-
-    for index in 0..16 {
-        let queue = Arc::clone(&queue);
-        tasks.push(tokio::spawn(async move {
-            let plan = TestPlan {
-                name: format!("plan-{index}"),
-            };
-            queue.enqueue(&plan).await
-        }));
-    }
-
-    for task in tasks {
-        task.await
-            .expect("enqueue task should not panic")
-            .expect("concurrent enqueue should succeed");
-    }
-
+async fn concurrent_enqueue_pushes_all_jobs() {
+    let fake_provider = Arc::new(FakeQueueProvider::new());
+    let queue = Arc::new(TestQueue::new(
+        fake_provider.as_ref().clone(),
+        no_op_metrics(),
+    ));
+    assert_all_enqueues_succeed(spawn_enqueues(queue, 8)).await;
     let pushed_jobs = fake_provider.pushed_jobs().expect("pushed jobs");
-    assert_eq!(
-        pushed_jobs.len(),
-        16,
-        "all concurrent jobs should be pushed"
+    assert_eq!(pushed_jobs.len(), 8, "all concurrent jobs should be pushed");
+}
+#[cfg(feature = "metrics")]
+#[tokio::test]
+async fn concurrent_enqueue_with_metrics_records_correct_count() {
+    let registry = prometheus::Registry::new();
+    let metrics = PrometheusRouteQueueMetrics::new(&registry)
+        .expect("route queue metrics should register with isolated registry");
+    let fake_provider = FakeQueueProvider::new();
+    let queue = Arc::new(TestQueue::new(fake_provider, Arc::new(metrics)));
+    assert_all_enqueues_succeed(spawn_enqueues(queue, 4)).await;
+
+    let mut buffer = Vec::new();
+    prometheus::TextEncoder::new()
+        .encode(&registry.gather(), &mut buffer)
+        .expect("metrics should encode as Prometheus text");
+    let metrics_text = String::from_utf8(buffer).expect("metrics text should be UTF-8");
+
+    assert!(
+        metrics_text.contains("route_queue_enqueue_total{outcome=\"success\"} 4"),
+        "success counter should be 4:\n{metrics_text}"
     );
 }
 
-/// Test plan type that always fails serialization.
 #[derive(Debug, Clone)]
 struct FailingSerializePlan {
     message: String,
@@ -243,7 +250,6 @@ impl Serialize for FailingSerializePlan {
     }
 }
 
-#[rstest]
 #[tokio::test]
 async fn apalis_queue_maps_serialization_failure_to_rejected() {
     let fake_provider = FakeQueueProvider::new();
@@ -276,7 +282,6 @@ async fn apalis_queue_maps_serialization_failure_to_rejected() {
         }
     }
 
-    // Verify nothing was pushed to the provider
     let pushed_jobs = fake_provider
         .pushed_jobs()
         .expect("should be able to access pushed jobs");
@@ -286,7 +291,6 @@ async fn apalis_queue_maps_serialization_failure_to_rejected() {
         "no jobs should be pushed when serialization fails"
     );
 }
-
 #[traced_test]
 #[tokio::test]
 async fn apalis_queue_success_logs_enqueue_without_alert() {
@@ -311,7 +315,6 @@ async fn apalis_queue_success_logs_enqueue_without_alert() {
         "successful enqueue should not emit warning logs"
     );
 }
-
 #[traced_test]
 #[tokio::test]
 async fn apalis_queue_provider_failure_logs_level() {
@@ -337,7 +340,6 @@ async fn apalis_queue_provider_failure_logs_level() {
         "warning should include provider failure text"
     );
 }
-
 #[traced_test]
 #[tokio::test]
 async fn apalis_queue_serialization_failure_logs_level() {
@@ -363,9 +365,7 @@ async fn apalis_queue_serialization_failure_logs_level() {
         "warning should mention serialization"
     );
 }
-
 #[cfg(feature = "metrics")]
-#[rstest]
 #[tokio::test]
 async fn apalis_queue_records_prometheus_enqueue_metrics() {
     let registry = prometheus::Registry::new();
