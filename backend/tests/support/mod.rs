@@ -78,6 +78,8 @@ pub fn format_postgres_error(error: &postgres::Error) -> String {
     reason = "table helpers are only used by selected integration-test crates"
 )]
 mod table_helpers {
+    //! Table helpers shared by selected integration-test crates.
+
     use super::format_postgres_error;
 
     /// Drop a table by name from a test database.

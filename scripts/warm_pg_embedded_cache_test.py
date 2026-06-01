@@ -144,6 +144,15 @@ def test_normalise_version_accepts_all_valid_numeric_versions(
         st.from_regex(r"\d+\.\d+\.\d+[A-Za-z-][^\s]*", fullmatch=True).filter(
             lambda s: "\x00" not in s
         ),
+        st.from_regex(r"=\d+\.\d+$", fullmatch=True).filter(
+            lambda s: "\x00" not in s and s.strip() != ""
+        ),
+        st.from_regex(r"=\d+\.\d+\.\d+\.\d+$", fullmatch=True).filter(
+            lambda s: "\x00" not in s and s.strip() != ""
+        ),
+        st.from_regex(r"=\d+\.\d+\.\d+[A-Za-z-][^\s]*", fullmatch=True).filter(
+            lambda s: "\x00" not in s and s.strip() != ""
+        ),
         st.from_regex(r"=[^0-9][^\s]*", fullmatch=True).filter(
             lambda s: "\x00" not in s and s.strip() != ""
         ),
