@@ -816,6 +816,11 @@ Queue observability:
   `outbound::metrics`. It accepts a `prometheus::Registry` at construction
   time, allowing tests to use isolated registries while production passes the
   default registry.
+- Concurrency coverage – Queue tests spawn concurrent enqueue tasks through a
+  shared `Arc<GenericApalisRouteQueue<_, _>>`, while metrics tests spawn
+  concurrent `PrometheusRouteQueueMetrics` initialisation attempts against an
+  isolated registry. This keeps shared state and duplicate-registration
+  behaviour covered without using process-global Prometheus state.
 - `route_queue_enqueue_total{outcome=success|failure}` – A feature-gated
   Prometheus counter for enqueue throughput and outcome.
 - `route_queue_enqueue_latency_seconds{outcome=success|failure}` – A
