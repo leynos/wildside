@@ -18,7 +18,7 @@ mod support;
 
 use crate::support::seed_helpers::seed_user_and_route;
 use diesel_walk_session_repository_test_params::{WalkSessionStats, WalkSessionTestParams};
-use support::atexit_cleanup::shared_cluster_handle;
+use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::{drop_table, handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
@@ -78,6 +78,7 @@ fn build_session_with_id(
 
 fn setup_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
+    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temp_db.url().to_string();

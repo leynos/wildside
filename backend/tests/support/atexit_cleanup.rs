@@ -11,97 +11,177 @@
 //! sends `SIGTERM`, and waits for graceful shutdown, bridging the gap until the
 //! library provides built-in process-exit shutdown.
 
-#[cfg(unix)]
-use std::ffi::CString;
-#[cfg(unix)]
-use std::os::unix::ffi::OsStrExt;
-#[cfg(unix)]
-use std::path::PathBuf;
-#[cfg(unix)]
-use std::sync::atomic::{AtomicI32, Ordering};
-#[cfg(unix)]
-use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-#[cfg(unix)]
-use color_eyre::eyre::eyre;
-#[cfg(unix)]
-use pg_embedded_setup_unpriv::BootstrapError;
 use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
 
 const SHARED_CLUSTER_RETRIES: usize = 5;
 const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
-#[cfg(unix)]
-const SHARED_CLUSTER_LOCK_FILE: &str = "wildside-pg-embedded-shared-cluster.lock";
-
-/// Postmaster PID captured at registration time.
-#[cfg(unix)]
-static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
-
-/// Data directory for re-reading `postmaster.pid` at exit time.
-#[cfg(unix)]
-static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
-#[cfg(unix)]
-static SHARED_CLUSTER_PROCESS_LOCK_FD: OnceLock<i32> = OnceLock::new();
-#[cfg(unix)]
-static SHARED_CLUSTER_PROCESS_LOCK_INIT: Mutex<()> = Mutex::new(());
 
 #[cfg(unix)]
-fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
-    if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
-        return Ok(());
-    }
+mod unix_atexit {
+    //! Unix-only process-exit cleanup for the shared embedded PostgreSQL cluster.
 
-    let _init_guard = SHARED_CLUSTER_PROCESS_LOCK_INIT.lock().map_err(|error| {
-        BootstrapError::from(eyre!(
-            "acquire shared cluster process lock init mutex: {error}"
-        ))
-    })?;
-    if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
-        return Ok(());
-    }
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicI32, Ordering};
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Duration;
 
-    let lock_path = std::env::temp_dir().join(SHARED_CLUSTER_LOCK_FILE);
-    let lock_path_bytes = lock_path.as_os_str().as_bytes();
-    let lock_path_cstring = CString::new(lock_path_bytes).map_err(|error| {
-        BootstrapError::from(eyre!(
-            "encode shared cluster lock path '{}': {error}",
-            lock_path.display()
-        ))
-    })?;
+    use color_eyre::eyre::eyre;
+    use pg_embedded_setup_unpriv::{BootstrapError, BootstrapResult, ClusterHandle};
 
-    // SAFETY: `lock_path_cstring` is NUL-terminated and lives for the call.
-    let fd = unsafe {
-        libc::open(
-            lock_path_cstring.as_ptr(),
-            libc::O_CREAT | libc::O_RDWR,
-            0o600,
-        )
-    };
-    if fd < 0 {
-        let error = std::io::Error::last_os_error();
-        return Err(BootstrapError::from(eyre!(
-            "open shared cluster lock file '{}': {error}",
-            lock_path.display()
-        )));
-    }
+    pub(super) const SHARED_CLUSTER_LOCK_FILE: &str = "wildside-pg-embedded-shared-cluster.lock";
 
-    // SAFETY: `fd` is a valid descriptor from `open` above.
-    let lock_result = unsafe { libc::flock(fd, libc::LOCK_EX) };
-    if lock_result != 0 {
-        let error = std::io::Error::last_os_error();
-        // SAFETY: `fd` is valid and should be closed on lock failure.
-        unsafe {
-            libc::close(fd);
+    /// Postmaster PID captured at registration time.
+    pub(super) static PG_POSTMASTER_PID: AtomicI32 = AtomicI32::new(0);
+
+    /// Data directory for re-reading `postmaster.pid` at exit time.
+    pub(super) static PG_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+    pub(super) static SHARED_CLUSTER_PROCESS_LOCK_FD: OnceLock<i32> = OnceLock::new();
+    pub(super) static SHARED_CLUSTER_PROCESS_LOCK_INIT: Mutex<()> = Mutex::new(());
+
+    pub(super) fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
+        if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
+            return Ok(());
         }
-        return Err(BootstrapError::from(eyre!(
-            "acquire shared cluster lock '{}': {error}",
-            lock_path.display()
-        )));
+
+        let _init_guard = SHARED_CLUSTER_PROCESS_LOCK_INIT.lock().map_err(|error| {
+            BootstrapError::from(eyre!(
+                "acquire shared cluster process lock init mutex: {error}"
+            ))
+        })?;
+        if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
+            return Ok(());
+        }
+
+        let lock_path = std::env::temp_dir().join(SHARED_CLUSTER_LOCK_FILE);
+        let lock_path_bytes = lock_path.as_os_str().as_bytes();
+        let lock_path_cstring = CString::new(lock_path_bytes).map_err(|error| {
+            BootstrapError::from(eyre!(
+                "encode shared cluster lock path '{}': {error}",
+                lock_path.display()
+            ))
+        })?;
+
+        // SAFETY: `lock_path_cstring` is NUL-terminated and lives for the call.
+        let fd = unsafe {
+            libc::open(
+                lock_path_cstring.as_ptr(),
+                libc::O_CREAT | libc::O_RDWR,
+                0o600,
+            )
+        };
+        if fd < 0 {
+            let error = std::io::Error::last_os_error();
+            return Err(BootstrapError::from(eyre!(
+                "open shared cluster lock file '{}': {error}",
+                lock_path.display()
+            )));
+        }
+
+        // SAFETY: `fd` is a valid descriptor from `open` above.
+        let lock_result = unsafe { libc::flock(fd, libc::LOCK_EX) };
+        if lock_result != 0 {
+            let error = std::io::Error::last_os_error();
+            // SAFETY: `fd` is valid and should be closed on lock failure.
+            unsafe {
+                libc::close(fd);
+            }
+            return Err(BootstrapError::from(eyre!(
+                "acquire shared cluster lock '{}': {error}",
+                lock_path.display()
+            )));
+        }
+
+        let _ = SHARED_CLUSTER_PROCESS_LOCK_FD.set(fd);
+        Ok(())
     }
 
-    let _ = SHARED_CLUSTER_PROCESS_LOCK_FD.set(fd);
-    Ok(())
+    /// Reads the postmaster PID from the `postmaster.pid` file in `data_dir`.
+    pub(super) fn read_postmaster_pid(data_dir: &std::path::Path) -> Option<i32> {
+        let dir =
+            cap_std::fs::Dir::open_ambient_dir(data_dir, cap_std::ambient_authority()).ok()?;
+        let content = dir.read_to_string("postmaster.pid").ok()?;
+        content.lines().next()?.trim().parse().ok()
+    }
+
+    /// Sends SIGTERM to the PostgreSQL postmaster and waits for shutdown.
+    ///
+    /// Registered via `libc::atexit` so the shared cluster is stopped when the
+    /// test binary exits. Re-reads `postmaster.pid` at exit time and only signals
+    /// when the on-disk PID still matches the stored value, guarding against PID
+    /// reuse.
+    pub(super) extern "C" fn stop_postgres_on_exit() {
+        let stored_pid = PG_POSTMASTER_PID.load(Ordering::Relaxed);
+        if stored_pid <= 0 {
+            return;
+        }
+
+        // Re-read postmaster.pid to guard against PID reuse.
+        let pid = match PG_DATA_DIR.get().and_then(|dir| read_postmaster_pid(dir)) {
+            Some(current_pid) if current_pid == stored_pid => current_pid,
+            _ => return,
+        };
+
+        // SAFETY: `pid` was validated against the on-disk `postmaster.pid`.
+        // SIGTERM triggers a graceful "smart shutdown"; signal 0 probes liveness.
+        unsafe {
+            if libc::kill(pid, libc::SIGTERM) != 0 {
+                return;
+            }
+        }
+
+        // Wait up to five seconds for PostgreSQL to exit gracefully.
+        for _ in 0..50 {
+            std::thread::sleep(Duration::from_millis(100));
+            // SAFETY: signal 0 checks whether the process still exists.
+            if unsafe { libc::kill(pid, 0) } != 0 {
+                return;
+            }
+        }
+
+        // SAFETY: force-kill after the graceful shutdown budget expires.
+        unsafe {
+            libc::kill(pid, libc::SIGKILL);
+        }
+    }
+
+    /// Records the postmaster PID and registers an `atexit` handler so the
+    /// shared cluster is stopped when the test binary exits. Uses
+    /// `compare_exchange` to ensure the handler is registered at most once.
+    pub(super) fn register_process_exit_cleanup(handle: &ClusterHandle) {
+        let data_dir = &handle.settings().data_dir;
+        let Some(pid) = read_postmaster_pid(data_dir) else {
+            return;
+        };
+
+        // Only register once: if PG_POSTMASTER_PID is still 0, swap in the real
+        // PID. If it was already set, another call got here first.
+        if PG_POSTMASTER_PID
+            .compare_exchange(0, pid, Ordering::Relaxed, Ordering::Relaxed)
+            .is_err()
+        {
+            return;
+        }
+
+        let _ = PG_DATA_DIR.set(data_dir.clone());
+
+        // SAFETY: `stop_postgres_on_exit` is a valid `extern "C"` function with
+        // no preconditions beyond the atomic PID being set (done above).
+        let rc = unsafe { libc::atexit(stop_postgres_on_exit) };
+        if rc != 0 {
+            eprintln!(
+                concat!(
+                    "pg-embed: failed to register atexit handler (rc={rc}); ",
+                    "PostgreSQL process (PID {pid}) may outlive the test binary"
+                ),
+                rc = rc,
+                pid = pid
+            );
+        }
+    }
 }
 
 /// Returns the shared cluster handle and registers an atexit handler to stop
@@ -110,9 +190,29 @@ fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
 /// This is a thin wrapper around the library's `shared_cluster_handle()` that
 /// adds cross-process cleanup for nextest compatibility.
 ///
+/// # Environment preconditions
+///
+/// Callers **must** invoke [`ensure_stable_cluster_environment()`] before
+/// calling this function. `shared_cluster_handle()` does not set up
+/// `PG_PASSWORD` or `POSTGRESQL_RELEASES_URL` itself; separating setup from
+/// access makes the command/query boundary explicit.
+///
+/// # Failure caching
+///
+/// `pg_embedded_setup_unpriv::test_support::shared_cluster_handle()` stores
+/// its result in a library-internal `OnceLock`. Once a failure is recorded,
+/// every subsequent call within the same process returns the same cached error
+/// immediately — the retry loop below does **not** re-attempt the download.
+/// The retries exist solely to handle the race window where a parallel test
+/// thread's first-use bootstrap is still in progress. They provide no
+/// protection against a failed bootstrap; for that, ensure the binary cache
+/// is warm before the test process starts (see CI workflow and
+/// `scripts/warm-pg-embedded-cache.sh`).
+///
 /// # Examples
 ///
 /// ```rust,ignore
+/// ensure_stable_cluster_environment();
 /// let cluster = shared_cluster_handle()
 ///     .expect("embedded postgres cluster should be available");
 /// let temp_db = cluster
@@ -120,16 +220,20 @@ fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
 ///     .expect("temporary database should be created");
 /// println!("connection URL: {}", temp_db.url());
 /// ```
+// Unit tests for this function are impractical: exercising the happy path
+// requires a live embedded PostgreSQL cluster. Coverage is provided
+// end-to-end by every BDD integration-test binary in the `pg-embed` nextest
+// group. The internal helpers (`ensure_stable_cluster_environment`,
+// `unix_atexit::read_postmaster_pid`, etc.) are unit-tested below.
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
-    ensure_stable_password();
     #[cfg(unix)]
-    acquire_shared_cluster_process_lock()?;
+    unix_atexit::acquire_shared_cluster_process_lock()?;
     let mut attempt = 1;
     loop {
         match pg_embedded_setup_unpriv::test_support::shared_cluster_handle() {
             Ok(handle) => {
                 #[cfg(unix)]
-                register_process_exit_cleanup(handle);
+                unix_atexit::register_process_exit_cleanup(handle);
                 return Ok(handle);
             }
             Err(error) => {
@@ -143,15 +247,20 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     }
 }
 
-/// Ensures `PG_PASSWORD` is set to a stable value so the password remains
-/// consistent across process invocations that reuse the same data directory.
+/// Ensures that `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are both set to
+/// stable values before the shared embedded cluster is initialised.
 ///
 /// `postgresql_embedded::Settings::default()` generates a random password on
 /// each call. When the data directory already exists, `setup()` skips `initdb`,
 /// leaving the cluster configured with the *original* password. Without a
 /// stable override, subsequent nextest processes fail with `28P01 password
 /// authentication failed`.
-fn ensure_stable_password() {
+///
+/// `POSTGRESQL_RELEASES_URL` is pinned to the Theseus binaries mirror so that
+/// the binary download source remains stable across crate upgrades and is not
+/// subject to transient GitHub Releases fetch failures (misreported by reqwest
+/// as "error decoding response body").
+pub(crate) fn ensure_stable_cluster_environment() {
     if std::env::var_os("PG_PASSWORD").is_none() {
         // SAFETY: called before the library spawns any threads. The shared
         // cluster singleton serializes access with a `Mutex`, so this runs at
@@ -160,91 +269,18 @@ fn ensure_stable_password() {
             std::env::set_var("PG_PASSWORD", "wildside_embedded_test");
         }
     }
-}
-
-/// Reads the postmaster PID from the `postmaster.pid` file in `data_dir`.
-#[cfg(unix)]
-fn read_postmaster_pid(data_dir: &std::path::Path) -> Option<i32> {
-    let dir = cap_std::fs::Dir::open_ambient_dir(data_dir, cap_std::ambient_authority()).ok()?;
-    let content = dir.read_to_string("postmaster.pid").ok()?;
-    content.lines().next()?.trim().parse().ok()
-}
-
-/// Sends SIGTERM to the PostgreSQL postmaster and waits for shutdown.
-///
-/// Registered via `libc::atexit` so the shared cluster is stopped when the
-/// test binary exits. Re-reads `postmaster.pid` at exit time and only signals
-/// when the on-disk PID still matches the stored value, guarding against PID
-/// reuse.
-#[cfg(unix)]
-extern "C" fn stop_postgres_on_exit() {
-    let stored_pid = PG_POSTMASTER_PID.load(Ordering::Relaxed);
-    if stored_pid <= 0 {
-        return;
-    }
-
-    // Re-read postmaster.pid to guard against PID reuse.
-    let pid = match PG_DATA_DIR.get().and_then(|dir| read_postmaster_pid(dir)) {
-        Some(current_pid) if current_pid == stored_pid => current_pid,
-        _ => return,
-    };
-
-    // SAFETY: `pid` was validated against the on-disk `postmaster.pid`.
-    // SIGTERM triggers a graceful "smart shutdown"; signal 0 probes liveness.
-    unsafe {
-        if libc::kill(pid, libc::SIGTERM) != 0 {
-            return;
+    if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
+        // Pin to Theseus binaries to avoid transient fetch failures in CI that
+        // reqwest misreports as "error decoding response body".
+        // SAFETY: called before the library spawns any threads. The shared-
+        // cluster singleton serializes access with a Mutex, so this runs at
+        // most once per process.
+        unsafe {
+            std::env::set_var(
+                "POSTGRESQL_RELEASES_URL",
+                "https://github.com/theseus-rs/postgresql-binaries",
+            );
         }
-    }
-
-    // Wait up to five seconds for PostgreSQL to exit gracefully.
-    for _ in 0..50 {
-        std::thread::sleep(Duration::from_millis(100));
-        // SAFETY: signal 0 checks whether the process still exists.
-        if unsafe { libc::kill(pid, 0) } != 0 {
-            return;
-        }
-    }
-
-    // SAFETY: force-kill after the graceful shutdown budget expires.
-    unsafe {
-        libc::kill(pid, libc::SIGKILL);
-    }
-}
-
-/// Records the postmaster PID and registers an `atexit` handler so the
-/// shared cluster is stopped when the test binary exits. Uses
-/// `compare_exchange` to ensure the handler is registered at most once.
-#[cfg(unix)]
-fn register_process_exit_cleanup(handle: &ClusterHandle) {
-    let data_dir = &handle.settings().data_dir;
-    let Some(pid) = read_postmaster_pid(data_dir) else {
-        return;
-    };
-
-    // Only register once: if PG_POSTMASTER_PID is still 0, swap in the real
-    // PID. If it was already set, another call got here first.
-    if PG_POSTMASTER_PID
-        .compare_exchange(0, pid, Ordering::Relaxed, Ordering::Relaxed)
-        .is_err()
-    {
-        return;
-    }
-
-    let _ = PG_DATA_DIR.set(data_dir.clone());
-
-    // SAFETY: `stop_postgres_on_exit` is a valid `extern "C"` function with
-    // no preconditions beyond the atomic PID being set (done above).
-    let rc = unsafe { libc::atexit(stop_postgres_on_exit) };
-    if rc != 0 {
-        eprintln!(
-            concat!(
-                "pg-embed: failed to register atexit handler (rc={rc}); ",
-                "PostgreSQL process (PID {pid}) may outlive the test binary"
-            ),
-            rc = rc,
-            pid = pid
-        );
     }
 }
 
@@ -267,14 +303,17 @@ mod tests {
     fn read_postmaster_pid_parses_first_line() {
         let dir = tempfile::tempdir().expect("tempdir");
         write_postmaster_pid(dir.path(), "12345\n/some/path\n5432\n");
-        assert_eq!(super::read_postmaster_pid(dir.path()), Some(12345));
+        assert_eq!(
+            super::unix_atexit::read_postmaster_pid(dir.path()),
+            Some(12345)
+        );
     }
 
     #[cfg(unix)]
     #[test]
     fn read_postmaster_pid_returns_none_for_missing_file() {
         let dir = tempfile::tempdir().expect("tempdir");
-        assert_eq!(super::read_postmaster_pid(dir.path()), None);
+        assert_eq!(super::unix_atexit::read_postmaster_pid(dir.path()), None);
     }
 
     #[cfg(unix)]
@@ -282,37 +321,59 @@ mod tests {
     fn read_postmaster_pid_returns_none_for_non_numeric_content() {
         let dir = tempfile::tempdir().expect("tempdir");
         write_postmaster_pid(dir.path(), "not-a-number\n");
-        assert_eq!(super::read_postmaster_pid(dir.path()), None);
+        assert_eq!(super::unix_atexit::read_postmaster_pid(dir.path()), None);
     }
 
     #[test]
-    fn ensure_stable_password_does_not_overwrite_existing_value() {
-        let _guard = env_lock::lock_env([("PG_PASSWORD", Some("custom_value"))]);
-        super::ensure_stable_password();
+    fn ensure_stable_cluster_environment_does_not_overwrite_existing_values() {
+        let _guard = env_lock::lock_env([
+            ("PG_PASSWORD", Some("custom_value")),
+            (
+                "POSTGRESQL_RELEASES_URL",
+                Some("https://example.invalid/postgresql-binaries"),
+            ),
+        ]);
+        super::ensure_stable_cluster_environment();
         assert_eq!(
             std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
             "custom_value",
-            "ensure_stable_password should not overwrite an existing PG_PASSWORD"
+            "ensure_stable_cluster_environment should not overwrite an existing PG_PASSWORD"
+        );
+        assert_eq!(
+            std::env::var("POSTGRESQL_RELEASES_URL")
+                .expect("POSTGRESQL_RELEASES_URL should be set"),
+            "https://example.invalid/postgresql-binaries",
+            "ensure_stable_cluster_environment should not overwrite an existing release URL"
         );
     }
 
     #[test]
-    fn retry_helpers_are_linked() {
-        let _ = SHARED_CLUSTER_RETRIES;
-        let _ = SHARED_CLUSTER_RETRY_DELAY;
-        let _ = shared_cluster_handle as fn() -> BootstrapResult<&'static ClusterHandle>;
+    fn ensure_stable_cluster_environment_sets_release_url_when_missing() {
+        let _guard = env_lock::lock_env([
+            ("PG_PASSWORD", Some("custom_value")),
+            ("POSTGRESQL_RELEASES_URL", None),
+        ]);
+        super::ensure_stable_cluster_environment();
+        assert_eq!(
+            std::env::var("POSTGRESQL_RELEASES_URL")
+                .expect("POSTGRESQL_RELEASES_URL should be set"),
+            "https://github.com/theseus-rs/postgresql-binaries"
+        );
     }
 
-    #[cfg(unix)]
     #[test]
-    fn unix_cleanup_helpers_are_linked() {
-        let _ = SHARED_CLUSTER_LOCK_FILE;
-        let _ = &PG_POSTMASTER_PID;
-        let _ = &PG_DATA_DIR;
-        let _ = &SHARED_CLUSTER_PROCESS_LOCK_FD;
-        let _ = &SHARED_CLUSTER_PROCESS_LOCK_INIT;
-        let _ = acquire_shared_cluster_process_lock as fn() -> BootstrapResult<()>;
-        let _ = stop_postgres_on_exit as extern "C" fn();
-        let _ = register_process_exit_cleanup as fn(&ClusterHandle);
+    fn retry_budget_is_within_expected_bounds() {
+        let retry_count = std::hint::black_box(SHARED_CLUSTER_RETRIES);
+        let retry_delay = std::hint::black_box(SHARED_CLUSTER_RETRY_DELAY);
+
+        assert_eq!(
+            retry_count, 5,
+            "SHARED_CLUSTER_RETRIES must equal 5; got {retry_count}"
+        );
+        assert_eq!(
+            retry_delay,
+            Duration::from_millis(500),
+            "SHARED_CLUSTER_RETRY_DELAY must equal 500 ms; got {retry_delay:?}"
+        );
     }
 }

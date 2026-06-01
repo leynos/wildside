@@ -10,7 +10,7 @@ use mockable::DefaultClock;
 use postgres::NoTls;
 use tokio::runtime::Runtime;
 
-use crate::support::atexit_cleanup::shared_cluster_handle;
+use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use crate::support::{drop_table, handle_cluster_setup_failure, provision_template_database};
 use crate::{
     DatabaseHandle, FixtureOsmSource, GEOFENCE_BOUNDS, INPUT_DIGEST, OsmIngestionWorld,
@@ -21,6 +21,7 @@ impl OsmIngestionWorld {
     pub fn setup_command(&self) {
         let runtime = Runtime::new().expect("create runtime");
 
+        ensure_stable_cluster_environment();
         let cluster = match shared_cluster_handle() {
             Ok(cluster) => cluster,
             Err(reason) => {

@@ -28,7 +28,7 @@ use serde_json::Value;
 
 mod support;
 
-use support::atexit_cleanup::shared_cluster_handle;
+use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::embedded_postgres::drop_users_table;
 use support::{handle_cluster_setup_failure, provision_template_database};
 
@@ -186,6 +186,7 @@ async fn run_flow(
 }
 
 fn setup_db() -> Result<DbContext, String> {
+    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();

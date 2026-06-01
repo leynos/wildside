@@ -20,7 +20,7 @@ use rstest_bdd_macros::{ScenarioState, given, then, when};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-use super::atexit_cleanup::shared_cluster_handle;
+use super::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use super::{handle_cluster_setup_failure, provision_template_database};
 
 /// Wrapper for non-Clone runtime handle.
@@ -59,6 +59,7 @@ pub struct ExampleDataSeedingWorld {
 impl ExampleDataSeedingWorld {
     fn setup_fresh_database(&self) {
         let runtime = Runtime::new().expect("create runtime");
+        ensure_stable_cluster_environment();
         let cluster = match shared_cluster_handle() {
             Ok(c) => c,
             Err(reason) => {

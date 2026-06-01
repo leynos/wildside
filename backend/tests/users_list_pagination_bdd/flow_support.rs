@@ -20,7 +20,7 @@ use serde_json::Value;
 use url::Url;
 use uuid::Uuid;
 
-use super::support::atexit_cleanup::shared_cluster_handle;
+use super::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use super::support::profile_interests::build_session_middleware;
 use super::support::{format_postgres_error, provision_template_database};
 
@@ -76,6 +76,7 @@ fn with_world<F: FnOnce(&mut World)>(world: &mut World, f: F) {
 }
 
 pub(crate) fn setup_db_context() -> Result<DbContext, String> {
+    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();

@@ -19,7 +19,7 @@ use postgres::NoTls;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-use crate::support::atexit_cleanup::shared_cluster_handle;
+use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use crate::support::{handle_cluster_setup_failure, provision_template_database};
 use crate::{
     DatabaseHandle, ImmediateSleeper, LAUNCH_A_BOUNDS, MutableClock, NoJitter,
@@ -40,6 +40,7 @@ impl OverpassEnrichmentWorld {
     ) {
         let runtime = Runtime::new().expect("create runtime");
 
+        ensure_stable_cluster_environment();
         let cluster = match shared_cluster_handle() {
             Ok(cluster) => cluster,
             Err(reason) => {

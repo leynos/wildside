@@ -4,6 +4,9 @@ name: ci
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
+env:
+  PG_VERSION: "16.10.0"
+
 jobs:
   build:
     runs-on: ubicloud-standard-8
@@ -39,7 +42,7 @@ jobs:
           echo "bun=${frontend_hash}-${tokens_hash}" >>"$GITHUB_OUTPUT"
 
       - name: Cache workspace node_modules
-        uses: ubicloud/cache@v4
+        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
         with:
           path: |
             node_modules
@@ -50,7 +53,7 @@ jobs:
           restore-keys: ${{ runner.os }}-modules-
 
       - name: Cache Bun downloads
-        uses: ubicloud/cache@v4
+        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
         with:
           path: |
             ~/.bun/install/cache
@@ -133,15 +136,22 @@ jobs:
 
       # Backend
       - name: Cache cargo
-        uses: ubicloud/cache@v4
+        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.theseus/postgresql
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache PostgreSQL embedded binaries
+        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
+        with:
+          path: |
+            ~/.theseus/postgresql
+            ~/.cache/pg-embedded/binaries
+          key: ${{ runner.os }}-pg-embedded-${{ env.PG_VERSION }}
+          restore-keys: ${{ runner.os }}-pg-embedded-
       - name: Rust build
         run: cargo check --locked --manifest-path backend/Cargo.toml --all-targets --all-features
       - name: Rust fmt check
@@ -168,13 +178,23 @@ jobs:
         run: |
           make prepare-pg-worker
 
+      - name: Warm PostgreSQL embedded binary cache
+        env:
+          # Increase GitHub API rate limits for postgresql_embedded downloads.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin the embedded PostgreSQL version so postgresql_archive skips release-listing queries.
+          # Use the semver "exact" prefix so no wildcard resolution is attempted.
+          POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
+          POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
+        run: bash scripts/warm-pg-embedded-cache.sh
+
       - name: Rust tests
         env:
           # Increase GitHub API rate limits for postgresql_embedded downloads.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Pin the embedded PostgreSQL version so postgresql_archive skips release-listing queries.
           # Use the semver "exact" prefix so no wildcard resolution is attempted.
-          POSTGRESQL_VERSION: "=16.10.0"
+          POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
           # Keep backend selection explicit for strict PG_TEST_BACKEND validation.
           PG_TEST_BACKEND: postgresql_embedded
           # Root-path bootstrap requires the worker binary for privilege demotion.

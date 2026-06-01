@@ -11,7 +11,7 @@ use rstest_bdd_macros::{given, scenario, then, when};
 
 mod support;
 
-use support::atexit_cleanup::shared_cluster_handle;
+use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::embedded_postgres::drop_users_table;
 use support::{drop_table, handle_cluster_setup_failure, provision_template_database};
 
@@ -110,6 +110,7 @@ fn assert_users_and_profile_state(
 
 #[fixture]
 fn world() -> UserStateSchemaAuditWorld {
+    ensure_stable_cluster_environment();
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(reason) => {

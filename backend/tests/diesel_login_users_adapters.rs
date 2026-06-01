@@ -22,7 +22,7 @@ use serde_json::Value;
 
 mod support;
 
-use support::atexit_cleanup::shared_cluster_handle;
+use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::embedded_postgres::drop_users_table;
 use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
@@ -227,6 +227,7 @@ async fn run_flow(
 }
 
 fn setup_db_context() -> Option<DbContext> {
+    ensure_stable_cluster_environment();
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(error) => {

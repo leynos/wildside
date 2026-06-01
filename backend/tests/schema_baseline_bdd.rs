@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 mod support;
 
-use support::atexit_cleanup::shared_cluster_handle;
+use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::{format_postgres_error, provision_template_database};
 
 struct BaselineWorld {
@@ -67,6 +67,7 @@ impl BaselineWorld {
 
 #[fixture]
 fn world() -> BaselineWorld {
+    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().expect("embedded postgres cluster should be available");
     let database = provision_template_database(cluster)
         .map_err(|error: UserPersistenceError| error.to_string())

@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 mod support;
 
-use support::atexit_cleanup::shared_cluster_handle;
+use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::profile_interests::{
     DB_PROFILE_NAME, FIRST_THEME_ID, FIXTURE_AUTH_ID, FIXTURE_PROFILE_NAME, SECOND_THEME_ID,
     build_session_middleware,
@@ -197,6 +197,7 @@ async fn run_flow(
 }
 
 fn setup_db_context() -> Option<DbContext> {
+    ensure_stable_cluster_environment();
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(error) => {

@@ -9,7 +9,7 @@ use diesel_async::RunQueryDsl;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use uuid::Uuid;
 
-use super::support::atexit_cleanup::shared_cluster_handle;
+use super::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use super::support::provision_template_database;
 
 /// Database context for DB-present startup mode tests.
@@ -21,6 +21,7 @@ pub(crate) struct DbContext {
 
 /// Set up a DB context with embedded PostgreSQL.
 pub(crate) fn setup_db_context(runtime: &tokio::runtime::Runtime) -> Result<DbContext, String> {
+    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();

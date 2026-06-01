@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 mod support;
 
-use support::atexit_cleanup::shared_cluster_handle;
+use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
 
 struct TestContext {
@@ -39,6 +39,7 @@ fn seed_user(url: &str, user_id: &UserId) -> Result<(), String> {
 
 fn setup_context() -> Result<TestContext, String> {
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
+    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temp_db.url().to_string();
