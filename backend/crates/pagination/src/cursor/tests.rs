@@ -139,31 +139,26 @@ fn new_cursor_includes_direction_in_json(#[case] direction: Direction, #[case] e
     assert_eq!(dir_value, expected);
 }
 
-#[test]
-fn invalid_direction_value_returns_unsupported_direction_error() {
-    let invalid_cursor_json =
-        r#"{"key":{"created_at":"2026-03-22T10:30:00Z","id":"test-id"},"dir":"Sideways"}"#;
-    let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(invalid_cursor_json);
+#[rstest]
+#[case(
+    r#"{"key":{"created_at":"2026-03-22T10:30:00Z","id":"test-id"},"dir":"Sideways"}"#,
+    "Sideways"
+)]
+#[case(
+    r#"{"key":{"created_at":"2026-03-22T10:30:00Z","id":"test-id"},"dir":123}"#,
+    "123"
+)]
+fn unsupported_direction_value_returns_unsupported_direction_error(
+    #[case] cursor_json: &str,
+    #[case] expected_direction: &str,
+) {
+    let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(cursor_json);
 
     let result = Cursor::<FixtureKey>::decode(&encoded);
 
     assert!(matches!(
         result,
-        Err(CursorError::UnsupportedDirection { direction }) if direction == "Sideways"
-    ));
-}
-
-#[test]
-fn non_string_direction_value_returns_unsupported_direction_error() {
-    let invalid_cursor_json =
-        r#"{"key":{"created_at":"2026-03-22T10:30:00Z","id":"test-id"},"dir":123}"#;
-    let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(invalid_cursor_json);
-
-    let result = Cursor::<FixtureKey>::decode(&encoded);
-
-    assert!(matches!(
-        result,
-        Err(CursorError::UnsupportedDirection { direction }) if direction == "123"
+        Err(CursorError::UnsupportedDirection { direction }) if direction == expected_direction
     ));
 }
 
