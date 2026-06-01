@@ -1,6 +1,7 @@
 //! Unit tests for opaque cursor encoding and decoding.
 
 use base64::Engine as _;
+use insta::assert_json_snapshot;
 use proptest::{prelude::Just, prop_oneof, proptest, string::string_regex};
 use rstest::rstest;
 use serde::{Deserialize, Serialize};
@@ -137,6 +138,26 @@ fn new_cursor_includes_direction_in_json(#[case] direction: Direction, #[case] e
         .and_then(|v| v.as_str())
         .expect("dir field should exist and be a string");
     assert_eq!(dir_value, expected);
+}
+
+#[rstest]
+#[case(Direction::Next, "cursor_wire_payload_next")]
+#[case(Direction::Prev, "cursor_wire_payload_prev")]
+fn cursor_json_payload_matches_snapshot(#[case] direction: Direction, #[case] snapshot_name: &str) {
+    let cursor = Cursor::with_direction(
+        FixtureKey {
+            created_at: "2026-03-22T10:30:00Z".to_owned(),
+            id: "test-id".to_owned(),
+        },
+        direction,
+    );
+    let encoded = cursor.encode().expect("encoding succeeds");
+    let decoded_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(&encoded)
+        .expect("base64 decoding succeeds");
+    let json_value: serde_json::Value = serde_json::from_slice(&decoded_bytes).expect("valid JSON");
+
+    assert_json_snapshot!(snapshot_name, json_value);
 }
 
 #[rstest]

@@ -17,6 +17,7 @@ use std::{error::Error as StdError, io, sync::Arc};
 
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
+mod cursor_error_tests;
 mod request_validation_tests;
 
 #[derive(Debug)]
@@ -256,33 +257,6 @@ async fn list_users_rejects_invalid_limits(#[case] path: &str) -> TestResult {
     assert_eq!(
         details.get("code").and_then(Value::as_str),
         Some("invalid_limit")
-    );
-    Ok(())
-}
-
-#[actix_web::test]
-async fn list_users_rejects_invalid_cursor() -> TestResult {
-    let app = actix_test::init_service(test_app()).await;
-    let cookie = login_and_get_cookie(&app).await?;
-
-    let users_req = actix_test::TestRequest::get()
-        .uri("/api/v1/users?cursor=not-a-cursor")
-        .cookie(cookie)
-        .to_request();
-    let users_res = actix_test::call_service(&app, users_req).await;
-
-    assert_eq!(users_res.status(), actix_web::http::StatusCode::BAD_REQUEST);
-    let body = actix_test::read_body(users_res).await;
-    let value: Value = serde_json::from_slice(&body)?;
-    assert_eq!(
-        value.get("message").and_then(Value::as_str),
-        Some("cursor is invalid")
-    );
-    let details = get_details_object(&value)?;
-    assert_eq!(details.get("field").and_then(Value::as_str), Some("cursor"));
-    assert_eq!(
-        details.get("code").and_then(Value::as_str),
-        Some("invalid_cursor")
     );
     Ok(())
 }

@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETED
 
 ## Purpose / big picture
 
@@ -333,10 +333,11 @@ errors.
 
 ## Outcomes & Retrospective
 
-Implementation is complete: semantic pagination errors now flow through the
-repository-facing error taxonomy and port/query mapping, the externally visible
-`400` path for malformed user cursors is preserved and validated, and the
-contract and documentation have been updated.
+Implementation is complete across M0-M6: semantic pagination errors now flow
+through the repository-facing error taxonomy and port/query mapping, the
+externally visible `400` path for malformed and unsupported-direction user
+cursors is preserved and validated, and the contract, regression coverage, and
+documentation have been updated.
 
 ## Context and orientation
 

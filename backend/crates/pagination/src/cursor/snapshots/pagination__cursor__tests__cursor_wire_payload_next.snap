@@ -1,0 +1,11 @@
+---
+source: backend/crates/pagination/src/cursor/tests.rs
+expression: json_value
+---
+{
+  "dir": "Next",
+  "key": {
+    "created_at": "2026-03-22T10:30:00Z",
+    "id": "test-id"
+  }
+}
