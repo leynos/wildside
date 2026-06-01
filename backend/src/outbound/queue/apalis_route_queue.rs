@@ -1,24 +1,32 @@
-//! Apalis-backed `RouteQueue` adapter using PostgreSQL storage.
+//! Apalis-backed route queue adapter.
+//!
+//! This module implements the
+//! [`RouteQueue`](crate::domain::ports::RouteQueue) port for dispatching
+//! route-planning jobs through Apalis with PostgreSQL-backed persistence.
+//!
+//! [`GenericApalisRouteQueue<P, Q>`] is the test and BDD harness seam. It is
+//! parameterized over the plan payload type `P` and queue provider type `Q` so
+//! tests can substitute in-memory or failing providers. [`ApalisRouteQueue<P>`]
+//! is the production alias that binds the provider to
+//! [`ApalisPostgresProvider`].
+//!
+//! The `metrics` feature enables the Prometheus route queue metrics adapter in
+//! [`crate::outbound::metrics`]. The queue itself depends only on the
+//! domain-owned [`RouteQueueMetrics`](crate::domain::ports::RouteQueueMetrics)
+//! port.
 
 use async_trait::async_trait;
 use serde::Serialize;
 use serde_json::Value;
+use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Instant;
 
 use apalis_core::backend::TaskSink;
 use tracing::{instrument, warn};
 
-use crate::domain::ports::{JobDispatchError, RouteQueue};
-
-#[cfg(feature = "metrics")]
-mod observability;
-
-#[cfg(feature = "metrics")]
-use observability::observe_enqueue;
-
-#[cfg(not(feature = "metrics"))]
-fn observe_enqueue(_outcome: &str, _latency: std::time::Duration) {}
+use crate::domain::ports::{JobDispatchError, RouteQueue, RouteQueueMetrics, RouteQueueOutcome};
 
 /// Abstracts the queue storage backend for testability.
 ///
@@ -92,8 +100,9 @@ pub(crate) trait QueueProvider: Send + Sync {
 /// # Example
 ///
 /// ```rust,no_run
+/// # use std::sync::Arc;
+/// # use backend::domain::ports::{NoOpRouteQueueMetrics, RouteQueue};
 /// # use backend::outbound::queue::{GenericApalisRouteQueue, ApalisPostgresProvider};
-/// # use backend::domain::ports::RouteQueue;
 /// # use serde::{Serialize, Deserialize};
 /// # use sqlx::PgPool;
 /// #
@@ -104,17 +113,27 @@ pub(crate) trait QueueProvider: Send + Sync {
 /// #
 /// # async fn example(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
 /// let provider = ApalisPostgresProvider::new(pool).await?;
-/// let queue: GenericApalisRouteQueue<MyPlan, _> = GenericApalisRouteQueue::new(provider);
+/// let queue: GenericApalisRouteQueue<MyPlan, _> =
+///     GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
 ///
 /// let plan = MyPlan { route_id: "route-123".to_string() };
 /// queue.enqueue(&plan).await?;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GenericApalisRouteQueue<P, Q> {
     provider: Q,
+    metrics: Arc<dyn RouteQueueMetrics>,
     _plan: PhantomData<fn() -> P>,
+}
+
+impl<P, Q> fmt::Debug for GenericApalisRouteQueue<P, Q> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GenericApalisRouteQueue")
+            .field("metrics", &"RouteQueueMetrics")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<P, Q> GenericApalisRouteQueue<P, Q> {
@@ -123,6 +142,8 @@ impl<P, Q> GenericApalisRouteQueue<P, Q> {
     /// # Example
     ///
     /// ```rust,no_run
+    /// # use std::sync::Arc;
+    /// # use backend::domain::ports::NoOpRouteQueueMetrics;
     /// # use backend::outbound::queue::{GenericApalisRouteQueue, ApalisPostgresProvider};
     /// # use serde::{Serialize, Deserialize};
     /// # use sqlx::PgPool;
@@ -132,13 +153,15 @@ impl<P, Q> GenericApalisRouteQueue<P, Q> {
     /// #
     /// # async fn example(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
     /// let provider = ApalisPostgresProvider::new(pool).await?;
-    /// let queue: GenericApalisRouteQueue<MyPlan, _> = GenericApalisRouteQueue::new(provider);
+    /// let queue: GenericApalisRouteQueue<MyPlan, _> =
+    ///     GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(provider: Q) -> Self {
+    pub fn new(provider: Q, metrics: Arc<dyn RouteQueueMetrics>) -> Self {
         Self {
             provider,
+            metrics,
             _plan: PhantomData,
         }
     }
@@ -187,7 +210,12 @@ where
                 );
             }
         }
-        observe_enqueue(if result.is_ok() { "success" } else { "failure" }, latency);
+        let outcome = if result.is_ok() {
+            RouteQueueOutcome::Success
+        } else {
+            RouteQueueOutcome::Failure
+        };
+        self.metrics.observe_enqueue(outcome, latency);
         result
     }
 }

@@ -1,11 +1,30 @@
-//! Unit tests for the Apalis route queue adapter.
+//! Unit and property tests for `GenericApalisRouteQueue<P, Q>`.
+//!
+//! Deterministic `rstest`/Tokio tests cover named enqueue success, provider
+//! failure, serialization failure, tracing, and metrics scenarios. `proptest`
+//! property tests exercise arbitrary serialization round-trips and the
+//! invariant that serialization failures push no jobs.
+//!
+//! The tests use `FakeQueueProvider` to record pushed jobs in memory,
+//! `FailingQueueProvider` to return configurable provider errors, and
+//! `FailingSerializePlan` to force serializer errors.
+//!
+//! These tests exercise `GenericApalisRouteQueue` through the `RouteQueue` port
+//! interface. They do not test live Apalis or PostgreSQL integration.
 
 use super::*;
+use crate::domain::ports::NoOpRouteQueueMetrics;
+#[cfg(feature = "metrics")]
+use crate::outbound::metrics::PrometheusRouteQueueMetrics;
 use crate::outbound::queue::test_helpers::{FailingQueueProvider, FakeQueueProvider};
+#[cfg(feature = "metrics")]
+use prometheus::Encoder;
 use proptest::prelude::*;
 use rstest::rstest;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
+use std::sync::Arc;
+use tracing_test::traced_test;
 
 /// Test plan type for unit tests.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -13,10 +32,14 @@ struct TestPlan {
     name: String,
 }
 
+fn no_op_metrics() -> Arc<NoOpRouteQueueMetrics> {
+    Arc::new(NoOpRouteQueueMetrics)
+}
+
 async fn assert_plan_round_trips(plan: TestPlan) {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<TestPlan, _> =
-        GenericApalisRouteQueue::new(fake_provider.clone());
+        GenericApalisRouteQueue::new(fake_provider.clone(), no_op_metrics());
 
     let enqueue_result = queue.enqueue(&plan).await;
     assert!(
@@ -40,7 +63,7 @@ async fn assert_plan_round_trips(plan: TestPlan) {
 async fn assert_failed_serialization_pushes_no_jobs(message: String) {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
-        GenericApalisRouteQueue::new(fake_provider.clone());
+        GenericApalisRouteQueue::new(fake_provider.clone(), no_op_metrics());
 
     let result = queue.enqueue(&FailingSerializePlan { message }).await;
     assert!(
@@ -90,7 +113,7 @@ proptest! {
 async fn apalis_queue_enqueue_round_trips() {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<TestPlan, _> =
-        GenericApalisRouteQueue::new(fake_provider.clone());
+        GenericApalisRouteQueue::new(fake_provider.clone(), no_op_metrics());
 
     let plan = TestPlan {
         name: "test-plan".to_string(),
@@ -118,7 +141,7 @@ async fn apalis_queue_enqueue_round_trips() {
 async fn apalis_queue_maps_provider_error_to_unavailable() {
     let failing_provider = FailingQueueProvider::new("simulated queue failure".to_string());
     let queue: GenericApalisRouteQueue<TestPlan, _> =
-        GenericApalisRouteQueue::new(failing_provider);
+        GenericApalisRouteQueue::new(failing_provider, no_op_metrics());
 
     let plan = TestPlan {
         name: "test-plan".to_string(),
@@ -148,7 +171,7 @@ async fn apalis_queue_maps_provider_error_to_unavailable() {
 async fn apalis_queue_enqueues_multiple_plans() {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<TestPlan, _> =
-        GenericApalisRouteQueue::new(fake_provider.clone());
+        GenericApalisRouteQueue::new(fake_provider.clone(), no_op_metrics());
 
     let plan1 = TestPlan {
         name: "plan-1".to_string(),
@@ -200,7 +223,7 @@ impl Serialize for FailingSerializePlan {
 async fn apalis_queue_maps_serialization_failure_to_rejected() {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
-        GenericApalisRouteQueue::new(fake_provider.clone());
+        GenericApalisRouteQueue::new(fake_provider.clone(), no_op_metrics());
 
     let plan = FailingSerializePlan {
         message: "simulated serialization failure".to_string(),
@@ -236,5 +259,117 @@ async fn apalis_queue_maps_serialization_failure_to_rejected() {
         pushed_jobs.len(),
         0,
         "no jobs should be pushed when serialization fails"
+    );
+}
+
+#[traced_test]
+#[tokio::test]
+async fn apalis_queue_success_logs_enqueue_without_alert() {
+    let fake_provider = FakeQueueProvider::new();
+    let queue: GenericApalisRouteQueue<TestPlan, _> =
+        GenericApalisRouteQueue::new(fake_provider, no_op_metrics());
+    let plan = TestPlan {
+        name: "test-plan".to_string(),
+    };
+
+    queue
+        .enqueue(&plan)
+        .await
+        .expect("enqueue should succeed with fake provider");
+
+    assert!(
+        logs_contain("enqueue"),
+        "success logs should mention enqueue"
+    );
+    assert!(
+        !logs_contain("warn") && !logs_contain("WARN"),
+        "successful enqueue should not emit warning logs"
+    );
+}
+
+#[traced_test]
+#[tokio::test]
+async fn apalis_queue_provider_failure_logs_level() {
+    let failing_provider = FailingQueueProvider::new("simulated queue failure".to_string());
+    let queue: GenericApalisRouteQueue<TestPlan, _> =
+        GenericApalisRouteQueue::new(failing_provider, no_op_metrics());
+    let plan = TestPlan {
+        name: "test-plan".to_string(),
+    };
+
+    let result = queue.enqueue(&plan).await;
+
+    assert!(
+        result.is_err(),
+        "enqueue should fail when provider returns error"
+    );
+    assert!(
+        logs_contain("WARN"),
+        "provider failure should emit a warning"
+    );
+    assert!(
+        logs_contain("simulated queue failure"),
+        "warning should include provider failure text"
+    );
+}
+
+#[traced_test]
+#[tokio::test]
+async fn apalis_queue_serialization_failure_logs_level() {
+    let fake_provider = FakeQueueProvider::new();
+    let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
+        GenericApalisRouteQueue::new(fake_provider, no_op_metrics());
+    let plan = FailingSerializePlan {
+        message: "simulated serialization failure".to_string(),
+    };
+
+    let result = queue.enqueue(&plan).await;
+
+    assert!(
+        result.is_err(),
+        "enqueue should fail when serialization fails"
+    );
+    assert!(
+        logs_contain("WARN"),
+        "serialization failure should emit a warning"
+    );
+    assert!(
+        logs_contain("serialization") || logs_contain("serialize"),
+        "warning should mention serialization"
+    );
+}
+
+#[cfg(feature = "metrics")]
+#[rstest]
+#[tokio::test]
+async fn apalis_queue_records_prometheus_enqueue_metrics() {
+    let registry = prometheus::Registry::new();
+    let metrics = PrometheusRouteQueueMetrics::new(&registry)
+        .expect("route queue metrics should register with isolated registry");
+    let fake_provider = FakeQueueProvider::new();
+    let queue: GenericApalisRouteQueue<TestPlan, _> =
+        GenericApalisRouteQueue::new(fake_provider, Arc::new(metrics));
+    let plan = TestPlan {
+        name: "test-plan".to_string(),
+    };
+
+    queue
+        .enqueue(&plan)
+        .await
+        .expect("enqueue should succeed with fake provider");
+
+    let mut buffer = Vec::new();
+    prometheus::TextEncoder::new()
+        .encode(&registry.gather(), &mut buffer)
+        .expect("metrics should encode as Prometheus text");
+    let metrics_text = String::from_utf8(buffer).expect("metrics text should be UTF-8");
+
+    assert!(
+        metrics_text.contains("route_queue_enqueue_total{outcome=\"success\"} 1"),
+        "success counter should be 1:\n{metrics_text}"
+    );
+    assert!(
+        metrics_text.contains("route_queue_enqueue_latency_seconds_count{outcome=\"success\"} 1"),
+        "latency histogram should record one sample:\n{metrics_text}"
     );
 }
