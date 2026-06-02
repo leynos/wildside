@@ -105,12 +105,18 @@ mod tests {
         register_pagination_error_metrics(&registry)?;
         let _error = invalid_cursor_error_from(PaginationErrorSource::UsersHttp);
 
-        assert!(
-            registry
-                .gather()
-                .iter()
-                .any(|metric| metric.name() == "wildside_pagination_errors_total"),
-            "pagination error counter should be registered"
+        let families = registry.gather();
+        let counter_value = families
+            .iter()
+            .find(|metric| metric.name() == "wildside_pagination_errors_total")
+            .and_then(|metric| metric.metric.first())
+            .and_then(|sample| sample.counter.as_ref())
+            .map(|counter| counter.value());
+
+        assert_eq!(
+            counter_value,
+            Some(1.0),
+            "invalid_cursor_error_from should increment wildside_pagination_errors_total"
         );
         Ok(())
     }
