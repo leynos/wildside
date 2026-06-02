@@ -82,7 +82,7 @@ Hypertext Transfer Protocol (HTTP) `400 Bad Request`:
 
 | Condition                                  | Message                             | `details.field` | `details.code`          |
 |--------------------------------------------|-------------------------------------|-----------------|-------------------------|
-| Cursor text is not a valid user cursor    | `cursor is invalid`                 | `cursor`        | `invalid_cursor`        |
+| Cursor text is not a valid user cursor     | `cursor is invalid`                 | `cursor`        | `invalid_cursor`        |
 | Cursor direction is not supported          | `cursor direction is unsupported`   | `cursor`        | `unsupported_direction` |
 
 Authentication and infrastructure errors keep their existing meanings.
