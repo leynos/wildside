@@ -100,17 +100,18 @@ rstest-bdd = "0.5.0"
 rstest-bdd-macros = { version = "0.5.0", features = ["strict-compile-time-validation"] }
 tracing-test = { version = "0.2", features = ["no-env-filter"] }
 insta = { version = "1", features = ["json", "redactions"] }
+serial_test = "3"
 # Provides libc::atexit for graceful embedded PostgreSQL cluster shutdown under nextest.
 libc = "0.2"
 tempfile = "3"
 
 [[bin]]
-name = "openapi-dump"
-path = "src/bin/openapi_dump.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
-name = "er-snapshots"
-path = "src/bin/er_snapshots.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
 name = "ingest-osm"

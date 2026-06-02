@@ -16,7 +16,8 @@ use url::Url;
 use utoipa::ToSchema;
 
 use crate::domain::pagination_errors::{
-    PaginationErrorSource, invalid_cursor_error_from, unsupported_direction_error_from,
+    PaginationErrorSource, invalid_cursor_error_from, record_pagination_error,
+    unsupported_direction_error_from,
 };
 use crate::domain::ports::{ListUsersPageRequest, UsersPage};
 use crate::domain::{Error, User, UserCursorKey};
@@ -278,9 +279,11 @@ fn current_request_url(request: &HttpRequest) -> Result<Url, Error> {
 fn map_cursor_error(error: CursorError) -> Error {
     match error {
         CursorError::UnsupportedDirection { .. } => {
+            record_pagination_error(PaginationErrorSource::UsersHttp, "unsupported_direction");
             unsupported_direction_error_from(PaginationErrorSource::UsersHttp)
         }
         CursorError::InvalidBase64 { .. } | CursorError::Deserialize { .. } => {
+            record_pagination_error(PaginationErrorSource::UsersHttp, "invalid_cursor");
             invalid_cursor_error_from(PaginationErrorSource::UsersHttp)
         }
         CursorError::Serialize { .. } => Error::internal("failed to decode users cursor"),

@@ -2,6 +2,12 @@
 //!
 //! These helpers centralize the user-visible cursor error contract so inbound
 //! adapters and repository error mapping cannot drift.
+//!
+//! * `invalid_cursor_error_from` — pure constructor for the invalid-cursor
+//!   error envelope.
+//! * `unsupported_direction_error_from` — pure constructor for the
+//!   unsupported-direction error envelope.
+//! * `record_pagination_error` — emit structured log and increment counter.
 
 use serde_json::json;
 #[cfg(feature = "metrics")]
@@ -34,21 +40,20 @@ impl PaginationErrorSource {
     }
 }
 
-/// Build the standard invalid cursor error for a specific adapter source.
-pub(crate) fn invalid_cursor_error_from(source: PaginationErrorSource) -> Error {
-    record_pagination_error(source, "invalid_cursor");
+/// Build the standard invalid-cursor error envelope.
+pub(crate) fn invalid_cursor_error_from(_source: PaginationErrorSource) -> Error {
     Error::invalid_request("cursor is invalid")
         .with_details(json!({ "field": "cursor", "code": "invalid_cursor" }))
 }
 
-/// Build the standard unsupported cursor direction error for an adapter source.
-pub(crate) fn unsupported_direction_error_from(source: PaginationErrorSource) -> Error {
-    record_pagination_error(source, "unsupported_direction");
+/// Build the standard unsupported-direction error envelope.
+pub(crate) fn unsupported_direction_error_from(_source: PaginationErrorSource) -> Error {
     Error::invalid_request("cursor direction is unsupported")
         .with_details(json!({ "field": "cursor", "code": "unsupported_direction" }))
 }
 
-fn record_pagination_error(source: PaginationErrorSource, detail_code: &'static str) {
+/// Record a pagination cursor error observation: structured log + optional counter.
+pub(crate) fn record_pagination_error(source: PaginationErrorSource, detail_code: &'static str) {
     let trace_id = TraceId::current().map(|id| id.to_string());
     info!(
         error_code = detail_code,
@@ -94,16 +99,19 @@ mod tests {
 
     use std::error::Error as StdError;
 
+    use serial_test::serial;
+
     use super::*;
 
     type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
     #[test]
+    #[serial]
     fn registers_pagination_error_counter() -> TestResult {
         let registry = Registry::new();
 
         register_pagination_error_metrics(&registry)?;
-        let _error = invalid_cursor_error_from(PaginationErrorSource::UsersHttp);
+        record_pagination_error(PaginationErrorSource::UsersHttp, "invalid_cursor");
 
         let families = registry.gather();
         let counter_value = families
@@ -116,7 +124,7 @@ mod tests {
         assert_eq!(
             counter_value,
             Some(1.0),
-            "invalid_cursor_error_from should increment wildside_pagination_errors_total"
+            "record_pagination_error should increment wildside_pagination_errors_total"
         );
         Ok(())
     }
