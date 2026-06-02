@@ -1,4 +1,11 @@
 //! Test utilities for queue adapters.
+//!
+//! These helpers let queue adapter tests exercise serialization, dispatch, and
+//! observability paths without requiring live infrastructure.
+//!
+//! - `FakeQueueProvider` records pushed job payloads for assertions.
+//! - `FailingQueueProvider` simulates queue dispatch failures.
+//! - `RecordingRouteQueueMetrics` captures enqueue outcomes and latencies.
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -104,8 +111,9 @@ impl RecordingRouteQueueMetrics {
 
 impl RouteQueueMetrics for RecordingRouteQueueMetrics {
     fn observe_enqueue(&self, outcome: RouteQueueOutcome, latency: Duration) {
-        let Ok(mut observations) = self.observations.lock() else {
-            panic!("failed to lock route queue metrics");
+        let mut observations = match self.observations.lock() {
+            Ok(observations) => observations,
+            Err(error) => panic!("failed to lock route queue metrics: {error}"),
         };
         observations.push((outcome, latency));
     }
