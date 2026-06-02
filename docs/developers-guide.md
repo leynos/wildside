@@ -279,7 +279,7 @@ The warm-up step pins:
   anonymous rate limits.
 
 Keep PostgreSQL-backed nextest binaries in the `pg-embedded` test group in
-`.config/nextest.toml`, and keep that group serialised. First-use cluster
+`.config/nextest.toml`, and keep that group serialized. First-use cluster
 bootstrap is process-local and expensive; serial execution avoids concurrent
 setup attempts competing for the same warmed cache, filesystem paths, and
 worker process.
