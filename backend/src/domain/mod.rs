@@ -75,6 +75,10 @@ pub mod offline_bundle_service;
 mod offline_bundle_service_support;
 pub mod osm_ingestion;
 pub mod overpass_enrichment_worker;
+/// Centralises pagination cursor error envelope construction, logging, and
+/// optional Prometheus counter recording for all adapter layers.  Inbound
+/// HTTP adapters and outbound persistence error mappers must import helpers
+/// from this module rather than constructing error envelopes independently.
 pub(crate) mod pagination_errors;
 pub mod ports;
 pub mod preferences;
