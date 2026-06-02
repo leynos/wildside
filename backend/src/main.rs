@@ -25,9 +25,11 @@ use server::{ServerConfig, create_server};
 #[cfg(feature = "metrics")]
 fn make_metrics()
 -> Result<actix_web_prom::PrometheusMetrics, Box<dyn std::error::Error + Send + Sync>> {
-    PrometheusMetricsBuilder::new("wildside")
+    let metrics = PrometheusMetricsBuilder::new("wildside")
         .endpoint("/metrics")
-        .build()
+        .build()?;
+    backend::register_pagination_error_metrics(&metrics.registry)?;
+    Ok(metrics)
 }
 
 #[cfg(feature = "metrics")]

@@ -15,7 +15,9 @@ use serde_json::json;
 use url::Url;
 use utoipa::ToSchema;
 
-use crate::domain::pagination_errors::{invalid_cursor_error, unsupported_direction_error};
+use crate::domain::pagination_errors::{
+    PaginationErrorSource, invalid_cursor_error_from, unsupported_direction_error_from,
+};
 use crate::domain::ports::{ListUsersPageRequest, UsersPage};
 use crate::domain::{Error, User, UserCursorKey};
 use crate::inbound::http::schemas::UserSchema;
@@ -275,9 +277,11 @@ fn current_request_url(request: &HttpRequest) -> Result<Url, Error> {
 
 fn map_cursor_error(error: CursorError) -> Error {
     match error {
-        CursorError::UnsupportedDirection { .. } => unsupported_direction_error(),
+        CursorError::UnsupportedDirection { .. } => {
+            unsupported_direction_error_from(PaginationErrorSource::UsersHttp)
+        }
         CursorError::InvalidBase64 { .. } | CursorError::Deserialize { .. } => {
-            invalid_cursor_error()
+            invalid_cursor_error_from(PaginationErrorSource::UsersHttp)
         }
         CursorError::Serialize { .. } => Error::internal("failed to decode users cursor"),
     }

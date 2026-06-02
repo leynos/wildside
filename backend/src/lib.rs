@@ -25,3 +25,11 @@ pub use doc::ApiDoc;
 pub use domain::ProcessHealth;
 pub use inbound::http;
 pub use inbound::http::error::ApiResult;
+
+/// Register optional pagination metrics for the HTTP metrics endpoint.
+#[cfg(feature = "metrics")]
+pub fn register_pagination_error_metrics(
+    registry: &prometheus::Registry,
+) -> Result<(), prometheus::Error> {
+    domain::pagination_errors::register_pagination_error_metrics(registry)
+}

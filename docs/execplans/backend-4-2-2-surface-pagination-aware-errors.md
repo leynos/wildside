@@ -218,6 +218,10 @@ errors.
   JSON value round trip with a wire-struct decode path, adding non-string
   direction regression coverage, and centralizing pagination cursor error
   envelope construction.
+- [x] 2026-06-02: Addressed follow-up observability review by adding
+  source-aware pagination error logs and the
+  `wildside_pagination_errors_total{code,source}` Prometheus counter for
+  HTTP and repository-mapped cursor failures.
 
 ## Surprises & Discoveries
 
@@ -336,8 +340,9 @@ errors.
 Implementation is complete across M0-M6: semantic pagination errors now flow
 through the repository-facing error taxonomy and port/query mapping, the
 externally visible `400` path for malformed and unsupported-direction user
-cursors is preserved and validated, and the contract, regression coverage, and
-documentation have been updated.
+cursors is preserved and validated, observability now records source-aware
+logs and Prometheus counters for pagination client failures, and the contract,
+regression coverage, and documentation have been updated.
 
 ## Context and orientation
 

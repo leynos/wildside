@@ -2051,6 +2051,11 @@ ordinary database query failures remain redacted `500` responses. Inbound
 adapters must not import Diesel or outbound modules to make this mapping; the
 semantic error travels through the port surface.
 
+Pagination error mapping records structured `info` logs with the current
+`traceId` when available. When the `metrics` feature is enabled, the server
+also exposes `wildside_pagination_errors_total{code,source}` so maintainers can
+track malformed cursor and unsupported-direction rates by adapter source.
+
 ##### 3.4.3 Pagination Compatibility Requirements (Phase 4, Future Work)
 
 Opaque pagination remains deferred future work. The current public contract for

@@ -1,7 +1,9 @@
 //! Shared mapping from user persistence failures to domain HTTP-safe errors.
 
 use crate::domain::Error;
-use crate::domain::pagination_errors::{invalid_cursor_error, unsupported_direction_error};
+use crate::domain::pagination_errors::{
+    PaginationErrorSource, invalid_cursor_error_from, unsupported_direction_error_from,
+};
 use crate::domain::ports::{UserPaginationError, UserPersistenceError};
 
 pub(super) fn map_user_persistence_error(error: UserPersistenceError) -> Error {
@@ -14,8 +16,12 @@ pub(super) fn map_user_persistence_error(error: UserPersistenceError) -> Error {
 
 fn map_user_pagination_error(error: UserPaginationError) -> Error {
     match error {
-        UserPaginationError::InvalidCursorFormat { .. } => invalid_cursor_error(),
-        UserPaginationError::UnsupportedDirection { .. } => unsupported_direction_error(),
+        UserPaginationError::InvalidCursorFormat { .. } => {
+            invalid_cursor_error_from(PaginationErrorSource::UserPersistence)
+        }
+        UserPaginationError::UnsupportedDirection { .. } => {
+            unsupported_direction_error_from(PaginationErrorSource::UserPersistence)
+        }
     }
 }
 
