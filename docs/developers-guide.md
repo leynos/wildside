@@ -539,6 +539,16 @@ Related domain helpers:
 To run BDD tests locally:
 
 ```bash
+# Ensure pg-embedded-setup-unpriv is available
+pg-embedded-setup-unpriv --help
+
+# Start the embedded PG cluster
+pg-embedded-setup-unpriv start
+
+# Run Redis route-cache BDD tests
+cargo test -p backend --test route_cache_redis_bdd
+```
+
 ### RedisTestServer harness
 
 Integration tests use `RedisTestServer` from `backend/src/test_support/redis.rs`:
