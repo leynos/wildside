@@ -13,6 +13,7 @@ pub mod er_snapshots;
 pub mod example_data;
 pub mod inbound;
 mod middleware;
+mod observability;
 pub mod outbound;
 pub mod server;
 #[cfg(any(test, feature = "test-support"))]
@@ -46,5 +47,5 @@ pub use inbound::http::error::ApiResult;
 pub fn register_pagination_error_metrics(
     registry: &prometheus::Registry,
 ) -> Result<(), prometheus::Error> {
-    domain::pagination_errors::register_pagination_error_metrics(registry)
+    observability::pagination_errors::register_pagination_error_metrics(registry)
 }
