@@ -3740,6 +3740,8 @@ name = "pagination"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "insta",
+ "proptest",
  "rstest",
  "rstest-bdd 0.5.0",
  "rstest-bdd-macros 0.5.0",

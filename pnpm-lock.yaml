@@ -66,7 +66,7 @@ importers:
         specifier: ^7.3.2
         version: 7.3.2(@types/node@24.3.1)(jiti@2.6.1)(yaml@2.8.3)
       vitest:
-        specifier: ^4.1.0
+        specifier: ^4.1.8
         version: 4.1.8(@types/node@24.3.1)(vite@7.3.2(@types/node@24.3.1)(jiti@2.6.1)(yaml@2.8.3))
 
   frontend-pwa:
@@ -118,7 +118,7 @@ importers:
         specifier: ^7.3.2
         version: 7.3.2(@types/node@22.18.12)(jiti@2.6.1)(yaml@2.8.3)
       vitest:
-        specifier: ^4.1.0
+        specifier: ^4.1.8
         version: 4.1.8(@types/node@22.18.12)(vite@7.3.2(@types/node@22.18.12)(jiti@2.6.1)(yaml@2.8.3))
 
   packages/tokens:
@@ -2884,9 +2884,6 @@ packages:
   tinycolor2@1.6.0:
     resolution: {integrity: sha512-XPaBkWQJdsf3pLKJV9p4qN/S+fm2Oj8AIPo1BTUhg5oxkvm9+SVEGFdhyOz7tTdUTfvxMiAs4sp6/eZO2Ew+pw==}
 
-  tinyexec@1.0.1:
-    resolution: {integrity: sha512-5uC6DDlmeqiOwCPmK9jMSdOuZTh8bU39Ys6yidB+UTt5hfZUPGAypSgFRiEp+jbi9qH40BLDvy85jIU88wKSqw==}
-
   tinyexec@1.2.4:
     resolution: {integrity: sha512-SHf/r48b7vOrjve9PxJo3MN5v5yuyjHvdUcrQffT3WXMUfnGmHDVbC4k3sHJaJTgZCwpUplIaAo5ANtMyp3YHg==}
     engines: {node: '>=18'}
@@ -3178,7 +3175,7 @@ snapshots:
   '@antfu/install-pkg@1.1.0':
     dependencies:
       package-manager-detector: 1.3.0
-      tinyexec: 1.0.1
+      tinyexec: 1.2.4
 
   '@babel/code-frame@7.27.1':
     dependencies:
@@ -6230,8 +6227,6 @@ snapshots:
   tinybench@2.9.0: {}
 
   tinycolor2@1.6.0: {}
-
-  tinyexec@1.0.1: {}
 
   tinyexec@1.2.4: {}
 
