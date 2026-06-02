@@ -104,8 +104,9 @@ impl RecordingRouteQueueMetrics {
 
 impl RouteQueueMetrics for RecordingRouteQueueMetrics {
     fn observe_enqueue(&self, outcome: RouteQueueOutcome, latency: Duration) {
-        if let Ok(mut observations) = self.observations.lock() {
-            observations.push((outcome, latency));
-        }
+        let Ok(mut observations) = self.observations.lock() else {
+            panic!("failed to lock route queue metrics");
+        };
+        observations.push((outcome, latency));
     }
 }
