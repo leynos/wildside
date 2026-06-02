@@ -180,15 +180,17 @@ where
 
     #[instrument(skip(self, plan))]
     async fn enqueue(&self, plan: &Self::Plan) -> Result<(), JobDispatchError> {
+        let started = Instant::now();
         // Serialize the plan to JSON value
         let payload = serde_json::to_value(plan).map_err(|error| {
             warn!(
                 error = %error,
                 "route queue serialization failed"
             );
+            self.metrics
+                .observe_enqueue(RouteQueueOutcome::Failure, started.elapsed());
             JobDispatchError::rejected(format!("Failed to serialize plan: {error}"))
         })?;
-        let started = Instant::now();
 
         // Push to the queue provider
         let result = self.provider.push_job(payload).await;

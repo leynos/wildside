@@ -3,8 +3,9 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use crate::domain::ports::JobDispatchError;
+use crate::domain::ports::{JobDispatchError, RouteQueueMetrics, RouteQueueOutcome};
 use crate::outbound::queue::apalis_route_queue::QueueProvider;
 
 /// Fake queue provider that records pushed payloads for assertion.
@@ -78,5 +79,33 @@ impl FailingQueueProvider {
 impl QueueProvider for FailingQueueProvider {
     async fn push_job(&self, _payload: Value) -> Result<(), JobDispatchError> {
         Err(JobDispatchError::unavailable(self.error_message.clone()))
+    }
+}
+
+/// Metrics recorder for asserting route queue observability in unit tests.
+#[derive(Debug, Clone, Default)]
+pub struct RecordingRouteQueueMetrics {
+    observations: Arc<Mutex<Vec<(RouteQueueOutcome, Duration)>>>,
+}
+
+impl RecordingRouteQueueMetrics {
+    /// Returns all observed route queue outcomes and latencies.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the mutex is poisoned.
+    pub fn observations(&self) -> Result<Vec<(RouteQueueOutcome, Duration)>, String> {
+        self.observations
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|error| format!("failed to lock route queue metrics: {error}"))
+    }
+}
+
+impl RouteQueueMetrics for RecordingRouteQueueMetrics {
+    fn observe_enqueue(&self, outcome: RouteQueueOutcome, latency: Duration) {
+        if let Ok(mut observations) = self.observations.lock() {
+            observations.push((outcome, latency));
+        }
     }
 }

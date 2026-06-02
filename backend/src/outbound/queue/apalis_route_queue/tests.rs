@@ -3,18 +3,22 @@
 
 use super::*;
 use crate::domain::ports::NoOpRouteQueueMetrics;
-#[cfg(feature = "metrics")]
-use crate::outbound::metrics::PrometheusRouteQueueMetrics;
-use crate::outbound::queue::test_helpers::{FailingQueueProvider, FakeQueueProvider};
+use crate::outbound::queue::test_helpers::{
+    FailingQueueProvider, FakeQueueProvider, RecordingRouteQueueMetrics,
+};
 use futures::future::join_all;
-#[cfg(feature = "metrics")]
-use prometheus::Encoder;
+use insta::assert_snapshot;
 use proptest::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::task::JoinHandle;
 use tracing_test::traced_test;
+
+#[cfg(feature = "metrics")]
+mod metrics;
+mod properties;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TestPlan {
@@ -157,12 +161,10 @@ async fn apalis_queue_maps_provider_error_to_unavailable() {
     );
 
     match result.expect_err("expected error but call succeeded") {
-        JobDispatchError::Unavailable { message } => {
-            assert!(
-                message.contains("simulated queue failure"),
-                "error message should contain provider error: {message}"
-            );
-        }
+        error @ JobDispatchError::Unavailable { .. } => assert_snapshot!(
+            error.to_string(),
+            @"route queue is unavailable: simulated queue failure"
+        ),
         JobDispatchError::Rejected { .. } => {
             panic!("expected Unavailable error, got Rejected");
         }
@@ -206,36 +208,24 @@ async fn apalis_queue_enqueues_multiple_plans() {
 #[tokio::test]
 async fn concurrent_enqueue_pushes_all_jobs() {
     let fake_provider = Arc::new(FakeQueueProvider::new());
+    let metrics = RecordingRouteQueueMetrics::default();
     let queue = Arc::new(TestQueue::new(
         fake_provider.as_ref().clone(),
-        no_op_metrics(),
+        Arc::new(metrics.clone()),
     ));
     assert_all_enqueues_succeed(spawn_enqueues(queue, 8)).await;
     let pushed_jobs = fake_provider.pushed_jobs().expect("pushed jobs");
     assert_eq!(pushed_jobs.len(), 8, "all concurrent jobs should be pushed");
-}
-#[cfg(feature = "metrics")]
-#[tokio::test]
-async fn concurrent_enqueue_with_metrics_records_correct_count() {
-    let registry = prometheus::Registry::new();
-    let metrics = PrometheusRouteQueueMetrics::new(&registry)
-        .expect("route queue metrics should register with isolated registry");
-    let fake_provider = FakeQueueProvider::new();
-    let queue = Arc::new(TestQueue::new(fake_provider, Arc::new(metrics)));
-    assert_all_enqueues_succeed(spawn_enqueues(queue, 4)).await;
-
-    let mut buffer = Vec::new();
-    prometheus::TextEncoder::new()
-        .encode(&registry.gather(), &mut buffer)
-        .expect("metrics should encode as Prometheus text");
-    let metrics_text = String::from_utf8(buffer).expect("metrics text should be UTF-8");
-
-    assert!(
-        metrics_text.contains("route_queue_enqueue_total{outcome=\"success\"} 4"),
-        "success counter should be 4:\n{metrics_text}"
+    let observations = metrics.observations().expect("metrics observations");
+    assert_eq!(
+        observations.len(),
+        8,
+        "all concurrent jobs should be observed"
     );
+    assert!(observations.iter().all(|(outcome, latency)| {
+        *outcome == RouteQueueOutcome::Success && *latency >= Duration::ZERO
+    }));
 }
-
 #[derive(Debug, Clone)]
 struct FailingSerializePlan {
     message: String,
@@ -267,16 +257,10 @@ async fn apalis_queue_maps_serialization_failure_to_rejected() {
     );
 
     match result.expect_err("expected error but call succeeded") {
-        JobDispatchError::Rejected { message } => {
-            assert!(
-                message.contains("Failed to serialize plan"),
-                "error message should contain adapter context: {message}"
-            );
-            assert!(
-                message.contains("simulated serialization failure"),
-                "error message should contain underlying serializer error: {message}"
-            );
-        }
+        error @ JobDispatchError::Rejected { .. } => assert_snapshot!(
+            error.to_string(),
+            @"route job was rejected: Failed to serialize plan: simulated serialization failure"
+        ),
         JobDispatchError::Unavailable { .. } => {
             panic!("expected Rejected error for serialization failure, got Unavailable");
         }
@@ -363,38 +347,5 @@ async fn apalis_queue_serialization_failure_logs_level() {
     assert!(
         logs_contain("serialization") || logs_contain("serialize"),
         "warning should mention serialization"
-    );
-}
-#[cfg(feature = "metrics")]
-#[tokio::test]
-async fn apalis_queue_records_prometheus_enqueue_metrics() {
-    let registry = prometheus::Registry::new();
-    let metrics = PrometheusRouteQueueMetrics::new(&registry)
-        .expect("route queue metrics should register with isolated registry");
-    let fake_provider = FakeQueueProvider::new();
-    let queue: GenericApalisRouteQueue<TestPlan, _> =
-        GenericApalisRouteQueue::new(fake_provider, Arc::new(metrics));
-    let plan = TestPlan {
-        name: "test-plan".to_string(),
-    };
-
-    queue
-        .enqueue(&plan)
-        .await
-        .expect("enqueue should succeed with fake provider");
-
-    let mut buffer = Vec::new();
-    prometheus::TextEncoder::new()
-        .encode(&registry.gather(), &mut buffer)
-        .expect("metrics should encode as Prometheus text");
-    let metrics_text = String::from_utf8(buffer).expect("metrics text should be UTF-8");
-
-    assert!(
-        metrics_text.contains("route_queue_enqueue_total{outcome=\"success\"} 1"),
-        "success counter should be 1:\n{metrics_text}"
-    );
-    assert!(
-        metrics_text.contains("route_queue_enqueue_latency_seconds_count{outcome=\"success\"} 1"),
-        "latency histogram should record one sample:\n{metrics_text}"
     );
 }
