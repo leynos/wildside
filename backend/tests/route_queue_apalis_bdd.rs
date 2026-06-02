@@ -12,7 +12,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use backend::domain::ports::{JobDispatchError, RouteQueue};
+use backend::domain::ports::{JobDispatchError, NoOpRouteQueueMetrics, RouteQueue};
 use backend::outbound::queue::test_helpers::FailingQueueProvider;
 use backend::outbound::queue::{ApalisPostgresProvider, GenericApalisRouteQueue};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
@@ -95,7 +95,7 @@ fn setup_test_context() -> Result<TestContext, String> {
     let provider = runtime
         .block_on(async { ApalisPostgresProvider::new(pool.clone()).await })
         .map_err(|err| err.to_string())?;
-    let queue = GenericApalisRouteQueue::new(provider);
+    let queue = GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
 
     Ok(TestContext {
         runtime,
@@ -146,7 +146,10 @@ fn the_queue_adapter_uses_an_invalid_database_connection(world: &Option<SharedCo
             match provider_result {
                 Ok(provider) => {
                     // Provider constructed (lazy pool), but enqueue will fail.
-                    ctx.queue = Some(Arc::new(GenericApalisRouteQueue::new(provider)));
+                    ctx.queue = Some(Arc::new(GenericApalisRouteQueue::new(
+                        provider,
+                        Arc::new(NoOpRouteQueueMetrics),
+                    )));
                 }
                 Err(err) => {
                     // Keep a queue adapter present so the failure is exercised
@@ -155,6 +158,7 @@ fn the_queue_adapter_uses_an_invalid_database_connection(world: &Option<SharedCo
                         FailingQueueProvider::new(format!(
                             "unavailable: broken connection ({err})"
                         )),
+                        Arc::new(NoOpRouteQueueMetrics),
                     )));
                 }
             }

@@ -1,13 +1,32 @@
-//! Apalis-backed `RouteQueue` adapter using PostgreSQL storage.
+//! Apalis-backed route queue adapter.
+//!
+//! This module implements the
+//! [`RouteQueue`](crate::domain::ports::RouteQueue) port for dispatching
+//! route-planning jobs through Apalis with PostgreSQL-backed persistence.
+//!
+//! [`GenericApalisRouteQueue<P, Q>`] is the test and BDD harness seam. It is
+//! parameterized over the plan payload type `P` and queue provider type `Q` so
+//! tests can substitute in-memory or failing providers. [`ApalisRouteQueue<P>`]
+//! is the production alias that binds the provider to
+//! [`ApalisPostgresProvider`].
+//!
+//! The `metrics` feature enables the Prometheus route queue metrics adapter in
+//! [`crate::outbound::metrics`]. The queue itself depends only on the
+//! domain-owned [`RouteQueueMetrics`](crate::domain::ports::RouteQueueMetrics)
+//! port.
 
 use async_trait::async_trait;
 use serde::Serialize;
 use serde_json::Value;
+use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
+use std::time::Instant;
 
 use apalis_core::backend::TaskSink;
+use tracing::{instrument, warn};
 
-use crate::domain::ports::{JobDispatchError, RouteQueue};
+use crate::domain::ports::{JobDispatchError, RouteQueue, RouteQueueMetrics, RouteQueueOutcome};
 
 /// Abstracts the queue storage backend for testability.
 ///
@@ -81,8 +100,9 @@ pub(crate) trait QueueProvider: Send + Sync {
 /// # Example
 ///
 /// ```rust,no_run
+/// # use std::sync::Arc;
+/// # use backend::domain::ports::{NoOpRouteQueueMetrics, RouteQueue};
 /// # use backend::outbound::queue::{GenericApalisRouteQueue, ApalisPostgresProvider};
-/// # use backend::domain::ports::RouteQueue;
 /// # use serde::{Serialize, Deserialize};
 /// # use sqlx::PgPool;
 /// #
@@ -93,17 +113,27 @@ pub(crate) trait QueueProvider: Send + Sync {
 /// #
 /// # async fn example(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
 /// let provider = ApalisPostgresProvider::new(pool).await?;
-/// let queue: GenericApalisRouteQueue<MyPlan, _> = GenericApalisRouteQueue::new(provider);
+/// let queue: GenericApalisRouteQueue<MyPlan, _> =
+///     GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
 ///
 /// let plan = MyPlan { route_id: "route-123".to_string() };
 /// queue.enqueue(&plan).await?;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GenericApalisRouteQueue<P, Q> {
     provider: Q,
+    metrics: Arc<dyn RouteQueueMetrics>,
     _plan: PhantomData<fn() -> P>,
+}
+
+impl<P, Q> fmt::Debug for GenericApalisRouteQueue<P, Q> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GenericApalisRouteQueue")
+            .field("metrics", &"RouteQueueMetrics")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<P, Q> GenericApalisRouteQueue<P, Q> {
@@ -112,6 +142,8 @@ impl<P, Q> GenericApalisRouteQueue<P, Q> {
     /// # Example
     ///
     /// ```rust,no_run
+    /// # use std::sync::Arc;
+    /// # use backend::domain::ports::NoOpRouteQueueMetrics;
     /// # use backend::outbound::queue::{GenericApalisRouteQueue, ApalisPostgresProvider};
     /// # use serde::{Serialize, Deserialize};
     /// # use sqlx::PgPool;
@@ -121,13 +153,15 @@ impl<P, Q> GenericApalisRouteQueue<P, Q> {
     /// #
     /// # async fn example(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
     /// let provider = ApalisPostgresProvider::new(pool).await?;
-    /// let queue: GenericApalisRouteQueue<MyPlan, _> = GenericApalisRouteQueue::new(provider);
+    /// let queue: GenericApalisRouteQueue<MyPlan, _> =
+    ///     GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(provider: Q) -> Self {
+    pub fn new(provider: Q, metrics: Arc<dyn RouteQueueMetrics>) -> Self {
         Self {
             provider,
+            metrics,
             _plan: PhantomData,
         }
     }
@@ -144,13 +178,47 @@ where
 {
     type Plan = P;
 
+    #[instrument(skip(self, plan))]
     async fn enqueue(&self, plan: &Self::Plan) -> Result<(), JobDispatchError> {
+        let started = Instant::now();
         // Serialize the plan to JSON value
-        let payload = serde_json::to_value(plan)
-            .map_err(|e| JobDispatchError::rejected(format!("Failed to serialize plan: {e}")))?;
+        let payload = serde_json::to_value(plan).map_err(|error| {
+            warn!(
+                error = %error,
+                "route queue serialization failed"
+            );
+            self.metrics
+                .observe_enqueue(RouteQueueOutcome::Failure, started.elapsed());
+            JobDispatchError::rejected(format!("Failed to serialize plan: {error}"))
+        })?;
 
         // Push to the queue provider
-        self.provider.push_job(payload).await
+        let result = self.provider.push_job(payload).await;
+        let latency = started.elapsed();
+        match &result {
+            Ok(()) => {
+                tracing::debug!(
+                    outcome = "success",
+                    latency_ms = latency.as_millis(),
+                    "route queue enqueue succeeded"
+                );
+            }
+            Err(error) => {
+                warn!(
+                    error = %error,
+                    outcome = "failure",
+                    latency_ms = latency.as_millis(),
+                    "route queue enqueue failed"
+                );
+            }
+        }
+        let outcome = if result.is_ok() {
+            RouteQueueOutcome::Success
+        } else {
+            RouteQueueOutcome::Failure
+        };
+        self.metrics.observe_enqueue(outcome, latency);
+        result
     }
 }
 
@@ -185,6 +253,7 @@ impl ApalisPostgresProvider {
     /// # Ok(())
     /// # }
     /// ```
+    #[instrument(skip(pool))]
     pub async fn new(pool: sqlx::PgPool) -> Result<Self, JobDispatchError> {
         // `setup()` is defined exclusively on `impl PostgresStorage<(), (), ()>`
         // by the apalis-postgres library (see `impl PostgresStorage<(), (), ()>`
@@ -199,8 +268,9 @@ impl ApalisPostgresProvider {
         // at runtime.
         apalis_postgres::PostgresStorage::<(), (), ()>::setup(&pool)
             .await
-            .map_err(|e| {
-                JobDispatchError::unavailable(format!("Failed to setup Apalis tables: {e}"))
+            .map_err(|error| {
+                warn!(error = %error, "route queue storage setup failed");
+                JobDispatchError::unavailable(format!("Failed to setup Apalis tables: {error}"))
             })?;
 
         // Create the storage instance
@@ -212,176 +282,20 @@ impl ApalisPostgresProvider {
 
 #[async_trait]
 impl QueueProvider for ApalisPostgresProvider {
+    #[instrument(skip(self, payload))]
     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
         let mut storage = self.storage.clone();
-        storage
-            .push(payload)
-            .await
-            .map_err(|e| JobDispatchError::unavailable(format!("Failed to enqueue job: {e}")))
+        let started = Instant::now();
+        storage.push(payload).await.map_err(|error| {
+            warn!(
+                error = %error,
+                elapsed_ms = started.elapsed().as_millis(),
+                "route queue push failed"
+            );
+            JobDispatchError::unavailable(format!("Failed to enqueue job: {error}"))
+        })
     }
 }
 
 #[cfg(test)]
-mod tests {
-    //! Unit tests for the Apalis route queue adapter.
-    use super::*;
-    use crate::outbound::queue::test_helpers::{FailingQueueProvider, FakeQueueProvider};
-    use rstest::rstest;
-    use serde::{Deserialize, Serialize};
-
-    /// Test plan type for unit tests.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-    struct TestPlan {
-        name: String,
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn apalis_queue_enqueue_round_trips() {
-        let fake_provider = FakeQueueProvider::new();
-        let queue: GenericApalisRouteQueue<TestPlan, _> =
-            GenericApalisRouteQueue::new(fake_provider.clone());
-
-        let plan = TestPlan {
-            name: "test-plan".to_string(),
-        };
-
-        let result = queue.enqueue(&plan).await;
-        assert!(result.is_ok(), "enqueue should succeed with fake provider");
-
-        let pushed_jobs = fake_provider
-            .pushed_jobs()
-            .expect("should be able to access pushed jobs");
-        assert_eq!(pushed_jobs.len(), 1, "exactly one job should be pushed");
-
-        // Verify the payload can be deserialized back to the original plan
-        let deserialized: TestPlan = serde_json::from_value(pushed_jobs[0].clone())
-            .expect("pushed payload should be valid JSON");
-        assert_eq!(
-            deserialized, plan,
-            "deserialized plan should match original"
-        );
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn apalis_queue_maps_provider_error_to_unavailable() {
-        let failing_provider = FailingQueueProvider::new("simulated queue failure".to_string());
-        let queue: GenericApalisRouteQueue<TestPlan, _> =
-            GenericApalisRouteQueue::new(failing_provider);
-
-        let plan = TestPlan {
-            name: "test-plan".to_string(),
-        };
-
-        let result = queue.enqueue(&plan).await;
-        assert!(
-            result.is_err(),
-            "enqueue should fail when provider returns error"
-        );
-
-        match result.expect_err("expected error but call succeeded") {
-            JobDispatchError::Unavailable { message } => {
-                assert!(
-                    message.contains("simulated queue failure"),
-                    "error message should contain provider error: {message}"
-                );
-            }
-            JobDispatchError::Rejected { .. } => {
-                panic!("expected Unavailable error, got Rejected");
-            }
-        }
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn apalis_queue_enqueues_multiple_plans() {
-        let fake_provider = FakeQueueProvider::new();
-        let queue: GenericApalisRouteQueue<TestPlan, _> =
-            GenericApalisRouteQueue::new(fake_provider.clone());
-
-        let plan1 = TestPlan {
-            name: "plan-1".to_string(),
-        };
-        let plan2 = TestPlan {
-            name: "plan-2".to_string(),
-        };
-
-        queue
-            .enqueue(&plan1)
-            .await
-            .expect("first enqueue should succeed");
-        queue
-            .enqueue(&plan2)
-            .await
-            .expect("second enqueue should succeed");
-
-        let pushed_jobs = fake_provider
-            .pushed_jobs()
-            .expect("should be able to access pushed jobs");
-        assert_eq!(pushed_jobs.len(), 2, "both jobs should be pushed");
-
-        let deserialized1: TestPlan = serde_json::from_value(pushed_jobs[0].clone())
-            .expect("first payload should be valid JSON");
-        let deserialized2: TestPlan = serde_json::from_value(pushed_jobs[1].clone())
-            .expect("second payload should be valid JSON");
-
-        assert_eq!(deserialized1, plan1, "first plan should match");
-        assert_eq!(deserialized2, plan2, "second plan should match");
-    }
-
-    /// Test plan type that always fails serialization.
-    #[derive(Debug, Clone)]
-    struct FailingSerializePlan;
-
-    impl Serialize for FailingSerializePlan {
-        fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: serde::Serializer,
-        {
-            Err(serde::ser::Error::custom("simulated serialization failure"))
-        }
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn apalis_queue_maps_serialization_failure_to_rejected() {
-        let fake_provider = FakeQueueProvider::new();
-        let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
-            GenericApalisRouteQueue::new(fake_provider.clone());
-
-        let plan = FailingSerializePlan;
-
-        let result = queue.enqueue(&plan).await;
-        assert!(
-            result.is_err(),
-            "enqueue should fail when serialization fails"
-        );
-
-        match result.expect_err("expected error but call succeeded") {
-            JobDispatchError::Rejected { message } => {
-                assert!(
-                    message.contains("Failed to serialize plan"),
-                    "error message should contain adapter context: {message}"
-                );
-                assert!(
-                    message.contains("simulated serialization failure"),
-                    "error message should contain underlying serializer error: {message}"
-                );
-            }
-            JobDispatchError::Unavailable { .. } => {
-                panic!("expected Rejected error for serialization failure, got Unavailable");
-            }
-        }
-
-        // Verify nothing was pushed to the provider
-        let pushed_jobs = fake_provider
-            .pushed_jobs()
-            .expect("should be able to access pushed jobs");
-        assert_eq!(
-            pushed_jobs.len(),
-            0,
-            "no jobs should be pushed when serialization fails"
-        );
-    }
-}
+mod tests;

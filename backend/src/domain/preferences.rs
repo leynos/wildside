@@ -247,8 +247,8 @@ mod tests {
     #[rstest]
     fn unit_system_serde_roundtrip() {
         for unit in [UnitSystem::Metric, UnitSystem::Imperial] {
-            let json = serde_json::to_string(&unit).expect("serialise");
-            let parsed: UnitSystem = serde_json::from_str(&json).expect("deserialise");
+            let json = serde_json::to_string(&unit).expect("serialize");
+            let parsed: UnitSystem = serde_json::from_str(&json).expect("deserialize");
             assert_eq!(parsed, unit);
         }
     }

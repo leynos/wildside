@@ -279,7 +279,7 @@ The warm-up step pins:
   anonymous rate limits.
 
 Keep PostgreSQL-backed nextest binaries in the `pg-embedded` test group in
-`.config/nextest.toml`, and keep that group serialised. First-use cluster
+`.config/nextest.toml`, and keep that group serialized. First-use cluster
 bootstrap is process-local and expensive; serial execution avoids concurrent
 setup attempts competing for the same warmed cache, filesystem paths, and
 worker process.
@@ -539,6 +539,16 @@ Related domain helpers:
 To run BDD tests locally:
 
 ```bash
+# Ensure pg-embedded-setup-unpriv is available
+pg-embedded-setup-unpriv --help
+
+# Start the embedded PG cluster
+pg-embedded-setup-unpriv start
+
+# Run Redis route-cache BDD tests
+cargo test -p backend --test route_cache_redis_bdd
+```
+
 ### RedisTestServer harness
 
 Integration tests use `RedisTestServer` from `backend/src/test_support/redis.rs`:
@@ -769,7 +779,7 @@ The hexagonal boundary is enforced via visibility:
 |--------------------------------------|---------------------------|--------------------------------------------|
 | `ApalisRouteQueue<P>`                | `pub`                     | Public adapter for domain use              |
 | `ApalisPostgresProvider`             | `pub`                     | Production `QueueProvider` implementation  |
-| `GenericApalisRouteQueue<P, Q>`      | Internal; not re-exported | Generic adapter implementation             |
+| `GenericApalisRouteQueue<P, Q>`      | `pub`                     | Generic adapter and BDD harness seam       |
 | `QueueProvider`                      | `pub(crate)`              | Test seam for provider abstraction         |
 | `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only)  | In-memory test double                      |
 | `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only)  | Always-failing test double                 |
@@ -791,14 +801,44 @@ Public production API:
 
 Implementation details within `outbound::queue`:
 
-- `GenericApalisRouteQueue<P, Q>` – Declared `pub` inside the private
-  `apalis_route_queue` module, but not re-exported at crate root. It
-  parameterises the adapter over the queue provider type `Q` so tests can
-  substitute doubles.
+- `GenericApalisRouteQueue<P, Q>` – Re-exported beside the production alias
+  because the BDD harness constructs the adapter with a test provider. It
+  can parameterize the adapter over the queue provider type `Q`, so tests can
+  substitute doubles, while production code should prefer
+  `ApalisRouteQueue<P>`.
 - `QueueProvider` – Declared `pub(crate)` inside the private
   `apalis_route_queue` module. Defines `async fn push_job(&self,
   payload: serde_json::Value) -> Result<(), JobDispatchError>` as the test
   seam; not part of the crate's supported public API.
+
+Queue observability:
+
+- `RouteQueueMetrics` – The domain-owned metrics port used by queue adapters
+  to record enqueue outcomes without depending on Prometheus or process-global
+  state.
+- `RouteQueueOutcome` – The bounded outcome label type for queue metrics. It
+  currently exposes only `success` and `failure`, keeping metric cardinality
+  predictable.
+- `NoOpRouteQueueMetrics` – The no-op implementation used by tests and
+  metrics-disabled builds. Prefer it whenever a test is not asserting metrics
+  behaviour.
+- `PrometheusRouteQueueMetrics` – The Prometheus adapter in
+  `outbound::metrics`. It accepts a `prometheus::Registry` at construction
+  time, allowing tests to use isolated registries while production passes the
+  default registry.
+- Concurrency coverage – Queue tests spawn concurrent enqueue tasks through a
+  shared `Arc<GenericApalisRouteQueue<_, _>>`, while metrics tests spawn
+  concurrent `PrometheusRouteQueueMetrics` initialization attempts against an
+  isolated registry. This keeps shared state and duplicate-registration
+  behaviour covered without using process-global Prometheus state.
+- `route_queue_enqueue_total{outcome=success|failure}` – A feature-gated
+  Prometheus counter for enqueue throughput and outcome.
+- `route_queue_enqueue_latency_seconds{outcome=success|failure}` – A
+  feature-gated Prometheus histogram for end-to-end queue enqueue latency in
+  seconds.
+- `tracing` – The adapter emits `debug` on enqueue success and `warn` on
+  failure points (serialization, push, and setup failures), including latency
+  and the adapter outcome.
 
 ### Queue build requirements
 

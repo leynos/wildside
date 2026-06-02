@@ -2,7 +2,7 @@
 //!
 //! Purpose: Define strongly typed domain entities used by the API and
 //! persistence layers. Keep types immutable and document invariants and
-//! serialisation contracts (serde) in each type's Rustdoc.
+//! serialization contracts (serde) in each type's Rustdoc.
 //!
 //! Public surface:
 //! - Error (alias to `error::Error`) — domain-level error payload; HTTP

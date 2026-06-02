@@ -171,7 +171,7 @@ where
         };
     }
 
-    /// Deserialise a stored response snapshot.
+    /// Deserialize a stored response snapshot.
     fn deserialize_stored_response(
         snapshot: serde_json::Value,
     ) -> Result<RouteSubmissionResponse, Error> {

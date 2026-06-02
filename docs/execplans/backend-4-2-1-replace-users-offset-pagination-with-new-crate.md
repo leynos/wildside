@@ -84,10 +84,10 @@ them requires escalation, not a workaround.
 ## Risks
 
 - Risk: surfacing `created_at` on the `User` domain entity changes the
-  serialised JSON contract.
+  serialized JSON contract.
   Severity: medium. Likelihood: high.
   Mitigation: add the field with `#[serde(rename = "createdAt")]` and a
-  matching deserialise alias; assert the new shape with a snapshot or
+  matching deserialize alias; assert the new shape with a snapshot or
   explicit JSON round-trip test; cross-check the OpenAPI schema in
   `frontend-pwa/openapi.json` does not need a parallel hand edit.
 
@@ -158,7 +158,7 @@ them requires escalation, not a workaround.
   fallback path.
 - [x] 2026-05-01: M2 completed with `UserCursorKey`,
   `ListUsersPageRequest`, and `UsersPage`; `UserDto` accepts legacy payloads
-  without `createdAt` but serialises the new field as `createdAt`. `make fmt`,
+  without `createdAt` but serializes the new field as `createdAt`. `make fmt`,
   `make markdownlint`, `make check-fmt`, `make lint`, and `make test` passed.
 - [x] M3: Diesel adapter implements the keyset query (`limit + 1` fetch,
   composite filter, asc ordering); covered by unit tests with a stubbed
@@ -449,7 +449,7 @@ becomes:
 
 `prev` is omitted on the first page; `next` is omitted on the last page.
 Field names follow camelCase via the existing serde defaults on
-`PaginationLinks` (`self_` serialises as `"self"`).
+`PaginationLinks` (`self_` serializes as `"self"`).
 
 ### Signposts (read these before starting)
 
@@ -544,7 +544,7 @@ Worker A tasks:
 
 1. Add `created_at: chrono::DateTime<chrono::Utc>` to the `User` struct;
    thread it through the constructor (`User::new`) and the `UserDto`
-   serialisation form. Update existing factories
+   serialization form. Update existing factories
    (`docs/backend-sample-data-design.md` describes the example-data crate;
    confirm any factory-style helper continues to compile).
 2. Add `User::created_at(&self) -> chrono::DateTime<chrono::Utc>`

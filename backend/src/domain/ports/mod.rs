@@ -30,6 +30,7 @@ mod route_annotations_query;
 mod route_cache;
 mod route_metrics;
 mod route_queue;
+mod route_queue_metrics;
 mod route_repository;
 mod route_submission;
 mod schema_snapshot_repository;
@@ -167,6 +168,7 @@ pub use route_annotations_query::{FixtureRouteAnnotationsQuery, RouteAnnotations
 pub use route_cache::{RouteCache, RouteCacheError};
 pub use route_metrics::{RouteMetrics, RouteMetricsError};
 pub use route_queue::{JobDispatchError, RouteQueue};
+pub use route_queue_metrics::{NoOpRouteQueueMetrics, RouteQueueMetrics, RouteQueueOutcome};
 pub use route_repository::{RoutePersistenceError, RouteRepository};
 pub use route_submission::{
     FixtureRouteSubmissionService, RouteSubmissionRequest, RouteSubmissionResponse,
