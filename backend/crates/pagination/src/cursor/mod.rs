@@ -154,18 +154,48 @@ impl<Key> Cursor<Key> {
     }
 
     /// Borrow the cursor key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
+    ///
+    /// assert_eq!(cursor.key(), &"my-key");
+    /// ```
     #[must_use]
     pub const fn key(&self) -> &Key {
         &self.key
     }
 
     /// Access the pagination direction.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
+    ///
+    /// assert_eq!(cursor.direction(), Direction::Prev);
+    /// ```
     #[must_use]
     pub const fn direction(&self) -> Direction {
         self.dir
     }
 
     /// Consume the cursor and return the inner key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
+    ///
+    /// assert_eq!(cursor.into_inner(), "my-key");
+    /// ```
     #[must_use]
     pub fn into_inner(self) -> Key {
         self.key
@@ -199,6 +229,39 @@ where
     ///
     /// Returns [`CursorError::Serialize`] when the cursor key cannot be
     /// serialized into JSON.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::with_direction("my-key".to_owned(), Direction::Prev);
+    ///
+    /// let encoded = cursor.encode().expect("cursor encoding succeeds");
+    ///
+    /// assert!(!encoded.is_empty());
+    /// assert!(!encoded.contains('='));
+    /// ```
+    ///
+    /// ```
+    /// use pagination::{Cursor, CursorError};
+    /// use serde::Serialize;
+    ///
+    /// struct FailingKey;
+    ///
+    /// impl Serialize for FailingKey {
+    ///     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    ///     where
+    ///         S: serde::Serializer,
+    ///     {
+    ///         Err(serde::ser::Error::custom("cannot serialize key"))
+    ///     }
+    /// }
+    ///
+    /// let error = Cursor::new(FailingKey).encode().expect_err("encoding fails");
+    ///
+    /// assert!(matches!(error, CursorError::Serialize { .. }));
+    /// ```
     pub fn encode(&self) -> Result<String, CursorError> {
         let payload = serde_json::to_vec(self).map_err(|error| {
             debug!(
@@ -225,6 +288,27 @@ where
     /// base64url, [`CursorError::UnsupportedDirection`] when `dir` is present
     /// but not one of the supported directions, and [`CursorError::Deserialize`]
     /// when the decoded JSON does not match the expected cursor shape.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pagination::{Cursor, Direction};
+    ///
+    /// let cursor = Cursor::with_direction("my-key".to_owned(), Direction::Prev);
+    /// let encoded = cursor.encode().expect("cursor encoding succeeds");
+    ///
+    /// let decoded = Cursor::<String>::decode(&encoded).expect("cursor decoding succeeds");
+    ///
+    /// assert_eq!(decoded, cursor);
+    /// ```
+    ///
+    /// ```
+    /// use pagination::{Cursor, CursorError};
+    ///
+    /// let error = Cursor::<String>::decode("not a cursor").expect_err("decoding fails");
+    ///
+    /// assert!(matches!(error, CursorError::InvalidBase64 { .. }));
+    /// ```
     pub fn decode(value: &str) -> Result<Self, CursorError> {
         let payload = decode_base64_url(value)?;
         let wire: CursorWire<Key> = serde_json::from_slice(&payload).map_err(|error| {

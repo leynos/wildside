@@ -19,9 +19,7 @@ existing Wildside error envelope with a stable invalid-request code, a
 code. The same HTTP behaviour must be preserved when a repository or query
 adapter returns a semantic pagination failure from below the HTTP parser.
 
-This plan is pre-implementation only. Do not implement it until the user
-explicitly approves this ExecPlan. The implementation will be considered
-observable when:
+The completed implementation is observable through:
 
 1. `GET /api/v1/users?cursor=not-a-cursor` returns HTTP `400` with an
    invalid cursor error envelope.
@@ -127,8 +125,8 @@ errors.
   pagination validation paths; keep Diesel `DatabaseError` and
   `QueryBuilderError` mapped as they are today.
 
-- Risk: `docs/users-guide.md` does not currently exist even though the request
-  asks for it to be updated.
+- Risk: `docs/users-guide.md` did not exist at the time of planning even though
+  the request asked for it to be updated.
   Severity: low. Likelihood: certain.
   Mitigation: create the guide only if the implementation introduces
   user-visible server behaviour not already documented elsewhere; otherwise
@@ -223,7 +221,8 @@ errors.
 
 ## Surprises & Discoveries
 
-- Observation: `docs/users-guide.md` is absent from the repository.
+- Observation: `docs/users-guide.md` was absent from the repository at the time
+  of planning and was created in M5.
   Evidence: `find docs -iname '*user*guide*.md'` lists tool-specific guides
   such as `docs/rstest-bdd-users-guide.md` and
   `docs/pg-embed-setup-unpriv-users-guide.md`, but not a general
@@ -301,8 +300,9 @@ errors.
   direction properties were covered by roadmap 4.1.2.
   Date/Author: 2026-05-20 / Codex.
 
-- Decision: The plan pull request is a draft, pre-implementation review PR.
-  Rationale: The user explicitly required plan approval before implementation.
+- Decision: The plan pull request began as a draft review PR.
+  Rationale: The user explicitly required plan approval before implementation,
+  and later approved implementation on 2026-05-26.
   Date/Author: 2026-05-20 / Codex.
 
 - Decision: Start implementation on the existing plan branch and keep the
@@ -658,8 +658,8 @@ Wyvern agent findings used during planning:
 - Current `UserPersistenceError` cannot represent pagination-specific client
   failures, so repository-originated cursor failures would currently map as
   generic internal errors.
-- `docs/users-guide.md` is missing, and the implementation should address that
-  explicitly.
+- `docs/users-guide.md` was missing at planning time, and the implementation
+  addressed that explicitly by creating it in M5.
 
 ## Interfaces and dependencies
 
