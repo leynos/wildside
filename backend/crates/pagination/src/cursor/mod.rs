@@ -31,7 +31,7 @@ use tracing::debug;
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust
 /// use pagination::Direction;
 ///
 /// let forward = Direction::Next;
@@ -56,7 +56,7 @@ pub enum Direction {
 ///
 /// # Example
 ///
-/// ```
+/// ```rust
 /// use pagination::{Cursor, Direction};
 /// use serde::{Deserialize, Serialize};
 ///
@@ -147,7 +147,7 @@ impl<Key> Cursor<Key> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, Direction};
     ///
     /// let cursor = Cursor::new("my-key");
@@ -165,7 +165,7 @@ impl<Key> Cursor<Key> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, Direction};
     ///
     /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
@@ -180,7 +180,7 @@ impl<Key> Cursor<Key> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, Direction};
     ///
     /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
@@ -196,7 +196,7 @@ impl<Key> Cursor<Key> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, Direction};
     ///
     /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
@@ -212,7 +212,7 @@ impl<Key> Cursor<Key> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, Direction};
     ///
     /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
@@ -228,7 +228,7 @@ impl<Key> Cursor<Key> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, Direction};
     ///
     /// let cursor = Cursor::with_direction("my-key", Direction::Prev);
@@ -255,7 +255,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, Direction};
     ///
     /// let cursor = Cursor::with_direction("my-key".to_owned(), Direction::Prev);
@@ -266,7 +266,7 @@ where
     /// assert!(!encoded.contains('='));
     /// ```
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, CursorError};
     /// use serde::Serialize;
     ///
@@ -314,7 +314,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, Direction};
     ///
     /// let cursor = Cursor::with_direction("my-key".to_owned(), Direction::Prev);
@@ -325,7 +325,7 @@ where
     /// assert_eq!(decoded, cursor);
     /// ```
     ///
-    /// ```
+    /// ```rust
     /// use pagination::{Cursor, CursorError};
     ///
     /// let error = Cursor::<String>::decode("not a cursor").expect_err("decoding fails");
