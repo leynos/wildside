@@ -281,7 +281,9 @@ told that other agents may be editing the repository.
 
 - Decision: keep this PR as a pre-implementation planning PR.
   Rationale: the user explicitly required plan approval before implementation.
-  Date/Author: 2026-05-21 / Codex.
+  Date/Author: 2026-05-21 / Codex. Superseded on 2026-05-26 after the user
+  approved implementation and the execution entries below recorded completed
+  helper seams, regression assertions, gates, and CodeRabbit reviews.
 
 - Decision: group login, users, profile, interests, preferences, and
   route-annotation startup selection under an explicit user-state helper seam.
@@ -327,9 +329,26 @@ told that other agents may be editing the repository.
 
 ## Outcomes & retrospective
 
-This section is intentionally empty during draft. It must be updated after
-approval, implementation, CodeRabbit review, gate execution, and roadmap
-closure.
+- Implemented seam: on 2026-05-26, commit `b42f04b` added the private
+  `UserStatePortsBundle` and `compose_user_state_ports` seam in
+  `backend/src/server/state_builders.rs`. Status: implemented without widening
+  the public `build_http_state` entrypoint.
+- Strengthened assertions: on 2026-05-26, commit `ce7e588` added shared BDD
+  assertions in
+  `backend/tests/startup_mode_composition_bdd/flow_support.rs`. Profile and
+  users-list responses now prove DB-present versus fixture-fallback selection
+  by display-name evidence; preferences remain an authenticated `userId`
+  contract because DB-present mode creates the same default preferences as the
+  fixture adapter when none are seeded.
+- Gate evidence: on 2026-05-26, Stage A, Stage B, Stage C, and final gates all
+  passed with `make check-fmt`, `make lint`, and `make test`. The final gate
+  reported 1220 Rust tests passed with 4 skipped, followed by passing
+  frontend/workspace tests. On 2026-06-03, the rebased branch passed
+  `make check-fmt`, `make test`, `make typecheck`, and `make lint`.
+- Review evidence: CodeRabbit agent reviews completed with 0 findings after
+  Stage B commit `af4d5d6`, Stage C commit `ce7e588`, and the final
+  documentation milestone on 2026-05-26. The draft PR is
+  <https://github.com/leynos/wildside/pull/359>.
 
 ## Context and orientation
 

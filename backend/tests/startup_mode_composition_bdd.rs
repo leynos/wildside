@@ -265,8 +265,8 @@ fn all_responses_match_db_backed_contracts(world: &mut World) {
 
     assert_shared_happy_path_contracts(world, DB_PROFILE_NAME);
 
-    // The shared assertion has already verified that user-state endpoints
-    // expose the seeded DB profile name rather than fixture data.
+    // The shared assertion has already verified that profile and users-list
+    // endpoints expose the seeded DB profile name rather than fixture data.
 }
 
 // ------------------------------------------------------------------------

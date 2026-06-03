@@ -122,7 +122,7 @@ pub(crate) fn assert_profile_response(snapshot: &Snapshot, expected_display_name
     );
 }
 
-/// Assert that user-state endpoints expose one deterministic adapter choice.
+/// Assert that profile and users-list endpoints expose one adapter choice.
 pub(crate) fn assert_user_state_adapter_selection(world: &World, expected_display_name: &str) {
     let profile = world.profile.as_ref().expect("profile snapshot");
     assert_profile_response(profile, expected_display_name);
@@ -145,6 +145,8 @@ pub(crate) fn assert_user_state_adapter_selection(world: &World, expected_displa
     let preferences = world.preferences.as_ref().expect("preferences snapshot");
     assert_eq!(preferences.status, 200);
     let preferences_body = preferences.body.as_ref().expect("preferences body");
+    // DB-present and fixture-fallback modes both create default preferences
+    // when none are seeded, so preferences cover authenticated identity wiring.
     assert_eq!(
         preferences_body.get("userId").and_then(Value::as_str),
         Some(FIXTURE_AUTH_ID)
