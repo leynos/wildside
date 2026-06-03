@@ -169,6 +169,10 @@ fn cursor_json_payload_matches_snapshot(#[case] direction: Direction, #[case] sn
     r#"{"key":{"created_at":"2026-03-22T10:30:00Z","id":"test-id"},"dir":123}"#,
     "123"
 )]
+#[case(
+    r#"{"key":{"created_at":"2026-03-22T10:30:00Z","id":"test-id"},"dir":null}"#,
+    "null"
+)]
 fn unsupported_direction_value_returns_unsupported_direction_error(
     #[case] cursor_json: &str,
     #[case] expected_direction: &str,

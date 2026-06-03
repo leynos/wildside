@@ -19,7 +19,7 @@ use base64::{
     Engine as _,
     engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
 };
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use tracing::debug;
 
@@ -86,8 +86,20 @@ pub struct Cursor<Key> {
 #[derive(Debug, Deserialize)]
 struct CursorWire<Key> {
     key: Key,
-    #[serde(default)]
-    dir: Option<serde_json::Value>,
+    // `Option<Option<_>>` distinguishes an absent `dir` (outer `None`) from
+    // an explicit `"dir": null` (outer `Some(None)`). `deserialize_some` is
+    // required because the default `Option` deserializer collapses `null`
+    // to `None`, hiding the difference.
+    #[serde(default, deserialize_with = "deserialize_some")]
+    dir: Option<Option<serde_json::Value>>,
+}
+
+fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 /// Errors raised while encoding or decoding opaque cursors.
@@ -344,12 +356,17 @@ fn decode_base64_url(value: &str) -> Result<Vec<u8>, CursorError> {
         })
 }
 
-fn decode_direction(raw_direction: Option<serde_json::Value>) -> Result<Direction, CursorError> {
-    raw_direction.map_or(Ok(Direction::Next), |value| match value.as_str() {
-        Some("Next") => Ok(Direction::Next),
-        Some("Prev") => Ok(Direction::Prev),
-        Some(direction) => unsupported_direction(direction.to_owned()),
-        None => unsupported_direction(value.to_string()),
+fn decode_direction(
+    raw_direction: Option<Option<serde_json::Value>>,
+) -> Result<Direction, CursorError> {
+    raw_direction.map_or(Ok(Direction::Next), |value| match value {
+        None => unsupported_direction("null".to_owned()),
+        Some(value) => match value.as_str() {
+            Some("Next") => Ok(Direction::Next),
+            Some("Prev") => Ok(Direction::Prev),
+            Some(direction) => unsupported_direction(direction.to_owned()),
+            None => unsupported_direction(value.to_string()),
+        },
     })
 }
 
