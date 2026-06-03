@@ -6,7 +6,11 @@ use serde_json::Value;
 
 use super::{TestResult, get_details_object, login_and_get_cookie, test_app};
 
+#[cfg(feature = "metrics")]
+use serial_test::serial;
+
 #[actix_web::test]
+#[cfg_attr(feature = "metrics", serial)]
 async fn list_users_rejects_invalid_cursor() -> TestResult {
     assert_users_cursor_error(
         "/api/v1/users?cursor=not-a-cursor",
@@ -18,6 +22,7 @@ async fn list_users_rejects_invalid_cursor() -> TestResult {
 }
 
 #[actix_web::test]
+#[cfg_attr(feature = "metrics", serial)]
 async fn list_users_rejects_unsupported_cursor_direction() -> TestResult {
     let unsupported_direction_cursor = "eyJrZXkiOnsiY3JlYXRlZF9hdCI6IjIwMjYtMDMtMjJUMTA6MzA6MDBaIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifSwiZGlyIjoiU2lkZXdheXMifQ";
     let path = format!("/api/v1/users?cursor={unsupported_direction_cursor}");

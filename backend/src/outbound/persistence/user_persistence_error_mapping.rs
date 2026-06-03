@@ -38,6 +38,9 @@ mod tests {
     use rstest::rstest;
     use serde_json::json;
 
+    #[cfg(feature = "metrics")]
+    use serial_test::serial;
+
     #[rstest]
     #[case(
         UserPersistenceError::pagination(UserPaginationError::invalid_cursor_format("bad token")),
@@ -49,6 +52,7 @@ mod tests {
         "cursor direction is unsupported",
         "unsupported_direction"
     )]
+    #[cfg_attr(feature = "metrics", serial)]
     fn pagination_errors_map_to_invalid_request(
         #[case] source: UserPersistenceError,
         #[case] expected_message: &str,
