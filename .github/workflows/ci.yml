@@ -157,7 +157,7 @@ jobs:
       - name: Rust fmt check
         run: cargo fmt --manifest-path backend/Cargo.toml --all -- --check
       - name: Rust clippy
-        run: cargo clippy --locked --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
+        run: make lint-clippy
 
       - name: Whitaker lint
         run: |

@@ -46,7 +46,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 .PHONY: fmt lint test test-rust test-frontend typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
-.PHONY: lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile
+.PHONY: lint-rust lint-clippy lint-frontend lint-asyncapi lint-openapi lint-makefile
 .PHONY: lint-actions lint-architecture workspace-sync prepare-pg-worker
 
 workspace-sync:
@@ -108,9 +108,17 @@ lint: workspace-sync
 
 lint-rust:
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
-	cargo clippy --workspace --all-targets --all-features -- $(RUST_FLAGS)
+	$(MAKE) lint-clippy
 	$(RUST_FLAGS_ENV) whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
 	$(RUST_FLAGS_ENV) whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
+
+# Strict-union of the previous Makefile and CI clippy calls:
+#   * --locked (matches CI; fails on lockfile drift)
+#   * --workspace (broader than CI's --manifest-path backend/Cargo.toml; covers
+#     example-data, pagination, architecture-lint, and other workspace members)
+# CI invokes this target so both surfaces stay in lockstep.
+lint-clippy:
+	cargo clippy --locked --workspace --all-targets --all-features -- $(RUST_FLAGS)
 
 lint-frontend:
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
