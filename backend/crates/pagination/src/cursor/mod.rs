@@ -86,20 +86,31 @@ pub struct Cursor<Key> {
 #[derive(Debug, Deserialize)]
 struct CursorWire<Key> {
     key: Key,
-    // `Option<Option<_>>` distinguishes an absent `dir` (outer `None`) from
-    // an explicit `"dir": null` (outer `Some(None)`). `deserialize_some` is
-    // required because the default `Option` deserializer collapses `null`
-    // to `None`, hiding the difference.
-    #[serde(default, deserialize_with = "deserialize_some")]
-    dir: Option<Option<serde_json::Value>>,
+    #[serde(default, deserialize_with = "deserialize_wire_direction")]
+    dir: WireDirection,
 }
 
-fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+/// Tri-state view of the `dir` field needed to tell an absent field, an
+/// explicit `null`, and a present value apart. `Option<Option<_>>` would
+/// model the same domain but trips `clippy::option_option`.
+#[derive(Debug, Default)]
+enum WireDirection {
+    #[default]
+    Absent,
+    Null,
+    Present(serde_json::Value),
+}
+
+fn deserialize_wire_direction<'de, D>(deserializer: D) -> Result<WireDirection, D::Error>
 where
-    T: Deserialize<'de>,
     D: Deserializer<'de>,
 {
-    T::deserialize(deserializer).map(Some)
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(if value.is_null() {
+        WireDirection::Null
+    } else {
+        WireDirection::Present(value)
+    })
 }
 
 /// Errors raised while encoding or decoding opaque cursors.
@@ -356,18 +367,17 @@ fn decode_base64_url(value: &str) -> Result<Vec<u8>, CursorError> {
         })
 }
 
-fn decode_direction(
-    raw_direction: Option<Option<serde_json::Value>>,
-) -> Result<Direction, CursorError> {
-    raw_direction.map_or(Ok(Direction::Next), |value| match value {
-        None => unsupported_direction("null".to_owned()),
-        Some(value) => match value.as_str() {
+fn decode_direction(raw_direction: WireDirection) -> Result<Direction, CursorError> {
+    match raw_direction {
+        WireDirection::Absent => Ok(Direction::Next),
+        WireDirection::Null => unsupported_direction("null".to_owned()),
+        WireDirection::Present(value) => match value.as_str() {
             Some("Next") => Ok(Direction::Next),
             Some("Prev") => Ok(Direction::Prev),
             Some(direction) => unsupported_direction(direction.to_owned()),
             None => unsupported_direction(value.to_string()),
         },
-    })
+    }
 }
 
 fn unsupported_direction(direction: String) -> Result<Direction, CursorError> {
