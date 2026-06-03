@@ -159,12 +159,12 @@ jobs:
       - name: Rust clippy
         run: make lint-clippy
 
-      - name: Whitaker lint
+      - name: Install whitaker
         run: |
           cargo install whitaker-installer --version 0.2.0
           whitaker-installer --experimental
-          whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
-          whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
+      - name: Whitaker lint
+        run: make lint-whitaker
 
       - name: Architecture lint
         run: make lint-architecture
