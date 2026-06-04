@@ -206,6 +206,9 @@ jobs:
             --manifest-path backend/Cargo.toml \
             --all-targets --all-features
 
+      - name: Compile-fail tests (pagination trait bounds)
+        run: cargo test --locked --features trybuild-tests -p pagination cursor_trait_bound_compile_fail_tests
+
       # OpenAPI dump (at runtime or via a small bin)
       - name: Generate OpenAPI specification
         run: make openapi
