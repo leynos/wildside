@@ -78,6 +78,32 @@ fn padded_base64_cursor_decodes_successfully() {
     assert_eq!(decoded, cursor);
 }
 
+proptest! {
+    #[test]
+    fn padded_and_unpadded_cursor_decode_equivalently(
+        created_at in string_regex("[[:alnum:]-:.+T t]{1,32}")
+            .expect("created_at strategy should parse"),
+        id in string_regex("[[:alnum:]-_]{1,32}").expect("id strategy should parse"),
+        direction in prop_oneof![Just(Direction::Next), Just(Direction::Prev)],
+    ) {
+        let cursor = Cursor::with_direction(
+            FixtureKey { created_at, id },
+            direction,
+        );
+        let payload = serde_json::to_vec(&cursor).expect("cursor should serialize");
+        let padded = base64::engine::general_purpose::URL_SAFE.encode(&payload);
+        let unpadded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&payload);
+
+        let from_padded = Cursor::<FixtureKey>::decode(&padded)
+            .expect("padded cursor decoding should succeed");
+        let from_unpadded = Cursor::<FixtureKey>::decode(&unpadded)
+            .expect("unpadded cursor decoding should succeed");
+
+        assert_eq!(from_padded, from_unpadded);
+        assert_eq!(from_padded, cursor);
+    }
+}
+
 #[test]
 fn structurally_invalid_json_cursor_fails_decode() {
     let invalid_payload =

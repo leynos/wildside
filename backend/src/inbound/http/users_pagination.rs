@@ -12,6 +12,7 @@ use pagination::{
 };
 use serde::Deserialize;
 use serde_json::json;
+use tracing::debug;
 use url::Url;
 use utoipa::ToSchema;
 
@@ -276,15 +277,32 @@ fn current_request_url(request: &HttpRequest) -> Result<Url, Error> {
 
 fn map_cursor_error(error: CursorError) -> Error {
     match error {
-        CursorError::UnsupportedDirection { .. } => {
+        CursorError::UnsupportedDirection { direction } => {
+            debug!(
+                rejected_direction = %direction,
+                source = "users_http",
+                "rejected users cursor with unsupported direction"
+            );
             record_pagination_error(PaginationErrorSource::UsersHttp, "unsupported_direction");
             unsupported_direction_error()
         }
-        CursorError::InvalidBase64 { .. } | CursorError::Deserialize { .. } => {
+        CursorError::InvalidBase64 { message } | CursorError::Deserialize { message } => {
+            debug!(
+                cursor_decode_error = %message,
+                source = "users_http",
+                "rejected users cursor with decode failure"
+            );
             record_pagination_error(PaginationErrorSource::UsersHttp, "invalid_cursor");
             invalid_cursor_error()
         }
-        CursorError::Serialize { .. } => Error::internal("failed to decode users cursor"),
+        CursorError::Serialize { message } => {
+            debug!(
+                cursor_serialize_error = %message,
+                source = "users_http",
+                "users cursor decode raised serialize error"
+            );
+            Error::internal("failed to decode users cursor")
+        }
     }
 }
 

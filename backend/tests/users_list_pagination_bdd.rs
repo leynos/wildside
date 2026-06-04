@@ -3,6 +3,9 @@
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 
+#[cfg(feature = "metrics")]
+use serial_test::serial;
+
 mod support;
 
 use support::handle_cluster_setup_failure;
@@ -172,6 +175,7 @@ fn oversized_users_page_limit_is_rejected(world: World) {
     path = "tests/features/users_list_pagination.feature",
     name = "Invalid users cursor is rejected"
 )]
+#[cfg_attr(feature = "metrics", serial)]
 fn invalid_users_cursor_is_rejected(world: World) {
     drop(world);
 }
@@ -180,6 +184,7 @@ fn invalid_users_cursor_is_rejected(world: World) {
     path = "tests/features/users_list_pagination.feature",
     name = "Unsupported users cursor direction is rejected"
 )]
+#[cfg_attr(feature = "metrics", serial)]
 fn unsupported_users_cursor_direction_is_rejected(world: World) {
     drop(world);
 }
