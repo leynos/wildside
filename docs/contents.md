@@ -1,4 +1,7 @@
-# Documentation index
+# Documentation contents
+
+- [Documentation contents](contents.md) – the canonical index for project
+  documentation. _Audience: all readers._
 
 ## Project architecture
 
@@ -6,6 +9,8 @@
   blueprint and product vision. _Audience: stakeholders and all contributors._
 - [Repository design guide](repository-structure.md) – explains repository
   layout and request flow. _Audience: new contributors._
+- [Repository layout](repository-layout.md) – maps the major repository paths
+  and their responsibilities. _Audience: new contributors and maintainers._
 - [Wildside backend: functional design specification](wildside-backend-design.md)
   – outlines backend components and tasks. _Audience: backend developers._
 - [Wildside backend architecture](wildside-backend-architecture.md) – hexagonal
