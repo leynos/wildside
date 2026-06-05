@@ -1,13 +1,14 @@
 /** @file Tests the shared audit helper, including the bulk advisory fallback. */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 
-const execFileSyncMock = vi.fn();
-const spawnSyncMock = vi.fn();
+const execFileSyncMock = mock();
+const spawnSyncMock = mock();
 const githubAdvisoryIdKey = 'github_advisory_id';
 const packageNameKey = 'package_name';
+let auditUtilsImportCounter = 0;
 
-vi.mock('node:child_process', () => ({
+mock.module('node:child_process', () => ({
   execFileSync: execFileSyncMock,
   spawnSync: spawnSyncMock,
 }));
@@ -59,7 +60,8 @@ function setupRetiredPnpmAudit(lsPayload = [{ name: 'frontend-pwa', dependencies
  * @returns {Promise<typeof import('../../security/audit-utils.js')>} Imported audit utility module.
  */
 async function loadAuditUtils() {
-  const module = await import('../../security/audit-utils.js');
+  const module = await import(`../../security/audit-utils.js?bun-test=${auditUtilsImportCounter}`);
+  auditUtilsImportCounter += 1;
   return module;
 }
 
@@ -75,16 +77,21 @@ describe('buildVersionMap', () => {
 
 describe('runAuditJson', () => {
   beforeEach(() => {
-    vi.resetModules();
-    vi.clearAllMocks();
-    globalThis.fetch = vi.fn();
-    vi.unstubAllEnvs();
-    vi.stubEnv('npm_config_registry', '');
-    vi.stubEnv('NPM_CONFIG_REGISTRY', '');
+    execFileSyncMock.mockReset();
+    spawnSyncMock.mockReset();
+    globalThis.fetch = mock();
+    // biome-ignore lint/style/noProcessEnv: tests simulate registry configuration.
+    process.env.npm_config_registry = '';
+    // biome-ignore lint/style/noProcessEnv: tests simulate registry configuration.
+    process.env.NPM_CONFIG_REGISTRY = '';
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    // biome-ignore lint/style/noProcessEnv: tests restore simulated registry configuration.
+    delete process.env.npm_config_registry;
+    // biome-ignore lint/style/noProcessEnv: tests restore simulated registry configuration.
+    delete process.env.NPM_CONFIG_REGISTRY;
   });
 
   /**

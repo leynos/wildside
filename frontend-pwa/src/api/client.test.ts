@@ -4,12 +4,12 @@
  * query key helpers and delegates requests through the shared fetcher.
  */
 
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { UserIdSchema, UsersSchema } from '@app/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mockCustomFetchParsed = vi.fn();
+const mockCustomFetchParsed = mock();
 
-vi.mock('./fetcher', () => ({
+mock.module('./fetcher', () => ({
   customFetchParsed: mockCustomFetchParsed,
 }));
 

@@ -90,6 +90,9 @@ importers:
         specifier: ^3
         version: 3.25.76
     devDependencies:
+      '@types/bun':
+        specifier: ^1.3.14
+        version: 1.3.14
       '@types/node':
         specifier: ^22
         version: 22.18.12
@@ -117,9 +120,6 @@ importers:
       vite:
         specifier: ^7.3.2
         version: 7.3.2(@types/node@22.18.12)(jiti@2.6.1)(yaml@2.8.3)
-      vitest:
-        specifier: ^4.1.8
-        version: 4.1.8(@types/node@22.18.12)(vite@7.3.2(@types/node@22.18.12)(jiti@2.6.1)(yaml@2.8.3))
 
   packages/tokens:
     devDependencies:
@@ -906,6 +906,9 @@ packages:
   '@types/babel__traverse@7.28.0':
     resolution: {integrity: sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q==}
 
+  '@types/bun@1.3.14':
+    resolution: {integrity: sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw==}
+
   '@types/chai@5.2.2':
     resolution: {integrity: sha512-8kB30R7Hwqf40JPiKhVzodJs2Qc1ZJ5zuT3uzw5Hq/dhNCl3G3l83jfpdI1e20BP348+fV7VIL/+FxaXkqBmWg==}
 
@@ -1252,6 +1255,9 @@ packages:
 
   buffer@6.0.3:
     resolution: {integrity: sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==}
+
+  bun-types@1.3.14:
+    resolution: {integrity: sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ==}
 
   call-bind-apply-helpers@1.0.2:
     resolution: {integrity: sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ==}
@@ -3961,6 +3967,10 @@ snapshots:
     dependencies:
       '@babel/types': 7.28.4
 
+  '@types/bun@1.3.14':
+    dependencies:
+      bun-types: 1.3.14
+
   '@types/chai@5.2.2':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -4155,14 +4165,6 @@ snapshots:
       '@vitest/utils': 4.1.8
       chai: 6.2.2
       tinyrainbow: 3.1.0
-
-  '@vitest/mocker@4.1.8(vite@7.3.2(@types/node@22.18.12)(jiti@2.6.1)(yaml@2.8.3))':
-    dependencies:
-      '@vitest/spy': 4.1.8
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 7.3.2(@types/node@22.18.12)(jiti@2.6.1)(yaml@2.8.3)
 
   '@vitest/mocker@4.1.8(vite@7.3.2(@types/node@24.3.1)(jiti@2.6.1)(yaml@2.8.3))':
     dependencies:
@@ -4361,6 +4363,10 @@ snapshots:
     dependencies:
       base64-js: 1.5.1
       ieee754: 1.2.1
+
+  bun-types@1.3.14:
+    dependencies:
+      '@types/node': 22.18.12
 
   call-bind-apply-helpers@1.0.2:
     dependencies:
@@ -6354,33 +6360,6 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.6.1
       yaml: 2.8.3
-
-  vitest@4.1.8(@types/node@22.18.12)(vite@7.3.2(@types/node@22.18.12)(jiti@2.6.1)(yaml@2.8.3)):
-    dependencies:
-      '@vitest/expect': 4.1.8
-      '@vitest/mocker': 4.1.8(vite@7.3.2(@types/node@22.18.12)(jiti@2.6.1)(yaml@2.8.3))
-      '@vitest/pretty-format': 4.1.8
-      '@vitest/runner': 4.1.8
-      '@vitest/snapshot': 4.1.8
-      '@vitest/spy': 4.1.8
-      '@vitest/utils': 4.1.8
-      es-module-lexer: 2.1.0
-      expect-type: 1.3.0
-      magic-string: 0.30.21
-      obug: 2.1.1
-      pathe: 2.0.3
-      picomatch: 4.0.4
-      std-env: 4.1.0
-      tinybench: 2.9.0
-      tinyexec: 1.2.4
-      tinyglobby: 0.2.15
-      tinyrainbow: 3.1.0
-      vite: 7.3.2(@types/node@22.18.12)(jiti@2.6.1)(yaml@2.8.3)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 22.18.12
-    transitivePeerDependencies:
-      - msw
 
   vitest@4.1.8(@types/node@24.3.1)(vite@7.3.2(@types/node@24.3.1)(jiti@2.6.1)(yaml@2.8.3)):
     dependencies:

@@ -11,26 +11,26 @@ import type {
   ResolvedConfig,
   UserConfig,
 } from 'vite';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
-import { spawnSync } from 'node:child_process';
-import { existsSync, type PathLike } from 'node:fs';
+import type { spawnSync } from 'node:child_process';
+import type { PathLike } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { designTokensPlugin } from '../vite/plugins/design-tokens';
 import { pathToString } from './test-helpers';
 import { createMockLogger } from './test-logger';
 
-vi.mock('node:fs', () => ({
-  existsSync: vi.fn(),
+const existsSyncMock = mock();
+const spawnSyncMock = mock();
+
+mock.module('node:fs', () => ({
+  existsSync: existsSyncMock,
 }));
 
-vi.mock('node:child_process', () => ({
-  spawnSync: vi.fn(),
+mock.module('node:child_process', () => ({
+  spawnSync: spawnSyncMock,
 }));
-
-const existsSyncMock = vi.mocked(existsSync);
-const spawnSyncMock = vi.mocked(spawnSync);
 
 type ConfigHook = NonNullable<Plugin['config']>;
 type ConfigHookHandler = Extract<
@@ -100,7 +100,8 @@ describe('designTokensPlugin', () => {
   const distPath = resolve(workspaceRoot, 'packages/tokens/dist');
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    existsSyncMock.mockReset();
+    spawnSyncMock.mockReset();
     // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     delete process.env.npm_config_user_agent;
   });

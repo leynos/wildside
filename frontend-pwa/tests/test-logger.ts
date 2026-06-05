@@ -2,32 +2,34 @@
  * @file Test helpers for working with the Vite logger interface.
  */
 
+import { mock } from 'bun:test';
 import type { Logger } from 'vite';
-import { vi } from 'vitest';
+
+type MockFunction = ReturnType<typeof mock>;
 
 type LoggerExtensions = {
-  time: ReturnType<typeof vi.fn>;
-  timeEnd: ReturnType<typeof vi.fn>;
-  debug: ReturnType<typeof vi.fn>;
-  fatal: ReturnType<typeof vi.fn>;
+  time: MockFunction;
+  timeEnd: MockFunction;
+  debug: MockFunction;
+  fatal: MockFunction;
 };
 
 export function createMockLogger(): Logger {
   let errorLogged = false;
-  const info = vi.fn();
-  const warn = vi.fn();
-  const warnOnce = vi.fn();
-  const error = vi.fn(() => {
+  const info = mock();
+  const warn = mock();
+  const warnOnce = mock();
+  const error = mock(() => {
     errorLogged = true;
   });
-  const clearScreen = vi.fn();
-  const time = vi.fn();
-  const timeEnd = vi.fn();
-  const debug = vi.fn();
-  const fatal = vi.fn(() => {
+  const clearScreen = mock();
+  const time = mock();
+  const timeEnd = mock();
+  const debug = mock();
+  const fatal = mock(() => {
     errorLogged = true;
   });
-  const hasErrorLogged = vi.fn(() => errorLogged);
+  const hasErrorLogged = mock(() => errorLogged);
 
   const logger: Logger & LoggerExtensions = {
     hasWarned: false,

@@ -1,10 +1,10 @@
 /** @file Exercises the audit wrapper to ensure ledger exceptions behave as expected. */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 
 import { VALIDATOR_ADVISORY_ID, VALIDATOR_MIN_SAFE_VERSION } from '../../security/constants.js';
 
-const validatorPatchMock = vi.fn(() => true);
+const validatorPatchMock = mock(() => true);
 
 const baselineLedgerEntries = [
   {
@@ -29,6 +29,14 @@ const cloneLedgerEntries = (entries = baselineLedgerEntries) =>
   entries.map((entry) => ({ ...entry }));
 
 let nextLedgerEntries = cloneLedgerEntries();
+let evaluateAuditImportCounter = 0;
+const consoleSpies = [];
+
+function spyOnConsole(method) {
+  const spy = spyOn(console, method).mockImplementation(() => {});
+  consoleSpies.push(spy);
+  return spy;
+}
 
 function setLedgerEntries(mutator) {
   // Allow tests to layer mutations while still supporting easy resets.
@@ -42,13 +50,13 @@ function setLedgerEntries(mutator) {
   nextLedgerEntries = cloneLedgerEntries(baselineLedgerEntries);
 }
 
-vi.mock('../../security/audit-exceptions.json', () => ({
+mock.module('../../security/audit-exceptions.json', () => ({
   get default() {
     return cloneLedgerEntries(nextLedgerEntries);
   },
 }));
 
-vi.mock('../../security/validator-patch.js', () => ({
+mock.module('../../security/validator-patch.js', () => ({
   isValidatorPatched: validatorPatchMock,
 }));
 
@@ -62,7 +70,14 @@ const createAdvisory = (id, title) => ({
 const DEFAULT_NOW = new Date('2025-03-01T00:00:00.000Z');
 
 async function loadEvaluateAudit() {
-  const { evaluateAudit } = await import('./run-audit.mjs');
+  mock.module('../../security/audit-exceptions.json', () => ({
+    default: cloneLedgerEntries(nextLedgerEntries),
+  }));
+  mock.module('../../security/validator-patch.js', () => ({
+    isValidatorPatched: validatorPatchMock,
+  }));
+  const { evaluateAudit } = await import(`./run-audit.mjs?bun-test=${evaluateAuditImportCounter}`);
+  evaluateAuditImportCounter += 1;
   return evaluateAudit;
 }
 
@@ -70,7 +85,7 @@ const evaluateAuditScenarios = [
   {
     name: 'returns success when advisories are covered by the ledger',
     advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
-    spyFactory: () => vi.spyOn(console, 'info').mockImplementation(() => {}),
+    spyFactory: () => spyOnConsole('info'),
     expectedExitCode: 0,
     expectedValidatorCalls: 1,
     assertSpy: (spy) => {
@@ -82,7 +97,7 @@ const evaluateAuditScenarios = [
   {
     name: 'propagates failure when unexpected advisories are reported',
     advisories: [createAdvisory('GHSA-abcd-1234-efgh', 'Unexpected vulnerability')],
-    spyFactory: () => vi.spyOn(console, 'error').mockImplementation(() => {}),
+    spyFactory: () => spyOnConsole('error'),
     expectedExitCode: 1,
     expectedValidatorCalls: 0,
     assertSpy: (spy) => {
@@ -96,14 +111,14 @@ const evaluateAuditScenarios = [
 describe('evaluateAudit', () => {
   beforeEach(() => {
     setLedgerEntries();
-    vi.resetModules();
-    vi.clearAllMocks();
     validatorPatchMock.mockReset();
     validatorPatchMock.mockReturnValue(true);
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    for (const consoleSpy of consoleSpies.splice(0)) {
+      consoleSpy.mockRestore();
+    }
   });
 
   it.each(evaluateAuditScenarios)('$name', async ({
@@ -128,7 +143,7 @@ describe('evaluateAudit', () => {
   it('fails when validator advisory is present but mitigation is missing', async () => {
     const evaluateAudit = await loadEvaluateAudit();
     validatorPatchMock.mockReturnValue(false);
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = spyOnConsole('error');
 
     const exitCode = evaluateAudit(
       {
@@ -158,7 +173,7 @@ describe('evaluateAudit', () => {
       return entries;
     });
     const evaluateAudit = await loadEvaluateAudit();
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const infoSpy = spyOnConsole('info');
 
     const exitCode = evaluateAudit(
       {
@@ -201,7 +216,7 @@ describe('evaluateAudit', () => {
       return entries;
     });
     const evaluateAudit = await loadEvaluateAudit();
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const infoSpy = spyOnConsole('info');
 
     const exitCode = evaluateAudit(
       {
@@ -235,8 +250,8 @@ describe('evaluateAudit', () => {
       return entries;
     });
     const evaluateAudit = await loadEvaluateAudit();
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const infoSpy = spyOnConsole('info');
+    const errorSpy = spyOnConsole('error');
 
     const exitCode = evaluateAudit(
       {
@@ -305,7 +320,7 @@ describe('evaluateAudit', () => {
   }) => {
     setupAction();
     const evaluateAudit = await loadEvaluateAudit();
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = spyOnConsole('error');
 
     const exitCode = evaluateAudit(
       {
@@ -325,7 +340,7 @@ describe('evaluateAudit', () => {
       return entries;
     });
     const evaluateAudit = await loadEvaluateAudit();
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const infoSpy = spyOnConsole('info');
 
     const exitCode = evaluateAudit(
       {
@@ -347,7 +362,7 @@ describe('evaluateAudit', () => {
       return entries;
     });
     const evaluateAudit = await loadEvaluateAudit();
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = spyOnConsole('error');
 
     const exitCode = evaluateAudit(
       {
@@ -371,8 +386,8 @@ describe('evaluateAudit', () => {
 
   it('passes through status when no advisories are present', async () => {
     const evaluateAudit = await loadEvaluateAudit();
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const infoSpy = spyOnConsole('info');
+    const errorSpy = spyOnConsole('error');
 
     const successCode = evaluateAudit({ advisories: [], status: 0 }, { now: DEFAULT_NOW });
     const failureCode = evaluateAudit({ advisories: [], status: 1 }, { now: DEFAULT_NOW });

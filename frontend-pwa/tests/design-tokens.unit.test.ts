@@ -4,32 +4,33 @@
 
 // biome-ignore assist/source/organizeImports: maintain external/node/local grouping required by review.
 import type { Logger } from 'vite';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
-import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import type { spawnSync } from 'node:child_process';
+import type { PathLike } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { detectPackageManager, ensureTokensDist } from '../vite/plugins/design-tokens';
 import { pathToString } from './test-helpers';
 import { createMockLogger } from './test-logger';
 
-vi.mock('node:fs', () => ({
-  existsSync: vi.fn(),
+const existsSyncMock = mock();
+const spawnSyncMock = mock();
+
+mock.module('node:fs', () => ({
+  existsSync: existsSyncMock,
 }));
 
-vi.mock('node:child_process', () => ({
-  spawnSync: vi.fn(),
+mock.module('node:child_process', () => ({
+  spawnSync: spawnSyncMock,
 }));
-
-const existsSyncMock = vi.mocked(existsSync);
-const spawnSyncMock = vi.mocked(spawnSync);
 
 describe('detectPackageManager', () => {
   const workspaceRoot = '/workspace/project';
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    existsSyncMock.mockReset();
+    spawnSyncMock.mockReset();
     // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     delete process.env.npm_config_user_agent;
   });
@@ -53,12 +54,14 @@ describe('detectPackageManager', () => {
   });
 
   it('falls back to yarn lockfile discovery when user agent is missing', () => {
-    existsSyncMock.mockImplementation((path) => pathToString(path).endsWith('yarn.lock'));
+    existsSyncMock.mockImplementation((path: PathLike) => pathToString(path).endsWith('yarn.lock'));
     expect(detectPackageManager(workspaceRoot)).toBe('yarn');
   });
 
   it('falls back to npm lockfile discovery when user agent is missing', () => {
-    existsSyncMock.mockImplementation((path) => pathToString(path).endsWith('package-lock.json'));
+    existsSyncMock.mockImplementation((path: PathLike) =>
+      pathToString(path).endsWith('package-lock.json'),
+    );
     expect(detectPackageManager(workspaceRoot)).toBe('npm');
   });
 
@@ -74,7 +77,8 @@ describe('ensureTokensDist', () => {
   let logger: Logger;
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    existsSyncMock.mockReset();
+    spawnSyncMock.mockReset();
     // biome-ignore lint/style/noProcessEnv: tests simulate npm CLI hints.
     delete process.env.npm_config_user_agent;
     logger = createMockLogger();
@@ -87,7 +91,7 @@ describe('ensureTokensDist', () => {
    * @param lockfileCheck - Optional matcher for lockfile discovery.
    */
   function mockDistMissing(lockfileCheck?: (path: string) => boolean): void {
-    existsSyncMock.mockImplementation((path) => {
+    existsSyncMock.mockImplementation((path: PathLike) => {
       const target = pathToString(path);
       if (lockfileCheck?.(target)) return true;
       return false;
@@ -121,7 +125,7 @@ describe('ensureTokensDist', () => {
       process.env.npm_config_user_agent = userAgent;
     }
 
-    existsSyncMock.mockImplementation((path) => {
+    existsSyncMock.mockImplementation((path: PathLike) => {
       const target = pathToString(path);
       if (lockfileCheck?.(target)) return true;
       if (target === distPath) return distExists;
@@ -146,7 +150,7 @@ describe('ensureTokensDist', () => {
   }
 
   it('returns immediately when the dist directory already exists', () => {
-    existsSyncMock.mockImplementation((path) => pathToString(path) === distPath);
+    existsSyncMock.mockImplementation((path: PathLike) => pathToString(path) === distPath);
 
     expect(ensureTokensDist({ workspaceRoot, logger })).toBe(distPath);
     expect(spawnSyncMock).not.toHaveBeenCalled();
