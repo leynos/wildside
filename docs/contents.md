@@ -122,6 +122,15 @@
 
 - [Documentation style guide](documentation-style-guide.md) – conventions for
   clear, consistent docs. _Audience: all contributors._
+- [PWA assistant instructions](../frontend-pwa/AGENTS.md) – scoped TypeScript,
+  JavaScript, testing, and quality-gate guidance for the browser PWA.
+  _Audience: frontend developers and automation agents._
+- [Package assistant instructions](../packages/AGENTS.md) – scoped TypeScript
+  package boundaries, testing, and quality-gate guidance for shared packages.
+  _Audience: package maintainers and automation agents._
+- [Security assistant instructions](../security/AGENTS.md) – scoped JavaScript
+  audit policy, validation, and security automation guidance. _Audience:
+  security automation maintainers and automation agents._
 - [Scripting standards](scripting-standards.md) – Python-first automation
   guidance covering `uv`, `plumbum`, and testing expectations. _Audience:
   automation authors._
