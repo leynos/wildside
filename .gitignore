@@ -111,6 +111,8 @@ deploy/k8s/backend/secret.env
 # Local agent memory state
 .memdb/
 .vtcode/
+
+# Claude Code per-session runtime state (PIDs, scheduled-task locks, etc.)
 .claude/
 *.swo
 *~
