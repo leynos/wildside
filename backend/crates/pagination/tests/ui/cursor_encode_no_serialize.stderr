@@ -1,0 +1,16 @@
+error[E0599]: the method `encode` exists for struct `pagination::Cursor<NotSerialisable>`, but its trait bounds were not satisfied
+  --> tests/ui/cursor_encode_no_serialize.rs:10:20
+   |
+ 3 | struct NotSerialisable {
+   | ---------------------- doesn't satisfy `NotSerialisable: serde_core::ser::Serialize`
+...
+10 |     let _ = cursor.encode();
+   |                    ^^^^^^ method cannot be called on `pagination::Cursor<NotSerialisable>` due to unsatisfied trait bounds
+   |
+   = note: the following trait bounds were not satisfied:
+           `NotSerialisable: serde_core::ser::Serialize`
+note: the trait `serde_core::ser::Serialize` must be implemented
+  --> $CARGO/serde_core-$VERSION/src/ser/mod.rs
+   |
+   | pub trait Serialize {
+   | ^^^^^^^^^^^^^^^^^^^

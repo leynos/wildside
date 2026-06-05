@@ -9,7 +9,7 @@
     "puppeteer": "^23.11.1",
     "validator": "^13.15.23",
     "vite": "^7.3.2",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.8"
   },
   "name": "myapp",
   "private": true,

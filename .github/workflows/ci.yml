@@ -157,14 +157,14 @@ jobs:
       - name: Rust fmt check
         run: cargo fmt --manifest-path backend/Cargo.toml --all -- --check
       - name: Rust clippy
-        run: cargo clippy --locked --manifest-path backend/Cargo.toml --all-targets --all-features -- -D warnings
+        run: make lint-clippy
 
-      - name: Whitaker lint
+      - name: Install whitaker
         run: |
           cargo install whitaker-installer --version 0.2.0
           whitaker-installer --experimental
-          whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
-          whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
+      - name: Whitaker lint
+        run: make lint-whitaker
 
       - name: Architecture lint
         run: make lint-architecture
@@ -205,6 +205,9 @@ jobs:
           RUSTFLAGS="-D warnings" cargo nextest run --locked \
             --manifest-path backend/Cargo.toml \
             --all-targets --all-features
+
+      - name: Compile-fail tests (pagination trait bounds)
+        run: cargo test --locked --features trybuild-tests -p pagination cursor_trait_bound_compile_fail_tests
 
       # OpenAPI dump (at runtime or via a small bin)
       - name: Generate OpenAPI specification

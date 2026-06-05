@@ -461,6 +461,16 @@ transport-agnostic:
 - **Error mapping** is performed by inbound adapters, not by the shared
   crate. The crate documents recommended HTTP status codes and envelope
   `code` values, but the adapter layer owns the final mapping.
+- **Pagination-aware repository errors** are modelled as semantic port errors
+  rather than opaque query strings. For users pagination,
+  `UserPersistenceError::Pagination` wraps `UserPaginationError`, allowing
+  repository-originated invalid cursor and unsupported direction failures to
+  map to HTTP `400` while connection failures remain `503` and unexpected
+  query failures remain redacted `500` responses.
+- **BDD cursor fixtures** that exercise invalid opaque cursor payloads should
+  use static base64url tokens via `concat!` when the request helper expects a
+  `'static` path. This keeps the behaviour explicit without adding test-only
+  dependencies to an adapter crate.
 
 ### Documentation invariant testing
 

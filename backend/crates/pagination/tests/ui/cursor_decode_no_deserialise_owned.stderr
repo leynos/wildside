@@ -1,0 +1,22 @@
+error[E0599]: the associated function or constant `decode` exists for struct `pagination::Cursor<NotDeserialisable>`, but its trait bounds were not satisfied
+ --> tests/ui/cursor_decode_no_deserialise_owned.rs:9:42
+  |
+3 | struct NotDeserialisable {
+  | ------------------------ doesn't satisfy `_: Deserialize<'de>` or `_: DeserializeOwned`
+...
+9 |     let _ = Cursor::<NotDeserialisable>::decode("sometoken");
+  |                                          ^^^^^^ associated function or constant cannot be called on `pagination::Cursor<NotDeserialisable>` due to unsatisfied trait bounds
+  |
+note: if you're trying to build a new `pagination::Cursor<NotDeserialisable>` consider using one of the following associated functions:
+      pagination::Cursor::<Key>::new
+      pagination::Cursor::<Key>::with_direction
+ --> src/cursor/mod.rs
+  |
+  |     pub const fn new(key: Key) -> Self {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     pub const fn with_direction(key: Key, dir: Direction) -> Self {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: the following trait bounds were not satisfied:
+          `NotDeserialisable: serde_core::de::Deserialize<'de>`
+          which is required by `NotDeserialisable: serde_core::de::DeserializeOwned`

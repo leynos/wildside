@@ -10,12 +10,23 @@ base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+tracing = "0.1"
 url = "2"
 
+[features]
+# CI-only gate for the trybuild compile-fail tests. Leaving it unset keeps
+# `cargo test -p pagination` fast for local runs (no trybuild scratch
+# compiles); CI passes `--features trybuild-tests` to exercise the trait
+# bound regressions.
+trybuild-tests = []
+
 [dev-dependencies]
+insta = { version = "1", features = ["json"] }
+proptest = "1.6"
 rstest = "0.26"
 rstest-bdd = "0.5.0"
 rstest-bdd-macros = { version = "0.5.0", features = ["strict-compile-time-validation"] }
+trybuild = { version = "1", features = ["diff"] }
 
 [lints]
 workspace = true

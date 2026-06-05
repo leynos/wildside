@@ -13,6 +13,7 @@ pub mod er_snapshots;
 pub mod example_data;
 pub mod inbound;
 mod middleware;
+mod observability;
 pub mod outbound;
 pub mod server;
 #[cfg(any(test, feature = "test-support"))]
@@ -25,3 +26,26 @@ pub use doc::ApiDoc;
 pub use domain::ProcessHealth;
 pub use inbound::http;
 pub use inbound::http::error::ApiResult;
+
+/// Register optional pagination metrics for the HTTP metrics endpoint.
+///
+/// # Examples
+///
+/// ```
+/// # #[cfg(feature = "metrics")]
+/// # fn main() -> Result<(), prometheus::Error> {
+/// let registry = prometheus::Registry::new();
+///
+/// backend::register_pagination_error_metrics(&registry)?;
+///
+/// Ok::<(), prometheus::Error>(())
+/// # }
+/// # #[cfg(not(feature = "metrics"))]
+/// # fn main() {}
+/// ```
+#[cfg(feature = "metrics")]
+pub fn register_pagination_error_metrics(
+    registry: &prometheus::Registry,
+) -> Result<(), prometheus::Error> {
+    observability::pagination_errors::register_pagination_error_metrics(registry)
+}

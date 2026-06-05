@@ -103,6 +103,9 @@
 
 ## Operational runbooks
 
+- [Wildside server users guide](users-guide.md) – user-visible backend API
+  behaviour, including users list pagination errors. _Audience: API consumers
+  and backend developers._
 - [OSM ingestion end-to-end runbook](runbooks/osm-ingestion-e2e.md) – operator
   procedure for executing and verifying `ingest-osm` runs, including
   deterministic reruns. _Audience: backend operators and developers._

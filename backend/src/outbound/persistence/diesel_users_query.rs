@@ -14,7 +14,7 @@ use crate::domain::{Error, User, UserCursorKey, UserId};
 use super::diesel_user_repository::DieselUserRepository;
 use super::user_persistence_error_mapping::map_user_persistence_error;
 #[cfg(test)]
-use crate::domain::ports::UserPersistenceError;
+use crate::domain::ports::{UserPaginationError, UserPersistenceError};
 
 /// Diesel-backed `UsersQuery` implementation backed by user repository reads.
 #[derive(Clone)]
@@ -107,6 +107,8 @@ mod tests {
     enum StubFailure {
         Connection,
         Query,
+        InvalidCursor,
+        UnsupportedDirection,
     }
 
     impl StubFailure {
@@ -114,6 +116,12 @@ mod tests {
             match self {
                 Self::Connection => UserPersistenceError::connection("database unavailable"),
                 Self::Query => UserPersistenceError::query("database query failed"),
+                Self::InvalidCursor => UserPersistenceError::pagination(
+                    UserPaginationError::invalid_cursor_format("bad token"),
+                ),
+                Self::UnsupportedDirection => UserPersistenceError::pagination(
+                    UserPaginationError::unsupported_direction("sideways"),
+                ),
             }
         }
     }
@@ -327,6 +335,8 @@ mod tests {
     #[rstest]
     #[case(StubFailure::Connection, ErrorCode::ServiceUnavailable)]
     #[case(StubFailure::Query, ErrorCode::InternalError)]
+    #[case(StubFailure::InvalidCursor, ErrorCode::InvalidRequest)]
+    #[case(StubFailure::UnsupportedDirection, ErrorCode::InvalidRequest)]
     #[tokio::test]
     async fn list_users_page_maps_persistence_failures(
         #[case] failure: StubFailure,

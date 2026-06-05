@@ -3,6 +3,9 @@
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 
+#[cfg(feature = "metrics")]
+use serial_test::serial;
+
 mod support;
 
 use support::handle_cluster_setup_failure;
@@ -58,6 +61,19 @@ fn the_client_requests_the_users_list_with_an_invalid_cursor(world: &mut World) 
     run_authenticated_request(world, "/api/v1/users?cursor=not-a-cursor");
 }
 
+#[when("the client requests the users list with an unsupported cursor direction")]
+fn the_client_requests_the_users_list_with_an_unsupported_cursor_direction(world: &mut World) {
+    run_authenticated_request(
+        world,
+        concat!(
+            "/api/v1/users?cursor=",
+            "eyJrZXkiOnsiY3JlYXRlZF9hdCI6IjIwMjYtMDEtMDFUMDA6MDA6MDBaIiwiaWQi",
+            "OiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifSwiZGlyIjoi",
+            "U2lkZXdheXMifQ"
+        ),
+    );
+}
+
 #[when("the client requests the users list without a session")]
 fn the_client_requests_the_users_list_without_a_session(world: &mut World) {
     run_unauthenticated_request(world);
@@ -108,6 +124,11 @@ fn the_users_response_is_bad_request_with_invalid_cursor_details(world: &mut Wor
     assert_error(world, 400, "invalid_cursor");
 }
 
+#[then("the users response is bad request with unsupported_direction details")]
+fn the_users_response_is_bad_request_with_unsupported_direction_details(world: &mut World) {
+    assert_error(world, 400, "unsupported_direction");
+}
+
 #[then("the users response is unauthorised")]
 fn the_users_response_is_unauthorised(world: &mut World) {
     assert_status(world, 401);
@@ -154,7 +175,17 @@ fn oversized_users_page_limit_is_rejected(world: World) {
     path = "tests/features/users_list_pagination.feature",
     name = "Invalid users cursor is rejected"
 )]
+#[cfg_attr(feature = "metrics", serial)]
 fn invalid_users_cursor_is_rejected(world: World) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/users_list_pagination.feature",
+    name = "Unsupported users cursor direction is rejected"
+)]
+#[cfg_attr(feature = "metrics", serial)]
+fn unsupported_users_cursor_direction_is_rejected(world: World) {
     drop(world);
 }
 

@@ -198,7 +198,9 @@ pub use user_preferences_repository::{
     FixtureUserPreferencesRepository, UserPreferencesRepository, UserPreferencesRepositoryError,
 };
 pub use user_profile_query::{FixtureUserProfileQuery, UserProfileQuery};
-pub use user_repository::{ListUsersPageRequest, UserPersistenceError, UserRepository};
+pub use user_repository::{
+    ListUsersPageRequest, UserPaginationError, UserPersistenceError, UserRepository,
+};
 pub use users_query::{FixtureUsersQuery, UsersPage, UsersQuery};
 #[cfg(test)]
 pub use walk_session_command::MockWalkSessionCommand;

@@ -41,12 +41,13 @@ YAMLLINT_VERSION ?= 1.35.1
 OPENAPI_SPEC ?= spec/openapi.json
 
 # Place one consolidated PHONY declaration near the top of the file
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down \
-	local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
-	fmt lint test test-rust test-frontend typecheck deps lockfile lint-specs audit \
-	check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint audit-node rust-audit \
-	lint-rust lint-frontend lint-asyncapi lint-openapi lint-makefile lint-actions \
-	lint-architecture workspace-sync
+.PHONY: all clean be fe fe-build openapi gen docker-up docker-down
+.PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
+.PHONY: fmt lint test test-rust test-frontend typecheck deps lockfile
+.PHONY: lint-specs audit audit-node rust-audit
+.PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
+.PHONY: lint-rust lint-clippy lint-whitaker lint-frontend lint-asyncapi lint-openapi lint-makefile
+.PHONY: lint-actions lint-architecture workspace-sync prepare-pg-worker
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -107,12 +108,28 @@ lint: workspace-sync
 
 lint-rust:
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
-	cargo clippy --workspace --all-targets --all-features -- $(RUST_FLAGS)
+	$(MAKE) lint-clippy
+	$(MAKE) lint-whitaker
+
+# Strict-union of the previous Makefile and CI clippy calls:
+#   * --locked (matches CI; fails on lockfile drift)
+#   * --workspace (broader than CI's --manifest-path backend/Cargo.toml; covers
+#     example-data, pagination, architecture-lint, and other workspace members)
+# CI invokes this target so both surfaces stay in lockstep.
+lint-clippy:
+	cargo clippy --locked --workspace --all-targets --all-features -- $(RUST_FLAGS)
+
+# Whitaker is expected to be on PATH; install with `whitaker-installer
+# --experimental` (CI bootstraps it in a separate step). Runs under
+# RUSTFLAGS="-D warnings" so a workspace warning fails the lint, matching
+# the clippy gate. CI invokes this target so both surfaces stay in lockstep.
+lint-whitaker:
 	$(RUST_FLAGS_ENV) whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
 	$(RUST_FLAGS_ENV) whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
 
 lint-frontend:
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+
 
 lint-specs: lint-asyncapi lint-openapi
 
@@ -175,6 +192,7 @@ PG_WORKER_INSTALL_ROOT ?= $(CURDIR)/target/pg-worker-root
 PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.1
 NEXTEST_TEST_THREADS ?= 1
 
+
 test: test-rust test-frontend
 
 test-rust: workspace-sync prepare-pg-worker
@@ -184,7 +202,6 @@ test-frontend: deps typecheck
 	pnpm run test
 	pnpm run test:workspaces
 
-.PHONY: prepare-pg-worker
 .ONESHELL: prepare-pg-worker
 define PREPARE_PG_WORKER_CMD
 set -euo pipefail
@@ -214,6 +231,7 @@ PNPM_LOCK_HASH := $(shell \
   fi)
 NODE_MODULES_STAMP := node_modules/.pnpm-install-$(PNPM_LOCK_HASH)
 
+
 deps: $(NODE_MODULES_STAMP)
 
 $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
@@ -224,7 +242,8 @@ $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
 
 typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,--noEmit -p $$dir/tsconfig.json,typescript@$(TSC_VERSION)) || exit 1; done
 
-audit: audit-node rust-audit
+
+audit: deps audit-node rust-audit
 
 audit-node: deps
 	pnpm -r --if-present run audit

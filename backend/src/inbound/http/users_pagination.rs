@@ -7,15 +7,20 @@
 use std::num::NonZeroUsize;
 
 use actix_web::HttpRequest;
-use pagination::{Cursor, Direction, MAX_LIMIT, PageParams, Paginated, PaginationLinks};
+use pagination::{
+    Cursor, CursorError, Direction, MAX_LIMIT, PageParams, Paginated, PaginationLinks,
+};
 use serde::Deserialize;
 use serde_json::json;
+use tracing::debug;
 use url::Url;
 use utoipa::ToSchema;
 
+use crate::domain::pagination_errors::{invalid_cursor_error, unsupported_direction_error};
 use crate::domain::ports::{ListUsersPageRequest, UsersPage};
 use crate::domain::{Error, User, UserCursorKey};
 use crate::inbound::http::schemas::UserSchema;
+use crate::observability::pagination_errors::{PaginationErrorSource, record_pagination_error};
 
 /// Raw users list query parameters.
 ///
@@ -131,7 +136,7 @@ pub fn parse_users_page_params(
         .as_deref()
         .map(Cursor::<UserCursorKey>::decode)
         .transpose()
-        .map_err(|_| invalid_cursor_error())?;
+        .map_err(map_cursor_error)?;
     let direction = cursor
         .as_ref()
         .map_or(UsersPageDirection::First, cursor_direction);
@@ -270,9 +275,35 @@ fn current_request_url(request: &HttpRequest) -> Result<Url, Error> {
     Url::parse(&url).map_err(|err| Error::internal(format!("failed to build request URL: {err}")))
 }
 
-fn invalid_cursor_error() -> Error {
-    Error::invalid_request("cursor is invalid")
-        .with_details(json!({ "field": "cursor", "code": "invalid_cursor" }))
+fn map_cursor_error(error: CursorError) -> Error {
+    match error {
+        CursorError::UnsupportedDirection { direction } => {
+            debug!(
+                rejected_direction = %direction,
+                source = "users_http",
+                "rejected users cursor with unsupported direction"
+            );
+            record_pagination_error(PaginationErrorSource::UsersHttp, "unsupported_direction");
+            unsupported_direction_error()
+        }
+        CursorError::InvalidBase64 { message } | CursorError::Deserialize { message } => {
+            debug!(
+                cursor_decode_error = %message,
+                source = "users_http",
+                "rejected users cursor with decode failure"
+            );
+            record_pagination_error(PaginationErrorSource::UsersHttp, "invalid_cursor");
+            invalid_cursor_error()
+        }
+        CursorError::Serialize { message } => {
+            debug!(
+                cursor_serialize_error = %message,
+                source = "users_http",
+                "users cursor decode raised serialize error"
+            );
+            Error::internal("failed to decode users cursor")
+        }
+    }
 }
 
 fn invalid_limit_error(value: Option<&str>) -> Error {
