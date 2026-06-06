@@ -809,6 +809,18 @@ services.
 > `DieselUserRepository` into a mixed-responsibility type. Roadmap item 3.5.4
 > then completed the shared-revision write contract so interests writes now use
 > the same optimistic-concurrency semantics as full preferences updates.
+>
+> **Design decision (2026-05-26):** Roadmap item 3.5.5 hardens the HTTP state
+> composition root with a private user-state port bundle in
+> `backend/src/server/state_builders.rs`. `build_http_state` still owns the
+> public startup boundary, but login, users, profile, interests, preferences,
+> and route-annotation port selection now pass through one explicit helper seam
+> before being inserted into `HttpStatePorts` and `HttpStateExtraPorts`.
+> DB-present mode continues to select outbound Diesel adapters, DB-absent mode
+> continues to select fixture fallbacks, and regression coverage asserts the
+> selected adapter through current-user, users-list, and preferences responses.
+> The helper remains private so persistence details stay confined to outbound
+> adapters and HTTP handlers continue to consume domain ports only.
 
 For screen readers: The following sequence diagram shows the idempotent offline
 bundle upsert flow, including replay handling and duplicate-key race recovery.

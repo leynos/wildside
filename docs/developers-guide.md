@@ -376,6 +376,17 @@ When adding a new behaviour:
 When migrating existing suites, prefer incremental edits that preserve scenario
 intent and avoid broad rewrites that obscure regressions.
 
+When validating generated `rstest-bdd` integration binaries, prefer running
+the binary directly:
+
+```bash
+cargo test -p backend --test startup_mode_composition_bdd -- --nocapture
+```
+
+Name filters can miss generated scenario functions or select only support
+module tests. Use filters only after confirming the generated scenario names
+match the filter text.
+
 ## Shared workspace crate testing
 
 Shared workspace crates (such as `backend/crates/pagination`) provide

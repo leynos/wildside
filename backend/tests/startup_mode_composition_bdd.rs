@@ -27,7 +27,8 @@ mod flows;
 
 use db_support::{seed_route, seed_user, setup_db_context};
 use flow_support::{
-    World, assert_internal, assert_profile_response, extract_validation_baseline, is_skipped,
+    World, assert_internal, assert_user_state_adapter_selection, extract_validation_baseline,
+    is_skipped,
 };
 use flows::{run_comprehensive_flow, run_validation_error_flow};
 
@@ -82,11 +83,6 @@ fn assert_snapshot_ok(
 }
 
 fn assert_user_state_snapshots(world: &World) {
-    // Users list should return 200
-    let users_list = world.users_list.as_ref().expect("users_list snapshot");
-    assert_eq!(users_list.status, 200);
-
-    // Preferences should return 200 with all required fields
     assert_snapshot_ok(
         &world.preferences,
         "preferences",
@@ -162,7 +158,8 @@ fn assert_shared_happy_path_contracts(world: &World, profile_name: &str) {
     assert!(login.session_cookie.is_some());
 
     let profile = world.profile.as_ref().expect("profile snapshot");
-    assert_profile_response(profile, profile_name);
+    assert_eq!(profile.status, 200);
+    assert_user_state_adapter_selection(world, profile_name);
 
     assert_user_state_snapshots(world);
     assert_catalogue_snapshots(world);
@@ -268,13 +265,8 @@ fn all_responses_match_db_backed_contracts(world: &mut World) {
 
     assert_shared_happy_path_contracts(world, DB_PROFILE_NAME);
 
-    // DB-specific assertion: verify userId matches seeded user
-    let preferences = world.preferences.as_ref().expect("preferences snapshot");
-    let prefs_body = preferences.body.as_ref().expect("preferences body");
-    assert_eq!(
-        prefs_body.get("userId").and_then(|v| v.as_str()),
-        Some(FIXTURE_AUTH_ID)
-    );
+    // The shared assertion has already verified that profile and users-list
+    // endpoints expose the seeded DB profile name rather than fixture data.
 }
 
 // ------------------------------------------------------------------------
