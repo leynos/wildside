@@ -8,7 +8,7 @@
     "jsx": "react-jsx",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["vite/client"],
+    "types": ["vite/client", "bun"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,

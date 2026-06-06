@@ -1,4 +1,7 @@
-# Documentation index
+# Documentation contents
+
+- [Documentation contents](contents.md) – the canonical index for project
+  documentation. _Audience: all readers._
 
 ## Project architecture
 
@@ -6,6 +9,8 @@
   blueprint and product vision. _Audience: stakeholders and all contributors._
 - [Repository design guide](repository-structure.md) – explains repository
   layout and request flow. _Audience: new contributors._
+- [Repository layout](repository-layout.md) – maps the major repository paths
+  and their responsibilities. _Audience: new contributors and maintainers._
 - [Wildside backend: functional design specification](wildside-backend-design.md)
   – outlines backend components and tasks. _Audience: backend developers._
 - [Wildside backend architecture](wildside-backend-architecture.md) – hexagonal
@@ -117,6 +122,15 @@
 
 - [Documentation style guide](documentation-style-guide.md) – conventions for
   clear, consistent docs. _Audience: all contributors._
+- [PWA assistant instructions](../frontend-pwa/AGENTS.md) – scoped TypeScript,
+  JavaScript, testing, and quality-gate guidance for the browser PWA.
+  _Audience: frontend developers and automation agents._
+- [Package assistant instructions](../packages/AGENTS.md) – scoped TypeScript
+  package boundaries, testing, and quality-gate guidance for shared packages.
+  _Audience: package maintainers and automation agents._
+- [Security assistant instructions](../security/AGENTS.md) – scoped JavaScript
+  audit policy, validation, and security automation guidance. _Audience:
+  security automation maintainers and automation agents._
 - [Scripting standards](scripting-standards.md) – Python-first automation
   guidance covering `uv`, `plumbum`, and testing expectations. _Audience:
   automation authors._
