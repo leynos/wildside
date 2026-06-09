@@ -42,22 +42,16 @@ Observable success:
 ## Risks
 
 - Risk: fixture naming and scenario binding behaviour changed in v0.5.0.
-  Severity: medium
-  Likelihood: high
-  Mitigation: verify fixture-key behaviour with targeted nextest runs before
-  full gateway.
+  Severity: medium Likelihood: high Mitigation: verify fixture-key behaviour
+  with targeted nextest runs before full gateway.
 
 - Risk: strict compile-time validation surfaces latent mismatches.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: compile targeted backend and example-data test binaries after
-  dependency upgrade.
+  Severity: medium Likelihood: medium Mitigation: compile targeted backend and
+  example-data test binaries after dependency upgrade.
 
 - Risk: documentation drift around missing developer guide path.
-  Severity: medium
-  Likelihood: high
-  Mitigation: create `docs/developers-guide.md` and cross-link it from testing
-  docs.
+  Severity: medium Likelihood: high Mitigation: create
+  `docs/developers-guide.md` and cross-link it from testing docs.
 
 ## Progress
 
@@ -72,35 +66,32 @@ Observable success:
 ## Surprises & discoveries
 
 - Observation: `docs/developers-guide.md` did not exist, despite references
-  from other docs.
-  Evidence: file lookup failed during planning; docs contained links to this
-  path.
-  Impact: migration required creating a new canonical developer guide.
+  from other docs. Evidence: file lookup failed during planning; docs contained
+  links to this path. Impact: migration required creating a new canonical
+  developer guide.
 
 - Observation: underscore-prefixed scenario fixture bindings (`_world`) changed
   runtime fixture keys and broke step injection where steps expected `world`.
   Evidence: nextest failures in backend scenario binaries reported available
-  fixture `_world` and missing fixture `world`.
-  Impact: scenario bindings in this repository keep `world` key and use explicit
-  no-op bodies to satisfy warning gates.
+  fixture `_world` and missing fixture `world`. Impact: scenario bindings in
+  this repository keep `world` key and use explicit no-op bodies to satisfy
+  warning gates.
 
 ## Decision log
 
 - Decision: enable `strict-compile-time-validation` in macro dev-dependencies.
-  Rationale: stronger compile-time drift detection.
-  Date/Author: 2026-02-08 / user + Codex
+  Rationale: stronger compile-time drift detection. Date/Author: 2026-02-08 /
+  user + Codex
 
 - Decision: retain `world` fixture key in scenario bindings and avoid
-  underscore-prefixed binding names in current suites.
-  Rationale: existing step definitions depend on `world`; `_world` caused
-  runtime fixture mismatch.
+  underscore-prefixed binding names in current suites. Rationale: existing step
+  definitions depend on `world`; `_world` caused runtime fixture mismatch.
   Date/Author: 2026-02-08 / Codex
 
 - Decision: create `docs/developers-guide.md` as the canonical contributor
   strategy document and keep `docs/wildside-testing-guide.md` as operational
-  quick reference.
-  Rationale: explicit user preference and existing broken-reference risk.
-  Date/Author: 2026-02-08 / user + Codex
+  quick reference. Rationale: explicit user preference and existing
+  broken-reference risk. Date/Author: 2026-02-08 / user + Codex
 
 ## Outcomes & retrospective
 

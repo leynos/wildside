@@ -1,9 +1,8 @@
 # Deliver Diesel schema baseline for roadmap 3.1.1
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: DONE
 
@@ -17,9 +16,8 @@ schema with composite key constraints and GiST (Generalized Search Tree) / GIN
 through domain ports and outbound adapters.
 
 Observable outcome: the new migration applies to embedded Postgres, schema
-objects and indices exist, duplicate composite keys are rejected, new
-ingestion ports are present, and `make check-fmt`, `make lint`, and
-`make test` all pass.
+objects and indices exist, duplicate composite keys are rejected, new ingestion
+ports are present, and `make check-fmt`, `make lint`, and `make test` all pass.
 
 ## Constraints
 
@@ -48,21 +46,17 @@ ingestion ports are present, and `make check-fmt`, `make lint`, and
 ## Risks
 
 - Risk: replacing `routes` columns could break existing tests and adapters.
-  Severity: high
-  Likelihood: medium
-  Mitigation: update affected Diesel schema/models/tests in same change.
+  Severity: high Likelihood: medium Mitigation: update affected Diesel
+  schema/models/tests in same change.
 
 - Risk: spatial types and indexes in architecture docs may not map one-to-one
-  with embedded Postgres capabilities.
-  Severity: high
-  Likelihood: medium
+  with embedded Postgres capabilities. Severity: high Likelihood: medium
   Mitigation: use native `PATH`/`POINT` types plus supported GiST/GIN indexes
   in baseline migration, and document the decision.
 
 - Risk: schema/document mismatch for catalogue fields.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: use `docs/wildside-pwa-data-model.md` as tie-break for shapes.
+  Severity: medium Likelihood: medium Mitigation: use
+  `docs/wildside-pwa-data-model.md` as tie-break for shapes.
 
 ## Progress
 
@@ -89,13 +83,13 @@ ingestion ports are present, and `make check-fmt`, `make lint`, and
 ## Decision Log
 
 - Decision: apply immediate `routes` shape replacement in baseline migration.
-  Rationale: chosen implementation strategy for this task scope.
-  Date/Author: 2026-02-06 / Codex.
+  Rationale: chosen implementation strategy for this task scope. Date/Author:
+  2026-02-06 / Codex.
 
 - Decision: add ingestion repositories as new domain ports now, with Diesel
-  upsert adapters and no endpoint adoption yet.
-  Rationale: keeps schema and ingestion behind ports as required by phase 3.
-  Date/Author: 2026-02-06 / Codex.
+  upsert adapters and no endpoint adoption yet. Rationale: keeps schema and
+  ingestion behind ports as required by phase 3. Date/Author: 2026-02-06 /
+  Codex.
 
 - Decision: keep schema baseline compatible with embedded Postgres by using
   native `PATH`/`POINT` types and supported GiST/GIN indexes instead of a hard
@@ -131,10 +125,9 @@ Primary implementation files:
 
 ## Plan of Work
 
-Stage A: migration and schema alignment.
-Stage B: port and adapter scaffolding.
-Stage C: behavioural and unit validation.
-Stage D: docs update, quality gates, commit.
+Stage A: migration and schema alignment. Stage B: port and adapter scaffolding.
+Stage C: behavioural and unit validation. Stage D: docs update, quality gates,
+commit.
 
 ## Concrete Steps
 

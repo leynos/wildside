@@ -102,8 +102,8 @@ match the Nile Valley example chart interface.
 Removed the duplicated infra directories, scripts, actions, and docs while
 preserving the Wildside Helm chart and container build assets. Documentation
 now points to Nile Valley for infrastructure guidance, and CI/Makefile targets
-no longer depend on OpenTofu or infra checks. All quality gates passed, and
-the Helm chart interface was confirmed to match Nile Valley (schema identical,
+no longer depend on OpenTofu or infra checks. All quality gates passed, and the
+Helm chart interface was confirmed to match Nile Valley (schema identical,
 defaults only differ).
 
 ## Context and Orientation
@@ -129,9 +129,9 @@ Stage A: Inventory and interface validation (no code changes).
   (`infra/`, `scripts/`, `.github/actions/`, and infra docs). Capture a list of
   directories and files to remove.
 - Establish the Helm chart interface contract by comparing
-  `deploy/charts/wildside` with
-  `../../nile-valley/deploy/charts/example-app` (values schema, values keys,
-  and required templates). Record any differences that require action.
+  `deploy/charts/wildside` with `../../nile-valley/deploy/charts/example-app`
+  (values schema, values keys, and required templates). Record any differences
+  that require action.
 - Decide whether `deploy/k8s` is a GitOps artefact that should be removed or
   retained. Escalate if the intent is unclear.
 

@@ -55,8 +55,7 @@ Proposed API:
 - `SeedRegistry { version: u32, interest_theme_ids: Vec<Uuid>,
   safety_toggle_ids: Vec<Uuid>, seeds: Vec<SeedDefinition> }`
 - `SeedDefinition { name: String, seed: u64, user_count: usize }`
-- `ExampleUserSeed { id: Uuid, display_name: String,
-  interest_theme_ids: Vec<Uuid>, safety_toggle_ids: Vec<Uuid>, unit_system:
+- `ExampleUserSeed { id: Uuid, display_name: String, interest_theme_ids: Vec<Uuid>, safety_toggle_ids: Vec<Uuid>, unit_system:
   UnitSystemSeed }`
 - `UnitSystemSeed` enum with `Metric` and `Imperial`.
 - `generate_example_users(registry: &SeedRegistry, seed: &SeedDefinition)
@@ -152,8 +151,8 @@ the field names. Proposed config fields:
 - `example_data.user_count`: optional override for the seed's default count.
 - `example_data.registry_path`: path to the registry JSON.
 
-Environment overrides (subject to the same naming conventions and mapping
-rules `ortho-config` applies elsewhere):
+Environment overrides (subject to the same naming conventions and mapping rules
+`ortho-config` applies elsewhere):
 
 - `EXAMPLE_DATA_IS_ENABLED`
 - `EXAMPLE_DATA_SEED_NAME`

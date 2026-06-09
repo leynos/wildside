@@ -22,9 +22,9 @@
   examples demonstrating usage and outcome. Test documentation should omit
   examples that only restate the test logic.
 - **Keep file size manageable.** No single code file should be longer than 400
-  lines. Long switch statements or dispatch tables should be broken up by feature
-  and constituents colocated with targets. Large blocks of test data should be
-  moved to external data files.
+  lines. Long switch statements or dispatch tables should be broken up by
+  feature and constituents colocated with targets. Large blocks of test data
+  should be moved to external data files.
 - **Name things precisely.** Use clear, descriptive variable and function names.
   For booleans, prefer names with `is`, `has`, or `should`.
 - **Structure logically.** Each file should encapsulate a coherent module. Group
@@ -64,7 +64,8 @@
   commit, ensure all of the following are met:
   - New functionality or behaviour changes are fully validated by relevant unit
     and behavioural tests.
-  - Bug fixes include a failing test before the fix and a passing test afterward.
+  - Bug fixes include a failing test before the fix and a passing test
+    afterward.
   - Code passes lint checks.
   - Formatting is correct and validated.
 - **For Python files:**
@@ -78,7 +79,8 @@
   - **Mermaid diagrams:** Passes validation using nixie (`make nixie`).
 - **Committing:**
   - Only changes that meet all quality gates should be committed.
-  - Write clear, descriptive commit messages that summarise the change, following:
+  - Write clear, descriptive commit messages that summarise the change,
+    following:
     - **Imperative mood** in the subject line (for example, "Fix bug", "Add feature").
     - **Subject line length:** around 50 characters or fewer.
     - **Body:** Separate subject from body with a blank line. Explain *what* and
@@ -100,7 +102,8 @@
     to calculating or deriving one value.
   - **Primitive obsession / data clumps:** groups of simple variables that are
     frequently passed together, which may indicate a missing abstraction.
-  - **Excessive parameters:** functions or methods requiring too many parameters.
+  - **Excessive parameters:** functions or methods requiring too many
+    parameters.
   - **Feature envy:** methods that focus more on other data than their own.
   - **Shotgun surgery:** one change that forces many files to be edited.
 - **Abstraction / port / helper policy:** before adding a new abstraction, port,
@@ -110,7 +113,8 @@
   - Document the new abstraction's intended scope and re-use policy.
   - Record the decision in architecture, design, or developers-guide docs using
     `docs/contents.md` as the index.
-- **Post-commit review:** after functional changes or bug fixes that meet quality
+- **Post-commit review:** after functional changes or bug fixes that meet
+  quality
   gates, review changed code and adjacent areas using these heuristics.
 - **Separate atomic refactors:** if refactoring is required, implement it in a
   separate atomic commit after the functional change and ensure it passes all
@@ -123,11 +127,13 @@
 - Snapshot tests (using `syrupy`) should be provided where multivariant output
   format consistency is relevant to the requirements.
 - Add end-to-end tests where a change affects externally observable workflows,
-  integration contracts, persistence, command-line behaviour, network boundaries,
-  user interface flows, or other system-level behaviour.
-- Use property tests with `hypothesis` or `CrossHair` when a change introduces an
+  integration contracts, persistence, command-line behaviour, network
+  boundaries, user interface flows, or other system-level behaviour.
+- Use property tests with `hypothesis` or `CrossHair` when a change introduces
+  an
   invariant over a range of inputs, states, orderings, or transitions.
-- Run relevant unit, behavioural, property, and end-to-end suites before and after
+- Run relevant unit, behavioural, property, and end-to-end suites before and
+  after
   each change.
 
 ## Markdown guidance
@@ -144,14 +150,14 @@
 
 ## Project documentation
 
-Record design decisions in the design document. Where a decision is substantive,
-record it in an ADR document following the documentation style guide, then
-reference that ADR from the design document.
+Record design decisions in the design document. Where a decision is
+substantive, record it in an ADR document following the documentation style
+guide, then reference that ADR from the design document.
 
 Update `docs/users-guide.md` for any change to application behaviour or user
 interface that users should know about. Document internally facing interfaces
-or practices in the relevant component architecture document. Document internally
-facing conventions or practices in `docs/developers-guide.md`.
+or practices in the relevant component architecture document. Document
+internally facing conventions or practices in `docs/developers-guide.md`.
 
 ## Python development guidelines
 

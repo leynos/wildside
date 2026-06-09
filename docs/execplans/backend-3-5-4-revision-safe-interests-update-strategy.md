@@ -1,9 +1,8 @@
 # Define the revision-safe interests update strategy (roadmap 3.5.4)
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises &
-Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
-to date as work proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -16,9 +15,7 @@ close-out record to understand what actually landed and how the roadmap item
 was closed.
 
 This plan covers roadmap item 3.5.4 only:
-`Define and implement the revision-safe interests update strategy (for
-example optimistic concurrency via expected revision checks), including the
-persistence contract and error mapping for stale-write conflicts.`
+`Define and implement the revision-safe interests update strategy (for example optimistic concurrency via expected revision checks), including the persistence contract and error mapping for stale-write conflicts.`
 
 ## Purpose / big picture
 
@@ -107,35 +104,28 @@ Observable success criteria:
 
 - Risk: interests writes are a partial update over the broader
   `user_preferences` aggregate, so they can conflict with full preferences
-  writes even when the interest IDs themselves did not overlap.
-  Severity: high.
-  Likelihood: high.
-  Mitigation: document that interests and preferences share one aggregate
-  revision, and make tests prove interests updates preserve non-interest fields
-  while still bumping the shared revision.
+  writes even when the interest IDs themselves did not overlap. Severity: high.
+  Likelihood: high. Mitigation: document that interests and preferences share
+  one aggregate revision, and make tests prove interests updates preserve
+  non-interest fields while still bumping the shared revision.
 
 - Risk: changing the interests driving port will touch fixture adapters,
-  recording doubles, startup-mode harnesses, and handler tests.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: update the typed request/response contract first, then fix all
-  consumers in a single mechanical sweep before refining behaviour.
+  recording doubles, startup-mode harnesses, and handler tests. Severity:
+  medium. Likelihood: high. Mitigation: update the typed request/response
+  contract first, then fix all consumers in a single mechanical sweep before
+  refining behaviour.
 
 - Risk: current callers may rely on the legacy last-write-wins behaviour of
-  `/users/me/interests`.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: make the compatibility break explicit in docs and architecture
-  decision records, and keep the full preferences endpoint unchanged so clients
-  already using revision-safe writes remain unaffected.
+  `/users/me/interests`. Severity: high. Likelihood: medium. Mitigation: make
+  the compatibility break explicit in docs and architecture decision records,
+  and keep the full preferences endpoint unchanged so clients already using
+  revision-safe writes remain unaffected.
 
 - Risk: embedded PostgreSQL tests may fail for environmental reasons unrelated
-  to the feature.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: use repo-standard `pg-embedded-setup-unpriv` helpers, retain
-  logs, and record the known `/dev/null` and missing-lint-tool failure modes in
-  the execution transcript.
+  to the feature. Severity: medium. Likelihood: medium. Mitigation: use
+  repo-standard `pg-embedded-setup-unpriv` helpers, retain logs, and record the
+  known `/dev/null` and missing-lint-tool failure modes in the execution
+  transcript.
 
 ## Progress
 
@@ -166,37 +156,34 @@ Observable success criteria:
 - Observation: `DieselUserInterestsCommand` already depends on
   `UserPreferencesRepository`, not on a dedicated interests repository.
   Evidence:
-  `backend/src/outbound/persistence/diesel_user_interests_command.rs`.
-  Impact: 3.5.4 should refine the existing aggregate contract instead of adding
-  another persistence abstraction.
+  `backend/src/outbound/persistence/diesel_user_interests_command.rs`. Impact:
+  3.5.4 should refine the existing aggregate contract instead of adding another
+  persistence abstraction.
 
 - Observation: the current interests command hides concurrent writes behind a
   bounded retry loop and never surfaces the winning revision on success.
-  Evidence:
-  `backend/src/outbound/persistence/diesel_user_interests_command.rs` and its
-  `tests/retry.rs`.
-  Impact: the current behaviour is not revision-safe from the caller’s
-  perspective and must be replaced, not merely documented.
+  Evidence: `backend/src/outbound/persistence/diesel_user_interests_command.rs`
+  and its `tests/retry.rs`. Impact: the current behaviour is not revision-safe
+  from the caller’s perspective and must be replaced, not merely documented.
 
 - Observation: the 3.5.1 audit already established that
   `user_preferences.revision` is sufficient for interests conflict handling and
-  that no revision-tracking migration is required.
-  Evidence: `docs/user-state-schema-audit-3-5-1.md`.
-  Impact: the implementation should stay inside domain/adapter code and tests.
+  that no revision-tracking migration is required. Evidence:
+  `docs/user-state-schema-audit-3-5-1.md`. Impact: the implementation should
+  stay inside domain/adapter code and tests.
 
 - Observation: the execution environment still recreates `/dev/null` as a
   regular file (`-rw-r--r--`) instead of the expected character device, so
   `pg-embedded-setup-unpriv` fails during PostgreSQL bootstrap before any
-  scenario logic runs.
-  Evidence: `ls -l /dev/null` reported a regular file on 2026-03-13, and
+  scenario logic runs. Evidence: `ls -l /dev/null` reported a regular file on
+  2026-03-13, and
   `cargo test -p backend --test user_interests_revision_conflicts_bdd` failed
-  with repeated `cannot create /dev/null: Permission denied`.
-  Impact: DB-backed BDD scenarios compile but cannot be executed to completion
-  in this container until the runtime is repaired.
+  with repeated `cannot create /dev/null: Permission denied`. Impact: DB-backed
+  BDD scenarios compile but cannot be executed to completion in this container
+  until the runtime is repaired.
 
 - Observation: the environment blocker above was later resolved, allowing the
-  DB-backed BDD suite and the full repository gates to pass.
-  Evidence:
+  DB-backed BDD suite and the full repository gates to pass. Evidence:
   `docs/execplans/backend-3-5-4a-close-revision-safe-interests-update-strategy.md`.
   Impact: roadmap item `3.5.4` is now closed; keep the earlier `/dev/null`
   notes as historical debugging context rather than the current state.
@@ -204,33 +191,29 @@ Observable success criteria:
 ## Decision Log
 
 - Decision: use `user_preferences` as the single aggregate and concurrency
-  source for interests writes.
-  Rationale: the schema audit already blesses `user_preferences.revision` as
-  sufficient, and adding a second interests revision source would recreate the
-  parity gap 3.5.x is closing.
-  Date/Author: 2026-03-13 / planning team.
+  source for interests writes. Rationale: the schema audit already blesses
+  `user_preferences.revision` as sufficient, and adding a second interests
+  revision source would recreate the parity gap 3.5.x is closing. Date/Author:
+  2026-03-13 / planning team.
 
 - Decision: replace the current raw-parameter interests port with a typed
   request carrying `expected_revision`, and return a success payload that
-  includes the new revision.
-  Rationale: revision-safe writes need an explicit caller contract; otherwise
-  the adapter can only guess and retry.
-  Date/Author: 2026-03-13 / planning team.
+  includes the new revision. Rationale: revision-safe writes need an explicit
+  caller contract; otherwise the adapter can only guess and retry. Date/Author:
+  2026-03-13 / planning team.
 
 - Decision: align stale-write error mapping with the existing preferences and
   annotations conflict envelope: top-level `code: "conflict"` with nested
   details carrying `code: "revision_mismatch"`, `expectedRevision`, and
-  `actualRevision`.
-  Rationale: clients already consume this shape elsewhere, so reuse lowers
-  cognitive load and avoids contract fragmentation.
-  Date/Author: 2026-03-13 / planning team.
+  `actualRevision`. Rationale: clients already consume this shape elsewhere, so
+  reuse lowers cognitive load and avoids contract fragmentation. Date/Author:
+  2026-03-13 / planning team.
 
 - Decision: implement this work with an agent team rather than a single
-  undifferentiated change stream.
-  Rationale: the task spans domain contracts, Diesel persistence, HTTP/OpenAPI,
-  BDD flows, and architecture documentation; explicit ownership reduces drift
-  between those layers.
-  Date/Author: 2026-03-13 / planning team.
+  undifferentiated change stream. Rationale: the task spans domain contracts,
+  Diesel persistence, HTTP/OpenAPI, BDD flows, and architecture documentation;
+  explicit ownership reduces drift between those layers. Date/Author:
+  2026-03-13 / planning team.
 
 ## Outcomes & retrospective
 
@@ -325,8 +308,8 @@ Start by replacing the implicit interests-write contract with an explicit one.
 The recommended shape is:
 
 - add `UpdateUserInterestsRequest` under
-  `backend/src/domain/ports/user_interests_command.rs` containing
-  `user_id`, `interest_theme_ids`, and `expected_revision: Option<u32>`;
+  `backend/src/domain/ports/user_interests_command.rs` containing `user_id`,
+  `interest_theme_ids`, and `expected_revision: Option<u32>`;
 - extend `backend/src/domain/user_interests.rs` so successful interests writes
   expose `revision: u32`;
 - keep the response body as interests-focused data rather than returning the
@@ -341,8 +324,7 @@ semantics:
 - BDD scenarios that currently fail because the endpoint does not reject stale
   revisions and does not return a revision on success.
 
-Do not continue until the failing tests demonstrate the exact missing
-behaviour.
+Do not continue until the failing tests demonstrate the exact missing behaviour.
 
 Stage B: implement the revision-safe domain and adapter strategy.
 
@@ -428,9 +410,9 @@ Only after all tests and checks pass should `docs/backend-roadmap.md` mark
 
 ## Concrete steps
 
-Run all commands from `/home/user/project`. Use `set -o pipefail` and `tee`
-for every meaningful command so the exit code survives truncation and the log
-is retained.
+Run all commands from `/home/user/project`. Use `set -o pipefail` and `tee` for
+every meaningful command so the exit code survives truncation and the log is
+retained.
 
 1. Capture the current baseline and confirm the old interests contract.
 

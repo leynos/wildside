@@ -1,9 +1,8 @@
 # Audit user-state schema coverage and migration needs (roadmap 3.5.1)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises &
-Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
-to date as work proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -14,10 +13,10 @@ Implementation started after explicit approval and is now complete.
 
 ## Purpose / big picture
 
-Roadmap task 3.5.1 requires a concrete audit of schema and persistence
-coverage for login, users, profile, and interests, then a documented decision
-on whether new migrations are required for profile and interests storage,
-revision tracking, and stale-write conflict handling.
+Roadmap task 3.5.1 requires a concrete audit of schema and persistence coverage
+for login, users, profile, and interests, then a documented decision on whether
+new migrations are required for profile and interests storage, revision
+tracking, and stale-write conflict handling.
 
 After this work lands, maintainers can point to one auditable source of truth
 showing:
@@ -83,33 +82,26 @@ Observable success criteria:
 ## Risks
 
 - Risk: interests state currently appears in two schema shapes
-  (`user_preferences.interest_theme_ids` and `user_interest_themes`), which
-  can produce contradictory migration conclusions.
-  Severity: high.
-  Likelihood: high.
-  Mitigation: include a decision checkpoint that selects one canonical
+  (`user_preferences.interest_theme_ids` and `user_interest_themes`), which can
+  produce contradictory migration conclusions. Severity: high. Likelihood:
+  high. Mitigation: include a decision checkpoint that selects one canonical
   persistence path for 3.5.x planning and document the rationale.
 
 - Risk: preferences already implement revision mismatch handling, but dedicated
   interests endpoints and domain types do not carry revision semantics.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: record whether interests conflict handling should reuse the
-  preferences revision model or require dedicated schema and port updates.
+  Severity: high. Likelihood: medium. Mitigation: record whether interests
+  conflict handling should reuse the preferences revision model or require
+  dedicated schema and port updates.
 
 - Risk: audit work accidentally leaks persistence concerns into domain or
-  inbound layers.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: add or update architecture guardrail tests and keep all schema
-  probing behind domain-driven ports with outbound implementations.
+  inbound layers. Severity: high. Likelihood: medium. Mitigation: add or update
+  architecture guardrail tests and keep all schema probing behind domain-driven
+  ports with outbound implementations.
 
 - Risk: fixture-backed runtime wiring can obscure real schema coverage if the
   audit does not explicitly separate runtime wiring status from schema status.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: report runtime wiring and schema coverage as separate axes in
-  the audit output.
+  Severity: medium. Likelihood: high. Mitigation: report runtime wiring and
+  schema coverage as separate axes in the audit output.
 
 ## Agent team
 
@@ -181,40 +173,34 @@ Coordination rules:
 
 - Observation (2026-02-26): runtime wiring for login, users, profile, and
   interests is still fixture-backed in `state_builders`, even when DB pool
-  configuration exists.
-  Evidence: `backend/src/server/state_builders.rs`.
+  configuration exists. Evidence: `backend/src/server/state_builders.rs`.
   Impact: schema coverage and runtime port persistence parity are distinct
   concerns and must be reported separately.
 
 - Observation (2026-02-26): interests persistence appears in both
-  `user_preferences` and `user_interest_themes` models.
-  Evidence: migration and Diesel schema audit from explorer findings.
-  Impact: 3.5.1 must produce a canonical storage recommendation before 3.5.3
-  and 3.5.4 can be implemented safely.
+  `user_preferences` and `user_interest_themes` models. Evidence: migration and
+  Diesel schema audit from explorer findings. Impact: 3.5.1 must produce a
+  canonical storage recommendation before 3.5.3 and 3.5.4 can be implemented
+  safely.
 
 - Observation (2026-02-26): preferences already have revision mismatch and
   conflict mapping, while dedicated interests paths do not expose equivalent
-  revision semantics.
-  Evidence: `preferences_service` and repository tests versus
-  `user_interests` domain and HTTP contracts.
-  Impact: migration and API-decision notes must distinguish existing coverage
-  from missing coverage.
+  revision semantics. Evidence: `preferences_service` and repository tests
+  versus `user_interests` domain and HTTP contracts. Impact: migration and
+  API-decision notes must distinguish existing coverage from missing coverage.
 
 ## Decision log
 
 - Decision: represent audit output as a domain-level report model with explicit
-  coverage and migration enums (`LoginSchemaCoverage`,
-  `EntitySchemaCoverage`, `InterestsStorageCoverage`, and
-  `MigrationDecision`).
-  Rationale: allows deterministic unit testing of decisions without coupling
-  tests to SQL or documentation formatting.
-  Date/Author: 2026-02-26 / Codex.
+  coverage and migration enums (`LoginSchemaCoverage`, `EntitySchemaCoverage`,
+  `InterestsStorageCoverage`, and `MigrationDecision`). Rationale: allows
+  deterministic unit testing of decisions without coupling tests to SQL or
+  documentation formatting. Date/Author: 2026-02-26 / Codex.
 
 - Decision: treat this roadmap item as complete only when both artefacts exist:
-  the audit report and architecture decision notes.
-  Rationale: roadmap wording requires documentation of migration need decisions,
-  and downstream items depend on those decisions.
-  Date/Author: 2026-02-26 / Codex.
+  the audit report and architecture decision notes. Rationale: roadmap wording
+  requires documentation of migration need decisions, and downstream items
+  depend on those decisions. Date/Author: 2026-02-26 / Codex.
 
 - Decision: keep this plan in `DRAFT` until explicit user approval.
   Rationale: the execplans workflow requires approval before implementation.
@@ -222,9 +208,8 @@ Coordination rules:
 
 - Decision: use the existing driven port `SchemaSnapshotRepository` as the
   schema metadata source for 3.5.1 audit logic instead of introducing a new
-  persistence-facing port.
-  Rationale: reuses established hexagonal seam and keeps 3.5.1 scoped to audit
-  behaviour rather than port-surface expansion.
+  persistence-facing port. Rationale: reuses established hexagonal seam and
+  keeps 3.5.1 scoped to audit behaviour rather than port-surface expansion.
   Date/Author: 2026-02-26 / Codex.
 
 ## Context and orientation
@@ -235,8 +220,7 @@ Roadmap and design references:
 - `docs/wildside-backend-architecture.md` (hexagonal boundaries, user-state
   persistence design, and documentation update target).
 - `docs/rust-testing-with-rstest-fixtures.md`,
-  `docs/rstest-bdd-users-guide.md`,
-  `docs/pg-embed-setup-unpriv-users-guide.md`,
+  `docs/rstest-bdd-users-guide.md`, `docs/pg-embed-setup-unpriv-users-guide.md`,
   `docs/rust-doctest-dry-guide.md`,
   `docs/complexity-antipatterns-and-refactoring-strategies.md`.
 
@@ -389,8 +373,8 @@ Documentation and roadmap:
 - All commands are re-runnable. Log file names are deterministic per branch
   and action.
 - If bootstrap or tests fail due to transient DB state, cleanly stop embedded
-  PostgreSQL, rerun setup, and re-run only the failing target first before
-  full gates.
+  PostgreSQL, rerun setup, and re-run only the failing target first before full
+  gates.
 - If migration recommendation outcomes change mid-implementation, update
   `Decision Log`, then re-run related unit and behavioural tests before
   continuing.

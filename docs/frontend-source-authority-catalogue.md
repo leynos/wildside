@@ -8,8 +8,8 @@ settle the design in its proper home.
 
 `docs/v2a-front-end-stack.md` takes precedence where it conflicts with older
 Progressive Web Application (PWA) platform guidance. Older PWA material remains
-useful when it describes Wildside behaviour that does not conflict with the
-v2a stack direction.
+useful when it describes Wildside behaviour that does not conflict with the v2a
+stack direction.
 
 ## Classification legend
 
@@ -58,8 +58,8 @@ Follow-up labels use these values: `update design document`,
 
 Authority: `docs/v2a-front-end-stack.md` (`authoritative`).
 
-Supporting sources: `docs/react-tailwind-with-bun.md`, `frontend-pwa/package.json`,
-and `Makefile` (`supporting`).
+Supporting sources: `docs/react-tailwind-with-bun.md`,
+`frontend-pwa/package.json`, and `Makefile` (`supporting`).
 
 Current status: the repository declares Bun, Vite, React, React DOM, TanStack
 Query, Tailwind CSS `^3`, DaisyUI `^4`, Zod, clsx, TypeScript, Vitest, and
@@ -74,31 +74,30 @@ Follow-up: Tailwind CSS v4 and DaisyUI v5 migration remains a later
 Authority: `docs/wildside-pwa-design.md` (`authoritative`).
 
 Supporting sources: `docs/v2a-front-end-stack.md`,
-`docs/wildside-ux-state-graph-v0.1.json`, and `docs/sitemap.md`
-(`supporting`).
+`docs/wildside-ux-state-graph-v0.1.json`, and `docs/sitemap.md` (`supporting`).
 
 Current status: the design expects a TanStack Router route tree and accessible
 client-side routing. The current `frontend-pwa` package has a single shell and
 does not yet declare TanStack Router.
 
-Follow-up: introducing the router and route tree is an `implementation
-follow-up` for later roadmap phases. No source-document contradiction blocks
-item 0.1.1.
+Follow-up: introducing the router and route tree is an
+`implementation follow-up` for later roadmap phases. No source-document
+contradiction blocks item 0.1.1.
 
 ### State management
 
 Authority: `docs/v2a-front-end-stack.md` (`authoritative`).
 
-Supporting sources: `docs/wildside-pwa-design.md` and `docs/local-first-react.md`
-(`supporting`).
+Supporting sources: `docs/wildside-pwa-design.md` and
+`docs/local-first-react.md` (`supporting`).
 
 Current status: current code uses React state, hooks, the theme provider, and
 TanStack Query. The v2a target splits responsibility across Zustand for
 interactive client state, TanStack Query for server and synchronized domain
 state, and XState for explicit multistep workflows.
 
-Follow-up: the long-lived client-state ownership policy should be formalized
-as a `write ADR` follow-up before broad feature implementation depends on it.
+Follow-up: the long-lived client-state ownership policy should be formalized as
+a `write ADR` follow-up before broad feature implementation depends on it.
 
 ### Local-first persistence
 
@@ -123,12 +122,12 @@ Supporting source:
 `docs/building-accessible-and-responsive-progressive-web-applications.md`
 (`supporting`).
 
-Current status: Wildside is intended to be installable with a Web App
-Manifest, app-like display mode, icons, `start_url`, and theme colours.
+Current status: Wildside is intended to be installable with a Web App Manifest,
+app-like display mode, icons, `start_url`, and theme colours.
 
-Follow-up: manifest implementation is an `implementation follow-up` for the
-PWA hardening workstream. No additional source reconciliation is needed for
-item 0.1.1.
+Follow-up: manifest implementation is an `implementation follow-up` for the PWA
+hardening workstream. No additional source reconciliation is needed for item
+0.1.1.
 
 ### Service worker and caching policy
 
@@ -157,8 +156,8 @@ canvas per map route view, OpenMapTiles-backed styling, a MapLibre
 right-to-left (RTL) text plugin when RTL locales are active, and shared map
 state for viewport and overlays.
 
-Follow-up: MapLibre dependency introduction and tile-provider strategy are
-later `implementation follow-up` and `write ADR` candidates. Current
+Follow-up: MapLibre dependency introduction and tile-provider strategy are later
+`implementation follow-up` and `write ADR` candidates. Current
 `frontend-pwa/package.json` does not declare MapLibre.
 
 ### Data model and card model
@@ -174,14 +173,14 @@ walk sessions, route plans, and card-level projections. The backend must not
 ship CSS classes; it provides semantic identifiers that the client maps to
 presentation.
 
-Follow-up: richer card-model fixture migration is an `implementation
-follow-up`. If data-shape gaps are found while reconciling contracts, they
-belong in an `update data model` follow-up.
+Follow-up: richer card-model fixture migration is an
+`implementation follow-up`. If data-shape gaps are found while reconciling
+contracts, they belong in an `update data model` follow-up.
 
 ### Localization and RTL
 
-Authority: `docs/wildside-pwa-design.md` and
-`docs/wildside-pwa-data-model.md` (`authoritative` as an authority set).
+Authority: `docs/wildside-pwa-design.md` and `docs/wildside-pwa-data-model.md`
+(`authoritative` as an authority set).
 
 Supporting sources: `docs/v2a-front-end-stack.md` and
 `docs/pure-accessible-and-localizable-react-components.md` (`supporting`).
@@ -212,8 +211,8 @@ Current status: Wildside targets Web Content Accessibility Guidelines (WCAG)
 Radix primitives for complex widgets, visible focus, focus-not-obscured
 behaviour, skip links, route focus management, and route-change announcements.
 
-Follow-up: executable Playwright, axe, and manual accessibility gates are
-later `implementation follow-up` items. The policy source is stable for 0.1.1.
+Follow-up: executable Playwright, axe, and manual accessibility gates are later
+`implementation follow-up` items. The policy source is stable for 0.1.1.
 
 ### Styling and tokens
 
@@ -231,8 +230,8 @@ HTML, semantic classes, and generated design tokens.
 
 Follow-up: current Tailwind v3 and DaisyUI v4 package state conflicts with the
 target v4/v5 platform direction. The repository already treats
-`docs/v2a-front-end-stack.md` as the precedence source, and migration belongs
-to `implementation follow-up` plus 0.2.4 and 0.2.5.
+`docs/v2a-front-end-stack.md` as the precedence source, and migration belongs to
+`implementation follow-up` plus 0.2.4 and 0.2.5.
 
 ### REST contracts
 
@@ -256,12 +255,12 @@ implementation can cite implemented wire contracts.
 Authority: `spec/asyncapi.yaml` (`authoritative`).
 
 Supporting sources: `docs/adr-001-websockets-on-actix-ws.md`,
-`docs/wildside-pwa-design.md`, and
-`docs/wildside-ux-state-graph-v0.1.json` (`supporting`).
+`docs/wildside-pwa-design.md`, and `docs/wildside-ux-state-graph-v0.1.json`
+(`supporting`).
 
 Current status: the implemented AsyncAPI contract describes `/ws` display-name
-submission, invalid-display-name replies, and user-created events. ADR 001
-owns the backend adapter choice and confirms that WebSocket handling remains an
+submission, invalid-display-name replies, and user-created events. ADR 001 owns
+the backend adapter choice and confirms that WebSocket handling remains an
 inbound adapter.
 
 Follow-up: route-generation progress and offline-bundle progress events are
@@ -304,12 +303,12 @@ later roadmap phases use them as implementation tickets.
 ### Testing and validation
 
 Authority: `docs/wildside-pwa-design.md` and
-`docs/high-velocity-accessibility-first-component-testing.md`
-(`authoritative` as an authority set).
+`docs/high-velocity-accessibility-first-component-testing.md` (`authoritative`
+as an authority set).
 
-Supporting sources: `docs/v2a-front-end-stack.md`, `docs/wildside-testing-guide.md`,
-`docs/rstest-bdd-users-guide.md`, `Makefile`, and `frontend-pwa/package.json`
-(`supporting`).
+Supporting sources: `docs/v2a-front-end-stack.md`,
+`docs/wildside-testing-guide.md`, `docs/rstest-bdd-users-guide.md`, `Makefile`,
+and `frontend-pwa/package.json` (`supporting`).
 
 Current status: executable repository gates are `make check-fmt`, `make lint`,
 `make test`, `make markdownlint`, and `make nixie`. Current front-end unit
@@ -389,8 +388,8 @@ only in `docs/frontend-roadmap.md`.
 Authority: `docs/wildside-pwa-data-model.md` (`authoritative`).
 
 Supporting sources: `docs/wildside-backend-architecture.md`,
-`docs/adr-001-websockets-on-actix-ws.md`, and the `hexagonal-architecture`
-skill (`supporting`).
+`docs/adr-001-websockets-on-actix-ws.md`, and the `hexagonal-architecture` skill
+(`supporting`).
 
 Current status: domain types and ports remain framework-independent, adapters
 translate at boundaries, and front-end code consumes backend contracts through

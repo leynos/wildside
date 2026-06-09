@@ -1,25 +1,23 @@
 # Publish crate-level pagination documentation (roadmap 4.1.3)
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
 This plan covers roadmap item 4.1.3 only:
-`Publish crate-level documentation outlining ordering requirements, default and
-maximum limits (20 and 100), and error mapping guidelines.`
+`Publish crate-level documentation outlining ordering requirements, default and maximum limits (20 and 100), and error mapping guidelines.`
 
 ## Purpose / big picture
 
 The `pagination` crate at `backend/crates/pagination` already ships the types
 needed for keyset pagination — `Cursor<Key>`, `Direction`, `PageParams`,
-`Paginated<T>`, and `PaginationLinks` — but the crate-level documentation
-(the `//!` block in `lib.rs`) is minimal: a six-line summary, a brief heading
-about cursor-based pagination, and a single code example. A developer picking
-up the crate for the first time cannot answer critical integration questions
-without reading every source file:
+`Paginated<T>`, and `PaginationLinks` — but the crate-level documentation (the
+`//!` block in `lib.rs`) is minimal: a six-line summary, a brief heading about
+cursor-based pagination, and a single code example. A developer picking up the
+crate for the first time cannot answer critical integration questions without
+reading every source file:
 
 - What ordering guarantees must a key type satisfy?
 - What are the shared default and maximum page sizes, and why?
@@ -28,8 +26,8 @@ without reading every source file:
 - What does the crate intentionally *not* provide (Diesel filters,
   Actix extractors, connection pooling)?
 
-After this change, a developer opening the pagination crate's documentation
-(via `cargo doc -p pagination --open` or reading `lib.rs`) will find a
+After this change, a developer opening the pagination crate's documentation (via
+`cargo doc -p pagination --open` or reading `lib.rs`) will find a
 self-contained reference covering:
 
 1. **Ordering requirements** — what "total ordering" means in practice, why the
@@ -43,24 +41,23 @@ self-contained reference covering:
    (`InvalidLimit`) should be translated to HTTP responses, with recommended
    status codes and envelope shapes.
 4. **Scope boundaries** — an explicit "what this crate does not do" section so
-   consumers know which responsibilities belong to inbound or outbound
-   adapters.
+   consumers know which responsibilities belong to inbound or outbound adapters.
 
 The change also adds unit tests (via `rstest`) and behavioural tests (via
-`rstest-bdd`) that validate the documented invariants hold at runtime:
-defaults are applied, limits are capped, zero limits are rejected, and error
-variants carry useful messages.
+`rstest-bdd`) that validate the documented invariants hold at runtime: defaults
+are applied, limits are capped, zero limits are rejected, and error variants
+carry useful messages.
 
 Observable success criteria:
 
 - `cargo doc -p pagination --no-deps` builds without warnings and the
-  generated HTML contains sections titled "Ordering requirements", "Default
-  and maximum limits", "Error mapping guidelines", and "Scope boundaries".
+  generated HTML contains sections titled "Ordering requirements", "Default and
+  maximum limits", "Error mapping guidelines", and "Scope boundaries".
 - Existing tests continue to pass: `cargo test -p pagination` returns zero
   failures.
 - New documentation-focused tests confirm the documented invariants: default
-  limit is 20, maximum limit is 100, zero limit yields `PageParamsError`,
-  and cursor error variants are distinguishable.
+  limit is 20, maximum limit is 100, zero limit yields `PageParamsError`, and
+  cursor error variants are distinguishable.
 - New BDD scenarios confirm the documented behaviour from an integration
   perspective.
 - `make check-fmt`, `make lint`, and `make test` all pass with logs retained.
@@ -78,8 +75,8 @@ escalation, not workarounds.
   dependencies on Actix, Diesel, or backend domain modules may be introduced.
 - The existing public API surface (`Cursor`, `CursorError`, `Direction`,
   `Paginated`, `PaginationLinks`, `PageParams`, `PageParamsError`,
-  `DEFAULT_LIMIT`, `MAX_LIMIT`) must not change in any breaking way. This
-  task adds documentation and tests, not new types or breaking signatures.
+  `DEFAULT_LIMIT`, `MAX_LIMIT`) must not change in any breaking way. This task
+  adds documentation and tests, not new types or breaking signatures.
 - New documentation must follow en-GB-oxendict spelling as required by
   `AGENTS.md` and `docs/documentation-style-guide.md`.
 - Rustdoc examples must be marked `no_run` per the documentation style guide
@@ -114,10 +111,10 @@ of autonomous action, not quality criteria.
 - Environment: if embedded Postgres or the Rust toolchain cannot execute
   locally, stop and document the exact blocker with command output.
 - Gate: if a quality gate failure is caused by pre-existing issues unrelated
-  to this task (e.g. `/dev/null` drift, missing `actionlint`), document it
-  and proceed with the feature-scoped gates (`cargo test -p pagination`,
-  `cargo clippy -p pagination -- -D warnings`, `cargo fmt -p pagination --
-  --check`).
+  to this task (e.g. `/dev/null` drift, missing `actionlint`), document it and
+  proceed with the feature-scoped gates (`cargo test -p pagination`,
+  `cargo clippy -p pagination -- -D warnings`,
+  `cargo fmt -p pagination -- --check`).
 
 ## Risks
 
@@ -125,48 +122,39 @@ Known uncertainties that might affect the plan.
 
 - Risk: the existing crate documentation example in `lib.rs` already
   demonstrates basic usage; expanding it may push `lib.rs` close to the
-  400-line limit.
-  Severity: low.
-  Likelihood: medium.
-  Mitigation: keep prose concise, use short focused examples per section, and
-  measure line count after each edit.
+  400-line limit. Severity: low. Likelihood: medium. Mitigation: keep prose
+  concise, use short focused examples per section, and measure line count after
+  each edit.
 
 - Risk: documentation-focused tests may duplicate existing tests that already
-  cover default limits and cursor error variants.
-  Severity: low.
-  Likelihood: high.
-  Mitigation: review existing tests first and only add tests that validate
-  newly documented invariants not already covered (e.g. verifying that
+  cover default limits and cursor error variants. Severity: low. Likelihood:
+  high. Mitigation: review existing tests first and only add tests that
+  validate newly documented invariants not already covered (e.g. verifying that
   documented error messages match reality, or that documented mappings hold).
-  Where an existing test already covers a documented invariant, reference it
-  in the documentation rather than duplicating.
+  Where an existing test already covers a documented invariant, reference it in
+  the documentation rather than duplicating.
 
 - Risk: full-gate failures may come from environment drift (broken
   `/dev/null`, missing `yamllint` or `actionlint`) rather than from this
-  change.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: retain logs with `tee`, rely on `make test` for automatic
-  `PG_EMBEDDED_WORKER` wiring, and treat environment failures as separate
-  from feature regressions. Use crate-scoped gates as the primary signal.
+  change. Severity: medium. Likelihood: medium. Mitigation: retain logs with
+  `tee`, rely on `make test` for automatic `PG_EMBEDDED_WORKER` wiring, and
+  treat environment failures as separate from feature regressions. Use
+  crate-scoped gates as the primary signal.
 
 - Risk: the `docs/documentation-style-guide.md` requires `no_run` on all
   examples, but some existing pagination crate examples do not use `no_run`
   (they run as doctests). Changing them to `no_run` would remove doctest
-  coverage.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: inspect the style guide carefully. The guide says to mark
-  examples with `no_run` under the "API doc comments (Rust)" heading. The
-  existing crate examples that run as doctests provide value; new examples
-  added in this task should follow the style guide. If a conflict arises,
-  document the decision to keep runnable doctests for existing examples and
-  use `no_run` for new prose-heavy examples.
+  coverage. Severity: medium. Likelihood: high. Mitigation: inspect the style
+  guide carefully. The guide says to mark examples with `no_run` under the "API
+  doc comments (Rust)" heading. The existing crate examples that run as
+  doctests provide value; new examples added in this task should follow the
+  style guide. If a conflict arises, document the decision to keep runnable
+  doctests for existing examples and use `no_run` for new prose-heavy examples.
 
 ## Agent team and ownership
 
-This implementation should use an explicit agent team. One person may play
-more than one role, but the ownership boundaries should remain visible.
+This implementation should use an explicit agent team. One person may play more
+than one role, but the ownership boundaries should remain visible.
 
 - Coordinator agent:
   Owns sequencing, keeps this ExecPlan current, enforces tolerances, collects
@@ -174,8 +162,8 @@ more than one role, but the ownership boundaries should remain visible.
 
 - Documentation agent:
   Owns `backend/crates/pagination/src/lib.rs` crate-level documentation
-  expansion, module-level (`//!`) documentation improvements across
-  `cursor.rs`, `envelope.rs`, and `params.rs`, and any new Rustdoc examples.
+  expansion, module-level (`//!`) documentation improvements across `cursor.rs`,
+  `envelope.rs`, and `params.rs`, and any new Rustdoc examples.
 
 - Quality assurance (QA) agent:
   Owns new `rstest` unit tests and `rstest-bdd` behavioural scenarios that
@@ -204,15 +192,16 @@ Hand-off order:
 
 - [x] Review current crate documentation, tests, and line counts.
 - [x] Expand `lib.rs` crate-level documentation with four sections: ordering
-  requirements, default and maximum limits, error mapping guidelines, and
-  scope boundaries.
+  requirements, default and maximum limits, error mapping guidelines, and scope
+  boundaries.
 - [x] Improve module-level documentation in `cursor.rs`, `envelope.rs`, and
   `params.rs` where the existing `//!` comments are minimal.
 - [x] Add new BDD feature file for documentation invariants.
 - [x] Add step definitions for new BDD scenarios.
 - [x] Add any new `rstest` unit tests for invariants not already covered.
-- [x] Run crate-scoped gates: `cargo test -p pagination`, `cargo clippy -p
-  pagination -- -D warnings`, `cargo fmt -p pagination -- --check`.
+- [x] Run crate-scoped gates: `cargo test -p pagination`,
+      `cargo clippy -p pagination -- -D warnings`,
+      `cargo fmt -p pagination -- --check`.
 - [-] Run full gates: `make check-fmt`, `make lint`, `make test` —
   `make lint` failed due to missing `actionlint` (environment issue;
   feature-scoped gates all pass).
@@ -223,7 +212,8 @@ Hand-off order:
 ## Surprises & discoveries
 
 1. **cursor.rs exceeded 400-line limit**: Initially added three unit tests for
-   cursor error display strings (`cursor_error_invalid_base64_display_contains_message`,
+   cursor error display strings
+   (`cursor_error_invalid_base64_display_contains_message`,
    `cursor_error_deserialize_display_contains_message`,
    `cursor_error_serialize_display_contains_message`), pushing `cursor.rs` from
    379 to 430 lines. The `module-max-lines` lint failed. Removed these tests
@@ -275,8 +265,8 @@ Hand-off order:
    line count: 167 lines.
 
 2. **Enhanced module-level documentation**: Expanded `//!` comments in
-   cursor.rs (added security consideration about unsigned cursors,
-   base64url encoding details), envelope.rs (query parameter preservation,
+   cursor.rs (added security consideration about unsigned cursors, base64url
+   encoding details), envelope.rs (query parameter preservation,
    skip_serializing_if behaviour), and params.rs (Deserialize normalization
    integration with HTTP extractors).
 
@@ -331,8 +321,7 @@ The crate's source files are:
 - `backend/crates/pagination/src/lib.rs` — crate root with re-exports and a
   brief `//!` doc block (currently 55 lines).
 - `backend/crates/pagination/src/cursor.rs` — `Cursor<Key>`, `CursorError`,
-  `Direction`, encoding/decoding logic, and 11 unit tests (currently 364
-  lines).
+  `Direction`, encoding/decoding logic, and 11 unit tests (currently 364 lines).
 - `backend/crates/pagination/src/envelope.rs` — `Paginated<T>`,
   `PaginationLinks`, link building, and 1 unit test (currently 204 lines).
 - `backend/crates/pagination/src/params.rs` — `PageParams`,
@@ -348,10 +337,10 @@ The crate's test files are:
 - `backend/crates/pagination/tests/features/direction_aware_cursors.feature`
   — 3 Gherkin scenarios covering direction-aware cursors.
 
-The crate's `Cargo.toml` declares these production dependencies: `base64`
-0.22, `serde` 1 (with `derive`), `serde_json` 1, `thiserror` 2, `url` 2.
-Dev dependencies: `rstest` 0.26, `rstest-bdd` 0.5.0, `rstest-bdd-macros`
-0.5.0 (with `strict-compile-time-validation`).
+The crate's `Cargo.toml` declares these production dependencies: `base64` 0.22,
+`serde` 1 (with `derive`), `serde_json` 1, `thiserror` 2, `url` 2. Dev
+dependencies: `rstest` 0.26, `rstest-bdd` 0.5.0, `rstest-bdd-macros` 0.5.0 (with
+`strict-compile-time-validation`).
 
 ### Public API surface
 
@@ -359,8 +348,8 @@ The crate exports the following items:
 
 - `Cursor<Key>` — generic cursor wrapping an ordering key and a `Direction`.
   Constructors: `new(key)` (default `Next`), `with_direction(key, dir)`.
-  Methods: `key()`, `direction()`, `into_inner()`, `into_parts()`,
-  `encode()`, `decode(value)`.
+  Methods: `key()`, `direction()`, `into_inner()`, `into_parts()`, `encode()`,
+  `decode(value)`.
 - `CursorError` — three variants: `Serialize`, `InvalidBase64`,
   `Deserialize`, each with a `message: String` field.
 - `Direction` — `Next` (default) or `Prev`.
@@ -409,11 +398,10 @@ Specifically, confirm:
   `params.rs` are each a single line and could benefit from a brief paragraph
   summarizing the module's contract and integration guidance.
 - Existing unit tests already cover default limit, maximum limit, zero limit
-  rejection, cursor round-tripping, and error variants. New tests should
-  focus on invariants that are *documented* but not yet *tested* — for
-  example, verifying that the documented error display strings are stable, or
-  that the documented limit constants are consistent with the normalization
-  logic.
+  rejection, cursor round-tripping, and error variants. New tests should focus
+  on invariants that are *documented* but not yet *tested* — for example,
+  verifying that the documented error display strings are stable, or that the
+  documented limit constants are consistent with the normalization logic.
 
 Validation: no code changes; this stage produces only notes in the `Progress`
 section.
@@ -424,16 +412,16 @@ Add four new documentation sections to the `//!` block in `lib.rs`, after the
 existing `# Example` section:
 
 1. `# Ordering requirements` — explain that key types must implement
-   `Serialize` and `DeserializeOwned`, that the key fields must correspond to
-   a composite database index providing a total ordering, that ties must be
+   `Serialize` and `DeserializeOwned`, that the key fields must correspond to a
+   composite database index providing a total ordering, that ties must be
    broken by a unique field (typically a UUID), and that the ordering must
    remain consistent across all pages of a given endpoint.
 
 2. `# Default and maximum limits` — document `DEFAULT_LIMIT` (20) and
    `MAX_LIMIT` (100), explain that `PageParams` applies the default when no
-   limit is provided, caps oversized requests at the maximum, and rejects
-   zero as invalid. Reference the constants by name so the documentation
-   stays in sync with the code.
+   limit is provided, caps oversized requests at the maximum, and rejects zero
+   as invalid. Reference the constants by name so the documentation stays in
+   sync with the code.
 
 3. `# Error mapping guidelines` — describe how consumers should translate
    `CursorError` and `PageParamsError` to HTTP responses. Recommend HTTP 400
@@ -460,16 +448,16 @@ single-line summaries to short paragraphs (3–6 lines each) that explain the
 module's responsibility, its relationship to the rest of the crate, and any
 integration guidance specific to that module.
 
-For `cursor.rs`, add a brief note about the base64url JSON encoding format,
-the backward-compatibility behaviour of the `dir` field, and the security
+For `cursor.rs`, add a brief note about the base64url JSON encoding format, the
+backward-compatibility behaviour of the `dir` field, and the security
 consideration that cursors are opaque but not signed.
 
 For `envelope.rs`, add a note about the `from_request` constructor's query
 parameter preservation behaviour and the `skip_serializing_if` annotation on
 optional links.
 
-For `params.rs`, add a note about the `Deserialize` implementation's
-automatic normalization and how it interacts with framework query extractors.
+For `params.rs`, add a note about the `Deserialize` implementation's automatic
+normalization and how it interacts with framework query extractors.
 
 Validation: `cargo doc -p pagination --no-deps` succeeds without warnings. No
 source file exceeds 400 lines.
@@ -490,8 +478,8 @@ confidence:
 - Error display strings are human-readable and stable.
 
 Add step definitions to the existing
-`backend/crates/pagination/tests/pagination_bdd.rs` file, extending the
-`World` state machine where needed.
+`backend/crates/pagination/tests/pagination_bdd.rs` file, extending the `World`
+state machine where needed.
 
 Validation: `cargo test -p pagination --test pagination_bdd` passes with the
 new scenarios.
@@ -522,10 +510,10 @@ Run the full quality gate sequence:
 If all gates pass:
 
 1. Record the documentation design decision in
-   `docs/wildside-backend-architecture.md` in the pagination foundation
-   section (near line 1971), noting that crate-level documentation now covers
-   ordering requirements, default and maximum limits, error mapping
-   guidelines, and scope boundaries.
+   `docs/wildside-backend-architecture.md` in the pagination foundation section
+   (near line 1971), noting that crate-level documentation now covers ordering
+   requirements, default and maximum limits, error mapping guidelines, and
+   scope boundaries.
 2. Mark roadmap item 4.1.3 done in `docs/backend-roadmap.md` by changing
    `- [ ] 4.1.3.` to `- [x] 4.1.3.`.
 3. Update this ExecPlan's status to COMPLETE.
@@ -552,14 +540,14 @@ Expected: all existing tests pass (approximately 25+ tests, 0 failures).
 wc -l backend/crates/pagination/src/*.rs
 ```
 
-Expected: `lib.rs` ~55, `cursor.rs` ~364, `envelope.rs` ~204, `params.rs`
-~137. All under 400.
+Expected: `lib.rs` ~55, `cursor.rs` ~364, `envelope.rs` ~204, `params.rs` ~137.
+All under 400.
 
 ### 3. Expand crate-level documentation
 
-Edit `backend/crates/pagination/src/lib.rs` to add the four new sections
-after the existing `# Example` block. Aim for `lib.rs` to be approximately
-130–160 lines after the expansion.
+Edit `backend/crates/pagination/src/lib.rs` to add the four new sections after
+the existing `# Example` block. Aim for `lib.rs` to be approximately 130–160
+lines after the expansion.
 
 ### 4. Improve module-level documentation
 
@@ -626,8 +614,8 @@ Expected: all three exit with code 0.
 
 ### 12. Update architecture document
 
-Edit `docs/wildside-backend-architecture.md` to add a design decision entry
-in the pagination foundation section.
+Edit `docs/wildside-backend-architecture.md` to add a design decision entry in
+the pagination foundation section.
 
 ### 13. Update roadmap
 
@@ -694,11 +682,11 @@ cargo doc -p pagination --no-deps
 ## Idempotence and recovery
 
 All steps are safe to re-run. Documentation edits and test additions are
-additive and do not affect persistent state. If a test fails, fix the issue
-and re-run; partial documentation edits do not leave the crate in a broken
-state because they are comments rather than code. The embedded Postgres tests
-(if any run as part of `make test`) use temporary data directories that are
-cleaned up automatically.
+additive and do not affect persistent state. If a test fails, fix the issue and
+re-run; partial documentation edits do not leave the crate in a broken state
+because they are comments rather than code. The embedded Postgres tests (if any
+run as part of `make test`) use temporary data directories that are cleaned up
+automatically.
 
 ## Artifacts and notes
 
@@ -747,12 +735,12 @@ Feature: Pagination documentation invariants
 
 This table summarizes the error mapping guidelines that will be documented:
 
-| Error type       | Variant          | Suggested HTTP status | Envelope `code`         |
-|------------------|------------------|-----------------------|-------------------------|
-| `CursorError`    | `InvalidBase64`  | 400 Bad Request       | `invalid_cursor`        |
-| `CursorError`    | `Deserialize`    | 400 Bad Request       | `invalid_cursor`        |
-| `CursorError`    | `Serialize`      | 500 Internal Error    | `internal_error`        |
-| `PageParamsError`| `InvalidLimit`   | 400 Bad Request       | `invalid_page_params`   |
+| Error type        | Variant         | Suggested HTTP status | Envelope `code`       |
+| ----------------- | --------------- | --------------------- | --------------------- |
+| `CursorError`     | `InvalidBase64` | 400 Bad Request       | `invalid_cursor`      |
+| `CursorError`     | `Deserialize`   | 400 Bad Request       | `invalid_cursor`      |
+| `CursorError`     | `Serialize`     | 500 Internal Error    | `internal_error`      |
+| `PageParamsError` | `InvalidLimit`  | 400 Bad Request       | `invalid_page_params` |
 
 Note: `CursorError::Serialize` maps to 500 because it indicates a bug in the
 server (the key type could not be serialized), not a client error.

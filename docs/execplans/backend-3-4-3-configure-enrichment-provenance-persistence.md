@@ -1,15 +1,13 @@
 # Configure enrichment provenance persistence and admin reporting endpoints (roadmap 3.4.3)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
 This plan covers roadmap item 3.4.3 only:
-`Configure enrichment provenance persistence (source URL, timestamp, and
-bounding box) and expose it via admin reporting endpoints.`
+`Configure enrichment provenance persistence (source URL, timestamp, and bounding box) and expose it via admin reporting endpoints.`
 
 ## Purpose / big picture
 
@@ -33,8 +31,8 @@ Observable success criteria:
   bounds;
 - admin reporting endpoint returns provenance rows in deterministic order;
 - unit tests (`rstest`) and behavioural tests
-  (`rstest-bdd`, behaviour-driven development (BDD)) cover happy,
-  unhappy, and edge paths;
+  (`rstest-bdd`, behaviour-driven development (BDD)) cover happy, unhappy, and
+  edge paths;
 - behavioural suites use existing `pg-embedded-setup-unpriv` cluster patterns;
 - architecture docs record the 3.4.3 decision;
 - roadmap item 3.4.3 is marked done only after all required gates pass.
@@ -58,16 +56,14 @@ Observable success criteria:
 ## Tolerances (exception triggers)
 
 - If delivering `/api/v1/admin/...` requires a new role-based access control
-  (RBAC) model beyond current
-  session auth, stop and escalate.
+  (RBAC) model beyond current session auth, stop and escalate.
 - If provenance writes require replacing the existing point-of-interest (POI)
-  persistence contract
-  with a broader transactional port, stop and confirm scope expansion.
+  persistence contract with a broader transactional port, stop and confirm
+  scope expansion.
 - If historical backfill is required for old enrichment rows, stop and split a
   dedicated backfill task.
 - If file churn exceeds 30 files or about 2,200 net lines of code (LOC), split
-  into staged
-  milestones.
+  into staged milestones.
 - If `make check-fmt`, `make lint`, or `make test` fail after three
   consecutive fix attempts, stop with retained logs.
 
@@ -81,9 +77,8 @@ Observable success criteria:
   Mitigation: persist URL from the exact source invocation context.
 
 - Risk: admin route naming implies stronger auth controls than currently
-  implemented.
-  Mitigation: document current auth semantics and keep scope focused on
-  reporting contract.
+  implemented. Mitigation: document current auth semantics and keep scope
+  focused on reporting contract.
 
 - Risk: reporting query performance degrades as rows grow.
   Mitigation: index by import timestamp and enforce bounded pagination.
@@ -244,7 +239,8 @@ Proposed endpoint contract:
 
 Wiring steps:
 
-- add handler module (for example `backend/src/inbound/http/admin_enrichment.rs`);
+- add handler module (for example
+  `backend/src/inbound/http/admin_enrichment.rs`);
 - extend `HttpState` / `HttpStatePorts` for provenance query port;
 - wire database (DB)-backed adapter in `build_http_state` when pool exists;
 - wire fixture/no-op fallback when pool is absent;
@@ -376,35 +372,31 @@ Branch-specific expected evidence paths:
 ## Decision Log
 
 - Decision: add a dedicated enrichment provenance domain port and entity rather
-  than extending ingestion provenance types.
-  Rationale: ingestion and enrichment lifecycles and contracts differ.
-  Date/Author: 2026-02-28 / Codex.
+  than extending ingestion provenance types. Rationale: ingestion and
+  enrichment lifecycles and contracts differ. Date/Author: 2026-02-28 / Codex.
 
 - Decision: keep admin reporting endpoint in inbound HTTP, consuming a domain
-  query port via `HttpState`.
-  Rationale: maintains hexagonal boundaries and existing route wiring patterns.
-  Date/Author: 2026-02-28 / Codex.
+  query port via `HttpState`. Rationale: maintains hexagonal boundaries and
+  existing route wiring patterns. Date/Author: 2026-02-28 / Codex.
 
 - Decision: treat auth model changes as out of scope for 3.4.3.
   Rationale: roadmap requires reporting exposure, not RBAC redesign.
   Date/Author: 2026-02-28 / Codex.
 
 - Decision: record final persistence policy (transactional vs sequential write
-  handling) in architecture docs when implementation is complete.
-  Rationale: this is a key operational behaviour and must be explicit.
-  Date/Author: 2026-02-28 / Codex.
+  handling) in architecture docs when implementation is complete. Rationale:
+  this is a key operational behaviour and must be explicit. Date/Author:
+  2026-02-28 / Codex.
 
 - Decision: persist provenance after POI upsert success and fail the job when
-  provenance persistence fails.
-  Rationale: keeps auditability mandatory while preserving existing POI
-  persistence semantics.
-  Date/Author: 2026-02-28 / Codex.
+  provenance persistence fails. Rationale: keeps auditability mandatory while
+  preserving existing POI persistence semantics. Date/Author: 2026-02-28 /
+  Codex.
 
 - Decision: keep admin reporting as a direct domain-port query from inbound
-  state rather than introducing a separate application service.
-  Rationale: scope is read-only endpoint exposure and the existing adapter
-  pattern already routes port calls through `HttpState`.
-  Date/Author: 2026-02-28 / Codex.
+  state rather than introducing a separate application service. Rationale:
+  scope is read-only endpoint exposure and the existing adapter pattern already
+  routes port calls through `HttpState`. Date/Author: 2026-02-28 / Codex.
 
 ## Outcomes & Retrospective
 
@@ -415,8 +407,8 @@ Completed.
 - Shipped migration and Diesel adapter for
   `overpass_enrichment_provenance(source_url, imported_at, bounds_*)`.
 - Shipped authenticated admin reporting endpoint
-  `GET /api/v1/admin/enrichment/provenance` with bounded pagination
-  (`limit` default 50, max 200) and optional RFC 3339 `before` cursor.
+  `GET /api/v1/admin/enrichment/provenance` with bounded pagination (`limit`
+  default 50, max 200) and optional RFC 3339 `before` cursor.
 - Added worker + endpoint coverage across `rstest` and `rstest-bdd`,
   including happy, unhappy, and edge paths.
 - Updated `docs/wildside-backend-architecture.md` with the 3.4.3 decision and

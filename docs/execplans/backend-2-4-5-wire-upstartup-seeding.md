@@ -1,8 +1,8 @@
 # Wire Startup Example Data Seeding Behind Feature Flags
 
 This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
-`Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes &
-Retrospective` must be kept up to date as work proceeds.
+`Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
+`Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -61,8 +61,8 @@ re-run without duplicating data. Success is observable when:
 
 Risk: `ortho-config` integration is new in this repo and may require extra
 scaffolding for settings files or environment mapping. Severity: medium
-Likelihood: medium Mitigation: audit existing configuration patterns first; keep
-the seeding config isolated and documented.
+Likelihood: medium Mitigation: audit existing configuration patterns first;
+keep the seeding config isolated and documented.
 
 Risk: `rstest-bdd` v0.4.0 introduces API changes relative to v0.3.2. Severity:
 medium Likelihood: medium Mitigation: update dev dependencies early and adjust
@@ -107,8 +107,8 @@ Observation (2026-02-03): Whitaker's `no_std_fs_operations` lint rejected
 Decision (2026-02-03): Introduce `ExampleDataSeedRepository` to own the
 transaction boundary for recording seed runs and upserting users/preferences,
 keeping the domain seeding service pure. Configuration uses `ortho_config`
-prefix `EXAMPLE_DATA_`, with `count` mapped to config file key
-`user_count` and defaults for the seed name (`mossy-owl`) and registry path
+prefix `EXAMPLE_DATA_`, with `count` mapped to config file key `user_count` and
+defaults for the seed name (`mossy-owl`) and registry path
 (`backend/fixtures/example-data/seeds.json`). Rationale: align with the
 sample-data design while keeping seeding optional and testable across env and
 config sources.
@@ -259,10 +259,10 @@ for startup seeding behaviour, using embedded Postgres helpers.
 7. Update `docs/wildside-backend-architecture.md` and mark 2.4.5 complete in
 `docs/backend-roadmap.md`.
 
-8. Run quality gates: `make check-fmt | tee /tmp/check-fmt-$(get-project)-$(git
-branch --show).out`, `make lint | tee /tmp/lint-$(get-project)-$(git branch
---show).out`, and `make test | tee /tmp/test-$(get-project)-$(git branch
---show).out`.
+8. Run quality gates:
+   `make check-fmt | tee /tmp/check-fmt-$(get-project)-$(git branch --show).out`,
+   `make lint | tee /tmp/lint-$(get-project)-$(git branch --show).out`, and
+   `make test | tee /tmp/test-$(get-project)-$(git branch --show).out`.
 
 ## Validation and Acceptance
 
@@ -278,8 +278,8 @@ Acceptance criteria:
   inserts nothing new.
 - Invalid configuration (missing registry or seed) fails fast with a clear
   error.
-- All tests and quality gates pass: `make check-fmt`, `make lint`, and `make
-  test`.
+- All tests and quality gates pass: `make check-fmt`, `make lint`, and
+  `make test`.
 
 ## Idempotence and Recovery
 
@@ -307,8 +307,9 @@ Acceptance criteria:
   dependency).
 
 - Proposed new API surfaces (names may adjust after audit) include
-  `backend::domain::example_data::ExampleDataSettings` loaded via `ortho-config`
-  and `backend::domain::example_data::ExampleDataSeeder` with a method such as:
+  `backend::domain::example_data::ExampleDataSettings` loaded via
+  `ortho-config` and `backend::domain::example_data::ExampleDataSeeder` with a
+  method such as:
 
         pub async fn seed(&self, registry: &SeedRegistry, seed: &SeedDefinition)
             -> Result<SeedingOutcome, ExampleDataSeedError>;

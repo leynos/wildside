@@ -101,8 +101,8 @@ utilities.
 
 ## 6. `@apply` and `@utility`
 
-Use `@utility` for project wrappers that need variant support. Use `@apply` only
-for Tailwind utilities.
+Use `@utility` for project wrappers that need variant support. Use `@apply`
+only for Tailwind utilities.
 
 ```css
 @utility poi-chip {
@@ -120,13 +120,13 @@ tokens.
 
 ## 7. Specificity and cascade
 
-Selectors should remain low-specificity. State selectors belong near the wrapper
-they modify, and broad overrides should be avoided.
+Selectors should remain low-specificity. State selectors belong near the
+wrapper they modify, and broad overrides should be avoided.
 
 ## 8. Responsive and container behaviour
 
-Use normal responsive utilities for page-level layout. Use container queries when
-a component must adapt to the space allocated by its parent.
+Use normal responsive utilities for page-level layout. Use container queries
+when a component must adapt to the space allocated by its parent.
 
 ## 9. Checklist
 

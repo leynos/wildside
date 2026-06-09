@@ -35,16 +35,15 @@ behavioural suites[^1][^2][^3].
 ## Coverage findings
 
 - Login persistence:
-  Missing credential storage in schema (`MissingCredentialStorage`).
-  Evidence: audit rules in `user_state_schema_audit.rs`; baseline behavioural
-  scenario asserts missing login credential storage.
+  Missing credential storage in schema (`MissingCredentialStorage`). Evidence:
+  audit rules in `user_state_schema_audit.rs`; baseline behavioural scenario
+  asserts missing login credential storage.
 - Users persistence:
-  Covered through `users` table (`id`, `display_name`).
-  Evidence: audit rules in `user_state_schema_audit.rs`; baseline behavioural
-  scenario asserts users coverage.
+  Covered through `users` table (`id`, `display_name`). Evidence: audit rules in
+  `user_state_schema_audit.rs`; baseline behavioural scenario asserts users
+  coverage.
 - Profile persistence:
-  Covered for the current minimal profile model (maps to
-  `users.display_name`).
+  Covered for the current minimal profile model (maps to `users.display_name`).
   Evidence: audit rules treat profile as covered when users storage is covered.
 - Interests persistence:
   Dual model detected (`user_preferences.interest_theme_ids` plus

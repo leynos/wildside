@@ -1,23 +1,21 @@
 # Deliver Overpass enrichment workers with quotas, circuit breaking, and metrics (roadmap 3.4.2)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
 This plan covers roadmap item 3.4.2 only:
-`Add Overpass enrichment workers with semaphore-governed quotas, circuit
-breaking, and metrics wired to the enrichment job counters`.
+`Add Overpass enrichment workers with semaphore-governed quotas, circuit breaking, and metrics wired to the enrichment job counters`.
 
 ## Purpose / big picture
 
 Roadmap item 3.4.2 adds asynchronous Overpass enrichment workers so sparse
 points of interest (POI) coverage can be improved without blocking
-request-handling paths. The worker
-flow must honour strict quotas, avoid cascading failures with circuit breaking,
-and emit metrics suitable for production dashboards and alerts.
+request-handling paths. The worker flow must honour strict quotas, avoid
+cascading failures with circuit breaking, and emit metrics suitable for
+production dashboards and alerts.
 
 After this work, the backend should be able to enqueue and execute enrichment
 jobs through domain ports, call Overpass through an outbound adapter under
@@ -63,7 +61,8 @@ Observable success criteria:
   module) with adapter-neutral state transitions and error mapping.
 - Wire metrics through domain metrics ports and outbound Prometheus adapters.
 - Use `rstest` for unit coverage and `rstest-bdd` for behaviour coverage.
-- Use existing embedded PostgreSQL support patterns under `backend/tests/support`
+- Use existing embedded PostgreSQL support patterns under
+  `backend/tests/support`
   and `pg-embedded-setup-unpriv` guidance.
 - Keep Markdown documentation in en-GB-oxendict and 80-column prose wrapping.
 
@@ -87,19 +86,16 @@ Observable success criteria:
 ## Risks
 
 - Risk: quota state may diverge across worker replicas if implemented as
-  process-local only.
-  Mitigation: define quota storage scope explicitly (shared backend state) and
-  test concurrent worker behaviour against that scope.
+  process-local only. Mitigation: define quota storage scope explicitly (shared
+  backend state) and test concurrent worker behaviour against that scope.
 
 - Risk: circuit breaker thresholds may over-trigger and suppress useful
-  enrichment.
-  Mitigation: define threshold, cooldown, and half-open probe semantics in one
-  policy module with deterministic unit tests.
+  enrichment. Mitigation: define threshold, cooldown, and half-open probe
+  semantics in one policy module with deterministic unit tests.
 
 - Risk: semaphore control may accidentally wrap whole jobs instead of just
-  outbound calls, reducing throughput.
-  Mitigation: apply permit acquisition only at Overpass call boundaries and
-  assert release behaviour in tests.
+  outbound calls, reducing throughput. Mitigation: apply permit acquisition
+  only at Overpass call boundaries and assert release behaviour in tests.
 
 - Risk: metrics wiring may drift from the counters used in dashboards.
   Mitigation: centralize metric names and label enums in one port/adapter pair
@@ -271,8 +267,8 @@ Adapter contract tests pass and worker execution paths remain port-driven.
 ## Milestone 3 - Behavioural tests with embedded PostgreSQL
 
 Add `rstest-bdd` scenarios for end-to-end worker behaviour using the embedded
-PostgreSQL support path. Reuse existing support fixtures where possible.
-This uses behaviour-driven development (BDD) scenarios for observable outcomes.
+PostgreSQL support path. Reuse existing support fixtures where possible. This
+uses behaviour-driven development (BDD) scenarios for observable outcomes.
 
 Required scenarios:
 
@@ -360,43 +356,38 @@ All three commands exit 0; retained logs show success without unresolved gates.
 
 - Observation (2026-02-26): architecture guidance already defines explicit
   Overpass limits and enrichment observability targets, which reduces design
-  ambiguity for 3.4.2.
-  Impact: this plan can pin concrete quota, timeout, semaphore, and metrics
-  expectations early.
+  ambiguity for 3.4.2. Impact: this plan can pin concrete quota, timeout,
+  semaphore, and metrics expectations early.
 
 - Observation (2026-02-26): existing ingestion BDD support includes reusable
-  embedded PostgreSQL and skip-handling helpers.
-  Impact: 3.4.2 behaviour tests can reuse proven fixtures rather than creating
-  a second cluster bootstrap path.
+  embedded PostgreSQL and skip-handling helpers. Impact: 3.4.2 behaviour tests
+  can reuse proven fixtures rather than creating a second cluster bootstrap
+  path.
 
 - Observation (2026-02-26): `cargo test <filter>` can compile BDD crates
   without executing the scenario functions when the filter misses generated
-  names.
-  Impact: behavioural evidence should use explicit `--test` invocations for new
-  BDD files.
+  names. Impact: behavioural evidence should use explicit `--test` invocations
+  for new BDD files.
 
 ## Decision Log
 
 - Decision: keep this plan strictly scoped to roadmap 3.4.2 and defer 3.4.3
-  provenance reporting endpoints.
-  Rationale: roadmap sequencing separates worker behaviour from admin reporting
-  concerns.
-  Date/Author: 2026-02-26 / Codex.
+  provenance reporting endpoints. Rationale: roadmap sequencing separates
+  worker behaviour from admin reporting concerns. Date/Author: 2026-02-26 /
+  Codex.
 
 - Decision: use a four-agent ownership model with explicit merge order.
   Rationale: reduces cross-layer drift and keeps port-first boundaries intact.
   Date/Author: 2026-02-26 / Codex.
 
 - Decision: require full gate logs captured through `tee` under `/tmp` as part
-  of completion criteria.
-  Rationale: durable gate evidence is required for truthful completion status.
-  Date/Author: 2026-02-26 / Codex.
+  of completion criteria. Rationale: durable gate evidence is required for
+  truthful completion status. Date/Author: 2026-02-26 / Codex.
 
 - Decision: keep worker policy (quota + circuit + retry) inside a domain-owned
   `OverpassEnrichmentWorker` and expose only source/metrics/persistence
-  boundaries through ports.
-  Rationale: preserves hexagonal boundaries while allowing adapter-specific
-  implementations for HTTP and Prometheus.
+  boundaries through ports. Rationale: preserves hexagonal boundaries while
+  allowing adapter-specific implementations for HTTP and Prometheus.
   Date/Author: 2026-02-26 / Codex.
 
 ## Outcomes & Retrospective

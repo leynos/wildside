@@ -9,8 +9,8 @@ Status: DRAFT
 ## Purpose / big picture
 
 This phase makes the Wildside front-end documentation implementable before
-feature work starts. After completion, contributors can tell which document owns
-each platform, product, schema, styling, localization, accessibility, and
+feature work starts. After completion, contributors can tell which document
+owns each platform, product, schema, styling, localization, accessibility, and
 testing requirement, and roadmap tasks can cite those sources instead of
 becoming the source of design decisions.
 
@@ -18,18 +18,18 @@ becoming the source of design decisions.
 
 `docs/frontend-roadmap.md` remains the task catalogue, not the primary design
 authority. Platform guidance in `docs/v2a-front-end-stack.md` takes precedence
-over older Progressive Web App (PWA) design material when the
-documents conflict. Substantive policy, schema, and contract decisions must move
-into a design document or Architecture Decision Record (ADR). Imported v2a lint
-and token work must cite the source repository and local ownership path.
+over older Progressive Web App (PWA) design material when the documents
+conflict. Substantive policy, schema, and contract decisions must move into a
+design document or Architecture Decision Record (ADR). Imported v2a lint and
+token work must cite the source repository and local ownership path.
 
 ## Tolerances
 
 Escalate if reconciliation requires changing backend contracts, removing an
-existing documented product requirement, or choosing between incompatible token,
-state, cache, or localization policies. Escalate if the mockup source cannot be
-accessed or if imported lint rules require dependencies not approved by the
-stack decision.
+existing documented product requirement, or choosing between incompatible
+token, state, cache, or localization policies. Escalate if the mockup source
+cannot be accessed or if imported lint rules require dependencies not approved
+by the stack decision.
 
 ## Risks
 
@@ -44,8 +44,8 @@ Start with `docs/frontend-roadmap.md` phase 0 and create an authority catalogue
 covering `docs/v2a-front-end-stack.md`, `docs/wildside-pwa-design.md`,
 `docs/wildside-pwa-data-model.md`, `docs/wildside-ux-state-graph-v0.1.json`,
 `docs/sitemap.md`, `spec/openapi.json`, and `spec/asyncapi.yaml`. Record which
-document owns each topic and which topics need a design document or Architecture
-Decision Record update.
+document owns each topic and which topics need a design document or
+Architecture Decision Record update.
 
 Next, reconcile the Progressive Web App design material against the v2a stack
 direction. Import and document the v2a localization, accessibility, semantic
@@ -54,8 +54,8 @@ design-system source into the repository-owned `packages/tokens/` pipeline
 without committing generated mockup artefacts as source.
 
 Finish by replacing decision prose in roadmap phases 1-5 with inline citations
-to the reconciled source documents and by updating task dependencies where a new
-Architecture Decision Record, schema update, or design document requires
+to the reconciled source documents and by updating task dependencies where a
+new Architecture Decision Record, schema update, or design document requires
 implementation of merge gates.
 
 ## Validation

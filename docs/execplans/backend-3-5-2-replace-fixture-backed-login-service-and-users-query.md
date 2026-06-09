@@ -1,18 +1,13 @@
 # Replace fixture-backed LoginService and UsersQuery wiring with DB-backed adapters (roadmap 3.5.2)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
 This plan covers roadmap item 3.5.2 only:
-`Replace fixture-backed LoginService and UsersQuery wiring in server state
-construction with explicit DB-backed concrete types, either by extending
-DieselUserRepository to satisfy those ports directly or by introducing adapter
-wrappers around it, while preserving current session and error-envelope
-behaviour.`
+`Replace fixture-backed LoginService and UsersQuery wiring in server state construction with explicit DB-backed concrete types, either by extending DieselUserRepository to satisfy those ports directly or by introducing adapter wrappers around it, while preserving current session and error-envelope behaviour.`
 
 ## Purpose / big picture
 
@@ -85,17 +80,16 @@ Observable success criteria:
   preserves current behaviour and record the gap in architecture decisions.
 
 - Risk: wrapper or repository changes accidentally alter unauthorized envelope
-  mapping.
-  Mitigation: keep existing handler tests and add explicit unhappy-path
-  assertions for code/message/status/trace-id semantics.
+  mapping. Mitigation: keep existing handler tests and add explicit
+  unhappy-path assertions for code/message/status/trace-id semantics.
 
 - Risk: DB-present and fixture-fallback startup modes drift over time.
   Mitigation: add behavioural scenarios that prove each mode through observable
   response differences.
 
 - Risk: extending `DieselUserRepository` directly may over-couple driven and
-  driving concerns.
-  Mitigation: prefer dedicated adapters wrapping `DieselUserRepository`.
+  driving concerns. Mitigation: prefer dedicated adapters wrapping
+  `DieselUserRepository`.
 
 - Risk: DB startup tests may depend on seeded rows and become flaky.
   Mitigation: seed deterministic users per test fixture and assert exact
@@ -368,9 +362,9 @@ All required gates pass with retained logs and no unresolved failures.
   test crate root fixed path resolution and preserved access to
   `pub(super) build_http_state`.
 - Embedded PostgreSQL setup panicked when invoked from async Actix test
-  contexts (`Cannot start a runtime from within a runtime`). Converting the
-  new suites to synchronous `rstest` tests with explicit runtime helpers
-  removed nested runtime contention.
+  contexts (`Cannot start a runtime from within a runtime`). Converting the new
+  suites to synchronous `rstest` tests with explicit runtime helpers removed
+  nested runtime contention.
 - Strict lint policy (`no_expect_outside_tests`) did not recognize separate
   server-module test files as test-only contexts; removing duplicate in-module
   tests avoided policy churn while keeping startup-mode verification in
@@ -379,21 +373,21 @@ All required gates pass with retained logs and no unresolved failures.
 ## Decision Log
 
 - Decision: choose wrapper adapters (`DieselLoginService`, `DieselUsersQuery`)
-  around `DieselUserRepository` as the 3.5.2 implementation path.
-  Rationale: keeps repository responsibilities cohesive and aligns with current
+  around `DieselUserRepository` as the 3.5.2 implementation path. Rationale:
+  keeps repository responsibilities cohesive and aligns with current
   service-over-repository patterns.
 
 - Decision: keep credential-storage schema out of 3.5.2 scope.
   Rationale: roadmap and 3.5.1 audit establish this as an acknowledged gap.
 
 - Decision: roadmap 3.5.2 checkbox flips to done only after final required
-  gates are green for the same tree.
-  Rationale: preserves deterministic closure and avoids false-green reporting.
+  gates are green for the same tree. Rationale: preserves deterministic closure
+  and avoids false-green reporting.
 
 - Decision: DB-present startup-mode tests now require DB-backed signatures and
-  DB-absent mode requires fixture signatures.
-  Rationale: adapter wiring is landed in `state_builders`; transitional
-  dual-signature assertions are no longer needed.
+  DB-absent mode requires fixture signatures. Rationale: adapter wiring is
+  landed in `state_builders`; transitional dual-signature assertions are no
+  longer needed.
 
 ## Outcomes & Retrospective
 
@@ -426,4 +420,5 @@ Completed delivery summary:
     `users-query.out` (pass)
 - Follow-up work explicitly deferred to 3.5.3+:
   - DB-backed parity for `UserProfileQuery` and `UserInterestsCommand` (3.5.3).
-  - Canonical interests persistence and revision-conflict strategy work (3.5.4+).
+  - Canonical interests persistence and revision-conflict strategy work
+    (3.5.4+).

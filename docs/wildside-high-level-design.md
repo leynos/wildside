@@ -91,9 +91,9 @@ findings are as follows:
 
 A thorough analysis of the mobile application market reveals that the "walking
 app" space is not a single category but a collection of distinct segments, each
-with different user profiles, value propositions, and monetization
-strategies[^1] Understanding this segmentation is critical to positioning
-Wildside effectively.
+with different user profiles, value propositions, and monetization strategies
+[^1] Understanding this segmentation is critical to positioning Wildside
+effectively.
 
 #### Segment 1: Fitness & Performance Trackers (Direct/Indirect Competitors)
 
@@ -471,8 +471,8 @@ meaning.
   Victor Horta," allowing for the creation of highly specific and personalized
   thematic walks. The
 
-  `wikidata=*` tag is the critical conduit that makes this symbiosis
-  possible[^10]
+  `wikidata=*` tag is the critical conduit that makes this symbiosis possible
+  [^10]
 
 ### POI Scoring & Personalization Algorithm
 
@@ -1009,8 +1009,8 @@ the outset.
 
 - **The Latency Problem:** There is an inherent delay between an edit being
   made in OSM or Wikidata and that change being reflected in the Wildside app.
-  Wikimedia's own servers have a sync process from OSM that can take up to a
-  day[^41] Our own nightly batch process introduces further latency. This means
+  Wikimedia's own servers have a sync process from OSM that can take up to a day
+  [^41] Our own nightly batch process introduces further latency. This means
   the app's data will always be 24-48 hours behind the real world at best. This
   limitation must be accepted, and potentially communicated to users.
 
@@ -1030,9 +1030,9 @@ the outset.
     in the source datasets.
 
 - **The Mismatched Granularity Problem:** A frequent challenge is that the
-  concept of a "place" does not always map one-to-one between OSM and
-  Wikidata[^43] A single Wikidata item for "The University of Edinburgh"
-  (Q160302) corresponds to hundreds of separate
+  concept of a "place" does not always map one-to-one between OSM and Wikidata
+  [^43] A single Wikidata item for "The University of Edinburgh" (Q160302)
+  corresponds to hundreds of separate
 
   `way` elements in OSM representing individual buildings, paths, and lawns.
 

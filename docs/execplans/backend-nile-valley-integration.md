@@ -1,9 +1,8 @@
 # Integrate Wildside with Nile Valley previews
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -22,11 +21,11 @@ contract used by Corbusier and Nile Valley, and this repository has no local
 
 After this change, a developer can run the Wildside backend as the production
 HTTP entry point, build a non-root container image with stable health probes,
-render and install a Nile Valley-compatible Helm chart, and use Makefile targets
-to create, inspect, tail, and tear down a local `k3d` preview environment. A
-reviewer can observe success by requesting `/health/live` and `/health/ready`,
-rendering the Helm chart with local and GitOps-style values, and running the
-full repository gates.
+render and install a Nile Valley-compatible Helm chart, and use Makefile
+targets to create, inspect, tail, and tear down a local `k3d` preview
+environment. A reviewer can observe success by requesting `/health/live` and
+`/health/ready`, rendering the Helm chart with local and GitOps-style values,
+and running the full repository gates.
 
 Observable success criteria:
 
@@ -57,8 +56,8 @@ Observable success criteria:
 
 - Do not implement this plan until the user explicitly approves it.
 - Preserve the hexagonal dependency rule from the `hexagonal-architecture`
-  skill and `docs/wildside-backend-architecture.md`: dependencies point
-  inward, the domain defines ports, and adapters implement or consume them.
+  skill and `docs/wildside-backend-architecture.md`: dependencies point inward,
+  the domain defines ports, and adapters implement or consume them.
 - Keep health domain code free of Actix Web, Kubernetes, Docker, Helm, or
   environment-variable types.
 - Keep the inbound HTTP adapter thin: parse no business policy there, and map
@@ -106,16 +105,15 @@ Observable success criteria:
   installation, stop and ask whether that belongs in Nile Valley instead.
 - Dependency tolerance: adding `cyclopts` and `plumbum` as inline `uv` script
   dependencies is expected. Adding more than two new Rust production
-  dependencies or more than four Python dependencies requires explicit
-  approval.
+  dependencies or more than four Python dependencies requires explicit approval.
 - Test tolerance: if `rstest-bdd` cannot reasonably exercise a network or CLI
   boundary without excessive runtime, add a narrower behavioural test and
   document the reason. Do not add superficial BDD scenarios.
 - Proof tolerance: no Verus, Kani, or proptest work is expected for this
   feature because the planned logic is configuration, boundary mapping, and
   orchestration rather than a broad state-space invariant. If implementation
-  introduces non-trivial port-allocation, state-transition, or retry invariants,
-  revisit this decision.
+  introduces non-trivial port-allocation, state-transition, or retry
+  invariants, revisit this decision.
 - Gate tolerance: after three repair loops on the same gate failure, stop,
   record the failing command and log path, and ask for direction.
 - Environment tolerance: if `k3d`, Docker, `kubectl`, Helm, `coderabbit`, or
@@ -125,49 +123,38 @@ Observable success criteria:
 ## Risks
 
 - Risk: Wildside already has health endpoints, but their semantics are owned by
-  `backend/src/inbound/http/health.rs`.
-  Severity: medium.
-  Likelihood: high.
+  `backend/src/inbound/http/health.rs`. Severity: medium. Likelihood: high.
   Mitigation: move policy into a domain-owned health module and keep the HTTP
   adapter as response mapping only.
 
 - Risk: the current backend Dockerfile probes `/health`, while the server and
-  chart use `/health/live` and `/health/ready`.
-  Severity: high.
-  Likelihood: high.
-  Mitigation: standardize probes on `/health/live` for liveness/startup and
-  `/health/ready` for readiness, matching the Corbusier follow-up decision.
+  chart use `/health/live` and `/health/ready`. Severity: high. Likelihood:
+  high. Mitigation: standardize probes on `/health/live` for liveness/startup
+  and `/health/ready` for readiness, matching the Corbusier follow-up decision.
 
 - Risk: the Wildside chart currently resembles Nile Valley's generic
-  `example-app` chart more than Corbusier's hardened chart.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: port only the chart contract that Nile Valley expects:
-  ExternalSecret, schema validation, Secret lookup controls, service account,
-  ingress hosts, and stable probe schema.
+  `example-app` chart more than Corbusier's hardened chart. Severity: medium.
+  Likelihood: high. Mitigation: port only the chart contract that Nile Valley
+  expects: ExternalSecret, schema validation, Secret lookup controls, service
+  account, ingress hosts, and stable probe schema.
 
 - Risk: local `k3d` orchestration may overlap with Nile Valley ownership.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: keep the repository-local workflow as a developer preview that
-  builds Wildside's image and installs Wildside's chart, while documenting that
-  multi-application GitOps automation remains in Nile Valley.
+  Severity: medium. Likelihood: medium. Mitigation: keep the repository-local
+  workflow as a developer preview that builds Wildside's image and installs
+  Wildside's chart, while documenting that multi-application GitOps automation
+  remains in Nile Valley.
 
 - Risk: a full local preview may be slow or flaky because it depends on Docker,
-  `k3d`, Kubernetes controllers, CloudNativePG, and Valkey.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: unit-test helper parsing and validation logic, use bounded waits,
-  surface clear preflight errors, and reserve end-to-end preview execution for
-  explicit local validation.
+  `k3d`, Kubernetes controllers, CloudNativePG, and Valkey. Severity: medium.
+  Likelihood: medium. Mitigation: unit-test helper parsing and validation
+  logic, use bounded waits, surface clear preflight errors, and reserve
+  end-to-end preview execution for explicit local validation.
 
 - Risk: documentation requirements mention `docs/users-guide.md`, but this
   repository currently uses component-specific user guides instead of that
-  global file.
-  Severity: low.
-  Likelihood: high.
-  Mitigation: create `docs/users-guide.md` as the user-facing entry point for
-  server and preview behaviour, and link it from `docs/contents.md`.
+  global file. Severity: low. Likelihood: high. Mitigation: create
+  `docs/users-guide.md` as the user-facing entry point for server and preview
+  behaviour, and link it from `docs/contents.md`.
 
 ## Relevant skills and documentation
 
@@ -204,8 +191,8 @@ the existing health adapter, server bootstrap, and Helm values.
 ## Prior art and external references
 
 Firecrawl was used to resolve gaps around Corbusier and Nile Valley. The
-implementation should keep these references nearby but must still adapt them
-to Wildside's existing structure.
+implementation should keep these references nearby but must still adapt them to
+Wildside's existing structure.
 
 - Corbusier Makefile:
   <https://github.com/leynos/corbusier/blob/main/Makefile>
@@ -440,8 +427,8 @@ The CLI must provide:
 - `logs`
 
 The CLI should accept environment-variable overrides with a `WILDSIDE_` prefix
-for cluster name, namespace, and ingress port. It should expose a `--skip-build`
-option for `up` and `--follow` for `logs`.
+for cluster name, namespace, and ingress port. It should expose a
+`--skip-build` option for `up` and `--follow` for `logs`.
 
 Add Makefile targets:
 
@@ -502,12 +489,12 @@ Add and update documentation while the implementation details are fresh:
   the repository layout.
 - Update `docs/contents.md` with any new long-lived documents.
 - Add an Architectural Decision Record only if implementation makes a
-  long-lived architectural choice not adequately captured by the design doc.
-  If needed, use the next `docs/adr-NNN-*.md` number after
+  long-lived architectural choice not adequately captured by the design doc. If
+  needed, use the next `docs/adr-NNN-*.md` number after
   `docs/adr-001-websockets-on-actix-ws.md`.
 - Update `docs/backend-roadmap.md` by adding a deployment coordination task
-  under section 7 if no suitable task exists. Mark it done only after all
-  gates pass.
+  under section 7 if no suitable task exists. Mark it done only after all gates
+  pass.
 
 Run documentation validation:
 
@@ -520,8 +507,8 @@ make markdownlint 2>&1 | tee -a "/tmp/${action}-${project}-${branch}.out"
 make nixie 2>&1 | tee -a "/tmp/${action}-${project}-${branch}.out"
 ```
 
-Commit documentation changes after validation. Run
-`coderabbit review --agent` and resolve concerns.
+Commit documentation changes after validation. Run `coderabbit review --agent`
+and resolve concerns.
 
 ### Milestone 7: Full gates and closeout
 
@@ -630,14 +617,15 @@ strategy before continuing.
   schema validation, and `/health/live` startup probes.
 - [x] 2026-05-21: Validated the Helm milestone with `helm lint`,
   `helm template --kube-version 1.31.0`, local values rendering, and an
-  ExternalSecret render in `/tmp/helm-template-wildside-backend-nile-valley-integration.out`.
+  ExternalSecret render in
+  `/tmp/helm-template-wildside-backend-nile-valley-integration.out`.
 - [x] 2026-05-21: Committed the Helm milestone as
   `66cf831 Align Helm chart with Nile Valley`.
 - [x] 2026-05-21: Ran `coderabbit review --agent` for the Helm milestone;
   CodeRabbit completed with zero findings.
 - [x] 2026-05-21: Added local `k3d` orchestration scaffolding with a
-  Cyclopts CLI, Makefile targets, configuration, validation, k3d,
-  Kubernetes, and Helm deployment helpers.
+  Cyclopts CLI, Makefile targets, configuration, validation, k3d, Kubernetes,
+  and Helm deployment helpers.
 - [x] 2026-05-21: Validated the local preview CLI help and pure Python
   validation tests; `make local-k8s-status` now reports the expected local
   blocker because `k3d` and `kubectl` are not installed in this environment.
@@ -702,20 +690,17 @@ strategy before continuing.
 ## Decision Log
 
 - 2026-05-21: Treat this as a hardening and alignment project, not a greenfield
-  add.
-  Rationale: the current repository already contains an Actix runtime, health
-  routes, Dockerfile, and Helm chart. Replacing them wholesale would increase
-  risk and violate the local preference to extend existing patterns.
+  add. Rationale: the current repository already contains an Actix runtime,
+  health routes, Dockerfile, and Helm chart. Replacing them wholesale would
+  increase risk and violate the local preference to extend existing patterns.
 
 - 2026-05-21: Use `/health/live` for liveness and startup probes and
-  `/health/ready` for readiness.
-  Rationale: this matches Kubernetes probe semantics and the Corbusier follow-up
-  decision discovered via Firecrawl.
+  `/health/ready` for readiness. Rationale: this matches Kubernetes probe
+  semantics and the Corbusier follow-up decision discovered via Firecrawl.
 
 - 2026-05-21: Create a domain-owned health observation port before changing the
-  HTTP adapter.
-  Rationale: the requested architecture uses hexagonal boundaries, and health
-  policy currently lives in the inbound adapter.
+  HTTP adapter. Rationale: the requested architecture uses hexagonal
+  boundaries, and health policy currently lives in the inbound adapter.
 
 - 2026-05-21: Plan to create `docs/users-guide.md`.
   Rationale: the user explicitly requested that file, and the repository does
@@ -723,34 +708,32 @@ strategy before continuing.
   behaviour.
 
 - 2026-05-21: Do not plan Verus, Kani, or proptest work for the initial scope.
-  Rationale: the planned changes are boundary mapping and orchestration, not
-  a broad algorithmic state space. This decision must be revisited if the
+  Rationale: the planned changes are boundary mapping and orchestration, not a
+  broad algorithmic state space. This decision must be revisited if the
   implementation introduces retry or state invariants that merit stronger
   verification.
 
 - 2026-05-21: Begin implementation with the domain health port and HTTP
-  adapter tests.
-  Rationale: this is the architecture-bearing change. Container, Helm, and
-  local preview work should depend on stable health semantics rather than the
-  current adapter-owned state.
+  adapter tests. Rationale: this is the architecture-bearing change. Container,
+  Helm, and local preview work should depend on stable health semantics rather
+  than the current adapter-owned state.
 
 - 2026-05-21: Keep `backend::inbound::http::health::HealthState` as a type
-  alias for `backend::domain::ProcessHealth` during the refactor.
-  Rationale: existing server wiring and callers can keep their current import
-  path while the actual health semantics and state live in the domain layer.
+  alias for `backend::domain::ProcessHealth` during the refactor. Rationale:
+  existing server wiring and callers can keep their current import path while
+  the actual health semantics and state live in the domain layer.
 
 - 2026-05-21: Use a Debian slim runtime image rather than continuing the
-  Alpine musl image.
-  Rationale: the backend depends on PostgreSQL, OpenSSL, and SQLite-linked
-  crates. A glibc runtime with explicit `libpq5`, `libssl3`, and
+  Alpine musl image. Rationale: the backend depends on PostgreSQL, OpenSSL, and
+  SQLite-linked crates. A glibc runtime with explicit `libpq5`, `libssl3`, and
   `libsqlite3-0` packages keeps the container build simpler and avoids the
   brittle exact Alpine package pins that were already stale.
 
 - 2026-05-21: Keep live Secret lookup validation opt-in through
-  `validateExistingSecret`.
-  Rationale: GitOps, CI, and local preview renders must work without access to
-  the target cluster, while operators can still request a live lookup when
-  installing against a cluster that already contains the Secret.
+  `validateExistingSecret`. Rationale: GitOps, CI, and local preview renders
+  must work without access to the target cluster, while operators can still
+  request a live lookup when installing against a cluster that already contains
+  the Secret.
 
 ## Outcomes & Retrospective
 
@@ -769,10 +752,10 @@ forms, schema validation, and Kubernetes probes aligned with the runtime health
 contract.
 
 The repository now provides `make local-k8s-up`, `make local-k8s-status`,
-`make local-k8s-logs`, and `make local-k8s-down` targets backed by a
-Cyclopts/`uv` Python helper. The helper preflights Docker, Helm, `k3d`, and
-`kubectl`; builds and imports the local backend image; and installs the chart
-with `values.local.yaml` when the required tools are present.
+`make local-k8s-logs`, and `make local-k8s-down` targets backed by a Cyclopts/
+`uv` Python helper. The helper preflights Docker, Helm, `k3d`, and `kubectl`;
+builds and imports the local backend image; and installs the chart with
+`values.local.yaml` when the required tools are present.
 
 Documentation now covers user-facing server and preview behaviour in
 `docs/users-guide.md`, the local preview and Nile Valley design in

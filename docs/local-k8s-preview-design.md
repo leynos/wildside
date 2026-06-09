@@ -3,11 +3,11 @@
 ## Purpose
 
 Wildside ships the application artefacts that Nile Valley preview and GitOps
-workflows consume: the backend container image, Helm chart, and health contract.
-Nile Valley remains responsible for shared cluster automation, environment
-overlays, and cross-application GitOps reconciliation. This repository owns a
-developer-focused local preview loop that proves the Wildside chart can install
-into a small `k3d` cluster.
+workflows consume: the backend container image, Helm chart, and health
+contract. Nile Valley remains responsible for shared cluster automation,
+environment overlays, and cross-application GitOps reconciliation. This
+repository owns a developer-focused local preview loop that proves the Wildside
+chart can install into a small `k3d` cluster.
 
 ## Runtime health contract
 
@@ -81,13 +81,13 @@ The workflow expects these executables on `PATH`:
 
 Configuration can be overridden with environment variables:
 
-| Variable                    | Default                  | Purpose                |
-| --------------------------- | ------------------------ | ---------------------- |
-| `WILDSIDE_K3D_CLUSTER`      | `wildside-preview`       | k3d cluster name.      |
-| `WILDSIDE_K3D_PORT`         | `8088`                   | Loopback ingress port. |
-| `WILDSIDE_K8S_NAMESPACE`    | `wildside`               | Kubernetes namespace.  |
-| `WILDSIDE_HELM_RELEASE`     | `wildside`               | Helm release name.     |
-| `WILDSIDE_IMAGE`            | `wildside-backend:local` | Local image reference. |
+| Variable                 | Default                  | Purpose                |
+| ------------------------ | ------------------------ | ---------------------- |
+| `WILDSIDE_K3D_CLUSTER`   | `wildside-preview`       | k3d cluster name.      |
+| `WILDSIDE_K3D_PORT`      | `8088`                   | Loopback ingress port. |
+| `WILDSIDE_K8S_NAMESPACE` | `wildside`               | Kubernetes namespace.  |
+| `WILDSIDE_HELM_RELEASE`  | `wildside`               | Helm release name.     |
+| `WILDSIDE_IMAGE`         | `wildside-backend:local` | Local image reference. |
 
 `WILDSIDE_IMAGE` must include a tag because the Helm chart receives repository
 and tag as separate values.
@@ -96,8 +96,8 @@ and tag as separate values.
 
 The local preview helper has unit coverage for preflight validation and image
 reference parsing. Full end-to-end preview validation requires Docker, `k3d`,
-`kubectl`, Helm, and an available loopback port. If those tools are absent,
-the CLI must fail early with a clear missing-executable message rather than
+`kubectl`, Helm, and an available loopback port. If those tools are absent, the
+CLI must fail early with a clear missing-executable message rather than
 partially creating infrastructure.
 
 Repository-wide validation remains:

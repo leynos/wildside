@@ -1,9 +1,8 @@
 # Ship the `ingest-osm` CLI with backend-owned ingestion controls (roadmap 3.4.1)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE (implementation delivered; documentation closure updated)
 
@@ -87,37 +86,30 @@ Observable success criteria:
 ## Risks
 
 - Risk: `wildside-engine` API shape may not map cleanly to existing backend
-  ingestion entities.
-  Status: mitigated.
-  Mitigation applied: added `WildsideDataOsmSourceRepository` as a thin outbound
-  adapter behind `OsmSourceRepository`, keeping mapping isolated from domain
-  orchestration.
+  ingestion entities. Status: mitigated. Mitigation applied: added
+  `WildsideDataOsmSourceRepository` as a thin outbound adapter behind
+  `OsmSourceRepository`, keeping mapping isolated from domain orchestration.
 
 - Risk: provenance schema may under-specify rerun determinism, causing duplicate
-  writes or non-auditable reruns.
-  Status: mitigated.
-  Mitigation applied: added migration
-  `2026-02-24-000000_create_osm_ingestion_provenance` with unique rerun key
-  constraint on `(geofence_id, input_digest)` and repository conflict mapping.
+  writes or non-auditable reruns. Status: mitigated. Mitigation applied: added
+  migration `2026-02-24-000000_create_osm_ingestion_provenance` with unique
+  rerun key constraint on `(geofence_id, input_digest)` and repository conflict
+  mapping.
 
 - Risk: CLI orchestration grows into a high-complexity control flow.
-  Status: mitigated.
-  Mitigation applied: split responsibilities into CLI parsing
+  Status: mitigated. Mitigation applied: split responsibilities into CLI parsing
   (`backend/src/bin/ingest_osm.rs`), domain orchestration
   (`backend/src/domain/osm_ingestion.rs`), and outbound adapters.
 
 - Risk: behavioural tests may silently validate fixtures instead of migrated
-  schema.
-  Status: mitigated.
-  Mitigation applied: BDD scenarios run with Diesel repositories on temporary
-  PostgreSQL instances and include a dropped-schema failure path.
+  schema. Status: mitigated. Mitigation applied: BDD scenarios run with Diesel
+  repositories on temporary PostgreSQL instances and include a dropped-schema
+  failure path.
 
 - Risk: unit-test evidence for the domain service may be incomplete when the
-  service module exceeds file-length limits.
-  Status: mitigated.
-  Mitigation applied: extracted tests into
-  `backend/src/domain/osm_ingestion_tests/` and kept
-  `backend/src/domain/osm_ingestion.rs` under 400 lines while preserving
+  service module exceeds file-length limits. Status: mitigated. Mitigation
+  applied: extracted tests into `backend/src/domain/osm_ingestion_tests/` and
+  kept `backend/src/domain/osm_ingestion.rs` under 400 lines while preserving
   `rstest` coverage.
 
 ## Agent team
@@ -197,9 +189,9 @@ Coordination rules:
 
 - Observation (2026-02-24): `wildside-engine` integration landed as a direct
   `wildside-data` dependency in `backend/Cargo.toml` rather than through shell
-  invocation of `wildside-cli`.
-  Impact: domain logic stays independent of process execution details, and
-  parser integration is exercised through a typed outbound adapter.
+  invocation of `wildside-cli`. Impact: domain logic stays independent of
+  process execution details, and parser integration is exercised through a
+  typed outbound adapter.
 
 - Observation (2026-02-24): behavioural coverage includes deterministic replay
   and missing-schema unhappy paths against temporary PostgreSQL instances.
@@ -208,42 +200,36 @@ Coordination rules:
 
 - Observation (2026-02-24): `make test` initially failed on two BDD suites
   with transient embedded PostgreSQL startup failures under default nextest
-  parallelism.
-  Impact: rerunning with `NEXTEST_TEST_THREADS=1` stabilized the suite while
-  preserving full test coverage.
+  parallelism. Impact: rerunning with `NEXTEST_TEST_THREADS=1` stabilized the
+  suite while preserving full test coverage.
 
 ## Decision Log
 
 - Decision: keep this ExecPlan strictly scoped to roadmap item 3.4.1.
   Rationale: roadmap sequencing separates 3.4.1 foundational ingest delivery
-  from 3.4.2/3.4.3 enrichment workers and reporting.
-  Date/Author: 2026-02-24 / Codex.
+  from 3.4.2/3.4.3 enrichment workers and reporting. Date/Author: 2026-02-24 /
+  Codex.
 
 - Decision: require explicit domain ports for provenance and deterministic rerun
-  policy rather than embedding these rules in the CLI adapter.
-  Rationale: preserves hexagonal boundaries and keeps business rules testable
-  without CLI/persistence coupling.
-  Date/Author: 2026-02-24 / Codex.
+  policy rather than embedding these rules in the CLI adapter. Rationale:
+  preserves hexagonal boundaries and keeps business rules testable without
+  CLI/persistence coupling. Date/Author: 2026-02-24 / Codex.
 
 - Decision: use a four-agent ownership model (domain, persistence, CLI, tests)
-  for implementation execution.
-  Rationale: reduces cross-layer drift and keeps merge/testing sequence explicit.
-  Date/Author: 2026-02-24 / Codex.
+  for implementation execution. Rationale: reduces cross-layer drift and keeps
+  merge/testing sequence explicit. Date/Author: 2026-02-24 / Codex.
 
 - Decision: treat `wildside-data` as the backend integration boundary for 3.4.1
   while keeping `wildside-cli ingest` as a reference capability in the shared
-  upstream project.
-  Rationale: crate-level integration keeps command orchestration testable and
-  avoids subprocess coupling in domain flows.
+  upstream project. Rationale: crate-level integration keeps command
+  orchestration testable and avoids subprocess coupling in domain flows.
   Date/Author: 2026-02-24 / Codex.
 
 - Decision: keep roadmap item 3.4.1 marked complete and track remaining gate
   evidence and service-level unit coverage as explicit follow-up risk items in
-  this plan.
-  Rationale: delivered artefacts for CLI, ports, migration, and BDD are present
-  in-repo, while final integrated verification can be completed by the main
-  owner.
-  Date/Author: 2026-02-24 / Codex.
+  this plan. Rationale: delivered artefacts for CLI, ports, migration, and BDD
+  are present in-repo, while final integrated verification can be completed by
+  the main owner. Date/Author: 2026-02-24 / Codex.
 
 ## Context and orientation
 

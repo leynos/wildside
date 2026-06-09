@@ -1,9 +1,8 @@
 # Close roadmap item 3.5.4 with revision-safe interests updates
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises &
-Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
-to date as work proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -18,8 +17,8 @@ domain or HTTP layers.
 
 The repository already contains a candidate 3.5.4 implementation footprint in
 the domain port, Diesel adapter, HTTP handler, behavioural tests, and
-architecture document. This plan treats that footprint as provisional. The
-team must verify the contract, correct any gaps, prove the behaviour through
+architecture document. This plan treats that footprint as provisional. The team
+must verify the contract, correct any gaps, prove the behaviour through
 `rstest` and `rstest-bdd` (behaviour-driven development, BDD), update the
 architecture record if the final decision differs from the current text, run
 the full gates, and only then mark roadmap item 3.5.4 as done.
@@ -155,9 +154,9 @@ produced green evidence for the required gates.
 
 - Risk: interests writes are a partial update of the broader
   `user_preferences` aggregate, so they can conflict with full preferences
-  writes even when only interest IDs changed.
-  Mitigation: keep one shared revision counter and prove the shared aggregate
-  contract in both unit and behavioural tests.
+  writes even when only interest IDs changed. Mitigation: keep one shared
+  revision counter and prove the shared aggregate contract in both unit and
+  behavioural tests.
 
 - Risk: the repository already contains a partially finished implementation, so
   stale plan text or stale assumptions may be more dangerous than missing code.
@@ -165,9 +164,9 @@ produced green evidence for the required gates.
   not the older narrative.
 
 - Risk: behavioural tests depend on embedded PostgreSQL and have historical
-  bootstrap failures involving `/dev/null` and worker setup.
-  Mitigation: run an explicit environment preflight before treating any BDD
-  failure as a product regression.
+  bootstrap failures involving `/dev/null` and worker setup. Mitigation: run an
+  explicit environment preflight before treating any BDD failure as a product
+  regression.
 
 - Risk: handler, schema, adapter, and documentation drift can leave the
   feature "implemented" in code but not safely consumable by clients.
@@ -276,8 +275,8 @@ field and `expectedRevision` semantics, add that coverage before moving on.
 The verification agent owns this milestone, with support from the persistence
 and HTTP agents when failures reveal real product gaps.
 
-Unit coverage must use `rstest` and should focus on the contract edges that
-are easiest to regress:
+Unit coverage must use `rstest` and should focus on the contract edges that are
+easiest to regress:
 
 - first write creates revision `1`;
 - matching revision increments exactly once;
@@ -334,9 +333,9 @@ Only after the full gates are green may the coordinator:
 
 ## Validation and gate execution
 
-The verification agent runs all required gates with `tee` and `set -o
-pipefail`, keeping the logs for review. These are the minimum closure commands
-for this roadmap item:
+The verification agent runs all required gates with `tee` and
+`set -o pipefail`, keeping the logs for review. These are the minimum closure
+commands for this roadmap item:
 
 ```bash
 set -o pipefail && make check-fmt 2>&1 \
@@ -393,9 +392,9 @@ document is no longer a draft.
   including port, domain, adapter, BDD, and architecture-document changes,
   while the roadmap entry remains open.
 - The previous
-  `docs/execplans/backend-3-5-4-revision-safe-interests-update-strategy.md`
-  was no longer a draft and no longer matched the repository state, so this
-  plan had to be rewritten as a fresh audit-and-close document.
+  `docs/execplans/backend-3-5-4-revision-safe-interests-update-strategy.md` was
+  no longer a draft and no longer matched the repository state, so this plan
+  had to be rewritten as a fresh audit-and-close document.
 - Historical notes show that DB-backed verification can fail because of
   environment issues around `/dev/null` and embedded PostgreSQL worker setup,
   so the plan must treat environment preflight as first-class work rather than
@@ -408,23 +407,20 @@ document is no longer a draft.
 ## Decision Log
 
 - Decision: treat the current repository state as provisional until the
-  verification evidence proves the roadmap acceptance criteria.
-  Rationale: code that looks complete but is not fully verified should not
-  close the roadmap item.
-  Date/Author: 2026-03-20 / planning team.
+  verification evidence proves the roadmap acceptance criteria. Rationale: code
+  that looks complete but is not fully verified should not close the roadmap
+  item. Date/Author: 2026-03-20 / planning team.
 
 - Decision: use `user_preferences` as the single aggregate and revision source
-  for interests updates.
-  Rationale: this preserves the hexagonal model already described in the
-  architecture document and avoids inventing a second persistence contract for
-  one subset of the same aggregate.
-  Date/Author: 2026-03-20 / planning team.
+  for interests updates. Rationale: this preserves the hexagonal model already
+  described in the architecture document and avoids inventing a second
+  persistence contract for one subset of the same aggregate. Date/Author:
+  2026-03-20 / planning team.
 
 - Decision: use an explicit agent team with one coordinator.
   Rationale: the work crosses domain, persistence, HTTP, tests, and docs, and
   the repository already contains partial implementation that must be audited
-  carefully.
-  Date/Author: 2026-03-20 / planning team.
+  carefully. Date/Author: 2026-03-20 / planning team.
 
 - Decision: update the roadmap only after the full gates pass.
   Rationale: the roadmap is a delivery record, not an intent record.
@@ -454,13 +450,10 @@ Evidence captured:
 - Targeted BDD tests:
   `/tmp/backend-3-5-4-targeted-bdd.log`
 - Environment preflight:
-  `/tmp/backend-3-5-4-dev-null.log`,
-  `/tmp/backend-3-5-4-prepare-pg-worker.log`
+  `/tmp/backend-3-5-4-dev-null.log`, `/tmp/backend-3-5-4-prepare-pg-worker.log`
 - Documentation and gate logs:
-  `/tmp/backend-3-5-4-markdownlint.log`,
-  `/tmp/backend-3-5-4-nixie.log`,
-  `/tmp/backend-3-5-4-check-fmt.log`,
-  `/tmp/backend-3-5-4-lint.log`,
+  `/tmp/backend-3-5-4-markdownlint.log`, `/tmp/backend-3-5-4-nixie.log`,
+  `/tmp/backend-3-5-4-check-fmt.log`, `/tmp/backend-3-5-4-lint.log`,
   `/tmp/backend-3-5-4-test.log`
 
 Environment notes:

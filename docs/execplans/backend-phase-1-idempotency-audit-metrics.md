@@ -72,8 +72,8 @@ Success is observable when:
 - Decision: Age buckets aligned to 24-hour time-to-live (TTL) with retry-pattern
   semantics. Rationale: TTL is 24 hours; buckets should cover this range
   meaningfully. Buckets: `0-1m` (immediate retries), `1-5m` (client backoff),
-  `5-30m` (session recovery), `30m-2h` (tab refresh), `2h-6h` (same-day
-  return), `6h-24h` (next-day retry). Date/Author: 2025-12-26 / Claude Code.
+  `5-30m` (session recovery), `30m-2h` (tab refresh), `2h-6h` (same-day return),
+  `6h-24h` (next-day retry). Date/Author: 2025-12-26 / Claude Code.
 
 - Decision: Use single counter metric with `outcome` label rather than separate
   counters. Rationale: Reduces metric proliferation. A single counter with

@@ -2,9 +2,8 @@
 
 **Audience:** Wildside front-end implementers and tooling maintainers.
 **Goal:** enforce semantic, accessible HTML with clean, token-driven Tailwind
-and daisyUI usage.
-**Outcome:** readable markup, reusable semantic wrappers, predictable Radix
-state styling and executable lint gates.
+and daisyUI usage. **Outcome:** readable markup, reusable semantic wrappers,
+predictable Radix state styling and executable lint gates.
 
 ## 1. Scope
 
@@ -47,8 +46,8 @@ The v2a mockup provides the initial rule set:
 ## 4. Biome and GritQL integration
 
 Grit rules should stay granular while Biome plugin support expects one useful
-pattern per file. Rules should emit actionable diagnostics that name the semantic
-replacement, for example replacing a clickable `<div>` with `<button>`.
+pattern per file. Rules should emit actionable diagnostics that name the
+semantic replacement, for example replacing a clickable `<div>` with `<button>`.
 
 ## 5. Accessibility rules
 
@@ -69,21 +68,21 @@ non-form elements.
 ## 7. State-slot rules
 
 Radix and ARIA state should be visible in markup through `data-state`,
-`aria-selected`, `aria-current`, `role="tab"` and related attributes. State that
-only exists in a class string is harder to test and should be flagged where a
-semantic attribute is available.
+`aria-selected`, `aria-current`, `role="tab"` and related attributes. State
+that only exists in a class string is harder to test and should be flagged
+where a semantic attribute is available.
 
 ## 8. Class-list and wrapper rules
 
-Long repeated class lists should either become a component, a semantic wrapper or
-a documented exception. Near-duplicate class sets should warn before they become
-copy-and-paste styling debt.
+Long repeated class lists should either become a component, a semantic wrapper
+or a documented exception. Near-duplicate class sets should warn before they
+become copy-and-paste styling debt.
 
 ## 9. Testing-selector rules
 
 Test code should prefer role, label and text queries. `data-testid`,
-`querySelector`, class selectors and text-click shortcuts should require a local
-exception when ordinary semantics are available.
+`querySelector`, class selectors and text-click shortcuts should require a
+local exception when ordinary semantics are available.
 
 ## 10. CSS token and colour rules
 

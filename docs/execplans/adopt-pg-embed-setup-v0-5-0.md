@@ -61,31 +61,24 @@ If any objective requires violating a constraint, stop and escalate.
 
 - Risk: strict `PG_TEST_BACKEND` validation in v0.5.0 could make previously
   permissive local or Continuous Integration (CI) configurations fail early.
-  Severity: high
-  Likelihood: medium
-  Mitigation: audit CI and test helper environment assumptions, set
-  `PG_TEST_BACKEND=postgresql_embedded` where required, and add explicit
-  documentation.
+  Severity: high Likelihood: medium Mitigation: audit CI and test helper
+  environment assumptions, set `PG_TEST_BACKEND=postgresql_embedded` where
+  required, and add explicit documentation.
 
 - Risk: moving shared test helpers from `TestCluster` references to
   `ClusterHandle`/guard split could create lifecycle leaks or cleanup drift.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: keep process-lifetime ownership explicit, retain template-db
-  cleanup guards (`TemporaryDatabase`), and validate teardown behaviour with
-  focused tests.
+  Severity: medium Likelihood: medium Mitigation: keep process-lifetime
+  ownership explicit, retain template-db cleanup guards (`TemporaryDatabase`),
+  and validate teardown behaviour with focused tests.
 
 - Risk: default cleanup behaviour changed in v0.5.0 (`DataOnly` on drop) and
-  could surprise debugging workflows that inspect directories.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: document when to use `CleanupMode::None` for forensic runs and
-  keep deterministic defaults for automated tests.
+  could surprise debugging workflows that inspect directories. Severity: medium
+  Likelihood: medium Mitigation: document when to use `CleanupMode::None` for
+  forensic runs and keep deterministic defaults for automated tests.
 
 - Risk: changing support helpers may silently affect many integration suites.
-  Severity: medium
-  Likelihood: high
-  Mitigation: migrate helper signatures incrementally, then run full gates.
+  Severity: medium Likelihood: high Mitigation: migrate helper signatures
+  incrementally, then run full gates.
 
 ## Progress
 
@@ -108,24 +101,21 @@ If any objective requires violating a constraint, stop and escalate.
 
 - Observation: repository docs are inconsistent about the currently adopted
   pg-embed version (`docs/wildside-testing-guide.md` still states `v0.2.0`,
-  while `backend/Cargo.toml` currently uses `0.4.0`).
-  Evidence: direct file inspection.
-  Impact: migration must include cohesive documentation alignment so strategy
-  docs do not drift from code reality.
+  while `backend/Cargo.toml` currently uses `0.4.0`). Evidence: direct file
+  inspection. Impact: migration must include cohesive documentation alignment
+  so strategy docs do not drift from code reality.
 
 - Observation: current helper `backend/tests/support/pg_embed.rs` wraps
-  `test_support::shared_cluster()` with environment locking and retry logic,
-  so adoption of `shared_test_cluster_handle()` may require a custom wrapper
-  rather than a direct fixture swap.
-  Evidence: helper code inspection.
-  Impact: plan keeps both adoption options open until implementation chooses
-  the least risky path.
+  `test_support::shared_cluster()` with environment locking and retry logic, so
+  adoption of `shared_test_cluster_handle()` may require a custom wrapper
+  rather than a direct fixture swap. Evidence: helper code inspection. Impact:
+  plan keeps both adoption options open until implementation chooses the least
+  risky path.
 
 - Observation: repository-level `make test` includes additional package suites
   beyond backend integration tests, so quality-gate verification must allow for
-  significantly longer runtime than backend-only nextest.
-  Evidence: `make test` logs include `mxd` and `mxd-verification` suites after
-  workspace nextest.
+  significantly longer runtime than backend-only nextest. Evidence: `make test`
+  logs include `mxd` and `mxd-verification` suites after workspace nextest.
   Impact: implementation validation used full gate logs with `tee` and waited
   for final command completion markers.
 
@@ -134,27 +124,25 @@ If any objective requires violating a constraint, stop and escalate.
 - Decision: create a dedicated ExecPlan at
   `docs/execplans/adopt-pg-embed-setup-v0-5-0.md` before implementing changes.
   Rationale: user requested explicit planning with execplans skill and this
-  migration has non-trivial behavioural changes.
-  Date/Author: 2026-02-09 / Codex.
+  migration has non-trivial behavioural changes. Date/Author: 2026-02-09 /
+  Codex.
 
 - Decision: treat documentation cohesion as part of migration scope,
-  specifically updating `docs/developers-guide.md` to reflect test strategy
-  and v0.5.0 usage guidance.
-  Rationale: user requirement and existing documentation drift.
-  Date/Author: 2026-02-09 / Codex.
+  specifically updating `docs/developers-guide.md` to reflect test strategy and
+  v0.5.0 usage guidance. Rationale: user requirement and existing documentation
+  drift. Date/Author: 2026-02-09 / Codex.
 
 - Decision: implement shared test bootstrap with `TestCluster::new_split()`,
   retain process-lifetime ownership via intentional `ClusterGuard` leak, and
-  expose only `&'static ClusterHandle` to tests.
-  Rationale: this adopts v0.5.0 send-safe lifecycle APIs while preserving the
-  existing sandbox path overrides and retry controls in local helpers.
-  Date/Author: 2026-02-09 / Codex.
+  expose only `&'static ClusterHandle` to tests. Rationale: this adopts v0.5.0
+  send-safe lifecycle APIs while preserving the existing sandbox path overrides
+  and retry controls in local helpers. Date/Author: 2026-02-09 / Codex.
 
 - Decision: set `PG_TEST_BACKEND=postgresql_embedded` explicitly in both CI
-  test environment and local shared-cluster bootstrap when unset.
-  Rationale: v0.5.0 validates backend values strictly; explicit defaulting keeps
-  bootstrap deterministic and aligned between local and CI runs.
-  Date/Author: 2026-02-09 / Codex.
+  test environment and local shared-cluster bootstrap when unset. Rationale:
+  v0.5.0 validates backend values strictly; explicit defaulting keeps bootstrap
+  deterministic and aligned between local and CI runs. Date/Author: 2026-02-09
+  / Codex.
 
 ## Outcomes & retrospective
 
@@ -173,8 +161,8 @@ No plan tolerances were exceeded.
 
 ## Context and orientation
 
-This repository already uses shared embedded-Postgres infrastructure for backend
-integration and behavioural tests.
+This repository already uses shared embedded-Postgres infrastructure for
+backend integration and behavioural tests.
 
 Key files and their current role:
 
@@ -340,8 +328,7 @@ The migration must keep using these interfaces and dependencies:
 
 - Crate dependency:
   `pg_embedded_setup_unpriv = { package = "pg-embed-setup-unpriv",`
-  `version = "0.5.0" }`
-  in `backend/Cargo.toml`.
+  `version = "0.5.0" }` in `backend/Cargo.toml`.
 - Test helper contract:
   `backend/tests/support/pg_embed.rs` continues to provide a shared cluster
   accessor suitable for existing test suites.
@@ -349,11 +336,11 @@ The migration must keep using these interfaces and dependencies:
   `backend/tests/support/embedded_postgres.rs::provision_template_database`
   remains the single entry point for per-test temporary databases.
 - Skip policy:
-  `backend/tests/support/cluster_skip.rs::handle_cluster_setup_failure`
-  remains the gatekeeper for optional test skipping.
+  `backend/tests/support/cluster_skip.rs::handle_cluster_setup_failure` remains
+  the gatekeeper for optional test skipping.
 
 ## Revision note
 
-Updated after implementation approval to record dependency migration to `0.5.0`,
-the `ClusterHandle` split-bootstrap adoption, strict `PG_TEST_BACKEND`
+Updated after implementation approval to record dependency migration to
+`0.5.0`, the `ClusterHandle` split-bootstrap adoption, strict `PG_TEST_BACKEND`
 alignment, and final quality-gate evidence. Remaining work has been completed.

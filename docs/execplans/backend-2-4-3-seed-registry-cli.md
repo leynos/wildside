@@ -1,14 +1,13 @@
 # Deliver seed registry CLI
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: DONE
 
-No `PLANS.md` file exists in the repository root at the time of writing. If
-one is added, this ExecPlan must be updated to follow it.
+No `PLANS.md` file exists in the repository root at the time of writing. If one
+is added, this ExecPlan must be updated to follow it.
 
 ## Purpose / Big Picture
 
@@ -61,30 +60,22 @@ both unit and behavioural coverage.
 ## Risks
 
 - Risk: generated names are multi-word passphrases rather than adjective noun
-  pairs, changing the expected naming semantics.
-  Severity: low
-  Likelihood: high
+  pairs, changing the expected naming semantics. Severity: low Likelihood: high
   Mitigation: document the new naming format and keep names hyphen-joined so
   they remain single tokens in the registry.
 
 - Risk: concurrent edits to the registry could be overwritten.
-  Severity: medium
-  Likelihood: low
-  Mitigation: write atomically via a temp file in the same directory and
-  consider a simple last-write-wins warning if the file changed between read
-  and write.
+  Severity: medium Likelihood: low Mitigation: write atomically via a temp file
+  in the same directory and consider a simple last-write-wins warning if the
+  file changed between read and write.
 
 - Risk: generated names collide with existing seeds.
-  Severity: low
-  Likelihood: medium
-  Mitigation: detect collisions and retry name generation with a new seed
-  value up to a bounded limit.
+  Severity: low Likelihood: medium Mitigation: detect collisions and retry name
+  generation with a new seed value up to a bounded limit.
 
 - Risk: tests mutate the real fixture file.
-  Severity: medium
-  Likelihood: low
-  Mitigation: copy the registry into a per-test temp directory and operate on
-  the copy only.
+  Severity: medium Likelihood: low Mitigation: copy the registry into a
+  per-test temp directory and operate on the copy only.
 
 ## Progress
 
@@ -99,28 +90,25 @@ both unit and behavioural coverage.
 ## Surprises & Discoveries
 
 - Observation: `rstest-bdd` step placeholders include surrounding quotes when
-  the feature text includes quoted strings.
-  Evidence: Duplicate-name scenario passed quoted values through to the JSON
-  seed registry and caused parse errors.
-  Impact: Step patterns now include explicit quotes to capture the inner value
-  only.
+  the feature text includes quoted strings. Evidence: Duplicate-name scenario
+  passed quoted values through to the JSON seed registry and caused parse
+  errors. Impact: Step patterns now include explicit quotes to capture the
+  inner value only.
 
 ## Decision Log
 
 - Decision: Implement the CLI as a binary target in the `example-data` crate
-  (`example-data-seed`) so it can reuse registry types directly.
-  Rationale: Keeps seed registry logic close to the data model and avoids
-  backend dependencies.
-  Date/Author: 2026-01-18 / Plan author.
+  (`example-data-seed`) so it can reuse registry types directly. Rationale:
+  Keeps seed registry logic close to the data model and avoids backend
+  dependencies. Date/Author: 2026-01-18 / Plan author.
 
 - Decision: Write registry updates atomically with a temp file and rename.
-  Rationale: Prevents partial writes if the CLI crashes mid-write.
-  Date/Author: 2026-01-18 / Plan author.
+  Rationale: Prevents partial writes if the CLI crashes mid-write. Date/Author:
+  2026-01-18 / Plan author.
 
 - Decision: Generate seed names using `base-d` with the `eff_long` dictionary
-  and join words with hyphens.
-  Rationale: Avoids GPL-licensed dependencies while keeping names readable and
-  registry-friendly as single tokens.
+  and join words with hyphens. Rationale: Avoids GPL-licensed dependencies
+  while keeping names readable and registry-friendly as single tokens.
   Date/Author: 2026-01-18 / Plan author.
 
 ## Outcomes & Retrospective
@@ -200,8 +188,8 @@ Stage D: Behavioural tests and documentation updates.
   about the seed registry CLI and atomic update approach.
 - Mark roadmap item 2.4.4 as done in `docs/backend-roadmap.md`.
 
-Each stage ends with running the relevant tests and updating `Progress`.
-Do not proceed if any stage validation fails.
+Each stage ends with running the relevant tests and updating `Progress`. Do not
+proceed if any stage validation fails.
 
 ## Concrete Steps
 
@@ -249,8 +237,9 @@ skipped integration coverage.
 
 Acceptance criteria:
 
-- Running `cargo run -p example-data --bin example-data-seed -- \
-  --registry backend/fixtures/example-data/seeds.json` appends a new seed and
+- Running
+  `cargo run -p example-data --bin example-data-seed -- \ --registry backend/fixtures/example-data/seeds.json`
+  appends a new seed and
   prints a success line that includes the hyphen-joined seed name.
 - The CLI rejects a duplicate seed name with a clear error message.
 - Unit tests cover registry update helpers using `rstest`.
@@ -270,8 +259,8 @@ Quality criteria (what "done" means):
 CLI writes are safe to re-run because each new seed name is unique; if a
 collision occurs, the CLI must surface the error without overwriting existing
 entries. The atomic write strategy ensures partial writes do not corrupt the
-registry. If a write operation fails, remove any temp file left in the
-registry directory and re-run the CLI.
+registry. If a write operation fails, remove any temp file left in the registry
+directory and re-run the CLI.
 
 ## Artefacts and Notes
 
@@ -313,8 +302,8 @@ Dependencies:
 
 ## Revision note (required when editing an ExecPlan)
 
-2026-01-18: Initial draft for task 2.4.4 seed registry CLI.
-2026-01-18: Updated dependency plan to use `base-d` `eff_long` word list and
-hyphen-joined passphrase names.
-2026-01-18: Recorded progress updates and noted `rstest-bdd` quote handling.
-2026-01-18: Marked plan complete with outcomes and gating results.
+2026-01-18: Initial draft for task 2.4.4 seed registry CLI. 2026-01-18: Updated
+dependency plan to use `base-d` `eff_long` word list and hyphen-joined
+passphrase names. 2026-01-18: Recorded progress updates and noted `rstest-bdd`
+quote handling. 2026-01-18: Marked plan complete with outcomes and gating
+results.

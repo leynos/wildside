@@ -14,9 +14,9 @@ orchestration tooling that is not yet fully declared in
 
 ## Overview
 
-The current Wildside PWA is a client-side React application built with Bun,
-Vite `^7.3.2`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`,
-TanStack Query, Zod, clsx, TypeScript, Vitest, and Orval.
+The current Wildside PWA is a client-side React application built with Bun, Vite
+`^7.3.2`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`, TanStack
+Query, Zod, clsx, TypeScript, Vitest, and Orval.
 
 The fuller v2a target stack described by the roadmap and mockup adds TanStack
 Router, Tailwind CSS v4, DaisyUI v5, Radix UI primitives, i18next with Fluent
@@ -74,10 +74,10 @@ state architecture.
 - **React integration:** `@vitejs/plugin-react` handles JSX and React Fast
   Refresh.
 - **Tailwind integration:** Tailwind CSS `^3` runs through
-  `tailwind.config.js`, which consumes generated token presets and DaisyUI theme
-  output.
-- **Module format:** The project is ECMAScript Modules (ESM)-only (`"type":
-  "module"` in `package.json`).
+  `tailwind.config.js`, which consumes generated token presets and DaisyUI
+  theme output.
+- **Module format:** The project is ECMAScript Modules (ESM)-only
+  (`"type": "module"` in `package.json`).
 - **Token integration:** `vite.config.ts` wires a design-token plugin so token
   outputs are generated before development, build, and preview workflows.
 
@@ -92,8 +92,8 @@ In practice, the front-end entry path is:
 ### React
 
 The UI is built with React 19 and `react-dom/client`. The main bootstrap file,
-`src/main.tsx`, mounts the Single-Page Application (SPA) into `#root`,
-provides a loading fallback via Suspense, and avoids rendering during tests.
+`src/main.tsx`, mounts the Single-Page Application (SPA) into `#root`, provides
+a loading fallback via Suspense, and avoids rendering during tests.
 
 ### Routing
 
@@ -155,8 +155,8 @@ Design tokens are a first-class part of the stack.
   reload when they change.
 
 This means the front-end theme layer is not hand-maintained in one place.
-Instead, the design source of truth lives in the token package, and both CSS and
-Tailwind consume generated outputs.
+Instead, the design source of truth lives in the token package, and both CSS
+and Tailwind consume generated outputs.
 
 ### Theme handling
 
@@ -171,10 +171,10 @@ framework:
 
 ### PostCSS
 
-The current PWA does not declare a project-level PostCSS configuration. Tailwind
-is wired through `tailwind.config.js`, and any future Tailwind v4 migration
-should document the new PostCSS or CSS-first integration in the same change that
-adds the dependency upgrade.
+The current PWA does not declare a project-level PostCSS configuration.
+Tailwind is wired through `tailwind.config.js`, and any future Tailwind v4
+migration should document the new PostCSS or CSS-first integration in the same
+change that adds the dependency upgrade.
 
 ## Component primitives and icons
 
@@ -195,8 +195,8 @@ entity and UI-chrome localization tasks in the roadmap.
 ## Map stack
 
 The current PWA does not declare MapLibre GL JS. Interactive map views are a
-Wildside v2a target capability for itinerary, quick-walk, saved-route, tile, and
-location flows.
+Wildside v2a target capability for itinerary, quick-walk, saved-route, tile,
+and location flows.
 
 - The fuller map stack is expected to lazy-load `maplibre-gl` and its CSS when
   that dependency is introduced.
@@ -228,10 +228,10 @@ The repository has a broader-than-average front-end verification setup.
 
 ### Accessibility-focused and end-to-end tests
 
-The current `frontend-pwa/package.json` does not declare Testing Library,
-Happy DOM, Playwright, or `axe-core` packages. Those tools are part of the v2a
-target verification stack and should be imported through the roadmap tasks that
-cover lint, accessibility, and semantic testing gates.
+The current `frontend-pwa/package.json` does not declare Testing Library, Happy
+DOM, Playwright, or `axe-core` packages. Those tools are part of the v2a target
+verification stack and should be imported through the roadmap tasks that cover
+lint, accessibility, and semantic testing gates.
 
 ## Linting, type-checking, and semantic checks
 
@@ -260,9 +260,8 @@ presenting domain entities on cards, lists, and detail screens. Entity models
 carry their own localized strings rather than delegating display-text
 responsibility to the Fluent translation bundles. This keeps Fluent bundles
 focused on UI chrome (button labels, Accessible Rich Internet Applications
-(ARIA) labels, section headings, format
-strings) while letting each entity own its names, descriptions, and badge text
-per locale.
+(ARIA) labels, section headings, format strings) while letting each entity own
+its names, descriptions, and badge text per locale.
 
 ### Shared primitives
 
@@ -356,8 +355,8 @@ add:
 To avoid confusion, this section refers to `frontend-pwa/package.json`, not the
 broader v2a target architecture described above.
 
-The following target or common front-end tools are not currently declared in the
-PWA runtime dependencies:
+The following target or common front-end tools are not currently declared in
+the PWA runtime dependencies:
 
 - TanStack Router,
 - Radix UI,

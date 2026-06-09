@@ -1,9 +1,8 @@
 # Define catalogue and descriptor domain types (roadmap 3.2.1)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETED
 
@@ -83,25 +82,19 @@ Observable outcome:
 ## Risks
 
 - Risk: introducing strict validation for localization keys or icon IDs may
-  reject legacy fixture data used by ingestion tests.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: codify validation rules in one place, update fixtures
-  intentionally, and document rationale in architecture decisions.
+  reject legacy fixture data used by ingestion tests. Severity: medium
+  Likelihood: medium Mitigation: codify validation rules in one place, update
+  fixtures intentionally, and document rationale in architecture decisions.
 
 - Risk: naming collisions with existing domain symbols (for example
-  `InterestThemeId`) may produce unclear module boundaries.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: keep catalogue and descriptor types in dedicated modules and use
-  explicit imports/re-exports.
+  `InterestThemeId`) may produce unclear module boundaries. Severity: medium
+  Likelihood: medium Mitigation: keep catalogue and descriptor types in
+  dedicated modules and use explicit imports/re-exports.
 
 - Risk: behavioural coverage might accidentally test Diesel internals instead
-  of port semantics.
-  Severity: medium
-  Likelihood: low
-  Mitigation: structure behaviour-driven development steps around domain ports
-  and observable database outcomes, not adapter implementation details.
+  of port semantics. Severity: medium Likelihood: low Mitigation: structure
+  behaviour-driven development steps around domain ports and observable
+  database outcomes, not adapter implementation details.
 
 ## Progress
 
@@ -134,67 +127,58 @@ Observable outcome:
 
 - Observation (2026-02-10): Existing ingestion ports already model catalogue
   and descriptor payloads, but as ingestion-specific structs under
-  `backend/src/domain/ports/*`, not as reusable domain entities.
-  Evidence: `backend/src/domain/ports/catalogue_ingestion_repository.rs` and
-  `backend/src/domain/ports/descriptor_ingestion_repository.rs`.
-  Impact: 3.2.1 should introduce domain entities and then migrate ports to
-  consume them to avoid duplicated models.
+  `backend/src/domain/ports/*`, not as reusable domain entities. Evidence:
+  `backend/src/domain/ports/catalogue_ingestion_repository.rs` and
+  `backend/src/domain/ports/descriptor_ingestion_repository.rs`. Impact: 3.2.1
+  should introduce domain entities and then migrate ports to consume them to
+  avoid duplicated models.
 
-- Observation (2026-02-10): The `grepai` index failed for one query (`failed to
-  decode index: EOF`).
-  Evidence: command-line interface (CLI) error during semantic search.
-  Impact: exact-text fallback (`rg`) is acceptable when semantic index is not
-  usable.
+- Observation (2026-02-10): The `grepai` index failed for one query
+  (`failed to decode index: EOF`).
+  Evidence: command-line interface (CLI) error during semantic search. Impact:
+  exact-text fallback (`rg`) is acceptable when semantic index is not usable.
 
 - Observation (2026-02-10): A first-cut `catalogue` module exceeded the
-  repository's 400-line code file limit.
-  Evidence: `backend/src/domain/catalogue/mod.rs` reached 460 lines.
-  Impact: Split catalogue entities into focused submodules and kept validation
-  helpers in a dedicated file.
+  repository's 400-line code file limit. Evidence:
+  `backend/src/domain/catalogue/mod.rs` reached 460 lines. Impact: Split
+  catalogue entities into focused submodules and kept validation helpers in a
+  dedicated file.
 
 - Observation (2026-02-11): The new behavioural suite timed out under the
-  default nextest slow timeout.
-  Evidence: `catalogue_descriptor_ingestion_bdd` exceeded 60 seconds in early
-  runs.
-  Impact: Added `binary(catalogue_descriptor_ingestion_bdd)` to
-  `.config/nextest.toml` slow-suite overrides (`300s`) alongside other
-  pg-embedded suites.
+  default nextest slow timeout. Evidence: `catalogue_descriptor_ingestion_bdd`
+  exceeded 60 seconds in early runs. Impact: Added
+  `binary(catalogue_descriptor_ingestion_bdd)` to `.config/nextest.toml`
+  slow-suite overrides (`300s`) alongside other pg-embedded suites.
 
 - Observation (2026-02-11): `rstest-bdd` step fixture names must match exactly;
   underscore-prefixed parameter names are treated as different fixtures.
   Evidence: panic reported missing fixture `_world` while scenario provided
-  `world`.
-  Impact: renamed step parameter to `world` and consumed it explicitly.
+  `world`. Impact: renamed step parameter to `world` and consumed it explicitly.
 
 - Observation (2026-02-11): Baseline schema enforces foreign keys from
   `route_summaries.route_id` to `routes.id` and from `community_picks.user_id`
-  to `users.id`.
-  Evidence: behavioural test failed with
+  to `users.id`. Evidence: behavioural test failed with
   `route_summaries_route_id_fkey` violation when using random universally
-  unique identifier (UUID) fixtures.
-  Impact: seeded deterministic `users`/`routes` rows in the Given step and
-  switched test fixtures to stable IDs.
+  unique identifier (UUID) fixtures. Impact: seeded deterministic `users`/
+  `routes` rows in the Given step and switched test fixtures to stable IDs.
 
 ## Decision log
 
 - Decision: keep this plan scoped to domain type modelling and ingestion-port
   payload ownership; defer new read ports/endpoints to roadmap tasks 3.2.2 and
-  3.2.3.
-  Rationale: preserves roadmap sequencing and keeps this change atomic.
+  3.2.3. Rationale: preserves roadmap sequencing and keeps this change atomic.
   Date/Author: 2026-02-10 / Codex.
 
 - Decision: model localization and semantic icon identifiers as dedicated domain
   value objects (or aliases/newtypes with validation) rather than raw
-  `serde_json::Value`/`String` in domain-facing types.
-  Rationale: improves invariants, readability, and testability while keeping
-  adapters responsible for JSONB mapping.
-  Date/Author: 2026-02-10 / Codex.
+  `serde_json::Value`/`String` in domain-facing types. Rationale: improves
+  invariants, readability, and testability while keeping adapters responsible
+  for JSONB mapping. Date/Author: 2026-02-10 / Codex.
 
 - Decision: treat `catalogue_descriptor_ingestion_bdd` as a slow embedded-
-  Postgres suite in nextest profile overrides.
-  Rationale: avoids false timeouts from template database provisioning and
-  aligns scheduler behaviour with existing pg-embedded behavioural binaries.
-  Date/Author: 2026-02-11 / Codex.
+  Postgres suite in nextest profile overrides. Rationale: avoids false timeouts
+  from template database provisioning and aligns scheduler behaviour with
+  existing pg-embedded behavioural binaries. Date/Author: 2026-02-11 / Codex.
 
 ## Outcomes & retrospective
 

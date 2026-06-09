@@ -56,22 +56,16 @@ seeding behaviour.
 ## Risks
 
 - Risk: Migration syntax errors or missing down migration
-  Severity: low
-  Likelihood: low
-  Mitigation: Follow existing migration patterns exactly; test with diesel
-  migration run/revert cycle.
+  Severity: low Likelihood: low Mitigation: Follow existing migration patterns
+  exactly; test with diesel migration run/revert cycle.
 
 - Risk: Incorrect ON CONFLICT behaviour leading to race conditions
-  Severity: medium
-  Likelihood: low
-  Mitigation: Write explicit integration test verifying idempotent insert
-  returns correct status.
+  Severity: medium Likelihood: low Mitigation: Write explicit integration test
+  verifying idempotent insert returns correct status.
 
 - Risk: Schema.rs and models.rs drift from migration
-  Severity: low
-  Likelihood: low
-  Mitigation: Manually verify schema.rs matches migration columns; run full
-  test suite.
+  Severity: low Likelihood: low Mitigation: Manually verify schema.rs matches
+  migration columns; run full test suite.
 
 ## Progress
 
@@ -89,35 +83,31 @@ seeding behaviour.
 ## Surprises & Discoveries
 
 - Observation: Backend initially used rstest-bdd v0.2.0, not v0.3.2 as
-  stated
-  Evidence: Cargo.toml showed `rstest_bdd_macros = "0.2.0"`
-  Impact: Initial implementation used v0.2.0 patterns; later upgraded to
-  v0.3.2 with `Slot<T>`, `ScenarioState` derive, and explicit scenario name
-  bindings.
+  stated Evidence: Cargo.toml showed `rstest_bdd_macros = "0.2.0"` Impact:
+  Initial implementation used v0.2.0 patterns; later upgraded to v0.3.2 with
+  `Slot<T>`, `ScenarioState` derive, and explicit scenario name bindings.
 
 - Observation: Type inference issues with `handle_cluster_setup_failure`
-  in BDD tests
-  Evidence: Compiler error `cannot infer type of the type parameter T`
-  Impact: Required explicit type annotation `let _: Option<()>` when
-  discarding result.
+  in BDD tests Evidence: Compiler error
+  `cannot infer type of the type parameter T` Impact: Required explicit type
+  annotation `let _: Option<()>` when discarding result.
 
 - Observation: ExampleDataRunRow struct flagged as dead code
-  Evidence: Clippy warning about unused struct
-  Impact: Added `#[expect(dead_code)]` annotation; the struct will be used when
-  seed audit/query functionality is added in future tasks.
+  Evidence: Clippy warning about unused struct Impact: Added
+  `#[expect(dead_code)]` annotation; the struct will be used when seed
+  audit/query functionality is added in future tasks.
 
 ## Decision Log
 
 - Decision: Use `seed_key TEXT PRIMARY KEY` rather than a composite key
   Rationale: The design document specifies seed_key as the sole identifier;
-  each seed name is unique and sufficient for once-only guard.
-  Date/Author: 2026-01-16 / Plan author.
+  each seed name is unique and sufficient for once-only guard. Date/Author:
+  2026-01-16 / Plan author.
 
 - Decision: Return `SeedingResult` enum from repository method
   Rationale: The caller needs to distinguish between "seed applied" and "seed
   already exists" without treating the latter as an error. An enum is cleaner
-  than Option or bool.
-  Date/Author: 2026-01-16 / Plan author.
+  than Option or bool. Date/Author: 2026-01-16 / Plan author.
 
 ## Outcomes & Retrospective
 
@@ -176,7 +166,8 @@ Related documents:
 
 - `docs/backend-sample-data-design.md` - Design specification
 - `docs/wildside-backend-architecture.md` - Architecture reference
-- `docs/pg-embedded-setup-unpriv-users-guide.md` - Testing with embedded Postgres
+- `docs/pg-embedded-setup-unpriv-users-guide.md` - Testing with embedded
+  Postgres
 
 ## Plan of Work
 
@@ -220,8 +211,8 @@ Create `backend/src/domain/ports/example_data_runs_repository.rs`:
 
     define_port_error! {
         pub enum ExampleDataRunsError {
-            Connection { message: String } => "...",
-            Query { message: String } => "...",
+            Connection { message: String } => "…",
+            Query { message: String } => "…",
         }
     }
 
@@ -253,7 +244,8 @@ Export from `backend/src/domain/ports/mod.rs`.
 
 ### Stage D: Implement Diesel adapter
 
-Create `backend/src/outbound/persistence/diesel_example_data_runs_repository.rs`:
+Create
+`backend/src/outbound/persistence/diesel_example_data_runs_repository.rs`:
 
 - `DieselExampleDataRunsRepository` struct with `DbPool`
 - `map_pool_error` and `map_diesel_error` helper functions
@@ -400,10 +392,10 @@ partway:
 - Git can restore to clean state
 
 Note: The raw `CREATE TABLE` statement is not inherently idempotent (it would
-fail if the table already exists). Idempotence is provided by Diesel's migration
-tracking, which prevents reapplication of previously applied migrations. To make
-the SQL itself idempotent, use `CREATE TABLE IF NOT EXISTS` in future
-migrations.
+fail if the table already exists). Idempotence is provided by Diesel's
+migration tracking, which prevents reapplication of previously applied
+migrations. To make the SQL itself idempotent, use `CREATE TABLE IF NOT EXISTS`
+in future migrations.
 
 ## Artifacts and Notes
 

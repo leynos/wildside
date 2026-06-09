@@ -12,8 +12,8 @@ implementation for roadmap item `3.5.4`:
 The goal here is to capture the exact evidence, the relevant code paths, what
 was ruled out, and the most likely diagnoses supported by the investigation.
 
-Historical note: later on 2026-03-13 the repository switched from a
-repo-local `backend` `pg_worker` binary to the `pg_worker` binary published by
+Historical note: later on 2026-03-13 the repository switched from a repo-local
+`backend` `pg_worker` binary to the `pg_worker` binary published by
 `pg-embed-setup-unpriv`. Code-path references below describe the wiring that
 was in place when these failures were captured.
 
@@ -161,8 +161,8 @@ before any scenario assertions execute:
 76  Location: backend/tests/support/cluster_skip.rs:30
 ```
 
-The same log also shows the BDD framework reporting failure at the first `Given`
-step:
+The same log also shows the BDD framework reporting failure at the first
+`Given` step:
 
 ```text
 80  The application panicked (crashed).
@@ -201,8 +201,8 @@ failed while trying to redirect subprocess output there.
 
 Evidence supporting that diagnosis:
 
-- The failure text is explicit: `sh: 1: cannot create /dev/null: Permission
-  denied`.
+- The failure text is explicit:
+  `sh: 1: cannot create /dev/null: Permission denied`.
 - The stacktrace locations point into `pg-embed-setup-unpriv`, not backend
   application code.
 - The panic originates from `handle_cluster_setup_failure()` in
@@ -283,8 +283,8 @@ The same stderr stream continues with the same pattern:
 
 ### Failure 2 follow-up investigation
 
-The exact probe command was re-run directly, feeding it `/dev/null` on stdin. It
-completed successfully and emitted only the expected target metadata:
+The exact probe command was re-run directly, feeding it `/dev/null` on stdin.
+It completed successfully and emitted only the expected target metadata:
 
 ```text
 1  ___
@@ -308,10 +308,11 @@ completed successfully and emitted only the expected target metadata:
 53 unix
 ```
 
-The command `cargo clippy --workspace --all-targets --all-features -- -D
-warnings` was also re-run. This time it did not hit the target-probe
-failure at all. Instead, it progressed into ordinary workspace linting and
-failed on unrelated, deterministic lint expectations:
+The command
+`cargo clippy --workspace --all-targets --all-features -- -D warnings` was also
+re-run. This time it did not hit the target-probe failure at all. Instead, it
+progressed into ordinary workspace linting and failed on unrelated,
+deterministic lint expectations:
 
 ```text
 11  Checking backend v0.1.0 (/home/user/project/backend)

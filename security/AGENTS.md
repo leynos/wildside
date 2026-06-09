@@ -26,10 +26,10 @@ These instructions apply in addition to the repository root `AGENTS.md`.
 ## Testing expectations
 
 - Ensure new features are validated with unit tests and behavioural tests using
-  `bun:test` where applicable, covering happy paths, unhappy paths, and relevant
-  edge cases. The current root JavaScript test harness is Vitest; keep local
-  tests compatible with the active repository harness unless the runner change
-  is deliberate and documented.
+  `bun:test` where applicable, covering happy paths, unhappy paths, and
+  relevant edge cases. The current root JavaScript test harness is Vitest; keep
+  local tests compatible with the active repository harness unless the runner
+  change is deliberate and documented.
 - Add end-to-end tests where the change affects externally observable workflows,
   integration contracts, persistence, command-line behaviour, network
   boundaries, user interface flows, or other system-level behaviour.

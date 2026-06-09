@@ -10,7 +10,7 @@ internally organized into decoupled
 modules([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L5-L13)
 )(
 [2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L262-L265)).
- This approach accelerates early development and debugging by avoiding the
+This approach accelerates early development and debugging by avoiding the
 complexity of microservices while maintaining clear boundaries between domains.
 In production, the backend runs as a containerized service (e.g. in Kubernetes)
 and connects to external services like a Postgres database, a Redis cache, and
@@ -18,7 +18,7 @@ a tile server for map
 data([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L19-L27)
 )(
 [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L40-L48)).
- A high-level system diagram (from the original design spec) illustrates these
+A high-level system diagram (from the original design spec) illustrates these
 components and interactions:
 
 - **Actix Web API Server:** The main web service handling HTTP requests and
@@ -66,7 +66,7 @@ into layers corresponding to **domain**, **ports**, and **adapters**. Core
 business logic lives in the **domain layer** (pure logic with no direct I/O or
 framework
 dependencies)([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L262-L265)).
- The domain defines abstract interfaces (ports) for external interactions like
+The domain defines abstract interfaces (ports) for external interactions like
 persistence, caching, or messaging. Surrounding this, infrastructure and
 framework-specific code (adapters) implement these interfaces – for example,
 the database adapter uses Diesel to fulfill the persistence port, and the web
@@ -76,7 +76,7 @@ on details of Actix, Diesel, or other external tools. It also simplifies
 testing – domain services can be unit-tested with mock implementations of
 ports, and the real adapters can be integration-tested
 separately([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L262-L266)).
- The repository is structured to reflect this separation, with distinct modules
+The repository is structured to reflect this separation, with distinct modules
 for `inbound::http` (HTTP handlers), `inbound::ws` (WebSocket handlers),
 `domain` (business logic and domain models), and `outbound` (persistence,
 cache, and other external adapters that implement the domain ports)
@@ -88,17 +88,17 @@ structured logging and distributed tracing, and every incoming request or job
 is tagged with a **trace ID** (UUID) that is propagated across asynchronous
 calls and even into background
 jobs([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L712-L720)).
- Key metrics are collected and exposed via **Prometheus** endpoints or
+Key metrics are collected and exposed via **Prometheus** endpoints or
 exporters, covering HTTP request rates/latencies, active WebSocket connections,
 job processing times, database performance, cache hits,
 etc.([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L81-L89)
 )(
 [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L727-L735)).
- Additionally, the backend emits high-level **analytics events** to **PostHog**
+Additionally, the backend emits high-level **analytics events** to **PostHog**
 to track user behavior (for example, when a route is generated or a POI is
 viewed)(
 [1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L88-L95)).
- This observability stack ensures that developers and operators can monitor
+This observability stack ensures that developers and operators can monitor
 system health and user engagement in real time. (Details on specific metrics
 and tracing follow in each component’s description.)
 
@@ -107,7 +107,7 @@ hexagonal (ports and adapters) architecture. It leverages **Actix Web** for
 high-performance async HTTP/WS handling, **Diesel** (with Postgres/PostGIS) for
 persistence, **bb8** for async connection
 pooling([4](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/keyset-pagination-design.md#L34-L40)),
- **Redis** for caching, **PostgreSQL** for Apalis-backed queue persistence, and
+**Redis** for caching, **PostgreSQL** for Apalis-backed queue persistence, and
 **Apalis** for robust background job execution. The design emphasizes clear
 domain boundaries, scalability (via potential service extraction or horizontal
 scaling of the monolith and workers), and thorough observability for both
@@ -209,9 +209,8 @@ injected state rather than importing outbound modules directly.
 - **Port (domain):** `backend/src/domain/ports/user_repository.rs` defines the
   `UserRepository` trait and `UserPersistenceError`.
 - **Adapter (outbound):**
-  `backend/src/outbound/persistence/diesel_user_repository.rs`
-  implements `UserRepository` using Diesel and maps Diesel errors to domain
-  errors.
+  `backend/src/outbound/persistence/diesel_user_repository.rs` implements
+  `UserRepository` using Diesel and maps Diesel errors to domain errors.
 - **Contract (tests):** `backend/tests/ports_behaviour.rs` exercises the port
   semantics against a Postgres-backed implementation using
   `pg-embed-setup-unpriv`.
@@ -330,9 +329,10 @@ Module boundaries are enforced by a repo-local lint that runs during
 - **2026-01-05:** Add contract tests for PWA endpoint guarantees (optimistic
   concurrency, idempotency conflicts, deterministic replay). BDD scenarios
   exercise the HTTP adapter layer with test doubles for fast, deterministic
-  validation. Repository-level tests with embedded PostgreSQL validate SQL-level
-  revision semantics. This layered approach ensures clients can safely implement
-  offline-first retry patterns while avoiding redundant test coverage.
+  validation. Repository-level tests with embedded PostgreSQL validate
+  SQL-level revision semantics. This layered approach ensures clients can
+  safely implement offline-first retry patterns while avoiding redundant test
+  coverage.
 - **2026-01-18:** Use `base-d` with the `eff_long` word list to generate
   hyphen-joined seed names for the seed registry CLI, replacing `lexis` to
   avoid licence concerns. The CLI writes registry updates atomically via a
@@ -371,7 +371,7 @@ upgrades for real-time
 features([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L28-L36)
 )(
 [2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L38-L46)).
- This layer is the primary **entry point** into the system, responsible for
+This layer is the primary **entry point** into the system, responsible for
 receiving client requests, authenticating and validating them, then invoking
 domain services or enqueuing jobs as needed.
 
@@ -379,37 +379,36 @@ domain services or enqueuing jobs as needed.
 
 - **Inbound adapter location:** HTTP adapters live in
   `backend/src/inbound/http`, keeping handlers thin (request parsing →
-  domain/service call → response mapping). Session interactions are wrapped by
-  a `SessionContext` helper so persistence or framework details stay out of the
+  domain/service call → response mapping). Session interactions are wrapped by a
+  `SessionContext` helper so persistence or framework details stay out of the
   handler bodies.
 
 - **Routing and HTTP endpoints:** Defining routes for all API functions (e.g.
   user login, fetching user profiles, initiating route generation,
   etc.)([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L130-L138)).
-   Each endpoint is implemented as an async handler that uses domain logic or
+  Each endpoint is implemented as an async handler that uses domain logic or
   interacts with the database through domain ports. The API follows RESTful
   principles and uses JSON for request/response bodies.
 
 - **Authentication and sessions:** Enforcing authentication (e.g. Bearer tokens
   or cookies) on protected endpoints. Wildside uses stateless, signed cookies
   for session management, via `actix-session` with cookie storage. A secret key
-  is loaded from a secure source (Kubernetes Secret or Vault) at startup to
-  sign
+  is loaded from a secure source (Kubernetes Secret or Vault) at startup to sign
   cookies([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L145-L153)
   )(
   [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L169-L177)).
-   Session cookies are HTTPOnly and Secure, with SameSite policies adjustable
+  Session cookies are HTTPOnly and Secure, with SameSite policies adjustable
   by configuration for development vs
   production([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L147-L155)
   )(
   [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L169-L178)).
-   This provides a lightweight way to identify users without server-side
+  This provides a lightweight way to identify users without server-side
   sessions.
 
 - **WebSocket endpoint:** Handling upgrades to `/ws` for real-time
   client-server
   communication([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L38-L46)).
-   When a client connects over WebSocket (after authenticating with a session
+  When a client connects over WebSocket (after authenticating with a session
   token or bearer token), the server establishes a persistent connection for
   bi-directional messaging. This is used, for example, to push **route
   generation status** updates asynchronously to the client. Actix Web’s
@@ -420,10 +419,10 @@ domain services or enqueuing jobs as needed.
   hijacking([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L40-L48)
   )(
   [1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L55-L63)).
-   Connections with missing or invalid origins are rejected with clear error
+  Connections with missing or invalid origins are rejected with clear error
   codes (400/403) and logged for
   auditing([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L53-L61)).
-   The `/ws` entry point now lives in `backend/src/inbound/ws` as an inbound
+  The `/ws` entry point now lives in `backend/src/inbound/ws` as an inbound
   adapter. Incoming JSON messages are deserialized into domain commands and
   passed to `UserOnboardingService`, which emits domain events (e.g.,
   `UserCreated`, `DisplayNameRejected`). The WebSocket handler only serializes
@@ -439,10 +438,10 @@ domain services or enqueuing jobs as needed.
   (`GenerateRouteJob`) via the job queue adapter, rather than compute the route
   inline(
   [1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L135-L143)).
-   It immediately returns a 202 Accepted with a request ID, allowing the
+  It immediately returns a 202 Accepted with a request ID, allowing the
   expensive work to happen
   asynchronously([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L135-L143)).
-   Another example: a `GET /api/v1/users` endpoint will call a domain service
+  Another example: a `GET /api/v1/users` endpoint will call a domain service
   to fetch a page of users from the database (likely using the pagination
   service described later) and return the results.
 
@@ -450,12 +449,12 @@ domain services or enqueuing jobs as needed.
   (e.g. `/health/ready` and `/health/live`) for Kubernetes liveness/readiness
   probes(
   [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L139-L143)).
-   It also mounts a Prometheus metrics endpoint (e.g. `/metrics`) which
+  It also mounts a Prometheus metrics endpoint (e.g. `/metrics`) which
   publishes application metrics for
   scraping([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L82-L90)
   )(
   [5](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/backend/src/main.rs#L93-L101)).
-   These endpoints are lightweight and allow integration with ops tooling.
+  These endpoints are lightweight and allow integration with ops tooling.
 
 #### REST API Specification
 
@@ -464,7 +463,7 @@ Endpoints share a consistent error envelope so clients can rely on shape
 stability.
 
 | Method   | Path                                    | Description                                                                                                                                                                                                  | Authentication       |
-| ------   | -------------------------------------   | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------                                  | -------------------- |
+| -------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
 | `POST`   | `/api/v1/login`                         | Issue a session cookie from user credentials.                                                                                                                                                                | None                 |
 | `GET`    | `/api/v1/users/me`                      | Return the authenticated user profile.                                                                                                                                                                       | Session cookie       |
 | `GET`    | `/api/v1/users/me/preferences`          | Fetch the user’s preferences.                                                                                                                                                                                | Session cookie       |
@@ -505,18 +504,18 @@ the same optimistic-concurrency policy. A first interests write may omit
 `expectedRevision` and creates revision `1`; once a preferences row exists,
 `PUT /api/v1/users/me/interests` must receive `expectedRevision` and returns
 HTTP `409 Conflict` with top-level `code: "conflict"` and nested `details`
-containing `code: "revision_mismatch"`, `expectedRevision`, and `actualRevision`
-when the token is stale or omitted.
+containing `code: "revision_mismatch"`, `expectedRevision`, and
+`actualRevision` when the token is stale or omitted.
 
-`GET /api/v1/users/me/preferences` always returns a fully populated
-preferences payload. When the user has never saved preferences, the service
-creates and persists default preferences (revision 1) before responding so
-clients can cache a stable baseline. Updates via
-`PUT /api/v1/users/me/preferences` require `expectedRevision` once a record
-exists; omitting it yields a conflict to prevent silent overwrites.
+`GET /api/v1/users/me/preferences` always returns a fully populated preferences
+payload. When the user has never saved preferences, the service creates and
+persists default preferences (revision 1) before responding so clients can
+cache a stable baseline. Updates via `PUT /api/v1/users/me/preferences` require
+`expectedRevision` once a record exists; omitting it yields a conflict to
+prevent silent overwrites.
 
-`POST /api/v1/routes` validates the request, hands it to the driving domain
-port (`RouteService`), and allows the service to coordinate cache lookup,
+`POST /api/v1/routes` validates the request, hands it to the driving domain port
+(`RouteService`), and allows the service to coordinate cache lookup,
 idempotency tracking, queueing, and persistence. Responses follow the sequence
 below:
 
@@ -611,8 +610,8 @@ data without rewriting view components.
 - `RouteAnnotationRepository` (read/write): manages `RouteNote` and
   `RouteProgress` aggregates with revision checks.
 - `OfflineBundleRepository` (read/write): stores offline bundle manifests and
-  progress status per user and device, including bounds/zoom metadata and
-  owner scoping used by offline list/delete operations.
+  progress status per user and device, including bounds/zoom metadata and owner
+  scoping used by offline list/delete operations.
 - `WalkSessionRepository` (read/write): persists walk sessions and completion
   summaries, including completion-only projections for finished sessions.
 - `IdempotencyRepository` (read/write): persists idempotency keys for outbox
@@ -652,7 +651,8 @@ flow through the same hexagonal seams as production writes. The flow is:
    `EXAMPLE_DATA_` environment overrides.
 2. `seed_example_data_on_startup` in `backend::example_data` checks whether
    seeding is enabled and whether a database pool is available.
-3. The adapter loads the JSON registry (`backend/fixtures/example-data/seeds.json`
+3. The adapter loads the JSON registry
+   (`backend/fixtures/example-data/seeds.json`
    by default) and resolves the configured seed name.
 4. `ExampleDataSeeder` (domain service) generates deterministic users from
    `crates/example-data` and prepares validated domain entities.
@@ -757,12 +757,14 @@ services.
 > repositories remain the only layer with SQL/persistence details.
 >
 > **Design decision (2026-02-24):** Roadmap item 3.4.1 introduces the
-> `ingest-osm` CLI as an inbound command adapter (`backend/src/bin/ingest_osm.rs`)
+> `ingest-osm` CLI as an inbound command adapter
+> (`backend/src/bin/ingest_osm.rs`)
 > backed by a dedicated driving port (`OsmIngestionCommand`). The command
 > delegates to a domain service that enforces backend-owned ingestion behaviour:
 > launch geofence filtering, provenance persistence, and deterministic reruns
 > keyed by `(geofence_id, input_digest)`. Outbound concerns are split into
-> three driven ports: `OsmSourceRepository` (wrapping `wildside-data` ingestion),
+> three driven ports: `OsmSourceRepository` (wrapping `wildside-data`
+> ingestion),
 > `OsmPoiRepository` (POI upserts into `pois`), and
 > `OsmIngestionProvenanceRepository` (rerun-key lookup and provenance writes).
 > This keeps parser and SQL details outside the domain while preserving an
@@ -862,8 +864,8 @@ sequenceDiagram
     HTTP-->>Client: JSON response
 ```
 
-*Figure: Offline bundle upsert sequence showing idempotency lookup, persistence,
-and replay/conflict outcomes.*
+*Figure: Offline bundle upsert sequence showing idempotency lookup,
+persistence, and replay/conflict outcomes.*
 
 For screen readers: The following sequence diagram shows authenticated walk
 session creation, including ownership checks when a session identifier already
@@ -916,11 +918,11 @@ ownership validation, and create-or-return behaviour.*
 - `OsmIngestionCommand` executes the `ingest-osm` workflow and returns
   executed/replayed outcomes for deterministic reruns.
 
-`GET/POST/DELETE /api/v1/offline/bundles` is backed by
-`OfflineBundleQuery`/`OfflineBundleCommand`, and
-`POST /api/v1/walk-sessions` is backed by `WalkSessionCommand`. This keeps
-transport parsing, domain orchestration, and persistence concerns separated
-across inbound adapters, driving ports, and driven ports.
+`GET/POST/DELETE /api/v1/offline/bundles` is backed by `OfflineBundleQuery`/
+`OfflineBundleCommand`, and `POST /api/v1/walk-sessions` is backed by
+`WalkSessionCommand`. This keeps transport parsing, domain orchestration, and
+persistence concerns separated across inbound adapters, driving ports, and
+driven ports.
 
 All ports retain the existing rules: domain types enforce invariants,
 localizations are stored as `EntityLocalizations`, and adapters map infra
@@ -1121,8 +1123,9 @@ sequenceDiagram
 
 > **Design decision (2025-12-28):** Introduce a shared `IdempotencyRepository`
 > port that scopes idempotency keys by `MutationType` enum (routes, notes,
-> progress, preferences, bundles). The composite primary key `(key, user_id,
-> mutation_type)` allows clients to reuse the same UUID across different
+> progress, preferences, bundles). The composite primary key
+> `(key, user_id, mutation_type)` allows clients to reuse the same UUID across
+> different
 > mutation types without collision. TTL is configurable via
 > `IDEMPOTENCY_TTL_HOURS` (default 24 hours, clamped between 1 hour and 10
 > years) and read at application start via
@@ -1270,7 +1273,7 @@ thin. For example, the `POST /api/v1/routes` handler simply constructs a domain
 `GenerateRouteJob` request and hands it off to the **job dispatch port**, then
 returns a tracking
 ID([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L135-L143)).
- Similarly, WebSocket message handlers (if clients can send messages) would
+Similarly, WebSocket message handlers (if clients can send messages) would
 parse the input and invoke domain logic or respond with domain-provided data.
 By following this pattern, we ensure that the web layer can be modified (or
 even replaced with a different framework or a gRPC interface) without impacting
@@ -1281,25 +1284,25 @@ and to enable downstream clients, Wildside uses **OpenAPI** for API
 documentation. Using the `utoipa` crate, the backend automatically derives an
 OpenAPI spec from endpoint definitions and data
 models([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L30-L38)).
- This spec can be served at runtime (e.g. via an endpoint like
+This spec can be served at runtime (e.g. via an endpoint like
 `/api-docs/openapi.json`) and is used to generate TypeScript API clients via
 **Orval** in the frontend build
 process([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L6-L8)
 )(
 [2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L32-L40)).
- In development mode, a Swagger UI is available at `/docs` for interactive API
+In development mode, a Swagger UI is available at `/docs` for interactive API
 exploration(
 [5](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/backend/src/main.rs#L80-L88)
 )(
 [2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L42-L46)).
- The OpenAPI documentation ensures that interface contracts remain clear and
+The OpenAPI documentation ensures that interface contracts remain clear and
 versioned (the API is versioned under `/api/v1` prefix), and it aids in testing
 and client generation.
 
 **WebSocket AsyncAPI:** Similarly, the events and messages sent over the
 WebSocket channel are documented using **AsyncAPI**
 specifications([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L6-L8)).
- An AsyncAPI document (found in the `spec/asyncapi.yaml`) describes the message
+An AsyncAPI document (found in the `spec/asyncapi.yaml`) describes the message
 schema for server-to-client events (like `UserCreated` or
 `route_generation_status`) and any client-to-server messages. This serves as a
 contract for real-time interactions, ensuring clients know how to handle
@@ -1311,7 +1314,7 @@ updates progress, the server broadcasts a message conforming to the
 etc.)([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L200-L209)
 )(
 [1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L232-L240)).
- By maintaining the AsyncAPI spec, we can use tools or codegen for WebSocket
+By maintaining the AsyncAPI spec, we can use tools or codegen for WebSocket
 event handling in clients, and we guarantee that as the real-time API evolves
 (new event types, etc.), it remains well-documented.
 
@@ -1321,21 +1324,21 @@ a client wants to generate a walking route, it sends an HTTP POST to
 Actix API handler checks authentication, validates the JSON body, and
 immediately enqueues a `GenerateRouteJob` to the background worker
 queue([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L135-L143)).
- It responds with `202 Accepted` and a JSON containing a new `request_id` (as a
+It responds with `202 Accepted` and a JSON containing a new `request_id` (as a
 UUID)(
 [1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L176-L184)).
- The client can then either poll `GET /api/v1/routes/{request_id}` for the
+The client can then either poll `GET /api/v1/routes/{request_id}` for the
 result or, more efficiently, listen on the WebSocket for a
 `route_generation_status` message. The WebSocket connection (which the client
 would have opened earlier) will receive events as the job progresses – e.g.
 <!-- markdownlint-disable-next-line MD013 -->
-`{"type": "route_generation_status", "request_id": "...", "status": "running", "progress": 50}`
-– and ultimately a `status: "succeeded"` with `progress: 100` or a
+`{"type": "route_generation_status", "request_id": "...", "status": "running", "progress": 50}` –
+and ultimately a `status: "succeeded"` with `progress: 100` or a
 `status: "failed"` with an error if something went
 wrong([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L232-L240)
 )(
 [1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L234-L239)).
- Once completed, the client can fetch or will receive the final route data (a
+Once completed, the client can fetch or will receive the final route data (a
 series of coordinates or POIs composing the path). This design decouples the
 immediate request/response from the long-running process, improving
 responsiveness.
@@ -1347,28 +1350,26 @@ header: if a client retries a request with the same key, within a configurable
 window, the server will return the originally generated `request_id` (or result
 if ready) instead of duplicating
 work([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L153-L161)).
- If the payload differs for the same key, the server rejects it with a
+If the payload differs for the same key, the server rejects it with a
 `409 Conflict`, ensuring
 consistency([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L155-L162)).
- The key persistence (with TTL) is backed by the database to survive restarts.
+The key persistence (with TTL) is backed by the database to survive restarts.
 Additionally, API calls are subject to rate limits per user (e.g. 60 route
 requests per minute) to protect the
 system([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L159-L162)).
- These policies are enforced at the web layer, using middleware or simple
+These policies are enforced at the web layer, using middleware or simple
 counters, and configuration for limits is adjustable.
 
 **Observability (API & WS):** The Actix Web layer is instrumented with
 middleware to collect **HTTP metrics** for every
 request([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L81-L89)).
- We use `actix-web-prom` (Prometheus middleware) to automatically count
+We use `actix-web-prom` (Prometheus middleware) to automatically count
 requests and measure latency, partitioned by endpoint and status code (e.g.
 counters like `http_requests_total{path,method,status}` and histograms like
-`http_request_duration_seconds`
-)([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L81-L89)).
- A global `/metrics` endpoint on the server exposes these metrics for
-Prometheus
+`http_request_duration_seconds` )([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L81-L89)).
+A global `/metrics` endpoint on the server exposes these metrics for Prometheus
 scraping([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L82-L90)).
- WebSocket usage is also tracked: we maintain a gauge of active WebSocket
+WebSocket usage is also tracked: we maintain a gauge of active WebSocket
 connections and perhaps counters for messages sent/received. Each WebSocket
 event type can be counted as well (e.g. number of `route_generation_status`
 messages broadcast). These help ensure that real-time features are performing
@@ -1381,7 +1382,7 @@ Each incoming HTTP request or WS message is associated with a unique **trace
 ID** (often the same as the request ID for route jobs, or a correlation ID
 header) which is logged in all messages related to that
 flow([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L712-L720)).
- If a request triggers a background job, the trace ID is passed along so that
+If a request triggers a background job, the trace ID is passed along so that
 logs from the worker can be correlated with the original API call. This
 end-to-end tracing is crucial for debugging complex interactions across
 asynchronous boundaries. For example, if a user’s route generation failed, an
@@ -1396,12 +1397,12 @@ backend sends a custom event to PostHog’s API – e.g. an event `RouteGenerate
 with properties like route_length, number_of_pois, and perhaps the user’s
 anonymized
 ID([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L260-L266)).
- Similarly, a `POIClicked` event might be recorded when a user views a point of
+Similarly, a `POIClicked` event might be recorded when a user views a point of
 interest. These events feed into product metrics (funnel analysis, feature
 adoption, etc.) and complement the low-level Prometheus metrics with high-level
 usage
 data([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L88-L95)).
- The web layer has hooks or simply makes HTTP calls to PostHog asynchronously
+The web layer has hooks or simply makes HTTP calls to PostHog asynchronously
 (or the frontend sends these events; in either case the design accounts for
 capturing such analytics).
 
@@ -1420,20 +1421,20 @@ enqueue jobs). In practice, those traits are implemented by adapters in the
 `infra` layer (Diesel, Apalis, etc.), but the domain only depends on the trait,
 not the concrete
 implementation([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/repository-structure.md#L262-L265)).
- This ensures the domain logic is easily testable and not tightly coupled to,
+This ensures the domain logic is easily testable and not tightly coupled to,
 say, a SQL database or a web framework.
 
 A key part of Wildside’s domain is the **Route Generation Engine**. This is
 encapsulated in a separate Rust crate (`wildside-engine`), which the backend
 uses as a
 library([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L60-L63)).
- The engine is responsible for computing the “most interesting” walking route
+The engine is responsible for computing the “most interesting” walking route
 for a user given a start location, time budget, and interest preferences. Under
 the hood, this engine tackles an Orienteering Problem (an NP-hard problem) by
 scoring points of interest (POIs) and constructing an optimal path that
 maximizes “interestingness” while fitting within the time/distance
 constraints([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L125-L133)).
- It uses heuristics and algorithms to evaluate which POIs to include and in
+It uses heuristics and algorithms to evaluate which POIs to include and in
 what order.
 
 **Integration of engine:** In the backend’s architecture, the engine is a pure
@@ -1442,7 +1443,7 @@ route. Because this computation is CPU-intensive and can take significant time
 for non-trivial inputs, the design offloads this to a background worker rather
 than running it on the main Actix thread
 pool([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L135-L143)).
- The domain defines a job (e.g. `GenerateRouteJob`) which essentially wraps the
+The domain defines a job (e.g. `GenerateRouteJob`) which essentially wraps the
 input parameters for route generation. When executed by a worker, the job’s
 handler function will invoke the `wildside-engine` library’s API to actually
 compute the
@@ -1469,7 +1470,7 @@ efficiently in the
 database([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L270-L278)
 )(
 [1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L274-L282)),
- possibly filtering by tags (e.g. only include POIs where
+possibly filtering by tags (e.g. only include POIs where
 `tags->'category' = 'history'`). The POI details (like name, coordinates,
 descriptions) are stored in the DB and would be fetched via Diesel models. The
 engine then scores these candidate POIs (perhaps using a formula that accounts
@@ -1497,23 +1498,23 @@ enrichment** step. The route generation job can detect a “data sparse” scena
 data([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L632-L640)
 )(
 [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L664-L671)).
- This enrichment job uses the **Overpass API** (a read API for OpenStreetMap
+This enrichment job uses the **Overpass API** (a read API for OpenStreetMap
 data) to query for more points of interest (e.g. all amenities or landmarks
 within the bounding box of the
 area)([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L666-L674)).
- The results from Overpass are then inserted into our database (into the `pois`
+The results from Overpass are then inserted into our database (into the `pois`
 table) so that future route requests in this area have more data to work with.
 The enrichment is done asynchronously and can be prioritized lower (in a
 separate queue) so it doesn’t block primary route
 requests([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L654-L662)).
- This hybrid approach (seed the database with known data, then enrich
+This hybrid approach (seed the database with known data, then enrich
 on-the-fly when needed) ensures decent coverage without upfront importing
 absolutely all OSM data. It also keeps the database size manageable by only
 adding data where users actually go. The system respects Overpass usage
 policies – e.g., rate limiting requests, adding a proper User-Agent and Contact
 info, and backing off if the service returns 429 Too Many
 Requests([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L380-L388)).
- We also implement caching and deduplication for Overpass queries to avoid
+We also implement caching and deduplication for Overpass queries to avoid
 redundant fetches. This enrichment mechanism runs in the background and updates
 the DB, and we can emit events or logs when it completes (for monitoring).
 
@@ -1571,8 +1572,8 @@ before invoking a port. Canonical examples include:
 - `InterestThemeId` and `UserId` — newtypes around UUIDs guaranteeing correct
   namespace usage and enabling compile-time distinction between identifiers.
 - `RouteCacheKey` — owns canonical cache-key derivation for route requests
-  via `RouteCacheKey::for_route_request`, which applies namespacing and
-  request normalization inside the domain layer. The outbound adapter
+  via `RouteCacheKey::for_route_request`, which applies namespacing and request
+  normalization inside the domain layer. The outbound adapter
   (`backend/src/outbound/cache/redis_route_cache.rs`, type `RedisRouteCache`)
   only stores and retrieves pre-derived `RouteCacheKey` values; handlers and
   the Redis adapter never canonicalize payloads themselves.
@@ -1626,25 +1627,24 @@ metric** for route computation duration (e.g.
 `wildside_engine_route_duration_seconds`) to understand how long the engine
 takes for various
 requests([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L254-L262)).
- We also count successes vs failures of route jobs
-(`jobs_total{type="GenerateRoute",status="success|failure"}`
-)([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L729-L737)).
- If an external routing API or service is used within the engine, calls to it
+We also count successes vs failures of route jobs
+(`jobs_total{type="GenerateRoute",status="success|failure"}` )([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L729-L737)).
+If an external routing API or service is used within the engine, calls to it
 are timed and failures counted as well. The engine has a built-in timeout
 safeguard – if a route computation exceeds a certain threshold (say 30
 seconds), it will be aborted to free
 resources([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L258-L265)).
- When such a timeout occurs, the event is logged and the user is notified (via
+When such a timeout occurs, the event is logged and the user is notified (via
 the WS status message showing `failed` with reason
 "timeout")([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L234-L240)).
- These incidents could trigger alerts if frequent.
+These incidents could trigger alerts if frequent.
 
 From a product standpoint, we also track the results of the route generation.
 For example, when a route is successfully created, the system (or client) could
 send a PostHog event “RouteGenerated” with properties like the number of POIs
 in the route, the total distance, the categories of POIs included,
 etc.([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L260-L265)).
- This helps the team analyze what kinds of routes are popular and adjust the
+This helps the team analyze what kinds of routes are popular and adjust the
 engine’s heuristics over time.
 
 In logs, because the engine runs inside a job which is traced, we include the
@@ -1731,8 +1731,8 @@ erDiagram
   basics.
 - `interest_themes` — catalogue of selectable themes. `name` is unique, and
   descriptions remain optional so copy can evolve without schema churn.
-- `user_interest_themes` — join table enforcing one row per `(user_id,
-  theme_id)` pair via a composite primary key.
+- `user_interest_themes` — join table enforcing one row per
+  `(user_id, theme_id)` pair via a composite primary key.
 - `pois` — mirror of OpenStreetMap entities. Composite primary key
   `(element_type, id)` stops duplicates. `location` is `GEOGRAPHY(Point, 4326)`
   with a GiST index; `osm_tags` uses JSONB with a GIN index where filter
@@ -1767,9 +1767,9 @@ The following E-R diagram captures how offline bundle manifests and walk
 completion records link back to users, routes, and highlighted POIs.
 
 **Caption (text alternative):** E-R diagram showing that `User` owns
-`OfflineBundle` records and completes `WalkSession` records. Each
-`WalkSession` belongs to one `Route`, has many primary and secondary stats,
-and has many highlighted POI links through `HighlightedPoi`, which references
+`OfflineBundle` records and completes `WalkSession` records. Each `WalkSession`
+belongs to one `Route`, has many primary and secondary stats, and has many
+highlighted POI links through `HighlightedPoi`, which references
 `PointOfInterest`.
 
 ```mermaid
@@ -1921,13 +1921,12 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
    primitives from
    [`wildside-engine`](https://github.com/leynos/wildside-engine)
    (`wildside-cli ingest` and `wildside-data`) to load curated `.osm.pbf`
-   extracts into `pois`.
-   `wildside-engine` currently provides deterministic POI extraction from OSM
-   plus idempotent persistence in its SQLite artefacts. The backend import
-   layer maps those results into PostGIS and adds launch geofence filtering
-   plus provenance persistence (`source_url`, input digest, imported timestamp,
-   geofence ID, and computed bounding box) so reruns remain deterministic and
-   auditable per launch region.
+   extracts into `pois`. `wildside-engine` currently provides deterministic POI
+   extraction from OSM plus idempotent persistence in its SQLite artefacts. The
+   backend import layer maps those results into PostGIS and adds launch
+   geofence filtering plus provenance persistence (`source_url`, input digest,
+   imported timestamp, geofence ID, and computed bounding box) so reruns remain
+   deterministic and auditable per launch region.
 2. **On-demand enrichment:** When the routing domain detects sparse POI
    coverage for a request, it enqueues an `EnrichmentJob`. The worker queries
    Overpass with a descriptive `User-Agent` and `Contact` header, enforces the
@@ -1939,14 +1938,14 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
 3. **Route caching:** Completed routes persist in PostgreSQL and are cached in
    Redis using canonicalized keys. The canonical form sorts the three theme
    arrays (`themes`, which holds slug-style names, plus `themeIds` and
-   `interestThemeIds`, which hold UUID identifiers),
-   rounds coordinates to five decimal places, serializes JSON with stable key
-   ordering, and hashes the payload with SHA-256. Cache keys follow
-   `route:v1:<sha256>`; anonymous routes expire after 24 hours with ±10 %
-   jitter while saved routes remove the TTL. Rotate the namespace (`v2`,
-   `v3`, …) whenever schema or engine changes invalidate cached content.
-   The canonicalization seam lives in `backend/src/domain/ports/cache_key.rs`,
-   which performs the array sorting and coordinate rounding before hashing;
+   `interestThemeIds`, which hold UUID identifiers), rounds coordinates to five
+   decimal places, serializes JSON with stable key ordering, and hashes the
+   payload with SHA-256. Cache keys follow `route:v1:<sha256>`; anonymous
+   routes expire after 24 hours with ±10 % jitter while saved routes remove the
+   TTL. Rotate the namespace (`v2`, `v3`, …) whenever schema or engine changes
+   invalidate cached content. The canonicalization seam lives in
+   `backend/src/domain/ports/cache_key.rs`, which performs the array sorting
+   and coordinate rounding before hashing;
    `backend/src/outbound/cache/redis_route_cache.rs` only persists the derived
    key and never re-canonicalizes payloads.
 
@@ -1979,15 +1978,14 @@ boundary discipline as 3.4.2:
 - `OverpassEnrichmentWorker` remains domain-owned and writes enrichment
   provenance through a dedicated driven port.
 - The persistence adapter owns PostgreSQL shape details and stores
-  `{source_url, imported_at, bounds_min_lng, bounds_min_lat, bounds_max_lng,
-  bounds_max_lat}` in PostgreSQL. Deterministic newest-first behaviour is a
-  read-time guarantee provided by the listing query and repository response
+  `{source_url, imported_at, bounds_min_lng, bounds_min_lat, bounds_max_lng, bounds_max_lat}`
+  in PostgreSQL. Deterministic newest-first behaviour is a read-time guarantee
+  provided by the listing query and repository response
   (`ORDER BY imported_at DESC, id DESC`), not by row storage order.
 - Admin reporting is exposed through an inbound HTTP handler at
-  `GET /api/v1/admin/enrichment/provenance`, with query parameters
-  `limit` (default 50, max 200) and optional `before`
-  (Request for Comments 3339 (RFC 3339) `RFC3339|UUID` composite cursor;
-  legacy RFC3339 is accepted as
+  `GET /api/v1/admin/enrichment/provenance`, with query parameters `limit`
+  (default 50, max 200) and optional `before` (Request for Comments 3339 (RFC
+  3339) `RFC3339|UUID` composite cursor; legacy RFC3339 is accepted as
   `RFC3339|ffffffff-ffff-ffff-ffff-ffffffffffff`). The endpoint requires an
   authenticated admin session and returns a response payload shaped as
   `{ records, nextBefore? }` where `nextBefore` is emitted in `RFC3339|UUID`
@@ -2005,8 +2003,8 @@ This section records the design contract implemented for roadmap item 3.4.3.
 Roadmap 4.1.1 introduces a standalone workspace crate at
 `backend/crates/pagination` for shared pagination primitives. The root Cargo
 workspace now includes `backend/crates/*` in its autodiscovery globs, so the
-crate remains present when workspace-member sync rewrites the generated
-members list.
+crate remains present when workspace-member sync rewrites the generated members
+list.
 
 The crate boundary is intentionally narrow:
 
@@ -2029,8 +2027,8 @@ Hexagonal boundary rules for this crate are explicit:
 
 This foundation crate is intentionally generic and additive. Direction-aware
 cursors (roadmap 4.1.2) are now implemented with a `Direction` enum supporting
-`Next` and `Prev` variants. Endpoint adoption and admin provenance compatibility
-work remain separate roadmap items in section 4.2.
+`Next` and `Prev` variants. Endpoint adoption and admin provenance
+compatibility work remain separate roadmap items in section 4.2.
 
 Crate-level documentation (roadmap 4.1.3) now provides a self-contained
 reference for developers integrating the pagination primitives. The
@@ -2048,20 +2046,19 @@ Deserialize implementation.
 
 Roadmap 4.2.2 adds the pagination-aware error contract for endpoint adoption.
 The pagination crate now distinguishes unsupported decoded cursor directions
-from generic deserialization failures with
-`CursorError::UnsupportedDirection`.
+from generic deserialization failures with `CursorError::UnsupportedDirection`.
 Inbound HTTP adapters map malformed cursor tokens to `invalid_cursor` and
-unsupported directions to `unsupported_direction`, both as HTTP `400 Bad
-Request` responses in the existing Wildside error envelope.
+unsupported directions to `unsupported_direction`, both as HTTP
+`400 Bad Request` responses in the existing Wildside error envelope.
 
 Repository and query ports may also surface pagination-aware errors when an
 adapter detects an invalid page boundary below the HTTP parser. For the users
-listing path, `UserPersistenceError::Pagination` carries
-`UserPaginationError`, and the outbound query adapter maps those failures to
-HTTP-safe invalid-request errors. Connection failures remain `503`, and
-ordinary database query failures remain redacted `500` responses. Inbound
-adapters must not import Diesel or outbound modules to make this mapping; the
-semantic error travels through the port surface.
+listing path, `UserPersistenceError::Pagination` carries `UserPaginationError`,
+and the outbound query adapter maps those failures to HTTP-safe invalid-request
+errors. Connection failures remain `503`, and ordinary database query failures
+remain redacted `500` responses. Inbound adapters must not import Diesel or
+outbound modules to make this mapping; the semantic error travels through the
+port surface.
 
 Pagination error mapping records structured `info` logs with the current
 `traceId` when available. When the `metrics` feature is enabled, the server
@@ -2169,13 +2166,13 @@ slow or heavy to perform inline with an HTTP request. We chose **Apalis** – a
 Rust background job framework – to manage this. The **background workers** run
 as a separate process (or separate set of processes) from the main Actix Web
 server, though they share the same codebase. The intended deployment shape is
-to run the same binary in different roles, selected by bootstrap
-configuration such as `WILDSIDE_MODE=worker` or a CLI flag, so the API server
-and worker fleet can be deployed independently. The current
-`backend/src/main.rs`, however, still boots only the Actix HTTP server; it
-does not yet switch into an Apalis worker bootstrap path. Roadmap item 5.2.1
-therefore covers only the PostgreSQL-backed `RouteQueue` adapter, not
-request-path dispatch into `RouteQueue` or the route-worker consumption flow.
+to run the same binary in different roles, selected by bootstrap configuration
+such as `WILDSIDE_MODE=worker` or a CLI flag, so the API server and worker
+fleet can be deployed independently. The current `backend/src/main.rs`,
+however, still boots only the Actix HTTP server; it does not yet switch into an
+Apalis worker bootstrap path. Roadmap item 5.2.1 therefore covers only the
+PostgreSQL-backed `RouteQueue` adapter, not request-path dispatch into
+`RouteQueue` or the route-worker consumption flow.
 
 **Job queue and Apalis config:** Apalis supports multiple backends for queues;
 the current implementation uses **PostgreSQL** as the job broker (roadmap item
@@ -2183,43 +2180,39 @@ the current implementation uses **PostgreSQL** as the job broker (roadmap item
 leverage existing PostgreSQL infrastructure and test harnesses
 (`pg-embedded-setup-unpriv`), eliminating the need for an additional Advanced
 Message Queuing Protocol (AMQP) broker service in production and testing. The
-hexagonal boundary – specifically the `QueueProvider` trait and the
-domain-owned `RouteQueue` port – ensures that migrating to an AMQP backend
-(e.g., RabbitMQ) is a contained adapter change if queue throughput or routing
-requirements outgrow PostgreSQL
-`NOTIFY`/`SKIP LOCKED` capabilities.
+hexagonal boundary – specifically the `QueueProvider` trait and the domain-owned
+`RouteQueue` port – ensures that migrating to an AMQP backend (e.g., RabbitMQ)
+is a contained adapter change if queue throughput or routing requirements
+outgrow PostgreSQL `NOTIFY`/`SKIP LOCKED` capabilities.
 
-Each job type will have its own queue; for example, the configuration
-will define a high-priority queue for route generation jobs and a
-lower-priority queue for enrichment jobs. The Apalis configuration will
-register job types and their handlers, and set up consumers for each
-queue. Retry policies will also be configured: if a job fails, Apalis
-will retry it a limited number of times with exponential backoff
-delays. If a job continues to fail (e.g., bad data or a persistent
-issue), it will be moved to a **dead-letter queue** after max retries,
-so that failed jobs can be inspected or manually requeued once the
-issue is resolved. Each job will also have a **timeout** – for
-instance, the system will enforce that `GenerateRouteJob` must
-complete within 30 seconds, otherwise it is considered failed (to
-avoid stuck threads). Apalis allows setting such time limits per job
-or globally.
+Each job type will have its own queue; for example, the configuration will
+define a high-priority queue for route generation jobs and a lower-priority
+queue for enrichment jobs. The Apalis configuration will register job types and
+their handlers, and set up consumers for each queue. Retry policies will also
+be configured: if a job fails, Apalis will retry it a limited number of times
+with exponential backoff delays. If a job continues to fail (e.g., bad data or
+a persistent issue), it will be moved to a **dead-letter queue** after max
+retries, so that failed jobs can be inspected or manually requeued once the
+issue is resolved. Each job will also have a **timeout** – for instance, the
+system will enforce that `GenerateRouteJob` must complete within 30 seconds,
+otherwise it is considered failed (to avoid stuck threads). Apalis allows
+setting such time limits per job or globally.
 
 **Roadmap item 5.2.1 scope:** As of roadmap item 5.2.1, the backend includes an
 Apalis-backed `RouteQueue` driven adapter with PostgreSQL storage
 (`backend/src/outbound/queue/apalis_route_queue.rs`). This adapter implements
 the `RouteQueue` port trait using `apalis-postgres` (`PostgresStorage`) for job
 persistence and maps infrastructure failures to domain-owned `JobDispatchError`
-variants. The adapter uses a dedicated `sqlx::PgPool` for
-`PostgresStorage`, independent of the Diesel `bb8` pool used by repository
-adapters even when both connect to the same PostgreSQL instance. The Apalis
-job tables are managed by `PostgresStorage::setup()`, not by Diesel
-migrations.
+variants. The adapter uses a dedicated `sqlx::PgPool` for `PostgresStorage`,
+independent of the Diesel `bb8` pool used by repository adapters even when both
+connect to the same PostgreSQL instance. The Apalis job tables are managed by
+`PostgresStorage::setup()`, not by Diesel migrations.
 
 Importantly, 5.2.1 delivers the driven adapter itself but does not yet enable
 request-path queue dispatch or worker consumption. The `TODO(#276)` markers in
 `backend/src/domain/route_submission/mod.rs` (lines 241 and 295) remain
-unchanged, awaiting later roadmap items covering job struct definitions (5.2.2),
-retry policies (5.2.3), and trace propagation (5.2.4). The stub adapter
+unchanged, awaiting later roadmap items covering job struct definitions
+(5.2.2), retry policies (5.2.3), and trace propagation (5.2.4). The stub adapter
 (`StubRouteQueue`) is retained for tests that do not require PostgreSQL.
 
 **Job definitions:** We have two primary job types in the system (with the
@@ -2235,27 +2228,27 @@ possibility of more as the project grows):
   user([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L67-L74)
   )(
   [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L76-L78)).
-   On failure or timeout, it will similarly notify (via WS or mark the status
+  On failure or timeout, it will similarly notify (via WS or mark the status
   in DB) that the route failed. As part of its logic, if it detects not enough
   POIs (data sparse), it will enqueue an **EnrichmentJob** before
   finishing([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L632-L640)
   )(
   [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L664-L671))
-   (this can be done by pushing a new job to the enrichment queue).
+  (this can be done by pushing a new job to the enrichment queue).
 
 - **EnrichmentJob:** Contains parameters like a geographical bounding box or
   area ID and perhaps a category of POIs to fetch. Its handler will call the
   Overpass API (via HTTP) to get additional POIs in that
   area([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L666-L674)).
-   It parses the Overpass response, and for each new POI, inserts or updates
-  the `pois` table in our
+  It parses the Overpass response, and for each new POI, inserts or updates the
+  `pois` table in our
   database([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L668-L670)).
-   This job essentially expands our local dataset. It might not directly notify
+  This job essentially expands our local dataset. It might not directly notify
   the user (the user’s original request is handled by the GenerateRouteJob
   which will re-run the route or was waiting), but it will emit metrics (like
   count of POIs added) and possibly log an event for
   monitoring([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L371-L378)).
-   If a route job was waiting on enrichment (depending on implementation, we
+  If a route job was waiting on enrichment (depending on implementation, we
   might either have the original job block pending enrichment or more likely
   the first job returns what it can and enrichment will affect future
   requests), in a future iteration we could have the GenerateRouteJob await the
@@ -2275,16 +2268,15 @@ For example, as the worker’s job runs, it could periodically publish a JSON
 message like `{"request_id": X, "status": "running", "progress": 50}` to Redis.
 The API server, which is subscribed (perhaps via a small background task in
 Actix) to these channels, will then forward that to the appropriate WebSocket
-client (we track which user/socket is waiting on that request_id).
-If direct pub/sub is too complex, we could opt for a simpler
-approach: the client relies on polling the GET route status endpoint for now
-(which reads from DB), and only final completion is pushed via WS. However, the
-design intent is to have real-time updates, so a pub/sub or direct push is
-preferable(
+client (we track which user/socket is waiting on that request_id). If direct
+pub/sub is too complex, we could opt for a simpler approach: the client relies
+on polling the GET route status endpoint for now (which reads from DB), and
+only final completion is pushed via WS. However, the design intent is to have
+real-time updates, so a pub/sub or direct push is preferable(
 [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L69-L77)
 )(
 [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L72-L78)).
- Ensuring thread-safe communication between the worker process and the Actix
+Ensuring thread-safe communication between the worker process and the Actix
 server is crucial – using Redis as an intermediary decouples them nicely.
 
 Because the API and worker share a database, another mechanism is possible: the
@@ -2302,9 +2294,9 @@ taken by one worker. If load increases (lots of route requests), we can
 increase the number of worker pods independently of the API pods, which is a
 nice scalability feature enabled by our decoupling. In local development, the
 intended shape is still to run the server in one terminal and a worker in
-another. A future `WILDSIDE_MODE` environment variable or command-line flag
-can select that role, but `backend/src/main.rs` does not yet implement the
-worker bootstrap. Later roadmap work must add that startup path alongside the
+another. A future `WILDSIDE_MODE` environment variable or command-line flag can
+select that role, but `backend/src/main.rs` does not yet implement the worker
+bootstrap. Later roadmap work must add that startup path alongside the
 request-path `RouteQueue` dispatch flow.
 
 **Observability (Jobs):** The job execution system is instrumented with metrics
@@ -2312,17 +2304,17 @@ and tracing as well. We count all jobs executed and their outcomes using
 Prometheus counters: e.g., `jobs_total{type="GenerateRoute", status="success"}`
 increments when a route job
 succeeds([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L729-L737)),
- and similarly with status="failed" for exceptions. The histogram for route
+and similarly with status="failed" for exceptions. The histogram for route
 duration (mentioned earlier) specifically measures how long the route
 computation took inside the job
 handler([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L254-L262)).
- We could also measure end-to-end time from request to completion, though that
+We could also measure end-to-end time from request to completion, though that
 might be inferred. For enrichment, 3.4.2 wires outcomes to both
 `jobs_total{type="Enrichment", status="success|failure"}` and
 `enrichment_jobs_total{status="success|failure"}` so dashboards can aggregate
 across all jobs or inspect enrichment-specific behaviour. If needed, a gauge
-for active jobs could be maintained (though Apalis can likely report if
-workers are busy).
+for active jobs could be maintained (though Apalis can likely report if workers
+are busy).
 
 Apalis integrates with the `tracing` crate, so each job run can emit tracing
 spans. We make sure to propagate the trace ID from the enqueuing context: one
@@ -2330,17 +2322,18 @@ method is to include the originating trace ID in the job payload (or in
 metadata) so that when the worker picks it up, it can attach that ID to its
 logging
 context([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L712-L720)).
- In practice, we might log an event like “GenerateRouteJob started
+In practice, we might log an event like “GenerateRouteJob started
 (request_id=…, trace=X)” and use `tracing::info_span!(..., trace_id = X)`
 around the job execution. This way, if a user request triggered multiple jobs,
 all of them carry the same trace_id in logs.
 
 Queue depth and worker health monitoring can be achieved by querying the Apalis
-PostgreSQL tables (e.g., `SELECT COUNT(*) FROM apalis.jobs WHERE state = 'pending'`)
-and exporting metrics (e.g., `job_queue_length{queue="route_generation"}`) via
-custom Prometheus exporters or Apalis' built-in metrics if available. Growing
-queue length indicates workers are falling behind. Alerts can be configured for
-job timeouts or dead-letter queue entries (indicating repeated failures).
+PostgreSQL tables (e.g.,
+`SELECT COUNT(*) FROM apalis.jobs WHERE state = 'pending'`) and exporting
+metrics (e.g., `job_queue_length{queue="route_generation"}`) via custom
+Prometheus exporters or Apalis' built-in metrics if available. Growing queue
+length indicates workers are falling behind. Alerts can be configured for job
+timeouts or dead-letter queue entries (indicating repeated failures).
 
 Finally, any exceptions in job processing (like if the engine panics or an API
 call fails) are caught by Apalis and can be logged. We ensure that those errors
@@ -2361,20 +2354,20 @@ service that the backend connects to, separate from the Postgres database.
 - **Route result caching:** After the expensive process of generating a route,
   the result can be cached in Redis for a short period (e.g. 24
   hours)([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L342-L350)).
-   We compute a cache key derived from the route request parameters –
+  We compute a cache key derived from the route request parameters –
   essentially a hash of the JSON input (start location, duration, preferences).
   A stable, canonical representation of the request is used (sorted keys,
   rounded coordinates to some precision, etc.) to ensure that semantically
   identical requests yield the same
   key([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L393-L400)).
-   Before enqueuing a new route job, the API handler will first check Redis: if
+  Before enqueuing a new route job, the API handler will first check Redis: if
   a result for that exact request parameters is already cached, it returns it
   immediately, avoiding duplicate
   computation([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L359-L367)).
-   If not, it proceeds to enqueue the job and, when the job finishes, the
+  If not, it proceeds to enqueue the job and, when the job finishes, the
   worker writes the result to the cache for future
   hits([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L359-L367)).
-   This is particularly useful if multiple users ask for popular routes (e.g.,
+  This is particularly useful if multiple users ask for popular routes (e.g.,
   a famous tour route) or if a user repeats a request.
 
 - **POI and static data caching:** Although the database is quite capable, we
@@ -2401,7 +2394,7 @@ service that the backend connects to, separate from the Postgres database.
 **Implementation:** The backend uses a Redis client library (`bb8-redis` for
 connection pooling). We initialize a Redis connection pool during
 startup([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L686-L694)).
- This pool is made available to parts of the application that need it (e.g. via
+This pool is made available to parts of the application that need it (e.g. via
 Actix application state or passed into domain services that require cache).
 
 For route caching, the `RedisRouteCache` adapter implements the `RouteCache`
@@ -2413,24 +2406,25 @@ approximately 21.6 to 26.4 hours. This prevents thundering herd problems where
 many keys expiring simultaneously would cause a spike of concurrent cache
 misses([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L343-L350)).
 Cache reads are performed by calling `RouteCache::get`, which the
-`RedisRouteCache` adapter fulfils by issuing a Redis `GET cache:<hash>`
-command internally. The JSON stored is the same that would be returned to the
-client, so the API can just forward it if found.
+`RedisRouteCache` adapter fulfils by issuing a Redis `GET cache:<hash>` command
+internally. The JSON stored is the same that would be returned to the client,
+so the API can just forward it if found.
 
 We carefully design the key hashing to avoid both collisions and unnecessary
 differences. As mentioned, we create a stable JSON string of the route request
 input with sorted keys and trimmed numeric precision, then hash (SHA-256
 truncated or base64) to get a fixed-length
 key([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L393-L400)).
- We use that as the Redis key. This ensures that minor numerical differences
+We use that as the Redis key. This ensures that minor numerical differences
 (like a coordinate that differs only in the 7th decimal place) don't prevent
 cache hits, while different requests (different preferences or location)
 reliably yield different keys.
 
 The cache TTL policy balances result reuse against serving stale data. The base
 TTL of 24 hours is suitable for route plans where the underlying map data
-changes infrequently([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L146-L149)).
- To prevent cache expiry storms (thundering herd), the adapter applies +/- 10%
+changes
+infrequently([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L146-L149)).
+To prevent cache expiry storms (thundering herd), the adapter applies +/- 10%
 uniform random jitter to each TTL on write, spreading expirations across a
 ~4.8-hour window centred around the 24-hour base. This jitter is computed
 per-`put` invocation using an injectable RNG (a `SmallRng` seeded from entropy
@@ -2451,15 +2445,15 @@ use versioning in keys. For now, the simple TTL suffices.
 provides metrics like `redis_up`, `redis_memory_used_bytes`, `redis_keys`, as
 well as operation
 counts([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L771-L778)).
- Particularly useful are `redis_keyspace_hits_total` and
+Particularly useful are `redis_keyspace_hits_total` and
 `redis_keyspace_misses_total` to calculate the cache hit
 ratio([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L780-L788)).
- We will monitor that our cache hit rate is healthy for route requests – a low
+We will monitor that our cache hit rate is healthy for route requests – a low
 hit rate might mean most requests are unique or our caching isn’t effective.
 Also, `redis_evicted_keys_total` indicates if keys are being evicted due to
 memory pressure, which would signal to increase the cache size or adjust
 TTLs([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L780-L788)).
- The backend application can also log cache events at debug level (like “route
+The backend application can also log cache events at debug level (like “route
 cache hit for key X”).
 
 We include cache metrics in our Grafana dashboards, and set an alert if, for
@@ -2488,16 +2482,16 @@ production.
 Every service start initializes a `tracing_subscriber` with JSON output and an
 environment-based filter (to control log
 level)([5](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/backend/src/main.rs#L29-L33)).
- Each incoming HTTP request is wrapped in a tracing span that attaches a unique
+Each incoming HTTP request is wrapped in a tracing span that attaches a unique
 `traceId` (UUID) to that request’s
 context([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L712-L720)).
- This trace ID is included in all log entries produced during the handling of
+This trace ID is included in all log entries produced during the handling of
 the request, and it’s propagated to any spawned tasks or background jobs. For
 propagation, when enqueuing an Apalis job, the code will include the trace ID
 (e.g., in the job metadata or context) so that when the job runs in a worker,
 the first thing it does is join a tracing span with that same
 ID([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L712-L720)).
- This way, if one searches logs for a particular trace ID, one can see the
+This way, if one searches logs for a particular trace ID, one can see the
 entire flow: e.g. “HTTP POST /routes” → “Enqueued GenerateRouteJob [id=abc]” →
 “Worker picked up job [abc]” → “Route computation logs…” → “Job completed” →
 “WebSocket event sent to user”. We also log important events with structured
@@ -2506,14 +2500,14 @@ an error with fields like `error.kind = "NoPOIsFound"`, `request_id = ...`,
 `user_id = ...`. This structured approach makes it easier to filter and analyze
 logs in **Loki** (our log aggregation system, fed via
 FluentBit)([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L50-L58)).
- Logs are kept relatively concise but with enough context to diagnose issues.
+Logs are kept relatively concise but with enough context to diagnose issues.
 In production, sensitive data is omitted or sanitized in logs.
 
 **Metrics (Prometheus):** We have a mix of **automated** and **custom metrics**
 exposed via Prometheus. On the automated side, the Actix Web Prometheus
 middleware gives us standard HTTP metrics without much
 code([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L82-L90)).
- We also run exporters:
+We also run exporters:
 
 - *Postgres exporter* to gather DB metrics (transaction rate, cache hits,
   connections,
@@ -2538,7 +2532,8 @@ monitoring([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde
 - **Job Counts:** Counter `jobs_total{type, status}` covering each job type.
   Current enrichment wiring emits `status="success|failure"` with
   `type="Enrichment"`, and route generation continues to use the wider status
-  set where needed([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L730-L738)).
+  set where
+  needed([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L730-L738)).
   This helps to alert on excessive failures.
 
 - **WebSocket Connections:** Gauge `websocket_connections_active` for number of
@@ -2547,12 +2542,13 @@ monitoring([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde
 
 - **Enrichment outcomes:** Counter `enrichment_jobs_total{status}` for
   enrichment jobs with `status="success|failure"` to mirror the domain worker
-  outcome contract([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L738-L741)).
+  outcome
+  contract([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L738-L741)).
 
 - **POI Count:** Gauge `pois_total` to track how many POIs are in our
   database(
   [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L741-L744)),
-   indicating data growth (this can be updated after each enrichment job or
+  indicating data growth (this can be updated after each enrichment job or
   during nightly metrics collection).
 
 These metrics are updated in code via the `prometheus` crate or similar, and
@@ -2568,7 +2564,7 @@ events, we fire PostHog events. For example, after successfully creating a user
 account, we might send a `UserSignedUp` event. After a route is generated, a
 `RouteGenerated` event with properties (route length, POI count, etc.) is
 sent([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L260-L265)).
- PostHog captures these events for analysis of user behavior. We ensure not to
+PostHog captures these events for analysis of user behavior. We ensure not to
 send personally identifiable information without consent – events are either
 anonymous or use a user ID that PostHog can map (depending on our privacy
 approach). The integration is done either by backend sending an HTTP request to

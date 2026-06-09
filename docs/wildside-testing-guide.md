@@ -23,14 +23,13 @@ with local step definitions at build time.
 
 ## Embedded Postgres worker path
 
-`make test` now uses the `pg_worker` helper shipped by
-`pg-embed-setup-unpriv` (imported as `pg_embedded_setup_unpriv` in Rust).
+`make test` now uses the `pg_worker` helper shipped by `pg-embed-setup-unpriv`
+(imported as `pg_embedded_setup_unpriv` in Rust).
 
 - If `pg_worker` is already installed and on `PATH`, the Makefile copies that
   binary to `PG_WORKER_PATH`.
 - Otherwise, the Makefile installs `pg-embed-setup-unpriv`'s `pg_worker` into
-  a cache under `target/pg-worker-root/` and then copies it to
-  `PG_WORKER_PATH`.
+  a cache under `target/pg-worker-root/` and then copies it to `PG_WORKER_PATH`.
 - By default, `PG_WORKER_PATH` is `target/pg_worker`. Override it when you need
   a different writable destination, for example:
 
@@ -53,9 +52,9 @@ The test harness sets `PG_TEST_BACKEND=postgresql_embedded` when not already
 provided. This matches v0.5.0 strict backend validation and keeps local and CI
 behaviour explicit.
 
-If full cluster-level isolation is required (for example, to change
-server-wide settings), switch the test to the per-test `TestCluster` helper
-instead of the shared cluster path.
+If full cluster-level isolation is required (for example, to change server-wide
+settings), switch the test to the per-test `TestCluster` helper instead of the
+shared cluster path.
 
 To force the template to rebuild locally, delete the workspace cache under
 `target/pg-embed/shared-*` and re-run the relevant tests.

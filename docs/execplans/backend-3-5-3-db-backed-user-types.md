@@ -1,21 +1,18 @@
 # Replace fixture-backed profile and interests wiring with DB-backed adapters (roadmap 3.5.3)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises &
-Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
-to date as work proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: IMPLEMENTATION COMPLETE (coordinator evidence handoff pending)
 
 This plan covers roadmap item 3.5.3 only:
-`Replace fixture-backed UserProfileQuery and UserInterestsCommand wiring with
-explicit DB-backed concrete types, and document whether this uses repository
-extensions or dedicated adapters.`
+`Replace fixture-backed UserProfileQuery and UserInterestsCommand wiring with explicit DB-backed concrete types, and document whether this uses repository extensions or dedicated adapters.`
 
 ## Purpose / big picture
 
-`backend/src/server/state_builders.rs` now uses database (DB)-backed adapters for
-`LoginService` and `UsersQuery` (roadmap 3.5.2), but it still hard-wires
+`backend/src/server/state_builders.rs` now uses database (DB)-backed adapters
+for `LoginService` and `UsersQuery` (roadmap 3.5.2), but it still hard-wires
 `FixtureUserProfileQuery` and `FixtureUserInterestsCommand` even when
 `ServerConfig.db_pool` is present.
 
@@ -78,28 +75,20 @@ Observable success criteria:
 
 - Risk: interests persistence is still dual-model (`user_preferences` and
   `user_interest_themes`), which can cause ambiguous adapter ownership.
-  Severity: high.
-  Likelihood: high.
-  Mitigation: decide and document canonical adapter strategy for 3.5.3, and
-  explicitly defer revision-safe write contract details to 3.5.4.
+  Severity: high. Likelihood: high. Mitigation: decide and document canonical
+  adapter strategy for 3.5.3, and explicitly defer revision-safe write contract
+  details to 3.5.4.
 
 - Risk: missing-user or missing-table behaviour could change envelope
-  semantics.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: add unhappy-path assertions for status, `code`, `message`, and
-  trace-id parity.
+  semantics. Severity: high. Likelihood: medium. Mitigation: add unhappy-path
+  assertions for status, `code`, `message`, and trace-id parity.
 
 - Risk: state-builder wiring may drift between DB-present and fixture modes.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: add dedicated startup-mode behavioural scenarios for
-  profile/interests flows.
+  Severity: medium. Likelihood: medium. Mitigation: add dedicated startup-mode
+  behavioural scenarios for profile/interests flows.
 
 - Risk: adding profile/interests adapters by extending an existing repository
-  may create low-cohesion abstractions.
-  Severity: medium.
-  Likelihood: medium.
+  may create low-cohesion abstractions. Severity: medium. Likelihood: medium.
   Mitigation: evaluate dedicated adapters first and record the final decision
   in architecture docs.
 
@@ -129,44 +118,40 @@ Observable success criteria:
 
 - Observation: dual-model interests persistence (`user_preferences` and
   `user_interest_themes`) made repository-extension wiring lower cohesion than
-  dedicated adapter wiring.
-  Evidence: 3.5.1 schema-audit notes and outbound persistence schema mapping.
-  Impact: 3.5.3 explicitly chose dedicated adapters and deferred canonical
-  revision-conflict semantics to 3.5.4.
+  dedicated adapter wiring. Evidence: 3.5.1 schema-audit notes and outbound
+  persistence schema mapping. Impact: 3.5.3 explicitly chose dedicated adapters
+  and deferred canonical revision-conflict semantics to 3.5.4.
 
 - Observation: startup-mode assertions needed to stay mode-specific instead of
   generic parity checks once DB-present profile/interests signatures diverged
-  from fixtures.
-  Evidence: startup-mode behavioural scenarios and adapter-level tests.
-  Impact: test coverage now asserts DB-present versus fixture-fallback outcomes
-  explicitly, reducing regression ambiguity.
+  from fixtures. Evidence: startup-mode behavioural scenarios and adapter-level
+  tests. Impact: test coverage now asserts DB-present versus fixture-fallback
+  outcomes explicitly, reducing regression ambiguity.
 
 - Observation: final gate evidence ownership is centralized by the coordinator
-  for cross-agent closure consistency.
-  Evidence: agent-team handoff model in this rollout.
-  Impact: this ExecPlan records implementation-complete status with explicit
-  placeholders for coordinator-attached gate logs.
+  for cross-agent closure consistency. Evidence: agent-team handoff model in
+  this rollout. Impact: this ExecPlan records implementation-complete status
+  with explicit placeholders for coordinator-attached gate logs.
 
 ## Decision Log
 
 - Decision: choose dedicated adapters (`DieselUserProfileQuery` and
-  `DieselUserInterestsCommand`) instead of extending `DieselUserRepository` with
-  profile/interests driving-port implementations.
-  Rationale: keeps repository responsibilities cohesive and localizes
-  profile/interests persistence mapping to dedicated adapter seams.
-  Date/Author: 2026-03-04 / implementation team.
+  `DieselUserInterestsCommand`) instead of extending `DieselUserRepository`
+  with profile/interests driving-port implementations. Rationale: keeps
+  repository responsibilities cohesive and localizes profile/interests
+  persistence mapping to dedicated adapter seams. Date/Author: 2026-03-04 /
+  implementation team.
 
 - Decision: keep revision-safe stale-write conflict semantics out of 3.5.3 and
-  defer them to roadmap item 3.5.4.
-  Rationale: prevents scope bleed while preserving the roadmap sequence from
-  parity wiring (3.5.3) to revision strategy (3.5.4).
-  Date/Author: 2026-03-04 / implementation team.
+  defer them to roadmap item 3.5.4. Rationale: prevents scope bleed while
+  preserving the roadmap sequence from parity wiring (3.5.3) to revision
+  strategy (3.5.4). Date/Author: 2026-03-04 / implementation team.
 
 - Decision: move this plan from `DRAFT` to implementation-complete status with
-  explicit coordinator-owned placeholders for final gate evidence.
-  Rationale: implementation and documentation closure are complete for 3.5.3,
-  while gate evidence publication is centralized in coordinator replay logs.
-  Date/Author: 2026-03-04 / docs owner.
+  explicit coordinator-owned placeholders for final gate evidence. Rationale:
+  implementation and documentation closure are complete for 3.5.3, while gate
+  evidence publication is centralized in coordinator replay logs. Date/Author:
+  2026-03-04 / docs owner.
 
 ## Outcomes & retrospective
 
@@ -235,10 +220,10 @@ present. Keep fixture fallback unchanged for DB-absent mode.
 
 Stage C: expand behavioural coverage and error-path parity.
 
-Add startup-mode behavioural tests for profile/interests using
-`rstest-bdd` and embedded PostgreSQL helpers, covering happy mode selection,
-unhappy schema-loss behaviour, and one edge case that proves validation/session
-contracts remain stable.
+Add startup-mode behavioural tests for profile/interests using `rstest-bdd` and
+embedded PostgreSQL helpers, covering happy mode selection, unhappy schema-loss
+behaviour, and one edge case that proves validation/session contracts remain
+stable.
 
 Stage D: documentation, roadmap closure, and gate replay.
 
@@ -409,7 +394,7 @@ and `pg-embedded-setup-unpriv` test helpers.
 
 ## Revision note
 
-Initial draft was upgraded to implementation-complete status on 2026-03-04.
-The revision captures the final 3.5.3 adapter-strategy decision (dedicated
+Initial draft was upgraded to implementation-complete status on 2026-03-04. The
+revision captures the final 3.5.3 adapter-strategy decision (dedicated
 adapters), roadmap closure updates, and explicit coordinator placeholders for
 closing-tree gate evidence paths and outcomes.

@@ -1,15 +1,13 @@
 # Implement the Redis-backed `RouteCache` adapter (roadmap 5.1.1)
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises &
-Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
-to date as work proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: IMPLEMENTED
 
 This plan covers roadmap item 5.1.1 only:
-`Implement RouteCache using Redis with bb8-redis for connection pooling,
-replacing the current stub adapter.`
+`Implement RouteCache using Redis with bb8-redis for connection pooling, replacing the current stub adapter.`
 
 ## Purpose / big picture
 
@@ -82,10 +80,10 @@ Observable success criteria:
   without also wiring new server/application configuration, stop and decide
   explicitly whether that extra wiring belongs in 5.1.1.
 - Test-harness tolerance: the implementation uses a local `redis-server`
-  process (not an in-process server) for live adapter tests. This approach
-  was chosen after discovering that `mini-redis` was not compatible with the
-  pooled `bb8-redis` client. If the `redis-server` harness cannot be started,
-  stop and document the blocker before continuing.
+  process (not an in-process server) for live adapter tests. This approach was
+  chosen after discovering that `mini-redis` was not compatible with the pooled
+  `bb8-redis` client. If the `redis-server` harness cannot be started, stop and
+  document the blocker before continuing.
 - Dependency tolerance: if more than one new production dependency or more than
   two new dev-dependencies are required, stop and review the trade-off.
 - Error-contract tolerance: if Redis or pool failures cannot be mapped cleanly
@@ -102,47 +100,37 @@ Observable success criteria:
 
 - Risk: the current `RouteCache` port is generic over `Plan`, so the Redis
   adapter must choose serialization bounds without leaking them into the
-  domain.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: keep serde bounds on the adapter implementation only, not on the
-  port trait, and test with a representative fixture plan type.
+  domain. Severity: high. Likelihood: medium. Mitigation: keep serde bounds on
+  the adapter implementation only, not on the port trait, and test with a
+  representative fixture plan type.
 
 - Risk: the roadmap separates 5.1.1 from 5.1.2 and 5.1.3, but a functioning
   Redis adapter still needs some serialization and persistence semantics.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: treat minimal payload encoding as an implementation detail needed
-  to satisfy 5.1.1, but keep TTL, jitter, and key-canonicalization work out of
-  scope and leave those roadmap items unchecked unless their acceptance
-  criteria are fully met.
+  Severity: medium. Likelihood: high. Mitigation: treat minimal payload
+  encoding as an implementation detail needed to satisfy 5.1.1, but keep TTL,
+  jitter, and key-canonicalization work out of scope and leave those roadmap
+  items unchecked unless their acceptance criteria are fully met.
 
 - Risk: there is no existing Redis test harness in `backend/tests/support/`,
   and the repo-local compose stack does not currently define a Redis service.
-  Severity: high.
-  Likelihood: high.
-  Mitigation: use the repo-local `redis-server` binary as the supported
-  test harness. Tests requiring a live Redis server are marked with
-  `#[ignore]` and must be run explicitly via `cargo test -- --ignored`.
-  If the project later adds Redis to `deploy/docker-compose.yml`, treat that as
-  an optional convenience for local development rather than the required test
-  harness for this plan.
+  Severity: high. Likelihood: high. Mitigation: use the repo-local
+  `redis-server` binary as the supported test harness. Tests requiring a live
+  Redis server are marked with `#[ignore]` and must be run explicitly via
+  `cargo test -- --ignored`. If the project later adds Redis to
+  `deploy/docker-compose.yml`, treat that as an optional convenience for local
+  development rather than the required test harness for this plan.
 
 - Risk: replacing the stub outright may break tests or code paths that assumed
-  a no-op adapter existed in production code.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: keep test-only doubles separate from the production adapter and
-  update references deliberately rather than deleting all stub behaviour at
-  once.
+  a no-op adapter existed in production code. Severity: medium. Likelihood:
+  medium. Mitigation: keep test-only doubles separate from the production
+  adapter and update references deliberately rather than deleting all stub
+  behaviour at once.
 
 - Risk: full-gate failures may come from the existing embedded-Postgres setup,
-  not from the Redis adapter.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: retain logs with `tee`, rely on `make test` so
-  `PG_EMBEDDED_WORKER` is wired automatically, and record any environment
-  failures explicitly before judging the feature incomplete.
+  not from the Redis adapter. Severity: medium. Likelihood: medium. Mitigation:
+  retain logs with `tee`, rely on `make test` so `PG_EMBEDDED_WORKER` is wired
+  automatically, and record any environment failures explicitly before judging
+  the feature incomplete.
 
 ## Agent team and ownership
 
@@ -197,8 +185,8 @@ Hand-off order:
 - [x] (2026-03-22 14:40Z) Recorded the architecture decision in
   `docs/wildside-backend-architecture.md`.
 - [x] (2026-03-22 14:40Z) Marked roadmap item 5.1.1 done in
-  `docs/backend-roadmap.md`. Roadmap items 5.1.2, 5.1.3, and 5.1.4 remain
-  open for future work (TTL, jitter, key canonicalization).
+  `docs/backend-roadmap.md`. Roadmap items 5.1.2, 5.1.3, and 5.1.4 remain open
+  for future work (TTL, jitter, key canonicalization).
 - [x] (2026-03-24) Run final gates and retain logs:
   - `make check-fmt`: passed (no formatting issues)
   - `make lint`: passed (no warnings)
@@ -212,76 +200,64 @@ Hand-off order:
 ## Surprises & Discoveries
 
 - Observation: `RouteCache` exists only as a domain port plus test doubles and
-  a no-op outbound stub.
-  Evidence:
-  `backend/src/domain/ports/route_cache.rs`,
-  `backend/src/domain/ports/tests.rs`,
-  `backend/src/outbound/cache/mod.rs`.
+  a no-op outbound stub. Evidence: `backend/src/domain/ports/route_cache.rs`,
+  `backend/src/domain/ports/tests.rs`, `backend/src/outbound/cache/mod.rs`.
   Impact: 5.1.1 can be delivered as a pure driven-adapter change without first
   refactoring an existing consumer.
 
 - Observation: no current server state builder, composition root, or route
-  orchestration service injects a `RouteCache`.
-  Evidence:
-  `backend/src/server/mod.rs`,
-  `backend/src/server/state_builders.rs`,
-  `backend/src/domain/route_submission/mod.rs`.
-  Impact: enabling cache-backed request reuse is not part of 5.1.1 and should
-  not be snuck into this adapter task.
+  orchestration service injects a `RouteCache`. Evidence:
+  `backend/src/server/mod.rs`, `backend/src/server/state_builders.rs`,
+  `backend/src/domain/route_submission/mod.rs`. Impact: enabling cache-backed
+  request reuse is not part of 5.1.1 and should not be snuck into this adapter
+  task.
 
 - Observation: the repo does not currently ship a Redis test harness, and
-  `deploy/docker-compose.yml` does not provision Redis.
-  Evidence:
-  `deploy/docker-compose.yml`,
-  `backend/tests/support/`.
-  Impact: the implementation must add a self-contained Redis test fixture or
-  explicitly expand infrastructure setup as part of the work.
+  `deploy/docker-compose.yml` does not provision Redis. Evidence:
+  `deploy/docker-compose.yml`, `backend/tests/support/`. Impact: the
+  implementation must add a self-contained Redis test fixture or explicitly
+  expand infrastructure setup as part of the work.
 
 - Observation: the architecture document already describes canonicalized Redis
-  keys, jittered TTL, and hit/miss metrics as future-state behaviour.
-  Evidence:
-  `docs/wildside-backend-architecture.md` around “Route caching” and
-  “Caching Layer (Redis)”.
-  Impact: 5.1.1 must distinguish the adapter foundation from later caching
-  policy work so the roadmap remains trustworthy.
+  keys, jittered TTL, and hit/miss metrics as future-state behaviour. Evidence:
+  `docs/wildside-backend-architecture.md` around “Route caching” and “Caching
+  Layer (Redis)”. Impact: 5.1.1 must distinguish the adapter foundation from
+  later caching policy work so the roadmap remains trustworthy.
 
 - Observation: `mini-redis` (evaluated and superseded) was not compatible
   with the pooled `redis-rs` client used by `bb8-redis`; pool checkout timed
-  out even after forcing RESP2 and disabling library info setup.
-  Evidence:
+  out even after forcing RESP2 and disabling library info setup. Evidence:
   focused BDD failures during the first implementation pass on 2026-03-22.
-  Impact: the behavioural harness uses a local `redis-server` process,
-  which satisfies the plan's requirement to exercise the adapter against
-  a real Redis protocol server. `mini-redis` is documented as superseded.
+  Impact: the behavioural harness uses a local `redis-server` process, which
+  satisfies the plan's requirement to exercise the adapter against a real Redis
+  protocol server. `mini-redis` is documented as superseded.
 
 ## Decision Log
 
 - Decision: 5.1.1 will deliver the Redis-driven adapter itself, not full
-  request-path caching.
-  Rationale: no domain service currently consumes `RouteCache`, and adding that
-  behaviour would spill into later roadmap items covering queueing, cache
-  strategy, and metrics.
-  Date/Author: 2026-03-22 / planning team.
+  request-path caching. Rationale: no domain service currently consumes
+  `RouteCache`, and adding that behaviour would spill into later roadmap items
+  covering queueing, cache strategy, and metrics. Date/Author: 2026-03-22 /
+  planning team.
 
 - Decision: keep the `RouteCache` port generic and place serialization bounds
-  only on the Redis adapter implementation.
-  Rationale: the domain should continue to describe capability, not storage
-  mechanics; serde requirements are an outbound concern.
-  Date/Author: 2026-03-22 / planning team.
+  only on the Redis adapter implementation. Rationale: the domain should
+  continue to describe capability, not storage mechanics; serde requirements
+  are an outbound concern. Date/Author: 2026-03-22 / planning team.
 
 - Decision: use a real Redis-protocol test harness for behavioural coverage,
-  using the `redis-server` binary as the supported implementation.
-  Rationale: the user explicitly asked for behavioural tests, and a port
-  contract for Redis should be verified against actual protocol interactions
-  rather than handwritten mocks. An in-process `mini-redis` harness was
-  evaluated and found incompatible with `bb8-redis` pooled clients.
-  Date/Author: 2026-03-22 / planning team.
+  using the `redis-server` binary as the supported implementation. Rationale:
+  the user explicitly asked for behavioural tests, and a port contract for
+  Redis should be verified against actual protocol interactions rather than
+  handwritten mocks. An in-process `mini-redis` harness was evaluated and found
+  incompatible with `bb8-redis` pooled clients. Date/Author: 2026-03-22 /
+  planning team.
 
 - Decision: keep future TTL, jitter, and key-canonicalization work out of scope
   for this plan, even if the adapter stores JSON payloads internally.
   Rationale: the roadmap has separate acceptance points for those behaviours,
-  and collapsing them into 5.1.1 would make closure ambiguous.
-  Date/Author: 2026-03-22 / planning team.
+  and collapsing them into 5.1.1 would make closure ambiguous. Date/Author:
+  2026-03-22 / planning team.
 
 ## Outcomes & retrospective
 
@@ -291,9 +267,8 @@ Hand-off order:
   The `RouteCache` port remained unchanged.
 - **Test harness**: Real `redis-server` process harness was chosen over
   `mini-redis` (superseded) due to compatibility issues with `bb8-redis` pooled
-  client.
-  Tests requiring `redis-server` are marked `#[ignore]` and documented for
-  opt-in execution.
+  client. Tests requiring `redis-server` are marked `#[ignore]` and documented
+  for opt-in execution.
 - **Serialization**: JSON serialization via `serde_json` was implemented
   as a minimal encoding detail in 5.1.1. Full serialization policy work
   (roadmap item 5.1.2) remains open for future scope.
@@ -302,8 +277,8 @@ Hand-off order:
 - **Roadmap items**: 5.1.1 marked complete in `docs/backend-roadmap.md`.
   Items 5.1.2, 5.1.3, and 5.1.4 remain open for future work.
 - **Follow-on work**: Items 5.1.2 (serialization policy), 5.1.3 (TTL with
-  jitter), and 5.1.4 (key canonicalization tests) remain pending as
-  originally scoped.
+  jitter), and 5.1.4 (key canonicalization tests) remain pending as originally
+  scoped.
 
 ## Context and orientation
 
@@ -323,8 +298,8 @@ The relevant current files are:
   writes.
 - `backend/src/server/mod.rs`,
   `backend/src/server/state_builders.rs`, and
-  `backend/src/domain/route_submission/mod.rs`
-  do not currently construct or consume a `RouteCache`.
+  `backend/src/domain/route_submission/mod.rs` do not currently construct or
+  consume a `RouteCache`.
 - `docs/wildside-backend-architecture.md`
   already describes Redis as the intended cache backend and documents later
   caching policy such as canonicalized keys and TTL.
@@ -382,8 +357,8 @@ should expose:
 - optional helpers to seed malformed values directly into Redis for unhappy-path
   assertions.
 
-Then add a behavioural suite such as
-`backend/tests/route_cache_redis_bdd.rs` with a companion feature file
+Then add a behavioural suite such as `backend/tests/route_cache_redis_bdd.rs`
+with a companion feature file
 `backend/tests/features/route_cache_redis.feature`. Recommended scenarios:
 
 - happy path: storing a plan and reading it back returns the same plan;
@@ -418,9 +393,9 @@ global gate run.
 
 ## Concrete steps
 
-Run all commands from `/home/user/project`. Use `set -o pipefail` and `tee`
-for every meaningful command so the exit code survives truncation and the log
-is retained.
+Run all commands from `/home/user/project`. Use `set -o pipefail` and `tee` for
+every meaningful command so the exit code survives truncation and the log is
+retained.
 
 1. Capture the current stub-only baseline and confirm there is no Redis-backed
    adapter yet.
@@ -502,7 +477,8 @@ The implementation is done only when all of the following are true:
     `bb8-redis` pooling.
   - `put` writes a payload that `get` can decode back into `P`.
   - a missing key returns `Ok(None)`.
-  - malformed cached content returns `Err(RouteCacheError::Serialization { .. })`.
+  - malformed cached content returns
+    `Err(RouteCacheError::Serialization { .. })`.
   - connection or command failures return
     `Err(RouteCacheError::Backend { .. })`.
 - Architectural boundaries:

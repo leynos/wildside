@@ -1,8 +1,8 @@
 # Tailwind CSS v4 project guide
 
 This guide captures the Tailwind CSS v4 rules that matter for Wildside. It is
-not a copy of the upstream Tailwind documentation. Use the official Tailwind CSS
-documentation for exhaustive utility and API reference material:
+not a copy of the upstream Tailwind documentation. Use the official Tailwind
+CSS documentation for exhaustive utility and API reference material:
 <https://tailwindcss.com/docs>.
 
 ## Installation and setup
@@ -39,7 +39,8 @@ Radix UI and generated design tokens.
 
 Implementation expectations:
 
-- Keep Tailwind configuration close to the entry stylesheet unless a plugin needs
+- Keep Tailwind configuration close to the entry stylesheet unless a plugin
+  needs
   JavaScript configuration.
 - Use `@tailwindcss/postcss` or the Vite integration selected by the front-end
   stack decision.
@@ -51,8 +52,8 @@ Implementation expectations:
 ## Utility and variant rules
 
 Tailwind utilities should be used for local layout, spacing and state-specific
-presentation. Repeated product concepts should move into small semantic wrappers
-or generated token roles.
+presentation. Repeated product concepts should move into small semantic
+wrappers or generated token roles.
 
 Recommended patterns:
 

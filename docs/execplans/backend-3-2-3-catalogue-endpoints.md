@@ -9,9 +9,8 @@ Status: COMPLETE
 ## Purpose / Big Picture
 
 The Progressive Web App (PWA) needs two session-authenticated read endpoints
-that return pre-assembled
-snapshots of catalogue and descriptor data. After this change, an authenticated
-client can:
+that return pre-assembled snapshots of catalogue and descriptor data. After
+this change, an authenticated client can:
 
 1. `GET /api/v1/catalogue/explore` -- receive the full explore catalogue
    (categories, route summaries, themes, collections, trending highlights, and
@@ -55,25 +54,20 @@ Completing this task marks roadmap item 3.2.3 as done and unblocks phase 3.3
 ## Risks
 
 - Risk: Adding `generated_at` to `DescriptorSnapshot` breaks existing tests
-  that construct snapshots without the field.
-  Severity: low
-  Likelihood: high
-  Mitigation: Update `FixtureDescriptorRepository`, all test constructors,
-  and the Diesel adapter in a single atomic commit. The field already exists
-  on `ExploreCatalogueSnapshot` so the pattern is established.
+  that construct snapshots without the field. Severity: low Likelihood: high
+  Mitigation: Update `FixtureDescriptorRepository`, all test constructors, and
+  the Diesel adapter in a single atomic commit. The field already exists on
+  `ExploreCatalogueSnapshot` so the pattern is established.
 
 - Risk: The adapter guardrails harness (`AdapterWorld`) must be extended with
   catalogue/descriptor recording doubles, which increases harness complexity.
-  Severity: medium
-  Likelihood: high
-  Mitigation: Follow the established `recording_double!` macro pattern used
-  by existing doubles. Keep the new doubles minimal (single method each).
+  Severity: medium Likelihood: high Mitigation: Follow the established
+  `recording_double!` macro pattern used by existing doubles. Keep the new
+  doubles minimal (single method each).
 
 - Risk: Existing `cluster_skip` warnings (unused imports/functions) may cause
-  lint failures.
-  Severity: low
-  Likelihood: high
-  Mitigation: Fix the existing warnings as part of the cleanup commit.
+  lint failures. Severity: low Likelihood: high Mitigation: Fix the existing
+  warnings as part of the cleanup commit.
 
 ## Progress
 
@@ -98,26 +92,25 @@ Completing this task marks roadmap item 3.2.3 as done and unblocks phase 3.3
 ## Surprises & Discoveries
 
 - Observation: `clippy::expect_used` is denied in non-test code via `lib.rs`.
-  Evidence: Clippy rejected `.expect()` calls in `From` impls for response DTOs.
-  Impact: Changed `From<Snapshot>` to `TryFrom<Snapshot>` with `Error = domain::Error`,
-  using a `to_json_value` helper that maps `serde_json` errors to `Error::internal`.
-  Handlers use `?` to propagate, tests use `.unwrap()`.
+  Evidence: Clippy rejected `.expect()` calls in `From` impls for response
+  DTOs. Impact: Changed `From<Snapshot>` to `TryFrom<Snapshot>` with
+  `Error = domain::Error`, using a `to_json_value` helper that maps
+  `serde_json` errors to `Error::internal`. Handlers use `?` to propagate,
+  tests use `.unwrap()`.
 
 - Observation: `module-max-lines` custom lint (whitaker) limits modules to
-  400 lines.
-  Evidence: Adding catalogue doubles wiring pushed `harness.rs` to 413
-  lines.
-  Impact: Inlined `HttpWsStateInputs` struct into direct `HttpStatePorts`
-  construction in the `world()` function, reducing the file to 381 lines.
+  400 lines. Evidence: Adding catalogue doubles wiring pushed `harness.rs` to
+  413 lines. Impact: Inlined `HttpWsStateInputs` struct into direct
+  `HttpStatePorts` construction in the `world()` function, reducing the file to
+  381 lines.
 
 - Observation: Catalogue BDD test fixtures used `.expect()` for embedded
   PostgreSQL setup, causing 180-second Continuous Integration (CI) timeouts
-  when the cluster is
-  unavailable.
-  Evidence: CI failure in `catalogue_descriptor_ingestion_bdd` with
+  when the cluster is unavailable. Evidence: CI failure in
+  `catalogue_descriptor_ingestion_bdd` with
   `postgresql_embedded::setup() failed: operation timed out after 180.0s`.
-  Impact: Converted `setup_test_context()` to `Result<TestContext, String>`
-  and adopted the `handle_cluster_setup_failure` pattern in both
+  Impact: Converted `setup_test_context()` to `Result<TestContext, String>` and
+  adopted the `handle_cluster_setup_failure` pattern in both
   `catalogue_descriptor_ingestion_bdd` and
   `catalogue_descriptor_read_models_bdd`. Tests now fail fast with a clear
   diagnostic instead of hanging.
@@ -130,27 +123,24 @@ Completing this task marks roadmap item 3.2.3 as done and unblocks phase 3.3
 
 - Decision: Use `private, no-cache, must-revalidate` for Cache-Control.
   Rationale: Data is session-scoped (authenticated), so `private` is
-  appropriate. `no-cache, must-revalidate` forces revalidation on each
-  request, matching the pattern used by `get_preferences`. The snapshot
-  `generatedAt` field gives clients a staleness signal without needing ETags
-  in this iteration.
-  Date/Author: 2026-02-15 / plan author.
+  appropriate. `no-cache, must-revalidate` forces revalidation on each request,
+  matching the pattern used by `get_preferences`. The snapshot `generatedAt`
+  field gives clients a staleness signal without needing ETags in this
+  iteration. Date/Author: 2026-02-15 / plan author.
 
 - Decision: Create a single `catalogue.rs` handler module (not two separate
   modules) since both endpoints share the same domain area and response
-  patterns.
-  Rationale: Keeps the module tree flat and consistent with the existing
-  pattern where `preferences.rs` contains both GET and PUT handlers.
+  patterns. Rationale: Keeps the module tree flat and consistent with the
+  existing pattern where `preferences.rs` contains both GET and PUT handlers.
   Date/Author: 2026-02-15 / plan author.
 
 - Decision: Add `From<CatalogueRepositoryError>` and
   `From<DescriptorRepositoryError>` impls for `domain::Error` rather than
-  creating thin driving port traits.
-  Rationale: These are simple read-through operations with no business logic.
-  A service layer would add unnecessary indirection. The `From` impls map
-  `Connection` to `Error::service_unavailable(...)` and `Query` to
-  `Error::internal(...)`, co-located with the source error types.
-  Date/Author: 2026-02-15 / plan author.
+  creating thin driving port traits. Rationale: These are simple read-through
+  operations with no business logic. A service layer would add unnecessary
+  indirection. The `From` impls map `Connection` to
+  `Error::service_unavailable(...)` and `Query` to `Error::internal(...)`,
+  co-located with the source error types. Date/Author: 2026-02-15 / plan author.
 
 ## Outcomes & Retrospective
 
@@ -161,27 +151,26 @@ and documented in the architecture document.
 Key outcomes:
 
 - `GET /api/v1/catalogue/explore` and
-  `GET /api/v1/catalogue/descriptors` serve pre-assembled
-  snapshots behind session authentication.
+  `GET /api/v1/catalogue/descriptors` serve pre-assembled snapshots behind
+  session authentication.
 - `Cache-Control: private, no-cache, must-revalidate` and
-  `generatedAt` metadata enable client-side staleness
-  detection.
+  `generatedAt` metadata enable client-side staleness detection.
 - Response DTOs use `serde_json::Value` wrapper fields to
   keep `ToSchema` derives out of the domain layer.
 - `TryFrom` conversion pattern avoids `expect()` in
   non-test code.
 - Harness refactoring (inlining `HttpWsStateInputs`) keeps
-  the shared test harness under the 400-line module limit
-  despite growing port count.
+  the shared test harness under the 400-line module limit despite growing port
+  count.
 
 Lessons:
 
 - When wrapping domain types for OpenAPI,
-  `serde_json::Value` is a pragmatic escape hatch that
-  avoids propagating utoipa derives into the domain.
+  `serde_json::Value` is a pragmatic escape hatch that avoids propagating
+  utoipa derives into the domain.
 - The `recording_double!` macro smoothly handles new ports;
-  the main growth pressure is in the harness's
-  `AdapterWorld` struct and `world()` fixture.
+  the main growth pressure is in the harness's `AdapterWorld` struct and
+  `world()` fixture.
 
 ## Context and Orientation
 
@@ -241,13 +230,13 @@ impls in the port files.
 ### Stage C: Wire handlers into HttpState, server, and OpenAPI
 
 Add `catalogue` and `descriptors` ports to `HttpState`/`HttpStatePorts`,
-register endpoints in `build_app`, wire Diesel repos in `create_server`,
-and register in OpenAPI `ApiDoc`.
+register endpoints in `build_app`, wire Diesel repos in `create_server`, and
+register in OpenAPI `ApiDoc`.
 
 ### Stage D: Create recording test doubles
 
-Create `RecordingCatalogueRepository` and `RecordingDescriptorRepository`
-using the `recording_double!` macro and extend the adapter guardrails harness.
+Create `RecordingCatalogueRepository` and `RecordingDescriptorRepository` using
+the `recording_double!` macro and extend the adapter guardrails harness.
 
 ### Stage E: Write BDD feature files and step implementations
 

@@ -29,8 +29,8 @@ goals include:
   response to prevent expensive `COUNT(*)` queries on large tables. Clients can
   detect the end of data by the absence of a `next` link.
 
-These goals summarize the expectations captured in issue #52
-requirements[^issue-52-requirements].
+These goals summarize the expectations captured in issue #52 requirements
+[^issue-52-requirements].
 
 This design focuses initially on the `GET /api/users` endpoint (replacing the
 current fixed-limit list), but the crate will be generic and extensible to
@@ -101,7 +101,7 @@ Example: A JSON representation might be
 `{"dir":"Next","key":{"created_at":"2025-10-10T19:17:56Z","id":"...uuid..."}}`.
 After base64url encoding, the client sees a string like
 `**eyJkaXIiOiJOZXh0Iiwia2V5Ijp7ImNyZWF0ZWRfYXQiOiIyMDI1LTEwLTEwVDE5OjE3OjU2WiIsImlkIjoi...**`
- (opaque and not easily guessable). **No signing or encryption** is applied in
+(opaque and not easily guessable). **No signing or encryption** is applied in
 this phase (to keep things simple), but the format is designed to be wrapped or
 signed later if needed for security.
 
@@ -123,10 +123,10 @@ correspond to an existing composite index in Postgres** for efficient queries.
 Here we assume an index on `users(created_at, id)` so that queries using this
 key for pagination are index-assisted.
 
-The crate can provide a marker trait or helper for such key types (e.g., a
-trait `PaginationKey` with perhaps an associated Diesel column tuple), but it
-may be simplest to rely on explicit usage in each context. For instance, we
-might implement a conversion from a `User` model to `UserCursorKey`:
+The crate can provide a marker trait or helper for such key types (e.g., a trait
+`PaginationKey` with perhaps an associated Diesel column tuple), but it may be
+simplest to rely on explicit usage in each context. For instance, we might
+implement a conversion from a `User` model to `UserCursorKey`:
 
 ```rust
 impl From<&User> for UserCursorKey {
@@ -225,9 +225,9 @@ or enforce those limits in the handler logic.
 
 **Ordering:** The keyset pagination relies on a **total ordering** of records.
 For `/api/users`, we use `ORDER BY created_at, id` (both ascending) as the
-stable sort. This ensures no two records share the same position: if two
-users have the same `created_at`, the tiebreaker `id` (e.g., a UUID or
-surrogate primary key) provides a deterministic order. The ordering must remain
+stable sort. This ensures no two records share the same position: if two users
+have the same `created_at`, the tiebreaker `id` (e.g., a UUID or surrogate
+primary key) provides a deterministic order. The ordering must remain
 **consistent** for all pages of a given endpoint. We will always apply this
 ordering to the query (even for the first page) to avoid nondeterministic
 results. The crate can enforce this by providing the appropriate Diesel
@@ -356,9 +356,9 @@ async fn list_users(
 Here `DbPool` is our async pool (could be Deadpool or bb8 – either yields an
 `AsyncPgConnection`). We cap the page size at 100 to honour the guardrail
 described in issue #52 page limit guidance[^issue-52-limit] and to match the
-client defaults noted in issue #52 client
-expectations[^issue-52-client-defaults]. If `cursor` is present, we attempt to
-decode it into a `Cursor<UserCursorKey>`.
+client defaults noted in issue #52 client expectations
+[^issue-52-client-defaults]. If `cursor` is present, we attempt to decode it
+into a `Cursor<UserCursorKey>`.
 
 - **Build Diesel Query:** Using Diesel’s query builder, start from the base
   table and apply filters based on the cursor:
@@ -561,8 +561,8 @@ A few details:
 - We use the raw cursor strings in the URLs as query params. They are already
   URL-safe (base64url ensures no `+`/`/` and no padding `=`), so they should
   not need special encoding beyond normal URL encoding. We should confirm that
-  `base64::URL_SAFE_NO_PAD` produces URL-legal characters (it does: uses `-`
-  and `_`).
+  `base64::URL_SAFE_NO_PAD` produces URL-legal characters (it does: uses `-` and
+  `_`).
 
 - **Return Response:** Finally, package the data and metadata into our
   `Paginated` struct and return as JSON:
@@ -646,9 +646,9 @@ rather than a full table scan. Similarly, that index covers the
 
 **Composite Filter in Diesel:** Diesel does not have built-in syntax for
 composite comparisons, but the OR condition shown above is equivalent. Another
-approach is to use Diesel’s `SqlLiteral` or custom expression to directly
-inject `(users.created_at, users.id) > ($1, $2)` if one wanted to rely on SQL
-tuple comparison. However, the OR approach is fine and portable. Diesel’s query
+approach is to use Diesel’s `SqlLiteral` or custom expression to directly inject
+`(users.created_at, users.id) > ($1, $2)` if one wanted to rely on SQL tuple
+comparison. However, the OR approach is fine and portable. Diesel’s query
 builder ensures the values are parameterized to prevent SQL injection.
 
 **Reverse Ordering for Prev Page:** In our design, we chose to keep a
