@@ -211,8 +211,8 @@ Create `backend/src/domain/ports/example_data_runs_repository.rs`:
 
     define_port_error! {
         pub enum ExampleDataRunsError {
-            Connection { message: String } => "…",
-            Query { message: String } => "…",
+            Connection { message: String } => "...",
+            Query { message: String } => "...",
         }
     }
 

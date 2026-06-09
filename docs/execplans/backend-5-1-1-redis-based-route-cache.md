@@ -7,7 +7,7 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: IMPLEMENTED
 
 This plan covers roadmap item 5.1.1 only:
-`Implement RouteCache using Redis with bb8-redis for connection pooling, replacing the current stub adapter.`
+`Implement RouteCache using Redis with bb8-redis for connection pooling, replacing the current stub adapter.` <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 

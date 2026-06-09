@@ -55,8 +55,7 @@ Proposed API:
 - `SeedRegistry { version: u32, interest_theme_ids: Vec<Uuid>,
   safety_toggle_ids: Vec<Uuid>, seeds: Vec<SeedDefinition> }`
 - `SeedDefinition { name: String, seed: u64, user_count: usize }`
-- `ExampleUserSeed { id: Uuid, display_name: String, interest_theme_ids: Vec<Uuid>, safety_toggle_ids: Vec<Uuid>, unit_system:
-  UnitSystemSeed }`
+- `ExampleUserSeed { id: Uuid, display_name: String, interest_theme_ids: Vec<Uuid>, safety_toggle_ids: Vec<Uuid>, unit_system: UnitSystemSeed }` <!-- markdownlint-disable-line MD013 -->
 - `UnitSystemSeed` enum with `Metric` and `Imperial`.
 - `generate_example_users(registry: &SeedRegistry, seed: &SeedDefinition)
   -> Vec<ExampleUserSeed>`

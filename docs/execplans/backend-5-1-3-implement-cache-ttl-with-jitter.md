@@ -7,7 +7,7 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 5.1.3 only:
-`Implement time-to-live (TTL) with jitter (24-hour window, +/- 10%) to prevent thundering herd on cache expiry.`
+`Implement time-to-live (TTL) with jitter (24-hour window, +/- 10%) to prevent thundering herd on cache expiry.` <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 

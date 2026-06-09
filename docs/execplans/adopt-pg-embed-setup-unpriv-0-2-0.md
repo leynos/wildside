@@ -164,7 +164,7 @@ behaviour before changing dependencies. Do not change code in this stage.
 
 Stage B: Update the dependency to v0.2.0 and fix compile errors. Update
 `backend/Cargo.toml` to
-`pg_embedded_setup_unpriv = { package = "pg-embed-setup-unpriv", version = "0.2.0" }`,
+`pg_embedded_setup_unpriv = { package = "pg-embed-setup-unpriv", version = "0.2.0" }`, <!-- markdownlint-disable-line MD013 -->
 then refresh `Cargo.lock` with `cargo update -p`. Address any API changes
 revealed by `cargo check` or the next test run.
 

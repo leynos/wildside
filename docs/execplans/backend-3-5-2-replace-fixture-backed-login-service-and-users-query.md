@@ -7,7 +7,7 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 3.5.2 only:
-`Replace fixture-backed LoginService and UsersQuery wiring in server state construction with explicit DB-backed concrete types, either by extending DieselUserRepository to satisfy those ports directly or by introducing adapter wrappers around it, while preserving current session and error-envelope behaviour.`
+`Replace fixture-backed LoginService and UsersQuery wiring in server state construction with explicit DB-backed concrete types, either by extending DieselUserRepository to satisfy those ports directly or by introducing adapter wrappers around it, while preserving current session and error-envelope behaviour.` <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 

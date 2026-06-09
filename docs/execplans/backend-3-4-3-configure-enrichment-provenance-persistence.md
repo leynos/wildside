@@ -7,7 +7,7 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 3.4.3 only:
-`Configure enrichment provenance persistence (source URL, timestamp, and bounding box) and expose it via admin reporting endpoints.`
+`Configure enrichment provenance persistence (source URL, timestamp, and bounding box) and expose it via admin reporting endpoints.` <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 

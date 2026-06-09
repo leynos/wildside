@@ -15,7 +15,7 @@ close-out record to understand what actually landed and how the roadmap item
 was closed.
 
 This plan covers roadmap item 3.5.4 only:
-`Define and implement the revision-safe interests update strategy (for example optimistic concurrency via expected revision checks), including the persistence contract and error mapping for stale-write conflicts.`
+`Define and implement the revision-safe interests update strategy (for example optimistic concurrency via expected revision checks), including the persistence contract and error mapping for stale-write conflicts.` <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 

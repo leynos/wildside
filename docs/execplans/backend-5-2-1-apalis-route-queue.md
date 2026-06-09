@@ -7,7 +7,7 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 5.2.1 only:
-`Implement RouteQueue using Apalis with PostgreSQL backend, replacing the current stub adapter.`
+`Implement RouteQueue using Apalis with PostgreSQL backend, replacing the current stub adapter.` <!-- markdownlint-disable-line MD013 -->
 
 No implementation work may begin from this plan until the plan is explicitly
 approved. Approval authorizes the implementation and closure milestones below;

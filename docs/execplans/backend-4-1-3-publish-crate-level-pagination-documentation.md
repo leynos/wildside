@@ -7,7 +7,7 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 4.1.3 only:
-`Publish crate-level documentation outlining ordering requirements, default and maximum limits (20 and 100), and error mapping guidelines.`
+`Publish crate-level documentation outlining ordering requirements, default and maximum limits (20 and 100), and error mapping guidelines.` <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 

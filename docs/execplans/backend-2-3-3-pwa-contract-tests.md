@@ -511,9 +511,9 @@ If a step fails partway through, re-run from the beginning of that stage.
 Expected test output (partial):
 
     running X tests
-    test pwa_preferences::pwa_preferences … ok
-    test pwa_annotations::pwa_annotations … ok
-    …
+    test pwa_preferences::pwa_preferences ... ok
+    test pwa_annotations::pwa_annotations ... ok
+    ...
     test result: ok. X passed; 0 failed
 
 ## Interfaces and Dependencies

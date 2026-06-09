@@ -7,7 +7,7 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 4.1.1 only:
-`Implement backend/crates/pagination providing opaque cursor encoding, PageParams, and Paginated<T> envelopes with navigation links, backed by unit tests for cursor round-tripping.`
+`Implement backend/crates/pagination providing opaque cursor encoding, PageParams, and Paginated<T> envelopes with navigation links, backed by unit tests for cursor round-tripping.` <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 

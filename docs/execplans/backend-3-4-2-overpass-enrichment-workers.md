@@ -7,7 +7,7 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 3.4.2 only:
-`Add Overpass enrichment workers with semaphore-governed quotas, circuit breaking, and metrics wired to the enrichment job counters`.
+`Add Overpass enrichment workers with semaphore-governed quotas, circuit breaking, and metrics wired to the enrichment job counters`. <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 

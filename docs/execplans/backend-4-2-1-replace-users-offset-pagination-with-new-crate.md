@@ -19,7 +19,7 @@ duplicate or skip records, and the underlying SQL is index-assisted by a new
 composite index. Success is observable in three ways:
 
 1. The handler returns the JSON envelope
-   `{ "data": [...], "limit": N, "links": { "self": "...", "next": "...", "prev": "..." } }`
+   `{ "data": [...], "limit": N, "links": { "self": "...", "next": "...", "prev": "..." } }` <!-- markdownlint-disable-line MD013 -->
    with omitted
    keys when no further page exists.
 2. Forward and backward cursor traversal returns every user exactly once

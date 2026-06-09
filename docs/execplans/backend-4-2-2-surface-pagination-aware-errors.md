@@ -54,7 +54,7 @@ cannot collapse those client failures into generic internal errors.
 - The cursor transport format remains opaque base64url JSON provided by
   `backend/crates/pagination`. Do not introduce a second cursor format.
 - Keep the current `/api/v1/users` response envelope from roadmap 4.2.1:
-  `{ "data": [...], "limit": N, "links": { "self": ..., "next": ..., "prev": ... } }`.
+  `{ "data": [...], "limit": N, "links": { "self": ..., "next": ..., "prev": ... } }`. <!-- markdownlint-disable-line MD013 -->
 - Preserve current non-pagination error semantics: unauthenticated requests
   return `401`, repository connection failures return `503`, and unexpected
   query failures return `500` with the internal message redacted.
@@ -171,7 +171,7 @@ cannot collapse those client failures into generic internal errors.
   `cargo test -p pagination -- --nocapture`,
   `cargo test -p backend user_persistence_error -- --nocapture`,
   `cargo test -p backend diesel_users_query -- --nocapture`, and
-  `cargo test -p backend --test users_list_pagination_bdd unsupported_users_cursor_direction_is_rejected -- --nocapture`.
+  `cargo test -p backend --test users_list_pagination_bdd unsupported_users_cursor_direction_is_rejected -- --nocapture`. <!-- markdownlint-disable-line MD013 -->
 - [x] 2026-05-26: Full deterministic gates passed after lint-driven
   refactoring: `make check-fmt`, `make lint`, and `make test`. The full test
   gate ran 1227 Rust tests with 1227 passing and 4 skipped, followed by the

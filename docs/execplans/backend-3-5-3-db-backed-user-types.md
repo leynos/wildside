@@ -7,7 +7,7 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: IMPLEMENTATION COMPLETE (coordinator evidence handoff pending)
 
 This plan covers roadmap item 3.5.3 only:
-`Replace fixture-backed UserProfileQuery and UserInterestsCommand wiring with explicit DB-backed concrete types, and document whether this uses repository extensions or dedicated adapters.`
+`Replace fixture-backed UserProfileQuery and UserInterestsCommand wiring with explicit DB-backed concrete types, and document whether this uses repository extensions or dedicated adapters.` <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 
