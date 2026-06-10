@@ -1,16 +1,13 @@
 # Implement the pagination crate foundation (roadmap 4.1.1)
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises &
-Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up
-to date as work proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
 This plan covers roadmap item 4.1.1 only:
-`Implement backend/crates/pagination providing opaque cursor encoding,
-PageParams, and Paginated<T> envelopes with navigation links, backed by unit
-tests for cursor round-tripping.`
+`Implement backend/crates/pagination providing opaque cursor encoding, PageParams, and Paginated<T> envelopes with navigation links, backed by unit tests for cursor round-tripping.` <!-- markdownlint-disable-line MD013 -->
 
 ## Purpose / big picture
 
@@ -76,12 +73,10 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
   cleanly as an explicit workspace member, stop and resolve the workspace
   structure before writing feature code.
 - Scope tolerance: if 4.1.1 requires edits in more than 12 files or more than
-  roughly 900 net lines, stop and split work so 4.1.2 or 4.2.x does not leak
-  in.
+  roughly 900 net lines, stop and split work so 4.1.2 or 4.2.x does not leak in.
 - API tolerance: if the crate needs endpoint-specific concepts such as Actix
   extractors, HTTP status codes, Diesel traits, or admin provenance-specific
-  cursor formats, stop and escalate because the abstraction boundary has
-  failed.
+  cursor formats, stop and escalate because the abstraction boundary has failed.
 - Behaviour tolerance: if navigation links cannot be expressed without fully
   implementing 4.1.2 traversal helpers, land the minimal direction seam needed
   for link generation and defer the rest explicitly.
@@ -91,46 +86,35 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
 - Gate tolerance: if `make check-fmt`, `make lint`, or `make test` fails after
   three repair loops, stop and capture the failure logs.
 - Environment tolerance: if embedded PostgreSQL setup blocks `make test`,
-  verify `/dev/null`, `PG_EMBEDDED_WORKER`, and `make prepare-pg-worker`
-  first; if the environment still fails, record evidence instead of masking
-  the issue.
+  verify `/dev/null`, `PG_EMBEDDED_WORKER`, and `make prepare-pg-worker` first;
+  if the environment still fails, record evidence instead of masking the issue.
 
 ## Risks
 
 - Risk: the roadmap says `backend/crates/pagination`, but the current workspace
-  layout only auto-discovers `crates/*`.
-  Severity: high.
-  Likelihood: high.
+  layout only auto-discovers `crates/*`. Severity: high. Likelihood: high.
   Mitigation: treat explicit workspace wiring as the first implementation step
   and document the decision in the architecture record.
 
 - Risk: 4.1.1 and 4.1.2 overlap conceptually because navigation links imply
-  directional cursors.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: limit 4.1.1 to the smallest public seam needed for opaque cursor
-  round-tripping and link generation, and defer stronger invariants and
-  property tests to 4.1.2.
+  directional cursors. Severity: medium. Likelihood: high. Mitigation: limit
+  4.1.1 to the smallest public seam needed for opaque cursor round-tripping and
+  link generation, and defer stronger invariants and property tests to 4.1.2.
 
 - Risk: endpoint-specific defaults could leak into the shared crate.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: keep shared defaults at 20 and 100 in the crate, but document
-  that consuming endpoints may layer narrower bounds on top, as already noted
-  in the backend architecture document for admin provenance reporting.
+  Severity: medium. Likelihood: medium. Mitigation: keep shared defaults at 20
+  and 100 in the crate, but document that consuming endpoints may layer
+  narrower bounds on top, as already noted in the backend architecture document
+  for admin provenance reporting.
 
 - Risk: requiring behavioural tests plus `pg-embed-setup-unpriv` could tempt
   implementers to add pointless database coverage to a pure utility crate.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: keep behavioural tests focused on the crate's observable API and
-  rely on the repository-wide `make test` gate to exercise embedded PostgreSQL
-  setup in the wider workspace.
+  Severity: medium. Likelihood: medium. Mitigation: keep behavioural tests
+  focused on the crate's observable API and rely on the repository-wide
+  `make test` gate to exercise embedded PostgreSQL setup in the wider workspace.
 
 - Risk: malformed cursor handling could be under-specified, causing later
-  endpoint-specific error mapping churn.
-  Severity: medium.
-  Likelihood: medium.
+  endpoint-specific error mapping churn. Severity: medium. Likelihood: medium.
   Mitigation: define a narrow crate-local error enum now and document that HTTP
   `400` translation remains backend work for roadmap 4.2.2.
 
@@ -157,115 +141,105 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
 
 - Observation: there is currently no `backend/crates/` directory.
   Evidence: `find backend/crates -maxdepth 3 -type f` returned
-  `No such file or directory`.
-  Impact: the implementation must create the directory tree and cannot assume
-  an existing crate template.
+  `No such file or directory`. Impact: the implementation must create the
+  directory tree and cannot assume an existing crate template.
 
 - Observation: the root workspace currently lists members manually, but
   `make fmt` rewrites that list from `workspace.metadata.autodiscover.globs`,
-  which originally targeted `crates/*` and not `backend/crates/*`.
-  Evidence: [Cargo.toml](../../Cargo.toml) contains
-  `members = ["backend", "crates/example-data", "tools/architecture-lint"]`
-  and `workspace.metadata.autodiscover.globs = ["apps/*", "crates/*", ...]`;
+  which originally targeted `crates/*` and not `backend/crates/*`. Evidence:
+  [Cargo.toml](../../Cargo.toml) contains
+  `members = ["backend", "crates/example-data", "tools/architecture-lint"]` and
+  `workspace.metadata.autodiscover.globs = ["apps/*", "crates/*", ...]`;
   `make fmt` runs `scripts/sync_workspace_members.py`, which rewrites members
-  from those globs.
-  Impact: the new pagination crate must be added to the autodiscovery globs or
-  it will be removed from the workspace during formatting and become invisible
-  to later quality gates.
+  from those globs. Impact: the new pagination crate must be added to the
+  autodiscovery globs or it will be removed from the workspace during
+  formatting and become invisible to later quality gates.
 
 - Observation: the backend architecture document already reserves special
-  pagination compatibility rules for admin provenance reporting.
-  Evidence:
+  pagination compatibility rules for admin provenance reporting. Evidence:
   [docs/wildside-backend-architecture.md](../wildside-backend-architecture.md)
-  around the "3.4.3 Pagination Compatibility Requirements" section.
-  Impact: the foundation crate must stay generic and must not encode admin
+  around the "3.4.3 Pagination Compatibility Requirements" section. Impact: the
+  foundation crate must stay generic and must not encode admin
   provenance-specific `before` semantics.
 
 - Observation: repository-wide test execution depends on
-  `pg-embed-setup-unpriv` via `make prepare-pg-worker` and
-  `make test`, not on per-crate direct cluster setup.
-  Evidence: [Makefile](../../Makefile) targets
+  `pg-embed-setup-unpriv` via `make prepare-pg-worker` and `make test`, not on
+  per-crate direct cluster setup. Evidence: [Makefile](../../Makefile) targets
   `prepare-pg-worker` and `test-rust`, plus the
-  `docs/pg-embed-setup-unpriv-users-guide.md` guidance.
-  Impact: local verification for 4.1.1 must include the standard gate flow,
-  but the new crate should remain free of direct database setup code.
+  `docs/pg-embed-setup-unpriv-users-guide.md` guidance. Impact: local
+  verification for 4.1.1 must include the standard gate flow, but the new crate
+  should remain free of direct database setup code.
 
 - Observation: the narrowest 4.1.1-compatible public API does not need
   direction-aware cursors yet, because the crate can generate `self`, `next`,
   and `prev` links from caller-supplied cursor strings without encoding
-  traversal semantics into the foundation token.
-  Evidence: the implemented crate exposes `Cursor<K>`, `PageParams`,
-  `Paginated<T>`, and `PaginationLinks`, and the behavioural tests cover link
-  generation without any `Next`/`Prev` enum.
-  Impact: roadmap 4.1.2 can still add direction-aware cursor semantics as a
-  focused follow-on change instead of leaking that scope into 4.1.1.
+  traversal semantics into the foundation token. Evidence: the implemented
+  crate exposes `Cursor<K>`, `PageParams`, `Paginated<T>`, and
+  `PaginationLinks`, and the behavioural tests cover link generation without any
+  `Next`/`Prev` enum. Impact: roadmap 4.1.2 can still add direction-aware
+  cursor semantics as a focused follow-on change instead of leaking that scope
+  into 4.1.1.
 
 - Observation: full gate replay was blocked twice by environment drift rather
-  than source regressions: `/dev/null` reverted to a regular file again and
-  the container was missing `yamllint` and `actionlint`.
-  Evidence: `ls -l /dev/null` showed `-rw-r--r--` before repair; `make lint`
-  failed in `lint-actions` until `yamllint` and `actionlint` were installed.
-  Impact: future gate replays in this container should verify `/dev/null` and
-  the lint helper CLIs before treating failures as product regressions.
+  than source regressions: `/dev/null` reverted to a regular file again and the
+  container was missing `yamllint` and `actionlint`. Evidence:
+  `ls -l /dev/null` showed `-rw-r--r--` before repair; `make lint` failed in
+  `lint-actions` until `yamllint` and `actionlint` were installed. Impact:
+  future gate replays in this container should verify `/dev/null` and the lint
+  helper CLIs before treating failures as product regressions.
 
 ## Decision Log
 
 - Decision: implement the crate at `backend/crates/pagination` exactly as the
-  roadmap and design document state, and wire it into the workspace by
-  extending `workspace.metadata.autodiscover.globs` with `backend/crates/*`.
-  Rationale: changing the path at plan time would silently rewrite approved
-  product scope; the repo's sync script rewrites workspace members from the
-  autodiscovery configuration, so fixing that source of truth is the durable
-  way to keep the crate visible.
-  Date/Author: 2026-03-22 / planning team.
+  roadmap and design document state, and wire it into the workspace by extending
+  `workspace.metadata.autodiscover.globs` with `backend/crates/*`. Rationale:
+  changing the path at plan time would silently rewrite approved product scope;
+  the repo's sync script rewrites workspace members from the autodiscovery
+  configuration, so fixing that source of truth is the durable way to keep the
+  crate visible. Date/Author: 2026-03-22 / planning team.
 
 - Decision: keep the pagination crate generic and infrastructure-neutral.
   Rationale: under the project's hexagonal rules, reusable pagination
   primitives belong outside endpoint adapters and must not depend on Actix,
-  Diesel, or backend-specific repository types.
-  Date/Author: 2026-03-22 / planning team.
+  Diesel, or backend-specific repository types. Date/Author: 2026-03-22 /
+  planning team.
 
 - Decision: treat directional cursor behaviour as a minimal seam in 4.1.1 only
   if it is strictly required to generate `next` and `prev` links, while
-  deferring richer helpers and property tests to roadmap 4.1.2.
-  Rationale: this matches the roadmap split while avoiding an artificial
-  foundation that would need immediate rework.
-  Date/Author: 2026-03-22 / planning team.
+  deferring richer helpers and property tests to roadmap 4.1.2. Rationale: this
+  matches the roadmap split while avoiding an artificial foundation that would
+  need immediate rework. Date/Author: 2026-03-22 / planning team.
 
 - Decision: satisfy the behavioural-test requirement at the crate boundary,
-  not by adding fake persistence to the pagination crate.
-  Rationale: the feature under construction is a pure utility crate; database
-  coverage belongs to endpoint adoption work, while embedded PostgreSQL still
-  remains part of the repo-wide gate flow.
-  Date/Author: 2026-03-22 / planning team.
+  not by adding fake persistence to the pagination crate. Rationale: the
+  feature under construction is a pure utility crate; database coverage belongs
+  to endpoint adoption work, while embedded PostgreSQL still remains part of
+  the repo-wide gate flow. Date/Author: 2026-03-22 / planning team.
 
 - Decision: keep roadmap 4.1.1 scoped to opaque cursor tokens without
-  direction metadata, and let the envelope builder accept caller-supplied
-  `next`/`prev` cursor strings for link generation.
-  Rationale: this satisfies the approved 4.1.1 deliverables while preserving a
-  clean seam for roadmap 4.1.2 to add direction-aware traversal semantics
-  separately.
-  Date/Author: 2026-03-22 / implementation.
+  direction metadata, and let the envelope builder accept caller-supplied `next`
+  /`prev` cursor strings for link generation. Rationale: this satisfies the
+  approved 4.1.1 deliverables while preserving a clean seam for roadmap 4.1.2
+  to add direction-aware traversal semantics separately. Date/Author:
+  2026-03-22 / implementation.
 
 - Decision: make the workspace discovery rule include `backend/crates/*`
-  rather than relying on a hand-edited `members` list.
-  Rationale: `make fmt` runs `scripts/sync_workspace_members.py`, which
-  rewrites the manifest from `workspace.metadata.autodiscover.globs`; adding
-  the crate only to `members` was not durable.
-  Date/Author: 2026-03-22 / implementation.
+  rather than relying on a hand-edited `members` list. Rationale: `make fmt`
+  runs `scripts/sync_workspace_members.py`, which rewrites the manifest from
+  `workspace.metadata.autodiscover.globs`; adding the crate only to `members`
+  was not durable. Date/Author: 2026-03-22 / implementation.
 
 - Decision: do not mark roadmap 4.1.1 done during planning.
   Rationale: the roadmap may only change once implementation is complete and
-  the full gate suite is green.
-  Date/Author: 2026-03-22 / planning team.
+  the full gate suite is green. Date/Author: 2026-03-22 / planning team.
 
 ## Outcomes & retrospective
 
 Completed state:
 
 - Added `backend/crates/pagination` as a workspace crate with documented
-  modules for opaque `Cursor<K>` encoding/decoding, normalized `PageParams`,
-  and `Paginated<T>`/`PaginationLinks` envelopes.
+  modules for opaque `Cursor<K>` encoding/decoding, normalized `PageParams`, and
+  `Paginated<T>`/`PaginationLinks` envelopes.
 - Added unit and behavioural coverage, including crate doctests and a
   `tests/features/pagination.feature` scenario file.
 - Updated
@@ -310,21 +284,20 @@ may cover multiple roles, but the ownership boundaries should remain visible.
   owns sequencing, keeps this ExecPlan current, enforces tolerances, and
   decides when the work is ready for roadmap closure.
 - Crate design agent:
-  creates the new crate layout, selects module boundaries, and keeps the
-  public API small, documented, and transport-neutral.
+  creates the new crate layout, selects module boundaries, and keeps the public
+  API small, documented, and transport-neutral.
 - Test agent:
   owns `rstest` unit coverage, `rstest-bdd` behavioural coverage, and the
   verification transcript for happy, unhappy, and edge cases.
 - Documentation agent:
   updates
   [docs/wildside-backend-architecture.md](../wildside-backend-architecture.md)
-  and later
-  [docs/backend-roadmap.md](../backend-roadmap.md) after
+  and later [docs/backend-roadmap.md](../backend-roadmap.md) after
   implementation is complete.
 - Gate agent:
-  runs `make prepare-pg-worker`, `make fmt`, `make markdownlint`,
-  `make nixie`, `make check-fmt`, `make lint`, and `make test` with
-  `set -o pipefail` and `tee`, then captures the log paths.
+  runs `make prepare-pg-worker`, `make fmt`, `make markdownlint`, `make nixie`,
+  `make check-fmt`, `make lint`, and `make test` with `set -o pipefail` and
+  `tee`, then captures the log paths.
 
 Coordination sequence:
 
@@ -401,10 +374,10 @@ Implement the cursor module first. The recommended public shape is:
 - a narrow `PaginationError` enum for invalid cursor payloads and related
   normalization failures.
 
-Keep the implementation free of panicking encode/decode paths. Use
-`serde`, `serde_json`, and base64url-safe encoding. If URL construction needs
-query-safe handling, use the existing `url` crate rather than hand-rolled
-string concatenation logic.
+Keep the implementation free of panicking encode/decode paths. Use `serde`,
+`serde_json`, and base64url-safe encoding. If URL construction needs query-safe
+handling, use the existing `url` crate rather than hand-rolled string
+concatenation logic.
 
 Acceptance for this milestone is green unit coverage for round-tripping and
 decode errors.
@@ -469,8 +442,8 @@ set -o pipefail && make test 2>&1 | tee /tmp/backend-4-1-1/test.log
 ```
 
 If every required gate passes, mark 4.1.1 done in
-[docs/backend-roadmap.md](../backend-roadmap.md) and
-update this ExecPlan's status and progress sections.
+[docs/backend-roadmap.md](../backend-roadmap.md) and update this ExecPlan's
+status and progress sections.
 
 ## Acceptance checks
 

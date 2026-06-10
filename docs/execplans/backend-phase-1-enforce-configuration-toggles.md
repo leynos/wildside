@@ -127,8 +127,8 @@ Terminology (plain-language):
      `same_site` fields for use by the server bootstrap.
 
 3. Update `backend/src/main.rs` to replace the inline helper functions with the
-   new shared module. Use `DefaultEnv` (backed by the process environment) and
-   a `BuildMode` derived from `cfg!(debug_assertions)` to select strict or
+   new shared module. Use `DefaultEnv` (backed by the process environment) and a
+   `BuildMode` derived from `cfg!(debug_assertions)` to select strict or
    relaxed behaviour. Keep warnings in debug builds when defaults are used.
 
 4. Add unit tests (`rstest`) in the new session configuration module. Include

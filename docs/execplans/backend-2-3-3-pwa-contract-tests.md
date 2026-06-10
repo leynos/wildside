@@ -12,11 +12,11 @@ guidelines. See `docs/documentation-style-guide.md` for formatting rules.
 ## Purpose / Big Picture
 
 Task 2.3.3 of the backend roadmap requires contract tests that validate the
-behavioural guarantees of the PWA endpoints: optimistic concurrency via revision
-fields, idempotency conflict detection, and deterministic response replay for
-retried requests. These tests exercise the HTTP adapter layer end-to-end,
-ensuring clients can safely implement offline-first patterns with reliable retry
-semantics.
+behavioural guarantees of the PWA endpoints: optimistic concurrency via
+revision fields, idempotency conflict detection, and deterministic response
+replay for retried requests. These tests exercise the HTTP adapter layer
+end-to-end, ensuring clients can safely implement offline-first patterns with
+reliable retry semantics.
 
 After this work is complete, developers and CI will have behavioural test
 coverage demonstrating:
@@ -38,8 +38,8 @@ test output includes scenarios named for each contract guarantee.
 Hard invariants that must hold throughout implementation:
 
 - **Hexagonal boundaries**: Tests must exercise the inbound HTTP adapter via
-  the test harness (`actix-web::test`), not by calling domain services directly.
-  Contract tests validate the HTTP contract, not internal wiring.
+  the test harness (`actix-web::test`), not by calling domain services
+  directly. Contract tests validate the HTTP contract, not internal wiring.
 - **No production code changes**: This task adds tests only. The endpoint
   implementations from task 2.3.2 are already complete.
 - **Test isolation**: Each scenario must be independent. BDD scenarios using
@@ -98,22 +98,23 @@ Known uncertainties that might affect the plan:
 ## Progress
 
 - [x] (2026-01-05) Stage A: Analyse existing test coverage and identify gaps.
-- [x] (2026-01-05) Stage B: Add BDD scenarios for optimistic concurrency conflicts.
+- [x] (2026-01-05) Stage B: Add BDD scenarios for optimistic concurrency
+      conflicts.
 - [x] (2026-01-05) Stage C: Add BDD scenarios for idempotency conflicts.
 - [x] (2026-01-05) Stage D: Add BDD scenarios for deterministic replay.
-- [x] (2026-01-05) Stage E: Review repository-level contract tests (already complete).
-- [x] (2026-01-05) Stage F: Validate with `make check-fmt`, `make lint`, `make test`.
+- [x] (2026-01-05) Stage E: Review repository-level contract tests (already
+      complete).
+- [x] (2026-01-05) Stage F: Validate with `make check-fmt`, `make lint`,
+      `make test`.
 - [x] (2026-01-05) Stage G: Update roadmap and architecture documentation.
 
 ## Surprises & Discoveries
 
 - Observation: Existing repository tests already had good coverage of revision
-  semantics.
-  Evidence: The `diesel_user_preferences_repository.rs` and
+  semantics. Evidence: The `diesel_user_preferences_repository.rs` and
   `diesel_route_annotation_repository.rs` files included round-trip, revision
-  update, and revision mismatch tests.
-  Impact: Stage E became a review rather than implementation. No additional
-  repository tests were needed.
+  update, and revision mismatch tests. Impact: Stage E became a review rather
+  than implementation. No additional repository tests were needed.
 
 ## Decision Log
 
@@ -199,9 +200,11 @@ All mutation endpoints support:
   `backend/src/domain/annotations/service.rs`
 - **Domain ports**: `backend/src/domain/ports/user_preferences_command.rs`,
   `backend/src/domain/ports/route_annotations_command.rs`
-- **Repository ports**: `backend/src/domain/ports/user_preferences_repository.rs`,
+- **Repository ports**:
+  `backend/src/domain/ports/user_preferences_repository.rs`,
   `backend/src/domain/ports/route_annotation_repository.rs`
-- **Diesel adapters**: `backend/src/outbound/persistence/diesel_user_preferences_repository.rs`,
+- **Diesel adapters**:
+  `backend/src/outbound/persistence/diesel_user_preferences_repository.rs`,
   `backend/src/outbound/persistence/diesel_route_annotation_repository.rs`
 - **Existing BDD tests**: `backend/tests/pwa_preferences_bdd.rs`,
   `backend/tests/pwa_annotations_bdd.rs`
@@ -299,9 +302,10 @@ Implementation approach:
 
 ### Stage E: Add repository-level contract tests for revision semantics
 
-Extend existing repository tests in `backend/tests/diesel_user_preferences_repository.rs`
-and `backend/tests/diesel_route_annotation_repository.rs` to cover additional
-edge cases:
+Extend existing repository tests in
+`backend/tests/diesel_user_preferences_repository.rs` and
+`backend/tests/diesel_route_annotation_repository.rs` to cover additional edge
+cases:
 
 1. **First save without revision**: Verify initial save with
    `expected_revision: None` creates revision 1.

@@ -1,9 +1,8 @@
 # Add catalogue and descriptor read repository ports (roadmap 3.2.2)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -13,8 +12,8 @@ execution reference.
 ## Purpose / big picture
 
 Roadmap item 3.2.2 requires read-side domain ports for catalogue and descriptor
-models, plus PostgreSQL persistence adapters that satisfy the same contract from
-inside outbound adapters. This keeps read model persistence details out of
+models, plus PostgreSQL persistence adapters that satisfy the same contract
+from inside outbound adapters. This keeps read model persistence details out of
 inbound adapters and domain services, preserving the hexagonal boundary defined
 in `docs/wildside-backend-architecture.md`.
 
@@ -64,8 +63,7 @@ Observable success criteria:
 ## Tolerances (exception triggers)
 
 - Scope tolerance: if implementation exceeds 18 files or 1,100 net lines
-  of code (LOC),
-  pause and reassess decomposition.
+  of code (LOC), pause and reassess decomposition.
 - API tolerance: if endpoint or response contracts for 3.2.3 are required to
   make 3.2.2 viable, stop and request scope clarification.
 - Migration tolerance: if schema changes are required for read ports,
@@ -78,29 +76,23 @@ Observable success criteria:
 ## Risks
 
 - Risk: Read-port return types may be underspecified in current code.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: define explicit snapshot structs in the domain port layer,
-  aligned with `docs/wildside-pwa-data-model.md` and architecture guidance.
+  Severity: medium. Likelihood: medium. Mitigation: define explicit snapshot
+  structs in the domain port layer, aligned with
+  `docs/wildside-pwa-data-model.md` and architecture guidance.
 
 - Risk: JSONB-to-domain conversion may accept malformed localization payloads.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: centralize JSON decoding helpers that always pass through
-  `LocalizationMap` validation and include negative contract tests.
+  Severity: high. Likelihood: medium. Mitigation: centralize JSON decoding
+  helpers that always pass through `LocalizationMap` validation and include
+  negative contract tests.
 
 - Risk: Embedded Postgres behavioural suites may be slow and flaky under
-  default test timeouts.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: reuse existing shared cluster/template database helpers and keep
-  fixture setup deterministic.
+  default test timeouts. Severity: medium. Likelihood: medium. Mitigation:
+  reuse existing shared cluster/template database helpers and keep fixture
+  setup deterministic.
 
 - Risk: Table ordering assumptions may leak into snapshot ordering.
-  Severity: low.
-  Likelihood: medium.
-  Mitigation: define explicit SQL ordering in repository queries and assert it
-  in tests.
+  Severity: low. Likelihood: medium. Mitigation: define explicit SQL ordering
+  in repository queries and assert it in tests.
 
 ## Progress
 
@@ -129,44 +121,42 @@ Observable success criteria:
 
 - Observation (2026-02-12): 3.2.1 already introduced validated catalogue and
   descriptor domain entities plus ingestion adapters, so 3.2.2 can focus only
-  on read-side ports/adapters and read contracts.
-  Evidence: `backend/src/domain/catalogue/mod.rs`,
+  on read-side ports/adapters and read contracts. Evidence:
+  `backend/src/domain/catalogue/mod.rs`,
   `backend/src/domain/descriptors/mod.rs`, and ingestion adapters under
   `backend/src/outbound/persistence/`.
 
 - Observation (2026-02-12): Architecture documentation already names
   `CatalogueRepository` and `DescriptorRepository` as driven ports and states
-  that `CatalogueRepository` returns an explore snapshot.
-  Evidence: `docs/wildside-backend-architecture.md` lines around the "Driven
-  ports (repositories)" section.
+  that `CatalogueRepository` returns an explore snapshot. Evidence:
+  `docs/wildside-backend-architecture.md` lines around the "Driven ports
+  (repositories)" section.
 
 - Observation (2026-02-12): Existing behavioural coverage pattern for
   persistence contracts uses template databases from shared embedded Postgres
-  fixtures and supports skip-on-unavailable behaviour.
-  Evidence: `backend/tests/ports_behaviour.rs`,
+  fixtures and supports skip-on-unavailable behaviour. Evidence:
+  `backend/tests/ports_behaviour.rs`,
   `backend/tests/catalogue_descriptor_ingestion_bdd.rs`, and
   `backend/tests/support/pg_embed.rs`.
 
 ## Decision log
 
 - Decision: Keep 3.2.2 scoped to read ports/adapters and contract tests; do
-  not implement HTTP endpoints in this change.
-  Rationale: The roadmap explicitly reserves endpoint wiring for 3.2.3.
-  Date/Author: 2026-02-12 / Codex.
+  not implement HTTP endpoints in this change. Rationale: The roadmap
+  explicitly reserves endpoint wiring for 3.2.3. Date/Author: 2026-02-12 /
+  Codex.
 
 - Decision: Introduce explicit read snapshot structs for port outputs (rather
   than returning many independent vectors) so 3.2.3 can map endpoint responses
-  without leaking adapter concerns.
-  Rationale: The architecture and Progressive Web App (PWA)
-  model both describe a cohesive explore snapshot contract.
+  without leaking adapter concerns. Rationale: The architecture and Progressive
+  Web App (PWA) model both describe a cohesive explore snapshot contract.
   Date/Author: 2026-02-12 / Codex.
 
 - Decision: Contract tests will include JSONB localization assertions in both
   directions (read decode and shape persistence expectations), and include at
-  least one malformed-localization unhappy path.
-  Rationale: Roadmap text calls out localization payload contracts as a primary
-  deliverable.
-  Date/Author: 2026-02-12 / Codex.
+  least one malformed-localization unhappy path. Rationale: Roadmap text calls
+  out localization payload contracts as a primary deliverable. Date/Author:
+  2026-02-12 / Codex.
 
 ## Outcomes & retrospective
 
@@ -180,16 +170,16 @@ Completion evidence:
 - Quality gates pass: `make check-fmt`, `make lint`, `make test` (678 passed,
   1 skipped).
 
-Net change: 14 files changed, 1,280 insertions, 11 deletions. Within the
-scope tolerance of 18 files / 1,100 LOC (file count within bounds; LOC
-slightly above due to comprehensive BDD test fixtures — acceptable given test
-code is not production complexity).
+Net change: 14 files changed, 1,280 insertions, 11 deletions. Within the scope
+tolerance of 18 files / 1,100 LOC (file count within bounds; LOC slightly above
+due to comprehensive BDD test fixtures — acceptable given test code is not
+production complexity).
 
 Lessons:
 
 - The Whitaker custom lint suite requires `//!` inner doc comments on all
-  `mod tests` blocks. This was not flagged by standard clippy and only
-  appeared in the Whitaker pass.
+  `mod tests` blocks. This was not flagged by standard clippy and only appeared
+  in the Whitaker pass.
 - Pre-existing `dead_code` warnings in `cluster_skip.rs` affect all BDD test
   crates but do not break `make test` (nextest compiles differently from
   `cargo check --test`). This is a known pre-existing issue on `main`.
@@ -270,9 +260,9 @@ Planned target files (subject to small adjustments during implementation):
 2. Implement Diesel adapters for new read ports.
 
    Add read-query adapters in outbound persistence. Query all required tables,
-   map rows into domain entities, and convert localization/image JSON into typed
-   domain value objects. Constrain ordering deterministically (for example, by
-   `slug` or `highlighted_at` where appropriate).
+   map rows into domain entities, and convert localization/image JSON into
+   typed domain value objects. Constrain ordering deterministically (for
+   example, by `slug` or `highlighted_at` where appropriate).
 
    Acceptance checks:
 
@@ -302,10 +292,10 @@ Planned target files (subject to small adjustments during implementation):
 
 4. Update architecture decision record and roadmap progress.
 
-   Add a 3.2.2 design decision entry to
-   `docs/wildside-backend-architecture.md` describing new read ports, adapter
-   boundaries, and localization contract guarantees. Mark roadmap task 3.2.2 as
-   done only after all tests and gates pass.
+   Add a 3.2.2 design decision entry to `docs/wildside-backend-architecture.md`
+   describing new read ports, adapter boundaries, and localization contract
+   guarantees. Mark roadmap task 3.2.2 as done only after all tests and gates
+   pass.
 
    Acceptance checks:
 
@@ -339,5 +329,5 @@ Planned target files (subject to small adjustments during implementation):
   migrations.
 - If embedded Postgres is unavailable in the local environment, preserve
   existing skip behaviour but still run unit and lint/fmt gates.
-- Update this ExecPlan `Progress`, `Surprises & Discoveries`, and `Decision
-  Log` as implementation proceeds.
+- Update this ExecPlan `Progress`, `Surprises & Discoveries`, and
+  `Decision Log` as implementation proceeds.

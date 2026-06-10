@@ -473,9 +473,9 @@ export function useTodos(filters) {
 
 - `useMutation`**:** This hook is used for creating, updating, or deleting
   data. It takes a `mutationFn` as its argument. The returned `mutate` function
-  is called to trigger the mutation. A common and powerful pattern is to use
-  the `onSuccess` callback to invalidate related queries, which prompts
-  Tanstack Query to automatically refetch the data and keep the UI in sync.[^15]
+  is called to trigger the mutation. A common and powerful pattern is to use the
+  `onSuccess` callback to invalidate related queries, which prompts Tanstack
+  Query to automatically refetch the data and keep the UI in sync.[^15]
 
 ```javascript
 // src/hooks/useAddTodo.js
@@ -1689,16 +1689,16 @@ accessed on August 20, 2025,
 accessed on August 20, 2025,
 [https://tanstack.com/query/v5/docs/react/guides/does-this-replace-client-state](https://tanstack.com/query/v5/docs/react/guides/does-this-replace-client-state)
 
-[^7] Zustand vs tanstack query : r/reactjs - Reddit, accessed on August 20,
-2025,
+[^7] Zustand vs tanstack query : r/reactjs - Reddit, accessed on
+August 20, 2025,
 [https://www.reddit.com/r/reactjs/comments/1mugweq/zustand_vs_tanstack_query/](https://www.reddit.com/r/reactjs/comments/1mugweq/zustand_vs_tanstack_query/)
 
 [^8] How to structure Next.js project with Zustand and React Query | by …,
 accessed on August 20, 2025,
 [https://medium.com/@zerebkov.artjom/how-to-structure-next-js-project-with-zustand-and-react-query-c4949544b0fe](https://medium.com/@zerebkov.artjom/how-to-structure-next-js-project-with-zustand-and-react-query-c4949544b0fe)
 
-[^9] Separating Concerns with Zustand and TanStack Query, accessed on August
-20, 2025,
+[^9] Separating Concerns with Zustand and TanStack Query, accessed on
+August 20, 2025,
 [https://volodymyrrudyi.com/blog/separating-concerns-with-zustand-and-tanstack-query/](https://volodymyrrudyi.com/blog/separating-concerns-with-zustand-and-tanstack-query/)
 
 [^10] React State Management — using Zustand | by Chikku George | Globant -
@@ -1738,8 +1738,8 @@ on August 20, 2025, [https://tanstack.com/](https://tanstack.com/)
 JavaScript in Plain English, accessed on August 20, 2025,
 [https://javascript.plainenglish.io/cache-storage-in-tanstack-query-bdfd89fa4705](https://javascript.plainenglish.io/cache-storage-in-tanstack-query-bdfd89fa4705)
 
-[^20] Query Invalidation | TanStack Query React Docs, accessed on August 20,
-2025,
+[^20] Query Invalidation | TanStack Query React Docs, accessed on
+August 20, 2025,
 [https://tanstack.com/query/v5/docs/react/guides/query-invalidation](https://tanstack.com/query/v5/docs/react/guides/query-invalidation)
 
 [^21] React Query Cache Invalidation: Why Your Mutations Work But Your UI
@@ -1758,8 +1758,8 @@ accessed on August 20, 2025,
 accessed on August 20, 2025,
 [https://github.com/TanStack/query/discussions/5034](https://github.com/TanStack/query/discussions/5034)
 
-[^25] persistQueryClient | TanStack Query React Docs, accessed on August 20,
-2025,
+[^25] persistQueryClient | TanStack Query React Docs, accessed on
+August 20, 2025,
 [https://tanstack.com/query/v4/docs/react/plugins/persistQueryClient](https://tanstack.com/query/v4/docs/react/plugins/persistQueryClient)
 
 [^26] Building Offline-First React Native Apps with React Query and …, accessed
@@ -1802,8 +1802,8 @@ on August 20, 2025,
 Blog, accessed on August 20, 2025,
 [https://blog.logrocket.com/tanstack-query-websockets-real-time-react-data-fetching/](https://blog.logrocket.com/tanstack-query-websockets-real-time-react-data-fetching/)
 
-[^36] Optimistic Updates | TanStack Query React Docs, accessed on August 20,
-2025,
+[^36] Optimistic Updates | TanStack Query React Docs, accessed on
+August 20, 2025,
 [https://tanstack.com/query/v5/docs/react/guides/optimistic-updates](https://tanstack.com/query/v5/docs/react/guides/optimistic-updates)
 
 [^37] TkDodo's Blog | TanStack Query React Docs, accessed on August 20, 2025,
@@ -1812,12 +1812,12 @@ Blog, accessed on August 20, 2025,
 [^38] TkDodo's Blog | TanStack Query React Docs, accessed on August 20, 2025,
 [https://tanstack.com/query/latest/docs/react/community/tkdodos-blog](https://tanstack.com/query/latest/docs/react/community/tkdodos-blog)
 
-[^39] Using WebSockets with React Query | TkDodo's blog, accessed on August 20,
-2025,
+[^39] Using WebSockets with React Query | TkDodo's blog, accessed on
+August 20, 2025,
 [https://tkdodo.eu/blog/using-web-sockets-with-react-query](https://tkdodo.eu/blog/using-web-sockets-with-react-query)
 
-[^40] Using Websockets with React Query - Jon Bellah, accessed on August 20,
-2025,
+[^40] Using Websockets with React Query - Jon Bellah, accessed on
+August 20, 2025,
 [https://jonbellah.com/articles/websockets-with-react-query](https://jonbellah.com/articles/websockets-with-react-query)
 
 [^41] How do you guys build offline-first apps with React Native? - Reddit,
@@ -1833,7 +1833,7 @@ August 20, 2025,
 [https://electric-sql.com/blog/2025/07/29/local-first-sync-with-tanstack-db](https://electric-sql.com/blog/2025/07/29/local-first-sync-with-tanstack-db)
 
 [^44] XState | Stately, accessed on August 21, 2025,
-[https://stately.ai/docs/xstate](https://stately.ai/docs/xstate) [^45]
+[https://stately.ai/docs/xstate](https://stately.ai/docs/xstate)[^45]
 statelyai/xstate: Actor-based state management & orchestration for complex app
 logic. - GitHub, accessed on August 21, 2025,
 [https://github.com/statelyai/xstate](https://github.com/statelyai/xstate)
@@ -1853,12 +1853,12 @@ Developers - DhiWise, accessed on August 21, 2025,
 August 21, 2025,
 [https://www.youtube.com/watch?v=s0h34OkEVUE](https://www.youtube.com/watch?v=s0h34OkEVUE)
 
-[^50] How do you actually use xstate? : r/reactjs - Reddit, accessed on August
-21, 2025,
+[^50] How do you actually use xstate? : r/reactjs - Reddit, accessed on
+August 21, 2025,
 [https://www.reddit.com/r/reactjs/comments/1hggghc/how_do_you_actually_use_xstate/](https://www.reddit.com/r/reactjs/comments/1hggghc/how_do_you_actually_use_xstate/)
 
-[^51] What's the deal with XState? : r/reactjs - Reddit, accessed on August 21,
-2025,
+[^51] What's the deal with XState? : r/reactjs - Reddit, accessed on
+August 21, 2025,
 [https://www.reddit.com/r/reactjs/comments/yjaqhi/whats_the_deal_with_xstate/](https://www.reddit.com/r/reactjs/comments/yjaqhi/whats_the_deal_with_xstate/)
 
 [^52] pmndrs/zustand: Bear necessities for state management in React - GitHub,
@@ -1875,6 +1875,6 @@ libs)? Should they even be used together? : r/reactjs
 - Reddit, accessed on August 21, 2025,
 [https://www.reddit.com/r/reactjs/comments/1m2g5n9/how_do_you_use_xstate_with_react_query_or_other/](https://www.reddit.com/r/reactjs/comments/1m2g5n9/how_do_you_use_xstate_with_react_query_or_other/)
 
-[^55] biowaffeln/zustand-middleware-xstate - GitHub, accessed on August 21,
-2025,
+[^55] biowaffeln/zustand-middleware-xstate - GitHub, accessed on
+August 21, 2025,
 [https://github.com/biowaffeln/zustand-middleware-xstate](https://github.com/biowaffeln/zustand-middleware-xstate)

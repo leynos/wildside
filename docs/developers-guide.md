@@ -2,12 +2,11 @@
 
 This guide is the canonical reference for day-to-day contributor workflows in
 this repository. It explains how tests are structured, how behavioural tests
-with `rstest-bdd` are written, and which quality gates must pass before
-commit.
+with `rstest-bdd` are written, and which quality gates must pass before commit.
 
-Use this guide with the [Wildside testing
-guide](wildside-testing-guide.md). The testing guide is an operations
-quick reference, while this document defines strategy and usage conventions.
+Use this guide with the [Wildside testing guide](wildside-testing-guide.md).
+The testing guide is an operations quick reference, while this document defines
+strategy and usage conventions.
 
 ## Testing strategy
 
@@ -30,8 +29,8 @@ All suites run through the same quality gateways:
 
 Use the repository-local k3d preview when validating the backend image and Helm
 chart before handing values to Nile Valley. The preview workflow is documented
-in [Local k3d preview and Nile Valley integration
-design](local-k8s-preview-design.md).
+in
+[Local k3d preview and Nile Valley integration design](local-k8s-preview-design.md).
 
 ```bash
 make local-k8s-up
@@ -43,17 +42,17 @@ make local-k8s-down
 The Makefile targets call `uv run scripts/local_k8s.py ...`. Keep helper logic
 in `scripts/local_k8s/`, unit-test pure validation behaviour under
 `scripts/local_k8s/unittests/`, and keep cluster creation idempotent. The
-helper must fail before making changes when required tools such as Docker,
-Helm, `k3d`, or `kubectl` are missing.
+helper must fail before making changes when required tools such as Docker, Helm,
+`k3d`, or `kubectl` are missing.
 
 ## Front-end development
 
-The Wildside Progressive Web Application (PWA) lives under `frontend-pwa/`.
-The current checked-in package is intentionally smaller than the full v2a
-target stack. Contributors must treat `frontend-pwa/package.json` as the
-source of truth for installed packages, and use
-`docs/v2a-front-end-stack.md` and `docs/frontend-roadmap.md` for target-stack
-decisions that have not yet been implemented.
+The Wildside Progressive Web Application (PWA) lives under `frontend-pwa/`. The
+current checked-in package is intentionally smaller than the full v2a target
+stack. Contributors must treat `frontend-pwa/package.json` as the source of
+truth for installed packages, and use `docs/v2a-front-end-stack.md` and
+`docs/frontend-roadmap.md` for target-stack decisions that have not yet been
+implemented.
 
 Canonical front-end references:
 
@@ -75,7 +74,8 @@ Canonical front-end references:
   documents PWA, responsive design, and Web Content Accessibility Guidelines
   (WCAG) expectations.
 - [Semantic Tailwind with DaisyUI best practice](semantic-tailwind-with-daisyui-best-practice.md)
-  and [Enforcing semantic Tailwind best practice](enforcing-semantic-tailwind-best-practice.md)
+  and
+  [Enforcing semantic Tailwind best practice](enforcing-semantic-tailwind-best-practice.md)
   document semantic styling and lint policy.
 - [Frontend roadmap ExecPlan](execplans/frontend-roadmap.md) tracks overall
   roadmap execution, with phase-specific ExecPlans under `docs/execplans/`.
@@ -94,15 +94,15 @@ make test
 ```
 
 `make audit` checks frontend and Rust dependencies. It expects Corepack to be
-enabled so `pnpm` is available locally and in CI, and it requires
-`cargo-audit` for the Rust dependency check.
+enabled so `pnpm` is available locally and in CI, and it requires `cargo-audit`
+for the Rust dependency check.
 
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.2`,
-React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`,
-Zod 3, TypeScript 5, Vitest 3, and Orval 8. TanStack Router, Radix UI,
-i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
-target-stack items until a roadmap task adds them to `frontend-pwa/package.json`
-and the lockfile.
+React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`, Zod
+3, TypeScript 5, Vitest 3, and Orval 8. TanStack Router, Radix UI, i18next,
+Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are target-stack
+items until a roadmap task adds them to `frontend-pwa/package.json` and the
+lockfile.
 
 ### Build and preview workflow
 
@@ -126,8 +126,8 @@ bun run test
 ```
 
 Token generation runs before front-end development, build, and preview scripts
-through package hooks. The source token package is `packages/tokens/`; generated
-outputs are consumed by `frontend-pwa/tailwind.config.js` and
+through package hooks. The source token package is `packages/tokens/`;
+generated outputs are consumed by `frontend-pwa/tailwind.config.js` and
 `frontend-pwa/src/index.css`.
 
 Makefile targets are the canonical local and Continuous Integration (CI) entry
@@ -266,8 +266,8 @@ embedded PostgreSQL layers:
 - `~/.cache/pg-embedded/binaries` for `pg-embed-setup-unpriv` release archives.
 
 Do not co-locate those paths inside the Cargo registry/cache archive. Cargo
-dependency updates and `Cargo.lock` churn otherwise evict the PostgreSQL
-binary cache and force a fresh download during unrelated test changes.
+dependency updates and `Cargo.lock` churn otherwise evict the PostgreSQL binary
+cache and force a fresh download during unrelated test changes.
 
 The warm-up step pins:
 
@@ -286,9 +286,10 @@ worker process.
 
 If CI reports `error decoding response body`, treat it as a likely download
 stall or timeout from `reqwest` rather than as JSON/body corruption. Check the
-`Cache PostgreSQL embedded binaries` and `Warm PostgreSQL embedded binary
-cache` steps first, then verify that the `Rust tests` step is still exporting
-`PG_EMBEDDED_WORKER`, `GITHUB_TOKEN`, and `NEXTEST_TEST_THREADS=1`.
+`Cache PostgreSQL embedded binaries` and
+`Warm PostgreSQL embedded binary cache` steps first, then verify that the
+`Rust tests` step is still exporting `PG_EMBEDDED_WORKER`, `GITHUB_TOKEN`, and
+`NEXTEST_TEST_THREADS=1`.
 
 ## Rust behavioural tests with `rstest-bdd` v0.5.0
 
@@ -376,8 +377,8 @@ When adding a new behaviour:
 When migrating existing suites, prefer incremental edits that preserve scenario
 intent and avoid broad rewrites that obscure regressions.
 
-When validating generated `rstest-bdd` integration binaries, prefer running
-the binary directly:
+When validating generated `rstest-bdd` integration binaries, prefer running the
+binary directly:
 
 ```bash
 cargo test -p backend --test startup_mode_composition_bdd -- --nocapture
@@ -402,7 +403,7 @@ Shared crate BDD suites live under `tests/` and scale by feature file count.
 Each suite typically includes:
 
 | File type                      | Purpose                                                        |
-|--------------------------------|----------------------------------------------------------------|
+| ------------------------------ | -------------------------------------------------------------- |
 | `common.rs`                    | Shared fixtures, world state, re-exports, and helpers          |
 | `<crate>_bdd.rs`               | Core functional scenarios (one `#[scenario]` per feature file) |
 | `<crate>_documentation_bdd.rs` | Scenarios verifying documented invariants (optional)           |
@@ -428,10 +429,10 @@ The `common.rs` module contains:
 - **Domain-specific fixture types** (for example, a composite ordering key
   struct that mirrors the crate documentation examples).
 - **Helper functions** that encapsulate multi-step setup shared across
-  more than one step definition (for example, constructing a `PageParams`
-  value from a raw limit). Helpers live in `common.rs` rather than a step
-  binary so that both `<crate>_bdd.rs` and `<crate>_documentation_bdd.rs`
-  can call them without duplicating logic.
+  more than one step definition (for example, constructing a `PageParams` value
+  from a raw limit). Helpers live in `common.rs` rather than a step binary so
+  that both `<crate>_bdd.rs` and `<crate>_documentation_bdd.rs` can call them
+  without duplicating logic.
 
 Each BDD test binary declares `mod common;` and imports from it:
 
@@ -441,19 +442,19 @@ mod common;
 use common::{Cursor, CursorError, Direction, FixtureKey, World};
 ```
 
-When a step definition is needed by more than one test binary, define it
-in both binaries rather than extracting it into the common module.
-`rstest-bdd` step macros must appear in the same compilation unit as the
-`#[scenario]` binding that references them.
+When a step definition is needed by more than one test binary, define it in
+both binaries rather than extracting it into the common module. `rstest-bdd`
+step macros must appear in the same compilation unit as the `#[scenario]`
+binding that references them.
 
-When a setup action is needed by more than one step definition — across
-either the same or different test binaries — extract it into a `pub fn`
-in `common.rs`. Helper functions must not carry `#[given]`, `#[when]`, or
-`#[then]` attributes; they are plain Rust functions called by step
-definitions. Annotate helpers that use `.expect()` with
+When a setup action is needed by more than one step definition — across either
+the same or different test binaries — extract it into a `pub fn` in
+`common.rs`. Helper functions must not carry `#[given]`, `#[when]`, or
+`#[then]` attributes; they are plain Rust functions called by step definitions.
+Annotate helpers that use `.expect()` with
 `#[expect(clippy::expect_used, reason = "BDD helpers use expect for clear failures")]`.
-Prefer a helper over a duplicated step body as soon as the same
-boilerplate appears in two or more places.
+Prefer a helper over a duplicated step body as soon as the same boilerplate
+appears in two or more places.
 
 ### Hexagonal consumption rules
 
@@ -461,23 +462,21 @@ Shared workspace crates sit below the adapter layer and must remain
 transport-agnostic:
 
 - **Inbound adapters** consume shared crate types for deserialization and
-  response wrapping (for example, deserializing `PageParams` from query
-  strings and wrapping results in `Paginated<T>`).
+  response wrapping (for example, deserializing `PageParams` from query strings
+  and wrapping results in `Paginated<T>`).
 - **Outbound adapters** consume shared crate types for query construction
-  (for example, using `Cursor` keys for keyset filtering in Diesel
-  queries).
+  (for example, using `Cursor` keys for keyset filtering in Diesel queries).
 - **Domain code** does not depend on shared crate types directly. Ports
-  define their own parameter and return types; adapters convert at the
-  boundary.
+  define their own parameter and return types; adapters convert at the boundary.
 - **Error mapping** is performed by inbound adapters, not by the shared
-  crate. The crate documents recommended HTTP status codes and envelope
-  `code` values, but the adapter layer owns the final mapping.
+  crate. The crate documents recommended HTTP status codes and envelope `code`
+  values, but the adapter layer owns the final mapping.
 - **Pagination-aware repository errors** are modelled as semantic port errors
   rather than opaque query strings. For users pagination,
   `UserPersistenceError::Pagination` wraps `UserPaginationError`, allowing
   repository-originated invalid cursor and unsupported direction failures to
-  map to HTTP `400` while connection failures remain `503` and unexpected
-  query failures remain redacted `500` responses.
+  map to HTTP `400` while connection failures remain `503` and unexpected query
+  failures remain redacted `500` responses.
 - **BDD cursor fixtures** that exercise invalid opaque cursor payloads should
   use static base64url tokens via `concat!` when the request helper expects a
   `'static` path. This keeps the behaviour explicit without adding test-only
@@ -487,9 +486,9 @@ transport-agnostic:
 
 When a shared crate includes crate-level documentation that makes specific
 claims (default values, error behaviour, normalization rules), create a
-dedicated `*_documentation_bdd.rs` test file with scenarios that verify
-those claims at runtime. This ensures documentation and implementation
-remain in sync as a gating requirement.
+dedicated `*_documentation_bdd.rs` test file with scenarios that verify those
+claims at runtime. This ensures documentation and implementation remain in sync
+as a gating requirement.
 
 ### Integration guidance for new crates
 
@@ -572,7 +571,8 @@ cargo test -p backend --test route_cache_redis_bdd
 
 ### RedisTestServer harness
 
-Integration tests use `RedisTestServer` from `backend/src/test_support/redis.rs`:
+Integration tests use `RedisTestServer` from
+`backend/src/test_support/redis.rs`:
 
 ```rust
 use backend::test_support::redis::RedisTestServer;
@@ -624,14 +624,14 @@ cargo test -p backend --test '*'
 
 The hexagonal boundary is enforced via visibility:
 
-| Component                      | Visibility                  | Purpose                              |
-|--------------------------------|-----------------------------|--------------------------------------|
-| `RedisRouteCache<P>`           | `pub`                       | Public adapter for domain use        |
-| `GenericRedisRouteCache<P, C>` | Internal; not re-exported   | Generic adapter implementation       |
-| `ConnectionProvider`           | Internal; not re-exported   | Test seam for connection abstraction |
-| `RedisPoolProvider`            | Internal; not re-exported   | Production `ConnectionProvider` impl |
-| `test_helpers::FakeProvider`   | `pub` (test-only)           | In-memory test double                |
-| `RedisTestServer`              | `pub` (test-support)        | Live server harness                  |
+| Component                      | Visibility                | Purpose                              |
+| ------------------------------ | ------------------------- | ------------------------------------ |
+| `RedisRouteCache<P>`           | `pub`                     | Public adapter for domain use        |
+| `GenericRedisRouteCache<P, C>` | Internal; not re-exported | Generic adapter implementation       |
+| `ConnectionProvider`           | Internal; not re-exported | Test seam for connection abstraction |
+| `RedisPoolProvider`            | Internal; not re-exported | Production `ConnectionProvider` impl |
+| `test_helpers::FakeProvider`   | `pub` (test-only)         | In-memory test double                |
+| `RedisTestServer`              | `pub` (test-support)      | Live server harness                  |
 
 Domain code depends only on the `RouteCache` port trait. The Redis adapter
 implements this port without exposing `bb8-redis` types in the public API.
@@ -796,15 +796,15 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
 The hexagonal boundary is enforced via visibility:
 
-| Component                            | Visibility                | Purpose                                    |
-|--------------------------------------|---------------------------|--------------------------------------------|
-| `ApalisRouteQueue<P>`                | `pub`                     | Public adapter for domain use              |
-| `ApalisPostgresProvider`             | `pub`                     | Production `QueueProvider` implementation  |
-| `GenericApalisRouteQueue<P, Q>`      | `pub`                     | Generic adapter and BDD harness seam       |
-| `QueueProvider`                      | `pub(crate)`              | Test seam for provider abstraction         |
-| `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only)  | In-memory test double                      |
-| `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only)  | Always-failing test double                 |
-| `setup_apalis_storage`               | `pub` (test support)      | BDD harness for Apalis schema provisioning |
+| Component                            | Visibility               | Purpose                                    |
+| ------------------------------------ | ------------------------ | ------------------------------------------ |
+| `ApalisRouteQueue<P>`                | `pub`                    | Public adapter for domain use              |
+| `ApalisPostgresProvider`             | `pub`                    | Production `QueueProvider` implementation  |
+| `GenericApalisRouteQueue<P, Q>`      | `pub`                    | Generic adapter and BDD harness seam       |
+| `QueueProvider`                      | `pub(crate)`             | Test seam for provider abstraction         |
+| `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only) | In-memory test double                      |
+| `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only) | Always-failing test double                 |
+| `setup_apalis_storage`               | `pub` (test support)     | BDD harness for Apalis schema provisioning |
 
 Domain code depends only on the `RouteQueue` port trait. The Apalis adapter
 implements this port without exposing `apalis-postgres` or `sqlx` types in the
@@ -823,14 +823,13 @@ Public production API:
 Implementation details within `outbound::queue`:
 
 - `GenericApalisRouteQueue<P, Q>` – Re-exported beside the production alias
-  because the BDD harness constructs the adapter with a test provider. It
-  can parameterize the adapter over the queue provider type `Q`, so tests can
-  substitute doubles, while production code should prefer
-  `ApalisRouteQueue<P>`.
+  because the BDD harness constructs the adapter with a test provider. It can
+  parameterize the adapter over the queue provider type `Q`, so tests can
+  substitute doubles, while production code should prefer `ApalisRouteQueue<P>`.
 - `QueueProvider` – Declared `pub(crate)` inside the private
-  `apalis_route_queue` module. Defines `async fn push_job(&self,
-  payload: serde_json::Value) -> Result<(), JobDispatchError>` as the test
-  seam; not part of the crate's supported public API.
+  `apalis_route_queue` module. Defines
+  `async fn push_job(&self, payload: serde_json::Value) -> Result<(), JobDispatchError>`
+  as the test seam; not part of the crate's supported public API.
 
 Queue observability:
 

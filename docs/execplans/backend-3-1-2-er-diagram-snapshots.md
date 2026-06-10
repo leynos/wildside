@@ -6,8 +6,8 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 
 Status: COMPLETED (2026-02-09)
 
-No `PLANS.md` file exists in the repository root at the time of writing. If
-one is added, this ExecPlan must be updated to follow it.
+No `PLANS.md` file exists in the repository root at the time of writing. If one
+is added, this ExecPlan must be updated to follow it.
 
 ## Purpose / big picture
 
@@ -64,27 +64,19 @@ Success is observable when:
 ## Risks
 
 - Risk: Mermaid rendering output may vary between environments, causing noisy
-  snapshot diffs.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: keep canonical source snapshot as Mermaid text, sort all
-  introspection output deterministically, and keep rendered output format
-  stable.
+  snapshot diffs. Severity: medium Likelihood: medium Mitigation: keep
+  canonical source snapshot as Mermaid text, sort all introspection output
+  deterministically, and keep rendered output format stable.
 
 - Risk: migration introspection queries can return rows in non-deterministic
-  order.
-  Severity: high
-  Likelihood: medium
-  Mitigation: enforce explicit ordering in SQL queries and deterministic
-  in-memory sorting before rendering.
+  order. Severity: high Likelihood: medium Mitigation: enforce explicit
+  ordering in SQL queries and deterministic in-memory sorting before rendering.
 
 - Risk: behavioural tests that invoke rendering binaries can be flaky in
-  continuous integration (CI) if browser prerequisites are missing.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: separate renderer integration from core schema extraction,
-  support a no-rendering mode for logic tests, and run full pipeline tests with
-  current workspace Mermaid tooling.
+  continuous integration (CI) if browser prerequisites are missing. Severity:
+  medium Likelihood: medium Mitigation: separate renderer integration from core
+  schema extraction, support a no-rendering mode for logic tests, and run full
+  pipeline tests with current workspace Mermaid tooling.
 
 ## Progress
 
@@ -114,42 +106,38 @@ Success is observable when:
   Mermaid ER diagram, but no automated snapshot pipeline currently exists.
   Evidence: `docs/wildside-backend-architecture.md` contains static ER content
   under "Catalogue and user state diagrams", and repository search found no ER
-  snapshot generator.
-  Impact: this feature must introduce first-class generation mechanics and
-  traceable artefact storage.
+  snapshot generator. Impact: this feature must introduce first-class
+  generation mechanics and traceable artefact storage.
 
 - Observation: workspace tooling already includes Mermaid CLI dependencies and
-  browser bootstrap support.
-  Evidence: root `package.json` includes `@mermaid-js/mermaid-cli`, and
-  `scripts/install-mermaid-browser.mjs` supports Mermaid rendering setup.
-  Impact: no new diagram-rendering dependency is expected.
+  browser bootstrap support. Evidence: root `package.json` includes
+  `@mermaid-js/mermaid-cli`, and `scripts/install-mermaid-browser.mjs` supports
+  Mermaid rendering setup. Impact: no new diagram-rendering dependency is
+  expected.
 
 - Observation: the repository enforces capability-based filesystem access via
   Whitaker lint (`no_std_fs_operations`) across library and test targets.
-  Evidence: initial `make lint` runs failed on `std::fs` usage in new
-  snapshot modules and tests.
-  Impact: snapshot implementation was rewritten to use `cap_std::fs::Dir`
-  operations, including test helpers.
+  Evidence: initial `make lint` runs failed on `std::fs` usage in new snapshot
+  modules and tests. Impact: snapshot implementation was rewritten to use
+  `cap_std::fs::Dir` operations, including test helpers.
 
 ## Decision log
 
 - Decision: store ER snapshot artefacts under `docs/diagrams/er/` as
   deterministic Mermaid source (`.mmd`) plus a rendered image (`.svg`).
   Rationale: source files remain diffable and reviewable, while rendered
-  snapshots are directly consumable in documentation.
-  Date/Author: 2026-02-09 / Codex.
+  snapshots are directly consumable in documentation. Date/Author: 2026-02-09 /
+  Codex.
 
 - Decision: implement schema extraction as a domain-facing port plus outbound
-  Postgres adapter, and keep the CLI as an inbound adapter.
-  Rationale: roadmap phase 3 requires schema and ingestion operations to remain
-  behind domain ports, preserving hexagonal boundaries.
-  Date/Author: 2026-02-09 / Codex.
+  Postgres adapter, and keep the CLI as an inbound adapter. Rationale: roadmap
+  phase 3 requires schema and ingestion operations to remain behind domain
+  ports, preserving hexagonal boundaries. Date/Author: 2026-02-09 / Codex.
 
 - Decision: validate full generation via `rstest-bdd` scenarios and keep core
-  renderer logic covered by `rstest` unit tests.
-  Rationale: unit tests provide fast deterministic checks, while behavioural
-  scenarios prove end-to-end execution with embedded Postgres.
-  Date/Author: 2026-02-09 / Codex.
+  renderer logic covered by `rstest` unit tests. Rationale: unit tests provide
+  fast deterministic checks, while behavioural scenarios prove end-to-end
+  execution with embedded Postgres. Date/Author: 2026-02-09 / Codex.
 
 ## Outcomes & retrospective
 
@@ -171,9 +159,12 @@ Success is observable when:
   - `rstest-bdd` scenarios in `backend/tests/er_snapshots_bdd.rs` and
     `backend/tests/features/er_snapshots.feature`
 - Quality gates:
-  - `make check-fmt` passed (`/tmp/check-fmt-wildside-backend-3-1-2-er-diagram-snapshots.out`)
-  - `make lint` passed (`/tmp/lint-wildside-backend-3-1-2-er-diagram-snapshots.out`)
-  - `make test` passed (`/tmp/test-wildside-backend-3-1-2-er-diagram-snapshots.out`)
+  - `make check-fmt` passed
+    (`/tmp/check-fmt-wildside-backend-3-1-2-er-diagram-snapshots.out`)
+  - `make lint` passed
+    (`/tmp/lint-wildside-backend-3-1-2-er-diagram-snapshots.out`)
+  - `make test` passed
+    (`/tmp/test-wildside-backend-3-1-2-er-diagram-snapshots.out`)
 - Roadmap and architecture updates:
   - Marked `docs/backend-roadmap.md` item `3.1.2` as done.
   - Added architecture design decision and snapshot references in
@@ -325,7 +316,8 @@ Run all commands from repository root:
 
 Acceptance is satisfied when all conditions below hold:
 
-- Running the ER snapshot command against current migrations writes deterministic
+- Running the ER snapshot command against current migrations writes
+  deterministic
   artefacts under `docs/diagrams/er/`.
 - Unit tests (`rstest`) pass for happy and unhappy paths plus edge cases.
 - Behavioural tests (`rstest-bdd`) pass against embedded Postgres provisioned
@@ -372,7 +364,8 @@ Planned interfaces:
 
 Dependencies:
 
-- Reuse existing workspace tooling for Mermaid rendering (`@mermaid-js/mermaid-cli`).
+- Reuse existing workspace tooling for Mermaid rendering
+  (`@mermaid-js/mermaid-cli`).
 - Reuse existing Rust crates already present in backend and test support.
 - No new external service dependencies are planned.
 

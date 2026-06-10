@@ -1,9 +1,8 @@
 # ExecPlan: Add direction-aware cursors to pagination crate
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -41,8 +40,9 @@ functionality.
 `docs/rstest-bdd-users-guide.md`.
 - **Embedded Postgres:** Integration-style tests must use
 `pg-embedded-setup-unpriv` for local testing (where persistence is needed).
-- **Quality gates:** `make check-fmt`, `make lint`, `make test`, `make
-markdownlint`, `make fmt`, and `make nixie` must all pass before completion.
+- **Quality gates:** `make check-fmt`, `make lint`, `make test`,
+  `make markdownlint`, `make fmt`, and `make nixie` must all pass before
+  completion.
 - **File size:** No single code file may exceed 400 lines (per
 `AGENTS.md` guidelines).
 
@@ -117,14 +117,14 @@ that require significant refactoring.
   `Next` as the default variant, which simplifies the implementation and reads
   more idiomatically.
 - **2026-03-24 12:00Z:** Kept the `Direction` enum as a simple two-variant enum
-  (`Next`, `Prev`) without additional fields. This keeps the cursor JSON compact
-  and the API surface minimal.
+  (`Next`, `Prev`) without additional fields. This keeps the cursor JSON
+  compact and the API surface minimal.
 - **2026-03-24 12:30Z:** Added `into_parts()` method to `Cursor<Key>` alongside
   the existing `into_inner()`. This provides consumers with a convenient way to
   decompose a cursor into both its key and direction in one call.
 - **2026-03-24 13:15Z:** Made `with_direction` a `const fn` per Clippy's
-  suggestion. This allows constructing direction-aware cursors in const contexts
-  if needed.
+  suggestion. This allows constructing direction-aware cursors in const
+  contexts if needed.
 
 ## Outcomes & retrospective
 
@@ -413,7 +413,8 @@ Expected: New direction tests pass.
 
 ### 5. Add behavioural tests
 
-Create `backend/crates/pagination/tests/features/direction_aware_cursors.feature`:
+Create
+`backend/crates/pagination/tests/features/direction_aware_cursors.feature`:
 
 ```gherkin
 Feature: Direction-aware cursor pagination
@@ -564,11 +565,11 @@ test result: ok. 18 passed; 0 failed; 0 ignored
 The serde configuration ensures seamless migration between old and new cursor
 formats:
 
-| Origin          | JSON shape                            | Direction             |
-|-----------------|---------------------------------------|-----------------------|
-| Old (pre-4.1.2) | `{"key":{"id":"abc"}}`                | `Next` (default)      |
-| New with `Next` | `{"key":{"id":"abc"},"dir":"Next"}`   | `Next`                |
-| New with `Prev` | `{"key":{"id":"abc"},"dir":"Prev"}`   | `Prev`                |
+| Origin          | JSON shape                          | Direction        |
+| --------------- | ----------------------------------- | ---------------- |
+| Old (pre-4.1.2) | `{"key":{"id":"abc"}}`              | `Next` (default) |
+| New with `Next` | `{"key":{"id":"abc"},"dir":"Next"}` | `Next`           |
+| New with `Prev` | `{"key":{"id":"abc"},"dir":"Prev"}` | `Prev`           |
 
 Key serde behaviours:
 
@@ -577,8 +578,9 @@ Key serde behaviours:
   preserves the behaviour of existing cursors that were created before this
   change.
 - **No `skip_serializing_if`**: New cursors always include `dir` in serialized
-  output. This ensures forward compatibility—consumers that understand direction
-  will see it; consumers that tolerate unknown JSON fields will ignore `dir`.
+  output. This ensures forward compatibility—consumers that understand
+  direction will see it; consumers that tolerate unknown JSON fields will ignore
+  `dir`.
 
 ### Interface definitions
 

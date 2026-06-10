@@ -672,14 +672,13 @@ client reports a stalled release-asset download through a body-decoding error.
 Harden CI in three places:
 
 1. Cache PostgreSQL binary archives independently of Cargo dependencies.
-   `pg-embed-setup-unpriv` stores release archives under
-   `PG_BINARY_CACHE_DIR`, then `$XDG_CACHE_HOME/pg-embedded/binaries`, then
-   `$HOME/.cache/pg-embedded/binaries`, and finally
-   `/tmp/pg-embedded/binaries`. `postgresql_embedded` also uses
-   `$HOME/.theseus/postgresql` for runtime installations. Cache both persistent
-   locations when the workflow can use both crates, but keep those paths out of
-   a Cargo registry or `target` cache whose key changes on every
-   `Cargo.lock` update.
+   `pg-embed-setup-unpriv` stores release archives under `PG_BINARY_CACHE_DIR`,
+   then `$XDG_CACHE_HOME/pg-embedded/binaries`, then
+   `$HOME/.cache/pg-embedded/binaries`, and finally `/tmp/pg-embedded/binaries`.
+   `postgresql_embedded` also uses `$HOME/.theseus/postgresql` for runtime
+   installations. Cache both persistent locations when the workflow can use
+   both crates, but keep those paths out of a Cargo registry or `target` cache
+   whose key changes on every `Cargo.lock` update.
 2. Pin the release source in test bootstrap:
 
    ```bash

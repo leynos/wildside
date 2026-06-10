@@ -29,8 +29,8 @@ Bun can serve an HTML entry point directly:
 bun './**/*.html'
 ```
 
-The command prints a local URL and route table. React component edits should hot
-reload through React Fast Refresh.
+The command prints a local URL and route table. React component edits should
+hot reload through React Fast Refresh.
 
 ## Minimal entry shape
 

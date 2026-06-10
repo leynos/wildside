@@ -1,9 +1,8 @@
 # Implement offline bundle and walk session HTTP endpoints (roadmap 3.3.3)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -24,11 +23,11 @@ walk completion writes:
 - `POST /api/v1/walk-sessions`
 
 After this work, the Progressive Web App (PWA) can sync offline bundle
-manifests and submit walk
-sessions through the same session-authenticated API boundary as existing
-preferences and annotation flows. Persistence must remain confined to outbound
-Diesel adapters behind domain ports. Endpoints must return stable identifiers
-and surface revision semantics only where those semantics exist in the domain.
+manifests and submit walk sessions through the same session-authenticated API
+boundary as existing preferences and annotation flows. Persistence must remain
+confined to outbound Diesel adapters behind domain ports. Endpoints must return
+stable identifiers and surface revision semantics only where those semantics
+exist in the domain.
 
 Observable success criteria:
 
@@ -87,36 +86,28 @@ Observable success criteria:
 
 - Risk: endpoint Data Transfer Object (DTO) shape diverges from
   `docs/wildside-pwa-data-model.md`, causing client compatibility drift.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: define explicit request/response schema mapping and Behaviour-Driven
-  Development (BDD) checks.
+  Severity: high. Likelihood: medium. Mitigation: define explicit
+  request/response schema mapping and Behaviour-Driven Development (BDD) checks.
 
 - Risk: HTTP handlers call repositories directly without driving-port
-  orchestration, leaking idempotency/retry rules into adapters.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: add explicit driving command/query ports for offline and walk
-  flows and wire those into `HttpState`.
+  orchestration, leaking idempotency/retry rules into adapters. Severity: high.
+  Likelihood: medium. Mitigation: add explicit driving command/query ports for
+  offline and walk flows and wire those into `HttpState`.
 
 - Risk: offline mutation idempotency collisions across users or payloads.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: reuse existing `IdempotencyRepository` lookup/store pattern with
-  `MutationType::Bundles`, plus conflict/replay tests.
+  Severity: medium. Likelihood: medium. Mitigation: reuse existing
+  `IdempotencyRepository` lookup/store pattern with `MutationType::Bundles`,
+  plus conflict/replay tests.
 
 - Risk: ambiguity around “revision updates where applicable”.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: keep revision semantics unchanged from current domain model:
-  no revision field for offline bundles/walk sessions; return stable IDs and
-  timestamps (`updatedAt`) and note this decision in architecture docs.
+  Severity: medium. Likelihood: medium. Mitigation: keep revision semantics
+  unchanged from current domain model: no revision field for offline
+  bundles/walk sessions; return stable IDs and timestamps (`updatedAt`) and
+  note this decision in architecture docs.
 
 - Risk: adding new HTTP endpoints breaks OpenAPI registration completeness.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: update `backend/src/doc.rs` path/components and assert coverage
-  in existing OpenAPI BDD suite.
+  Severity: medium. Likelihood: medium. Mitigation: update `backend/src/doc.rs`
+  path/components and assert coverage in existing OpenAPI BDD suite.
 
 ## Agent team
 
@@ -192,35 +183,31 @@ Coordination rules:
 
 - Observation (2026-02-21): architecture doc already references
   `OfflineBundleCommand` and `WalkSessionCommand`, but code currently exposes
-  only repository ports and no corresponding driving command ports.
-  Impact: 3.3.3 should add driving ports/services to align implementation with
+  only repository ports and no corresponding driving command ports. Impact:
+  3.3.3 should add driving ports/services to align implementation with
   documented architecture.
 
 - Observation (2026-02-21): current `HttpState` and server route wiring have no
-  offline/walk entries.
-  Impact: state wiring and harness doubles must be extended before endpoint BDD
-  tests can pass.
+  offline/walk entries. Impact: state wiring and harness doubles must be
+  extended before endpoint BDD tests can pass.
 
 ## Decision Log
 
 - Decision: implement explicit driving ports/services for offline bundle and
   walk session HTTP operations instead of having handlers call repository ports
-  directly.
-  Rationale: aligns with architecture section “Driving ports” and keeps
-  idempotency/retry policy out of handlers.
-  Date/Author: 2026-02-21 / Codex.
+  directly. Rationale: aligns with architecture section “Driving ports” and
+  keeps idempotency/retry policy out of handlers. Date/Author: 2026-02-21 /
+  Codex.
 
 - Decision: treat “revision updates where applicable” as “preserve and return
   existing mutable version markers in domain payloads” and not introduce a new
-  revision field for offline/walk entities in 3.3.3.
-  Rationale: current domain types use IDs and timestamps, not numeric revision
-  fields; adding new revision columns would exceed roadmap scope.
-  Date/Author: 2026-02-21 / Codex.
+  revision field for offline/walk entities in 3.3.3. Rationale: current domain
+  types use IDs and timestamps, not numeric revision fields; adding new
+  revision columns would exceed roadmap scope. Date/Author: 2026-02-21 / Codex.
 
 - Decision: keep offline bundle idempotency on `POST` and `DELETE` only, using
-  existing `MutationType::Bundles`.
-  Rationale: matches architecture and existing idempotency taxonomy.
-  Date/Author: 2026-02-21 / Codex.
+  existing `MutationType::Bundles`. Rationale: matches architecture and
+  existing idempotency taxonomy. Date/Author: 2026-02-21 / Codex.
 
 ## Context and orientation
 
@@ -411,8 +398,7 @@ Completed outcomes:
 - Added driving ports and domain services for offline bundle mutations/queries
   and walk session creation, keeping repository details in outbound adapters.
 - Delivered the four roadmap endpoints:
-  `GET/POST/DELETE /api/v1/offline/bundles` and
-  `POST /api/v1/walk-sessions`.
+  `GET/POST/DELETE /api/v1/offline/bundles` and `POST /api/v1/walk-sessions`.
 - Preserved stable identifiers in API responses (`id` values are caller-stable
   UUIDs), and kept revision semantics unchanged because these entities do not
   use numeric revision counters.

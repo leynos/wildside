@@ -1,15 +1,13 @@
 # Validate and close the Apalis-backed `RouteQueue` adapter (backend 5.2.1)
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
 This plan covers roadmap item 5.2.1 only:
-`Implement RouteQueue using Apalis with PostgreSQL backend, replacing the
-current stub adapter.`
+`Implement RouteQueue using Apalis with PostgreSQL backend, replacing the current stub adapter.` <!-- markdownlint-disable-line MD013 -->
 
 No implementation work may begin from this plan until the plan is explicitly
 approved. Approval authorizes the implementation and closure milestones below;
@@ -103,10 +101,10 @@ Observable success means:
 ## Risks
 
 - Risk: the current base already contains an Apalis adapter, so the remaining
-  work may be partly reconciliation rather than new implementation.
-  Mitigation: start by auditing the current symbols, tests, dependencies, and
-  docs. If the adapter is already correct, make only closure changes such as
-  roadmap updates and plan evidence.
+  work may be partly reconciliation rather than new implementation. Mitigation:
+  start by auditing the current symbols, tests, dependencies, and docs. If the
+  adapter is already correct, make only closure changes such as roadmap updates
+  and plan evidence.
 
 - Risk: Apalis release-candidate APIs may have shifted. Firecrawl research on
   2026-05-21 found `apalis-postgres` latest documentation at 1.0.0-rc.8, while
@@ -119,19 +117,16 @@ Observable success means:
   `backend/src/outbound/queue/*` and document the dual-pool boundary.
 
 - Risk: `PostgresStorage::setup()` creates Apalis-owned tables that are not
-  represented in Diesel migrations.
-  Mitigation: verify setup is idempotent in tests and document that Apalis owns
-  its internal queue schema.
+  represented in Diesel migrations. Mitigation: verify setup is idempotent in
+  tests and document that Apalis owns its internal queue schema.
 
 - Risk: route-submission user flows may appear to require end-to-end queue
-  dispatch to satisfy "replacing the current stub adapter".
-  Mitigation: keep the acceptance boundary explicit. 5.2.1 closes when the
-  driven adapter exists and is validated; dispatch and worker processing are
-  later roadmap items.
+  dispatch to satisfy "replacing the current stub adapter". Mitigation: keep
+  the acceptance boundary explicit. 5.2.1 closes when the driven adapter exists
+  and is validated; dispatch and worker processing are later roadmap items.
 
 - Risk: `docs/users-guide.md` was requested, but this workspace does not
-  contain that file.
-  Mitigation: update `docs/developers-guide.md` and
+  contain that file. Mitigation: update `docs/developers-guide.md` and
   `docs/wildside-backend-architecture.md` for internal behaviour. If no
   end-user server behaviour changes, record that `docs/users-guide.md` is
   absent and no user-facing guide update was possible.
@@ -218,8 +213,8 @@ leta workspace add "$(pwd)"
 ```
 
 The expected branch is `backend-5-2-1-apalis-route-queue`. The working tree
-should be clean before implementation begins. If there are user changes, do
-not overwrite them.
+should be clean before implementation begins. If there are user changes, do not
+overwrite them.
 
 Use Leta and plain text search for non-code documents to confirm the current
 adapter state:
@@ -329,8 +324,8 @@ coderabbit review --agent
 
 Milestone 4: roadmap closure.
 
-Only after Milestones 1 through 3 pass and CodeRabbit concerns are clear,
-update `docs/backend-roadmap.md`:
+Only after Milestones 1 through 3 pass and CodeRabbit concerns are clear, update
+`docs/backend-roadmap.md`:
 
 ```markdown
 - [x] 5.2.1. Implement `RouteQueue` using Apalis with PostgreSQL backend,
@@ -397,9 +392,9 @@ approved work, must include gate logs and CodeRabbit outcomes.
 
 `proptest`, `kani`, and `verus` are not required for this milestone unless the
 implementation introduces new pure invariants beyond serialization and
-infrastructure error mapping. The queue adapter is primarily an external
-system integration, so focused unit tests and PostgreSQL-backed behavioural
-tests provide the appropriate level of rigour for 5.2.1.
+infrastructure error mapping. The queue adapter is primarily an external system
+integration, so focused unit tests and PostgreSQL-backed behavioural tests
+provide the appropriate level of rigour for 5.2.1.
 
 ## Idempotence and recovery
 
@@ -454,8 +449,8 @@ operation.
   (`/tmp/backend-5-2-1-queue-bdd.out`); 9 passed.
 - [x] 2026-05-26: Ran applicable pre-review gates:
   `make check-fmt` (`/tmp/backend-5-2-1-pre-coderabbit-check-fmt.out`) and
-  `make markdownlint`
-  (`/tmp/backend-5-2-1-pre-coderabbit-markdownlint.out`); both passed.
+  `make markdownlint` (`/tmp/backend-5-2-1-pre-coderabbit-markdownlint.out`);
+  both passed.
 - [x] 2026-05-26: Ran `coderabbit review --agent` after targeted adapter
   verification; review completed with 0 findings.
 - [x] 2026-05-26: Reconciled `docs/developers-guide.md` with the current
@@ -531,16 +526,14 @@ operation.
   Date/Author: 2026-05-21 / planning agent.
 
 - Decision: Keep route-submission dispatch and worker consumption out of
-  scope.
-  Rationale: roadmap items 5.2.2 through 5.3.1 cover job structs, retries,
-  trace propagation, and worker deployment. The current route-submission TODOs
-  show dispatch remains deliberately deferred.
+  scope. Rationale: roadmap items 5.2.2 through 5.3.1 cover job structs,
+  retries, trace propagation, and worker deployment. The current
+  route-submission TODOs show dispatch remains deliberately deferred.
   Date/Author: 2026-05-21 / planning agent.
 
 - Decision: Use `apalis-postgres` with PostgreSQL storage for the queue
-  adapter.
-  Rationale: `docs/backend-roadmap.md` explicitly requires Apalis with a
-  PostgreSQL backend. Firecrawl research confirmed Apalis PostgreSQL
+  adapter. Rationale: `docs/backend-roadmap.md` explicitly requires Apalis with
+  a PostgreSQL backend. Firecrawl research confirmed Apalis PostgreSQL
   documentation describes `PostgresStorage`, storage setup, standard polling,
   `NOTIFY`-based storage, heartbeat support, and orphaned job re-enqueueing.
   Date/Author: 2026-05-21 / planning agent.
@@ -548,8 +541,8 @@ operation.
 - Decision: Do not upgrade Apalis dependencies as part of the plan draft.
   Rationale: external documentation currently shows a newer release candidate
   than the repository pins, but dependency upgrades are implementation work and
-  need evidence from gates before they are justified.
-  Date/Author: 2026-05-21 / planning agent.
+  need evidence from gates before they are justified. Date/Author: 2026-05-21 /
+  planning agent.
 
 - Decision: Start approved execution as a validation-and-closure activity.
   Rationale: the user's 2026-05-26 instruction explicitly approves proceeding
@@ -559,20 +552,19 @@ operation.
   Date/Author: 2026-05-26 / implementation agent.
 
 - Decision: Keep the current `GenericApalisRouteQueue<P, Q>` re-export and
-  document it as a BDD harness seam.
-  Rationale: changing visibility would be an API adjustment rather than a
-  required 5.2.1 behaviour fix. The re-export is already used by the
-  PostgreSQL-backed BDD test, while production code still has the clearer
-  `ApalisRouteQueue<P>` alias.
-  Date/Author: 2026-05-26 / implementation agent.
+  document it as a BDD harness seam. Rationale: changing visibility would be an
+  API adjustment rather than a required 5.2.1 behaviour fix. The re-export is
+  already used by the PostgreSQL-backed BDD test, while production code still
+  has the clearer `ApalisRouteQueue<P>` alias. Date/Author: 2026-05-26 /
+  implementation agent.
 
 ## Outcomes & Retrospective
 
 5.2.1 is complete as a validation-and-closure milestone. The current backend
 already contained the Apalis/PostgreSQL `RouteQueue` adapter, so the approved
 implementation work verified that adapter against focused `rstest` unit tests,
-PostgreSQL-backed `rstest-bdd` scenarios, and full repository gates rather
-than rewriting working code.
+PostgreSQL-backed `rstest-bdd` scenarios, and full repository gates rather than
+rewriting working code.
 
 The only documentation defect found was in `docs/developers-guide.md`, which
 described `GenericApalisRouteQueue<P, Q>` as internal even though the backend

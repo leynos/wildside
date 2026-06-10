@@ -7,8 +7,8 @@ Last updated: 25 November 2025
 Every card in the mockup must render from a concrete entity data model that
 already contains its localized strings and International System of Units
 (SI)-based measurements. Locale bundles should keep only UI chrome and
-formatting scaffolding. This document audits current card usages and defines the
-schemas, localization rules, and migration steps to align the codebase.
+formatting scaffolding. This document audits current card usages and defines
+the schemas, localization rules, and migration steps to align the codebase.
 
 For a backend-compatible perspective (hexagonal domain boundaries, ports, and
 offline-first persistence), see `docs/wildside-mockup-data-model.md`.
@@ -26,9 +26,9 @@ offline-first persistence), see `docs/wildside-mockup-data-model.md`.
 ## Card inventory and current data sources
 
 - **Explore screen (`explore-sections.tsx`)**: category chips, featured walk,
-  popular theme cards, curated collection cards, trending route cards, community
-  pick panel. Data comes from `data/explore.ts`; names/descriptions live
-  directly in fixtures (English only).
+  popular theme cards, curated collection cards, trending route cards,
+  community pick panel. Data comes from `data/explore.ts`; names/descriptions
+  live directly in fixtures (English only).
 - **Discover screen (`discover-screen.tsx`)**: interest chips driven by
   `resolveDiscoverInterests` over the interest registry; labels drawn from
   Fluent keys.
@@ -217,8 +217,8 @@ erDiagram
   COMMUNITY_PICK ||--|| ROUTE : is_based_on_optional
 ```
 
-Figure 2 sketches the class-level model with localization-aware fields and asset
-references that underpin the card architecture.
+Figure 2 sketches the class-level model with localization-aware fields and
+asset references that underpin the card architecture.
 
 ```mermaid
 classDiagram
@@ -411,17 +411,17 @@ classDiagram
   - Refactor safety accordion sections to reference `SafetyToggle` entities and
     presets with localization maps; prune Fluent keys.
 - Status (1 Dec 2025): Customize sliders, chips, route previews, and advanced
-  toggles now resolve names/descriptions from localization maps; safety sections
-  draw from `SafetyToggle` entities with preset toggle mappings and the
-  redundant Fluent messages have been removed.
+  toggles now resolve names/descriptions from localization maps; safety
+  sections draw from `SafetyToggle` entities with preset toggle mappings and
+  the redundant Fluent messages have been removed.
 - **Phase 3: offline & map**
   - Migrate offline suggestions and downloads to SI/numeric fields and
     localization maps; update cards and undo states.
   - Reshape `WalkPointOfInterest` and saved routes; ensure tags use registries
     and unit formatting covers all numerical values.
 - Status (6 Dec 2025): Offline suggestions/downloads now expose localization
-  maps with SI sizes and relative timestamps; saved routes/POIs resolve tags via
-  registries and route metrics render through the unit formatters.
+  maps with SI sizes and relative timestamps; saved routes/POIs resolve tags
+  via registries and route metrics render through the unit formatters.
 - **Phase 4: wizard & completion**
   - Move wizard route summary and generated stops to the shared route/stop
     schemas; delete entity strings from Fluent.

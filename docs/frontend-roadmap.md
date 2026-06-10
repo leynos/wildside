@@ -9,28 +9,29 @@ units with explicit acceptance criteria.
 
 The primary source material is `docs/wildside-pwa-design.md`,
 `docs/wildside-pwa-data-model.md`, `docs/wildside-ux-state-graph-v0.1.json`,
-`docs/sitemap.md`, `spec/openapi.json`, `spec/asyncapi.yaml`, and the v2a mockup
-in `../wildside-mockup-v2a`. The styling, testing, localization, and Progressive
-Web Application (PWA) constraints come from the supporting
+`docs/sitemap.md`, `spec/openapi.json`, `spec/asyncapi.yaml`, and the v2a
+mockup in `../wildside-mockup-v2a`. The styling, testing, localization, and
+Progressive Web Application (PWA) constraints come from the supporting
 documents under `docs/`.
 
-The roadmap is a catalogue of correctly sized implementation tasks. It signposts
-authoritative design documents, Architecture Decision Records, schemas, and API
-contracts through inline citations, but it is not the principal source of
-product policy, schema shape, platform, or user experience requirements.
+The roadmap is a catalogue of correctly sized implementation tasks. It
+signposts authoritative design documents, Architecture Decision Records,
+schemas, and API contracts through inline citations, but it is not the
+principal source of product policy, schema shape, platform, or user experience
+requirements.
 
 ## 0. Source-of-truth reconciliation before implementation
 
-Idea: if the front-end sources of truth are reconciled before foundational build
-work begins, implementation tasks can cite stable design authority instead of
-accumulating decisions inside the roadmap.
+Idea: if the front-end sources of truth are reconciled before foundational
+build work begins, implementation tasks can cite stable design authority
+instead of accumulating decisions inside the roadmap.
 
 This phase catalogues the documentation reconciliation work needed before the
 roadmap is used as an implementation queue. It keeps design decisions in design
-documents or Architecture Decision Records (ADRs),
-resolves known inconsistencies where older Progressive Web App material differs
-from the v2a stack direction, and then refreshes roadmap citations so later
-phases remain task-focused.
+documents or Architecture Decision Records (ADRs), resolves known
+inconsistencies where older Progressive Web App material differs from the v2a
+stack direction, and then refreshes roadmap citations so later phases remain
+task-focused.
 
 ### 0.1. Catalogue authority, overlaps, and contradictions
 
@@ -65,8 +66,8 @@ The outcome informs the source documents that phases 1-5 should cite.
 ### 0.2. Move decisions into the right design authority
 
 This step answers which inconsistencies can be settled in existing design
-documents and which require a separate Architecture Decision Record. The outcome
-informs the concrete implementation tasks in phases 1-4.
+documents and which require a separate Architecture Decision Record. The
+outcome informs the concrete implementation tasks in phases 1-4.
 
 - [ ] 0.2.1. Reconcile Progressive Web App platform guidance under the v2a stack
       direction.
@@ -163,9 +164,9 @@ the roadmap as a hidden design document.
 ## 1. Foundational front-end contracts and build spine
 
 Idea: if the front-end settles its runtime stack, route-state contract,
-schema-validation boundary, and accessibility-first quality gates before feature
-work expands, later slices can migrate from fixtures to backend data without
-repeatedly reshaping app structure.
+schema-validation boundary, and accessibility-first quality gates before
+feature work expands, later slices can migrate from fixtures to backend data
+without repeatedly reshaping app structure.
 
 This phase turns the current minimal Progressive Web App into the
 production-ready skeleton that feature slices can reuse. It deliberately
@@ -178,9 +179,9 @@ them.
 This step answers what `frontend-pwa/` is allowed to become before feature
 delivery starts. Its outcome informs dependency changes, token plumbing, route
 layout, and which mockup practices should be copied rather than re-invented. See
-`docs/v2a-front-end-stack.md` §§Runtime and build toolchain, Styling and design
-system, and What is not currently declared; `docs/wildside-pwa-design.md`
-§§Styling, theming, and tokens; and
+`docs/v2a-front-end-stack.md` §§Runtime and build toolchain, Styling and
+design system, and What is not currently declared;
+`docs/wildside-pwa-design.md` §§Styling, theming, and tokens; and
 `../wildside-mockup-v2a/docs/wildside-mockup-design.md` §§Goals and Migration
 workflow.
 
@@ -373,15 +374,15 @@ from mockup fixtures to backend-compatible projections before route generation
 is fully live.
 
 This slice delivers the first usable journey: launch the app, choose interests,
-browse the route catalogue, refine route preferences, and preserve those choices
-locally. It exercises entity-localized cards, descriptor registries,
+browse the route catalogue, refine route preferences, and preserve those
+choices locally. It exercises entity-localized cards, descriptor registries,
 OpenAPI-backed user preferences, and offline stale catalogue behaviour.
 
 ### 2.1. Prove catalogue entities can replace hard-coded card copy
 
-This step answers whether the card architecture can drive the visible onboarding
-and discovery surfaces without string duplication. The outcome informs every
-later card, itinerary stop, and completion summary. See
+This step answers whether the card architecture can drive the visible
+onboarding and discovery surfaces without string duplication. The outcome
+informs every later card, itinerary stop, and completion summary. See
 `docs/data-model-driven-card-architecture.md` §§Purpose, Principles to enforce,
 and Entity schemas; and `docs/wildside-pwa-data-model.md` §§Descriptors and
 Catalogue.
@@ -580,14 +581,14 @@ The outcome sets the verification template for later slices. See
 
 Idea: if the route wizard, asynchronous generation states, and MapLibre views
 can share one route-plan model and one stable map provider, Wildside proves the
-core product promise before offline downloads and completion summaries depend on
-it.
+core product promise before offline downloads and completion summaries depend
+on it.
 
 This slice delivers the main Wildside loop: draft a walk, request generation,
 track progress, review the result, inspect stops on a stable map, save the
 route, and edit notes or progress. It exercises the hardest integration risks:
-async route state, map canvas ownership, WebSocket cache updates, and idempotent
-user-authored mutations.
+async route state, map canvas ownership, WebSocket cache updates, and
+idempotent user-authored mutations.
 
 ### 3.1. Turn route drafts into asynchronous generation requests
 
@@ -686,10 +687,11 @@ Client-Side Logic with XState.
 
 ### 3.3. Keep MapLibre stable while overlays change
 
-This step answers whether the map canvas can remain imperative and durable while
-React overlays, tabs, and route state update around it. The outcome informs
-offline tile caching and navigation. See `docs/wildside-pwa-design.md` §Map
-architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption `A006`.
+This step answers whether the map canvas can remain imperative and durable
+while React overlays, tabs, and route state update around it. The outcome
+informs offline tile caching and navigation. See `docs/wildside-pwa-design.md`
+§Map architecture; and `docs/wildside-ux-state-graph-v0.1.json` assumption
+`A006`.
 
 - [ ] 3.3.1. Implement a lazy MapLibre wrapper with graceful fallback.
   - Requires 3.1.1.
@@ -1076,9 +1078,9 @@ local-first, and boring to operate, the project can evaluate broader extensions
 on product value instead of letting them destabilize the main release.
 
 This phase collects work that the design documents mention but do not require
-for the first production Progressive Web App slice. These tasks should not block
-phases 1-4 unless a product decision explicitly promotes them into Minimum
-Viable Product scope.
+for the first production Progressive Web App slice. These tasks should not
+block phases 1-4 unless a product decision explicitly promotes them into
+Minimum Viable Product scope.
 
 ### 5.1. Evaluate account, auth, and profile expansion
 

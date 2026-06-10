@@ -39,14 +39,11 @@ No tolerances were breached during execution.
 ## Risks
 
 - Risk: duplicate behavioural assertions could overlap existing seeding tests.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: focus new assertions on row-count invariants and no-partial-write
-  guarantees.
+  Severity: medium. Likelihood: medium. Mitigation: focus new assertions on
+  row-count invariants and no-partial-write guarantees.
 - Risk: embedded Postgres bootstrap may fail in constrained environments.
-  Severity: medium.
-  Likelihood: low.
-  Mitigation: rely on existing `SKIP-TEST-CLUSTER` handling in shared support.
+  Severity: medium. Likelihood: low. Mitigation: rely on existing
+  `SKIP-TEST-CLUSTER` handling in shared support.
 
 ## Progress
 
@@ -65,24 +62,20 @@ No tolerances were breached during execution.
 
 - Observation: startup seeding already had behavioural scenarios before this
   task, but they did not assert row-count invariants for repeat and error
-  flows.
-  Evidence: existing `example_data_seeding.feature` only asserted outcome text
-  for duplicate and error scenarios.
-  Impact: additional count assertions were required to verify no duplicate and
-  no partial writes.
+  flows. Evidence: existing `example_data_seeding.feature` only asserted
+  outcome text for duplicate and error scenarios. Impact: additional count
+  assertions were required to verify no duplicate and no partial writes.
 
 ## Decision Log
 
 - Decision: extend the existing startup seeding BDD feature file instead of
-  adding a new integration harness.
-  Rationale: current harness already uses embedded Postgres and has stable
-  support fixtures.
-  Date/Author: 2026-02-05 / Codex.
+  adding a new integration harness. Rationale: current harness already uses
+  embedded Postgres and has stable support fixtures. Date/Author: 2026-02-05 /
+  Codex.
 - Decision: add a dedicated "Demo data flow" subsection in
   `docs/wildside-backend-architecture.md` near the seeding ports and existing
-  seeding decision.
-  Rationale: keep flow and decision context in one place for backend engineers.
-  Date/Author: 2026-02-05 / Codex.
+  seeding decision. Rationale: keep flow and decision context in one place for
+  backend engineers. Date/Author: 2026-02-05 / Codex.
 
 ## Outcomes & Retrospective
 

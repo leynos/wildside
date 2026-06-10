@@ -371,8 +371,8 @@ ______________________________________________________________________
 ## 7) Helm Deployment Interface
 
 This repository ships the Helm chart used to deploy the application. Cluster
-automation, object storage/CDN uploads, and environment overlays are managed
-in the Nile Valley repository.
+automation, object storage/CDN uploads, and environment overlays are managed in
+the Nile Valley repository.
 
 ### Principles
 
@@ -429,8 +429,8 @@ spec:
 ```
 
 **Ingress** points `/api/*` to the Service. The frontend public hostname points
-to the CDN; only `/api` reaches the cluster. The chart renders a ConfigMap
-named `<release-name>-config`, populated from `.Values.config`; the Deployment
+to the CDN; only `/api` reaches the cluster. The chart renders a ConfigMap named
+`<release-name>-config`, populated from `.Values.config`; the Deployment
 injects keys from it via `configMapKeyRef`. Reference Secret keys using
 `existingSecretName` and `secretEnvFromKeys`; never commit secret material to
 Git—manage it with SOPS or an External Secrets operator. If enabled,
@@ -503,11 +503,11 @@ Valley repository. Refer to its documentation for GitOps workflows and
 infrastructure state handling.
 
 This repository also provides a developer-local k3d preview helper:
-`scripts/local_k8s.py` and `scripts/local_k8s/*`. The helper builds the
-backend image, imports it into a local `k3d` cluster, and installs the Wildside
-chart with `deploy/charts/wildside/values.local.yaml`. It validates the
-application packaging contract; Nile Valley remains the owner of shared
-cluster and GitOps automation.
+`scripts/local_k8s.py` and `scripts/local_k8s/*`. The helper builds the backend
+image, imports it into a local `k3d` cluster, and installs the Wildside chart
+with `deploy/charts/wildside/values.local.yaml`. It validates the application
+packaging contract; Nile Valley remains the owner of shared cluster and GitOps
+automation.
 
 ______________________________________________________________________
 
@@ -545,14 +545,14 @@ docker-down:
 Use `make audit` to audit frontend and Rust dependencies. The frontend audit
 validates the audit exception allowlist against its schema and expiry dates.
 The shared helper tries `pnpm audit --json` first and falls back to npm's bulk
-advisory endpoint when the registry retires pnpm's legacy audit endpoints.
-The Rust audit runs `cargo audit` against the consolidated root `Cargo.lock`.
-It intentionally leaves cargo-audit's native text output intact so maintainers
-can inspect the upstream RUSTSEC identifier, affected crate, patched versions,
-and dependency path without a lossy translation layer. The Makefile pins the
-audit to `Cargo.lock` and applies only the documented `CARGO_AUDIT_IGNORES`.
-Enable Corepack (`corepack enable` and `corepack prepare pnpm@10.15.1
---activate`) so `pnpm` is available in local and CI environments.
+advisory endpoint when the registry retires pnpm's legacy audit endpoints. The
+Rust audit runs `cargo audit` against the consolidated root `Cargo.lock`. It
+intentionally leaves cargo-audit's native text output intact so maintainers can
+inspect the upstream RUSTSEC identifier, affected crate, patched versions, and
+dependency path without a lossy translation layer. The Makefile pins the audit
+to `Cargo.lock` and applies only the documented `CARGO_AUDIT_IGNORES`. Enable
+Corepack (`corepack enable` and `corepack prepare pnpm@10.15.1 --activate`) so
+`pnpm` is available in local and CI environments.
 
 ### pnpm setup sequence
 

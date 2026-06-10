@@ -22,7 +22,8 @@ These instructions apply in addition to the repository root `AGENTS.md`.
   workspace, the root target runs `tsc --noEmit -p frontend-pwa/tsconfig.json`.
 - Validate tests with `make test-frontend` from the repository root. For focused
   PWA work, `pnpm --filter frontend-pwa test` runs the local Vitest suite.
-- Run `pnpm --filter frontend-pwa build` when a change affects routing, bundling,
+- Run `pnpm --filter frontend-pwa build` when a change affects routing,
+  bundling,
   public assets, generated API clients, or production-only behaviour.
 - Use Playwright and `css-view` to validate browser-facing work.
 
@@ -46,7 +47,8 @@ These instructions apply in addition to the repository root `AGENTS.md`.
 - Add end-to-end tests where the change affects externally observable workflows,
   integration contracts, persistence, command-line behaviour, network
   boundaries, user interface (UI) flows, or other system-level behaviour.
-- Use property tests with `fast-check` when a change introduces an invariant over
+- Use property tests with `fast-check` when a change introduces an invariant
+  over
   a range of inputs, states, orderings, or transitions.
 - For introduced axioms or contractual business logic, use an exhaustive proof,
   for example with LemmaScript. Proofs must be substantive, rigorous, and

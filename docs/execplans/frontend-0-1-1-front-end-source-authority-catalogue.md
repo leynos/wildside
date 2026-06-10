@@ -1,9 +1,8 @@
 # Build the front-end source authority catalogue
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -84,8 +83,8 @@ OpenAPI spec, AsyncAPI spec, generated artefact, or migration must change.
 Roadmap item 0.1.1 is about authority classification, not contract or runtime
 implementation.
 
-Escalate if the source authority catalogue cannot name one authoritative
-source or one reconciliation follow-up for every platform, data, user
+Escalate if the source authority catalogue cannot name one authoritative source
+or one reconciliation follow-up for every platform, data, user
 experience-state, API, and styling topic referenced by the roadmap.
 
 Escalate if Playwright or `css-view` validation is impossible for a reason
@@ -102,43 +101,35 @@ resolved without expanding the scope beyond this catalogue.
 
 ## Risks
 
-Risk: the catalogue becomes a hidden design document.
-Severity: high.
-Likelihood: medium.
-Mitigation: phrase entries as ownership classifications and follow-up labels,
-not as new product policy. If new policy is needed, name an ADR or design
-document follow-up.
+Risk: the catalogue becomes a hidden design document. Severity: high.
+Likelihood: medium. Mitigation: phrase entries as ownership classifications and
+follow-up labels, not as new product policy. If new policy is needed, name an
+ADR or design document follow-up.
 
 Risk: the current repository differs from the fuller v2a target stack.
-Severity: high.
-Likelihood: high.
-Mitigation: classify current package state separately from target design
-authority. `docs/v2a-front-end-stack.md` already distinguishes the checked-in
-stack from the target stack, and the catalogue must preserve that distinction.
+Severity: high. Likelihood: high. Mitigation: classify current package state
+separately from target design authority. `docs/v2a-front-end-stack.md` already
+distinguishes the checked-in stack from the target stack, and the catalogue
+must preserve that distinction.
 
 Risk: requested validation tooling is target-state rather than installed
-project state.
-Severity: medium.
-Likelihood: high.
-Mitigation: record which gates are executable today and which are roadmap
-follow-ups. `css-view` is present on the machine; Playwright is not currently
-declared in `frontend-pwa/package.json`. Do not add Playwright solely for this
-catalogue without approval.
+project state. Severity: medium. Likelihood: high. Mitigation: record which
+gates are executable today and which are roadmap follow-ups. `css-view` is
+present on the machine; Playwright is not currently declared in
+`frontend-pwa/package.json`. Do not add Playwright solely for this catalogue
+without approval.
 
-Risk: API design intent and implemented API specs differ.
-Severity: high.
-Likelihood: high.
-Mitigation: classify `spec/openapi.json` and `spec/asyncapi.yaml` as
-authoritative for implemented wire contracts, and classify richer PWA design
-endpoint/event expectations as reconciliation follow-ups.
+Risk: API design intent and implemented API specs differ. Severity: high.
+Likelihood: high. Mitigation: classify `spec/openapi.json` and
+`spec/asyncapi.yaml` as authoritative for implemented wire contracts, and
+classify richer PWA design endpoint/event expectations as reconciliation
+follow-ups.
 
-Risk: there is no generic `docs/users-guide.md` in this repository.
-Severity: low.
-Likelihood: high.
-Mitigation: because this catalogue should not change user-facing behaviour, do
-not create a user guide only to say nothing changed. Record the absence and
-update the relevant user guide only if implementation introduces user-visible
-tool behaviour, which is outside the expected scope.
+Risk: there is no generic `docs/users-guide.md` in this repository. Severity:
+low. Likelihood: high. Mitigation: because this catalogue should not change
+user-facing behaviour, do not create a user guide only to say nothing changed.
+Record the absence and update the relevant user guide only if implementation
+introduces user-visible tool behaviour, which is outside the expected scope.
 
 ## Progress
 
@@ -161,9 +152,9 @@ tool behaviour, which is outside the expected scope.
 - [x] (2026-05-20T18:31:00Z) Validate this draft ExecPlan with
   `make check-fmt`, `make lint`, `make test`, and `make nixie`.
 - [x] (2026-05-20T18:36:00Z) Probe `css-view` and Playwright availability for
-  this plan-only change. `css-view --help` succeeded, and `bunx playwright
-  --version` reported version 1.60.0, but no executable front-end surface was
-  changed.
+  this plan-only change. `css-view --help` succeeded, and
+  `bunx playwright --version` reported version 1.60.0, but no executable
+  front-end surface was changed.
 - [x] (2026-05-20T19:43:26Z) Receive explicit user approval to implement
   roadmap item 0.1.1 from this ExecPlan.
 - [x] (2026-05-20T19:45:00Z) Draft
@@ -190,47 +181,42 @@ tool behaviour, which is outside the expected scope.
 ## Surprises & discoveries
 
 - Observation: `docs/execplans/frontend-phase-0-source-reconciliation.md`
-  already exists as a broader phase-0 plan.
-  Evidence: the file describes source reconciliation across phase 0 and names
-  `docs/v2a-front-end-stack.md` as the precedence source.
-  Impact: this ExecPlan stays narrower and task-specific for roadmap item
-  0.1.1 instead of duplicating the phase-level plan.
+  already exists as a broader phase-0 plan. Evidence: the file describes source
+  reconciliation across phase 0 and names `docs/v2a-front-end-stack.md` as the
+  precedence source. Impact: this ExecPlan stays narrower and task-specific for
+  roadmap item 0.1.1 instead of duplicating the phase-level plan.
 
 - Observation: only one ADR exists, and it is backend WebSocket transport
-  policy.
-  Evidence: `docs/adr-001-websockets-on-actix-ws.md` is the only ADR found
-  under `docs/`.
-  Impact: the catalogue will likely name several ADR follow-ups rather than
-  citing existing ADRs for front-end stack, local-first, accessibility,
-  localization, and styling governance.
+  policy. Evidence: `docs/adr-001-websockets-on-actix-ws.md` is the only ADR
+  found under `docs/`. Impact: the catalogue will likely name several ADR
+  follow-ups rather than citing existing ADRs for front-end stack, local-first,
+  accessibility, localization, and styling governance.
 
 - Observation: Playwright is not currently declared in the front-end package,
-  while `css-view` is installed on the machine.
-  Evidence: `frontend-pwa/package.json` has no Playwright dependency, and
-  `command -v css-view` resolves to `/home/leynos/.bun/bin/css-view`.
-  Impact: this plan treats Playwright as a required future front-end validation
-  gate when executable front-end work lands, not as a dependency to introduce
-  during catalogue drafting.
+  while `css-view` is installed on the machine. Evidence:
+  `frontend-pwa/package.json` has no Playwright dependency, and
+  `command -v css-view` resolves to `/home/leynos/.bun/bin/css-view`. Impact:
+  this plan treats Playwright as a required future front-end validation gate
+  when executable front-end work lands, not as a dependency to introduce during
+  catalogue drafting.
 
 - Observation: external search for a `css-view` project did not identify a
-  clear upstream documentation source.
-  Evidence: Firecrawl search for `"css-view" CSS CLI GitHub npm` returned
-  unrelated CSS View Transition and CSS CLI results.
-  Impact: the implementation should validate the local command directly and
-  record its invocation, rather than relying on uncertain external prior art.
+  clear upstream documentation source. Evidence: Firecrawl search for
+  `"css-view" CSS CLI GitHub npm` returned unrelated CSS View Transition and
+  CSS CLI results. Impact: the implementation should validate the local command
+  directly and record its invocation, rather than relying on uncertain external
+  prior art.
 
 - Observation: CodeRabbit was available locally but could not complete a
   review because the remote service reported a usage-credit rate limit.
   Evidence: `coderabbit review --agent` emitted `errorType: "rate_limit"` and
-  no actionable findings.
-  Impact: this draft has local validation evidence but no CodeRabbit findings
-  to resolve until credits are available or the review is run in another
-  environment.
+  no actionable findings. Impact: this draft has local validation evidence but
+  no CodeRabbit findings to resolve until credits are available or the review
+  is run in another environment.
 
 - Observation: probing Playwright with `bunx playwright --version` attempted
-  dependency resolution and rewrote `bun.lock`.
-  Evidence: the command reported Playwright 1.60.0 and changed the
-  `ip-address` override in `bun.lock`.
+  dependency resolution and rewrote `bun.lock`. Evidence: the command reported
+  Playwright 1.60.0 and changed the `ip-address` override in `bun.lock`.
   Impact: the lockfile change was reverted because this plan-only branch must
   not carry incidental dependency churn. Future executable front-end validation
   should use the repository's committed Playwright command once one exists.
@@ -238,67 +224,58 @@ tool behaviour, which is outside the expected scope.
 - Observation: `docs/developers-guide.md` named `make build-frontend`, but the
   repository Makefile exposes the front-end build target as `make fe-build`.
   Evidence: the Makefile has an `fe-build` target and no `build-frontend`
-  target.
-  Impact: the implementation updates the developers' guide while adding the
-  new source-authority reference so contributors receive executable workflow
-  guidance.
+  target. Impact: the implementation updates the developers' guide while adding
+  the new source-authority reference so contributors receive executable
+  workflow guidance.
 
 - Observation: `css-view` is available but requires a page URL and snapshots a
-  rendered page through Playwright.
-  Evidence: `css-view --help` prints `Usage: css-view [options] <url>` and
-  describes capturing computed CSS snapshots for a page.
-  Impact: item 0.1.1 changes only documentation and has no rendered front-end
-  surface for `css-view` or Playwright to exercise. The catalogue preserves
-  those tools as mandatory future gates for executable front-end changes.
+  rendered page through Playwright. Evidence: `css-view --help` prints
+  `Usage: css-view [options] <url>` and describes capturing computed CSS
+  snapshots for a page. Impact: item 0.1.1 changes only documentation and has
+  no rendered front-end surface for `css-view` or Playwright to exercise. The
+  catalogue preserves those tools as mandatory future gates for executable
+  front-end changes.
 
 ## Decision log
 
 - Decision: keep this ExecPlan in DRAFT until the user explicitly approves
-  implementation.
-  Rationale: the `execplans` skill requires an approval gate, and the user
-  explicitly stated that the plan must be approved before it is implemented.
-  Date/Author: 2026-05-20T18:18:15Z / Codex.
+  implementation. Rationale: the `execplans` skill requires an approval gate,
+  and the user explicitly stated that the plan must be approved before it is
+  implemented. Date/Author: 2026-05-20T18:18:15Z / Codex.
 
 - Decision: classify `docs/v2a-front-end-stack.md` as the precedence source
-  for front-end stack conflicts.
-  Rationale: roadmap item 0.1.1 explicitly requires this rule, and the broader
-  phase-0 ExecPlan already encodes the same constraint.
-  Date/Author: 2026-05-20T18:18:15Z / Codex.
+  for front-end stack conflicts. Rationale: roadmap item 0.1.1 explicitly
+  requires this rule, and the broader phase-0 ExecPlan already encodes the same
+  constraint. Date/Author: 2026-05-20T18:18:15Z / Codex.
 
 - Decision: treat OpenAPI and AsyncAPI specs as authoritative for implemented
   wire contracts, while treating PWA design documents as contract intent when
-  specs lag.
-  Rationale: generated or authored specs are the executable contract boundary;
-  richer design expectations that are absent from specs must become
-  reconciliation follow-ups.
-  Date/Author: 2026-05-20T18:18:15Z / Codex.
+  specs lag. Rationale: generated or authored specs are the executable contract
+  boundary; richer design expectations that are absent from specs must become
+  reconciliation follow-ups. Date/Author: 2026-05-20T18:18:15Z / Codex.
 
 - Decision: do not mark roadmap item 0.1.1 complete while drafting this plan.
   Rationale: the source authority catalogue itself has not been implemented;
   marking the roadmap item done during plan review would misrepresent project
-  state.
-  Date/Author: 2026-05-20T18:18:15Z / Codex.
+  state. Date/Author: 2026-05-20T18:18:15Z / Codex.
 
 - Decision: create a draft pull request for this ExecPlan before catalogue
-  implementation.
-  Rationale: the user requested a reviewable plan and explicitly required plan
-  approval before implementation. The implementation pull request can update or
-  follow this draft after approval.
-  Date/Author: 2026-05-20T18:36:00Z / Codex.
+  implementation. Rationale: the user requested a reviewable plan and
+  explicitly required plan approval before implementation. The implementation
+  pull request can update or follow this draft after approval. Date/Author:
+  2026-05-20T18:36:00Z / Codex.
 
 - Decision: move this ExecPlan from DRAFT to IN PROGRESS after explicit user
-  approval.
-  Rationale: the user asked to proceed with implementation of this approved
-  plan, so the approval gate has been satisfied and roadmap item 0.1.1 can now
-  be implemented within the recorded tolerances.
-  Date/Author: 2026-05-20T19:43:26Z / Codex.
+  approval. Rationale: the user asked to proceed with implementation of this
+  approved plan, so the approval gate has been satisfied and roadmap item 0.1.1
+  can now be implemented within the recorded tolerances. Date/Author:
+  2026-05-20T19:43:26Z / Codex.
 
 - Decision: update `docs/developers-guide.md` and `docs/contents.md` alongside
-  the catalogue.
-  Rationale: the catalogue changes contributor navigation and documentation
-  ownership for front-end work, so the developer guide and documentation index
-  should point to it. The developers' guide update also corrects the existing
-  front-end build target name to match the Makefile.
+  the catalogue. Rationale: the catalogue changes contributor navigation and
+  documentation ownership for front-end work, so the developer guide and
+  documentation index should point to it. The developers' guide update also
+  corrects the existing front-end build target name to match the Makefile.
   Date/Author: 2026-05-20T19:45:00Z / Codex.
 
 ## Outcomes & retrospective
@@ -359,12 +336,12 @@ front-end source authority catalogue that classifies these sources by topic:
 - `spec/asyncapi.yaml`
 - relevant ADRs
 
-Use the word "authoritative" for the document that owns a requirement.
-Use "supporting" for documents that provide background or implementation
-guidance but do not own the requirement. Use "superseded" only for guidance
-that should no longer be followed for a topic. Use "needs reconciliation" when
-the documents do not agree or when a design document, ADR, schema, or contract
-must be updated before implementation work can cite a stable authority.
+Use the word "authoritative" for the document that owns a requirement. Use
+"supporting" for documents that provide background or implementation guidance
+but do not own the requirement. Use "superseded" only for guidance that should
+no longer be followed for a topic. Use "needs reconciliation" when the
+documents do not agree or when a design document, ADR, schema, or contract must
+be updated before implementation work can cite a stable authority.
 
 The broader phase-0 planning file
 `docs/execplans/frontend-phase-0-source-reconciliation.md` is relevant
@@ -373,18 +350,17 @@ future implementer should be able to complete 0.1.1 from this file alone.
 
 ## Source authority findings to preserve
 
-For platform topics, the catalogue should treat
-`docs/v2a-front-end-stack.md` as authoritative for the current-versus-target
-stack split and precedence over older PWA guidance. `docs/wildside-pwa-design.md`
-is authoritative for Wildside PWA runtime behaviour where it does not conflict
-with that stack precedence.
+For platform topics, the catalogue should treat `docs/v2a-front-end-stack.md`
+as authoritative for the current-versus-target stack split and precedence over
+older PWA guidance. `docs/wildside-pwa-design.md` is authoritative for Wildside
+PWA runtime behaviour where it does not conflict with that stack precedence.
 
-For data topics, the catalogue should treat
-`docs/wildside-pwa-data-model.md` as authoritative for entity shapes,
-localization maps, offline bundle models, outbox concepts, and the
-backend-compatible card model. `docs/v2a-front-end-stack.md` and
-`docs/data-model-driven-card-architecture.md` are supporting sources for the
-shared card architecture and localization primitive pattern.
+For data topics, the catalogue should treat `docs/wildside-pwa-data-model.md`
+as authoritative for entity shapes, localization maps, offline bundle models,
+outbox concepts, and the backend-compatible card model.
+`docs/v2a-front-end-stack.md` and `docs/data-model-driven-card-architecture.md`
+are supporting sources for the shared card architecture and localization
+primitive pattern.
 
 For user experience state, the catalogue should treat
 `docs/wildside-ux-state-graph-v0.1.json` as authoritative for state regions,
@@ -393,12 +369,11 @@ structure and navigation groups. The state graph includes auth and future
 states that are not explicit in the sitemap, so those topics need
 reconciliation follow-ups.
 
-For API topics, the catalogue should treat `spec/openapi.json` as
-authoritative for implemented REST wire contracts and `spec/asyncapi.yaml` as
-authoritative for implemented WebSocket/event contracts. Design documents may
-describe intended endpoint families and progress events that are not yet
-present in the specs; those are reconciliation follow-ups, not implemented
-contract authority.
+For API topics, the catalogue should treat `spec/openapi.json` as authoritative
+for implemented REST wire contracts and `spec/asyncapi.yaml` as authoritative
+for implemented WebSocket/event contracts. Design documents may describe
+intended endpoint families and progress events that are not yet present in the
+specs; those are reconciliation follow-ups, not implemented contract authority.
 
 For styling, the catalogue should treat `docs/v2a-front-end-stack.md` and
 `docs/wildside-pwa-design.md` as authoritative for the current-versus-target
@@ -410,11 +385,11 @@ styling guides are `docs/tailwind-v4-guide.md`, `docs/daisyui-v5-guide.md`,
 For accessibility, the catalogue should treat `docs/wildside-pwa-design.md` as
 the Wildside accessibility requirement source and
 `docs/high-velocity-accessibility-first-component-testing.md` as the testing
-strategy source. External context confirms WCAG 2.2 is a W3C Recommendation
-and that WCAG 2.2 success criteria are testable statements. Playwright's
-official accessibility guide recommends combining automated checks with manual
-and inclusive assessment because automated tests cannot catch all
-accessibility problems.
+strategy source. External context confirms WCAG 2.2 is a W3C Recommendation and
+that WCAG 2.2 success criteria are testable statements. Playwright's official
+accessibility guide recommends combining automated checks with manual and
+inclusive assessment because automated tests cannot catch all accessibility
+problems.
 
 For localization and RTL, the catalogue should treat
 `docs/wildside-pwa-design.md`, `docs/v2a-front-end-stack.md`, and
@@ -435,17 +410,16 @@ LemmaScript when contractual business logic introduces axioms.
 
 After approval, start by rereading this ExecPlan, `AGENTS.md`,
 `docs/frontend-roadmap.md`, and `docs/documentation-style-guide.md`. Confirm
-the branch is still
-`frontend-0-1-1-front-end-source-authority-catalogue` and that the worktree has
-no unrelated edits that would be swept into the catalogue commit.
+the branch is still `frontend-0-1-1-front-end-source-authority-catalogue` and
+that the worktree has no unrelated edits that would be swept into the catalogue
+commit.
 
-Create a new document named
-`docs/frontend-source-authority-catalogue.md`. Use a short purpose section, a
-classification legend, a topic-by-topic authority catalogue, and a
-reconciliation follow-up section. Keep the document factual. Each topic entry
-must name one authoritative source or one named follow-up. Each follow-up must
-say whether it belongs in a design document, ADR, OpenAPI spec, AsyncAPI spec,
-roadmap citation fix, or later implementation task.
+Create a new document named `docs/frontend-source-authority-catalogue.md`. Use
+a short purpose section, a classification legend, a topic-by-topic authority
+catalogue, and a reconciliation follow-up section. Keep the document factual.
+Each topic entry must name one authoritative source or one named follow-up.
+Each follow-up must say whether it belongs in a design document, ADR, OpenAPI
+spec, AsyncAPI spec, roadmap citation fix, or later implementation task.
 
 Cover at least these topics: runtime and build stack, routing, state
 management, local-first persistence, PWA installability, service worker and
@@ -504,8 +478,8 @@ Expected branch output:
 frontend-0-1-1-front-end-source-authority-catalogue
 ```
 
-Refresh local context with text searches because the source files for this
-task are Markdown, JSON, YAML, and package metadata rather than code symbols:
+Refresh local context with text searches because the source files for this task
+are Markdown, JSON, YAML, and package metadata rather than code symbols:
 
 ```bash
 rg -n \
@@ -603,29 +577,28 @@ https://lody.ai/leynos/sessions/${LODY_SESSION_ID}
 The catalogue is accepted when every platform, data, user experience-state,
 API, styling, accessibility, localization, and testing topic referenced by
 `docs/frontend-roadmap.md` has exactly one named authoritative source or a
-named reconciliation follow-up in
-`docs/frontend-source-authority-catalogue.md`.
+named reconciliation follow-up in `docs/frontend-source-authority-catalogue.md`.
 
 The catalogue must explicitly state that `docs/v2a-front-end-stack.md` takes
 precedence where it conflicts with older PWA platform guidance.
 
 The catalogue must classify all required source files:
 `docs/v2a-front-end-stack.md`, `docs/wildside-pwa-design.md`,
-`docs/wildside-pwa-data-model.md`,
-`docs/wildside-ux-state-graph-v0.1.json`, `docs/sitemap.md`,
-`spec/openapi.json`, `spec/asyncapi.yaml`, and
+`docs/wildside-pwa-data-model.md`, `docs/wildside-ux-state-graph-v0.1.json`,
+`docs/sitemap.md`, `spec/openapi.json`, `spec/asyncapi.yaml`, and
 `docs/adr-001-websockets-on-actix-ws.md`.
 
 The catalogue must signpost relevant supporting documentation and skills:
 `leta`, `rust-router`, `hexagonal-architecture`, `execplans`, Firecrawl,
-`docs/tailwind-v4-guide.md`, `docs/semantic-tailwind-with-daisyui-best-practice.md`,
+`docs/tailwind-v4-guide.md`,
+`docs/semantic-tailwind-with-daisyui-best-practice.md`,
 `docs/react-tailwind-with-bun.md`,
 `docs/pure-accessible-and-localizable-react-components.md`,
 `docs/local-first-react.md`,
 `docs/high-velocity-accessibility-first-component-testing.md`,
 `docs/enforcing-semantic-tailwind-best-practice.md`,
-`docs/data-model-driven-card-architecture.md`, `docs/daisyui-v5-guide.md`,
-and `complexity-antipatterns-and-refactoring-strategies.md` if present.
+`docs/data-model-driven-card-architecture.md`, `docs/daisyui-v5-guide.md`, and
+`complexity-antipatterns-and-refactoring-strategies.md` if present.
 
 Documentation validation must pass:
 
@@ -681,8 +654,8 @@ catalogue. The only expected new stable document interface is
 `docs/frontend-source-authority-catalogue.md`, which later roadmap tasks can
 cite.
 
-The catalogue should use these classification values exactly:
-`authoritative`, `supporting`, `superseded`, and `needs reconciliation`.
+The catalogue should use these classification values exactly: `authoritative`,
+`supporting`, `superseded`, and `needs reconciliation`.
 
 The catalogue should use these follow-up labels exactly where applicable:
 `update design document`, `merge into PWA design`, `update data model`,

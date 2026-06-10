@@ -13,11 +13,10 @@ Implement the HTTP endpoints required for PWA preferences and annotations:
 - `POST /api/v1/routes/{route_id}/notes`
 - `PUT /api/v1/routes/{route_id}/progress`
 
-All endpoints must go through the inbound HTTP adapter and call domain
-services (driving ports). Idempotent mutations use the existing
-`Idempotency-Key` contract and the shared `IdempotencyRepository`. Error
-responses must reuse the existing domain `Error` envelope, so clients always see
-consistent payloads.
+All endpoints must go through the inbound HTTP adapter and call domain services
+(driving ports). Idempotent mutations use the existing `Idempotency-Key`
+contract and the shared `IdempotencyRepository`. Error responses must reuse the
+existing domain `Error` envelope, so clients always see consistent payloads.
 
 This is **step 2.3.2** from the backend roadmap. Contract tests for
 deterministic retries are tracked in 2.3.3.
@@ -42,8 +41,7 @@ Success is observable when:
 - [x] (2026-01-03 03:12Z) Attempt to use Code Graph Model Context Protocol
   (MCP) to map inbound handlers, ports, and adapters touched by this change.
 - [x] (2026-01-03 03:13Z) Confirm API payload shapes from
-  `docs/wildside-pwa-data-model.md` and
-  `docs/wildside-backend-architecture.md`.
+  `docs/wildside-pwa-data-model.md` and `docs/wildside-backend-architecture.md`.
 - [x] (2026-01-03 03:16Z) Add driving query ports for read endpoints and
   service implementations for preferences and annotations with idempotency
   support.
@@ -59,27 +57,23 @@ Success is observable when:
 ## Surprises & Discoveries
 
 - Observation: Code Graph MCP resources were not available in this
-  environment.
-  Evidence: MCP resource discovery returned no resources.
+  environment. Evidence: MCP resource discovery returned no resources.
 - Observation: Embedded PostgreSQL downloads initially hit GitHub rate limits
   during `make test`, and TFLint plugin initialization failed until plugins
-  were downloaded into a workspace directory.
-  Evidence: Re-running `make test` with `PG_WORKER_PATH` and `make lint` with
-  `TFLINT_PLUGIN_DIR` completed successfully.
+  were downloaded into a workspace directory. Evidence: Re-running `make test`
+  with `PG_WORKER_PATH` and `make lint` with `TFLINT_PLUGIN_DIR` completed
+  successfully.
 
 ## Decision Log
 
 - Decision: Use inbound request/response DTOs with `utoipa::ToSchema` for
-  preferences and annotations instead of adding schema wrappers for the
-  domain types.
-  Rationale: Keeps the domain layer framework-agnostic while documenting HTTP
-  payloads.
-  Date/Author: 2026-01-03 03:14Z / Codex
+  preferences and annotations instead of adding schema wrappers for the domain
+  types. Rationale: Keeps the domain layer framework-agnostic while documenting
+  HTTP payloads. Date/Author: 2026-01-03 03:14Z / Codex
 - Decision: Map foreign key violations for route annotations using the
-  database constraint name when available.
-  Rationale: Ensures missing routes surface as `RouteNotFound` even when
-  PostgreSQL error messages omit table names.
-  Date/Author: 2026-01-03 03:23Z / Codex.
+  database constraint name when available. Rationale: Ensures missing routes
+  surface as `RouteNotFound` even when PostgreSQL error messages omit table
+  names. Date/Author: 2026-01-03 03:23Z / Codex.
 
 ## Outcomes & Retrospective
 

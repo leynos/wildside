@@ -1,9 +1,8 @@
 # Harden startup-mode composition for user-state ports (roadmap 3.5.5)
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: IN PROGRESS (implementation approved on 2026-05-26)
 
@@ -12,17 +11,16 @@ approval on 2026-05-26.
 
 ## Purpose / big picture
 
-Roadmap item 3.5.5 requires hardening
-`backend/src/server/state_builders.rs`, the backend composition root that
-chooses concrete HTTP-facing port implementations during startup. The current
-selection rule is simple: when `ServerConfig.db_pool` is present, HTTP state
-should use DB-backed adapters; when it is absent, HTTP state should use fixture
-fallbacks. As more user-state wiring is added, that rule must remain
-deterministic and visible in tests.
+Roadmap item 3.5.5 requires hardening `backend/src/server/state_builders.rs`,
+the backend composition root that chooses concrete HTTP-facing port
+implementations during startup. The current selection rule is simple: when
+`ServerConfig.db_pool` is present, HTTP state should use DB-backed adapters;
+when it is absent, HTTP state should use fixture fallbacks. As more user-state
+wiring is added, that rule must remain deterministic and visible in tests.
 
 After the implementation, a developer can inspect one explicit user-state
-composition helper in `backend/src/server/state_builders.rs` and see how
-login, users, profile, interests, preferences, and route-annotation ports are
+composition helper in `backend/src/server/state_builders.rs` and see how login,
+users, profile, interests, preferences, and route-annotation ports are
 selected. Running the startup-mode unit and behavioural suites will prove that
 DB-present mode does not silently fall back to fixtures, and fixture-fallback
 mode still preserves the existing local contracts.
@@ -78,8 +76,7 @@ Observable success means:
   concerns before moving to the next milestone.
 - If `docs/users-guide.md` remains absent, record that no user-guide update was
   possible and update the nearest relevant operator-facing document only if
-  behaviour changes are visible to operators of the Wildside server
-  application.
+  behaviour changes are visible to operators of the Wildside server application.
 
 ## Tolerances (exception triggers)
 
@@ -107,43 +104,33 @@ Observable success means:
 
 - Risk: `HttpStateExtraPorts::default()` is fixture-first and could mask
   missing explicit composition if `build_http_state` stops wiring a port.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: keep `build_http_state` explicitly constructing all user-state
-  and extra ports, and add assertions that inspect endpoint behaviour rather
-  than relying only on type construction.
+  Severity: medium. Likelihood: medium. Mitigation: keep `build_http_state`
+  explicitly constructing all user-state and extra ports, and add assertions
+  that inspect endpoint behaviour rather than relying only on type construction.
 
 - Risk: the `Option<DbPool>` branch is repeated across helper functions, so a
   future port addition could accidentally use a fixture in DB-present mode.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: introduce a user-state helper seam that groups related port
-  selection in one place and add regression tests that prove DB identity data
-  is returned in DB-present mode.
+  Severity: high. Likelihood: medium. Mitigation: introduce a user-state helper
+  seam that groups related port selection in one place and add regression tests
+  that prove DB identity data is returned in DB-present mode.
 
 - Risk: route submission is composed in `backend/src/server/mod.rs`, not in
   `backend/src/server/state_builders.rs`, so route-submission parity can drift
-  from the HTTP state matrix.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: keep this plan focused on user-state composition, but preserve
-  existing route-submission assertions in the startup-mode BDD suite and avoid
-  changing `build_route_submission_service` unless required by a failed test.
+  from the HTTP state matrix. Severity: medium. Likelihood: medium. Mitigation:
+  keep this plan focused on user-state composition, but preserve existing
+  route-submission assertions in the startup-mode BDD suite and avoid changing
+  `build_route_submission_service` unless required by a failed test.
 
 - Risk: embedded PostgreSQL tests can be skipped or flaky when local database
-  setup fails.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: use existing `pg-embedded-setup-unpriv` helpers, preserve
-  explicit skip diagnostics, and rely on the full `make test` gate before
-  closure.
+  setup fails. Severity: medium. Likelihood: medium. Mitigation: use existing
+  `pg-embedded-setup-unpriv` helpers, preserve explicit skip diagnostics, and
+  rely on the full `make test` gate before closure.
 
 - Risk: over-hardening could duplicate the broader matrix planned for 3.5.6.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: limit new assertions to deterministic adapter selection and
-  obvious no-fallback regressions for user-state wiring. Leave expanded
-  revision-conflict and full-matrix repository coverage to 3.5.6.
+  Severity: medium. Likelihood: medium. Mitigation: limit new assertions to
+  deterministic adapter selection and obvious no-fallback regressions for
+  user-state wiring. Leave expanded revision-conflict and full-matrix
+  repository coverage to 3.5.6.
 
 ## Agent team
 
@@ -176,8 +163,8 @@ told that other agents may be editing the repository.
       operators, not end users of the product experience.
 - [x] (2026-05-26) Obtained explicit user approval for this plan.
 - [x] (2026-05-26) Ran Stage A baseline gates before implementation:
-  `make check-fmt`, `make lint`, and `make test` all passed. The full test
-  gate reported 1220 Rust tests passed with 4 skipped, followed by passing
+  `make check-fmt`, `make lint`, and `make test` all passed. The full test gate
+  reported 1220 Rust tests passed with 4 skipped, followed by passing
   frontend/workspace tests.
 - [x] (2026-05-26) Implemented the private `UserStatePortsBundle` and
   `compose_user_state_ports` seam in `backend/src/server/state_builders.rs`
@@ -185,14 +172,13 @@ told that other agents may be editing the repository.
 - [x] (2026-05-26) Ran Stage B targeted checks:
   `cargo test -p backend`
   `startup_modes_reject_invalid_credentials_with_unauthorised_envelope`
-  `-- --nocapture`
-  passed 2 selected tests, and
+  `-- --nocapture` passed 2 selected tests, and
   `cargo test -p backend --test state_builders_composition_unit -- --nocapture`
   passed the fixture-mode composition unit test.
 - [x] (2026-05-26) Ran Stage B milestone gates before CodeRabbit:
-  `make check-fmt`, `make lint`, and `make test` all passed. The full test
-  gate again reported 1220 Rust tests passed with 4 skipped, followed by
-  passing frontend/workspace tests.
+  `make check-fmt`, `make lint`, and `make test` all passed. The full test gate
+  again reported 1220 Rust tests passed with 4 skipped, followed by passing
+  frontend/workspace tests.
 - [x] (2026-05-26) Ran CodeRabbit after Stage B helper-seam commit
   `af4d5d6`; the agent review completed with 0 findings.
 - [x] (2026-05-26) Strengthened startup-mode behavioural regression
@@ -203,9 +189,9 @@ told that other agents may be editing the repository.
   `cargo test -p backend --test startup_mode_composition_bdd -- --nocapture`
   was run instead and passed all 12 tests.
 - [x] (2026-05-26) Ran Stage C milestone gates before CodeRabbit:
-  `make check-fmt`, `make lint`, and `make test`.
-  All passed. The full test gate reported 1220 Rust tests passed with 4
-  skipped, followed by passing frontend/workspace tests.
+  `make check-fmt`, `make lint`, and `make test`. All passed. The full test
+  gate reported 1220 Rust tests passed with 4 skipped, followed by passing
+  frontend/workspace tests.
 - [x] (2026-05-26) Committed Stage C as `ce7e588` and ran
   `coderabbit review --agent`; the agent review completed with 0 findings.
 - [x] (2026-05-26) Updated architecture, developer, and roadmap documentation
@@ -213,9 +199,9 @@ told that other agents may be editing the repository.
   made because this item preserves operator-visible server behaviour and the
   repository has no existing `docs/users-guide.md` file.
 - [x] (2026-05-26) Re-ran final quality gates after documentation updates:
-  `make check-fmt`, `make lint`, and `make test`.
-  All passed. The full test gate reported 1220 Rust tests passed with 4
-  skipped, followed by passing frontend/workspace tests.
+  `make check-fmt`, `make lint`, and `make test`. All passed. The full test
+  gate reported 1220 Rust tests passed with 4 skipped, followed by passing
+  frontend/workspace tests.
 - [x] (2026-05-26) Ran final CodeRabbit review after the documentation
   milestone; the agent review completed with 0 findings.
 - [x] (2026-05-26) Ran final plan-note commit gates:
@@ -229,51 +215,45 @@ told that other agents may be editing the repository.
 ## Surprises & discoveries
 
 - Observation: `docs/users-guide.md` is not present in this checkout.
-  Evidence: `fd 'users.*guide|user.*guide' docs` found specific tool guides
-  but no repository-wide `docs/users-guide.md`.
-  Impact: this plan records that user-guide updates are conditional. If
-  implementation changes server behaviour that an operator of the Wildside
-  server application should know about, update the relevant existing
-  operator-facing document or create a separate documentation decision.
+  Evidence: `fd 'users.*guide|user.*guide' docs` found specific tool guides but
+  no repository-wide `docs/users-guide.md`. Impact: this plan records that
+  user-guide updates are conditional. If implementation changes server
+  behaviour that an operator of the Wildside server application should know
+  about, update the relevant existing operator-facing document or create a
+  separate documentation decision.
 
 - Observation: `backend/tests/features/startup_mode_composition.feature`
   already states that it covers all HTTP-facing ports for roadmap item 3.5.5.
   Evidence: the feature file names all 16 `HttpStatePorts` and
   `HttpStateExtraPorts` and includes fixture, DB-present, schema-loss, and
-  validation-stability scenarios.
-  Impact: implementation should strengthen the existing suite rather than
-  replace it wholesale.
+  validation-stability scenarios. Impact: implementation should strengthen the
+  existing suite rather than replace it wholesale.
 
 - Observation: `build_http_state` is already the narrow composition point for
   HTTP state, while route-submission service construction lives in
-  `backend/src/server/mod.rs`.
-  Evidence: Leta found `state_builders.rs:build_http_state` and an ambiguous
-  separate `mod.rs:build_route_submission_service`.
-  Impact: this item should avoid moving route submission unless a regression
-  test proves the current split prevents deterministic user-state composition.
+  `backend/src/server/mod.rs`. Evidence: Leta found
+  `state_builders.rs:build_http_state` and an ambiguous separate
+  `mod.rs:build_route_submission_service`. Impact: this item should avoid
+  moving route submission unless a regression test proves the current split
+  prevents deterministic user-state composition.
 
 - Observation: the Stage B targeted command named in the draft plan selects
   existing invalid-credential adapter tests rather than the
-  `state_builders_composition_unit` test.
-  Evidence:
-  `cargo test -p backend`
+  `state_builders_composition_unit` test. Evidence: `cargo test -p backend`
   `startup_modes_reject_invalid_credentials_with_unauthorised_envelope`
-  `-- --nocapture`
-  passed two selected tests from `diesel_login_users_adapters.rs` and filtered
-  out the state-builder composition test.
-  Impact: keep the drafted command as historical evidence, but also run
+  `-- --nocapture` passed two selected tests from
+  `diesel_login_users_adapters.rs` and filtered out the state-builder
+  composition test. Impact: keep the drafted command as historical evidence,
+  but also run
   `cargo test -p backend --test state_builders_composition_unit -- --nocapture`
   for the helper-seam milestone.
 
 - Observation: filtering the startup-mode BDD binary with
   `startup_mode_composition` selected support tests only and filtered out all
-  generated scenarios.
-  Evidence:
-  `cargo test -p backend`
+  generated scenarios. Evidence: `cargo test -p backend`
   `startup_mode_composition`
-  `--test startup_mode_composition_bdd -- --nocapture`
-  reported 0 executed tests and 12 filtered out.
-  Impact: use
+  `--test startup_mode_composition_bdd -- --nocapture` reported 0 executed
+  tests and 12 filtered out. Impact: use
   `cargo test -p backend --test startup_mode_composition_bdd -- --nocapture`
   for this suite when validating generated `rstest-bdd` scenarios.
 
@@ -293,39 +273,35 @@ told that other agents may be editing the repository.
 
 - Decision: do not introduce `proptest`, `kani`, or `verus` for the planned
   implementation unless the approved implementation introduces a true state
-  transition invariant.
-  Rationale: this hardening primarily concerns deterministic branch selection
-  over two startup modes, which is better captured by table-driven `rstest`
-  and behaviour-level `rstest-bdd` assertions.
-  Date/Author: 2026-05-21 / Codex.
+  transition invariant. Rationale: this hardening primarily concerns
+  deterministic branch selection over two startup modes, which is better
+  captured by table-driven `rstest` and behaviour-level `rstest-bdd`
+  assertions. Date/Author: 2026-05-21 / Codex.
 
 - Decision: assert users-list adapter selection by display-name evidence
   rather than by authenticated user ID in the shared startup-mode helper.
   Rationale: fixture fallback exposes the current user profile and users-list
   fixture as separate fixture records, while DB-present mode exposes the seeded
   database display name through both endpoints. Preferences still assert the
-  authenticated fixture UUID to keep identity wiring covered.
-  Date/Author: 2026-05-26 / Codex.
+  authenticated fixture UUID to keep identity wiring covered. Date/Author:
+  2026-05-26 / Codex.
 
 - Decision: document Firecrawl findings as supporting context, not as
-  authoritative design input.
-  Rationale: repository docs and local conventions are more specific than
-  general public prior art. Public references only confirmed that the existing
-  tools and ports-as-traits approach remain appropriate.
-  Date/Author: 2026-05-21 / Codex.
+  authoritative design input. Rationale: repository docs and local conventions
+  are more specific than general public prior art. Public references only
+  confirmed that the existing tools and ports-as-traits approach remain
+  appropriate. Date/Author: 2026-05-21 / Codex.
 
 - Decision: interpret `docs/users-guide.md` as an operator guide for the
-  Wildside server application.
-  Rationale: the implementation plan needs to distinguish server operator
-  behaviour from product end-user behaviour when deciding whether a user-guide
-  update is required.
-  Date/Author: 2026-05-26 / Codex, based on user clarification.
+  Wildside server application. Rationale: the implementation plan needs to
+  distinguish server operator behaviour from product end-user behaviour when
+  deciding whether a user-guide update is required. Date/Author: 2026-05-26 /
+  Codex, based on user clarification.
 
 - Decision: keep `compose_user_state_ports` private.
   Rationale: `build_http_state` remains the public composition entrypoint, and
-  integration tests can verify observable fixture/DB behaviour without
-  widening helper visibility.
-  Date/Author: 2026-05-26 / Codex.
+  integration tests can verify observable fixture/DB behaviour without widening
+  helper visibility. Date/Author: 2026-05-26 / Codex.
 
 ## Outcomes & retrospective
 
@@ -334,12 +310,11 @@ told that other agents may be editing the repository.
   `backend/src/server/state_builders.rs`. Status: implemented without widening
   the public `build_http_state` entrypoint.
 - Strengthened assertions: on 2026-05-26, commit `ce7e588` added shared BDD
-  assertions in
-  `backend/tests/startup_mode_composition_bdd/flow_support.rs`. Profile and
-  users-list responses now prove DB-present versus fixture-fallback selection
-  by display-name evidence; preferences remain an authenticated `userId`
-  contract because DB-present mode creates the same default preferences as the
-  fixture adapter when none are seeded.
+  assertions in `backend/tests/startup_mode_composition_bdd/flow_support.rs`.
+  Profile and users-list responses now prove DB-present versus fixture-fallback
+  selection by display-name evidence; preferences remain an authenticated
+  `userId` contract because DB-present mode creates the same default
+  preferences as the fixture adapter when none are seeded.
 - Gate evidence: on 2026-05-26, Stage A, Stage B, Stage C, and final gates all
   passed with `make check-fmt`, `make lint`, and `make test`. The final gate
   reported 1220 Rust tests passed with 4 skipped, followed by passing
@@ -437,9 +412,8 @@ the failure in `Surprises & Discoveries`.
 
 In `backend/src/server/state_builders.rs`, introduce a private helper type or
 function that composes the identity-bearing user-state ports together. The
-preferred shape is a small private bundle, for example
-`UserStatePortsBundle`, returned by a helper such as
-`compose_user_state_ports(config: &ServerConfig)`.
+preferred shape is a small private bundle, for example `UserStatePortsBundle`,
+returned by a helper such as `compose_user_state_ports(config: &ServerConfig)`.
 
 The helper should own calls to:
 
@@ -531,8 +505,8 @@ item.
 
 Update `docs/backend-roadmap.md` to mark 3.5.5 done only after the helper seam,
 tests, CodeRabbit review, and full gates succeed. Follow the style used by
-3.5.2 and 3.5.3: include a short execution note naming the main tests and
-gate evidence.
+3.5.2 and 3.5.3: include a short execution note naming the main tests and gate
+evidence.
 
 Run Markdown and repository gates:
 
@@ -699,9 +673,9 @@ fits better, but the helper must remain explicit and private unless tests need
 ## Revision note
 
 Initial draft created on 2026-05-21. The draft captures roadmap item 3.5.5
-scope, current code anchors, test strategy, Firecrawl research findings,
-Wyvern reconnaissance, approval gate, and implementation tolerances. No
-implementation has been performed under this plan.
+scope, current code anchors, test strategy, Firecrawl research findings, Wyvern
+reconnaissance, approval gate, and implementation tolerances. No implementation
+has been performed under this plan.
 
 Revision on 2026-05-26 clarifies that `docs/users-guide.md` means an operator
 guide for the Wildside server application. This narrows user-guide update

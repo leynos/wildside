@@ -10,8 +10,9 @@ Status: DRAFT
 
 This plan tracks delivery of the Wildside front-end roadmap from source
 reconciliation through deferred product decisions. It gives a contributor one
-place to see the execution order, the governing documents, the validation gates,
-and the phase-level plans that should be updated as implementation progresses.
+place to see the execution order, the governing documents, the validation
+gates, and the phase-level plans that should be updated as implementation
+progresses.
 
 The observable outcome is a front-end roadmap that can be implemented without
 hunting through the pull request history. A contributor can start from this
@@ -28,8 +29,8 @@ schemas, or Architecture Decision Records.
 `frontend-pwa/package.json` remains the source of truth for installed front-end
 dependencies. `docs/v2a-front-end-stack.md` documents the current package state
 and target-stack boundary. Any change that adds target-stack dependencies must
-update package files, lockfiles, developer guidance, and the relevant phase plan
-in the same change.
+update package files, lockfiles, developer guidance, and the relevant phase
+plan in the same change.
 
 Documentation changes must use en-GB Oxford spelling conventions used by this
 repository, including `-ize` forms such as localization and customization.
@@ -41,9 +42,9 @@ captured in a design document, an API contract change outside the front-end
 scope, a new dependency that contradicts `docs/v2a-front-end-stack.md`, or a
 quality gate that cannot run in local development and CI.
 
-Escalate if implementation would make the roadmap the primary source of a schema
-shape, policy decision, accessibility requirement, cache rule, or entitlement
-rule.
+Escalate if implementation would make the roadmap the primary source of a
+schema shape, policy decision, accessibility requirement, cache rule, or
+entitlement rule.
 
 ## Risks
 
@@ -73,15 +74,15 @@ schema-validated API boundaries, and make front-end accessibility and semantic
 quality gates executable.
 
 Proceed to phase 2 in
-`docs/execplans/frontend-phase-2-catalogue-onboarding-discovery.md`. Deliver the
-catalogue-led onboarding and discovery flow from localized entity data,
+`docs/execplans/frontend-phase-2-catalogue-onboarding-discovery.md`. Deliver
+the catalogue-led onboarding and discovery flow from localized entity data,
 preference hooks, and stale or offline catalogue states.
 
 Proceed to phase 3 in `docs/execplans/frontend-phase-3-generated-walks-map.md`.
 Deliver route generation, wizard flow, map-led quick generation, MapLibre
-stability, active navigation, degraded Global Positioning System (GPS) recovery,
-saved routes, notes, progress, and Point of Interest (POI) narrative snippet
-lifecycle.
+stability, active navigation, degraded Global Positioning System (GPS)
+recovery, saved routes, notes, progress, and Point of Interest (POI) narrative
+snippet lifecycle.
 
 Proceed to phase 4 in
 `docs/execplans/frontend-phase-4-offline-safety-completion.md`. Deliver

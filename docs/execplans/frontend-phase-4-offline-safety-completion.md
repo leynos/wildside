@@ -8,10 +8,10 @@ Status: DRAFT
 
 ## Purpose / big picture
 
-This phase completes the Progressive Web App (PWA) reliability
-promise. Users can install the app, load the app shell offline, manage offline
-bundles, persist safety preferences, complete a walk, and see completion
-summaries that emphasize discovered places rather than fitness scoring.
+This phase completes the Progressive Web App (PWA) reliability promise. Users
+can install the app, load the app shell offline, manage offline bundles,
+persist safety preferences, complete a walk, and see completion summaries that
+emphasize discovered places rather than fitness scoring.
 
 ## Constraints
 
@@ -25,15 +25,15 @@ than UI labels or CSS classes.
 ## Tolerances
 
 Escalate if browser quota behaviour prevents reliable bundle status updates, if
-service-worker update user experience (UX) requires an unplanned
-product decision, or if walk completion contracts cannot avoid duplicate
-sessions after offline retry.
+service-worker update user experience (UX) requires an unplanned product
+decision, or if walk completion contracts cannot avoid duplicate sessions after
+offline retry.
 
 ## Risks
 
-Offline bundle work can blur cache ownership. Mitigate this by separating bundle
-manifests, tile Cache Storage, route-plan persistence, and outbox writes in
-tests and documentation.
+Offline bundle work can blur cache ownership. Mitigate this by separating
+bundle manifests, tile Cache Storage, route-plan persistence, and outbox writes
+in tests and documentation.
 
 ## Plan
 

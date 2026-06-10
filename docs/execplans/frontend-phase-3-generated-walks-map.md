@@ -8,18 +8,18 @@ Status: DRAFT
 
 ## Purpose / big picture
 
-This phase proves Wildside's core product loop. A user can draft a walk, request
-generation, follow progress, review the route on a stable map, inspect stops,
-save the route, edit notes, and recover when location or Global Positioning
-System (GPS) quality degrades.
+This phase proves Wildside's core product loop. A user can draft a walk,
+request generation, follow progress, review the route on a stable map, inspect
+stops, save the route, edit notes, and recover when location or Global
+Positioning System (GPS) quality degrades.
 
 ## Constraints
 
 Route generation must be durable and retry-safe. MapLibre ownership must remain
-imperative and stable while React overlays change. WebSocket events may patch or
-invalidate TanStack Query caches, but must not mutate view state directly.
-Generated route plans must carry Point of Interest (POI) narrative
-snippet lifecycle and cache metadata so offline rendering remains possible.
+imperative and stable while React overlays change. WebSocket events may patch
+or invalidate TanStack Query caches, but must not mutate view state directly.
+Generated route plans must carry Point of Interest (POI) narrative snippet
+lifecycle and cache metadata so offline rendering remains possible.
 
 ## Tolerances
 
@@ -36,17 +36,17 @@ and failing tests when overlay changes recreate the map instance.
 
 ## Plan
 
-Follow `docs/frontend-roadmap.md` phase 3. Add route draft, request, status, and
-route-plan schemas, then implement route-generation mutation, polling, and
-WebSocket progress convergence. Build the wizard steps and transition wrapper so
-impossible states cannot render.
+Follow `docs/frontend-roadmap.md` phase 3. Add route draft, request, status,
+and route-plan schemas, then implement route-generation mutation, polling, and
+WebSocket progress convergence. Build the wizard steps and transition wrapper
+so impossible states cannot render.
 
 Add lazy MapLibre loading, map state ownership, route-start and location
-permission user experience (UX), map-led quick generation, Quick
-Map tabs, Itinerary tabs, pedestrian instructions, degraded Global Positioning
-System recovery, saved-route states, notes and progress hooks, route-plan
-persistence, and Point of Interest narrative snippet lifecycle. Finish with
-contract, state-transition, map-provider, and Playwright coverage.
+permission user experience (UX), map-led quick generation, Quick Map tabs,
+Itinerary tabs, pedestrian instructions, degraded Global Positioning System
+recovery, saved-route states, notes and progress hooks, route-plan persistence,
+and Point of Interest narrative snippet lifecycle. Finish with contract,
+state-transition, map-provider, and Playwright coverage.
 
 ## Validation
 

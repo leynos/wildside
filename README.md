@@ -29,10 +29,10 @@ The Bun toolchain remains in use for runtime scripts and formatting tasks.
 
 ## Infrastructure
 
-Infrastructure automation, GitOps workflows, and ephemeral preview
-environments are maintained in the Nile Valley repository
-(`../../nile-valley`). This repository ships the application code, container
-images, and Helm chart that Nile Valley deploys.
+Infrastructure automation, GitOps workflows, and ephemeral preview environments
+are maintained in the Nile Valley repository (`../../nile-valley`). This
+repository ships the application code, container images, and Helm chart that
+Nile Valley deploys.
 
 ## Formatting, linting, and type checking
 

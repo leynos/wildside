@@ -28,13 +28,15 @@ These instructions apply in addition to the repository root `AGENTS.md`.
 ## Testing expectations
 
 - Ensure new features are validated with unit tests and behavioural tests using
-  `bun:test` where applicable, covering happy paths, unhappy paths, and relevant
-  edge cases. If the package already uses a different local test runner, keep the
-  local convention and document any runner change before introducing it.
+  `bun:test` where applicable, covering happy paths, unhappy paths, and
+  relevant edge cases. If the package already uses a different local test
+  runner, keep the local convention and document any runner change before
+  introducing it.
 - Add end-to-end tests where the change affects externally observable workflows,
   integration contracts, persistence, command-line behaviour, network
   boundaries, user interface flows, or other system-level behaviour.
-- Use property tests with `fast-check` when a change introduces an invariant over
+- Use property tests with `fast-check` when a change introduces an invariant
+  over
   a range of inputs, states, orderings, or transitions.
 - For introduced axioms or contractual business logic, use an exhaustive proof,
   for example with LemmaScript. Proofs must be substantive, rigorous, and

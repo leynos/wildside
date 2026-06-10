@@ -1,20 +1,19 @@
 # Implement route cache key canonicalization contract tests
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
 ## Purpose / big picture
 
 Roadmap item 5.1.4 closes the gap between the architecture document and the
-shipping backend by proving that route cache keys are canonicalized before
-they reach Redis. After this work, semantically equivalent route requests
-reuse the same cache entry even if their theme arrays are reordered, their
-object keys arrive in a different order, or their coordinates differ only
-outside the documented five-decimal precision.
+shipping backend by proving that route cache keys are canonicalized before they
+reach Redis. After this work, semantically equivalent route requests reuse the
+same cache entry even if their theme arrays are reordered, their object keys
+arrive in a different order, or their coordinates differ only outside the
+documented five-decimal precision.
 
 The user-visible outcome is indirect but important: cache hit rates improve for
 repeated route requests, and the canonicalization contract becomes testable in
@@ -47,25 +46,19 @@ both fast unit tests and a Redis-backed behavioural test.
 ## Risks
 
 - Risk: The current repository only stores opaque JSON route payloads, so the
-  canonicalization seam could overfit a guessed request shape.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: Normalize only the documented semantic rules: sorted theme arrays,
-  rounded coordinate fields, stable object ordering, and `route:v1:<sha256>`
-  formatting.
+  canonicalization seam could overfit a guessed request shape. Severity: medium
+  Likelihood: medium Mitigation: Normalize only the documented semantic rules:
+  sorted theme arrays, rounded coordinate fields, stable object ordering, and
+  `route:v1:<sha256>` formatting.
 
 - Risk: Extending the existing Redis BDD file would breach the 400-line module
-  limit.
-  Severity: medium
-  Likelihood: high
-  Mitigation: Add a new focused BDD file and feature instead of extending
+  limit. Severity: medium Likelihood: high Mitigation: Add a new focused BDD
+  file and feature instead of extending
   `backend/tests/route_cache_redis_bdd.rs`.
 
 - Risk: The environment may serialize Cargo builds behind an existing lock.
-  Severity: low
-  Likelihood: medium
-  Mitigation: Wait for the lock, then run the full Makefile gates with `tee`
-  logs before closing the turn.
+  Severity: low Likelihood: medium Mitigation: Wait for the lock, then run the
+  full Makefile gates with `tee` logs before closing the turn.
 
 ## Implementation outline
 
@@ -109,7 +102,8 @@ must still pass.
 - [x] 2026-04-24 00:00 UTC: Confirmed the ExecPlan file was missing from the
   checkout and restored it as a living document.
 - [x] 2026-04-24 00:00 UTC: Added a domain-owned canonical route cache key
-  constructor plus focused unit coverage in `backend/src/domain/ports/cache_key.rs`.
+  constructor plus focused unit coverage in
+  `backend/src/domain/ports/cache_key.rs`.
 - [x] 2026-04-24 00:00 UTC: Added a dedicated Redis-backed behavioural test and
   feature file for equivalent-request cache hits without extending the existing
   near-limit BDD file.
@@ -133,20 +127,19 @@ must still pass.
   `backend/src/domain/idempotency/payload.rs`, which keeps the new cache-key
   seam small and consistent.
 - The roadmap checkbox is now complete because the canonicalization contract
-  work is implemented, the Dylint follow-up is addressed, and `cargo test -p
-  backend` passed.
+  work is implemented, the Dylint follow-up is addressed, and
+  `cargo test -p backend` passed.
 
 ## Decision Log
 
 - Decision: Implement canonicalization as `RouteCacheKey::for_route_request`
-  inside `backend/src/domain/ports/cache_key.rs`.
-  Rationale: The architecture document says cache-key canonicalization belongs
-  to the service/domain seam, not to the Redis adapter.
+  inside `backend/src/domain/ports/cache_key.rs`. Rationale: The architecture
+  document says cache-key canonicalization belongs to the service/domain seam,
+  not to the Redis adapter.
 
 - Decision: Reuse the existing domain hash helper instead of introducing a new
-  hashing path.
-  Rationale: This avoids duplicate SHA-256 logic and keeps canonical JSON
-  hashing consistent across the codebase.
+  hashing path. Rationale: This avoids duplicate SHA-256 logic and keeps
+  canonical JSON hashing consistent across the codebase.
 
 - Decision: Split behavioural coverage into a new integration test file.
   Rationale: The existing Redis BDD file is already too close to the 400-line

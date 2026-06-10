@@ -1,9 +1,8 @@
 # Implement the example-data crate
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`,
-`Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
-`Outcomes & Retrospective` must be kept up to date as work proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -48,22 +47,20 @@ produces identical output across runs.
 ## Risks
 
 - Risk: `fake` crate names may contain invalid characters (hyphens, apostrophes)
-  Severity: medium
-  Likelihood: high
-  Mitigation: sanitize generated names by replacing invalid chars with
-  underscores; retry loop with max attempts.
+  Severity: medium Likelihood: high Mitigation: sanitize generated names by
+  replacing invalid chars with underscores; retry loop with max attempts.
 
 - Risk: Workspace lint strictness may reject idiomatic `fake` crate usage
-  Severity: low
-  Likelihood: medium
-  Mitigation: use `.get()` for bounds checking; avoid panicking code paths.
+  Severity: low Likelihood: medium Mitigation: use `.get()` for bounds
+  checking; avoid panicking code paths.
 
 ## Progress
 
 - [x] (2026-01-07) Phase 1: Crate scaffold and Cargo.toml
 - [x] (2026-01-07) Phase 2: Error types with thiserror
 - [x] (2026-01-07) Phase 3: Display name validation module
-- [x] (2026-01-07) Phase 4: Type definitions (SeedRegistry, ExampleUserSeed, UnitSystemSeed)
+- [x] (2026-01-07) Phase 4: Type definitions (SeedRegistry, ExampleUserSeed,
+      UnitSystemSeed)
 - [x] (2026-01-07) Phase 5: JSON registry parsing
 - [x] (2026-01-07) Phase 6: Deterministic user generation
 - [x] (2026-01-07) Phase 7: Create seed registry JSON fixture
@@ -76,19 +73,18 @@ produces identical output across runs.
 ## Surprises & Discoveries
 
 - Observation: Rust 2024 edition reserves `gen` as a keyword
-  Evidence: Compilation error: "expected identifier, found reserved keyword `gen`"
-  Impact: Resolved by upgrading to rand 0.9 which renamed methods: `gen()` →
-  `random()`, `gen_ratio()` → `random_ratio()`, `gen_range()` → `random_range()`
+  Evidence: Compilation error: "expected identifier, found reserved keyword
+  `gen`" Impact: Resolved by upgrading to rand 0.9 which renamed methods:
+  `gen()` → `random()`, `gen_ratio()` → `random_ratio()`, `gen_range()` →
+  `random_range()`
 
 - Observation: Workspace lints disallow `clippy::expect_used` even in test code
-  Evidence: 31 clippy errors for `expect()` calls in BDD test file
-  Impact: Added module-level `#![expect(clippy::expect_used)]` attribute to
-  test file
+  Evidence: 31 clippy errors for `expect()` calls in BDD test file Impact:
+  Added module-level `#![expect(clippy::expect_used)]` attribute to test file
 
 - Observation: `fake` crate names often contain hyphens and apostrophes
-  Evidence: Generated names like "O'Brien" and "Mary-Jane"
-  Impact: Implemented `sanitize_name()` function to replace invalid chars with
-  spaces
+  Evidence: Generated names like "O'Brien" and "Mary-Jane" Impact: Implemented
+  `sanitize_name()` function to replace invalid chars with spaces
 
 ## Decision Log
 
@@ -98,13 +94,12 @@ produces identical output across runs.
 
 - Decision: Defer Postgres integration tests to task 2.4.3
   Rationale: The example-data crate doesn't interact with Postgres directly;
-  database integration belongs in the migration task
-  Date/Author: 2026-01-07 / Planning phase
+  database integration belongs in the migration task Date/Author: 2026-01-07 /
+  Planning phase
 
 - Decision: Use ChaCha8Rng for deterministic generation
   Rationale: Portable, reproducible across platforms, recommended for
-  deterministic seeding
-  Date/Author: 2026-01-07 / Planning phase
+  deterministic seeding Date/Author: 2026-01-07 / Planning phase
 
 ## Outcomes & Retrospective
 
@@ -114,7 +109,8 @@ produces identical output across runs.
 - 60 unit tests + 7 BDD tests + 5 doctests all passing
 - Full quality gates passing: `make check-fmt && make lint && make test`
 - Deterministic generation verified: same seed produces identical output
-- Display name validation mirrors backend exactly (3–32 chars, `^[A-Za-z0-9_ ]+$`)
+- Display name validation mirrors backend exactly (3–32 chars,
+  `^[A-Za-z0-9_ ]+$`)
 
 ### Metrics
 

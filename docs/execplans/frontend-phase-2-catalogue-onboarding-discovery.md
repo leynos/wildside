@@ -19,9 +19,9 @@ copy.
 Use the entity and descriptor model from
 `docs/data-model-driven-card-architecture.md` and
 `docs/wildside-pwa-data-model.md`. Entity names, descriptions, badges, and card
-copy belong to localized entity data, while UI chrome belongs to the translation
-layer. Discovery and preference writes must use the local-first query and outbox
-boundaries from phase 1.
+copy belong to localized entity data, while UI chrome belongs to the
+translation layer. Discovery and preference writes must use the local-first
+query and outbox boundaries from phase 1.
 
 ## Tolerances
 

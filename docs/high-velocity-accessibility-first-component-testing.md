@@ -27,8 +27,9 @@ contrast and canvas-adjacent UI.
 
 ### 1.1 Fast component tests
 
-Component tests should use Testing Library queries by role, label, text or other
-user-visible semantics. Ordinary controls should not require `data-testid`.
+Component tests should use Testing Library queries by role, label, text or
+other user-visible semantics. Ordinary controls should not require
+`data-testid`.
 
 Required coverage for reusable components:
 
@@ -40,9 +41,9 @@ Required coverage for reusable components:
 
 ### 1.2 Node and JSDOM accessibility scans
 
-A parallel Node.js test harness is used for `axe-core` scans. These tests should
-live in dedicated `*.a11y.test.tsx` files so that accessibility scans remain
-discoverable and can run independently when needed.
+A parallel Node.js test harness is used for `axe-core` scans. These tests
+should live in dedicated `*.a11y.test.tsx` files so that accessibility scans
+remain discoverable and can run independently when needed.
 
 JSDOM limitations must be explicit. Rules that depend on layout, CSS pixels or
 browser rendering, such as `color-contrast`, should be disabled in component
@@ -79,8 +80,8 @@ should verify both DOM state and visible focus movement.
 
 ### 3.2.2 Focus management tests
 
-Dialogs, popovers, drawers and route transitions need explicit focus assertions.
-The expected behaviour is:
+Dialogs, popovers, drawers and route transitions need explicit focus
+assertions. The expected behaviour is:
 
 - opening a modal moves focus into the modal,
 - closing a modal returns focus to the trigger or a documented fallback,
@@ -128,7 +129,8 @@ core smoke suite already covers the release-blocking flows.
 - [ ] JSDOM-disabled accessibility rules have matching Playwright coverage.
 - [ ] Playwright covers keyboard navigation, focus management and route
       announcements.
-- [ ] Theme and viewport checks catch colour contrast and responsive regressions.
+- [ ] Theme and viewport checks catch colour contrast and responsive
+      regressions.
 - [ ] Localization checks cover at least one non-default locale for each major
       registry-driven surface.
 - [ ] Snapshot updates require deliberate review.

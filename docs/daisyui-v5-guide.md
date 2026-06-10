@@ -1,7 +1,7 @@
 # daisyUI v5 project guide
 
-This guide records Wildside-specific daisyUI v5 usage. It intentionally avoids a
-full copy of the upstream component reference. Use the official daisyUI
+This guide records Wildside-specific daisyUI v5 usage. It intentionally avoids
+a full copy of the upstream component reference. Use the official daisyUI
 documentation for exhaustive component markup, modifier lists and browser
 support details: <https://daisyui.com/docs/>.
 
@@ -37,7 +37,8 @@ Implementation expectations:
    daisyUI modifiers are not sufficient.
 3. Forced utility overrides such as `bg-red-500!` should be avoided except for a
    narrowly documented compatibility case.
-4. Product-specific repeated patterns belong in semantic wrappers or token roles,
+4. Product-specific repeated patterns belong in semantic wrappers or token
+   roles,
    not long duplicated class lists.
 5. Placeholder imagery is only suitable for mockups and must not ship in product
    routes.
@@ -45,8 +46,8 @@ Implementation expectations:
 ## daisyUI colour roles
 
 daisyUI exposes semantic colour role names that map to CSS custom properties.
-Wildside should use role names in markup and keep raw palette choices inside the
-token source.
+Wildside should use role names in markup and keep raw palette choices inside
+the token source.
 
 Primary roles:
 
@@ -79,8 +80,8 @@ Primary roles:
 
 ## Custom theme skeleton
 
-The theme skeleton below shows the role names expected by daisyUI. Values should
-come from the Wildside token source.
+The theme skeleton below shows the role names expected by daisyUI. Values
+should come from the Wildside token source.
 
 ```css
 @plugin "daisyui/theme" {
@@ -113,7 +114,7 @@ come from the Wildside token source.
 
 ## Component usage boundary
 
-Component-specific markup should come from upstream daisyUI documentation at the
-time of implementation. Repository documentation should only record Wildside
-policy, local exceptions and integration notes that are not obvious from the
-upstream reference.
+Component-specific markup should come from upstream daisyUI documentation at
+the time of implementation. Repository documentation should only record
+Wildside policy, local exceptions and integration notes that are not obvious
+from the upstream reference.

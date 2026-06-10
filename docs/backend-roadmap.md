@@ -220,8 +220,8 @@ so persistence details stay confined to outbound adapters.
 
 ## 4. Pagination infrastructure
 
-Pagination relies on domain repositories exposing ordered queries via ports;
-see `docs/keyset-pagination-design.md` for the detailed crate design.
+Pagination relies on domain repositories exposing ordered queries via ports; see
+`docs/keyset-pagination-design.md` for the detailed crate design.
 
 ### 4.1. Pagination crate foundation
 
@@ -236,7 +236,8 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
 
 ### 4.2. Endpoint adoption
 
-- [x] 4.2.1. Replace offset pagination in `GET /api/v1/users` with the new crate,
+- [x] 4.2.1. Replace offset pagination in `GET /api/v1/users` with the new
+      crate,
   including Diesel filters that respect `(created_at, id)` ordering and bb8
   connection pooling.
 - [x] 4.2.2. Update the repository layer to surface pagination-aware errors
@@ -246,9 +247,9 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
   and page traversal counts for analytics.
 - [ ] 4.2.4. Preserve the shipped admin provenance reporting baseline for
   `GET /api/v1/admin/enrichment/provenance`: keep admin-only access,
-  deterministic `(imported_at, id)` ordering, and legacy `before`
-  compatibility (Request for Comments 3339 (RFC 3339) `RFC3339` or
-  `RFC3339|UUID`) while layering the shared pagination crate on top.
+  deterministic `(imported_at, id)` ordering, and legacy `before` compatibility
+  (Request for Comments 3339 (RFC 3339) `RFC3339` or `RFC3339|UUID`) while
+  layering the shared pagination crate on top.
 - [ ] 4.2.5. Implement dual query compatibility for admin enrichment reporting:
   add the new opaque `cursor` parameter alongside the shipped `before`
   contract, reject requests that provide both, and map invalid cursor or
@@ -259,8 +260,8 @@ see `docs/keyset-pagination-design.md` for the detailed crate design.
   complete.
 - [ ] 4.2.7. Extend repository and endpoint tests to prove lossless traversal
   across `(imported_at, id)` tie boundaries for opaque cursor mode, plus
-  regression coverage that the shipped legacy `before` behaviour remains
-  stable during migration.
+  regression coverage that the shipped legacy `before` behaviour remains stable
+  during migration.
 - [ ] 4.2.8. Execute and document the deprecation plan for legacy `before` /
   `nextBefore` support, including removal criteria and release sequencing once
   consumers have migrated to opaque cursors.

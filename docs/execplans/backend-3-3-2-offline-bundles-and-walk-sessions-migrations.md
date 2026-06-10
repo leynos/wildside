@@ -1,9 +1,8 @@
 # Deliver offline bundle and walk session migrations with audit and bounds/zoom metadata (roadmap 3.3.2)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETED (implementation shipped and gates passing)
 
@@ -13,8 +12,9 @@ execution reference for roadmap item 3.3.2.
 ## Purpose / big picture
 
 Roadmap item 3.3.2 requires production migrations for `offline_bundles` and
-`walk_sessions` so the domain ports introduced in 3.3.1 can persist data through
-outbound adapters without leaking schema details into domain or inbound code.
+`walk_sessions` so the domain ports introduced in 3.3.1 can persist data
+through outbound adapters without leaking schema details into domain or inbound
+code.
 
 After this work:
 
@@ -38,7 +38,8 @@ Observable success criteria:
 - A fresh migrated database contains both new tables with required columns,
   constraints, and indexes.
 - Port-level save/find/list/delete flows for offline bundles and walk sessions
-  round-trip through PostgreSQL using migrated schema (not ad-hoc table creation).
+  round-trip through PostgreSQL using migrated schema (not ad-hoc table
+  creation).
 - Schema-loss/error scenarios map to typed repository errors rather than panic.
 - Audit timestamp behaviour is observable (`created_at` initialization,
   `updated_at` monotonic updates on mutation).
@@ -86,32 +87,23 @@ Observable success criteria:
 ## Risks
 
 - Risk: migration Data Definition Language (DDL) and domain invariants drift
-  (especially bounds ordering,
-  zoom range semantics, and walk completion fields).
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: add static SQL assertions and behavioural round-trip checks through
-  the domain constructors.
+  (especially bounds ordering, zoom range semantics, and walk completion
+  fields). Severity: high. Likelihood: medium. Mitigation: add static SQL
+  assertions and behavioural round-trip checks through the domain constructors.
 
 - Risk: timestamp behaviour is inconsistent (for example, `updated_at` not
-  changing on updates).
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: use trigger-based updates where appropriate and add behavioural
-  checks asserting monotonic `updated_at`.
+  changing on updates). Severity: medium. Likelihood: medium. Mitigation: use
+  trigger-based updates where appropriate and add behavioural checks asserting
+  monotonic `updated_at`.
 
 - Risk: existing behavioural tests rely on ad-hoc `CREATE TABLE` test setup,
-  which can mask migration defects.
-  Severity: high.
-  Likelihood: medium.
+  which can mask migration defects. Severity: high. Likelihood: medium.
   Mitigation: switch tests to migrated template databases and keep schema-loss
   checks via explicit `DROP TABLE` operations.
 
 - Risk: JSON/stat payload persistence introduces brittle cast/parsing logic.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: centralize serialization in adapter helpers and test malformed-row
-  handling as query errors.
+  Severity: medium. Likelihood: medium. Mitigation: centralize serialization in
+  adapter helpers and test malformed-row handling as query errors.
 
 ## Agent team
 
@@ -160,50 +152,47 @@ Coordination rules:
 
 - Observation (2026-02-20): `backend/tests/offline_bundle_walk_session_bdd`
   currently creates `offline_bundles` and `walk_sessions` directly in test code
-  (`create_contract_tables`) rather than relying on Diesel migrations.
-  Impact: migration defects can be hidden unless tests are moved to migrated
-  schema setup.
+  (`create_contract_tables`) rather than relying on Diesel migrations. Impact:
+  migration defects can be hidden unless tests are moved to migrated schema
+  setup.
 
 - Observation (2026-02-20): `backend/src/outbound/persistence/schema.rs` does
   not yet define Diesel `table!` mappings for `offline_bundles` or
-  `walk_sessions`.
-  Impact: production adapters cannot be implemented without schema map updates.
+  `walk_sessions`. Impact: production adapters cannot be implemented without
+  schema map updates.
 
 - Observation (2026-02-20): 3.3.1 already recorded domain decisions and port
-  contracts for offline bundles and walk sessions in architecture docs.
-  Impact: 3.3.2 documentation should append migration/persistence decisions,
-  not duplicate 3.3.1 rationale.
+  contracts for offline bundles and walk sessions in architecture docs. Impact:
+  3.3.2 documentation should append migration/persistence decisions, not
+  duplicate 3.3.1 rationale.
 
 - Observation (2026-02-20): Embedded Postgres cluster startup is flaky under
-  default parallel nextest execution in this worktree.
-  Impact: `make test` can fail with transient
-  `postgresql_embedded::start() failed` panics even when test logic is sound;
-  rerunning with `NEXTEST_TEST_THREADS=1` stabilizes the full suite.
+  default parallel nextest execution in this worktree. Impact: `make test` can
+  fail with transient `postgresql_embedded::start() failed` panics even when
+  test logic is sound; rerunning with `NEXTEST_TEST_THREADS=1` stabilizes the
+  full suite.
 
 ## Decision log
 
 - Decision: keep this plan strictly scoped to roadmap 3.3.2 and defer endpoint
-  work to 3.3.3.
-  Rationale: preserves roadmap sequencing and limits blast radius.
-  Date/Author: 2026-02-20 / Codex.
+  work to 3.3.3. Rationale: preserves roadmap sequencing and limits blast
+  radius. Date/Author: 2026-02-20 / Codex.
 
-- Decision: validate migration behaviour through domain-port contract tests using
+- Decision: validate migration behaviour through domain-port contract tests
+  using
   migrated template databases, replacing ad-hoc test table creation where
-  practical.
-  Rationale: proves the migration artefacts, not a parallel test schema.
-  Date/Author: 2026-02-20 / Codex.
+  practical. Rationale: proves the migration artefacts, not a parallel test
+  schema. Date/Author: 2026-02-20 / Codex.
 
 - Decision: execute with an explicit three-agent ownership model (migrations,
-  adapters, tests/docs) and staged merge order.
-  Rationale: reduces context switching and keeps implementation traceable.
-  Date/Author: 2026-02-20 / Codex.
+  adapters, tests/docs) and staged merge order. Rationale: reduces context
+  switching and keeps implementation traceable. Date/Author: 2026-02-20 / Codex.
 
 - Decision: run `make test` with `NEXTEST_TEST_THREADS=1` for final gate
-  evidence after parallel cluster-start flakiness appears.
-  Rationale: `pg-embedded-setup-unpriv` cluster boot can race under default
-  nextest parallelism; single-thread execution provides deterministic gate
-  outcomes for this branch.
-  Date/Author: 2026-02-20 / Codex.
+  evidence after parallel cluster-start flakiness appears. Rationale:
+  `pg-embedded-setup-unpriv` cluster boot can race under default nextest
+  parallelism; single-thread execution provides deterministic gate outcomes for
+  this branch. Date/Author: 2026-02-20 / Codex.
 
 ## Context and orientation
 
@@ -347,7 +336,8 @@ Update architecture and roadmap documents in the same feature branch:
 
 - `docs/wildside-backend-architecture.md`:
   - add a design decision entry for 3.3.2 migration shape and audit strategy;
-  - note how adapter contract tests prove port semantics against migrated schema.
+  - note how adapter contract tests prove port semantics against migrated
+    schema.
 - `docs/backend-roadmap.md`:
   - switch 3.3.2 from `[ ]` to `[x]` only after all gates pass.
 
@@ -393,15 +383,17 @@ Shipped versus plan:
 Gate outcomes and evidence:
 
 - `make check-fmt` passed.
-  Log: `/tmp/check-fmt-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations.out`
+  Log:
+  `/tmp/check-fmt-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations.out`
 - `make lint` passed.
-  Log: `/tmp/lint-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations.out`
+  Log:
+  `/tmp/lint-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations.out`
 - Initial `make test` failed because of transient embedded-cluster startup
-  errors under parallel nextest.
-  Log: `/tmp/test-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations.out`
+  errors under parallel nextest. Log:
+  `/tmp/test-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations.out`
 - Retried with `NEXTEST_TEST_THREADS=1 make test`; passed with
-  `744 tests run: 744 passed, 1 skipped`.
-  Log: `/tmp/test-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-threads1.out`
+  `744 tests run: 744 passed, 1 skipped`. Log:
+  `/tmp/test-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-backend-3-3-2-offline-bundles-and-walk-sessions-migrations-threads1.out`
 
 Follow-up tasks:
 

@@ -15,8 +15,8 @@ boundaries, persist offline writes, and run accessibility-first quality gates.
 
 ## Constraints
 
-Do not add target-stack dependencies until the stack alignment task accepts them
-and updates `frontend-pwa/package.json`, the lockfile, and developer
+Do not add target-stack dependencies until the stack alignment task accepts
+them and updates `frontend-pwa/package.json`, the lockfile, and developer
 documentation. Generated API clients, token outputs, and route metadata must be
 owned by repeatable scripts. Server state belongs in TanStack Query, durable
 offline writes belong behind the outbox boundary, and feature views must not
@@ -40,13 +40,14 @@ and test harness changes as separate commits with focused verification.
 Follow `docs/frontend-roadmap.md` phase 1. First, record the stack alignment
 decision and normalize package versions, scripts, and token generation. Next,
 replace the single app view with a feature-first shell, implement route
-metadata, and map user experience (UX) graph states to routes or
-documented deferrals.
+metadata, and map user experience (UX) graph states to routes or documented
+deferrals.
 
 Then generate and wrap the OpenAPI REST client, introduce query-key factories,
 add Dexie-backed outbox and offline bundle manifest storage, and define the
-WebSocket event boundary. Finish by making component, accessibility, Playwright,
-semantic CSS, and documentation gates executable from Makefile targets.
+WebSocket event boundary. Finish by making component, accessibility,
+Playwright, semantic CSS, and documentation gates executable from Makefile
+targets.
 
 ## Validation
 

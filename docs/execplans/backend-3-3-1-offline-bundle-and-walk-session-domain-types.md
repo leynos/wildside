@@ -1,9 +1,8 @@
 # Add offline bundle and walk session domain types and repositories (roadmap 3.3.1)
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -13,8 +12,8 @@ execution reference.
 ## Purpose / big picture
 
 Roadmap item 3.3.1 introduces the offline and walk-completion domain surface so
-later migration and HTTP work (3.3.2 and 3.3.3) can depend on stable,
-validated domain contracts.
+later migration and HTTP work (3.3.2 and 3.3.3) can depend on stable, validated
+domain contracts.
 
 After this work:
 
@@ -78,8 +77,8 @@ Observable success criteria:
 - Sequence tolerance: if production-ready Diesel adapters cannot be validated
   without introducing 3.3.2 migration work, pause and escalate with options.
 - Contract tolerance: if architecture and PWA docs disagree on required
-  `OfflineBundle` or `WalkSession` fields, stop, and document alternatives before
-  coding.
+  `OfflineBundle` or `WalkSession` fields, stop, and document alternatives
+  before coding.
 - Validation tolerance: if `make check-fmt`, `make lint`, or `make test` fails
   more than three consecutive fix attempts, stop and report with logs.
 - Runtime tolerance: if new pg-embedded BDD suite exceeds configured nextest
@@ -89,37 +88,29 @@ Observable success criteria:
 
 - Risk: domain model drift between `docs/wildside-pwa-data-model.md` and
   `docs/wildside-backend-architecture.md` (for example completion summary
-  representation).
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: anchor constructor fields to both docs and record explicit
-  decision entries when reconciling differences.
+  representation). Severity: medium. Likelihood: medium. Mitigation: anchor
+  constructor fields to both docs and record explicit decision entries when
+  reconciling differences.
 
 - Risk: roadmap sequencing (3.3.1 before 3.3.2 migrations) can make persistence
-  contract testing awkward.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: validate contracts via PostgreSQL-backed test adapters and test
-  schema setup in behavioural fixtures, while deferring migration artefacts to
-  3.3.2.
+  contract testing awkward. Severity: medium. Likelihood: medium. Mitigation:
+  validate contracts via PostgreSQL-backed test adapters and test schema setup
+  in behavioural fixtures, while deferring migration artefacts to 3.3.2.
 
 - Risk: progress/status validation may be too permissive, allowing invalid
-  states to cross the domain boundary.
-  Severity: high.
-  Likelihood: medium.
+  states to cross the domain boundary. Severity: high. Likelihood: medium.
   Mitigation: centralize validation constructors and add unit plus BDD
   regression coverage for invalid values.
 
 - Risk: behavioural tests may become flaky if cluster bootstrapping is repeated
-  per scenario.
-  Severity: medium.
-  Likelihood: low.
-  Mitigation: reuse `shared_cluster_handle()` and template database cloning
-  helpers already used by existing repository BDD suites.
+  per scenario. Severity: medium. Likelihood: low. Mitigation: reuse
+  `shared_cluster_handle()` and template database cloning helpers already used
+  by existing repository BDD suites.
 
 ## Progress
 
-- [x] (2026-02-19) Confirmed branch and loaded `execplans`, `hexagonal-architecture`,
+- [x] (2026-02-19) Confirmed branch and loaded `execplans`,
+      `hexagonal-architecture`,
       `leta`, and `grepai` skills.
 - [x] (2026-02-19) Reviewed roadmap item 3.3.1 and architecture/testing guides
       listed in the request.
@@ -148,70 +139,62 @@ Observable success criteria:
 
 - Observation (2026-02-19): `backend/src/domain/mod.rs` currently exports
   catalogue/descriptors/annotations but does not yet contain `offline` or
-  `walks` modules.
-  Evidence: `backend/src/domain/mod.rs`.
-  Impact: 3.3.1 needs new domain module additions plus re-exports.
+  `walks` modules. Evidence: `backend/src/domain/mod.rs`. Impact: 3.3.1 needs
+  new domain module additions plus re-exports.
 
 - Observation (2026-02-19): `backend/src/outbound/persistence/schema.rs`
   currently does not declare `offline_bundles` or `walk_sessions`; roadmap item
-  3.3.2 is still pending for migrations.
-  Evidence: `backend/src/outbound/persistence/schema.rs`,
-  `docs/backend-roadmap.md` section 3.3.
-  Impact: repository contract validation must avoid silently expanding into
-  migration scope.
+  3.3.2 is still pending for migrations. Evidence:
+  `backend/src/outbound/persistence/schema.rs`, `docs/backend-roadmap.md`
+  section 3.3. Impact: repository contract validation must avoid silently
+  expanding into migration scope.
 
 - Observation (2026-02-19): Existing BDD repository suites already provide a
   stable pattern for embedded Postgres setup, template database provisioning,
-  and schema-loss unhappy paths.
-  Evidence: `backend/tests/catalogue_descriptor_read_models_bdd.rs`,
-  `backend/tests/ports_behaviour.rs`, `backend/tests/support/embedded_postgres.rs`.
-  Impact: reuse these fixtures/patterns rather than introducing new bootstrap
-  mechanics.
+  and schema-loss unhappy paths. Evidence:
+  `backend/tests/catalogue_descriptor_read_models_bdd.rs`,
+  `backend/tests/ports_behaviour.rs`,
+  `backend/tests/support/embedded_postgres.rs`. Impact: reuse these
+  fixtures/patterns rather than introducing new bootstrap mechanics.
 
 - Observation (2026-02-20): `rstest-bdd` fixture matching is strict on
   parameter names. A step argument named `_world` does not bind to fixture
-  `world`.
-  Evidence: failure from
+  `world`. Evidence: failure from
   `backend/tests/offline_bundle_walk_session_bdd.rs` reporting missing fixture
-  `_world`.
-  Impact: shared step fixtures must use exact fixture names in function
-  signatures.
+  `_world`. Impact: shared step fixtures must use exact fixture names in
+  function signatures.
 
 - Observation (2026-02-20): Full-suite embedded-Postgres stability improves
-  when local runs set explicit runtime/data directories.
-  Evidence: `make test` failures with `postgresql_embedded::setup/start()` were
-  resolved by running with `PG_RUNTIME_DIR` and `PG_DATA_DIR` plus
-  `PG_TEST_BACKEND=postgresql_embedded`.
-  Impact: local gate command for this change uses explicit pg-embed environment
-  configuration.
+  when local runs set explicit runtime/data directories. Evidence: `make test`
+  failures with `postgresql_embedded::setup/start()` were resolved by running
+  with `PG_RUNTIME_DIR` and `PG_DATA_DIR` plus
+  `PG_TEST_BACKEND=postgresql_embedded`. Impact: local gate command for this
+  change uses explicit pg-embed environment configuration.
 
 ## Decision log
 
 - Decision: keep roadmap 3.3.1 focused on domain types and repository port
   contracts; defer migrations and HTTP surface area to 3.3.2 and 3.3.3.
   Rationale: preserves roadmap sequencing while delivering the domain/port seam
-  required by the data-platform foundation.
-  Date/Author: 2026-02-19 / Codex.
+  required by the data-platform foundation. Date/Author: 2026-02-19 / Codex.
 
 - Decision: model `OfflineBundle` and `WalkSession` as validated domain entities
-  with constructor-level invariants instead of loose DTO structs.
-  Rationale: keeps invalid persistence payloads from crossing domain boundaries
-  and aligns with existing domain-type patterns from 3.2.1.
-  Date/Author: 2026-02-19 / Codex.
+  with constructor-level invariants instead of loose DTO structs. Rationale:
+  keeps invalid persistence payloads from crossing domain boundaries and aligns
+  with existing domain-type patterns from 3.2.1. Date/Author: 2026-02-19 /
+  Codex.
 
 - Decision: behavioural contract tests will run against PostgreSQL-backed test
   adapters in `backend/tests/*` and use template database fixtures from
-  `pg-embedded-setup-unpriv`.
-  Rationale: satisfies the requirement for embedded-Postgres behavioural
-  validation while keeping 3.3.2 migration artefacts out of 3.3.1 scope.
-  Date/Author: 2026-02-19 / Codex.
+  `pg-embedded-setup-unpriv`. Rationale: satisfies the requirement for
+  embedded-Postgres behavioural validation while keeping 3.3.2 migration
+  artefacts out of 3.3.1 scope. Date/Author: 2026-02-19 / Codex.
 
 - Decision: Keep behavioural repository adapters dependency-light by encoding
   timestamp and JSON payloads through SQL text casts in insert statements and
-  parsing PostgreSQL timestamp text in adapter mapping helpers.
-  Rationale: avoids adding additional SQL codec dependencies while preserving
-  strict domain validation at adapter boundaries.
-  Date/Author: 2026-02-20 / Codex.
+  parsing PostgreSQL timestamp text in adapter mapping helpers. Rationale:
+  avoids adding additional SQL codec dependencies while preserving strict
+  domain validation at adapter boundaries. Date/Author: 2026-02-20 / Codex.
 
 ## Context and orientation
 
@@ -277,8 +260,8 @@ implementation):
    - `WalkSession` with session identity, route linkage, temporal bounds,
      primary/secondary stats, and highlighted POI IDs.
 
-   Add focused constructor validation (for example bounds ordering,
-   progress range, and non-empty IDs where required) plus unit tests for
+   Add focused constructor validation (for example bounds ordering, progress
+   range, and non-empty IDs where required) plus unit tests for
    success/failure/edge cases.
 
 2. Add repository ports for manifests and completion summaries.
@@ -316,8 +299,8 @@ implementation):
 
 4. Update architecture decision record and roadmap state.
 
-   Add a dated design-decision entry to
-   `docs/wildside-backend-architecture.md` describing:
+   Add a dated design-decision entry to `docs/wildside-backend-architecture.md`
+   describing:
 
    - new domain entities and invariants,
    - new repository ports and their responsibilities,

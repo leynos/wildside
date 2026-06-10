@@ -11,8 +11,7 @@ Two categories of hexagonal architecture violations exist:
 1. **TraceId crosses middleware→domain boundary**: Domain code imports `TraceId`
    from `middleware/trace.rs`
 2. **OpenAPI (OpenAPI Specification) / Utoipa framework types in domain**:
-   Domain
-   types derive `ToSchema` from the `utoipa` crate
+   Domain types derive `ToSchema` from the `utoipa` crate
 
 ## Design Decisions
 

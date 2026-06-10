@@ -79,8 +79,8 @@
   utilities, variants, theming, and utility reference. _Audience: frontend
   developers._
 - [daisyUI v5 guide](daisyui-v5-guide.md) – DaisyUI v5 installation,
-  configuration, theme roles, and component class reference. _Audience: frontend
-  developers._
+  configuration, theme roles, and component class reference. _Audience:
+  frontend developers._
 - [Semantic Tailwind with daisyUI best practice](semantic-tailwind-with-daisyui-best-practice.md)
   – semantic HTML, Radix state styling, Tailwind utilities, DaisyUI roles, and
   token guidance. _Audience: frontend developers._

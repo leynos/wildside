@@ -60,10 +60,10 @@ Observable success:
 ## Decision Log
 
 - Decision: Introduce explicit driving ports for the authenticated user
-  profile and interest selection, rather than letting handlers touch persistence
-  or shared state. Rationale: Keeps inbound adapters side-effect-free and
-  preserves the hexagonal boundary by routing stateful behaviour through domain
-  ports. Date/Author: 2025-12-19 / Codex CLI.
+  profile and interest selection, rather than letting handlers touch
+  persistence or shared state. Rationale: Keeps inbound adapters
+  side-effect-free and preserves the hexagonal boundary by routing stateful
+  behaviour through domain ports. Date/Author: 2025-12-19 / Codex CLI.
 
 - Decision: Model interest theme identifiers as a domain newtype around a
   universally unique identifier (UUID) and validate them before reaching port
