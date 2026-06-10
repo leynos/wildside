@@ -1120,8 +1120,8 @@ key categories.
 #### PWA-Specific Audits
 
 The Lighthouse "Progressive Web App" category specifically checks for the
-technical requirements of a PWA. The audits are grouped into subcategories
-[^96]:
+technical requirements of a PWA. The audits are grouped into
+subcategories [^96]:
 
 - **Fast and Reliable:** Verifies that the PWA loads quickly on slow networks
   and that both the current page and the manifest's `start_url` respond with a
@@ -1401,6 +1401,7 @@ inclusive, embodying the web's greatest strengths.
        standards-focused PWA guide.
 [^95]: Reference 95 from the source material used to compile this
        standards-focused PWA guide.
+[^96]: Reference 96 from the source material used to compile this
        standards-focused PWA guide.
 [^97]: Reference 97 from the source material used to compile this
        standards-focused PWA guide.
