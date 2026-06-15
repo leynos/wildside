@@ -930,8 +930,12 @@ The plan ships in two PRs:
 - [x] (2026-06-15 01:12Z) Milestone 3 `EnrichmentJob` passed red/green
   focused tests, `make check-fmt`, `make lint`, and CodeRabbit with
   `findings: 0`.
-- [ ] Milestone 3 `EnrichmentJob` committed.
-- [ ] Milestone 4 behavioural tests green and committed.
+- [x] (2026-06-15 01:14Z) Milestone 3 `EnrichmentJob` committed as
+  `f1d354b`.
+- [x] (2026-06-15 01:47Z) Milestone 4 behavioural tests passed
+  `cargo test -p backend --test job_structs_bdd`, `make check-fmt`,
+  `make lint`, and CodeRabbit with `findings: 0`.
+- [ ] Milestone 4 behavioural tests committed.
 - [ ] Milestone 5 documentation, full gates, roadmap closure, and PR
   update complete.
 
@@ -990,6 +994,11 @@ The plan ships in two PRs:
   test expanded to a helper with too many arguments. The constructor now has a
   scoped `#[expect(clippy::too_many_arguments)]`; the test now passes one
   structured case value per row.
+
+- (2026-06-15 01:40Z) Milestone 4 did not add a PostgreSQL-backed scenario.
+  `GenericApalisRouteQueue<EnrichmentJob, FakeQueueProvider>` exercises the
+  typed plan serialization and queue-provider seam without changing the
+  `PostgresStorage<serde_json::Value>` storage shape reserved for 5.3.1.
 
 ## Decision log
 
