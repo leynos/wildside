@@ -12,5 +12,7 @@ pub struct BoundingBox {
 
 impl BoundingBox {
     /// Return the stored coordinates in wire-format order.
-    pub fn coords(&self) -> [f64; 4] { self.coords }
+    pub fn coords(&self) -> [f64; 4] {
+        self.coords
+    }
 }
