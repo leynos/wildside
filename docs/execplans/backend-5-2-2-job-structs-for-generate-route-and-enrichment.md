@@ -921,8 +921,11 @@ The plan ships in two PRs:
 - [x] (2026-06-14 23:58Z) Milestone 1 scaffold compiled with
   `cargo check -p backend` and CodeRabbit retry completed with
   `findings: 0`.
-- [ ] Milestone 1 scaffold committed.
-- [ ] Milestone 2 `GenerateRouteJob` green and committed.
+- [x] (2026-06-14 23:59Z) Milestone 1 scaffold committed as `8219cf9`.
+- [x] (2026-06-15 00:30Z) Milestone 2 `GenerateRouteJob` passed red/green
+  focused tests, `make check-fmt`, `make lint`, and CodeRabbit with
+  `findings: 0`.
+- [ ] Milestone 2 `GenerateRouteJob` committed.
 - [ ] Milestone 3 `EnrichmentJob` green and committed.
 - [ ] Milestone 4 behavioural tests green and committed.
 - [ ] Milestone 5 documentation, full gates, roadmap closure, and PR
@@ -968,6 +971,14 @@ The plan ships in two PRs:
   `/tmp/coderabbit-wildside-backend-5-2-2-scaffold.out` was terminated; other
   agents' CodeRabbit processes were left untouched. A retry was started under
   `/tmp/coderabbit-wildside-backend-5-2-2-scaffold-retry.out`.
+
+- (2026-06-15 00:18Z) `make lint` found two deterministic issues before the
+  milestone 2 CodeRabbit review: clippy rejected the approved
+  seven-argument `GenerateRouteJob::v1` signature, and Whitaker did not treat
+  helper fixtures in `backend/src/domain/jobs/generate_route/tests.rs` as
+  test functions for `.expect()` usage. The constructor now has a scoped
+  `#[expect(clippy::too_many_arguments)]` with a reason, and fixture helpers
+  use deterministic UUID constructors or explicit `match` panics.
 
 ## Decision log
 
@@ -1025,6 +1036,15 @@ The plan ships in two PRs:
   taking the extra `request_id`/`enqueued_at` parameters) keeps the
   intent explicit.
   Date/Author: 2026-06-06 / planning agent.
+
+- Decision: Keep the approved `GenerateRouteJob::v1` positional constructor
+  and use a scoped clippy expectation for `too_many_arguments`.
+  Rationale: the ExecPlan explicitly prescribes the constructor signature so
+  tests and later milestones can build V1 payloads without introducing an
+  additional builder type. Clippy correctly flags the risk, so the
+  expectation is limited to that function and documents that the argument list
+  mirrors the persisted schema fields.
+  Date/Author: 2026-06-15 / implementation agent.
 
 - Decision: Derive only `PartialEq` (not `Eq`) on the job envelopes and
   on `BoundingBox`.
