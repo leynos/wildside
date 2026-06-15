@@ -13,7 +13,6 @@ Both endpoints send `Cache-Control: no-store` and a JSON body with a top-level
 `status` field (`pass` or `fail`) plus a `checks` object keyed by `liveness` or
 `readiness`.
 
-
 ## Route job payloads
 
 The backend now has internal typed payloads for route-generation and enrichment
