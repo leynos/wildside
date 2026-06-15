@@ -370,6 +370,11 @@ Progress notes:
 - [x] Stage D.5 — Updated PR #375 with implementation completion notes,
   validation results, and the clean follow-up CodeRabbit review status.
   Moved this ExecPlan to COMPLETE. `(2026-06-15 00:00Z)`
+- [x] Post-completion hook reconciliation — Committed `0f25910` to
+  normalize `bun.lock` after repeated stop-hook checks found the Bun-resolved
+  lockfile dirty again after restoration. `make check-fmt`, `make lint`, and
+  `make test` passed before the follow-up commit, and the branch was pushed.
+  `(2026-06-15 23:06Z)`
 
 Use ISO 8601 timestamps in UTC (for example, `(2026-06-05 12:34Z)`) when
 ticking items to measure rates of progress and detect tolerance breaches.
@@ -487,9 +492,12 @@ audit step appends evidence in this section.
 - Observation: `make nixie` ran `bun install` and rewrote `bun.lock` even
   though the task did not change package manifests or dependencies.
   Evidence: `git diff -- bun.lock` showed broad dependency churn unrelated to
-  the catalogue work.
-  Impact: restored `bun.lock` to avoid committing generated lockfile churn
-  outside the 0.1.2 documentation scope.
+  the catalogue work. Later stop-hook checks repeatedly found the same
+  Bun-resolved lockfile dirty again after restoration.
+  Impact: the initial catalogue commit excluded the generated lockfile churn,
+  but a separate post-completion commit, `0f25910`, normalizes `bun.lock` so
+  repository hooks leave the working tree clean after the validation toolchain
+  runs.
 
 Append new entries as the audit progresses, citing the relevant file path and
 line range as evidence.
@@ -658,6 +666,18 @@ choices.
   only.
   Date/Author: 2026-06-05, plan draft, after Logisphere panel review.
 
+- Decision: commit the Bun-resolved `bun.lock` form separately from the
+  catalogue implementation after completion.
+  Rationale: the plan originally treated lockfile changes as out of scope
+  because 0.1.2 did not add or remove dependencies. During validation,
+  `make nixie`, `make lint`, and the stop-hook path repeatedly regenerated
+  the same lockfile shape after `git restore`. Keeping the file reverted left
+  the branch dirty at the stop hook; committing it separately preserves the
+  catalogue commit's scope while making the repository state reproducible
+  after the required Bun-backed gates. The follow-up commit was gated with
+  `make check-fmt`, `make lint`, and `make test`.
+  Date/Author: 2026-06-15, post-completion hook reconciliation.
+
 ## Outcomes & retrospective
 
 Roadmap item 0.1.2 is complete. The committed catalogue records 13 open
@@ -681,6 +701,13 @@ source contradictions. Second, documentation gates can surface unrelated
 syntax breakage; the Mermaid label repair in the rstest-bdd migration guide
 was necessary to keep `make nixie` green, but it does not resolve any
 front-end finding.
+
+After completion, the stop hook repeatedly reported a dirty `bun.lock` because
+the Bun-backed validation tools regenerated the lockfile. Commit `0f25910`
+records that normalized lockfile state separately from the catalogue work.
+The current branch state is therefore two commits past the draft plan:
+`7b743d6` for the catalogue implementation and `0f25910` for lockfile
+normalization.
 
 ## Context and orientation
 
