@@ -848,18 +848,16 @@ sitemap.
 ### Running locally
 
 ```sh
-bun run scripts/audit-ux-state-graph.mjs \
-  --graph docs/wildside-ux-state-graph-v0.1.json \
-  --sitemap docs/sitemap.md
+node ./scripts/check-overrides-policy.mjs
 ```
 
-A run prints one line per state:
+A passing run prints:
 
 ```text
-<state-id> in=<count> out=<count> route=<route-or-NONE> [ORPHAN]
+pnpm override policy verified for basic-ftp, dompurify, ip-address, uuid.
 ```
 
-Input or parsing errors are printed to stderr and exit with code `1`.
+A failing run prints a policy diagnostic to stderr and exits with code `1`.
 
 ## Override policy check
 
@@ -999,6 +997,39 @@ Implementation details within `outbound::queue`:
   `apalis_route_queue` module. Defines
   `async fn push_job(&self, payload: serde_json::Value) -> Result<(), JobDispatchError>`
   as the test seam; not part of the crate's supported public API.
+
+
+### Background job payloads
+
+Domain-owned job payloads live under `backend/src/domain/jobs`. They are the
+only supported contract for values passed into `RouteQueue::enqueue`:
+
+- `GenerateRouteJob` is defined in
+  `backend/src/domain/jobs/generate_route.rs`. Build it from the existing
+  route submission port with `GenerateRouteJob::try_from_submission`, passing
+  the generated `request_id` and enqueue timestamp explicitly.
+- `EnrichmentJob` is defined in `backend/src/domain/jobs/enrichment.rs`. Build
+  it through `EnrichmentJob::v1`, which validates tag count, tag length, and
+  canonical tag ordering.
+- `BoundingBox` is defined in `backend/src/domain/jobs/bounding_box.rs`. It
+  serializes as `[min_lng, min_lat, max_lng, max_lat]` and rejects
+  antimeridian-wrapped boxes in V1. Split dateline-spanning inputs before
+  building an `EnrichmentJob`.
+
+Both job families use a serde envelope with `#[serde(tag = "v")]`, currently
+`"v1"`. V1 structs use `deny_unknown_fields`; do not remove that restriction.
+Any additive schema change requires a new variant such as V2. A changed
+`insta` snapshot for a V1 job is a signal to stop and cut a new variant, not to
+edit V1 in place.
+
+The payloads carry `idempotency_key` because the current Apalis pins predate
+framework-native idempotency support. Trace IDs are intentionally absent from
+V1; roadmap item 5.2.4 owns trace propagation and must choose the trace carrier
+before adding any trace field.
+
+Domain job modules must not import Apalis, SQLx, Diesel, Actix, or outbound
+adapter types. Adapter code serializes domain payloads at the boundary; domain
+code defines the contract and validation rules.
 
 Queue observability:
 

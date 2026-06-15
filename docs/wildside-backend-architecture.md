@@ -2215,49 +2215,46 @@ unchanged, awaiting later roadmap items covering job struct definitions
 (5.2.2), retry policies (5.2.3), and trace propagation (5.2.4). The stub adapter
 (`StubRouteQueue`) is retained for tests that do not require PostgreSQL.
 
-**Job definitions:** We have two primary job types in the system (with the
-possibility of more as the project grows):
+**Job definitions:** Roadmap item 5.2.2 defines the durable domain payloads in
+`backend/src/domain/jobs`. Both job families use a `#[serde(tag = "v")]`
+versioning envelope with a current `"v1"` variant. Existing V1 variants use
+`deny_unknown_fields`: adding any field, even an optional field, requires a new
+variant such as V2 and a reviewed snapshot update.
 
-- **GenerateRouteJob:** Contains the parameters needed to generate a route
-  (user id or context, start location, duration, interest tags, and the
-  request_id to correlate). Its handler will load necessary data (using the
-  domain logic and repositories), call the route engine to compute the path,
-  and then handle the result. On success, it will store the resulting route in
-  the database (so it can be retrieved via API) and trigger a WebSocket
-  notification to the
-  user([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L67-L74)
-  )(
-  [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L76-L78)).
-  On failure or timeout, it will similarly notify (via WS or mark the status
-  in DB) that the route failed. As part of its logic, if it detects not enough
-  POIs (data sparse), it will enqueue an **EnrichmentJob** before
-  finishing([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L632-L640)
-  )(
-  [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L664-L671))
-  (this can be done by pushing a new job to the enrichment queue).
+- `GenerateRouteJob` lives in
+  `backend/src/domain/jobs/generate_route.rs`. V1 carries `request_id`,
+  optional `idempotency_key`, `user_id`, `origin`, `destination`, optional
+  `preferences`, and `enqueued_at`. The helper
+  `GenerateRouteJob::try_from_submission` converts the existing
+  `RouteSubmissionRequest` shape into the queued payload while keeping
+  `RouteSubmissionRequest::payload` as `serde_json::Value`.
+- `EnrichmentJob` lives in `backend/src/domain/jobs/enrichment.rs`. V1 carries
+  `job_id`, optional `idempotency_key`, a validated `BoundingBox`, sorted and
+  deduplicated tags, and `enqueued_at`. The bounding box is serialized as
+  `[min_lng, min_lat, max_lng, max_lat]`, matching
+  `OverpassEnrichmentRequest`. Antimeridian-wrapped boxes are not supported in
+  V1; callers spanning the dateline must split the request into two boxes.
+- `BoundingBox` lives in `backend/src/domain/jobs/bounding_box.rs` and rejects
+  non-finite coordinates, out-of-range WGS84 coordinates, inverted latitude
+  ordering, and longitude ordering that would imply an antimeridian wrap.
 
-- **EnrichmentJob:** Contains parameters like a geographical bounding box or
-  area ID and perhaps a category of POIs to fetch. Its handler will call the
-  Overpass API (via HTTP) to get additional POIs in that
-  area([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L666-L674)).
-  It parses the Overpass response, and for each new POI, inserts or updates the
-  `pois` table in our
-  database([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L668-L670)).
-  This job essentially expands our local dataset. It might not directly notify
-  the user (the user’s original request is handled by the GenerateRouteJob
-  which will re-run the route or was waiting), but it will emit metrics (like
-  count of POIs added) and possibly log an event for
-  monitoring([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L371-L378)).
-  If a route job was waiting on enrichment (depending on implementation, we
-  might either have the original job block pending enrichment or more likely
-  the first job returns what it can and enrichment will affect future
-  requests), in a future iteration we could have the GenerateRouteJob await the
-  completion of the spawned EnrichmentJob (with some overall timeout).
+The idempotency key remains in the job payload as the durable wire-level source
+of truth. Although the resolved dependency graph now includes an `apalis-core`
+release with framework-native task identity, queue dispatch does not yet map
+the payload field into that metadata. A later integration can add that mapping
+without changing the V1 wire shape.
 
-We omit detailed implementation of these jobs in this design document (see code
-for specifics), but the key point is the separation: the **API enqueues a
-GenerateRouteJob** and returns immediately, the **worker processes it and may
-enqueue further jobs or produce output**.
+Trace identifiers are deliberately absent from the V1 payloads. Roadmap item
+5.2.4 owns trace propagation and will decide whether trace data travels in the
+job payload, Apalis task metadata, or OpenTelemetry context. Until that work
+lands, `request_id`/`job_id` provide stable identifiers but are not a complete
+trace-propagation mechanism.
+
+Worker handlers must match on the envelope variant before processing. If a
+worker receives an unknown future variant, it must reject the job as
+`JobDispatchError::Rejected`, log the payload version loudly, and rely on the
+retry/dead-letter policy from 5.2.3 when that policy lands. Workers must not
+panic or silently drop unknown variants.
 
 **Communication between workers and API:** The workers operate asynchronously
 from the API, so how does the API know to send WebSocket updates to the right
@@ -2317,10 +2314,10 @@ for active jobs could be maintained (though Apalis can likely report if workers
 are busy).
 
 Apalis integrates with the `tracing` crate, so each job run can emit tracing
-spans. We make sure to propagate the trace ID from the enqueuing context: one
-method is to include the originating trace ID in the job payload (or in
-metadata) so that when the worker picks it up, it can attach that ID to its
-logging
+spans. Roadmap item 5.2.4 will choose the trace carrier for queued work: the
+originating trace ID may travel in Apalis task metadata or tracing context, and
+only a future payload variant should add it to the job body. When the worker
+picks up a job, it attaches that ID to its logging
 context([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L712-L720)).
 In practice, we might log an event like “GenerateRouteJob started
 (request_id=…, trace=X)” and use `tracing::info_span!(..., trace_id = X)`

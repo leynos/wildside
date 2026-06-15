@@ -935,7 +935,16 @@ The plan ships in two PRs:
 - [x] (2026-06-15 01:47Z) Milestone 4 behavioural tests passed
   `cargo test -p backend --test job_structs_bdd`, `make check-fmt`,
   `make lint`, and CodeRabbit with `findings: 0`.
-- [ ] Milestone 4 behavioural tests committed.
+- [x] (2026-06-15 01:48Z) Milestone 4 behavioural tests committed as
+  `7f02a3c`.
+- [x] (2026-06-15 03:32Z) Milestone 5 documentation gates passed:
+  `make fmt`, `make markdownlint`, and `make nixie`.
+- [x] (2026-06-15 03:32Z) Milestone 5 full quality gates passed:
+  `make check-fmt`, `make lint`, and `make test`. The full test gate ran 1316
+  Rust nextest cases with 1316 passed and 4 skipped, then passed the
+  TypeScript/Vitest workspace tests.
+- [x] (2026-06-15 03:45Z) Milestone 5 documentation CodeRabbit review
+  completed with `findings: 0`.
 - [ ] Milestone 5 documentation, full gates, roadmap closure, and PR
   update complete.
 
@@ -999,6 +1008,13 @@ The plan ships in two PRs:
   `GenericApalisRouteQueue<EnrichmentJob, FakeQueueProvider>` exercises the
   typed plan serialization and queue-provider seam without changing the
   `PostgresStorage<serde_json::Value>` storage shape reserved for 5.3.1.
+
+- (2026-06-15 02:05Z) Milestone 5 documentation gates exposed a pre-existing
+  Mermaid parse failure in
+  `docs/rstest-bdd-v0-5-0-migration-guide.md`. `merman-cli` reported the
+  migration flowchart as an unterminated node label; simplifying the diagram to
+  parser-safe quoted labels, without changing the surrounding prose, unblocks
+  `make nixie`.
 
 ## Decision log
 
