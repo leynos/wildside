@@ -4,7 +4,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -33,7 +33,7 @@ finding the affected topic, and confirming whether the task's cited
 authorities currently agree. The catalogue stays load-bearing because closing
 PRs update the relevant rows rather than leaving stale `open` entries.
 
-This plan must be approved before implementation begins.
+Implementation proceeded after approval and is complete.
 
 ## Constraints
 
@@ -308,6 +308,69 @@ actual current state of the work.
 - [ ] Stage D.5 — Update PR description with completion notes, summarise
   outcomes here, and move the ExecPlan status to COMPLETE.
 
+Progress notes:
+
+- [x] Stage A.1 — Locked the existing five-label set, `FIND-NNNN`
+  identifier scheme, canonical row schema, `status` and `perishability`
+  fields, and catalogue path
+  `docs/frontend-source-contradictions-catalogue.md`.
+  `(2026-06-14 22:51Z)`
+- [x] Stage A.2 — Confirmed the audit source set is present: the authority
+  catalogue, v2a stack, accessible PWA guide, semantic Tailwind guide,
+  Wildside PWA design, Wildside PWA data model, UX state graph, sitemap,
+  OpenAPI spec, and AsyncAPI spec. Supporting hotspot documents remain the
+  same set named in the ExecPlan. `(2026-06-14 22:51Z)`
+- [x] Stage A.3 — Added the reproducible UX state-graph walker at
+  `scripts/audit-ux-state-graph.mjs`; OpenAPI and AsyncAPI extraction remain
+  scratch commands under `/tmp` as planned. `(2026-06-14 22:52Z)`
+- [x] Stage B.1 — Ran the identifier inventory into `/tmp` logs using the
+  `audit-$(get-project)-$(git branch --show-current)` template. The pass found
+  11 OpenAPI operations, one AsyncAPI channel, 74 UX states, and 18 UX state
+  orphan markers for triage. `(2026-06-14 22:52Z)`
+- [x] Stage B.2 — Completed the structured prose audit against source-authority
+  hotspots, contract inventories, and the wyvern confirmation pass.
+  Candidate findings were captured for schema shape, presentation leakage,
+  REST and AsyncAPI gaps, idempotency, auth phase boundaries,
+  service-worker update policy, stack drift, and navigation terminology.
+  `(2026-06-14 22:56Z)`
+- [x] Stage B.3 — Triaged candidates down to 13 findings and two
+  duplicate-but-consistent rows. Dropped or retained UX orphan markers only
+  where cross-document evidence supported a real finding. `(2026-06-14
+  22:56Z)`
+- [x] Stage C.1 — Authored
+  `docs/frontend-source-contradictions-catalogue.md` with scope, label set,
+  contract-gap ownership tree, status convention, row-update obligation, and
+  canonical row schema. `(2026-06-14 22:57Z)`
+- [x] Stage C.2 — Added findings, duplicate triage rows, topic
+  cross-reference table, coverage matrix, audit artefacts, validation note,
+  and relevant-skills section. `(2026-06-14 22:57Z)`
+- [x] Stage C.3 — Updated `docs/developers-guide.md` with a pointer to the
+  catalogue and the row-status update obligation for closing pull requests.
+  `(2026-06-14 22:58Z)`
+- [x] Stage D.1 — Ran `make check-fmt`, `make lint`, `make markdownlint`,
+  and `make nixie` sequentially with `/tmp` `tee` logs. `markdownlint`
+  initially failed on table alignment in the new catalogue and passed after a
+  mechanical table-alignment pass. `nixie` initially failed on an existing
+  Mermaid label in `docs/rstest-bdd-v0-5-0-migration-guide.md` and passed
+  after quoting the multi-line labels. `(2026-06-15 00:11Z)`
+- [x] Stage D.2 — Full `make test` rerun passed after the earlier transient
+  embedded-PostgreSQL bootstrap failure. Final gate results were 1,286/1,286
+  Rust tests passed with four skipped, 47 root Vitest tests passed, 43
+  `frontend-pwa` Vitest tests passed, and token contrast checks passed.
+  `(2026-06-15 00:17Z)`
+- [x] Stage D.3 — Ran `coderabbit review --agent`. The first review reported
+  one minor grammar concern in the FIND-0010 rationale; that comma fix was
+  applied, `make markdownlint`, `make check-fmt`, and `make lint` were rerun,
+  and the follow-up CodeRabbit review completed with zero findings.
+  `(2026-06-14 23:59Z)`
+- [x] Stage D.4 — Marked roadmap item 0.1.2 complete in
+  `docs/frontend-roadmap.md` and linked it to
+  `docs/frontend-source-contradictions-catalogue.md`.
+  `(2026-06-14 23:59Z)`
+- [x] Stage D.5 — Updated PR #375 with implementation completion notes,
+  validation results, and the clean follow-up CodeRabbit review status.
+  Moved this ExecPlan to COMPLETE. `(2026-06-15 00:00Z)`
+
 Use ISO 8601 timestamps in UTC (for example, `(2026-06-05 12:34Z)`) when
 ticking items to measure rates of progress and detect tolerance breaches.
 
@@ -327,6 +390,107 @@ audit step appends evidence in this section.
   Impact: Stage B.3 must triage and confirm each candidate before it enters
   the catalogue; do not promote candidates verbatim.
 
+- Observation: implementation began on branch
+  `frontend-0-1-2-catalogue-contradictions-and-duplicated-requirements`, not
+  on the main branch. The expected source set is present at audit time.
+  Evidence: `git branch --show-current`; `wc -l` over
+  `docs/frontend-source-authority-catalogue.md`, `docs/v2a-front-end-stack.md`,
+  `docs/building-accessible-and-responsive-progressive-web-applications.md`,
+  `docs/semantic-tailwind-with-daisyui-best-practice.md`,
+  `docs/wildside-pwa-design.md`, `docs/wildside-pwa-data-model.md`,
+  `docs/wildside-ux-state-graph-v0.1.json`, `docs/sitemap.md`,
+  `spec/openapi.json`, and `spec/asyncapi.yaml`.
+  Impact: Stage A can proceed without a branch change or source-set
+  escalation.
+
+- Observation: a wyvern agent team member was dispatched to confirm Stage A/B
+  inputs and candidate findings without editing files.
+  Evidence: agent `019ec854-d8ae-73b3-bdd7-aa8fd63314ef` (`Leibniz`).
+  Impact: findings entering the catalogue will be cross-checked against an
+  independent read-only pass.
+
+- Observation: `yq` is not installed in this worktree environment, but Python
+  with PyYAML is available and can read `spec/asyncapi.yaml` without changing
+  project dependencies.
+  Evidence: `command -v yq` returned no path; the Stage B.1 Python/YAML
+  extraction emitted the `/ws` channel.
+  Impact: AsyncAPI extraction remains scratch-only and no new tooling is added
+  to the repository.
+
+- Observation: the Stage B.1 UX graph pass emitted 18 orphan markers:
+  `router.not_found`, `runtime.service_worker_update_available`,
+  `explore.stale_catalogue`, `customize.generate_planned`,
+  `route_generation.draft`, `route_generation.conflict`,
+  `route_generation.data_sparse`, `route_generation.cancelled`, `map.layout`,
+  `map.location_denied`, `map.canvas_error`, `saved.empty`,
+  `offline.bundle_complete`, `offline.storage_pressure`, `auth.unknown`,
+  `auth.guest`, `auth.authenticated`, and `auth.login`.
+  Evidence: the `.out.uxstates` log written under `/tmp` with the
+  `audit-$(get-project)-$(git branch --show-current)` template.
+  Impact: Stage B.2/B.3 must decide which markers are true contradictions
+  rather than accepted transient, error, or terminal states.
+
+- Observation: the wyvern confirmation pass independently found the same major
+  issue families as the local audit: OpenAPI endpoint gaps, AsyncAPI event
+  gaps, `ImageAsset` alt-text shape, interests revision shape, idempotency
+  scope, auth/sitemap phase mismatch, stack drift, and bottom-nav terminology.
+  Evidence: agent `019ec854-d8ae-73b3-bdd7-aa8fd63314ef` completed with a
+  candidate list and over-counting warnings.
+  Impact: the catalogue uses those families, but keeps the ExecPlan's required
+  `FIND-NNNN` identifiers and prescribed labels.
+
+- Observation: the scribe agent team supplied useful prose for introduction,
+  coverage, row-update obligation, and caveats, but its draft used a different
+  `C-NN` row scheme and non-prescribed labels.
+  Evidence: agent `019ec858-25f6-7272-9e92-b092292ce674` completed with a
+  draft table using `contract-gap`, `openapi`, and similar labels.
+  Impact: integrated only the compatible prose and findings; the committed
+  catalogue keeps the canonical row schema and five-label set.
+
+- Observation: Stage B.3 treated many UX orphan markers as candidate signals
+  rather than findings. Terminal, transient, future, and error states were
+  promoted only when another source exposed a concrete contradiction.
+  Evidence: `docs/frontend-source-contradictions-catalogue.md` lists 13
+  findings and two duplicate-but-consistent rows rather than one row per
+  orphan marker.
+  Impact: this avoids the over-counting risk named in the plan while retaining
+  traceability to the UX walker output.
+
+- Observation: `make markdownlint` and `make nixie` exposed deterministic
+  documentation issues before CodeRabbit. The new catalogue's Markdown tables
+  needed alignment, and an existing Mermaid diagram in
+  `docs/rstest-bdd-v0-5-0-migration-guide.md` used multi-line node labels that
+  Mermaid could not parse.
+  Evidence: `/tmp/markdownlint-$(get-project)-$(git branch --show-current).out`
+  and `/tmp/nixie-$(get-project)-$(git branch --show-current).out`; both gates
+  passed after fixes.
+  Impact: the Mermaid repair is an additional documentation change outside the
+  planned catalogue set, but it was required to keep the documentation gate
+  green and does not settle any front-end finding.
+
+- Observation: the first full `make test` run failed only in
+  `backend::catalogue_descriptor_ingestion_bdd` because the embedded
+  PostgreSQL bootstrap reported that another server might already be running.
+  The same binary passed on a targeted rerun after the full run ended, and the
+  later full `make test` rerun passed all suites.
+  Evidence:
+  `/tmp/test-$(get-project)-$(git branch --show-current).out` reported
+  1,285 passed, one failed, and four skipped tests;
+  `/tmp/test-rerun-$(get-project)-$(git branch --show-current).out` reported
+  9/9 passing tests for the failed binary; and
+  `/tmp/test-$(get-project)-$(git branch --show-current)-rerun.out` reported
+  the clean full-gate result. No Postgres listener or `postmaster.pid`
+  remained after the first full run.
+  Impact: treat the first failure as a transient embedded-cluster setup issue.
+  CodeRabbit can now review against clean deterministic validation.
+
+- Observation: `make nixie` ran `bun install` and rewrote `bun.lock` even
+  though the task did not change package manifests or dependencies.
+  Evidence: `git diff -- bun.lock` showed broad dependency churn unrelated to
+  the catalogue work.
+  Impact: restored `bun.lock` to avoid committing generated lockfile churn
+  outside the 0.1.2 documentation scope.
+
 Append new entries as the audit progresses, citing the relevant file path and
 line range as evidence.
 
@@ -344,6 +508,20 @@ choices.
   benefit. Splitting becomes warranted only if the catalogue exceeds the
   tolerance threshold for candidate volume.
   Date/Author: 2026-06-05, plan draft.
+
+- Decision: the plan is active because the user explicitly requested
+  implementation of the planned functionality on 2026-06-14. The approval
+  gate in the draft plan is therefore satisfied for this worktree.
+  Rationale: the task prompt asks to proceed with implementation and names the
+  ExecPlan as the governing plan.
+  Date/Author: 2026-06-14, implementation session.
+
+- Decision: use Python/PyYAML instead of `yq` for the scratch AsyncAPI channel
+  extraction in Stage B.1.
+  Rationale: the plan permits a substitute when `yq` is missing, PyYAML is
+  already available, and committing new tooling would breach the
+  documentation-only scope.
+  Date/Author: 2026-06-14, implementation session.
 
 - Decision: the finding label set is the prescribed five: `update design
   document`, `merge into Progressive Web App design`, `update data model`,
@@ -482,9 +660,27 @@ choices.
 
 ## Outcomes & retrospective
 
-Summarize outcomes, gaps, and lessons learned at major milestones or at
-completion. Compare the result against the original purpose. Note what would
-be done differently next time. This section is filled in during Stage D.5.
+Roadmap item 0.1.2 is complete. The committed catalogue records 13 open
+findings and two duplicate-but-consistent rows across the named front-end
+source documents and contracts. Each finding carries stable identifiers,
+source citations, BCP 14-annotated claims, one approved follow-up label,
+status, severity, perishability, ownership notes, and an authority-catalogue
+topic cross-reference.
+
+The result matches the original purpose: later phase 1-5 implementation work
+can now check whether its cited front-end sources agree, which source owns any
+resolution, and whether the fix belongs in design prose, the data model, an
+ADR, OpenAPI, AsyncAPI, or roadmap citations. The roadmap item is checked off
+with a direct pointer to the catalogue, and the developers guide documents the
+row-update obligation for closing PRs.
+
+Two operational lessons matter for future catalogue work. First, the UX
+state-graph audit is useful as a triage input, but orphan markers must be
+cross-checked against design prose to avoid over-counting generated states as
+source contradictions. Second, documentation gates can surface unrelated
+syntax breakage; the Mermaid label repair in the rstest-bdd migration guide
+was necessary to keep `make nixie` green, but it does not resolve any
+front-end finding.
 
 ## Context and orientation
 

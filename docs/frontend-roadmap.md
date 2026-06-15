@@ -51,7 +51,8 @@ The outcome informs the source documents that phases 1-5 should cite.
   - Success: every platform, data, user experience-state, API, and styling topic
     referenced by this roadmap has one named authoritative source or a named
     reconciliation follow-up.
-- [ ] 0.1.2. Catalogue contradictions and duplicated requirements.
+- [x] 0.1.2. Catalogue contradictions and duplicated requirements. See
+      `docs/frontend-source-contradictions-catalogue.md`.
   - Requires 0.1.1.
   - Review the v2a stack, accessible Progressive Web App guide, semantic
     Tailwind/DaisyUI guide, Wildside Progressive Web App design, Wildside

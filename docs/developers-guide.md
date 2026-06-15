@@ -60,6 +60,9 @@ Canonical front-end references:
   identifies the authoritative source or reconciliation follow-up for each
   front-end platform, data, user experience, API, styling, accessibility,
   localization, and testing topic.
+- [Front-end source contradictions catalogue](frontend-source-contradictions-catalogue.md)
+  records concrete contradictions, duplicated requirements, and contract gaps.
+  Pull requests that resolve a finding must update that row's `status` field.
 - [v2a front-end stack](v2a-front-end-stack.md) documents the current package
   state and the target v2a stack boundary.
 - [Wildside front-end roadmap](frontend-roadmap.md) is the implementation task
