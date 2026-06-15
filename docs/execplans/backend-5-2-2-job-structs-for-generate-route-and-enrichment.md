@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: APPROVED / IN PROGRESS
+Status: COMPLETE
 
 This plan covers roadmap item 5.2.2 only:
 
@@ -945,8 +945,12 @@ The plan ships in two PRs:
   TypeScript/Vitest workspace tests.
 - [x] (2026-06-15 03:45Z) Milestone 5 documentation CodeRabbit review
   completed with `findings: 0`.
-- [ ] Milestone 5 documentation, full gates, roadmap closure, and PR
-  update complete.
+- [x] (2026-06-15 03:54Z) Roadmap item 5.2.2 was marked complete after the
+  documentation review, then final closure gates passed: `make fmt`,
+  `make markdownlint`, `make nixie`, `make check-fmt`, `make lint`, and
+  `make test`.
+- [x] (2026-06-15 04:08Z) Milestone 5 final CodeRabbit review completed with
+  `findings: 0`; closure commit is ready.
 
 ## Surprises & discoveries
 
@@ -1171,12 +1175,24 @@ The plan ships in two PRs:
 
 ## Outcomes & retrospective
 
-To be completed at the end of milestone M5. Compare the result against
-the purpose at the top of this plan, note what was discovered (especially
-about future trace propagation and storage-shape decisions for 5.2.3 and
-5.3.1), and capture any tooling or test-pattern improvements that would
-help future job-struct work (for example, whether the envelope pattern
-should be lifted to a generic `VersionedPayload<T>` helper crate).
+Roadmap item 5.2.2 is complete. The backend now has domain-owned,
+versioned job payloads for generate-route and enrichment work, pinned by
+unit, property, snapshot, and behavioural coverage. The `RouteQueue` port
+shape and `RouteSubmissionRequest` public contract were left unchanged,
+and the Apalis storage shape remains `serde_json::Value` for the later
+worker/storage milestones.
+
+The main future-facing decisions are now explicit in the code and docs:
+trace metadata stays deferred to 5.2.4, retry/dead-letter behaviour stays
+deferred to 5.2.3, and worker deployment/storage shape stays deferred to
+5.3.1. `BoundingBox` deliberately rejects antimeridian-wrapping boxes, so
+callers must split those boxes before building enrichment jobs.
+
+Tooling observations: CodeRabbit was slow but returned `findings: 0` at
+each milestone. Repository-wide documentation validation also caught a
+pre-existing Mermaid parsing problem in the rstest-bdd migration guide;
+simplifying that flowchart to quoted, parser-safe labels keeps `make
+nixie` green for future documentation changes.
 
 ## Revision history
 
