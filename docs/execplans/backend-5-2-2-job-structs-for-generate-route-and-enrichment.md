@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: APPROVED / IN PROGRESS
 
 This plan covers roadmap item 5.2.2 only:
 
@@ -50,7 +50,8 @@ The observable outcome of this plan is:
 
 Hard invariants. Violation requires escalation, not workarounds.
 
-- Do not start implementation until this DRAFT plan is explicitly approved.
+- Implementation was explicitly approved by the user on 2026-06-14. Keep
+  scope to the milestones in this plan.
 - Keep scope to backend roadmap item 5.2.2. Do not implement or mark done
   5.2.3 (retry policy and dead-letter handling), 5.2.4 (trace identifier
   propagation), 5.3.1 (worker deployment), or any route-submission dispatch
@@ -911,10 +912,16 @@ The plan ships in two PRs:
   type; rc.6/rc.7 lack the rc.8 framework-native idempotency feature) and
   to confirm the concrete fields the new structs must carry.
 - [x] (2026-06-06 01:50Z) Drafted this ExecPlan.
-- [ ] Approval received from the user.
+- [x] (2026-06-14 23:37Z) Approval received from the user; implementation
+  started under this ExecPlan.
 - [ ] Logisphere expert review run before delivery (planning gate).
-- [ ] Milestone 0 baseline audit complete.
-- [ ] Milestone 1 scaffold green and committed.
+- [x] (2026-06-14 23:37Z) Milestone 0 baseline audit confirmed the branch
+  name, empty working tree, and absence of existing `GenerateRouteJob` /
+  `EnrichmentJob` symbols.
+- [x] (2026-06-14 23:58Z) Milestone 1 scaffold compiled with
+  `cargo check -p backend` and CodeRabbit retry completed with
+  `findings: 0`.
+- [ ] Milestone 1 scaffold committed.
 - [ ] Milestone 2 `GenerateRouteJob` green and committed.
 - [ ] Milestone 3 `EnrichmentJob` green and committed.
 - [ ] Milestone 4 behavioural tests green and committed.
@@ -949,6 +956,18 @@ The plan ships in two PRs:
   (unbounded tags, no published schema-evolution rule, no documented
   worker-side policy for unknown envelope variants). All findings have
   been folded back into Risks, Decision Log, and the milestone steps.
+
+- (2026-06-14 23:37Z) The current branch is already named
+  `backend-5-2-2-job-structs-for-generate-route-and-enrichment`, matching the
+  plan. `git status --short` reported an empty working tree before
+  implementation edits began.
+
+- (2026-06-14 23:46Z) The first milestone 1 CodeRabbit invocation reached
+  sandbox preparation and then produced no output for about five minutes. Only
+  the `coderabbit review --agent` process tied to
+  `/tmp/coderabbit-wildside-backend-5-2-2-scaffold.out` was terminated; other
+  agents' CodeRabbit processes were left untouched. A retry was started under
+  `/tmp/coderabbit-wildside-backend-5-2-2-scaffold-retry.out`.
 
 ## Decision log
 

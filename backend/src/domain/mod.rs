@@ -24,6 +24,8 @@
 //! - IdempotencyRecord — stored record for idempotency tracking.
 //! - IdempotencyLookupResult — outcome of idempotency key lookup.
 //! - MutationType — discriminator for idempotency scopes (routes, notes, etc.).
+//! - Background job payloads (`GenerateRouteJob`, `EnrichmentJob`) dispatched
+//!   through the route queue port.
 //! - IdempotencyConfig — configurable TTL for idempotency records.
 //! - UserPreferences — user preferences for interests, safety, and display.
 //! - UnitSystem — metric or imperial unit display preference.
@@ -69,6 +71,7 @@ pub mod example_data;
 pub mod health;
 pub mod idempotency;
 pub mod interest_theme;
+pub mod jobs;
 pub mod localization;
 pub mod offline;
 pub mod offline_bundle_service;
