@@ -925,8 +925,12 @@ The plan ships in two PRs:
 - [x] (2026-06-15 00:30Z) Milestone 2 `GenerateRouteJob` passed red/green
   focused tests, `make check-fmt`, `make lint`, and CodeRabbit with
   `findings: 0`.
-- [ ] Milestone 2 `GenerateRouteJob` committed.
-- [ ] Milestone 3 `EnrichmentJob` green and committed.
+- [x] (2026-06-15 00:32Z) Milestone 2 `GenerateRouteJob` committed as
+  `39e935d`.
+- [x] (2026-06-15 01:12Z) Milestone 3 `EnrichmentJob` passed red/green
+  focused tests, `make check-fmt`, `make lint`, and CodeRabbit with
+  `findings: 0`.
+- [ ] Milestone 3 `EnrichmentJob` committed.
 - [ ] Milestone 4 behavioural tests green and committed.
 - [ ] Milestone 5 documentation, full gates, roadmap closure, and PR
   update complete.
@@ -979,6 +983,13 @@ The plan ships in two PRs:
   test functions for `.expect()` usage. The constructor now has a scoped
   `#[expect(clippy::too_many_arguments)]` with a reason, and fixture helpers
   use deterministic UUID constructors or explicit `match` panics.
+
+- (2026-06-15 01:02Z) `make lint` found two deterministic enrichment issues
+  before CodeRabbit: clippy rejected the approved five-argument
+  `EnrichmentJob::v1` constructor, and the parameterized invalid-bounding-box
+  test expanded to a helper with too many arguments. The constructor now has a
+  scoped `#[expect(clippy::too_many_arguments)]`; the test now passes one
+  structured case value per row.
 
 ## Decision log
 
@@ -1044,6 +1055,14 @@ The plan ships in two PRs:
   additional builder type. Clippy correctly flags the risk, so the
   expectation is limited to that function and documents that the argument list
   mirrors the persisted schema fields.
+  Date/Author: 2026-06-15 / implementation agent.
+
+- Decision: Keep the approved `EnrichmentJob::v1` positional constructor and
+  use a scoped clippy expectation for `too_many_arguments`.
+  Rationale: the constructor mirrors the V1 durable payload fields and avoids
+  introducing an extra builder solely to satisfy a lint. The expectation is
+  limited to the constructor and carries the same schema-shape rationale as
+  `GenerateRouteJob::v1`.
   Date/Author: 2026-06-15 / implementation agent.
 
 - Decision: Derive only `PartialEq` (not `Eq`) on the job envelopes and
