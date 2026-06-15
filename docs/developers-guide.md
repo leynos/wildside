@@ -998,7 +998,6 @@ Implementation details within `outbound::queue`:
   `async fn push_job(&self, payload: serde_json::Value) -> Result<(), JobDispatchError>`
   as the test seam; not part of the crate's supported public API.
 
-
 ### Background job payloads
 
 Domain-owned job payloads live under `backend/src/domain/jobs`. They are the
