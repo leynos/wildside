@@ -90,6 +90,8 @@ example-data = { path = "../crates/example-data" }
 mockall = "0.15"
 mockable = { version = "3.0", features = ["clock", "mock"] }
 proptest = "1"
+pretty_assertions = "1"
+googletest = "0.13"
 actix-rt = "2"
 # Actix uses actix-http types for request/response plumbing in test utilities.
 actix-http = "3"
@@ -112,12 +114,12 @@ tempfile = "3"
 trybuild = { version = "1", features = ["diff"] }
 
 [[bin]]
-name = "openapi-dump"
-path = "src/bin/openapi_dump.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
-name = "er-snapshots"
-path = "src/bin/er_snapshots.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
 name = "ingest-osm"
