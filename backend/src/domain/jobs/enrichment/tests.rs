@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::{
     ENRICHMENT_JOB_V1_MAX_TAG_LENGTH, ENRICHMENT_JOB_V1_MAX_TAGS, EnrichmentJob,
-    EnrichmentJobBuildError,
+    EnrichmentJobBuildError, EnrichmentJobParams,
 };
 use crate::domain::IdempotencyKey;
 use crate::domain::jobs::{BoundingBox, BoundingBoxError};
@@ -104,17 +104,17 @@ fn bounding_box_rejects_invalid_coordinates(#[case] case: InvalidBoundingBoxCase
 
 #[rstest]
 fn constructor_sorts_and_deduplicates_tags(job_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let job = EnrichmentJob::v1(
+    let job = EnrichmentJob::v1(EnrichmentJobParams {
         job_id,
-        Some(fixture_idempotency_key()),
-        fixture_bounding_box(),
-        vec![
+        idempotency_key: Some(fixture_idempotency_key()),
+        bounding_box: fixture_bounding_box(),
+        tags: vec![
             "tourism".to_owned(),
             "amenity".to_owned(),
             "tourism".to_owned(),
         ],
         enqueued_at,
-    )
+    })
     .expect("valid enrichment job should build");
 
     assert_eq!(job.tags(), &["amenity".to_owned(), "tourism".to_owned()]);
@@ -122,13 +122,13 @@ fn constructor_sorts_and_deduplicates_tags(job_id: Uuid, enqueued_at: DateTime<U
 
 #[rstest]
 fn constructor_rejects_empty_tags(job_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let error = EnrichmentJob::v1(
+    let error = EnrichmentJob::v1(EnrichmentJobParams {
         job_id,
-        Some(fixture_idempotency_key()),
-        fixture_bounding_box(),
-        Vec::new(),
+        idempotency_key: Some(fixture_idempotency_key()),
+        bounding_box: fixture_bounding_box(),
+        tags: Vec::new(),
         enqueued_at,
-    )
+    })
     .expect_err("empty tags should be rejected");
 
     assert_eq!(error, EnrichmentJobBuildError::EmptyTags);
@@ -140,13 +140,13 @@ fn constructor_rejects_too_many_tags(job_id: Uuid, enqueued_at: DateTime<Utc>) {
         .map(|index| format!("tag-{index}"))
         .collect::<Vec<_>>();
 
-    let error = EnrichmentJob::v1(
+    let error = EnrichmentJob::v1(EnrichmentJobParams {
         job_id,
-        Some(fixture_idempotency_key()),
-        fixture_bounding_box(),
+        idempotency_key: Some(fixture_idempotency_key()),
+        bounding_box: fixture_bounding_box(),
         tags,
         enqueued_at,
-    )
+    })
     .expect_err("oversized tag list should be rejected");
 
     assert_eq!(
@@ -162,13 +162,13 @@ fn constructor_rejects_too_many_tags(job_id: Uuid, enqueued_at: DateTime<Utc>) {
 fn constructor_rejects_too_long_tag(job_id: Uuid, enqueued_at: DateTime<Utc>) {
     let tag = "x".repeat(ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1);
 
-    let error = EnrichmentJob::v1(
+    let error = EnrichmentJob::v1(EnrichmentJobParams {
         job_id,
-        Some(fixture_idempotency_key()),
-        fixture_bounding_box(),
-        vec![tag],
+        idempotency_key: Some(fixture_idempotency_key()),
+        bounding_box: fixture_bounding_box(),
+        tags: vec![tag],
         enqueued_at,
-    )
+    })
     .expect_err("oversized tag should be rejected");
 
     assert_eq!(
@@ -228,13 +228,13 @@ fn snapshot_locks_v1_json_shape(job_id: Uuid, enqueued_at: DateTime<Utc>) {
 }
 
 fn fixture_job(job_id: Uuid, enqueued_at: DateTime<Utc>) -> EnrichmentJob {
-    match EnrichmentJob::v1(
+    match EnrichmentJob::v1(EnrichmentJobParams {
         job_id,
-        Some(fixture_idempotency_key()),
-        fixture_bounding_box(),
-        vec!["tourism".to_owned(), "amenity".to_owned()],
+        idempotency_key: Some(fixture_idempotency_key()),
+        bounding_box: fixture_bounding_box(),
+        tags: vec!["tourism".to_owned(), "amenity".to_owned()],
         enqueued_at,
-    ) {
+    }) {
         Ok(job) => job,
         Err(error) => panic!("static enrichment job should be valid: {error}"),
     }
@@ -263,13 +263,13 @@ fn valid_tags_strategy() -> impl Strategy<Value = Vec<String>> {
 
 fn enrichment_job_strategy() -> impl Strategy<Value = EnrichmentJob> {
     (valid_bounding_box_strategy(), valid_tags_strategy()).prop_map(|(bounding_box, tags)| {
-        match EnrichmentJob::v1(
-            Uuid::from_bytes([0x44; 16]),
-            Some(fixture_idempotency_key()),
+        match EnrichmentJob::v1(EnrichmentJobParams {
+            job_id: Uuid::from_bytes([0x44; 16]),
+            idempotency_key: Some(fixture_idempotency_key()),
             bounding_box,
             tags,
-            fixture_enqueued_at(),
-        ) {
+            enqueued_at: fixture_enqueued_at(),
+        }) {
             Ok(job) => job,
             Err(error) => panic!("strategy should generate valid enrichment jobs: {error}"),
         }
