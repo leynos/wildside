@@ -97,15 +97,15 @@ make test
 ```
 
 `make audit` checks frontend and Rust dependencies. It expects Corepack to be
-enabled so `pnpm` is available locally and in CI, and it requires `cargo-audit`
-for the Rust dependency check.
+enabled so `pnpm` is available locally and in CI, and it requires
+`cargo-audit` for the Rust dependency check.
 
-The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.2`,
-React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`, Zod
-3, TypeScript 5, Vitest 3, and Orval 8. TanStack Router, Radix UI, i18next,
-Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are target-stack
-items until a roadmap task adds them to `frontend-pwa/package.json` and the
-lockfile.
+The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.5`,
+React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`,
+Zod 3, TypeScript 5, Vitest 3, and Orval 8. TanStack Router, Radix UI,
+i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
+target-stack items until a roadmap task adds them to `frontend-pwa/package.json`
+and the lockfile.
 
 ### Build and preview workflow
 

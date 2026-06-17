@@ -375,6 +375,19 @@ Progress notes:
   lockfile dirty again after restoration. `make check-fmt`, `make lint`, and
   `make test` passed before the follow-up commit, and the branch was pushed.
   `(2026-06-15 23:06Z)`
+- [x] Post-completion audit maintenance — Refreshed the front-end package
+  graph to clear pnpm audit advisories for Vite, esbuild, ws, js-yaml,
+  `@babel/core`, DOMPurify, and markdown-it without adding audit exceptions.
+  `make audit` then exposed new RustSec vulnerabilities in the
+  `tokio-postgres`/`postgres-protocol` path, so `Cargo.lock` was updated to
+  `tokio-postgres` `0.7.18` and `postgres-protocol` `0.6.12` under existing
+  manifest constraints. `(2026-06-17 09:52Z)`
+- [x] Post-completion validation — Ran the required format, lint, test,
+  documentation, and audit gates after the dependency refresh. Attempted
+  `coderabbit review --agent` twice after the deterministic gates passed; both
+  invocations reached sandbox preparation and then stopped emitting progress,
+  so the stuck review processes were terminated without a review result.
+  `(2026-06-17 10:08Z)`
 
 Use ISO 8601 timestamps in UTC (for example, `(2026-06-05 12:34Z)`) when
 ticking items to measure rates of progress and detect tolerance breaches.
@@ -498,6 +511,37 @@ audit step appends evidence in this section.
   but a separate post-completion commit, `0f25910`, normalizes `bun.lock` so
   repository hooks leave the working tree clean after the validation toolchain
   runs.
+
+- Observation: the Node audit failure was resolved by direct dependency and
+  override updates rather than by extending `security/audit-exceptions.json`.
+  Evidence: `package.json` now pins patched override versions for esbuild,
+  ws, js-yaml, `@babel/core`, DOMPurify, and markdown-it, while Vite is
+  declared as `^7.3.5` in each front-end package that names it directly.
+  Impact: the audit policy remains strict for these advisories, and future
+  pnpm audit failures must still be either patched or explicitly justified.
+
+- Observation: the same `make audit` run that cleared pnpm advisories surfaced
+  new RustSec vulnerabilities for `tokio-postgres` `0.7.15` and
+  `postgres-protocol` `0.6.9`.
+  Evidence: `/tmp/audit-$(get-project)-$(git branch --show-current)-audit-fix.out`
+  reported `RUSTSEC-2026-0178`, `RUSTSEC-2026-0179`, and
+  `RUSTSEC-2026-0180`; after `cargo update -p tokio-postgres --precise
+  0.7.18`, `/tmp/audit-$(get-project)-$(git branch
+  --show-current)-audit-fix-rerun.out` reported only the repository's
+  existing allowed RustSec warnings.
+  Impact: the completed work includes a lockfile-only Rust dependency refresh
+  because the requested audit gate could not pass with the previous lockfile.
+
+- Observation: CodeRabbit did not complete for the post-completion audit
+  maintenance change even after a retry.
+  Evidence:
+  `/tmp/coderabbit-$(get-project)-$(git branch --show-current)-audit-fix.out`
+  and
+  `/tmp/coderabbit-$(get-project)-$(git branch --show-current)-audit-fix-retry.out`
+  both reached `preparing_sandbox` and then emitted no findings, completion,
+  or rate-limit message before their local processes were terminated.
+  Impact: the deterministic gates remain the validation authority for this
+  commit; no CodeRabbit concerns were available to resolve.
 
 Append new entries as the audit progresses, citing the relevant file path and
 line range as evidence.
