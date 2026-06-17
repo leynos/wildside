@@ -169,15 +169,15 @@ fn generate_route_job_strategy() -> impl Strategy<Value = GenerateRouteJob> {
         prop::option::of(json_object_strategy()),
     )
         .prop_map(|(origin, destination, preferences)| {
-            GenerateRouteJob::v1(
-                Uuid::nil(),
-                Some(fixture_idempotency_key()),
-                fixture_user_id(),
+            GenerateRouteJob::v1(GenerateRouteJobV1 {
+                request_id: Uuid::nil(),
+                idempotency_key: Some(fixture_idempotency_key()),
+                user_id: fixture_user_id(),
                 origin,
                 destination,
                 preferences,
-                fixture_enqueued_at(),
-            )
+                enqueued_at: fixture_enqueued_at(),
+            })
         })
 }
 
