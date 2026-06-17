@@ -43,13 +43,17 @@ function parseArgs(argv) {
     const option = argv[index];
     const value = argv[index + 1];
 
-    if ((option === "--graph" || option === "--sitemap") && value) {
+    if (isRecognisedOptionWithValue(option, value)) {
       parsed[option.slice(2)] = value;
       index += 1;
     }
   }
 
   return parsed;
+}
+
+function isRecognisedOptionWithValue(option, value) {
+  return (option === "--graph" || option === "--sitemap") && Boolean(value);
 }
 
 function readJson(path) {
@@ -89,16 +93,20 @@ function normaliseTransitions(graph) {
   }
 
   return graph.transitions.map((transition) => {
-    if (
-      !transition ||
-      typeof transition.from !== "string" ||
-      typeof transition.to !== "string"
-    ) {
+    if (!hasStringTransitionEndpoints(transition)) {
       throwInputError("Every state graph transition must contain string from and to fields");
     }
 
     return transition;
   });
+}
+
+function hasStringTransitionEndpoints(transition) {
+  return (
+    Boolean(transition) &&
+    typeof transition.from === "string" &&
+    typeof transition.to === "string"
+  );
 }
 
 function countTransitions(transitions, field) {
