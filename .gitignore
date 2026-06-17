@@ -109,3 +109,6 @@ deploy/k8s/backend/secret.env
 
 # Claude Code per-session runtime state (PIDs, scheduled-task locks, etc.)
 .claude/
+
+# Memtrace daemon runtime state.
+.memdb/
