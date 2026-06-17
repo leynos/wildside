@@ -5,7 +5,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use backend::domain::jobs::{
-    BoundingBox, EnrichmentJob, GenerateRouteJob, GenerateRouteJobBuildError,
+    BoundingBox, EnrichmentJob, EnrichmentJobParams, GenerateRouteJob, GenerateRouteJobBuildError,
 };
 use backend::domain::ports::{
     JobDispatchError, NoOpRouteQueueMetrics, OverpassEnrichmentRequest, RouteQueue,
@@ -130,13 +130,13 @@ fn valid_bounding_box() -> BoundingBox {
 }
 
 fn valid_enrichment_job() -> EnrichmentJob {
-    match EnrichmentJob::v1(
-        job_id(),
-        Some(enrichment_idempotency_key()),
-        valid_bounding_box(),
-        vec!["tourism".to_owned(), "amenity".to_owned()],
-        enrichment_enqueued_at(),
-    ) {
+    match EnrichmentJob::v1(EnrichmentJobParams {
+        job_id: job_id(),
+        idempotency_key: Some(enrichment_idempotency_key()),
+        bounding_box: valid_bounding_box(),
+        tags: vec!["tourism".to_owned(), "amenity".to_owned()],
+        enqueued_at: enrichment_enqueued_at(),
+    }) {
         Ok(job) => job,
         Err(error) => panic!("static enrichment job should be valid: {error}"),
     }
