@@ -13,6 +13,20 @@ pub const ENRICHMENT_JOB_V1_MAX_TAGS: usize = 64;
 /// Maximum UTF-8 length in bytes of any single tag in V1.
 pub const ENRICHMENT_JOB_V1_MAX_TAG_LENGTH: usize = 64;
 
+/// Parameters for building a [`EnrichmentJob::V1`] payload.
+pub struct EnrichmentJobParams {
+    /// Stable job identifier for trace correlation.
+    pub job_id: Uuid,
+    /// Optional idempotency key supplied by the client.
+    pub idempotency_key: Option<IdempotencyKey>,
+    /// Validated WGS84 bounding box for enrichment.
+    pub bounding_box: BoundingBox,
+    /// Raw tag list to canonicalize into sorted, deduplicated form.
+    pub tags: Vec<String>,
+    /// Wall-clock time at which the job was built and enqueued.
+    pub enqueued_at: DateTime<Utc>,
+}
+
 /// Versioned envelope for enrichment jobs.
 ///
 /// Adding a field to an existing variant requires cutting a new `V2` variant.
@@ -60,24 +74,14 @@ pub enum EnrichmentJobBuildError {
 
 impl EnrichmentJob {
     /// Build a V1 enrichment job from validated pieces.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the approved V1 payload constructor mirrors the persisted schema fields"
-    )]
-    pub fn v1(
-        job_id: Uuid,
-        idempotency_key: Option<IdempotencyKey>,
-        bounding_box: BoundingBox,
-        tags: Vec<String>,
-        enqueued_at: DateTime<Utc>,
-    ) -> Result<Self, EnrichmentJobBuildError> {
-        let tags = canonicalize_tags(tags)?;
+    pub fn v1(params: EnrichmentJobParams) -> Result<Self, EnrichmentJobBuildError> {
+        let tags = canonicalize_tags(params.tags)?;
         Ok(Self::V1(EnrichmentJobV1 {
-            job_id,
-            idempotency_key,
-            bounding_box,
+            job_id: params.job_id,
+            idempotency_key: params.idempotency_key,
+            bounding_box: params.bounding_box,
             tags,
-            enqueued_at,
+            enqueued_at: params.enqueued_at,
         }))
     }
 
