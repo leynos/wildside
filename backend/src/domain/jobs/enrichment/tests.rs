@@ -134,50 +134,44 @@ fn constructor_rejects_empty_tags(job_id: Uuid, enqueued_at: DateTime<Utc>) {
     assert_eq!(error, EnrichmentJobBuildError::EmptyTags);
 }
 
-#[rstest]
-fn constructor_rejects_too_many_tags(job_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let tags = (0..=ENRICHMENT_JOB_V1_MAX_TAGS)
-        .map(|index| format!("tag-{index}"))
-        .collect::<Vec<_>>();
-
-    let error = EnrichmentJob::v1(EnrichmentJobParams {
-        job_id,
-        idempotency_key: Some(fixture_idempotency_key()),
-        bounding_box: fixture_bounding_box(),
-        tags,
-        enqueued_at,
-    })
-    .expect_err("oversized tag list should be rejected");
-
-    assert_eq!(
-        error,
-        EnrichmentJobBuildError::TooManyTags {
-            limit: ENRICHMENT_JOB_V1_MAX_TAGS,
-            observed: ENRICHMENT_JOB_V1_MAX_TAGS + 1,
-        }
-    );
+#[derive(Clone)]
+struct TagRejectionCase {
+    tags: Vec<String>,
+    expected: EnrichmentJobBuildError,
 }
 
 #[rstest]
-fn constructor_rejects_too_long_tag(job_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let tag = "x".repeat(ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1);
-
+#[case(TagRejectionCase {
+    tags: (0..=ENRICHMENT_JOB_V1_MAX_TAGS)
+        .map(|index| format!("tag-{index}"))
+        .collect(),
+    expected: EnrichmentJobBuildError::TooManyTags {
+        limit: ENRICHMENT_JOB_V1_MAX_TAGS,
+        observed: ENRICHMENT_JOB_V1_MAX_TAGS + 1,
+    },
+})]
+#[case(TagRejectionCase {
+    tags: vec!["x".repeat(ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1)],
+    expected: EnrichmentJobBuildError::TagTooLong {
+        limit: ENRICHMENT_JOB_V1_MAX_TAG_LENGTH,
+        observed: ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1,
+    },
+})]
+fn constructor_rejects_invalid_tags(
+    job_id: Uuid,
+    enqueued_at: DateTime<Utc>,
+    #[case] case: TagRejectionCase,
+) {
     let error = EnrichmentJob::v1(EnrichmentJobParams {
         job_id,
         idempotency_key: Some(fixture_idempotency_key()),
         bounding_box: fixture_bounding_box(),
-        tags: vec![tag],
+        tags: case.tags,
         enqueued_at,
     })
-    .expect_err("oversized tag should be rejected");
+    .expect_err("invalid tags should be rejected");
 
-    assert_eq!(
-        error,
-        EnrichmentJobBuildError::TagTooLong {
-            limit: ENRICHMENT_JOB_V1_MAX_TAG_LENGTH,
-            observed: ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1,
-        }
-    );
+    assert_eq!(error, case.expected);
 }
 
 #[rstest]
