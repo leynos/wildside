@@ -43,28 +43,8 @@ pub struct GenerateRouteJobV1 {
 
 impl GenerateRouteJob {
     /// Build a V1 route-generation job from validated pieces.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the approved V1 payload constructor mirrors the persisted schema fields"
-    )]
-    pub fn v1(
-        request_id: Uuid,
-        idempotency_key: Option<IdempotencyKey>,
-        user_id: UserId,
-        origin: serde_json::Value,
-        destination: serde_json::Value,
-        preferences: Option<serde_json::Value>,
-        enqueued_at: DateTime<Utc>,
-    ) -> Self {
-        Self::V1(GenerateRouteJobV1 {
-            request_id,
-            idempotency_key,
-            user_id,
-            origin,
-            destination,
-            preferences,
-            enqueued_at,
-        })
+    pub fn v1(payload: GenerateRouteJobV1) -> Self {
+        Self::V1(payload)
     }
 
     /// Build a route-generation job from the route-submission port request.
@@ -94,15 +74,15 @@ impl GenerateRouteJob {
             .ok_or_else(|| GenerateRouteJobBuildError::payload_missing_field("destination"))?;
         let preferences = payload.get("preferences").cloned();
 
-        Ok(Self::v1(
+        Ok(Self::v1(GenerateRouteJobV1 {
             request_id,
-            submission.idempotency_key.clone(),
-            submission.user_id.clone(),
+            idempotency_key: submission.idempotency_key.clone(),
+            user_id: submission.user_id.clone(),
             origin,
             destination,
             preferences,
             enqueued_at,
-        ))
+        }))
     }
 }
 
