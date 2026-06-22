@@ -12,11 +12,18 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from local_k8s.config import PreviewConfig
-from local_k8s.deployment import _deploy_preview_tools, build_image, deploy_preview
+from local_k8s.deployment import (
+    _deploy_preview_tools,
+    build_image,
+    deploy_preview,
+    print_logs,
+    print_status,
+)
 
 
 @pytest.fixture
@@ -127,3 +134,86 @@ def test_build_image_uses_configured_container_engine(
             ],
         )
     ], "image builds must use the configured container engine"
+
+
+def test_print_status_uses_provider_context_and_prints_kind_port_forward(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify kind status uses provider tools and prints the operator command."""
+    config = replace(preview_config, k8s_provider="kind")
+    required_tools: list[tuple[str, ...]] = []
+    commands: list[tuple[str, list[str]]] = []
+
+    def record_run(command: str, args: list[str], **_: object) -> SimpleNamespace:
+        commands.append((command, args))
+        return SimpleNamespace(stdout="helm status\n")
+
+    monkeypatch.setattr(
+        "local_k8s.deployment.require_tools",
+        lambda tools: required_tools.append(tuple(tools)),
+    )
+    monkeypatch.setattr("local_k8s.deployment.print_cluster_status", lambda _: None)
+    monkeypatch.setattr("local_k8s.deployment.print_kubernetes_status", lambda _: None)
+    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+
+    print_status(config)
+
+    output = capsys.readouterr().out
+    assert required_tools == [("helm", "kind", "kubectl")]
+    assert commands == [
+        (
+            "helm",
+            [
+                "--kube-context",
+                "kind-wildside-preview",
+                "-n",
+                "wildside",
+                "status",
+                "preview",
+            ],
+        )
+    ], "Helm status must use the provider-specific kube context"
+    assert (
+        "kubectl --context kind-wildside-preview --namespace wildside "
+        "port-forward svc/preview-wildside 8088:80"
+    ) in output, "kind status must print the port-forward command for the Helm service"
+
+
+def test_print_logs_uses_configured_kube_context(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify log streaming targets the provider-specific kube context."""
+    config = replace(preview_config, k8s_provider="kind")
+    commands: list[tuple[str, list[str]]] = []
+
+    def record_run(command: str, args: list[str], **_: object) -> SimpleNamespace:
+        commands.append((command, args))
+        return SimpleNamespace(stdout="")
+
+    monkeypatch.setattr("local_k8s.deployment.require_tools", lambda _: None)
+    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+
+    print_logs(config, follow=True)
+
+    assert commands == [
+        (
+            "kubectl",
+            [
+                "--context",
+                "kind-wildside-preview",
+                "-n",
+                "wildside",
+                "logs",
+                "-l",
+                "app.kubernetes.io/instance=preview",
+                "-c",
+                "app",
+                "--tail",
+                "200",
+                "--follow",
+            ],
+        )
+    ], "logs must use the provider-specific kube context"

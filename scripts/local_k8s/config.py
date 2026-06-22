@@ -37,6 +37,12 @@ class PreviewConfig:
     local_values_path: Path
     dockerfile_path: Path
 
+    @property
+    def kube_context(self) -> str:
+        """Return the kube context name created by the selected provider."""
+
+        return f"{self.k8s_provider}-{self.cluster_name}"
+
     @classmethod
     def from_env(cls) -> "PreviewConfig":
         """Build configuration from defaults and `WILDSIDE_` overrides."""

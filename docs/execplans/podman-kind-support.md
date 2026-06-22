@@ -405,7 +405,18 @@ teardown result in this plan's `Outcomes & Retrospective`.
   `make check-fmt`, `make lint`, and `make test` all passed.
 - [x] 2026-06-22: Re-ran `coderabbit review --agent` after the deterministic
   Milestone 3 gates. CodeRabbit reported zero findings.
-- [ ] Implement Milestone 4.
+- [x] 2026-06-22: Added failing Milestone 4 tests for provider-aware status,
+  logs, Helm status, kind port-forward output, and idempotent kind teardown.
+  The observed red result showed status, logs, and Helm status still omitted
+  the selected kube context, and status preflight still required `k3d`.
+- [x] 2026-06-22: Implemented Milestone 4 by deriving kube context names from
+  the selected provider and cluster, passing that context to namespace, Helm,
+  status, and logs commands, and printing the kind port-forward command with
+  the Helm-derived service name.
+- [x] 2026-06-22: Ran the Milestone 4 gates: focused local preview pytest,
+  `make check-fmt`, `make lint`, and `make test` all passed.
+- [x] 2026-06-22: Re-ran `coderabbit review --agent` after the deterministic
+  Milestone 4 gates. CodeRabbit reported zero findings.
 - [ ] Implement Milestone 5.
 - [ ] Run final gates and live smoke validation where available.
 
@@ -440,6 +451,14 @@ teardown result in this plan's `Outcomes & Retrospective`.
   cluster lifecycle adapter. Milestone 3 kept that split: build uses the
   configured container engine, and `cluster.py` owns the provider-specific
   image import commands.
+- 2026-06-22: Status and logs were the last visible surfaces that still relied
+  on the user's ambient kube context. Using the same provider-derived context
+  everywhere makes the preview commands independent of whatever cluster a
+  developer last selected with `kubectl config use-context`.
+- 2026-06-22: The Helm chart's service name is not always the release name.
+  The kind port-forward output therefore needs the same Helm fullname helper
+  as status checks, otherwise renamed releases would print a command for the
+  wrong service.
 
 ## Decision Log
 
@@ -473,6 +492,15 @@ teardown result in this plan's `Outcomes & Retrospective`.
   Rationale: the archive is transient local-preview data and must not live in
   the repository, while using a deterministic path makes retries and tests
   predictable.
+- 2026-06-22: Derive kube contexts as `{provider}-{cluster_name}` on
+  `PreviewConfig`. Rationale: both `k3d` and `kind` use that naming convention
+  for the clusters created by this helper, and keeping the rule in config
+  avoids duplicating string construction across namespace, Helm, status, and
+  log operations.
+- 2026-06-22: Export `helm_fullname()` from `local_k8s.k8s` for reuse by the
+  deployment status output. Rationale: service naming is a Helm contract, not
+  a kind-specific concern, and the port-forward command must match the service
+  that Kubernetes status already inspects.
 
 ## Outcomes & Retrospective
 
@@ -481,8 +509,10 @@ configuration while preserving Docker plus `k3d` defaults and legacy
 `WILDSIDE_K3D_*` aliases. Milestone 2 adds provider-aware cluster lifecycle
 commands for Docker plus `k3d`, Docker plus `kind`, and rootless Podman plus
 `kind`. Milestone 3 adds provider-aware image build and import, including
-Podman archive save/load for rootless kind. Milestones 1 through 3 passed
-focused local preview tests, the full repository gates, relevant Markdown
-gates, and CodeRabbit review. The expected final outcome remains a
-backwards-compatible local preview helper with focused tests documenting each
-provider-specific command contract.
+Podman archive save/load for rootless kind. Milestone 4 makes status, logs,
+namespace creation, and Helm status provider-context aware and prints the
+operator's kind port-forward command. Milestones 1 through 4 passed focused
+local preview tests, the full repository gates, relevant Markdown gates where
+documentation changed, and CodeRabbit review. The expected final outcome
+remains a backwards-compatible local preview helper with focused tests
+documenting each provider-specific command contract.

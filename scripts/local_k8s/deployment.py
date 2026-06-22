@@ -5,7 +5,7 @@ from __future__ import annotations
 from .commands import run
 from .config import PreviewConfig
 from .cluster import ensure_cluster, import_image, print_cluster_status
-from .k8s import ensure_namespace, print_kubernetes_status
+from .k8s import ensure_namespace, helm_fullname, print_kubernetes_status
 from .validation import LocalK8sError, require_tools
 
 
@@ -54,6 +54,8 @@ def helm_upgrade(config: PreviewConfig) -> None:
     run(
         "helm",
         [
+            "--kube-context",
+            config.kube_context,
             "upgrade",
             "--install",
             config.release_name,
@@ -92,11 +94,34 @@ def image_repository_and_tag(image_name: str) -> tuple[str, str]:
 def print_status(config: PreviewConfig) -> None:
     """Print cluster and workload status."""
 
-    require_tools(("helm", "k3d", "kubectl"))
+    require_tools(_deploy_preview_tools(config, skip_build=True))
     print_cluster_status(config)
-    release = run("helm", ["-n", config.namespace, "status", config.release_name])
+    release = run(
+        "helm",
+        [
+            "--kube-context",
+            config.kube_context,
+            "-n",
+            config.namespace,
+            "status",
+            config.release_name,
+        ],
+    )
     print(release.stdout.strip())
     print_kubernetes_status(config)
+    print_kind_port_forward_command(config)
+
+
+def print_kind_port_forward_command(config: PreviewConfig) -> None:
+    """Print the port-forward command needed for kind previews."""
+
+    if config.k8s_provider != "kind":
+        return
+    print("port-forward:")
+    print(
+        f"kubectl --context {config.kube_context} --namespace {config.namespace} "
+        f"port-forward svc/{helm_fullname(config)} {config.ingress_port}:80"
+    )
 
 
 def print_logs(config: PreviewConfig, *, follow: bool) -> None:
@@ -104,6 +129,8 @@ def print_logs(config: PreviewConfig, *, follow: bool) -> None:
 
     require_tools(("kubectl",))
     args = [
+        "--context",
+        config.kube_context,
         "-n",
         config.namespace,
         "logs",

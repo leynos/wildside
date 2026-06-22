@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from local_k8s.cluster import ensure_cluster, import_image
+from local_k8s.cluster import delete_cluster, ensure_cluster, import_image
 from local_k8s.config import PreviewConfig
 
 
@@ -260,3 +260,25 @@ class TestImageImport:
                 ],
             ),
         ], "Podman-backed kind must save and load an image archive"
+
+
+def test_kind_delete_is_idempotent_when_cluster_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify kind teardown skips deletion when the cluster is absent."""
+    config = replace(preview_config, k8s_provider="kind")
+    commands: list[tuple[str, list[str]]] = []
+
+    def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+        commands.append((command, args))
+        return MockCommandResult(stdout="other\n")
+
+    monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+    monkeypatch.setattr("local_k8s.cluster.run", record_run)
+
+    delete_cluster(config)
+
+    assert commands == [
+        ("kind", ["get", "clusters"]),
+    ], "kind down must not delete an absent cluster"

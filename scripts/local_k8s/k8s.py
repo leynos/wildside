@@ -27,13 +27,23 @@ def ensure_namespace(config: PreviewConfig) -> None:
     """
 
     require_tools(("kubectl",))
-    result = run("kubectl", ["get", "namespace", config.namespace, "--ignore-not-found"])
+    result = run(
+        "kubectl",
+        [
+            "--context",
+            config.kube_context,
+            "get",
+            "namespace",
+            config.namespace,
+            "--ignore-not-found",
+        ],
+    )
     if result.stdout.strip():
         return
-    run("kubectl", ["create", "namespace", config.namespace])
+    run("kubectl", ["--context", config.kube_context, "create", "namespace", config.namespace])
 
 
-def _helm_fullname(config: PreviewConfig) -> str:
+def helm_fullname(config: PreviewConfig) -> str:
     """Return the chart fullname used for Kubernetes object names."""
 
     chart_name = config.chart_path.name
@@ -66,6 +76,8 @@ def print_kubernetes_status(config: PreviewConfig) -> None:
     pods = run(
         "kubectl",
         [
+            "--context",
+            config.kube_context,
             "-n",
             config.namespace,
             "get",
@@ -80,11 +92,13 @@ def print_kubernetes_status(config: PreviewConfig) -> None:
     services = run(
         "kubectl",
         [
+            "--context",
+            config.kube_context,
             "-n",
             config.namespace,
             "get",
             "service",
-            _helm_fullname(config),
+            helm_fullname(config),
             "--ignore-not-found",
         ],
     )
