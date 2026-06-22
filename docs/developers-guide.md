@@ -27,10 +27,10 @@ All suites run through the same quality gateways:
 
 ## Local Kubernetes preview
 
-Use the repository-local k3d preview when validating the backend image and Helm
-chart before handing values to Nile Valley. The preview workflow is documented
-in
-[Local k3d preview and Nile Valley integration design](local-k8s-preview-design.md).
+Use the repository-local Kubernetes preview when validating the backend image
+and Helm chart before handing values to Nile Valley. The preview workflow is
+documented in
+[Local Kubernetes preview and Nile Valley integration design](local-k8s-preview-design.md).
 
 ```bash
 make local-k8s-up
@@ -42,8 +42,34 @@ make local-k8s-down
 The Makefile targets call `uv run scripts/local_k8s.py ...`. Keep helper logic
 in `scripts/local_k8s/`, unit-test pure validation behaviour under
 `scripts/local_k8s/unittests/`, and keep cluster creation idempotent. The
-helper must fail before making changes when required tools such as Docker, Helm,
-`k3d`, or `kubectl` are missing.
+helper must fail before making changes when required tools for the selected
+mode are missing.
+
+Docker plus `k3d` remains the default local mode:
+
+```bash
+make local-k8s-up
+```
+
+Rootless Podman plus `kind` is the supported VM mode:
+
+```bash
+WILDSIDE_CONTAINER_ENGINE=podman WILDSIDE_K8S_PROVIDER=kind make local-k8s-up
+```
+
+The preferred configuration variables are `WILDSIDE_CONTAINER_ENGINE`,
+`WILDSIDE_K8S_PROVIDER`, `WILDSIDE_K8S_CLUSTER`, `WILDSIDE_K8S_PORT`, and
+`WILDSIDE_KIND_NODE_IMAGE`. `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT`
+remain legacy aliases when the provider-neutral names are unset. Leave
+`WILDSIDE_KIND_NODE_IMAGE` unset unless testing a supported Kubernetes upgrade;
+the default `kindest/node:v1.31.0` satisfies the chart's kubeVersion range. In
+`kind` mode, use `make local-k8s-status` to print the provider-specific
+`kubectl port-forward` command before opening the preview port.
+
+The helper also applies a generated `wildside-session-key` Secret before Helm
+installs the release. `values.local.yaml` mounts that key at
+`/var/run/secrets/session_key`, so local preview follows the release-mode
+session-key path without committing secret material.
 
 ## Front-end development
 
@@ -747,14 +773,16 @@ sitemap.
 ### Running locally
 
 ```sh
-bun run scripts/audit-ux-state-graph.mjs \
-  --graph <state-graph.json> \
-  --sitemap <sitemap.md>
+node ./scripts/check-overrides-parity.mjs
 ```
 
-Tests for this helper must cover the example cases with Vitest, graph
-invariants with the root workspace `fast-check` dev dependency, and CLI text
-output with Vitest snapshots.
+A passing run prints:
+
+```text
+Override parity verified for basic-ftp, dompurify, ip-address, uuid.
+```
+
+A failing run prints a per-dependency diff to stderr and exits with code `1`.
 
 ## Override parity check
 

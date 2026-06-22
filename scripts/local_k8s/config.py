@@ -16,6 +16,7 @@ DEFAULT_IMAGE_NAME = "wildside-backend:local"
 DEFAULT_INGRESS_PORT = 8088
 DEFAULT_CONTAINER_ENGINE = "docker"
 DEFAULT_K8S_PROVIDER = "k3d"
+DEFAULT_KIND_NODE_IMAGE = "kindest/node:v1.31.0"
 
 ContainerEngine = Literal["docker", "podman"]
 K8sProvider = Literal["k3d", "kind"]
@@ -32,6 +33,7 @@ class PreviewConfig:
     namespace: str
     release_name: str
     image_name: str
+    kind_node_image: str
     ingress_port: int
     chart_path: Path
     local_values_path: Path
@@ -67,6 +69,7 @@ class PreviewConfig:
             namespace=os.environ.get("WILDSIDE_K8S_NAMESPACE", DEFAULT_NAMESPACE),
             release_name=os.environ.get("WILDSIDE_HELM_RELEASE", DEFAULT_RELEASE_NAME),
             image_name=os.environ.get("WILDSIDE_IMAGE", DEFAULT_IMAGE_NAME),
+            kind_node_image=os.environ.get("WILDSIDE_KIND_NODE_IMAGE", DEFAULT_KIND_NODE_IMAGE),
             ingress_port=ingress_port,
             chart_path=chart_path,
             local_values_path=chart_path / "values.local.yaml",

@@ -20,6 +20,7 @@ def preview_config() -> PreviewConfig:
         namespace="wildside",
         release_name="preview",
         image_name="wildside-backend:local",
+        kind_node_image="kindest/node:v1.31.0",
         ingress_port=8088,
         chart_path=Path("/repo/deploy/charts/wildside"),
         local_values_path=Path("/repo/deploy/charts/wildside/values.local.yaml"),

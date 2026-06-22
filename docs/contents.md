@@ -18,7 +18,7 @@
   developers._
 - [Backend MVP architecture and observability](backend-design.md) – details
   monolithic backend and observability plan. _Audience: backend developers._
-- [Local k3d preview and Nile Valley integration design](local-k8s-preview-design.md)
+- [Local Kubernetes preview and Nile Valley integration design](local-k8s-preview-design.md)
   – describes the backend health, container, Helm, and local preview contracts.
   _Audience: backend developers and platform engineers._
 - [Values class diagram](values-class-diagram.mmd) – Mermaid diagram of Helm
@@ -103,8 +103,8 @@
 - Infrastructure automation, GitOps workflows, and ephemeral preview
   environments are documented in the Nile Valley repository
   (`../../nile-valley`). This repository keeps the application code, container
-  images, Helm chart, and developer-local k3d preview helper that Nile Valley
-  deploys or exercises.
+  images, Helm chart, and developer-local Kubernetes preview helper that Nile
+  Valley deploys or exercises.
 - [Rootless Podman and kind local preview ExecPlan](execplans/podman-kind-support.md)
   – planned adaptation of Wildside's Nile Valley local preview integration for
   rootless Podman plus `kind`. _Audience: backend developers and platform

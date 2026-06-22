@@ -1,4 +1,4 @@
-# Local k3d preview and Nile Valley integration design
+# Local Kubernetes preview and Nile Valley integration design
 
 ## Purpose
 
@@ -6,8 +6,10 @@ Wildside ships the application artefacts that Nile Valley preview and GitOps
 workflows consume: the backend container image, Helm chart, and health
 contract. Nile Valley remains responsible for shared cluster automation,
 environment overlays, and cross-application GitOps reconciliation. This
-repository owns a developer-focused local preview loop that proves the Wildside
-chart can install into a small `k3d` cluster.
+repository owns a developer-focused local preview loop that proves the
+Wildside chart can install into a small local Kubernetes cluster. The default
+mode remains Docker plus `k3d`; contributors on rootless Podman hosts can use
+Podman plus `kind`.
 
 ## Runtime health contract
 
@@ -65,40 +67,109 @@ make local-k8s-logs
 make local-k8s-down
 ```
 
-`make local-k8s-up` validates required tools, creates or reuses the `k3d`
-cluster, builds the backend image, imports it into the cluster, and installs or
-upgrades the Helm release with the local values file. The ingress load balancer
-is bound to `127.0.0.1` to avoid exposing the preview outside the developer
-machine.
+`make local-k8s-up` validates required tools, creates or reuses the selected
+local cluster, creates a generated Kubernetes Secret for the release-mode
+session signing key, builds the backend image with the selected container
+engine, imports it into the cluster, and installs or upgrades the Helm release
+with the local values file.
 
-The workflow expects these executables on `PATH`:
+Docker plus `k3d` is the default because it preserves the original local
+preview behaviour. Its ingress load balancer binds
+`127.0.0.1:${WILDSIDE_K8S_PORT:-8088}` to avoid exposing the preview outside
+the developer machine:
 
-- `docker`
-- `helm`
-- `k3d`
-- `kubectl`
-- `uv`
+```bash
+make local-k8s-up
+```
+
+Rootless Podman plus `kind` is selected with provider-neutral environment
+variables:
+
+```bash
+WILDSIDE_CONTAINER_ENGINE=podman WILDSIDE_K8S_PROVIDER=kind make local-k8s-up
+```
+
+In this mode the helper creates the `kind` cluster through a delegated user
+scope and pins the node image to a Kubernetes version accepted by the Helm
+chart's `kubeVersion` constraint:
+
+```bash
+systemd-run --scope --user -p Delegate=yes env KIND_EXPERIMENTAL_PROVIDER=podman kind create cluster
+```
+
+Podman stores unqualified image names under `localhost/`, while Kubernetes
+resolves an unqualified image such as `wildside-backend:local` as
+`docker.io/library/wildside-backend:local`. The helper tags the archive export
+with Docker's implicit registry name before `kind load image-archive`, so the
+image already present on the node matches the pod spec.
+
+The `kind` cluster deliberately has no host-port mapping. After `up` or
+`status`, run the printed `kubectl port-forward` command to open the preview
+locally. With default names the command is:
+
+```bash
+kubectl --context kind-wildside-preview --namespace wildside port-forward svc/wildside 8088:80
+```
+
+If `WILDSIDE_HELM_RELEASE` changes the release name, the service name in the
+printed command follows Helm's fullname rule.
+
+Required executables depend on the selected mode:
+
+| Mode                  | Required executables                                           |
+| --------------------- | -------------------------------------------------------------- |
+| Docker plus `k3d`     | `docker`, `helm`, `k3d`, `kubectl`, and `uv`                   |
+| Docker plus `kind`    | `docker`, `helm`, `kind`, `kubectl`, and `uv`                  |
+| Podman plus `kind`    | `podman`, `helm`, `kind`, `kubectl`, `systemd-run`, and `uv`   |
+| Podman plus `k3d`[^1] | `podman`, `helm`, `k3d`, `kubectl`, and `uv`                   |
+
+[^1]: Podman plus `k3d` is accepted by the configuration surface because image
+    builds use the selected container engine and cluster lifecycle uses the
+    selected Kubernetes provider. The primary rootless path is Podman plus
+    `kind`.
 
 Configuration can be overridden with environment variables:
 
-| Variable                 | Default                  | Purpose                |
-| ------------------------ | ------------------------ | ---------------------- |
-| `WILDSIDE_K3D_CLUSTER`   | `wildside-preview`       | k3d cluster name.      |
-| `WILDSIDE_K3D_PORT`      | `8088`                   | Loopback ingress port. |
-| `WILDSIDE_K8S_NAMESPACE` | `wildside`               | Kubernetes namespace.  |
-| `WILDSIDE_HELM_RELEASE`  | `wildside`               | Helm release name.     |
-| `WILDSIDE_IMAGE`         | `wildside-backend:local` | Local image reference. |
+| Variable                    | Default                  | Purpose                                      |
+| --------------------------- | ------------------------ | -------------------------------------------- |
+| `WILDSIDE_CONTAINER_ENGINE` | `docker`                 | Container engine: `docker` or `podman`.      |
+| `WILDSIDE_K8S_PROVIDER`     | `k3d`                    | Local cluster provider: `k3d` or `kind`.     |
+| `WILDSIDE_K8S_CLUSTER`      | `wildside-preview`       | Local cluster name.                          |
+| `WILDSIDE_K8S_PORT`         | `8088`                   | Loopback or port-forward preview port.       |
+| `WILDSIDE_K8S_NAMESPACE`    | `wildside`               | Kubernetes namespace.                        |
+| `WILDSIDE_HELM_RELEASE`     | `wildside`               | Helm release name.                           |
+| `WILDSIDE_IMAGE`            | `wildside-backend:local` | Local image reference.                       |
+| `WILDSIDE_KIND_NODE_IMAGE`  | `kindest/node:v1.31.0`   | `kind` node image.                           |
 
 `WILDSIDE_IMAGE` must include a tag because the Helm chart receives repository
-and tag as separate values.
+and tag as separate values. `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT`
+remain backwards-compatible aliases when the provider-neutral cluster and port
+variables are unset.
+
+Keep `WILDSIDE_KIND_NODE_IMAGE` within the chart's supported Kubernetes range,
+currently `>=1.26.0-0 <1.32.0-0`. Leaving it unset uses Kubernetes `v1.31.0`.
+
+The local values file enables `sessionSecret` and sets
+`SESSION_KEY_FILE=/var/run/secrets/session_key`. The helper generates and
+applies the `wildside-session-key` Secret on each `up` run, avoiding committed
+secret material while keeping the release-mode session configuration path.
+
+The kube context name is derived as `{provider}-{cluster}`. For the default
+cluster this is `k3d-wildside-preview`; for the rootless Podman plus `kind`
+path this is `kind-wildside-preview`.
 
 ## Validation
 
-The local preview helper has unit coverage for preflight validation and image
-reference parsing. Full end-to-end preview validation requires Docker, `k3d`,
-`kubectl`, Helm, and an available loopback port. If those tools are absent, the
-CLI must fail early with a clear missing-executable message rather than
-partially creating infrastructure.
+The local preview helper has unit coverage for configuration parsing,
+preflight validation, image reference parsing, provider-aware cluster
+lifecycle commands, provider-aware image import commands, status, logs, and
+port-forward output. Full end-to-end preview validation requires the selected
+container engine, selected Kubernetes provider, `kubectl`, Helm, and an
+available loopback port. Rootless Podman plus `kind` also requires working
+user-level systemd scopes with cgroup delegation.
+
+If those tools are absent, the CLI must fail early with a clear
+missing-executable message rather than partially creating infrastructure.
 
 Repository-wide validation remains:
 

@@ -10,6 +10,7 @@ for both deployment modes.
 
 from __future__ import annotations
 
+import base64
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,6 +22,7 @@ from local_k8s.deployment import (
     _deploy_preview_tools,
     build_image,
     deploy_preview,
+    ensure_session_secret,
     print_logs,
     print_status,
 )
@@ -47,6 +49,7 @@ def preview_config() -> PreviewConfig:
         namespace="wildside",
         release_name="preview",
         image_name="wildside-backend:local",
+        kind_node_image="kindest/node:v1.31.0",
         ingress_port=8088,
         chart_path=Path("/repo/deploy/charts/wildside"),
         local_values_path=Path("/repo/deploy/charts/wildside/values.local.yaml"),
@@ -80,6 +83,7 @@ def test_deploy_preview_docker_requirement_conditional_on_skip_build(
     )
     monkeypatch.setattr("local_k8s.deployment.ensure_cluster", no_op)
     monkeypatch.setattr("local_k8s.deployment.ensure_namespace", no_op)
+    monkeypatch.setattr("local_k8s.deployment.ensure_session_secret", no_op)
     monkeypatch.setattr("local_k8s.deployment.import_image", no_op)
     monkeypatch.setattr("local_k8s.deployment.helm_upgrade", no_op)
     monkeypatch.setattr("local_k8s.deployment.print_status", no_op)
@@ -134,6 +138,42 @@ def test_build_image_uses_configured_container_engine(
             ],
         )
     ], "image builds must use the configured container engine"
+
+
+def test_ensure_session_secret_applies_runtime_key_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify local preview creates a mounted session signing key Secret."""
+    commands: list[tuple[str, list[str], str | None]] = []
+
+    def record_run(command: str, args: list[str], **kwargs: object) -> None:
+        commands.append((command, args, kwargs.get("input_text")))
+
+    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+    monkeypatch.setattr(
+        "local_k8s.deployment.secrets.token_bytes",
+        lambda length: b"a" * length,
+    )
+
+    ensure_session_secret(preview_config)
+
+    assert commands[0][0:2] == (
+        "kubectl",
+        [
+            "--context",
+            "k3d-wildside-preview",
+            "apply",
+            "-f",
+            "-",
+        ],
+    ), "local preview must apply the session Secret before Helm"
+    manifest = commands[0][2]
+    assert manifest is not None
+    assert "name: wildside-session-key" in manifest
+    assert "namespace: wildside" in manifest
+    encoded_key = manifest.rsplit("session_key: ", maxsplit=1)[1].strip()
+    assert base64.b64decode(encoded_key) == b"a" * 96
 
 
 def test_print_status_uses_provider_context_and_prints_kind_port_forward(

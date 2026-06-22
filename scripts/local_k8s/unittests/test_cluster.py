@@ -110,6 +110,10 @@ class TestClusterCreation:
         ), "kind cluster creation must use stdin config via --config -"
         assert commands[1][2] is not None, "kind cluster creation must pass config on stdin"
         assert "kind: Cluster" in commands[1][2], "stdin config must be valid kind Cluster YAML"
+        assert "image: kindest/node:v1.31.0" in commands[1][2], (
+            "kind cluster creation must pin a Kubernetes version compatible "
+            "with the Helm chart kubeVersion range"
+        )
         assert "extraPortMappings" not in commands[1][2], "Docker-backed kind must not use host port mappings"
 
     def test_podman_kind_cluster_creation_uses_rootless_scope(
@@ -241,10 +245,18 @@ class TestImageImport:
             (
                 "podman",
                 [
+                    "tag",
+                    "wildside-backend:local",
+                    "docker.io/library/wildside-backend:local",
+                ],
+            ),
+            (
+                "podman",
+                [
                     "save",
                     "--output",
                     str(archive_path),
-                    "wildside-backend:local",
+                    "docker.io/library/wildside-backend:local",
                 ],
             ),
             (
@@ -259,7 +271,89 @@ class TestImageImport:
                     "wildside-preview",
                 ],
             ),
-        ], "Podman-backed kind must save and load an image archive"
+        ], "Podman-backed kind must archive the image name Kubernetes will pull"
+
+    def test_podman_kind_image_import_keeps_registry_qualified_archive_tag(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config: PreviewConfig,
+    ) -> None:
+        """Verify registry-qualified image names are archived without retagging."""
+        config = replace(
+            preview_config,
+            container_engine="podman",
+            image_name="registry.example.test/wildside/backend:local",
+            k8s_provider="kind",
+        )
+        commands: list[tuple[str, list[str]]] = []
+        archive_path = Path("/tmp/wildside-preview-image.tar")
+
+        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+            commands.append((command, args))
+            return MockCommandResult()
+
+        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        monkeypatch.setattr("local_k8s.cluster._image_archive_path", lambda _: archive_path)
+        monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", lambda _: None)
+
+        import_image(config)
+
+        assert commands[0] == (
+            "podman",
+            [
+                "save",
+                "--output",
+                str(archive_path),
+                "registry.example.test/wildside/backend:local",
+            ],
+        ), "registry-qualified Podman images must not be retagged"
+
+    def test_podman_kind_image_import_normalizes_namespaced_archive_tag(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config: PreviewConfig,
+    ) -> None:
+        """Verify namespaced Docker Hub image names are archived as Kubernetes pulls them."""
+        config = replace(
+            preview_config,
+            container_engine="podman",
+            image_name="leynos/wildside-backend:local",
+            k8s_provider="kind",
+        )
+        commands: list[tuple[str, list[str]]] = []
+        archive_path = Path("/tmp/wildside-preview-image.tar")
+
+        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+            commands.append((command, args))
+            return MockCommandResult()
+
+        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        monkeypatch.setattr("local_k8s.cluster._image_archive_path", lambda _: archive_path)
+        monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", lambda _: None)
+
+        import_image(config)
+
+        assert commands[:2] == [
+            (
+                "podman",
+                [
+                    "tag",
+                    "leynos/wildside-backend:local",
+                    "docker.io/leynos/wildside-backend:local",
+                ],
+            ),
+            (
+                "podman",
+                [
+                    "save",
+                    "--output",
+                    str(archive_path),
+                    "docker.io/leynos/wildside-backend:local",
+                ],
+            ),
+        ], "namespaced Podman images must use Kubernetes' Docker Hub pull name"
 
 
 def test_kind_delete_is_idempotent_when_cluster_is_absent(

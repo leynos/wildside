@@ -53,7 +53,7 @@ def ensure_cluster(config: PreviewConfig) -> None:
     match config.k8s_provider:
         case "kind":
             command, args = _kind_command(config, _kind_create_args(config), use_scope=True)
-            run(command, args, input_text=_kind_cluster_config())
+            run(command, args, input_text=_kind_cluster_config(config))
         case _:
             run("k3d", _k3d_create_args(config))
 
@@ -104,14 +104,17 @@ def import_image(config: PreviewConfig) -> None:
     match (config.k8s_provider, config.container_engine):
         case ("kind", "podman"):
             archive_path = _image_archive_path(config)
+            archive_image_name = _podman_archive_image_name(config.image_name)
             _remove_stale_archive(archive_path)
+            if archive_image_name != config.image_name:
+                run("podman", ["tag", config.image_name, archive_image_name])
             run(
                 "podman",
                 [
                     "save",
                     "--output",
                     str(archive_path),
-                    config.image_name,
+                    archive_image_name,
                 ],
             )
             command, args = _kind_command(
@@ -270,14 +273,15 @@ def _kind_create_args(config: PreviewConfig) -> list[str]:
     ]
 
 
-def _kind_cluster_config() -> str:
+def _kind_cluster_config(config: PreviewConfig) -> str:
     """Return a minimal kind cluster config with no host-port mapping."""
 
-    return """\
+    return f"""\
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
+    image: {config.kind_node_image}
 """
 
 
@@ -285,6 +289,20 @@ def _image_archive_path(config: PreviewConfig) -> Path:
     """Return the temporary Podman image archive path for kind loading."""
 
     return Path(tempfile.gettempdir()) / f"{config.cluster_name}-image.tar"
+
+
+def _podman_archive_image_name(image_name: str) -> str:
+    """Return an archive tag that matches Kubernetes' unqualified pull name."""
+
+    repository, separator, tag = image_name.rpartition(":")
+    if not separator:
+        return image_name
+    first_component = repository.split("/", maxsplit=1)[0]
+    if "." in first_component or ":" in first_component or first_component == "localhost":
+        return image_name
+    if "/" in repository:
+        return f"docker.io/{repository}:{tag}"
+    return f"docker.io/library/{repository}:{tag}"
 
 
 def _remove_stale_archive(archive_path: Path) -> None:

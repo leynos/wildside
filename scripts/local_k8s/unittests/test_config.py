@@ -23,6 +23,7 @@ def test_preview_config_uses_provider_neutral_defaults(monkeypatch: pytest.Monke
         "WILDSIDE_K8S_PORT",
         "WILDSIDE_K3D_CLUSTER",
         "WILDSIDE_K3D_PORT",
+        "WILDSIDE_KIND_NODE_IMAGE",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -32,6 +33,9 @@ def test_preview_config_uses_provider_neutral_defaults(monkeypatch: pytest.Monke
     assert config.k8s_provider == "k3d", "default Kubernetes provider must be k3d"
     assert config.cluster_name == "wildside-preview", "default cluster name must be wildside-preview"
     assert config.ingress_port == 8088, "default ingress port must be 8088"
+    assert config.kind_node_image == "kindest/node:v1.31.0", (
+        "default kind node image must satisfy the Helm chart kubeVersion range"
+    )
 
 
 def test_preview_config_accepts_podman_kind_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -49,6 +53,17 @@ def test_preview_config_accepts_podman_kind_env(monkeypatch: pytest.MonkeyPatch)
     assert config.k8s_provider == "kind", "WILDSIDE_K8S_PROVIDER must override the default"
     assert config.cluster_name == "wildside-kind", "WILDSIDE_K8S_CLUSTER must override legacy aliases"
     assert config.ingress_port == 18088, "WILDSIDE_K8S_PORT must override legacy aliases"
+
+
+def test_preview_config_accepts_kind_node_image_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify kind node image can be overridden for local Kubernetes upgrades."""
+    monkeypatch.setenv("WILDSIDE_KIND_NODE_IMAGE", "kindest/node:v1.31.9")
+
+    config = PreviewConfig.from_env()
+
+    assert config.kind_node_image == "kindest/node:v1.31.9", (
+        "WILDSIDE_KIND_NODE_IMAGE must override the default kind node image"
+    )
 
 
 def test_preview_config_uses_legacy_k3d_aliases(monkeypatch: pytest.MonkeyPatch) -> None:

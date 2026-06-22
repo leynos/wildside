@@ -417,8 +417,61 @@ teardown result in this plan's `Outcomes & Retrospective`.
   `make check-fmt`, `make lint`, and `make test` all passed.
 - [x] 2026-06-22: Re-ran `coderabbit review --agent` after the deterministic
   Milestone 4 gates. CodeRabbit reported zero findings.
-- [ ] Implement Milestone 5.
-- [ ] Run final gates and live smoke validation where available.
+- [x] 2026-06-22: Updated `docs/local-k8s-preview-design.md`,
+  `docs/developers-guide.md`, `docs/contents.md`, and the local preview
+  package summary so the documented workflow covers Docker plus `k3d`,
+  rootless Podman plus `kind`, provider-neutral environment variables, legacy
+  aliases, required tools, kube context naming, and kind port-forward usage.
+- [x] 2026-06-22: Ran `make markdownlint` after the Milestone 5 documentation
+  edits. The first result found table alignment issues in the new required
+  tools table; after aligning the table, `make markdownlint` passed.
+- [x] 2026-06-22: Attempted the live rootless Podman plus `kind` smoke path.
+  The helper created a Podman-backed `kind` control plane and reached the
+  Podman image build, but Helm refused to install because kind's default node
+  image used Kubernetes `v1.36.1`, outside the chart's
+  `>=1.26.0-0 <1.32.0-0` kubeVersion range.
+- [x] 2026-06-22: Added a failing regression test for kind cluster config node
+  image pinning, then implemented `WILDSIDE_KIND_NODE_IMAGE` with default
+  `kindest/node:v1.31.0` so new kind clusters use a Kubernetes version
+  compatible with the Helm chart.
+- [x] 2026-06-22: Re-ran the focused local preview pytest command after the
+  node-image fix; it passed with 34 tests.
+- [x] 2026-06-22: Live Podman plus kind validation then reached Helm rollout
+  but the pod tried to pull `docker.io/library/wildside-backend:local` while
+  Podman had exported `localhost/wildside-backend:local`. Added failing tests
+  and fixed the Podman archive path by tagging unqualified images with Docker's
+  implicit `docker.io/library/...` name before `podman save`.
+- [x] 2026-06-22: Live validation next reached container startup and exposed
+  that release builds reject ephemeral session keys. Updated local Helm values
+  to mount a `sessionSecret`, added helper-generated `wildside-session-key`
+  creation before Helm install, and covered the manifest contract in the
+  focused deployment tests.
+- [x] 2026-06-22: Re-ran the focused local preview pytest command after the
+  image-tag and session Secret fixes; it passed with 36 tests. `helm lint
+  deploy/charts/wildside --values deploy/charts/wildside/values.local.yaml`
+  also passed.
+- [x] 2026-06-22: Completed live rootless Podman plus `kind` smoke validation.
+  `local-k8s-up` created the Podman-backed kind cluster, built and imported the
+  backend image, applied the generated session Secret, installed Helm, and
+  reported the deployment as `1/1 Running`. A port-forward to
+  `svc/wildside 8088:80` returned
+  `{"status":"pass","checks":{"liveness":{"status":"pass"}}}` from
+  `/health/live`, and `local-k8s-down` removed the preview cluster.
+- [x] Complete Milestone 5 gates and live smoke validation where available.
+- [x] 2026-06-22: Ran final deterministic gates for Milestone 5:
+  `make check-fmt`, `make lint`, `make test`, `make markdownlint`, and
+  `make nixie` all passed after the live smoke fixes.
+- [x] 2026-06-22: Ran `coderabbit review --agent` for Milestone 5 after the
+  deterministic gates. CodeRabbit reported zero findings.
+- [x] 2026-06-22: Tightened the Podman archive tag normalizer after manual
+  pre-commit review so namespaced Docker Hub images such as
+  `leynos/wildside-backend:local` are saved as
+  `docker.io/leynos/wildside-backend:local`, matching Kubernetes pull
+  resolution. Added focused regression coverage.
+- [x] 2026-06-22: Re-ran the final gates after the namespaced-image fix.
+  Focused local preview tests passed with 37 tests, `make check-fmt`,
+  `make lint`, `make test`, `make markdownlint`, and `make nixie` passed, and a
+  second `coderabbit review --agent` reported zero findings.
 
 ## Surprises & Discoveries
 
@@ -459,6 +512,28 @@ teardown result in this plan's `Outcomes & Retrospective`.
   The kind port-forward output therefore needs the same Helm fullname helper
   as status checks, otherwise renamed releases would print a command for the
   wrong service.
+- 2026-06-22: The documentation index, developer guide, and package docstring
+  all used k3d-specific language. Milestone 5 needs to update those secondary
+  references as well as the main design document, otherwise repository search
+  still advertises the old single-provider contract.
+- 2026-06-22: Live Podman plus kind validation revealed that kind's default
+  node image can outrun the chart's supported Kubernetes range. The fix is to
+  pin a chart-compatible node image by default and expose an override for
+  deliberate Kubernetes upgrade testing.
+- 2026-06-22: Podman rewrites an unqualified tag such as
+  `wildside-backend:local` to `localhost/wildside-backend:local` in the saved
+  archive. Kubernetes resolves the same unqualified pod image as
+  `docker.io/library/wildside-backend:local`, so the kind node can have the
+  image loaded but still fail with `ImagePullBackOff` unless the archive uses
+  Docker's implicit registry name.
+- 2026-06-22: The same image-name mismatch applies to namespaced Docker Hub
+  names such as `leynos/wildside-backend:local`. Kubernetes resolves them as
+  `docker.io/leynos/wildside-backend:local`, not as the short Podman-local
+  name.
+- 2026-06-22: The local backend container is a release build. It refuses
+  `SESSION_ALLOW_EPHEMERAL=1`, which is correct for the production safety
+  contract. Local preview therefore needs a real generated Kubernetes Secret,
+  not an ephemeral-key opt-in.
 
 ## Decision Log
 
@@ -501,6 +576,23 @@ teardown result in this plan's `Outcomes & Retrospective`.
   deployment status output. Rationale: service naming is a Helm contract, not
   a kind-specific concern, and the port-forward command must match the service
   that Kubernetes status already inspects.
+- 2026-06-22: Default `kind` clusters to `kindest/node:v1.31.0` and allow
+  `WILDSIDE_KIND_NODE_IMAGE` overrides. Rationale: the Helm chart currently
+  supports Kubernetes `>=1.26.0-0 <1.32.0-0`, while kind's moving default can
+  create newer clusters that fail Helm's deterministic kubeVersion check.
+- 2026-06-22: For Podman-backed kind imports, retag unqualified image names as
+  `docker.io/library/{name}:{tag}` before saving the archive. Rationale:
+  Podman's local `localhost/` normalisation does not match Kubernetes'
+  unqualified-image resolution, and the node image store must contain the name
+  in the pod spec.
+- 2026-06-22: Treat namespaced Docker Hub image names as unqualified for Podman
+  archive export and retag them as `docker.io/{namespace}/{name}:{tag}`.
+  Rationale: a slash without an explicit registry is still a short Docker Hub
+  reference from Kubernetes' point of view.
+- 2026-06-22: Generate and apply `wildside-session-key` during local preview
+  setup and mount it through `values.local.yaml` with `SESSION_KEY_FILE`.
+  Rationale: release builds must not use ephemeral session keys, but local
+  preview should remain self-contained and must not commit secret material.
 
 ## Outcomes & Retrospective
 
@@ -511,8 +603,11 @@ commands for Docker plus `k3d`, Docker plus `kind`, and rootless Podman plus
 `kind`. Milestone 3 adds provider-aware image build and import, including
 Podman archive save/load for rootless kind. Milestone 4 makes status, logs,
 namespace creation, and Helm status provider-context aware and prints the
-operator's kind port-forward command. Milestones 1 through 4 passed focused
-local preview tests, the full repository gates, relevant Markdown gates where
-documentation changed, and CodeRabbit review. The expected final outcome
-remains a backwards-compatible local preview helper with focused tests
-documenting each provider-specific command contract.
+operator's kind port-forward command. Milestone 5 documents both local modes
+and validates the VM's rootless Podman plus kind path end to end, including
+image import, generated session Secret creation, Helm readiness, port-forwarded
+health, and teardown. Milestones 1 through 4 passed focused local preview
+tests, the full repository gates, relevant Markdown gates where documentation
+changed, and CodeRabbit review. Milestone 5 has passed focused tests,
+`helm lint`, and live smoke validation; final repository gates and CodeRabbit
+review all passed.

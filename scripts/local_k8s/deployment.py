@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import base64
+import secrets
+
 from .commands import run
 from .config import PreviewConfig
 from .cluster import ensure_cluster, import_image, print_cluster_status
 from .k8s import ensure_namespace, helm_fullname, print_kubernetes_status
 from .validation import LocalK8sError, require_tools
+
+SESSION_SECRET_KEY_NAME = "session_key"
+SESSION_SECRET_NAME = "wildside-session-key"
 
 
 def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
@@ -15,6 +21,7 @@ def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
     require_tools(_deploy_preview_tools(config, skip_build=skip_build))
     ensure_cluster(config)
     ensure_namespace(config)
+    ensure_session_secret(config)
     if not skip_build:
         build_image(config)
     import_image(config)
@@ -44,6 +51,34 @@ def build_image(config: PreviewConfig) -> None:
             config.image_name,
             str(config.repository_root),
         ],
+    )
+
+
+def ensure_session_secret(config: PreviewConfig) -> None:
+    """Create or refresh the local preview session signing key Secret."""
+
+    key = secrets.token_bytes(96)
+    encoded_key = base64.b64encode(key).decode("ascii")
+    manifest = f"""\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {SESSION_SECRET_NAME}
+  namespace: {config.namespace}
+type: Opaque
+data:
+  {SESSION_SECRET_KEY_NAME}: {encoded_key}
+"""
+    run(
+        "kubectl",
+        [
+            "--context",
+            config.kube_context,
+            "apply",
+            "-f",
+            "-",
+        ],
+        input_text=manifest,
     )
 
 
