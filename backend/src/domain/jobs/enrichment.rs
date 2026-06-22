@@ -1,7 +1,7 @@
 //! Versioned enrichment job payloads.
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
 use crate::domain::IdempotencyKey;
@@ -40,19 +40,29 @@ pub enum EnrichmentJob {
 }
 
 /// Version 1 payload for `EnrichmentJob`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnrichmentJobV1 {
     /// Stable job identifier for trace correlation.
-    pub job_id: Uuid,
+    job_id: Uuid,
     /// Optional idempotency key supplied by the client.
-    pub idempotency_key: Option<IdempotencyKey>,
+    idempotency_key: Option<IdempotencyKey>,
     /// Validated WGS84 bounding box for enrichment.
-    pub bounding_box: BoundingBox,
+    bounding_box: BoundingBox,
     /// Sorted, deduplicated tag list.
-    pub tags: Vec<String>,
+    tags: Vec<String>,
     /// Wall-clock time at which the job was built and enqueued.
-    pub enqueued_at: DateTime<Utc>,
+    enqueued_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct EnrichmentJobV1Raw {
+    job_id: Uuid,
+    idempotency_key: Option<IdempotencyKey>,
+    bounding_box: BoundingBox,
+    tags: Vec<String>,
+    enqueued_at: DateTime<Utc>,
 }
 
 /// Errors raised while building enrichment jobs.
@@ -108,6 +118,24 @@ impl EnrichmentJob {
         match self {
             Self::V1(payload) => payload.tags.as_slice(),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for EnrichmentJobV1 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = EnrichmentJobV1Raw::deserialize(deserializer)?;
+        let tags = canonicalize_tags(raw.tags).map_err(serde::de::Error::custom)?;
+
+        Ok(Self {
+            job_id: raw.job_id,
+            idempotency_key: raw.idempotency_key,
+            bounding_box: raw.bounding_box,
+            tags,
+            enqueued_at: raw.enqueued_at,
+        })
     }
 }
 
