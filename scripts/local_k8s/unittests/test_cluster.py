@@ -15,6 +15,7 @@ PYTHONPATH=scripts uv run --with pytest --with plumbum pytest scripts/local_k8s/
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -157,12 +158,15 @@ class TestClusterCreation:
 class TestImageImport:
     """Provider command-contract tests for preview image loading."""
 
-    def test_k3d_image_import_uses_existing_provider_command(
-        self,
+    @staticmethod
+    def _capture_commands(
         monkeypatch: pytest.MonkeyPatch,
-        preview_config: PreviewConfig,
-    ) -> None:
-        """Verify k3d keeps its current image import command."""
+        config: PreviewConfig,
+        *,
+        archive_path: Path | None = None,
+        on_remove_archive: Callable[[Path], None] | None = None,
+    ) -> list[tuple[str, list[str]]]:
+        """Monkeypatch cluster internals, run import_image, and return recorded commands."""
         commands: list[tuple[str, list[str]]] = []
 
         def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
@@ -171,8 +175,23 @@ class TestImageImport:
 
         monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
         monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        if archive_path is not None:
+            monkeypatch.setattr("local_k8s.cluster._image_archive_path", lambda _: archive_path)
+            monkeypatch.setattr(
+                "local_k8s.cluster._remove_stale_archive",
+                on_remove_archive if on_remove_archive is not None else lambda _: None,
+            )
 
-        import_image(preview_config)
+        import_image(config)
+        return commands
+
+    def test_k3d_image_import_uses_existing_provider_command(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config: PreviewConfig,
+    ) -> None:
+        """Verify k3d keeps its current image import command."""
+        commands = self._capture_commands(monkeypatch, preview_config)
 
         assert commands == [
             (
@@ -194,16 +213,7 @@ class TestImageImport:
     ) -> None:
         """Verify Docker-backed kind loads the local Docker image directly."""
         config = replace(preview_config, k8s_provider="kind")
-        commands: list[tuple[str, list[str]]] = []
-
-        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
-            commands.append((command, args))
-            return MockCommandResult()
-
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
-
-        import_image(config)
+        commands = self._capture_commands(monkeypatch, config)
 
         assert commands == [
             (
@@ -225,20 +235,14 @@ class TestImageImport:
     ) -> None:
         """Verify rootless Podman kind uses an archive load path."""
         config = replace(preview_config, container_engine="podman", k8s_provider="kind")
-        commands: list[tuple[str, list[str]]] = []
         removed_archives: list[Path] = []
         archive_path = Path("/tmp/wildside-preview-image.tar")
-
-        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
-            commands.append((command, args))
-            return MockCommandResult()
-
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
-        monkeypatch.setattr("local_k8s.cluster._image_archive_path", lambda _: archive_path)
-        monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", removed_archives.append)
-
-        import_image(config)
+        commands = self._capture_commands(
+            monkeypatch,
+            config,
+            archive_path=archive_path,
+            on_remove_archive=removed_archives.append,
+        )
 
         assert removed_archives == [archive_path], "stale Podman image archives must be removed before save"
         assert commands == [
@@ -285,19 +289,8 @@ class TestImageImport:
             image_name="registry.example.test/wildside/backend:local",
             k8s_provider="kind",
         )
-        commands: list[tuple[str, list[str]]] = []
         archive_path = Path("/tmp/wildside-preview-image.tar")
-
-        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
-            commands.append((command, args))
-            return MockCommandResult()
-
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
-        monkeypatch.setattr("local_k8s.cluster._image_archive_path", lambda _: archive_path)
-        monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", lambda _: None)
-
-        import_image(config)
+        commands = self._capture_commands(monkeypatch, config, archive_path=archive_path)
 
         assert commands[0] == (
             "podman",
@@ -321,19 +314,8 @@ class TestImageImport:
             image_name="leynos/wildside-backend:local",
             k8s_provider="kind",
         )
-        commands: list[tuple[str, list[str]]] = []
         archive_path = Path("/tmp/wildside-preview-image.tar")
-
-        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
-            commands.append((command, args))
-            return MockCommandResult()
-
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
-        monkeypatch.setattr("local_k8s.cluster._image_archive_path", lambda _: archive_path)
-        monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", lambda _: None)
-
-        import_image(config)
+        commands = self._capture_commands(monkeypatch, config, archive_path=archive_path)
 
         assert commands[:2] == [
             (
