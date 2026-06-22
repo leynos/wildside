@@ -33,6 +33,8 @@ def preview_config() -> PreviewConfig:
 
     return PreviewConfig(
         repository_root=Path("/repo"),
+        container_engine="docker",
+        k8s_provider="k3d",
         cluster_name="wildside-preview",
         namespace="wildside",
         release_name="preview",

@@ -4,8 +4,8 @@ This ExecPlan is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT. This plan is ready for review but has not been approved for
-implementation.
+Status: APPROVED AND IN IMPLEMENTATION. The user approved implementation on
+2026-06-22. Keep this plan current as each milestone lands.
 
 ## Purpose / big picture
 
@@ -42,7 +42,8 @@ make local-k8s-up
 
 ## Constraints
 
-- Do not implement this plan until the user explicitly approves it.
+- The user explicitly approved implementation on 2026-06-22; continue
+  milestone-by-milestone within this plan's tolerances.
 - Preserve the hexagonal boundary. The backend domain must not learn about
   Docker, Podman, `k3d`, `kind`, Kubernetes, Helm, or local preview tooling.
 - Keep this work in the deployment adapter surface: `scripts/local_k8s.py`,
@@ -268,8 +269,17 @@ uv run --with pytest --with plumbum --with cyclopts pytest scripts/local_k8s/uni
   | tee /tmp/test-local-k8s-wildside-podman-kind-support.out
 ```
 
-The expected red result is that the new fields or environment variables do not
-exist yet.
+When running this suite directly from the repository root, prefix the command
+with `PYTHONPATH=scripts` so the inline script package can be imported:
+
+```bash
+set -o pipefail
+PYTHONPATH=scripts uv run --with pytest --with plumbum --with cyclopts pytest scripts/local_k8s/unittests \
+  | tee /tmp/test-local-k8s-wildside-podman-kind-support.out
+```
+
+The observed red result for Milestone 1 was that the new fields or environment
+variables did not exist yet.
 
 Make the smallest config change, rerun the focused pytest command, and keep it
 green. Then add provider-aware command tests for Milestones 2 through 4 before
@@ -289,6 +299,14 @@ Run the focused local-preview pytest suite after each milestone:
 ```bash
 set -o pipefail
 uv run --with pytest --with plumbum --with cyclopts pytest scripts/local_k8s/unittests \
+  | tee /tmp/test-local-k8s-wildside-podman-kind-support.out
+```
+
+Use this direct command while the suite is not wired to a Make target:
+
+```bash
+set -o pipefail
+PYTHONPATH=scripts uv run --with pytest --with plumbum --with cyclopts pytest scripts/local_k8s/unittests \
   | tee /tmp/test-local-k8s-wildside-podman-kind-support.out
 ```
 
@@ -343,8 +361,21 @@ teardown result in this plan's `Outcomes & Retrospective`.
   `make nixie` install step is repeatable.
 - [x] 2026-06-22: Ran `make --no-print-directory markdownlint nixie`; it
   passed.
-- [ ] Review and approve this plan.
-- [ ] Implement Milestone 1.
+- [x] 2026-06-22: User approved this plan for implementation.
+- [x] 2026-06-22: Added failing Milestone 1 tests for
+  `WILDSIDE_CONTAINER_ENGINE`, `WILDSIDE_K8S_PROVIDER`,
+  `WILDSIDE_K8S_CLUSTER`, `WILDSIDE_K8S_PORT`, legacy alias precedence, and
+  unsupported provider values.
+- [x] 2026-06-22: Implemented Milestone 1 by adding provider fields and
+  validation to `PreviewConfig.from_env()`, while keeping Docker plus `k3d` as
+  the default.
+- [x] 2026-06-22: Ran the focused local preview pytest command with
+  `PYTHONPATH=scripts`; it passed with 21 tests.
+- [x] 2026-06-22: Ran the Milestone 1 gates after addressing CodeRabbit's
+  test-quality findings: focused local preview pytest, `make check-fmt`,
+  `make lint`, `make test`, `make markdownlint`, and `make nixie` all passed.
+- [x] 2026-06-22: Re-ran `coderabbit review --agent` after the deterministic
+  gates. CodeRabbit reported zero findings.
 - [ ] Implement Milestone 2.
 - [ ] Implement Milestone 3.
 - [ ] Implement Milestone 4.
@@ -365,6 +396,10 @@ teardown result in this plan's `Outcomes & Retrospective`.
 - 2026-06-22: `make nixie` runs `bun install`, and the checked-in `bun.lock`
   was stale relative to `package.json`. Committing the normalized lockfile
   avoids repeated validation-time drift.
+- 2026-06-22: Running `uv run ... pytest scripts/local_k8s/unittests`
+  directly does not add `scripts/` to `sys.path`; the direct command needs
+  `PYTHONPATH=scripts`. This confirms the earlier risk that the suite is not
+  yet wired into a project Make target.
 
 ## Decision Log
 
@@ -381,10 +416,17 @@ teardown result in this plan's `Outcomes & Retrospective`.
   helper. Rationale: Episodic proved this model for rootless Podman plus
   `kind`, and it avoids lifecycle ambiguity for long-running port-forward
   processes.
+- 2026-06-22: Keep provider selection as validated string literals on
+  `PreviewConfig` instead of adding a larger abstraction in Milestone 1.
+  Rationale: this preserves the current small local-preview module shape and
+  gives later milestones a clear dispatch field without widening scope.
 
 ## Outcomes & Retrospective
 
-This plan is pre-implementation. No production code has been changed yet. The
-expected implementation outcome is a backwards-compatible local preview helper
-that supports Docker plus `k3d`, Docker plus `kind`, and rootless Podman plus
-`kind`, with focused tests documenting each provider-specific command contract.
+Implementation is in progress. Milestone 1 establishes provider-neutral
+configuration while preserving Docker plus `k3d` defaults and legacy
+`WILDSIDE_K3D_*` aliases. The milestone passed focused local preview tests,
+the full repository gates, and CodeRabbit review. The expected final outcome
+remains a backwards-compatible local preview helper that supports Docker plus
+`k3d`, Docker plus `kind`, and rootless Podman plus `kind`, with focused tests
+documenting each provider-specific command contract.
