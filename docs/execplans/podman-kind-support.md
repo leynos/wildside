@@ -338,8 +338,11 @@ teardown result in this plan's `Outcomes & Retrospective`.
   values, existing Nile Valley design document, and local-preview unit tests.
 - [x] 2026-06-22: Drafted this pre-implementation ExecPlan.
 - [x] 2026-06-22: Ran `make markdownlint`; it passed.
-- [x] 2026-06-22: Ran `make nixie`; it failed on a pre-existing Mermaid
-  parse error in `docs/rstest-bdd-v0-5-0-migration-guide.md`.
+- [x] 2026-06-22: Fixed a pre-existing Mermaid parse error in
+  `docs/rstest-bdd-v0-5-0-migration-guide.md` and normalized `bun.lock` so the
+  `make nixie` install step is repeatable.
+- [x] 2026-06-22: Ran `make --no-print-directory markdownlint nixie`; it
+  passed.
 - [ ] Review and approve this plan.
 - [ ] Implement Milestone 1.
 - [ ] Implement Milestone 2.
@@ -359,9 +362,9 @@ teardown result in this plan's `Outcomes & Retrospective`.
 - 2026-06-22: The local preview pytest files live under
   `scripts/local_k8s/unittests`, but no Makefile target visibly runs that
   suite. Implementation should address or document that gap.
-- 2026-06-22: `make nixie` fails before this branch can get a clean Mermaid
-  gate because `docs/rstest-bdd-v0-5-0-migration-guide.md` contains an
-  existing flowchart parse error: `Unterminated node label (missing ``}``)`.
+- 2026-06-22: `make nixie` runs `bun install`, and the checked-in `bun.lock`
+  was stale relative to `package.json`. Committing the normalized lockfile
+  avoids repeated validation-time drift.
 
 ## Decision Log
 
