@@ -10,12 +10,13 @@ for both deployment modes.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from local_k8s.config import PreviewConfig
-from local_k8s.deployment import deploy_preview
+from local_k8s.deployment import _deploy_preview_tools, deploy_preview
 
 
 @pytest.fixture
@@ -82,4 +83,17 @@ def test_deploy_preview_docker_requirement_conditional_on_skip_build(
     assert required_tools == [expected_tools], (
         f"expected require_tools to be called once with {expected_tools}, "
         f"but got {required_tools}"
+    )
+
+
+def test_deploy_preview_tools_follow_configured_kubernetes_provider(
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify provider preflight follows the configured local cluster tool."""
+    kind_config = replace(preview_config, k8s_provider="kind")
+
+    assert _deploy_preview_tools(kind_config, skip_build=True) == (
+        "helm",
+        "kind",
+        "kubectl",
     )

@@ -376,7 +376,23 @@ teardown result in this plan's `Outcomes & Retrospective`.
   `make lint`, `make test`, `make markdownlint`, and `make nixie` all passed.
 - [x] 2026-06-22: Re-ran `coderabbit review --agent` after the deterministic
   gates. CodeRabbit reported zero findings.
-- [ ] Implement Milestone 2.
+- [x] 2026-06-22: Added failing Milestone 2 tests for provider-aware cluster
+  lifecycle command sequences. The first red result was
+  `ModuleNotFoundError: local_k8s.cluster`; the follow-up preflight red result
+  showed `_deploy_preview_tools()` still assumed the old signature.
+- [x] 2026-06-22: Implemented Milestone 2 by introducing
+  `local_k8s.cluster`, keeping the k3d loopback load-balancer path, adding
+  Docker-backed `kind` cluster creation from stdin, adding the rootless
+  Podman-backed `kind` `systemd-run` command, and making deployment preflight
+  choose the configured provider tool.
+- [x] 2026-06-22: Ran the focused local preview pytest command with
+  `PYTHONPATH=scripts`; it passed with 25 tests.
+- [x] 2026-06-22: Ran the Milestone 2 gates after addressing CodeRabbit's
+  lifecycle and test-quality findings: focused local preview pytest,
+  `make check-fmt`, `make lint`, `make test`, `make markdownlint`, and
+  `make nixie` all passed.
+- [x] 2026-06-22: Re-ran `coderabbit review --agent` after the deterministic
+  Milestone 2 gates. CodeRabbit reported zero findings.
 - [ ] Implement Milestone 3.
 - [ ] Implement Milestone 4.
 - [ ] Implement Milestone 5.
@@ -400,6 +416,14 @@ teardown result in this plan's `Outcomes & Retrospective`.
   directly does not add `scripts/` to `sys.path`; the direct command needs
   `PYTHONPATH=scripts`. This confirms the earlier risk that the suite is not
   yet wired into a project Make target.
+- 2026-06-22: Wildside's existing command adapter used plumbum and had no
+  stdin support. `kind create cluster --config -` needs stdin, so Milestone 2
+  extended the adapter with an `input_text` parameter rather than adding a
+  second runner abstraction.
+- 2026-06-22: CodeRabbit suggested moving a `MockCommandResult` import from
+  `conftest` to a relative `.conftest` import, but `scripts/local_k8s/unittests`
+  is not a Python package. The better fix was to keep `conftest.py` fixture-only
+  and define the helper dataclass inside `test_cluster.py`.
 
 ## Decision Log
 
@@ -420,13 +444,22 @@ teardown result in this plan's `Outcomes & Retrospective`.
   `PreviewConfig` instead of adding a larger abstraction in Milestone 1.
   Rationale: this preserves the current small local-preview module shape and
   gives later milestones a clear dispatch field without widening scope.
+- 2026-06-22: Move active lifecycle imports from `local_k8s.k3d` to
+  `local_k8s.cluster`, but keep `local_k8s.k3d` as a compatibility re-export.
+  Rationale: the CLI should no longer present the provider layer as k3d-only,
+  while existing internal imports can keep working during the transition.
+- 2026-06-22: Use explicit `match` dispatch for provider-specific lifecycle
+  branches in `local_k8s.cluster`. Rationale: `PreviewConfig` validates the
+  provider values, and pattern matching keeps unsupported-state handling
+  visible at each side-effect boundary.
 
 ## Outcomes & Retrospective
 
 Implementation is in progress. Milestone 1 establishes provider-neutral
 configuration while preserving Docker plus `k3d` defaults and legacy
-`WILDSIDE_K3D_*` aliases. The milestone passed focused local preview tests,
-the full repository gates, and CodeRabbit review. The expected final outcome
-remains a backwards-compatible local preview helper that supports Docker plus
-`k3d`, Docker plus `kind`, and rootless Podman plus `kind`, with focused tests
+`WILDSIDE_K3D_*` aliases. Milestone 2 adds provider-aware cluster lifecycle
+commands for Docker plus `k3d`, Docker plus `kind`, and rootless Podman plus
+`kind`. Milestones 1 and 2 passed focused local preview tests, the full
+repository gates, the Markdown gates, and CodeRabbit review. The expected final
+outcome remains a backwards-compatible local preview helper with focused tests
 documenting each provider-specific command contract.

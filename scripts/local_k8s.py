@@ -16,10 +16,10 @@ from cyclopts import App
 
 from local_k8s.config import PreviewConfig
 from local_k8s.deployment import deploy_preview, print_logs, print_status
-from local_k8s.k3d import delete_cluster
+from local_k8s.cluster import delete_cluster
 from local_k8s.validation import LocalK8sError
 
-app = App(help="Manage a local k3d Wildside preview environment.")
+app = App(help="Manage a local Kubernetes Wildside preview environment.")
 
 
 def _run(operation: str, func: Callable[[], None]) -> None:

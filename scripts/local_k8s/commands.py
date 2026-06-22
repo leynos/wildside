@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+import subprocess
 
 from plumbum import local
 from plumbum.commands.processes import ProcessExecutionError
@@ -37,7 +38,13 @@ class CommandResult:
     stderr: str
 
 
-def run(command: str, args: Sequence[str], *, cwd: str | None = None) -> CommandResult:
+def run(
+    command: str,
+    args: Sequence[str],
+    *,
+    cwd: str | None = None,
+    input_text: str | None = None,
+) -> CommandResult:
     """Run a local command and capture its output.
 
     Parameters
@@ -49,6 +56,9 @@ def run(command: str, args: Sequence[str], *, cwd: str | None = None) -> Command
     cwd : str | None, optional
         Working directory for execution. Uses the process current directory
         when unset.
+    input_text : str | None, optional
+        Text sent to standard input. Used for commands such as ``kind create
+        cluster --config -``.
 
     Returns
     -------
@@ -62,6 +72,16 @@ def run(command: str, args: Sequence[str], *, cwd: str | None = None) -> Command
     """
 
     try:
+        if input_text is not None:
+            completed = subprocess.run(  # noqa: S603 - command is built internally.
+                [command, *args],
+                input=input_text,
+                text=True,
+                capture_output=True,
+                check=True,
+                cwd=cwd,
+            )
+            return CommandResult(stdout=completed.stdout, stderr=completed.stderr)
         executable = local[command]
         if cwd:
             with local.cwd(cwd):
@@ -70,4 +90,6 @@ def run(command: str, args: Sequence[str], *, cwd: str | None = None) -> Command
             out = executable.run(args)
     except ProcessExecutionError as exc:
         raise LocalK8sError(exc.stderr.strip() or str(exc)) from exc
+    except subprocess.CalledProcessError as exc:
+        raise LocalK8sError((exc.stderr or "").strip() or str(exc)) from exc
     return CommandResult(stdout=out[1], stderr=out[2])

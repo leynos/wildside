@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .commands import run
 from .config import PreviewConfig
-from .k3d import ensure_cluster, import_image, print_cluster_status
+from .cluster import ensure_cluster, import_image, print_cluster_status
 from .k8s import ensure_namespace, print_kubernetes_status
 from .validation import LocalK8sError, require_tools
 
@@ -12,7 +12,7 @@ from .validation import LocalK8sError, require_tools
 def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
     """Build the image and install or upgrade the Wildside Helm release."""
 
-    require_tools(_deploy_preview_tools(skip_build=skip_build))
+    require_tools(_deploy_preview_tools(config, skip_build=skip_build))
     ensure_cluster(config)
     ensure_namespace(config)
     if not skip_build:
@@ -22,12 +22,13 @@ def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
     print_status(config)
 
 
-def _deploy_preview_tools(*, skip_build: bool) -> tuple[str, ...]:
+def _deploy_preview_tools(config: PreviewConfig, *, skip_build: bool) -> tuple[str, ...]:
     """Return the required command-line tools for the requested deploy mode."""
 
+    cluster_tool = "kind" if config.k8s_provider == "kind" else "k3d"
     if skip_build:
-        return ("helm", "k3d", "kubectl")
-    return ("docker", "helm", "k3d", "kubectl")
+        return ("helm", cluster_tool, "kubectl")
+    return (config.container_engine, "helm", cluster_tool, "kubectl")
 
 
 def build_image(config: PreviewConfig) -> None:
