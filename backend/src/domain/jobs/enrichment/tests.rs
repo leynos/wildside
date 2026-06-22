@@ -12,7 +12,9 @@ use super::{
     EnrichmentJobBuildError, EnrichmentJobParams,
 };
 use crate::domain::IdempotencyKey;
-use crate::domain::jobs::{BoundingBox, BoundingBoxError};
+use crate::domain::jobs::BoundingBox;
+
+mod bounding_box;
 
 #[fixture]
 fn job_id() -> Uuid {
@@ -40,66 +42,6 @@ fn fixture_bounding_box() -> BoundingBox {
         Ok(bounding_box) => bounding_box,
         Err(error) => panic!("static bounding box must be valid: {error}"),
     }
-}
-
-#[rstest]
-fn bounding_box_accepts_valid_coordinates() {
-    let bounding_box = BoundingBox::new(-180.0, -90.0, 180.0, 90.0)
-        .expect("world-spanning bounding box should be valid");
-
-    assert_eq!(bounding_box.coords(), [-180.0, -90.0, 180.0, 90.0]);
-}
-
-#[derive(Clone)]
-struct InvalidBoundingBoxCase {
-    min_lng: f64,
-    min_lat: f64,
-    max_lng: f64,
-    max_lat: f64,
-    expected: BoundingBoxError,
-}
-
-#[rstest]
-#[case(InvalidBoundingBoxCase {
-    min_lng: f64::NAN,
-    min_lat: 0.0,
-    max_lng: 1.0,
-    max_lat: 1.0,
-    expected: BoundingBoxError::NonFinite,
-})]
-#[case(InvalidBoundingBoxCase {
-    min_lng: -181.0,
-    min_lat: 0.0,
-    max_lng: 1.0,
-    max_lat: 1.0,
-    expected: BoundingBoxError::LongitudeOutOfRange,
-})]
-#[case(InvalidBoundingBoxCase {
-    min_lng: 0.0,
-    min_lat: -91.0,
-    max_lng: 1.0,
-    max_lat: 1.0,
-    expected: BoundingBoxError::LatitudeOutOfRange,
-})]
-#[case(InvalidBoundingBoxCase {
-    min_lng: 0.0,
-    min_lat: 0.0,
-    max_lng: 0.0,
-    max_lat: 1.0,
-    expected: BoundingBoxError::AntimeridianWrap,
-})]
-#[case(InvalidBoundingBoxCase {
-    min_lng: 0.0,
-    min_lat: 1.0,
-    max_lng: 1.0,
-    max_lat: 1.0,
-    expected: BoundingBoxError::InvertedOrdering,
-})]
-fn bounding_box_rejects_invalid_coordinates(#[case] case: InvalidBoundingBoxCase) {
-    let error = BoundingBox::new(case.min_lng, case.min_lat, case.max_lng, case.max_lat)
-        .expect_err("invalid bounding box should be rejected");
-
-    assert_eq!(error, case.expected);
 }
 
 #[rstest]
@@ -357,17 +299,5 @@ proptest! {
 
         prop_assert_eq!(request.bounding_box, job.bounding_box().coords());
         prop_assert_eq!(request.tags, job.tags().to_vec());
-    }
-
-    #[test]
-    fn inverted_longitude_ordering_is_rejected(
-        min_lng in -179.0_f64..179.0,
-        min_lat in -89.0_f64..89.0,
-        lat_span in 0.001_f64..1.0,
-    ) {
-        let error = BoundingBox::new(min_lng, min_lat, min_lng, min_lat + lat_span)
-            .expect_err("equal longitudes should be rejected");
-
-        prop_assert_eq!(error, BoundingBoxError::AntimeridianWrap);
     }
 }
