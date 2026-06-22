@@ -16,10 +16,11 @@ PYTHONPATH=scripts uv run --with pytest --with plumbum pytest scripts/local_k8s/
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 import pytest
 
-from local_k8s.cluster import ensure_cluster
+from local_k8s.cluster import ensure_cluster, import_image
 from local_k8s.config import PreviewConfig
 
 
@@ -147,3 +148,115 @@ class TestClusterCreation:
             "kind",
         ], "systemd-run must use --user --scope with Delegate=yes for rootless Podman"
         assert commands[1][2] is not None, "Podman kind creation must pass config on stdin"
+
+
+class TestImageImport:
+    """Provider command-contract tests for preview image loading."""
+
+    def test_k3d_image_import_uses_existing_provider_command(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config: PreviewConfig,
+    ) -> None:
+        """Verify k3d keeps its current image import command."""
+        commands: list[tuple[str, list[str]]] = []
+
+        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+            commands.append((command, args))
+            return MockCommandResult()
+
+        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+
+        import_image(preview_config)
+
+        assert commands == [
+            (
+                "k3d",
+                [
+                    "image",
+                    "import",
+                    "wildside-backend:local",
+                    "--cluster",
+                    "wildside-preview",
+                ],
+            ),
+        ], "k3d image import must remain unchanged"
+
+    def test_docker_kind_image_import_uses_docker_image_loader(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config: PreviewConfig,
+    ) -> None:
+        """Verify Docker-backed kind loads the local Docker image directly."""
+        config = replace(preview_config, k8s_provider="kind")
+        commands: list[tuple[str, list[str]]] = []
+
+        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+            commands.append((command, args))
+            return MockCommandResult()
+
+        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+
+        import_image(config)
+
+        assert commands == [
+            (
+                "kind",
+                [
+                    "load",
+                    "docker-image",
+                    "wildside-backend:local",
+                    "--name",
+                    "wildside-preview",
+                ],
+            ),
+        ], "Docker-backed kind must use kind load docker-image"
+
+    def test_podman_kind_image_import_saves_archive_before_loading(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config: PreviewConfig,
+    ) -> None:
+        """Verify rootless Podman kind uses an archive load path."""
+        config = replace(preview_config, container_engine="podman", k8s_provider="kind")
+        commands: list[tuple[str, list[str]]] = []
+        removed_archives: list[Path] = []
+        archive_path = Path("/tmp/wildside-preview-image.tar")
+
+        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+            commands.append((command, args))
+            return MockCommandResult()
+
+        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        monkeypatch.setattr("local_k8s.cluster._image_archive_path", lambda _: archive_path)
+        monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", removed_archives.append)
+
+        import_image(config)
+
+        assert removed_archives == [archive_path], "stale Podman image archives must be removed before save"
+        assert commands == [
+            (
+                "podman",
+                [
+                    "save",
+                    "--output",
+                    str(archive_path),
+                    "wildside-backend:local",
+                ],
+            ),
+            (
+                "env",
+                [
+                    "KIND_EXPERIMENTAL_PROVIDER=podman",
+                    "kind",
+                    "load",
+                    "image-archive",
+                    str(archive_path),
+                    "--name",
+                    "wildside-preview",
+                ],
+            ),
+        ], "Podman-backed kind must save and load an image archive"

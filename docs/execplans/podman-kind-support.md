@@ -393,7 +393,18 @@ teardown result in this plan's `Outcomes & Retrospective`.
   `make nixie` all passed.
 - [x] 2026-06-22: Re-ran `coderabbit review --agent` after the deterministic
   Milestone 2 gates. CodeRabbit reported zero findings.
-- [ ] Implement Milestone 3.
+- [x] 2026-06-22: Added failing Milestone 3 tests for provider-aware image
+  build and import. The observed red result showed `build_image()` still
+  hard-coded Docker and that the Podman-backed kind archive helpers did not
+  exist yet.
+- [x] 2026-06-22: Implemented Milestone 3 by making image builds use the
+  configured container engine, preserving `k3d image import`, preserving
+  Docker-backed `kind load docker-image`, and adding Podman-backed
+  `podman save` plus `kind load image-archive`.
+- [x] 2026-06-22: Ran the Milestone 3 gates: focused local preview pytest,
+  `make check-fmt`, `make lint`, and `make test` all passed.
+- [x] 2026-06-22: Re-ran `coderabbit review --agent` after the deterministic
+  Milestone 3 gates. CodeRabbit reported zero findings.
 - [ ] Implement Milestone 4.
 - [ ] Implement Milestone 5.
 - [ ] Run final gates and live smoke validation where available.
@@ -424,6 +435,11 @@ teardown result in this plan's `Outcomes & Retrospective`.
   `conftest` to a relative `.conftest` import, but `scripts/local_k8s/unittests`
   is not a Python package. The better fix was to keep `conftest.py` fixture-only
   and define the helper dataclass inside `test_cluster.py`.
+- 2026-06-22: The local preview image build was colocated in
+  `deployment.py`, while provider-specific image loading belongs with the
+  cluster lifecycle adapter. Milestone 3 kept that split: build uses the
+  configured container engine, and `cluster.py` owns the provider-specific
+  image import commands.
 
 ## Decision Log
 
@@ -452,6 +468,11 @@ teardown result in this plan's `Outcomes & Retrospective`.
   branches in `local_k8s.cluster`. Rationale: `PreviewConfig` validates the
   provider values, and pattern matching keeps unsupported-state handling
   visible at each side-effect boundary.
+- 2026-06-22: Store the Podman image export in the system temporary directory
+  as `{cluster_name}-image.tar` and remove any stale file before saving.
+  Rationale: the archive is transient local-preview data and must not live in
+  the repository, while using a deterministic path makes retries and tests
+  predictable.
 
 ## Outcomes & Retrospective
 
@@ -459,7 +480,9 @@ Implementation is in progress. Milestone 1 establishes provider-neutral
 configuration while preserving Docker plus `k3d` defaults and legacy
 `WILDSIDE_K3D_*` aliases. Milestone 2 adds provider-aware cluster lifecycle
 commands for Docker plus `k3d`, Docker plus `kind`, and rootless Podman plus
-`kind`. Milestones 1 and 2 passed focused local preview tests, the full
-repository gates, the Markdown gates, and CodeRabbit review. The expected final
-outcome remains a backwards-compatible local preview helper with focused tests
-documenting each provider-specific command contract.
+`kind`. Milestone 3 adds provider-aware image build and import, including
+Podman archive save/load for rootless kind. Milestones 1 through 3 passed
+focused local preview tests, the full repository gates, relevant Markdown
+gates, and CodeRabbit review. The expected final outcome remains a
+backwards-compatible local preview helper with focused tests documenting each
+provider-specific command contract.

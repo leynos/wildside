@@ -23,6 +23,8 @@ malformed or the requested cluster cannot be inspected.
 from __future__ import annotations
 
 import json
+import tempfile
+from pathlib import Path
 
 from .commands import run
 from .config import PreviewConfig
@@ -98,9 +100,32 @@ def import_image(config: PreviewConfig) -> None:
         Raised when required executables are missing or image import fails.
     """
 
-    require_tools((_provider_tool(config),))
-    match config.k8s_provider:
-        case "kind":
+    require_tools(_image_import_tools(config))
+    match (config.k8s_provider, config.container_engine):
+        case ("kind", "podman"):
+            archive_path = _image_archive_path(config)
+            _remove_stale_archive(archive_path)
+            run(
+                "podman",
+                [
+                    "save",
+                    "--output",
+                    str(archive_path),
+                    config.image_name,
+                ],
+            )
+            command, args = _kind_command(
+                config,
+                [
+                    "load",
+                    "image-archive",
+                    str(archive_path),
+                    "--name",
+                    config.cluster_name,
+                ],
+            )
+            run(command, args)
+        case ("kind", _):
             command, args = _kind_command(
                 config,
                 ["load", "docker-image", config.image_name, "--name", config.cluster_name],
@@ -159,6 +184,16 @@ def _provider_tool(config: PreviewConfig) -> str:
             return "kind"
         case _:
             return "k3d"
+
+
+def _image_import_tools(config: PreviewConfig) -> tuple[str, ...]:
+    """Return tools needed to import the local image into the cluster."""
+
+    match (config.k8s_provider, config.container_engine):
+        case ("kind", "podman"):
+            return ("kind", "podman")
+        case _:
+            return (_provider_tool(config),)
 
 
 def _cluster_exists(config: PreviewConfig) -> bool:
@@ -244,6 +279,18 @@ apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
 """
+
+
+def _image_archive_path(config: PreviewConfig) -> Path:
+    """Return the temporary Podman image archive path for kind loading."""
+
+    return Path(tempfile.gettempdir()) / f"{config.cluster_name}-image.tar"
+
+
+def _remove_stale_archive(archive_path: Path) -> None:
+    """Remove a stale image archive before writing a fresh Podman export."""
+
+    archive_path.unlink(missing_ok=True)
 
 
 def _kind_command(

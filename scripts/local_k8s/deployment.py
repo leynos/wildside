@@ -32,10 +32,10 @@ def _deploy_preview_tools(config: PreviewConfig, *, skip_build: bool) -> tuple[s
 
 
 def build_image(config: PreviewConfig) -> None:
-    """Build the Wildside backend image for local k3d import."""
+    """Build the Wildside backend image for local preview import."""
 
     run(
-        "docker",
+        config.container_engine,
         [
             "build",
             "-f",

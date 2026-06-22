@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from local_k8s.config import PreviewConfig
-from local_k8s.deployment import _deploy_preview_tools, deploy_preview
+from local_k8s.deployment import _deploy_preview_tools, build_image, deploy_preview
 
 
 @pytest.fixture
@@ -97,3 +97,33 @@ def test_deploy_preview_tools_follow_configured_kubernetes_provider(
         "kind",
         "kubectl",
     )
+
+
+def test_build_image_uses_configured_container_engine(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify local image builds use Docker or Podman from configuration."""
+    podman_config = replace(preview_config, container_engine="podman")
+    commands: list[tuple[str, list[str]]] = []
+
+    def record_run(command: str, args: list[str], **_: object) -> None:
+        commands.append((command, args))
+
+    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+
+    build_image(podman_config)
+
+    assert commands == [
+        (
+            "podman",
+            [
+                "build",
+                "-f",
+                "/repo/deploy/docker/backend.Dockerfile",
+                "-t",
+                "wildside-backend:local",
+                "/repo",
+            ],
+        )
+    ], "image builds must use the configured container engine"
