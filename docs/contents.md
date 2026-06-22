@@ -105,6 +105,10 @@
   (`../../nile-valley`). This repository keeps the application code, container
   images, Helm chart, and developer-local k3d preview helper that Nile Valley
   deploys or exercises.
+- [Rootless Podman and kind local preview ExecPlan](execplans/podman-kind-support.md)
+  – planned adaptation of Wildside's Nile Valley local preview integration for
+  rootless Podman plus `kind`. _Audience: backend developers and platform
+  engineers._
 
 ## Operational runbooks
 
