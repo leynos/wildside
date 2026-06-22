@@ -291,6 +291,15 @@ def _image_archive_path(config: PreviewConfig) -> Path:
     return Path(tempfile.gettempdir()) / f"{config.cluster_name}-image.tar"
 
 
+def _is_registry_host(component: str) -> bool:
+    """Return True when a repository path component identifies a registry host.
+
+    A component is treated as a registry host when it contains a dot (FQDN),
+    a colon (host:port), or is the literal string ``localhost``.
+    """
+    return "." in component or ":" in component or component == "localhost"
+
+
 def _podman_archive_image_name(image_name: str) -> str:
     """Return an archive tag that matches Kubernetes' unqualified pull name."""
 
@@ -298,7 +307,7 @@ def _podman_archive_image_name(image_name: str) -> str:
     if not separator:
         return image_name
     first_component = repository.split("/", maxsplit=1)[0]
-    if "." in first_component or ":" in first_component or first_component == "localhost":
+    if _is_registry_host(first_component):
         return image_name
     if "/" in repository:
         return f"docker.io/{repository}:{tag}"
