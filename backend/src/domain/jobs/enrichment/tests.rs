@@ -200,6 +200,62 @@ fn unknown_fields_are_rejected(job_id: Uuid, enqueued_at: DateTime<Utc>) {
 }
 
 #[rstest]
+fn serde_canonicalizes_duplicate_tags(job_id: Uuid, enqueued_at: DateTime<Utc>) {
+    let value = enrichment_job_json(
+        job_id,
+        enqueued_at,
+        serde_json::json!(["tourism", "amenity", "tourism"]),
+    );
+
+    let decoded: EnrichmentJob = serde_json::from_value(value).expect("job should deserialize");
+
+    assert_eq!(
+        decoded.tags(),
+        &["amenity".to_owned(), "tourism".to_owned()]
+    );
+}
+
+#[derive(Clone)]
+struct InvalidSerdeTagsCase {
+    tags: serde_json::Value,
+    expected_message: &'static str,
+}
+
+#[rstest]
+#[case(InvalidSerdeTagsCase {
+    tags: serde_json::json!([]),
+    expected_message: "enrichment job requires at least one tag",
+})]
+#[case(InvalidSerdeTagsCase {
+    tags: serde_json::json!(
+        (0..=ENRICHMENT_JOB_V1_MAX_TAGS)
+            .map(|index| format!("tag-{index}"))
+            .collect::<Vec<_>>()
+    ),
+    expected_message: "enrichment job has too many tags",
+})]
+#[case(InvalidSerdeTagsCase {
+    tags: serde_json::json!(["x".repeat(ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1)]),
+    expected_message: "enrichment job tag is too long",
+})]
+fn serde_rejects_invalid_tags(
+    job_id: Uuid,
+    enqueued_at: DateTime<Utc>,
+    #[case] case: InvalidSerdeTagsCase,
+) {
+    let value = enrichment_job_json(job_id, enqueued_at, case.tags);
+
+    let error = serde_json::from_value::<EnrichmentJob>(value)
+        .expect_err("invalid persisted tags should be rejected");
+
+    assert!(
+        error.to_string().contains(case.expected_message),
+        "expected error to contain {:?}, got {error}",
+        case.expected_message,
+    );
+}
+
+#[rstest]
 fn converts_to_overpass_request(job_id: Uuid, enqueued_at: DateTime<Utc>) {
     let job = fixture_job(job_id, enqueued_at);
 
@@ -232,6 +288,21 @@ fn fixture_job(job_id: Uuid, enqueued_at: DateTime<Utc>) -> EnrichmentJob {
         Ok(job) => job,
         Err(error) => panic!("static enrichment job should be valid: {error}"),
     }
+}
+
+fn enrichment_job_json(
+    job_id: Uuid,
+    enqueued_at: DateTime<Utc>,
+    tags: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "v": "v1",
+        "jobId": job_id,
+        "idempotencyKey": fixture_idempotency_key(),
+        "boundingBox": fixture_bounding_box(),
+        "tags": tags,
+        "enqueuedAt": enqueued_at,
+    })
 }
 
 fn valid_bounding_box_strategy() -> impl Strategy<Value = BoundingBox> {

@@ -1009,7 +1009,9 @@ only supported contract for values passed into `RouteQueue::enqueue`:
   the generated `request_id` and enqueue timestamp explicitly.
 - `EnrichmentJob` is defined in `backend/src/domain/jobs/enrichment.rs`. Build
   it through `EnrichmentJob::v1`, which validates tag count, tag length, and
-  canonical tag ordering.
+  canonical tag ordering. Deserializing a persisted V1 job applies the same
+  validation, so workers never receive unchecked tag vectors from
+  `apalis.jobs`.
 - `BoundingBox` is defined in `backend/src/domain/jobs/bounding_box.rs`. It
   serializes as `[min_lng, min_lat, max_lng, max_lat]` and rejects
   antimeridian-wrapped boxes in V1. Split dateline-spanning inputs before
