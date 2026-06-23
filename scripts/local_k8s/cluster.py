@@ -31,6 +31,38 @@ from .config import PreviewConfig
 from .validation import LocalK8sError, require_tools
 
 
+def _dispatch_provider_command(
+    config: PreviewConfig,
+    *,
+    kind_args: list[str],
+    k3d_args: list[str],
+    kind_input_text: str | None = None,
+    use_scope: bool = False,
+) -> None:
+    """Execute the provider-specific cluster command via kind or k3d.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Provider and engine selection.
+    kind_args : list[str]
+        Arguments forwarded to the kind sub-command.
+    k3d_args : list[str]
+        Arguments forwarded to k3d.
+    kind_input_text : str | None, optional
+        Text piped to stdin for kind (e.g. cluster config YAML).
+    use_scope : bool, optional
+        When ``True`` and the engine is Podman, wraps the invocation in a
+        ``systemd-run --scope`` call.
+    """
+    match config.k8s_provider:
+        case "kind":
+            command, args = _kind_command(config, kind_args, use_scope=use_scope)
+            run(command, args, input_text=kind_input_text)
+        case _:
+            run("k3d", k3d_args)
+
+
 def ensure_cluster(config: PreviewConfig) -> None:
     """Create the preview cluster when it does not already exist.
 
@@ -50,12 +82,13 @@ def ensure_cluster(config: PreviewConfig) -> None:
     if _cluster_exists(config):
         print(f"{config.k8s_provider} cluster {config.cluster_name!r} already exists")
         return
-    match config.k8s_provider:
-        case "kind":
-            command, args = _kind_command(config, _kind_create_args(config), use_scope=True)
-            run(command, args, input_text=_kind_cluster_config(config))
-        case _:
-            run("k3d", _k3d_create_args(config))
+    _dispatch_provider_command(
+        config,
+        kind_args=_kind_create_args(config),
+        k3d_args=_k3d_create_args(config),
+        kind_input_text=_kind_cluster_config(config),
+        use_scope=True,
+    )
 
 
 def delete_cluster(config: PreviewConfig) -> None:
@@ -77,12 +110,11 @@ def delete_cluster(config: PreviewConfig) -> None:
     if not _cluster_exists(config):
         print(f"{config.k8s_provider} cluster {config.cluster_name!r} does not exist")
         return
-    match config.k8s_provider:
-        case "kind":
-            command, args = _kind_command(config, ["delete", "cluster", "--name", config.cluster_name])
-            run(command, args)
-        case _:
-            run("k3d", ["cluster", "delete", config.cluster_name])
+    _dispatch_provider_command(
+        config,
+        kind_args=["delete", "cluster", "--name", config.cluster_name],
+        k3d_args=["cluster", "delete", config.cluster_name],
+    )
 
 
 def import_image(config: PreviewConfig) -> None:
