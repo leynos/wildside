@@ -102,7 +102,7 @@ enabled so `pnpm` is available locally and in CI, and it requires
 
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.5`,
 React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`,
-Zod 3, TypeScript 5, Vitest 3, and Orval 8. TanStack Router, Radix UI,
+Zod 3, TypeScript 5, Vitest `^4.1.8`, and Orval 8. TanStack Router, Radix UI,
 i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
 target-stack items until a roadmap task adds them to `frontend-pwa/package.json`
 and the lockfile.
@@ -752,8 +752,9 @@ bun run scripts/audit-ux-state-graph.mjs \
   --sitemap <sitemap.md>
 ```
 
-Tests for this helper must cover the example cases and the graph invariants
-with Vitest and `fast-check`; CLI text output should use Vitest snapshots.
+Tests for this helper must cover the example cases with Vitest, graph
+invariants with the root workspace `fast-check` dev dependency, and CLI text
+output with Vitest snapshots.
 
 ## Override parity check
 

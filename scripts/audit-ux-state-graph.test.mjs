@@ -489,6 +489,7 @@ describe("CLI entrypoint", () => {
       stderr: stripAnsi(error.stderr),
     }));
 
+    expect(result.code).toBe(1);
     expect(result).toMatchSnapshot();
   });
 });

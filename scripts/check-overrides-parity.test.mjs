@@ -63,11 +63,15 @@ async function runParityCheck(packageJson) {
  * @returns {Array<{dependencyName: string, rootValue: string | undefined, pnpmValue: string | undefined}>} Expected mismatch rows.
  */
 function expectedMissingOverrideMismatches(missingSide) {
-  return Object.entries(SYNCED).map(([dependencyName, overrideValue]) => ({
-    dependencyName,
-    rootValue: missingSide === 'root' ? undefined : overrideValue,
-    pnpmValue: missingSide === 'pnpm' ? undefined : overrideValue,
-  }));
+  return Object.entries(SYNCED)
+    .sort(([leftDependencyName], [rightDependencyName]) =>
+      leftDependencyName.localeCompare(rightDependencyName),
+    )
+    .map(([dependencyName, overrideValue]) => ({
+      dependencyName,
+      rootValue: missingSide === 'root' ? undefined : overrideValue,
+      pnpmValue: missingSide === 'pnpm' ? undefined : overrideValue,
+    }));
 }
 
 describe('formatOverrideValue', () => {
