@@ -56,6 +56,20 @@ async function runParityCheck(packageJson) {
   return checkOverridesParity(packageJson);
 }
 
+/**
+ * Build expected mismatch rows when one override block is missing entirely.
+ *
+ * @param {'root' | 'pnpm'} missingSide - The override side expected to be absent.
+ * @returns {Array<{dependencyName: string, rootValue: string | undefined, pnpmValue: string | undefined}>} Expected mismatch rows.
+ */
+function expectedMissingOverrideMismatches(missingSide) {
+  return Object.entries(SYNCED).map(([dependencyName, overrideValue]) => ({
+    dependencyName,
+    rootValue: missingSide === 'root' ? undefined : overrideValue,
+    pnpmValue: missingSide === 'pnpm' ? undefined : overrideValue,
+  }));
+}
+
 describe('formatOverrideValue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -121,24 +135,14 @@ describe('checkOverridesParity', () => {
     const result = await runParityCheck({ pnpm: { overrides: SYNCED } });
 
     expect(result.ok).toBe(false);
-    expect(result.mismatches).toEqual([
-      { dependencyName: 'basic-ftp', rootValue: undefined, pnpmValue: '5.3.1' },
-      { dependencyName: 'dompurify', rootValue: undefined, pnpmValue: DOMPURIFY_OVERRIDE },
-      { dependencyName: 'ip-address', rootValue: undefined, pnpmValue: '10.1.1' },
-      { dependencyName: 'uuid', rootValue: undefined, pnpmValue: '14.0.0' },
-    ]);
+    expect(result.mismatches).toEqual(expectedMissingOverrideMismatches('root'));
   });
 
   it('reports each missing pnpm override entry', async () => {
     const result = await runParityCheck({ overrides: SYNCED });
 
     expect(result.ok).toBe(false);
-    expect(result.mismatches).toEqual([
-      { dependencyName: 'basic-ftp', rootValue: '5.3.1', pnpmValue: undefined },
-      { dependencyName: 'dompurify', rootValue: DOMPURIFY_OVERRIDE, pnpmValue: undefined },
-      { dependencyName: 'ip-address', rootValue: '10.1.1', pnpmValue: undefined },
-      { dependencyName: 'uuid', rootValue: '14.0.0', pnpmValue: undefined },
-    ]);
+    expect(result.mismatches).toEqual(expectedMissingOverrideMismatches('pnpm'));
   });
 
   it('reports an individual missing top-level entry', async () => {
