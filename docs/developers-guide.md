@@ -709,6 +709,52 @@ dependency declarations (PEP 723 inline metadata), and style guidance.
    guard (see "Programmatic API" under "Override parity check") so the module
    can be imported cleanly in tests.
 
+## UX audit helpers
+
+`scripts/audit-ux-state-graph.mjs` supports front-end source catalogue work by
+checking a JSON UX state graph against routes cited in a Markdown sitemap. It
+is review tooling only: it must not change runtime behaviour, generate
+artefacts, or become a source of product requirements.
+
+### Input contract
+
+The graph file must be JSON with:
+
+- `states` — an array of objects with a string `id` and optional string
+  `route`.
+- `transitions` — an array of objects with string `from` and `to` endpoint
+  ids.
+- `initialState` — optional string id for the state that is allowed to have no
+  inbound transitions.
+
+The sitemap file is Markdown. The helper extracts backtick-quoted absolute
+routes such as `` `/cards` `` and compares state routes with exact, wildcard,
+and hash-stripped matching.
+
+### Output contract
+
+A successful run writes one deterministic line per state:
+
+```text
+<state-id> in=<count> out=<count> route=<route-or-NONE> [ORPHAN]
+```
+
+The `route` field defaults to `NONE` when a state omits a route. A state is
+marked `[ORPHAN]` when it is not the initial state and has no inbound
+transitions, has no outbound transitions, or names a route absent from the
+sitemap.
+
+### Running locally
+
+```sh
+bun run scripts/audit-ux-state-graph.mjs \
+  --graph <state-graph.json> \
+  --sitemap <sitemap.md>
+```
+
+Tests for this helper must cover the example cases and the graph invariants
+with Vitest and `fast-check`; CLI text output should use Vitest snapshots.
+
 ## Override parity check
 
 This repository pins certain security-sensitive dependencies in two separate
@@ -760,11 +806,16 @@ the two override blocks have drifted; update `package.json` and recommit.
 other tooling:
 
 - **`checkOverridesParity(packageJson)`** — accepts a parsed `package.json`
-  object, writes diagnostics to `console.log` or `console.error`, and returns
-  `0` on success or `1` on any mismatch or missing block.
+  object and returns a structured report with `ok`, `overridesToCheck`,
+  `mismatches`, and `reason` fields. It is a query helper and must not write to
+  stdout or stderr.
 - **`formatOverrideValue(value)`** — formats a single override value for
   human-readable diagnostics; returns `"<missing>"` for `undefined` and a
   JSON-stringified value otherwise.
+- **`reportOverridesParity(report, outputIo?)`** — writes the structured report
+  to a console-like adapter and returns process exit code `0` or `1`. The CLI
+  entrypoint is the only production caller that uses the default `console`
+  adapter.
 
 Example import:
 
@@ -772,6 +823,7 @@ Example import:
 import {
   checkOverridesParity,
   formatOverrideValue,
+  reportOverridesParity,
 } from './scripts/check-overrides-parity.mjs';
 ```
 

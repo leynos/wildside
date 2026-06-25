@@ -1,5 +1,6 @@
 /** @file Tests the UX state graph audit helper and CLI entrypoint. */
 
+import fc from "fast-check";
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -192,6 +193,49 @@ describe("countTransitions", () => {
       ]),
     );
   });
+
+  it("returns an empty map when no transitions exist", () => {
+    expect(countTransitions([], "from")).toEqual(new Map());
+    expect(countTransitions([], "to")).toEqual(new Map());
+  });
+
+  it("counts the requested endpoint field independently", () => {
+    const transitions = [
+      { from: "shared", to: "one" },
+      { from: "shared", to: "two" },
+      { from: "other", to: "shared" },
+    ];
+
+    expect(countTransitions(transitions, "from").get("shared")).toBe(2);
+    expect(countTransitions(transitions, "to").get("shared")).toBe(1);
+  });
+
+  it("matches generated endpoint frequencies", () => {
+    const endpoint = fc.constantFrom("home", "cards", "settings", "done");
+
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            from: endpoint,
+            to: endpoint,
+          }),
+          { maxLength: 30 },
+        ),
+        fc.constantFrom("from", "to"),
+        (transitions, field) => {
+          const actual = countTransitions(transitions, field);
+          const expected = new Map();
+
+          for (const transition of transitions) {
+            expected.set(transition[field], (expected.get(transition[field]) ?? 0) + 1);
+          }
+
+          expect(actual).toEqual(expected);
+        },
+      ),
+    );
+  });
 });
 
 describe("hasRouteMatch", () => {
@@ -205,6 +249,18 @@ describe("hasRouteMatch", () => {
 
   it("rejects routes absent from the sitemap", () => {
     expect(hasRouteMatch("/missing", routes)).toBe(false);
+  });
+
+  it("matches generated exact, wildcard, and hash-qualified known routes", () => {
+    fc.assert(
+      fc.property(fc.constantFrom("/", "/cards", "/settings"), (route) => {
+        expect(hasRouteMatch(route, routes)).toBe(true);
+        if (route !== "/") {
+          expect(hasRouteMatch(`${route}/*`, routes)).toBe(true);
+        }
+        expect(hasRouteMatch(`${route}#detail`, routes)).toBe(true);
+      }),
+    );
   });
 });
 
@@ -242,6 +298,116 @@ describe("auditStateGraph", () => {
       },
       { id: "unrouted", inbound: 0, outbound: 0, route: "NONE", isOrphan: true },
     ]);
+  });
+
+  it("marks a non-initial state with no inbound route as orphan", () => {
+    const rows = auditStateGraph(
+      {
+        initialState: "home",
+        states: [
+          { id: "home", route: "/" },
+          { id: "orphan", route: "/cards" },
+          { id: "done", route: "/done" },
+        ],
+        transitions: [
+          { from: "home", to: "done" },
+          { from: "orphan", to: "done" },
+        ],
+      },
+      new Set(["/", "/cards", "/done"]),
+    );
+
+    expect(rows.find((row) => row.id === "orphan")).toEqual({
+      id: "orphan",
+      inbound: 0,
+      outbound: 1,
+      route: "/cards",
+      isOrphan: true,
+    });
+  });
+
+  it("defaults an absent route to NONE independently of orphan status", () => {
+    const rows = auditStateGraph(
+      {
+        initialState: "home",
+        states: [{ id: "home", route: "/" }, { id: "unrouted" }, { id: "done" }],
+        transitions: [
+          { from: "home", to: "unrouted" },
+          { from: "unrouted", to: "done" },
+        ],
+      },
+      new Set(["/"]),
+    );
+
+    expect(rows.find((row) => row.id === "unrouted")).toEqual({
+      id: "unrouted",
+      inbound: 1,
+      outbound: 1,
+      route: "NONE",
+      isOrphan: false,
+    });
+  });
+
+  it("uses the initial state flag only for inbound-zero orphan status", () => {
+    const graph = {
+      states: [
+        { id: "home", route: "/" },
+        { id: "done", route: "/done" },
+      ],
+      transitions: [{ from: "home", to: "done" }],
+    };
+
+    expect(
+      auditStateGraph({ ...graph, initialState: "home" }, new Set(["/", "/done"])).find(
+        (row) => row.id === "home",
+      )?.isOrphan,
+    ).toBe(false);
+    expect(auditStateGraph(graph, new Set(["/", "/done"])).find((row) => row.id === "home"))
+      .toMatchObject({ inbound: 0, outbound: 1, isOrphan: true });
+  });
+
+  it("preserves orphan invariants for generated valid-route topologies", () => {
+    const stateId = fc.constantFrom("home", "cards", "settings", "review", "done");
+
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(stateId, { minLength: 2, maxLength: 5 }),
+        fc.array(
+          fc.record({
+            from: stateId,
+            to: stateId,
+          }),
+          { maxLength: 30 },
+        ),
+        (ids, generatedTransitions) => {
+          const idSet = new Set(ids);
+          const transitions = generatedTransitions.filter(
+            ({ from, to }) => idSet.has(from) && idSet.has(to),
+          );
+          const states = ids.map((id) => ({ id, route: `/${id}` }));
+          const initialState = ids[0];
+          const sitemapRoutes = new Set(ids.map((id) => `/${id}`));
+          const inbound = countTransitions(transitions, "to");
+          const outbound = countTransitions(transitions, "from");
+
+          const rows = auditStateGraph(
+            {
+              initialState,
+              states,
+              transitions,
+            },
+            sitemapRoutes,
+          );
+
+          for (const row of rows) {
+            expect(row.isOrphan).toBe(
+              (row.id !== initialState && (inbound.get(row.id) ?? 0) === 0) ||
+                (outbound.get(row.id) ?? 0) === 0,
+            );
+          }
+        },
+      ),
+    );
   });
 });
 
@@ -308,23 +474,21 @@ describe("CLI entrypoint", () => {
         { cwd: repositoryRoot },
       );
 
-      expect(stdout).toBe("home in=0 out=1 route=/\ndone in=1 out=0 route=/cards [ORPHAN]\n");
-      expect(stderr).toBe("");
+      expect(stdout).toMatchSnapshot();
+      expect(stderr).toMatchSnapshot();
     } finally {
       await rm(dir, { force: true, recursive: true });
     }
   });
 
   it("prints usage and exits non-zero when arguments are missing", async () => {
-    await expect(
-      execFileAsync("bun", [scriptPath.pathname], { cwd: repositoryRoot }).catch((error) => ({
-        code: error.code,
-        stderr: stripAnsi(error.stderr),
-      })),
-    ).resolves.toEqual({
-      code: 1,
-      stderr:
-        "Usage:\n  bun run scripts/audit-ux-state-graph.mjs --graph <path> --sitemap <path>\n",
-    });
+    const result = await execFileAsync("bun", [scriptPath.pathname], {
+      cwd: repositoryRoot,
+    }).catch((error) => ({
+      code: error.code,
+      stderr: stripAnsi(error.stderr),
+    }));
+
+    expect(result).toMatchSnapshot();
   });
 });

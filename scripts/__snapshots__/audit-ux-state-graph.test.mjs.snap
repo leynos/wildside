@@ -1,0 +1,18 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CLI entrypoint > prints audit rows and exits successfully 1`] = `
+"home in=0 out=1 route=/
+done in=1 out=0 route=/cards [ORPHAN]
+"
+`;
+
+exports[`CLI entrypoint > prints audit rows and exits successfully 2`] = `""`;
+
+exports[`CLI entrypoint > prints usage and exits non-zero when arguments are missing 1`] = `
+{
+  "code": 1,
+  "stderr": "Usage:
+  bun run scripts/audit-ux-state-graph.mjs --graph <path> --sitemap <path>
+",
+}
+`;
