@@ -58,17 +58,17 @@ WILDSIDE_CONTAINER_ENGINE=podman WILDSIDE_K8S_PROVIDER=kind make local-k8s-up
 ```
 
 The preferred configuration variables are `WILDSIDE_CONTAINER_ENGINE`,
-`WILDSIDE_K8S_PROVIDER`, `WILDSIDE_K8S_CLUSTER`, `WILDSIDE_K8S_PORT`, and
-`WILDSIDE_KIND_NODE_IMAGE`. `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT`
-remain legacy aliases when the provider-neutral names are unset. Leave
-`WILDSIDE_KIND_NODE_IMAGE` unset unless testing a supported Kubernetes upgrade;
-the default `kindest/node:v1.31.0` satisfies the chart's kubeVersion range. In
-`kind` mode, use `make local-k8s-status` to print the provider-specific
+`WILDSIDE_K8S_PROVIDER`, `WILDSIDE_K8S_CLUSTER`, and `WILDSIDE_K8S_PORT`.
+`WILDSIDE_KIND_NODE_IMAGE` is an optional testing-only override for supported
+Kubernetes upgrades; the default `kindest/node:v1.31.0` satisfies the chart's
+kubeVersion range. `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT` remain legacy
+aliases when the provider-neutral names are unset. In `kind` mode, use
+`make local-k8s-status` to print the provider-specific
 `kubectl port-forward` command before opening the preview port.
 
 The helper also applies a generated `wildside-session-key` Secret before Helm
 installs the release. `values.local.yaml` mounts that key at
-`/var/run/secrets/session_key`, so local preview follows the release-mode
+`/var/run/secrets/wildside-session/session_key`, so local preview follows the release-mode
 session-key path without committing secret material.
 
 ## Front-end development

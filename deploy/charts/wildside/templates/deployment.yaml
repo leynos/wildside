@@ -114,7 +114,7 @@ spec:
           {{- if .Values.sessionSecret.enabled }}
           volumeMounts:
             - name: session-key
-              mountPath: {{ .Values.sessionSecret.mountPath | default "/var/run/secrets" }}
+              mountPath: {{ .Values.sessionSecret.mountPath | default "/var/run/secrets/wildside-session" }}
               readOnly: true
           {{- end }}
       {{- if .Values.sessionSecret.enabled }}

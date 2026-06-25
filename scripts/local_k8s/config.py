@@ -78,6 +78,7 @@ class PreviewConfig:
 
 
 def _container_engine_from_env() -> ContainerEngine:
+    """Return the validated container engine environment value."""
     raw_value = os.environ.get("WILDSIDE_CONTAINER_ENGINE", DEFAULT_CONTAINER_ENGINE)
     if raw_value in ("docker", "podman"):
         return raw_value
@@ -88,6 +89,7 @@ def _container_engine_from_env() -> ContainerEngine:
 
 
 def _k8s_provider_from_env() -> K8sProvider:
+    """Return the validated Kubernetes provider environment value."""
     raw_value = os.environ.get("WILDSIDE_K8S_PROVIDER", DEFAULT_K8S_PROVIDER)
     if raw_value in ("k3d", "kind"):
         return raw_value

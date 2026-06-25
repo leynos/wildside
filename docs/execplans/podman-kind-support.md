@@ -436,7 +436,7 @@ teardown result in this plan's `Outcomes & Retrospective`.
   compatible with the Helm chart.
 - [x] 2026-06-22: Re-ran the focused local preview pytest command after the
   node-image fix; it passed with 34 tests.
-- [x] 2026-06-22: Live Podman plus kind validation then reached Helm rollout
+- [x] 2026-06-22: Live Podman plus kind validation then reached Helm rollout,
   but the pod tried to pull `docker.io/library/wildside-backend:local` while
   Podman had exported `localhost/wildside-backend:local`. Added failing tests
   and fixed the Podman archive path by tagging unqualified images with Docker's
@@ -514,7 +514,7 @@ teardown result in this plan's `Outcomes & Retrospective`.
   wrong service.
 - 2026-06-22: The documentation index, developer guide, and package docstring
   all used k3d-specific language. Milestone 5 needs to update those secondary
-  references as well as the main design document, otherwise repository search
+  references as well as the main design document; otherwise repository search
   still advertises the old single-provider contract.
 - 2026-06-22: Live Podman plus kind validation revealed that kind's default
   node image can outrun the chart's supported Kubernetes range. The fix is to
@@ -572,9 +572,9 @@ teardown result in this plan's `Outcomes & Retrospective`.
   for the clusters created by this helper, and keeping the rule in config
   avoids duplicating string construction across namespace, Helm, status, and
   log operations.
-- 2026-06-22: Export `helm_fullname()` from `local_k8s.k8s` for reuse by the
-  deployment status output. Rationale: service naming is a Helm contract, not
-  a kind-specific concern, and the port-forward command must match the service
+- 2026-06-22: Reuse `_helm_fullname()` from `local_k8s.k8s` for deployment
+  status output. Rationale: service naming is a Helm contract, not a
+  kind-specific concern, and the port-forward command must match the service
   that Kubernetes status already inspects.
 - 2026-06-22: Default `kind` clusters to `kindest/node:v1.31.0` and allow
   `WILDSIDE_KIND_NODE_IMAGE` overrides. Rationale: the Helm chart currently
@@ -582,7 +582,7 @@ teardown result in this plan's `Outcomes & Retrospective`.
   create newer clusters that fail Helm's deterministic kubeVersion check.
 - 2026-06-22: For Podman-backed kind imports, retag unqualified image names as
   `docker.io/library/{name}:{tag}` before saving the archive. Rationale:
-  Podman's local `localhost/` normalisation does not match Kubernetes'
+  Podman's local `localhost/` normalization does not match Kubernetes'
   unqualified-image resolution, and the node image store must contain the name
   in the pod spec.
 - 2026-06-22: Treat namespaced Docker Hub image names as unqualified for Podman

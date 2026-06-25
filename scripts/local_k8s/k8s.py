@@ -43,7 +43,7 @@ def ensure_namespace(config: PreviewConfig) -> None:
     run("kubectl", ["--context", config.kube_context, "create", "namespace", config.namespace])
 
 
-def helm_fullname(config: PreviewConfig) -> str:
+def _helm_fullname(config: PreviewConfig) -> str:
     """Return the chart fullname used for Kubernetes object names."""
 
     chart_name = config.chart_path.name
@@ -98,7 +98,7 @@ def print_kubernetes_status(config: PreviewConfig) -> None:
             config.namespace,
             "get",
             "service",
-            helm_fullname(config),
+            _helm_fullname(config),
             "--ignore-not-found",
         ],
     )

@@ -45,6 +45,7 @@ def _run_with_input(
     cwd: str | None = None,
     input_text: str,
 ) -> CommandResult:
+    """Run a command with stdin text via subprocess."""
     completed = subprocess.run(  # noqa: S603 - command is built internally.
         [command, *args],
         input=input_text,
@@ -62,6 +63,7 @@ def _run_with_plumbum(
     *,
     cwd: str | None = None,
 ) -> CommandResult:
+    """Run a command through plumbum and capture output."""
     executable = local[command]
     if cwd:
         with local.cwd(cwd):
@@ -74,6 +76,7 @@ def _run_with_plumbum(
 def _command_error_message(
     exc: ProcessExecutionError | subprocess.CalledProcessError,
 ) -> str:
+    """Return a normalized message for command execution failures."""
     stderr = exc.stderr or ""
     return stderr.strip() or str(exc)
 

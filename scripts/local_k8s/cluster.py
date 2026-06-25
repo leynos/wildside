@@ -357,11 +357,10 @@ def _kind_command(
     """Return the command and arguments for Docker- or Podman-backed kind."""
 
     match (config.container_engine, use_scope):
-        case ("podman", True):
-            env_command = ["env", "KIND_EXPERIMENTAL_PROVIDER=podman", "kind", *kind_args]
-            return "systemd-run", ["--scope", "--user", "-p", "Delegate=yes", *env_command]
-        case ("podman", False):
-            env_command = ["env", "KIND_EXPERIMENTAL_PROVIDER=podman", "kind", *kind_args]
-            return "env", env_command[1:]
+        case ("podman", _):
+            podman_args = ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", *kind_args]
+            if not use_scope:
+                return "env", podman_args
+            return "systemd-run", ["--scope", "--user", "-p", "Delegate=yes", "env", *podman_args]
         case _:
             return "kind", kind_args

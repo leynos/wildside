@@ -7,7 +7,7 @@ config:
   APP_ENV: "local-k8s"
   SESSION_ALLOW_EPHEMERAL: "0"
   SESSION_COOKIE_SECURE: "0"
-  SESSION_KEY_FILE: "/var/run/secrets/session_key"
+  SESSION_KEY_FILE: "/var/run/secrets/wildside-session/session_key"
   SESSION_SAMESITE: "Lax"
 
 ingress:
@@ -32,4 +32,4 @@ sessionSecret:
   enabled: true
   name: "wildside-session-key"
   keyName: "session_key"
-  mountPath: "/var/run/secrets"
+  mountPath: "/var/run/secrets/wildside-session"

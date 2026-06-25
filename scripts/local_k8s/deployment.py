@@ -8,7 +8,7 @@ import secrets
 from .commands import run
 from .config import PreviewConfig
 from .cluster import ensure_cluster, import_image, print_cluster_status
-from .k8s import ensure_namespace, helm_fullname, print_kubernetes_status
+from .k8s import _helm_fullname, ensure_namespace, print_kubernetes_status
 from .validation import LocalK8sError, require_tools
 
 SESSION_SECRET_KEY_NAME = "session_key"
@@ -155,7 +155,7 @@ def print_kind_port_forward_command(config: PreviewConfig) -> None:
     print("port-forward:")
     print(
         f"kubectl --context {config.kube_context} --namespace {config.namespace} "
-        f"port-forward svc/{helm_fullname(config)} {config.ingress_port}:80"
+        f"port-forward svc/{_helm_fullname(config)} {config.ingress_port}:80"
     )
 
 

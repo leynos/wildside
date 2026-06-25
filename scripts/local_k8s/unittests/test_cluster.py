@@ -231,15 +231,15 @@ class TestImageImport:
     def test_podman_kind_image_import_saves_archive_before_loading(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        preview_config: PreviewConfig,
+        preview_config_kind: PreviewConfig,
+        tmp_path: Path,
     ) -> None:
         """Verify rootless Podman kind uses an archive load path."""
-        config = replace(preview_config, container_engine="podman", k8s_provider="kind")
         removed_archives: list[Path] = []
-        archive_path = Path("/tmp/wildside-preview-image.tar")
+        archive_path = tmp_path / "wildside-preview-image.tar"
         commands = self._capture_commands(
             monkeypatch,
-            config,
+            preview_config_kind,
             archive_path=archive_path,
             on_remove_archive=removed_archives.append,
         )
@@ -280,16 +280,15 @@ class TestImageImport:
     def test_podman_kind_image_import_keeps_registry_qualified_archive_tag(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        preview_config: PreviewConfig,
+        preview_config_kind: PreviewConfig,
+        tmp_path: Path,
     ) -> None:
         """Verify registry-qualified image names are archived without retagging."""
         config = replace(
-            preview_config,
-            container_engine="podman",
+            preview_config_kind,
             image_name="registry.example.test/wildside/backend:local",
-            k8s_provider="kind",
         )
-        archive_path = Path("/tmp/wildside-preview-image.tar")
+        archive_path = tmp_path / "wildside-preview-image.tar"
         commands = self._capture_commands(monkeypatch, config, archive_path=archive_path)
 
         assert commands[0] == (
@@ -305,16 +304,15 @@ class TestImageImport:
     def test_podman_kind_image_import_normalizes_namespaced_archive_tag(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        preview_config: PreviewConfig,
+        preview_config_kind: PreviewConfig,
+        tmp_path: Path,
     ) -> None:
         """Verify namespaced Docker Hub image names are archived as Kubernetes pulls them."""
         config = replace(
-            preview_config,
-            container_engine="podman",
+            preview_config_kind,
             image_name="leynos/wildside-backend:local",
-            k8s_provider="kind",
         )
-        archive_path = Path("/tmp/wildside-preview-image.tar")
+        archive_path = tmp_path / "wildside-preview-image.tar"
         commands = self._capture_commands(monkeypatch, config, archive_path=archive_path)
 
         assert commands[:2] == [

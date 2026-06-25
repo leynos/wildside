@@ -89,7 +89,7 @@ variables:
 WILDSIDE_CONTAINER_ENGINE=podman WILDSIDE_K8S_PROVIDER=kind make local-k8s-up
 ```
 
-In this mode the helper creates the `kind` cluster through a delegated user
+In this mode, the helper creates the `kind` cluster through a delegated user
 scope and pins the node image to a Kubernetes version accepted by the Helm
 chart's `kubeVersion` constraint:
 
@@ -105,7 +105,7 @@ image already present on the node matches the pod spec.
 
 The `kind` cluster deliberately has no host-port mapping. After `up` or
 `status`, run the printed `kubectl port-forward` command to open the preview
-locally. With default names the command is:
+locally. With default names, the command is:
 
 ```bash
 kubectl --context kind-wildside-preview --namespace wildside port-forward svc/wildside 8088:80
@@ -150,12 +150,13 @@ Keep `WILDSIDE_KIND_NODE_IMAGE` within the chart's supported Kubernetes range,
 currently `>=1.26.0-0 <1.32.0-0`. Leaving it unset uses Kubernetes `v1.31.0`.
 
 The local values file enables `sessionSecret` and sets
-`SESSION_KEY_FILE=/var/run/secrets/session_key`. The helper generates and
-applies the `wildside-session-key` Secret on each `up` run, avoiding committed
-secret material while keeping the release-mode session configuration path.
+`SESSION_KEY_FILE=/var/run/secrets/wildside-session/session_key`. The helper
+generates and applies the `wildside-session-key` Secret on each `up` run,
+avoiding committed secret material while keeping the release-mode session
+configuration path.
 
 The kube context name is derived as `{provider}-{cluster}`. For the default
-cluster this is `k3d-wildside-preview`; for the rootless Podman plus `kind`
+cluster, this is `k3d-wildside-preview`; for the rootless Podman plus `kind`
 path this is `kind-wildside-preview`.
 
 ## Validation
