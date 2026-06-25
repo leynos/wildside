@@ -38,6 +38,46 @@ class CommandResult:
     stderr: str
 
 
+def _run_with_input(
+    command: str,
+    args: Sequence[str],
+    *,
+    cwd: str | None = None,
+    input_text: str,
+) -> CommandResult:
+    completed = subprocess.run(  # noqa: S603 - command is built internally.
+        [command, *args],
+        input=input_text,
+        text=True,
+        capture_output=True,
+        check=True,
+        cwd=cwd,
+    )
+    return CommandResult(stdout=completed.stdout, stderr=completed.stderr)
+
+
+def _run_with_plumbum(
+    command: str,
+    args: Sequence[str],
+    *,
+    cwd: str | None = None,
+) -> CommandResult:
+    executable = local[command]
+    if cwd:
+        with local.cwd(cwd):
+            out = executable.run(args)
+    else:
+        out = executable.run(args)
+    return CommandResult(stdout=out[1], stderr=out[2])
+
+
+def _command_error_message(
+    exc: ProcessExecutionError | subprocess.CalledProcessError,
+) -> str:
+    stderr = exc.stderr or ""
+    return stderr.strip() or str(exc)
+
+
 def run(
     command: str,
     args: Sequence[str],
@@ -73,23 +113,7 @@ def run(
 
     try:
         if input_text is not None:
-            completed = subprocess.run(  # noqa: S603 - command is built internally.
-                [command, *args],
-                input=input_text,
-                text=True,
-                capture_output=True,
-                check=True,
-                cwd=cwd,
-            )
-            return CommandResult(stdout=completed.stdout, stderr=completed.stderr)
-        executable = local[command]
-        if cwd:
-            with local.cwd(cwd):
-                out = executable.run(args)
-        else:
-            out = executable.run(args)
-    except ProcessExecutionError as exc:
-        raise LocalK8sError(exc.stderr.strip() or str(exc)) from exc
-    except subprocess.CalledProcessError as exc:
-        raise LocalK8sError((exc.stderr or "").strip() or str(exc)) from exc
-    return CommandResult(stdout=out[1], stderr=out[2])
+            return _run_with_input(command, args, cwd=cwd, input_text=input_text)
+        return _run_with_plumbum(command, args, cwd=cwd)
+    except (ProcessExecutionError, subprocess.CalledProcessError) as exc:
+        raise LocalK8sError(_command_error_message(exc)) from exc
