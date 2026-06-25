@@ -23,9 +23,11 @@ async function loadModule() {
 }
 
 /** Convenience fixture data shared across parity tests. */
+const DOMPURIFY_OVERRIDE = '3.4.11';
+
 const SYNCED = {
   'basic-ftp': '5.3.1',
-  dompurify: '3.4.0',
+  dompurify: DOMPURIFY_OVERRIDE,
   'ip-address': '10.1.1',
   uuid: '14.0.0',
 };
@@ -96,7 +98,7 @@ describe('checkOverridesParity', () => {
         {
           dependencyName: 'dompurify',
           rootValue: '3.3.0',
-          pnpmValue: '3.4.0',
+          pnpmValue: DOMPURIFY_OVERRIDE,
         },
       ],
     });
@@ -108,7 +110,7 @@ describe('checkOverridesParity', () => {
     expect(result.ok).toBe(false);
     expect(result.mismatches).toEqual([
       { dependencyName: 'basic-ftp', rootValue: undefined, pnpmValue: '5.3.1' },
-      { dependencyName: 'dompurify', rootValue: undefined, pnpmValue: '3.4.0' },
+      { dependencyName: 'dompurify', rootValue: undefined, pnpmValue: DOMPURIFY_OVERRIDE },
       { dependencyName: 'ip-address', rootValue: undefined, pnpmValue: '10.1.1' },
       { dependencyName: 'uuid', rootValue: undefined, pnpmValue: '14.0.0' },
     ]);
@@ -120,7 +122,7 @@ describe('checkOverridesParity', () => {
     expect(result.ok).toBe(false);
     expect(result.mismatches).toEqual([
       { dependencyName: 'basic-ftp', rootValue: '5.3.1', pnpmValue: undefined },
-      { dependencyName: 'dompurify', rootValue: '3.4.0', pnpmValue: undefined },
+      { dependencyName: 'dompurify', rootValue: DOMPURIFY_OVERRIDE, pnpmValue: undefined },
       { dependencyName: 'ip-address', rootValue: '10.1.1', pnpmValue: undefined },
       { dependencyName: 'uuid', rootValue: '14.0.0', pnpmValue: undefined },
     ]);
@@ -129,7 +131,7 @@ describe('checkOverridesParity', () => {
   it('reports an individual missing top-level entry', async () => {
     const result = await runParityCheck({
       overrides: {
-        dompurify: '3.4.0',
+        dompurify: DOMPURIFY_OVERRIDE,
         'ip-address': '10.1.1',
         uuid: '14.0.0',
       },
@@ -138,6 +140,23 @@ describe('checkOverridesParity', () => {
 
     expect(result.mismatches).toEqual([
       { dependencyName: 'basic-ftp', rootValue: undefined, pnpmValue: '5.3.1' },
+    ]);
+  });
+
+  it('reports an individual missing pnpm entry when shared values match', async () => {
+    const result = await runParityCheck({
+      overrides: SYNCED,
+      pnpm: {
+        overrides: {
+          dompurify: DOMPURIFY_OVERRIDE,
+          'ip-address': '10.1.1',
+          uuid: '14.0.0',
+        },
+      },
+    });
+
+    expect(result.mismatches).toEqual([
+      { dependencyName: 'basic-ftp', rootValue: '5.3.1', pnpmValue: undefined },
     ]);
   });
 
@@ -235,14 +254,14 @@ describe('direct execution guard', () => {
       JSON.stringify({
         overrides: {
           'basic-ftp': '5.3.1',
-          dompurify: '3.4.0',
+          dompurify: DOMPURIFY_OVERRIDE,
           'ip-address': '10.1.1',
           uuid: '14.0.0',
         },
         pnpm: {
           overrides: {
             'basic-ftp': '5.3.1',
-            dompurify: '3.4.0',
+            dompurify: DOMPURIFY_OVERRIDE,
             'ip-address': '10.1.1',
             uuid: '14.0.0',
           },
