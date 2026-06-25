@@ -1,7 +1,9 @@
 /** @file Tests the override parity helper and guarded CLI entrypoint. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
+import packageJson from '../package.json' with { type: 'json' };
 
 const readFileMock = vi.fn();
 
@@ -23,7 +25,18 @@ async function loadModule() {
 }
 
 /** Convenience fixture data shared across parity tests. */
-const DOMPURIFY_OVERRIDE = '3.4.11';
+const DOMPURIFY_OVERRIDE = packageJson.overrides.dompurify;
+assert.equal(
+  packageJson.pnpm.overrides.dompurify,
+  DOMPURIFY_OVERRIDE,
+  'package.json pnpm.overrides.dompurify must match overrides.dompurify',
+);
+assert.equal(
+  typeof DOMPURIFY_OVERRIDE,
+  'string',
+  'package.json overrides.dompurify must be a string',
+);
+const DRIFTED_DOMPURIFY_OVERRIDE = `not-${DOMPURIFY_OVERRIDE}`;
 
 const SYNCED = {
   'basic-ftp': '5.3.1',
@@ -84,7 +97,7 @@ describe('checkOverridesParity', () => {
     const result = await runParityCheck({
       overrides: {
         'basic-ftp': '5.3.1',
-        dompurify: '3.3.0',
+        dompurify: DRIFTED_DOMPURIFY_OVERRIDE,
         'ip-address': '10.1.1',
         uuid: '14.0.0',
       },
@@ -97,7 +110,7 @@ describe('checkOverridesParity', () => {
       mismatches: [
         {
           dependencyName: 'dompurify',
-          rootValue: '3.3.0',
+          rootValue: DRIFTED_DOMPURIFY_OVERRIDE,
           pnpmValue: DOMPURIFY_OVERRIDE,
         },
       ],
@@ -155,6 +168,7 @@ describe('checkOverridesParity', () => {
       },
     });
 
+    expect(result.overridesToCheck).toEqual(['basic-ftp', 'dompurify', 'ip-address', 'uuid']);
     expect(result.mismatches).toEqual([
       { dependencyName: 'basic-ftp', rootValue: '5.3.1', pnpmValue: undefined },
     ]);
@@ -205,8 +219,8 @@ describe('reportOverridesParity', () => {
         mismatches: [
           {
             dependencyName: 'dompurify',
-            rootValue: '3.4.10',
-            pnpmValue: '3.4.11',
+            rootValue: DRIFTED_DOMPURIFY_OVERRIDE,
+            pnpmValue: DOMPURIFY_OVERRIDE,
           },
         ],
         reason: 'mismatched',
@@ -219,8 +233,8 @@ describe('reportOverridesParity', () => {
       [
         'Override parity check failed.',
         'Override mismatch for "dompurify":',
-        '  overrides: "3.4.10"',
-        '  pnpm.overrides: "3.4.11"',
+        `  overrides: "${DRIFTED_DOMPURIFY_OVERRIDE}"`,
+        `  pnpm.overrides: "${DOMPURIFY_OVERRIDE}"`,
       ].join('\n'),
     );
     expect(outputIo.log).not.toHaveBeenCalled();
