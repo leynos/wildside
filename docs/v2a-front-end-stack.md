@@ -14,9 +14,9 @@ orchestration tooling that is not yet fully declared in
 
 ## Overview
 
-The current Wildside PWA is a client-side React application built with Bun, Vite
-`^7.3.2`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`, TanStack
-Query, Zod, clsx, TypeScript, Vitest, and Orval.
+The current Wildside PWA is a client-side React application built with Bun,
+Vite `^7.3.5`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`,
+TanStack Query, Zod, clsx, TypeScript, Vitest, and Orval.
 
 The fuller v2a target stack described by the roadmap and mockup adds TanStack
 Router, Tailwind CSS v4, DaisyUI v5, Radix UI primitives, i18next with Fluent
@@ -35,7 +35,7 @@ family would need them.
 The current `frontend-pwa/package.json` declares:
 
 - Bun,
-- Vite `^7.3.2`,
+- Vite `^7.3.5`,
 - React 19,
 - React DOM 18,
 - TanStack Query 5,
@@ -69,7 +69,7 @@ state architecture.
 
 - **Package manager and runner:** Bun drives local scripts, tests, and token
   generation via `package.json` and `bunfig.toml`.
-- **Bundler and dev server:** Vite `^7.3.2` is the application bundler and
+- **Bundler and dev server:** Vite `^7.3.5` is the application bundler and
   development server.
 - **React integration:** `@vitejs/plugin-react` handles JSX and React Fast
   Refresh.
@@ -323,7 +323,7 @@ For the shortest accurate summary of the checked-in mockup, the current
 front-end stack is:
 
 - Bun for scripts and package-manager-adjacent tooling,
-- Vite `^7.3.2` for bundling and development,
+- Vite `^7.3.5` for bundling and development,
 - React 19 for the SPA runtime,
 - React DOM 18 for rendering,
 - TanStack Query 5 for server-state caching,

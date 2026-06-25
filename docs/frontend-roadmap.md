@@ -51,7 +51,8 @@ The outcome informs the source documents that phases 1-5 should cite.
   - Success: every platform, data, user experience-state, API, and styling topic
     referenced by this roadmap has one named authoritative source or a named
     reconciliation follow-up.
-- [ ] 0.1.2. Catalogue contradictions and duplicated requirements.
+- [x] 0.1.2. Catalogue contradictions and duplicated requirements. See
+      `docs/frontend-source-contradictions-catalogue.md`.
   - Requires 0.1.1.
   - Review the v2a stack, accessible Progressive Web App guide, semantic
     Tailwind/DaisyUI guide, Wildside Progressive Web App design, Wildside
@@ -62,6 +63,11 @@ The outcome informs the source documents that phases 1-5 should cite.
     "roadmap citation fix".
   - Success: no finding is resolved by adding requirement prose only to this
     roadmap.
+  - Progress update, 2026-06-17: post-completion audit maintenance refreshed
+    the front-end dependency graph to clear pnpm advisories for Vite, esbuild,
+    ws, js-yaml, `@babel/core`, DOMPurify, and markdown-it without audit
+    exceptions. The same gate required a lockfile-only Rust refresh to patched
+    `tokio-postgres` and `postgres-protocol` releases.
 
 ### 0.2. Move decisions into the right design authority
 
