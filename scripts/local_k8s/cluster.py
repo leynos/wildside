@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from .commands import run
@@ -31,36 +32,27 @@ from .config import PreviewConfig
 from .validation import LocalK8sError, require_tools
 
 
+@dataclass(frozen=True)
+class _ProviderCommandSpec:
+    """Provider-specific command arguments for cluster lifecycle operations."""
+
+    kind_args: list[str]
+    k3d_args: list[str]
+    kind_input_text: str | None = None
+    use_scope: bool = False
+
+
 def _dispatch_provider_command(
     config: PreviewConfig,
-    *,
-    kind_args: list[str],
-    k3d_args: list[str],
-    kind_input_text: str | None = None,
-    use_scope: bool = False,
+    spec: _ProviderCommandSpec,
 ) -> None:
-    """Execute the provider-specific cluster command via kind or k3d.
-
-    Parameters
-    ----------
-    config : PreviewConfig
-        Provider and engine selection.
-    kind_args : list[str]
-        Arguments forwarded to the kind sub-command.
-    k3d_args : list[str]
-        Arguments forwarded to k3d.
-    kind_input_text : str | None, optional
-        Text piped to stdin for kind (e.g. cluster config YAML).
-    use_scope : bool, optional
-        When ``True`` and the engine is Podman, wraps the invocation in a
-        ``systemd-run --scope`` call.
-    """
+    """Execute the provider-specific cluster command via kind or k3d."""
     match config.k8s_provider:
         case "kind":
-            command, args = _kind_command(config, kind_args, use_scope=use_scope)
-            run(command, args, input_text=kind_input_text)
+            command, args = _kind_command(config, spec.kind_args, use_scope=spec.use_scope)
+            run(command, args, input_text=spec.kind_input_text)
         case _:
-            run("k3d", k3d_args)
+            run("k3d", spec.k3d_args)
 
 
 def ensure_cluster(config: PreviewConfig) -> None:
@@ -84,10 +76,12 @@ def ensure_cluster(config: PreviewConfig) -> None:
         return
     _dispatch_provider_command(
         config,
-        kind_args=_kind_create_args(config),
-        k3d_args=_k3d_create_args(config),
-        kind_input_text=_kind_cluster_config(config),
-        use_scope=True,
+        _ProviderCommandSpec(
+            kind_args=_kind_create_args(config),
+            k3d_args=_k3d_create_args(config),
+            kind_input_text=_kind_cluster_config(config),
+            use_scope=True,
+        ),
     )
 
 
@@ -112,8 +106,10 @@ def delete_cluster(config: PreviewConfig) -> None:
         return
     _dispatch_provider_command(
         config,
-        kind_args=["delete", "cluster", "--name", config.cluster_name],
-        k3d_args=["cluster", "delete", config.cluster_name],
+        _ProviderCommandSpec(
+            kind_args=["delete", "cluster", "--name", config.cluster_name],
+            k3d_args=["cluster", "delete", config.cluster_name],
+        ),
     )
 
 
