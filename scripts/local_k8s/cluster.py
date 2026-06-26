@@ -23,6 +23,7 @@ malformed or the requested cluster cannot be inspected.
 from __future__ import annotations
 
 import json
+import logging
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +31,8 @@ from pathlib import Path
 from .commands import run
 from .config import PreviewConfig
 from .validation import LocalK8sError, require_tools
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -50,8 +53,24 @@ def _dispatch_provider_command(
     match config.k8s_provider:
         case "kind":
             command, args = _kind_command(config, spec.kind_args, use_scope=spec.use_scope)
+            logger.info(
+                "local_k8s_provider_command",
+                extra={
+                    "provider": config.k8s_provider,
+                    "cluster": config.cluster_name,
+                    "command": command,
+                },
+            )
             run(command, args, input_text=spec.kind_input_text)
         case _:
+            logger.info(
+                "local_k8s_provider_command",
+                extra={
+                    "provider": config.k8s_provider,
+                    "cluster": config.cluster_name,
+                    "command": "k3d",
+                },
+            )
             run("k3d", spec.k3d_args)
 
 
@@ -113,7 +132,7 @@ def delete_cluster(config: PreviewConfig) -> None:
     )
 
 
-def import_image(config: PreviewConfig) -> None:
+def import_image(config: PreviewConfig, *, archive_dir: Path | None = None) -> None:
     """Import the local backend image into the preview cluster.
 
     Parameters
@@ -129,9 +148,17 @@ def import_image(config: PreviewConfig) -> None:
     """
 
     require_tools(_image_import_tools(config))
+    logger.info(
+        "local_k8s_import_image",
+        extra={
+            "provider": config.k8s_provider,
+            "cluster": config.cluster_name,
+            "image": config.image_name,
+        },
+    )
     match (config.k8s_provider, config.container_engine):
         case ("kind", "podman"):
-            archive_path = _image_archive_path(config)
+            archive_path = _image_archive_path(config, archive_dir=archive_dir)
             archive_image_name = _podman_archive_image_name(config.image_name)
             _remove_stale_archive(archive_path)
             if archive_image_name != config.image_name:
@@ -187,6 +214,13 @@ def print_cluster_status(config: PreviewConfig) -> None:
     """
 
     require_tools((_provider_tool(config),))
+    logger.info(
+        "local_k8s_cluster_status",
+        extra={
+            "provider": config.k8s_provider,
+            "cluster": config.cluster_name,
+        },
+    )
     if not _cluster_exists(config):
         error_message = f"{config.k8s_provider} cluster {config.cluster_name!r} does not exist"
         raise LocalK8sError(error_message)
@@ -304,19 +338,21 @@ def _kind_create_args(config: PreviewConfig) -> list[str]:
 def _kind_cluster_config(config: PreviewConfig) -> str:
     """Return a minimal kind cluster config with no host-port mapping."""
 
+    node_image = json.dumps(config.kind_node_image)
     return f"""\
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
-    image: {config.kind_node_image}
+    image: {node_image}
 """
 
 
-def _image_archive_path(config: PreviewConfig) -> Path:
+def _image_archive_path(config: PreviewConfig, *, archive_dir: Path | None = None) -> Path:
     """Return the temporary Podman image archive path for kind loading."""
 
-    return Path(tempfile.gettempdir()) / f"{config.cluster_name}-image.tar"
+    base_dir = Path(tempfile.gettempdir()) if archive_dir is None else archive_dir
+    return base_dir / f"{config.cluster_name}-image.tar"
 
 
 def _is_registry_host(component: str) -> bool:

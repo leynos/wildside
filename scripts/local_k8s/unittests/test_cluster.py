@@ -21,8 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from local_k8s.cluster import delete_cluster, ensure_cluster, import_image
+from local_k8s.cluster import delete_cluster, ensure_cluster, import_image, print_cluster_status
 from local_k8s.config import PreviewConfig
+from local_k8s.validation import LocalK8sError
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,7 +112,7 @@ class TestClusterCreation:
         ), "kind cluster creation must use stdin config via --config -"
         assert commands[1][2] is not None, "kind cluster creation must pass config on stdin"
         assert "kind: Cluster" in commands[1][2], "stdin config must be valid kind Cluster YAML"
-        assert "image: kindest/node:v1.31.0" in commands[1][2], (
+        assert 'image: "kindest/node:v1.31.0"' in commands[1][2], (
             "kind cluster creation must pin a Kubernetes version compatible "
             "with the Helm chart kubeVersion range"
         )
@@ -163,7 +164,7 @@ class TestImageImport:
         monkeypatch: pytest.MonkeyPatch,
         config: PreviewConfig,
         *,
-        archive_path: Path | None = None,
+        archive_dir: Path | None = None,
         on_remove_archive: Callable[[Path], None] | None = None,
     ) -> list[tuple[str, list[str]]]:
         """Monkeypatch cluster internals, run import_image, and return recorded commands."""
@@ -175,14 +176,13 @@ class TestImageImport:
 
         monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
         monkeypatch.setattr("local_k8s.cluster.run", record_run)
-        if archive_path is not None:
-            monkeypatch.setattr("local_k8s.cluster._image_archive_path", lambda _: archive_path)
+        if archive_dir is not None:
             monkeypatch.setattr(
                 "local_k8s.cluster._remove_stale_archive",
                 on_remove_archive if on_remove_archive is not None else lambda _: None,
             )
 
-        import_image(config)
+        import_image(config, archive_dir=archive_dir)
         return commands
 
     def test_k3d_image_import_uses_existing_provider_command(
@@ -240,7 +240,7 @@ class TestImageImport:
         commands = self._capture_commands(
             monkeypatch,
             preview_config_kind,
-            archive_path=archive_path,
+            archive_dir=tmp_path,
             on_remove_archive=removed_archives.append,
         )
 
@@ -289,7 +289,7 @@ class TestImageImport:
             image_name="registry.example.test/wildside/backend:local",
         )
         archive_path = tmp_path / "wildside-preview-image.tar"
-        commands = self._capture_commands(monkeypatch, config, archive_path=archive_path)
+        commands = self._capture_commands(monkeypatch, config, archive_dir=tmp_path)
 
         assert commands[0] == (
             "podman",
@@ -313,7 +313,7 @@ class TestImageImport:
             image_name="leynos/wildside-backend:local",
         )
         archive_path = tmp_path / "wildside-preview-image.tar"
-        commands = self._capture_commands(monkeypatch, config, archive_path=archive_path)
+        commands = self._capture_commands(monkeypatch, config, archive_dir=tmp_path)
 
         assert commands[:2] == [
             (
@@ -356,3 +356,42 @@ def test_kind_delete_is_idempotent_when_cluster_is_absent(
     assert commands == [
         ("kind", ["get", "clusters"]),
     ], "kind down must not delete an absent cluster"
+
+
+def test_print_cluster_status_prints_provider_context(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify cluster status reports the selected provider and ingress."""
+    commands: list[tuple[str, list[str]]] = []
+
+    def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+        commands.append((command, args))
+        return MockCommandResult(stdout="wildside-preview\n")
+
+    monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+    monkeypatch.setattr("local_k8s.cluster.run", record_run)
+
+    print_cluster_status(replace(preview_config, k8s_provider="kind"))
+
+    output = capsys.readouterr().out
+    assert commands == [("kind", ["get", "clusters"])]
+    assert "cluster: wildside-preview" in output
+    assert "provider: kind" in output
+    assert "ingress: http://127.0.0.1:8088" in output
+
+
+def test_print_cluster_status_rejects_missing_cluster(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify cluster status fails before printing stale preview details."""
+    monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+    monkeypatch.setattr(
+        "local_k8s.cluster.run",
+        lambda *_args, **_kwargs: MockCommandResult(stdout="other\n"),
+    )
+
+    with pytest.raises(LocalK8sError, match="does not exist"):
+        print_cluster_status(replace(preview_config, k8s_provider="kind"))

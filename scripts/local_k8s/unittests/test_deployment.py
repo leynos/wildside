@@ -11,6 +11,7 @@ for both deployment modes.
 from __future__ import annotations
 
 import base64
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -73,21 +74,27 @@ def test_deploy_preview_docker_requirement_conditional_on_skip_build(
 ) -> None:
     """Verify that Docker preflight follows the selected build mode."""
     required_tools: list[tuple[str, ...]] = []
+    calls: list[str] = []
 
-    def no_op(_: PreviewConfig) -> None:
-        """Replace deployment side effects during preflight assertions."""
+    def record_step(name: str) -> Callable[[PreviewConfig], None]:
+        """Return a side-effect replacement that records orchestration order."""
+
+        def step(_: PreviewConfig) -> None:
+            calls.append(name)
+
+        return step
 
     monkeypatch.setattr(
         "local_k8s.deployment.require_tools",
-        lambda tools: required_tools.append(tuple(tools)),
+        lambda tools: (calls.append("require_tools"), required_tools.append(tuple(tools))),
     )
-    monkeypatch.setattr("local_k8s.deployment.ensure_cluster", no_op)
-    monkeypatch.setattr("local_k8s.deployment.ensure_namespace", no_op)
-    monkeypatch.setattr("local_k8s.deployment.ensure_session_secret", no_op)
-    monkeypatch.setattr("local_k8s.deployment.import_image", no_op)
-    monkeypatch.setattr("local_k8s.deployment.helm_upgrade", no_op)
-    monkeypatch.setattr("local_k8s.deployment.print_status", no_op)
-    monkeypatch.setattr("local_k8s.deployment.build_image", no_op)
+    monkeypatch.setattr("local_k8s.deployment.ensure_cluster", record_step("ensure_cluster"))
+    monkeypatch.setattr("local_k8s.deployment.ensure_namespace", record_step("ensure_namespace"))
+    monkeypatch.setattr("local_k8s.deployment.ensure_session_secret", record_step("ensure_session_secret"))
+    monkeypatch.setattr("local_k8s.deployment.import_image", record_step("import_image"))
+    monkeypatch.setattr("local_k8s.deployment.helm_upgrade", record_step("helm_upgrade"))
+    monkeypatch.setattr("local_k8s.deployment.print_status", record_step("print_status"))
+    monkeypatch.setattr("local_k8s.deployment.build_image", record_step("build_image"))
 
     deploy_preview(preview_config, skip_build=skip_build)
 
@@ -95,6 +102,17 @@ def test_deploy_preview_docker_requirement_conditional_on_skip_build(
         f"expected require_tools to be called once with {expected_tools}, "
         f"but got {required_tools}"
     )
+    expected_calls = [
+        "require_tools",
+        "ensure_cluster",
+        "ensure_namespace",
+        "ensure_session_secret",
+        *([] if skip_build else ["build_image"]),
+        "import_image",
+        "helm_upgrade",
+        "print_status",
+    ]
+    assert calls == expected_calls, "deploy_preview must preserve lifecycle order"
 
 
 def test_deploy_preview_tools_follow_configured_kubernetes_provider(
@@ -150,13 +168,14 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
     def record_run(command: str, args: list[str], **kwargs: object) -> None:
         commands.append((command, args, kwargs.get("input_text")))
 
-    monkeypatch.setattr("local_k8s.deployment.run", record_run)
-    monkeypatch.setattr(
-        "local_k8s.deployment.secrets.token_bytes",
-        lambda length: b"a" * length,
-    )
+    def deterministic_key(length: int) -> bytes:
+        """Return a deterministic key for manifest assertions."""
+        assert length == 96
+        return b"a" * length
 
-    ensure_session_secret(preview_config)
+    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+
+    ensure_session_secret(preview_config, key_generator=deterministic_key)
 
     assert commands[0][0:2] == (
         "kubectl",
@@ -185,23 +204,37 @@ def test_print_status_uses_provider_context_and_prints_kind_port_forward(
     config = replace(preview_config, k8s_provider="kind")
     required_tools: list[tuple[str, ...]] = []
     commands: list[tuple[str, list[str]]] = []
+    calls: list[str] = []
 
     def record_run(command: str, args: list[str], **_: object) -> SimpleNamespace:
+        calls.append("helm_status")
         commands.append((command, args))
         return SimpleNamespace(stdout="helm status\n")
 
     monkeypatch.setattr(
         "local_k8s.deployment.require_tools",
-        lambda tools: required_tools.append(tuple(tools)),
+        lambda tools: (calls.append("require_tools"), required_tools.append(tuple(tools))),
     )
-    monkeypatch.setattr("local_k8s.deployment.print_cluster_status", lambda _: None)
-    monkeypatch.setattr("local_k8s.deployment.print_kubernetes_status", lambda _: None)
+    monkeypatch.setattr(
+        "local_k8s.deployment.print_cluster_status",
+        lambda _: calls.append("print_cluster_status"),
+    )
+    monkeypatch.setattr(
+        "local_k8s.deployment.print_kubernetes_status",
+        lambda _: calls.append("print_kubernetes_status"),
+    )
     monkeypatch.setattr("local_k8s.deployment.run", record_run)
 
     print_status(config)
 
     output = capsys.readouterr().out
     assert required_tools == [("helm", "kind", "kubectl")]
+    assert calls == [
+        "require_tools",
+        "print_cluster_status",
+        "helm_status",
+        "print_kubernetes_status",
+    ]
     assert commands == [
         (
             "helm",

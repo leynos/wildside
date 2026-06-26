@@ -8,10 +8,17 @@ provider values.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from local_k8s.config import PreviewConfig
 from local_k8s.validation import LocalK8sError
+
+
+def test_wildside_environment_is_isolated() -> None:
+    """Verify local preview tests start without inherited WILDSIDE variables."""
+    assert not any(name.startswith("WILDSIDE_") for name in os.environ)
 
 
 def test_preview_config_uses_provider_neutral_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -95,4 +102,34 @@ def test_preview_config_rejects_unknown_provider_values(
     monkeypatch.setenv(env_name, env_value)
 
     with pytest.raises(LocalK8sError, match=env_value):
+        PreviewConfig.from_env()
+
+
+@pytest.mark.parametrize(
+    "cluster_name",
+    ["../wildside", "Wildside", "wildside_", "-wildside", "wildside-"],
+)
+def test_preview_config_rejects_unsafe_cluster_names(
+    monkeypatch: pytest.MonkeyPatch,
+    cluster_name: str,
+) -> None:
+    """Verify cluster names cannot escape temp paths or Kubernetes naming."""
+    monkeypatch.setenv("WILDSIDE_K8S_CLUSTER", cluster_name)
+
+    with pytest.raises(LocalK8sError, match="WILDSIDE_K8S_CLUSTER"):
+        PreviewConfig.from_env()
+
+
+@pytest.mark.parametrize(
+    "kind_node_image",
+    ["kindest/node:v1.31.0\nextraPortMappings: []", " kindest/node:v1.31.0", ""],
+)
+def test_preview_config_rejects_unsafe_kind_node_images(
+    monkeypatch: pytest.MonkeyPatch,
+    kind_node_image: str,
+) -> None:
+    """Verify kind node image overrides cannot inject extra YAML content."""
+    monkeypatch.setenv("WILDSIDE_KIND_NODE_IMAGE", kind_node_image)
+
+    with pytest.raises(LocalK8sError, match="WILDSIDE_KIND_NODE_IMAGE"):
         PreviewConfig.from_env()

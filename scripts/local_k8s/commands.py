@@ -14,12 +14,15 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+import logging
 import subprocess
 
 from plumbum import local
 from plumbum.commands.processes import ProcessExecutionError
 
 from .validation import LocalK8sError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,4 +122,11 @@ def run(
             return _run_with_input(command, args, cwd=cwd, input_text=input_text)
         return _run_with_plumbum(command, args, cwd=cwd)
     except (ProcessExecutionError, subprocess.CalledProcessError) as exc:
+        logger.error(
+            "local_k8s_command_failed",
+            extra={
+                "command": command,
+                "failure_category": type(exc).__name__,
+            },
+        )
         raise LocalK8sError(_command_error_message(exc)) from exc

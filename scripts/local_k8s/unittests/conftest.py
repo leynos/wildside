@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -12,15 +13,9 @@ from local_k8s.config import ContainerEngine, K8sProvider, PreviewConfig
 @pytest.fixture(autouse=True)
 def clean_wildside_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Clear local preview environment variables before each test."""
-    for name in (
-        "WILDSIDE_CONTAINER_ENGINE",
-        "WILDSIDE_K8S_PROVIDER",
-        "WILDSIDE_K8S_CLUSTER",
-        "WILDSIDE_K8S_PORT",
-        "WILDSIDE_K3D_CLUSTER",
-        "WILDSIDE_K3D_PORT",
-        "WILDSIDE_KIND_NODE_IMAGE",
-    ):
+    for name in tuple(os.environ):
+        if not name.startswith("WILDSIDE_"):
+            continue
         monkeypatch.delenv(name, raising=False)
 
 

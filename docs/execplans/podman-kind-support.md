@@ -534,6 +534,19 @@ teardown result in this plan's `Outcomes & Retrospective`.
   `SESSION_ALLOW_EPHEMERAL=1`, which is correct for the production safety
   contract. Local preview therefore needs a real generated Kubernetes Secret,
   not an ephemeral-key opt-in.
+- 2026-06-26: Audit review found that the provider-aware helper needed firmer
+  test boundaries after the first implementation. Orchestration tests now
+  assert deploy/status call order, direct cluster-status tests cover the public
+  status helper, and property tests cover image-name normalization, Helm
+  fullname bounds, and provider-neutral environment alias precedence.
+- 2026-06-26: Security review found that environment-derived cluster names and
+  kind node image overrides needed validation before reaching filesystem paths
+  or YAML. `PreviewConfig` now validates those fields, and kind cluster YAML
+  renders the node image as a quoted JSON scalar.
+- 2026-06-26: Unit architecture review identified hard-coded randomness and
+  temp-path sources. The local session Secret generator and Podman archive
+  directory are now injectable for tests while preserving existing defaults for
+  CLI callers.
 
 ## Decision Log
 
@@ -593,6 +606,11 @@ teardown result in this plan's `Outcomes & Retrospective`.
   setup and mount it through `values.local.yaml` with `SESSION_KEY_FILE`.
   Rationale: release builds must not use ephemeral session keys, but local
   preview should remain self-contained and must not commit secret material.
+- 2026-06-26: Keep the injection seams as optional keyword-only parameters on
+  the concrete helper functions instead of adding a larger port abstraction.
+  Rationale: the preview helper is still a small script boundary, and the
+  injected key generator/archive directory are test seams rather than new
+  product concepts.
 
 ## Outcomes & Retrospective
 

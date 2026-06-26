@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+import logging
 import secrets
+from collections.abc import Callable
 
 from .commands import run
 from .config import PreviewConfig
@@ -14,11 +16,23 @@ from .validation import LocalK8sError, require_tools
 SESSION_SECRET_KEY_NAME = "session_key"
 SESSION_SECRET_NAME = "wildside-session-key"
 
+logger = logging.getLogger(__name__)
+
 
 def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
     """Build the image and install or upgrade the Wildside Helm release."""
 
     require_tools(_deploy_preview_tools(config, skip_build=skip_build))
+    logger.info(
+        "local_k8s_deploy_preview",
+        extra={
+            "provider": config.k8s_provider,
+            "cluster": config.cluster_name,
+            "release": config.release_name,
+            "image": config.image_name,
+            "skip_build": skip_build,
+        },
+    )
     ensure_cluster(config)
     ensure_namespace(config)
     ensure_session_secret(config)
@@ -41,6 +55,13 @@ def _deploy_preview_tools(config: PreviewConfig, *, skip_build: bool) -> tuple[s
 def build_image(config: PreviewConfig) -> None:
     """Build the Wildside backend image for local preview import."""
 
+    logger.info(
+        "local_k8s_build_image",
+        extra={
+            "engine": config.container_engine,
+            "image": config.image_name,
+        },
+    )
     run(
         config.container_engine,
         [
@@ -54,10 +75,22 @@ def build_image(config: PreviewConfig) -> None:
     )
 
 
-def ensure_session_secret(config: PreviewConfig) -> None:
+def ensure_session_secret(
+    config: PreviewConfig,
+    *,
+    key_generator: Callable[[int], bytes] = secrets.token_bytes,
+) -> None:
     """Create or refresh the local preview session signing key Secret."""
 
-    key = secrets.token_bytes(96)
+    logger.info(
+        "local_k8s_session_secret_apply",
+        extra={
+            "cluster": config.cluster_name,
+            "namespace": config.namespace,
+            "secret": SESSION_SECRET_NAME,
+        },
+    )
+    key = key_generator(96)
     encoded_key = base64.b64encode(key).decode("ascii")
     manifest = f"""\
 apiVersion: v1
@@ -86,6 +119,14 @@ def helm_upgrade(config: PreviewConfig) -> None:
     """Install or upgrade the Wildside Helm release."""
 
     image_repository, image_tag = image_repository_and_tag(config.image_name)
+    logger.info(
+        "local_k8s_helm_upgrade",
+        extra={
+            "cluster": config.cluster_name,
+            "release": config.release_name,
+            "image": config.image_name,
+        },
+    )
     run(
         "helm",
         [
@@ -130,6 +171,14 @@ def print_status(config: PreviewConfig) -> None:
     """Print cluster and workload status."""
 
     require_tools(_deploy_preview_tools(config, skip_build=True))
+    logger.info(
+        "local_k8s_print_status",
+        extra={
+            "provider": config.k8s_provider,
+            "cluster": config.cluster_name,
+            "release": config.release_name,
+        },
+    )
     print_cluster_status(config)
     release = run(
         "helm",

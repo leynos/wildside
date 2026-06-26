@@ -36,6 +36,7 @@ def require_tools(tools: Iterable[str]) -> None:
 
 
 def _is_missing(tool: str) -> bool:
+    """Return True when an executable cannot be resolved on PATH."""
     try:
         local.which(tool)
     except CommandNotFound:

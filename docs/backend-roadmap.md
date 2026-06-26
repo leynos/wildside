@@ -349,4 +349,4 @@ that repository when deployment or infrastructure behaviour needs updates.
 
 - [x] 7.1. Align Wildside with Nile Valley preview and GitOps workflows by
   hardening the backend health contract, container image, Helm chart, and
-  repository-local k3d preview helper.
+  repository-local provider-aware Kubernetes preview helper.
