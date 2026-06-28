@@ -398,7 +398,7 @@ def test_print_cluster_status_prints_provider_context(
     capsys: pytest.CaptureFixture[str],
     preview_config: PreviewConfig,
 ) -> None:
-    """Verify kind cluster status reports the selected provider and port-forward address."""
+    """Verify kind cluster status reports context without a direct ingress URL."""
     commands: list[tuple[str, list[str]]] = []
 
     def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
@@ -414,8 +414,8 @@ def test_print_cluster_status_prints_provider_context(
     assert commands == [("kind", ["get", "clusters"])]
     assert "cluster: wildside-preview" in output
     assert "provider: kind" in output
-    assert "port-forward address: http://127.0.0.1:8088" in output
     assert "ingress:" not in output
+    assert "http://127.0.0.1:8088" not in output
 
 
 def test_print_cluster_status_prints_k3d_ingress(

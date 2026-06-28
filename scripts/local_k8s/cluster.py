@@ -204,8 +204,8 @@ def print_cluster_status(config: PreviewConfig) -> None:
     """Print a short description of the preview cluster.
 
     The status output is intentionally compact so operators can confirm the
-    selected provider, cluster name, and local ingress URL before deploying or
-    debugging a preview.
+    selected provider, cluster name, and directly exposed local ingress URL
+    before deploying or debugging a preview.
 
     Parameters
     ----------
@@ -233,9 +233,7 @@ def print_cluster_status(config: PreviewConfig) -> None:
         raise LocalK8sError(error_message)
     print(f"cluster: {config.cluster_name}")
     print(f"provider: {config.k8s_provider}")
-    if config.k8s_provider == "kind":
-        print(f"port-forward address: http://127.0.0.1:{config.ingress_port}")
-    else:
+    if config.k8s_provider != "kind":
         print(f"ingress: http://127.0.0.1:{config.ingress_port}")
 
 
