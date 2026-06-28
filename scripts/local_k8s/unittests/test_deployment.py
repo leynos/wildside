@@ -28,6 +28,9 @@ from local_k8s.deployment import (
     print_status,
 )
 
+CommandRecord = tuple[str, list[str], str | None]
+RunHook = Callable[[str, list[str], str | None], None]
+
 
 @pytest.fixture
 def preview_config() -> PreviewConfig:
@@ -56,6 +59,28 @@ def preview_config() -> PreviewConfig:
         local_values_path=Path("/repo/deploy/charts/wildside/values.local.yaml"),
         dockerfile_path=Path("/repo/deploy/docker/backend.Dockerfile"),
     )
+
+
+def install_run_recorder(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    stdout: str = "",
+    on_run: RunHook | None = None,
+) -> list[CommandRecord]:
+    """Replace deployment command execution with a command recorder."""
+    commands: list[CommandRecord] = []
+
+    def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
+        input_text = kwargs.get("input_text")
+        if input_text is not None and not isinstance(input_text, str):
+            raise AssertionError("input_text must be text when provided")
+        if on_run is not None:
+            on_run(command, args, input_text)
+        commands.append((command, args, input_text))
+        return SimpleNamespace(stdout=stdout)
+
+    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+    return commands
 
 
 @pytest.mark.parametrize(
@@ -134,12 +159,7 @@ def test_build_image_uses_configured_container_engine(
 ) -> None:
     """Verify local image builds use Docker or Podman from configuration."""
     podman_config = replace(preview_config, container_engine="podman")
-    commands: list[tuple[str, list[str]]] = []
-
-    def record_run(command: str, args: list[str], **_: object) -> None:
-        commands.append((command, args))
-
-    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+    commands = install_run_recorder(monkeypatch)
 
     build_image(podman_config)
 
@@ -154,6 +174,7 @@ def test_build_image_uses_configured_container_engine(
                 "wildside-backend:local",
                 "/repo",
             ],
+            None,
         )
     ], "image builds must use the configured container engine"
 
@@ -163,21 +184,16 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify local preview creates a mounted session signing key Secret."""
-    commands: list[tuple[str, list[str], str | None]] = []
-
-    def record_run(command: str, args: list[str], **kwargs: object) -> None:
-        commands.append((command, args, kwargs.get("input_text")))
+    commands = install_run_recorder(monkeypatch)
 
     def deterministic_key(length: int) -> bytes:
         """Return a deterministic key for manifest assertions."""
         assert length == 96
         return b"a" * length
 
-    monkeypatch.setattr("local_k8s.deployment.run", record_run)
-
     ensure_session_secret(preview_config, key_generator=deterministic_key)
 
-    assert commands[0][0:2] == (
+    assert commands[0] == (
         "kubectl",
         [
             "--context",
@@ -186,6 +202,7 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
             "-f",
             "-",
         ],
+        commands[0][2],
     ), "local preview must apply the session Secret before Helm"
     manifest = commands[0][2]
     assert manifest is not None
@@ -203,13 +220,12 @@ def test_print_status_uses_provider_context_and_prints_kind_port_forward(
     """Verify kind status uses provider tools and prints the operator command."""
     config = replace(preview_config, k8s_provider="kind")
     required_tools: list[tuple[str, ...]] = []
-    commands: list[tuple[str, list[str]]] = []
     calls: list[str] = []
-
-    def record_run(command: str, args: list[str], **_: object) -> SimpleNamespace:
-        calls.append("helm_status")
-        commands.append((command, args))
-        return SimpleNamespace(stdout="helm status\n")
+    commands = install_run_recorder(
+        monkeypatch,
+        stdout="helm status\n",
+        on_run=lambda _command, _args, _input_text: calls.append("helm_status"),
+    )
 
     monkeypatch.setattr(
         "local_k8s.deployment.require_tools",
@@ -223,7 +239,6 @@ def test_print_status_uses_provider_context_and_prints_kind_port_forward(
         "local_k8s.deployment.print_kubernetes_status",
         lambda _: calls.append("print_kubernetes_status"),
     )
-    monkeypatch.setattr("local_k8s.deployment.run", record_run)
 
     print_status(config)
 
@@ -246,6 +261,7 @@ def test_print_status_uses_provider_context_and_prints_kind_port_forward(
                 "status",
                 "preview",
             ],
+            None,
         )
     ], "Helm status must use the provider-specific kube context"
     assert (
@@ -260,14 +276,9 @@ def test_print_logs_uses_configured_kube_context(
 ) -> None:
     """Verify log streaming targets the provider-specific kube context."""
     config = replace(preview_config, k8s_provider="kind")
-    commands: list[tuple[str, list[str]]] = []
-
-    def record_run(command: str, args: list[str], **_: object) -> SimpleNamespace:
-        commands.append((command, args))
-        return SimpleNamespace(stdout="")
+    commands = install_run_recorder(monkeypatch)
 
     monkeypatch.setattr("local_k8s.deployment.require_tools", lambda _: None)
-    monkeypatch.setattr("local_k8s.deployment.run", record_run)
 
     print_logs(config, follow=True)
 
@@ -288,5 +299,6 @@ def test_print_logs_uses_configured_kube_context(
                 "200",
                 "--follow",
             ],
+            None,
         )
     ], "logs must use the provider-specific kube context"

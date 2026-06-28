@@ -14,7 +14,7 @@ backend container image, the Helm chart under `deploy/charts/wildside`, health
 probes, and the repository-local `scripts/local_k8s.py` preview helper. That
 preview helper currently assumes Docker plus `k3d`. The Episodic commit
 `f19cbcf21ad3ecadf164822218ba8e152b3b68bf` shows how a sibling service was
-adapted so local previews can run on this virtual machine with rootless Podman
+adapted, so local previews can run on this virtual machine with rootless Podman
 plus `kind`.
 
 After this change, a developer on the same VM can run Wildside's local preview
@@ -574,7 +574,7 @@ teardown result in this plan's `Outcomes & Retrospective`.
 - 2026-06-22: Use explicit `match` dispatch for provider-specific lifecycle
   branches in `local_k8s.cluster`. Rationale: `PreviewConfig` validates the
   provider values, and pattern matching keeps unsupported-state handling
-  visible at each side-effect boundary.
+  visible at each side effect boundary.
 - 2026-06-22: Store the Podman image export in the system temporary directory
   as `{cluster_name}-image.tar` and remove any stale file before saving.
   Rationale: the archive is transient local-preview data and must not live in
@@ -585,7 +585,7 @@ teardown result in this plan's `Outcomes & Retrospective`.
   for the clusters created by this helper, and keeping the rule in config
   avoids duplicating string construction across namespace, Helm, status, and
   log operations.
-- 2026-06-22: Reuse `_helm_fullname()` from `local_k8s.k8s` for deployment
+- 2026-06-22: Reuse `helm_fullname()` from `local_k8s.k8s` for deployment
   status output. Rationale: service naming is a Helm contract, not a
   kind-specific concern, and the port-forward command must match the service
   that Kubernetes status already inspects.

@@ -54,7 +54,7 @@ class PreviewConfig:
         return f"{self.k8s_provider}-{self.cluster_name}"
 
     @classmethod
-    def from_env(cls) -> "PreviewConfig":
+    def from_env(cls) -> PreviewConfig:
         """Build configuration from defaults and `WILDSIDE_` overrides."""
 
         repository_root = Path(__file__).resolve().parents[2]

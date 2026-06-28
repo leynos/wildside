@@ -125,6 +125,7 @@ class TestClusterCreation:
     ) -> None:
         """Verify rootless Podman kind creation runs in a delegated user scope."""
         config = replace(preview_config, container_engine="podman", k8s_provider="kind")
+        required_tools: list[tuple[str, ...]] = []
         commands: list[tuple[str, list[str], str | None]] = []
 
         def record_run(command: str, args: list[str], **kwargs: object) -> MockCommandResult:
@@ -133,11 +134,15 @@ class TestClusterCreation:
                 return MockCommandResult()
             return MockCommandResult()
 
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+        monkeypatch.setattr(
+            "local_k8s.cluster.require_tools",
+            lambda tools: required_tools.append(tuple(tools)),
+        )
         monkeypatch.setattr("local_k8s.cluster.run", record_run)
 
         ensure_cluster(config)
 
+        assert required_tools == [("kind", "podman", "kubectl", "helm", "systemd-run")]
         assert commands[0] == (
             "env",
             ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", "get", "clusters"],
@@ -363,7 +368,7 @@ def test_print_cluster_status_prints_provider_context(
     capsys: pytest.CaptureFixture[str],
     preview_config: PreviewConfig,
 ) -> None:
-    """Verify cluster status reports the selected provider and ingress."""
+    """Verify kind cluster status reports the selected provider and port-forward address."""
     commands: list[tuple[str, list[str]]] = []
 
     def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
@@ -379,7 +384,29 @@ def test_print_cluster_status_prints_provider_context(
     assert commands == [("kind", ["get", "clusters"])]
     assert "cluster: wildside-preview" in output
     assert "provider: kind" in output
+    assert "port-forward address: http://127.0.0.1:8088" in output
+    assert "ingress:" not in output
+
+
+def test_print_cluster_status_prints_k3d_ingress(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify k3d status keeps the direct ingress URL."""
+
+    def record_run(_command: str, _args: list[str], **_: object) -> MockCommandResult:
+        return MockCommandResult(stdout='[{"name":"wildside-preview"}]\n')
+
+    monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+    monkeypatch.setattr("local_k8s.cluster.run", record_run)
+
+    print_cluster_status(preview_config)
+
+    output = capsys.readouterr().out
+    assert "provider: k3d" in output
     assert "ingress: http://127.0.0.1:8088" in output
+    assert "port-forward address:" not in output
 
 
 def test_print_cluster_status_rejects_missing_cluster(

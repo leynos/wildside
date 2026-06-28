@@ -43,8 +43,19 @@ def ensure_namespace(config: PreviewConfig) -> None:
     run("kubectl", ["--context", config.kube_context, "create", "namespace", config.namespace])
 
 
-def _helm_fullname(config: PreviewConfig) -> str:
-    """Return the chart fullname used for Kubernetes object names."""
+def helm_fullname(config: PreviewConfig) -> str:
+    """Return the chart fullname used for Kubernetes object names.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Preview configuration containing the Helm release and chart names.
+
+    Returns
+    -------
+    str
+        Helm-compatible fullname, truncated to the Kubernetes DNS label limit.
+    """
 
     chart_name = config.chart_path.name
     if config.release_name == chart_name:
@@ -98,7 +109,7 @@ def print_kubernetes_status(config: PreviewConfig) -> None:
             config.namespace,
             "get",
             "service",
-            _helm_fullname(config),
+            helm_fullname(config),
             "--ignore-not-found",
         ],
     )

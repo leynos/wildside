@@ -226,7 +226,10 @@ def print_cluster_status(config: PreviewConfig) -> None:
         raise LocalK8sError(error_message)
     print(f"cluster: {config.cluster_name}")
     print(f"provider: {config.k8s_provider}")
-    print(f"ingress: http://127.0.0.1:{config.ingress_port}")
+    if config.k8s_provider == "kind":
+        print(f"port-forward address: http://127.0.0.1:{config.ingress_port}")
+    else:
+        print(f"ingress: http://127.0.0.1:{config.ingress_port}")
 
 
 def _cluster_tools(config: PreviewConfig) -> tuple[str, ...]:
@@ -234,7 +237,7 @@ def _cluster_tools(config: PreviewConfig) -> tuple[str, ...]:
 
     match (config.k8s_provider, config.container_engine):
         case ("kind", "podman"):
-            return ("kind", "kubectl", "helm", "systemd-run")
+            return ("kind", "podman", "kubectl", "helm", "systemd-run")
         case ("kind", _):
             return ("kind", "kubectl", "helm")
         case _:
