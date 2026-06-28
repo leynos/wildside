@@ -603,9 +603,11 @@ teardown result in this plan's `Outcomes & Retrospective`.
   Rationale: a slash without an explicit registry is still a short Docker Hub
   reference from Kubernetes' point of view.
 - 2026-06-22: Generate and apply `wildside-session-key` during local preview
-  setup and mount it through `values.local.yaml` with `SESSION_KEY_FILE`.
-  Rationale: release builds must not use ephemeral session keys, but local
-  preview should remain self-contained and must not commit secret material.
+  setup when the Secret is missing, reuse existing key material on later
+  deploys, and mount it through `values.local.yaml` with `SESSION_KEY_FILE`.
+  Rationale: release builds must not use ephemeral session keys, local preview
+  should remain self-contained and must not commit secret material, and repeat
+  deploys should not invalidate active preview sessions.
 - 2026-06-26: Keep the injection seams as optional keyword-only parameters on
   the concrete helper functions instead of adding a larger port abstraction.
   Rationale: the preview helper is still a small script boundary, and the

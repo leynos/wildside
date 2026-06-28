@@ -198,18 +198,67 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
         [
             "--context",
             "k3d-wildside-preview",
+            "-n",
+            "wildside",
+            "get",
+            "secret",
+            "wildside-session-key",
+            "--ignore-not-found",
+            "-o=jsonpath={.data.session_key}",
+        ],
+        None,
+    ), "local preview must check for an existing session Secret before applying"
+    assert commands[1] == (
+        "kubectl",
+        [
+            "--context",
+            "k3d-wildside-preview",
             "apply",
             "-f",
             "-",
         ],
-        commands[0][2],
+        commands[1][2],
     ), "local preview must apply the session Secret before Helm"
-    manifest = commands[0][2]
+    manifest = commands[1][2]
     assert manifest is not None
     assert "name: wildside-session-key" in manifest
     assert "namespace: wildside" in manifest
     encoded_key = manifest.rsplit("session_key: ", maxsplit=1)[1].strip()
     assert base64.b64decode(encoded_key) == b"a" * 96
+
+
+def test_ensure_session_secret_reuses_existing_key(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify local preview does not rotate an existing session signing key."""
+    commands = install_run_recorder(
+        monkeypatch,
+        stdout=base64.b64encode(b"existing-key").decode("ascii"),
+    )
+
+    def fail_on_rotation(_length: int) -> bytes:
+        raise AssertionError("existing local preview session keys must be reused")
+
+    ensure_session_secret(preview_config, key_generator=fail_on_rotation)
+
+    assert commands == [
+        (
+            "kubectl",
+            [
+                "--context",
+                "k3d-wildside-preview",
+                "-n",
+                "wildside",
+                "get",
+                "secret",
+                "wildside-session-key",
+                "--ignore-not-found",
+                "-o=jsonpath={.data.session_key}",
+            ],
+            None,
+        )
+    ], "existing local preview session keys must be reused without apply"
 
 
 def test_print_status_uses_provider_context_and_prints_kind_port_forward(

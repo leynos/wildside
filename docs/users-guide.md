@@ -68,9 +68,9 @@ Kube contexts are named `{provider}-{cluster}`. The default context is
 `k3d-wildside-preview`; Podman plus kind with the default cluster uses
 `kind-wildside-preview`.
 
-The local session key is generated at deploy time, applied as the
-`wildside-session-key` Secret, and mounted by the chart at
-`/var/run/secrets/wildside-session/session_key`.
+The local session key is generated when missing, applied as the
+`wildside-session-key` Secret, reused on later deploys, and mounted by the
+chart at `/var/run/secrets/wildside-session/session_key`.
 
 Nile Valley owns shared preview and GitOps automation. The local preview in
 this repository is for developer validation of the Wildside chart and runtime

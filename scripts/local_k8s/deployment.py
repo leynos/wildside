@@ -80,7 +80,7 @@ def ensure_session_secret(
     *,
     key_generator: Callable[[int], bytes] = secrets.token_bytes,
 ) -> None:
-    """Create or refresh the local preview session signing key Secret."""
+    """Create the local preview session signing key Secret when absent."""
 
     logger.info(
         "local_k8s_session_secret_apply",
@@ -90,6 +90,23 @@ def ensure_session_secret(
             "secret": SESSION_SECRET_NAME,
         },
     )
+    existing_key = run(
+        "kubectl",
+        [
+            "--context",
+            config.kube_context,
+            "-n",
+            config.namespace,
+            "get",
+            "secret",
+            SESSION_SECRET_NAME,
+            "--ignore-not-found",
+            f"-o=jsonpath={{.data.{SESSION_SECRET_KEY_NAME}}}",
+        ],
+    )
+    if existing_key.stdout.strip():
+        return
+
     key = key_generator(96)
     encoded_key = base64.b64encode(key).decode("ascii")
     manifest = f"""\

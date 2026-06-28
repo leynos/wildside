@@ -151,9 +151,9 @@ currently `>=1.26.0-0 <1.32.0-0`. Leaving it unset uses Kubernetes `v1.31.0`.
 
 The local values file enables `sessionSecret` and sets
 `SESSION_KEY_FILE=/var/run/secrets/wildside-session/session_key`. The helper
-generates and applies the `wildside-session-key` Secret on each `up` run,
-avoiding committed secret material while keeping the release-mode session
-configuration path.
+creates the `wildside-session-key` Secret when missing and reuses existing key
+material on later `up` runs, avoiding committed secret material while keeping
+the release-mode session configuration path.
 
 The kube context name is derived as `{provider}-{cluster}`. For the default
 cluster, this is `k3d-wildside-preview`; for the rootless Podman plus `kind`
@@ -177,5 +177,6 @@ Repository-wide validation remains:
 ```bash
 make check-fmt
 make lint
+make audit
 make test
 ```
