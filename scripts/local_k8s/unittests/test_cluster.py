@@ -249,7 +249,10 @@ class TestImageImport:
             on_remove_archive=removed_archives.append,
         )
 
-        assert removed_archives == [archive_path], "stale Podman image archives must be removed before save"
+        assert removed_archives == [
+            archive_path,
+            archive_path,
+        ], "Podman image archives must be removed before save and after load"
         assert commands == [
             (
                 "podman",
@@ -281,6 +284,33 @@ class TestImageImport:
                 ],
             ),
         ], "Podman-backed kind must archive the image name Kubernetes will pull"
+
+    def test_podman_kind_image_import_removes_archive_when_load_fails(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config_kind: PreviewConfig,
+        tmp_path: Path,
+    ) -> None:
+        """Verify failed kind loads do not leave Podman image archives behind."""
+        archive_path = tmp_path / "wildside-preview-image.tar"
+        removed_archives: list[Path] = []
+
+        def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+            if command == "env" and args[:3] == ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", "load"]:
+                raise LocalK8sError("kind load failed")
+            return MockCommandResult()
+
+        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", removed_archives.append)
+
+        with pytest.raises(LocalK8sError, match="kind load failed"):
+            import_image(preview_config_kind, archive_dir=tmp_path)
+
+        assert removed_archives == [
+            archive_path,
+            archive_path,
+        ], "Podman image archives must be removed even when kind load fails"
 
     def test_podman_kind_image_import_keeps_registry_qualified_archive_tag(
         self,

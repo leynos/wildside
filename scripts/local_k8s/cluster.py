@@ -161,28 +161,31 @@ def import_image(config: PreviewConfig, *, archive_dir: Path | None = None) -> N
             archive_path = _image_archive_path(config, archive_dir=archive_dir)
             archive_image_name = _podman_archive_image_name(config.image_name)
             _remove_stale_archive(archive_path)
-            if archive_image_name != config.image_name:
-                run("podman", ["tag", config.image_name, archive_image_name])
-            run(
-                "podman",
-                [
-                    "save",
-                    "--output",
-                    str(archive_path),
-                    archive_image_name,
-                ],
-            )
-            command, args = _kind_command(
-                config,
-                [
-                    "load",
-                    "image-archive",
-                    str(archive_path),
-                    "--name",
-                    config.cluster_name,
-                ],
-            )
-            run(command, args)
+            try:
+                if archive_image_name != config.image_name:
+                    run("podman", ["tag", config.image_name, archive_image_name])
+                run(
+                    "podman",
+                    [
+                        "save",
+                        "--output",
+                        str(archive_path),
+                        archive_image_name,
+                    ],
+                )
+                command, args = _kind_command(
+                    config,
+                    [
+                        "load",
+                        "image-archive",
+                        str(archive_path),
+                        "--name",
+                        config.cluster_name,
+                    ],
+                )
+                run(command, args)
+            finally:
+                _remove_stale_archive(archive_path)
         case ("kind", _):
             command, args = _kind_command(
                 config,
