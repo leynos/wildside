@@ -60,6 +60,16 @@ def image_tags(draw: DrawFn) -> str:
     return first + "".join(rest)
 
 
+@st.composite
+def registry_qualified_image_names(draw: DrawFn) -> str:
+    """Generate registry-qualified image names that must remain unchanged."""
+    registry = draw(st.sampled_from(("localhost", "registry.example.test", "localhost:5000")))
+    namespace = draw(repository_components())
+    repository = draw(repository_components())
+    tag = draw(image_tags())
+    return f"{registry}/{namespace}/{repository}:{tag}"
+
+
 def _preview_config(*, release_name: str, chart_name: str) -> PreviewConfig:
     """Return a minimal PreviewConfig for pure helper property tests."""
     chart_path = Path("/repo/deploy/charts") / chart_name
@@ -157,22 +167,12 @@ def test_podman_archive_image_name_prefixes_namespaced_images(
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(
-    registry=st.sampled_from(("localhost", "registry.example.test", "localhost:5000")),
-    namespace=repository_components(),
-    repository=repository_components(),
-    tag=image_tags(),
-)
+@given(image_name=registry_qualified_image_names())
 def test_podman_archive_image_name_preserves_registry_hosts(
     monkeypatch: pytest.MonkeyPatch,
-    registry: str,
-    namespace: str,
-    repository: str,
-    tag: str,
+    image_name: str,
 ) -> None:
     """Verify registry-qualified images are already Kubernetes-compatible."""
-    image_name = f"{registry}/{namespace}/{repository}:{tag}"
-
     assert _podman_saved_image_name(monkeypatch, image_name) == image_name
 
 
