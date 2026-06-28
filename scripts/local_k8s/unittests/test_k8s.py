@@ -7,7 +7,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 from local_k8s.config import PreviewConfig
-from local_k8s.k8s import print_kubernetes_status
+from local_k8s.k8s import ensure_namespace, print_kubernetes_status
 
 if typing.TYPE_CHECKING:
     import pytest
@@ -76,3 +76,38 @@ def test_print_kubernetes_status_uses_configured_kube_context(
             "wide",
         ],
     ), "kind status must use the kind-prefixed kube context"
+
+
+def test_ensure_namespace_uses_configured_kube_context(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify namespace creation targets the provider-specific kube context."""
+    config = replace(preview_config, k8s_provider="kind")
+    calls = _capture_status_commands(monkeypatch)
+
+    ensure_namespace(config)
+
+    assert calls == [
+        (
+            "kubectl",
+            [
+                "--context",
+                "kind-wildside-preview",
+                "get",
+                "namespace",
+                "wildside",
+                "--ignore-not-found",
+            ],
+        ),
+        (
+            "kubectl",
+            [
+                "--context",
+                "kind-wildside-preview",
+                "create",
+                "namespace",
+                "wildside",
+            ],
+        ),
+    ], "namespace commands must use the provider-specific kube context"

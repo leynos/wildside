@@ -24,6 +24,7 @@ from local_k8s.deployment import (
     build_image,
     deploy_preview,
     ensure_session_secret,
+    helm_upgrade,
     print_logs,
     print_status,
 )
@@ -177,6 +178,43 @@ def test_build_image_uses_configured_container_engine(
             None,
         )
     ], "image builds must use the configured container engine"
+
+
+def test_helm_upgrade_uses_configured_kube_context(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify Helm upgrades target the selected provider context."""
+    config = replace(preview_config, k8s_provider="kind")
+    commands = install_run_recorder(monkeypatch)
+
+    helm_upgrade(config)
+
+    assert commands == [
+        (
+            "helm",
+            [
+                "--kube-context",
+                "kind-wildside-preview",
+                "upgrade",
+                "--install",
+                "preview",
+                "/repo/deploy/charts/wildside",
+                "--namespace",
+                "wildside",
+                "--values",
+                "/repo/deploy/charts/wildside/values.local.yaml",
+                "--set",
+                "image.repository=wildside-backend",
+                "--set",
+                "image.tag=local",
+                "--wait",
+                "--timeout",
+                "5m",
+            ],
+            None,
+        )
+    ], "Helm upgrades must use the provider-specific kube context"
 
 
 def test_ensure_session_secret_applies_runtime_key_manifest(
