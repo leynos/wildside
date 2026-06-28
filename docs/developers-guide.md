@@ -732,7 +732,7 @@ dependency declarations (PEP 723 inline metadata), and style guidance.
 1. Create a test file alongside the script: `scripts/<name>.test.mjs`.
 2. Use `vi.mock` / `vi.resetModules` from Vitest to isolate each import.
 3. If the script has CLI side-effects, gate them behind a direct-invocation
-   guard (see "Programmatic API" under "Override parity check") so the module
+   guard (see "Programmatic API" under "Override policy check") so the module
    can be imported cleanly in tests.
 
 ## UX audit helpers
@@ -773,75 +773,81 @@ sitemap.
 ### Running locally
 
 ```sh
-node ./scripts/check-overrides-parity.mjs
+node ./scripts/check-overrides-policy.mjs
 ```
 
 A passing run prints:
 
 ```text
-Override parity verified for basic-ftp, dompurify, ip-address, uuid.
+pnpm override policy verified for basic-ftp, dompurify, ip-address, uuid.
 ```
 
-A failing run prints a per-dependency diff to stderr and exits with code `1`.
+A failing run prints a policy diagnostic to stderr and exits with code `1`.
 
-## Override parity check
+## Override policy check
 
-This repository pins certain security-sensitive dependencies in two separate
-override blocks so they resolve correctly regardless of whether Bun or pnpm is
-used for installation:
+This repository pins certain security-sensitive dependencies with
+`pnpm.overrides`. Keep these install-time dependency patches scoped to pnpm.
+Do not add a top-level `overrides` block: npm consumes that block for ordinary
+commands such as `npx`, and rejects overrides that conflict with direct
+dependency ranges.
 
-- `overrides` — top-level; consumed by Bun.
-- `pnpm.overrides` — consumed by pnpm.
+Bun audit exceptions are handled by `security/run-bun-audit.js`, which turns
+non-expired entries in `security/audit-exceptions.json` into explicit
+`bun audit --ignore=<GHSA>` flags. This keeps Bun audit policy visible without
+changing npm's dependency resolution surface.
 
-The script `scripts/check-overrides-parity.mjs` verifies that both blocks
-contain identical values for every pinned dependency. It is run automatically
-in Continuous Integration (CI) after the lockfile step and before dependency
-installation.
+The script `scripts/check-overrides-policy.mjs` verifies that
+`pnpm.overrides` is present and that top-level overrides are absent. It is run
+automatically in Continuous Integration (CI) after the lockfile step and before
+dependency installation.
 
 ### Running locally
 
 ```sh
-node ./scripts/check-overrides-parity.mjs
+node ./scripts/check-overrides-policy.mjs
 ```
 
 A passing run prints:
 
 ```text
-Override parity verified for basic-ftp, dompurify, ip-address, uuid.
+pnpm override policy verified for basic-ftp, dompurify, ip-address, uuid.
 ```
 
-A failing run prints a per-dependency diff to stderr and exits with code `1`.
+A failing run prints a policy diagnostic to stderr and exits with code `1`.
 
 ### Resolving failures
 
-When the check fails, open `package.json` and ensure the version string in
-`overrides.<package>` exactly matches the version string in
-`pnpm.overrides.<package>`. Both entries must be present and identical.
+When the check fails, open `package.json` and remove any top-level
+`overrides` entries. Keep dependency patches under `pnpm.overrides`; for Bun
+audit output, add a time-bound entry to `security/audit-exceptions.json` and
+let `pnpm run audit:bun` pass the corresponding advisory ID to Bun.
 
 ### CI integration
 
 The check runs as a step in `.github/workflows/ci.yml`:
 
 ```yaml
-- run: node ./scripts/check-overrides-parity.mjs
+- run: node ./scripts/check-overrides-policy.mjs
 ```
 
 It appears after `make lockfile` and before `make deps`. A failure here means
-the two override blocks have drifted; update `package.json` and recommit.
+an npm-visible override has been added or the pnpm override policy has been
+removed; update `package.json` and recommit.
 
 ### Programmatic API
 
-`scripts/check-overrides-parity.mjs` exports two functions for use in tests or
+`scripts/check-overrides-policy.mjs` exports three functions for use in tests or
 other tooling:
 
-- **`checkOverridesParity(packageJson)`** — accepts a parsed `package.json`
-  object and returns a structured report with `ok`, `overridesToCheck`,
-  `mismatches`, and `reason` fields. It is a query helper and must not write to
-  stdout or stderr.
+- **`checkOverridesPolicy(packageJson)`** — accepts a parsed `package.json`
+  object and returns a structured report with `ok`, `pnpmOverridesToCheck`,
+  `rootOverrides`, and `reason` fields. It is a query helper and must not write
+  to stdout or stderr.
 - **`formatOverrideValue(value)`** — formats a single override value for
   human-readable diagnostics; returns `"<missing>"` for `undefined` and a
   JSON-stringified value otherwise.
-- **`reportOverridesParity(report, outputIo?)`** — writes the structured report
+- **`reportOverridesPolicy(report, outputIo?)`** — writes the structured report
   to a console-like adapter and returns process exit code `0` or `1`. The CLI
   entrypoint is the only production caller that uses the default `console`
   adapter.
@@ -853,7 +859,7 @@ import {
   checkOverridesParity,
   formatOverrideValue,
   reportOverridesParity,
-} from './scripts/check-overrides-parity.mjs';
+} from './scripts/check-overrides-policy.mjs';
 ```
 
 The CLI entry point is protected by a direct-invocation guard so importing the
@@ -861,7 +867,7 @@ module does not trigger any file I/O or process side-effects:
 
 ```js
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  // only runs when invoked directly as `node ./scripts/check-overrides-parity.mjs`
+  // only runs when invoked directly as `node ./scripts/check-overrides-policy.mjs`
 }
 ```
 

@@ -1,7 +1,5 @@
 //! Helper types and functions for route annotation service tests.
 
-#![cfg(test)]
-
 use std::{error::Error as StdError, future::Future};
 
 use super::{RouteAnnotationsService, make_service_with_idempotency};

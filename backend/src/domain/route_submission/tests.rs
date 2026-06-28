@@ -3,8 +3,6 @@
 //! Tests cover idempotency key handling, payload hash matching, conflict
 //! detection, and concurrent insert race conditions.
 
-#![cfg(test)]
-
 use std::{error::Error as StdError, sync::Arc};
 
 use chrono::Utc;

@@ -1,7 +1,5 @@
 //! Regression coverage for offline bundle domain types.
 
-#![cfg(test)]
-
 use std::{error::Error as StdError, io};
 
 use chrono::{Duration, TimeZone, Utc};

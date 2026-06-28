@@ -275,6 +275,7 @@ audit: deps audit-node rust-audit
 audit-node: deps
 	pnpm -r --if-present run audit
 	pnpm run audit:validate
+	pnpm run audit:bun
 
 rust-audit:
 	$(call ensure_tool,cargo-audit)
