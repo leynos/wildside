@@ -11,7 +11,7 @@ from shutil import which
 def test_local_k8s_cli_help_smoke() -> None:
     """Verify the script entry point loads and exposes the preview CLI."""
     uv = which("uv")
-    assert uv is not None
+    assert uv is not None, "uv must be available to execute scripts/local_k8s.py"
     script_path = Path(__file__).resolve().parents[2] / "local_k8s.py"
 
     completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
@@ -22,7 +22,9 @@ def test_local_k8s_cli_help_smoke() -> None:
         timeout=60,
     )
 
-    assert "Manage a local Kubernetes Wildside preview environment." in completed.stdout
+    assert "Manage a local Kubernetes Wildside preview environment." in completed.stdout, (
+        "local_k8s.py --help must return the preview CLI help text"
+    )
 
 
 def test_local_k8s_status_reports_configuration_errors_at_cli_boundary() -> None:

@@ -140,6 +140,10 @@ def import_image(config: PreviewConfig, *, archive_dir: Path | None = None) -> N
     config : PreviewConfig
         Local preview settings that select the Kubernetes provider, cluster
         name, and image name to import.
+    archive_dir : Path | None, optional
+        Directory for the temporary Podman image archive used by the
+        ``kind`` plus Podman import path. Defaults to the system temporary
+        directory.
 
     Raises
     ------

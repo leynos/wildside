@@ -3,9 +3,9 @@
 These tests exercise the orchestration logic in ``local_k8s.deployment``
 without invoking Kubernetes, Helm, k3d, or Docker. They document the preflight
 contract for full build-and-deploy runs and the ``skip_build`` path used with
-prebuilt images. The key invariant is that Docker is required only when the
-deployment will build an image locally; Helm, k3d, and kubectl remain required
-for both deployment modes.
+prebuilt images. The key invariant is that deployment tools depend on the
+selected provider, while Docker or Podman is required only when the deployment
+will build an image locally.
 """
 
 from __future__ import annotations
@@ -188,7 +188,7 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
 
     def deterministic_key(length: int) -> bytes:
         """Return a deterministic key for manifest assertions."""
-        assert length == 96
+        assert length == 96, "session key generator must request 96 bytes"
         return b"a" * length
 
     ensure_session_secret(preview_config, key_generator=deterministic_key)

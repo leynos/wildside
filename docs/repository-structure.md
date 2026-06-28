@@ -504,7 +504,7 @@ infrastructure state handling.
 
 This repository also provides a developer-local Kubernetes preview helper:
 `scripts/local_k8s.py` and `scripts/local_k8s/*`. The helper builds the backend
-image, imports it into a local `k3d` or kind cluster, applies the local session
+image, imports it into a local `k3d` or `kind` cluster, applies the local session
 Secret, and installs the Wildside chart with
 `deploy/charts/wildside/values.local.yaml`. It validates the application
 packaging contract; Nile Valley remains the owner of shared cluster and GitOps

@@ -18,7 +18,8 @@ from local_k8s.validation import LocalK8sError
 
 def test_wildside_environment_is_isolated() -> None:
     """Verify local preview tests start without inherited WILDSIDE variables."""
-    assert not any(name.startswith("WILDSIDE_") for name in os.environ)
+    leaked = [name for name in os.environ if name.startswith("WILDSIDE_")]
+    assert not leaked, f"expected no inherited WILDSIDE_ variables, got {leaked}"
 
 
 def test_preview_config_uses_provider_neutral_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -117,6 +118,21 @@ def test_preview_config_rejects_unsafe_cluster_names(
     monkeypatch.setenv("WILDSIDE_K8S_CLUSTER", cluster_name)
 
     with pytest.raises(LocalK8sError, match="WILDSIDE_K8S_CLUSTER"):
+        PreviewConfig.from_env()
+
+
+@pytest.mark.parametrize(
+    "namespace",
+    ["../wildside", "Wildside", "wildside_", "-wildside", "wildside-"],
+)
+def test_preview_config_rejects_unsafe_namespaces(
+    monkeypatch: pytest.MonkeyPatch,
+    namespace: str,
+) -> None:
+    """Verify namespace values cannot inject invalid Kubernetes YAML names."""
+    monkeypatch.setenv("WILDSIDE_K8S_NAMESPACE", namespace)
+
+    with pytest.raises(LocalK8sError, match="WILDSIDE_K8S_NAMESPACE"):
         PreviewConfig.from_env()
 
 

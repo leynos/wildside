@@ -309,9 +309,9 @@ markdownlint: spelling
 nixie:
 	bun install
 	bun scripts/install-mermaid-browser.mjs
-	# CI currently requires --no-sandbox; remove once nixie supports
-	# environment variable control for this option
-	$(NIXIE) --no-sandbox
+	# CI needs --no-sandbox; serial runs (--max-concurrency 1) avoid browser
+	# EAGAIN writes. Remove --no-sandbox once nixie supports env-var control.
+	$(NIXIE) --no-sandbox --max-concurrency 1
 
 spelling: spelling-phrase-check
 	@git ls-files -z | xargs -0 -r env $(UV_ENV) \

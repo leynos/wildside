@@ -157,7 +157,7 @@ the release-mode session configuration path.
 
 The kube context name is derived as `{provider}-{cluster}`. For the default
 cluster, this is `k3d-wildside-preview`; for the rootless Podman plus `kind`
-path this is `kind-wildside-preview`.
+path, this is `kind-wildside-preview`.
 
 ## Validation
 

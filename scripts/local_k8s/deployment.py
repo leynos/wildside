@@ -13,8 +13,8 @@ from .cluster import ensure_cluster, import_image, print_cluster_status
 from .k8s import ensure_namespace, helm_fullname, print_kubernetes_status
 from .validation import LocalK8sError, require_tools
 
-SESSION_SECRET_KEY_NAME = "session_key"
-SESSION_SECRET_NAME = "wildside-session-key"
+SESSION_SECRET_KEY_NAME = "session_key"  # noqa: S105 - Secret data key name, not secret material.
+SESSION_SECRET_NAME = "wildside-session-key"  # noqa: S105 - Secret resource name, not secret material.
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,24 @@ def ensure_session_secret(
     *,
     key_generator: Callable[[int], bytes] = secrets.token_bytes,
 ) -> None:
-    """Create the local preview session signing key Secret when absent."""
+    """Create the local preview session signing key Secret when absent.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Local preview settings that select the kube context, namespace, and
+        Secret location used by the deployment.
+    key_generator : Callable[[int], bytes], optional
+        Injectable source of key bytes. Tests use this seam to make the
+        rendered Secret deterministic; production uses ``secrets.token_bytes``.
+
+    Returns
+    -------
+    None
+        The function applies a Kubernetes Secret only when the expected key is
+        missing. Existing key material is reused to avoid rotating local
+        preview sessions on every deployment.
+    """
 
     logger.info(
         "local_k8s_session_secret_apply",

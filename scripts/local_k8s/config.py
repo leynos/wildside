@@ -19,6 +19,7 @@ DEFAULT_CONTAINER_ENGINE = "docker"
 DEFAULT_K8S_PROVIDER = "k3d"
 DEFAULT_KIND_NODE_IMAGE = "kindest/node:v1.31.0"
 CLUSTER_NAME_PATTERN = re.compile(r"[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?")
+NAMESPACE_PATTERN = re.compile(r"[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?")
 KIND_NODE_IMAGE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@_+-]{0,254}")
 
 ContainerEngine = Literal["docker", "podman"]
@@ -45,6 +46,7 @@ class PreviewConfig:
     def __post_init__(self) -> None:
         """Validate fields that are later forwarded to paths or YAML."""
         _validate_cluster_name(self.cluster_name)
+        _validate_namespace(self.namespace)
         _validate_kind_node_image(self.kind_node_image)
 
     @property
@@ -125,6 +127,16 @@ def _validate_cluster_name(value: str) -> None:
     if CLUSTER_NAME_PATTERN.fullmatch(value) is None:
         raise LocalK8sError(
             "WILDSIDE_K8S_CLUSTER must contain only lowercase letters, "
+            "digits, and hyphens; start and end with an alphanumeric "
+            "character; and be at most 63 characters"
+        )
+
+
+def _validate_namespace(value: str) -> None:
+    """Reject namespace values unsafe for Kubernetes names and YAML."""
+    if NAMESPACE_PATTERN.fullmatch(value) is None:
+        raise LocalK8sError(
+            "WILDSIDE_K8S_NAMESPACE must contain only lowercase letters, "
             "digits, and hyphens; start and end with an alphanumeric "
             "character; and be at most 63 characters"
         )

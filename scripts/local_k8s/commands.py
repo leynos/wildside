@@ -122,7 +122,7 @@ def run(
             return _run_with_input(command, args, cwd=cwd, input_text=input_text)
         return _run_with_plumbum(command, args, cwd=cwd)
     except (ProcessExecutionError, subprocess.CalledProcessError) as exc:
-        logger.error(
+        logger.exception(
             "local_k8s_command_failed",
             extra={
                 "command": command,

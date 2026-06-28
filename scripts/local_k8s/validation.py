@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from shutil import which
 
-from plumbum import local
-from plumbum.commands.processes import CommandNotFound
+from cuprum import ProgramCatalogue as Catalogue
+from cuprum import ProjectSettings, UnknownProgramError, sh
 
 
 class LocalK8sError(RuntimeError):
@@ -38,7 +39,21 @@ def require_tools(tools: Iterable[str]) -> None:
 def _is_missing(tool: str) -> bool:
     """Return True when an executable cannot be resolved on PATH."""
     try:
-        local.which(tool)
-    except CommandNotFound:
+        sh.make(tool, catalogue=_catalogue_for(tool))
+    except UnknownProgramError:
         return True
-    return False
+    return which(tool) is None
+
+
+def _catalogue_for(tool: str) -> Catalogue:
+    """Return a one-tool catalogue for preflight command construction."""
+    return Catalogue(
+        projects=(
+            ProjectSettings(
+                name="local-k8s-preflight",
+                programs=(tool,),
+                documentation_locations=(),
+                noise_rules=(),
+            ),
+        )
+    )

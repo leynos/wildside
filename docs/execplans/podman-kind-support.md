@@ -63,7 +63,7 @@ make local-k8s-up
   `kind load docker-image` is for Docker-backed clusters, while
   `kind load image-archive` works with the Podman provider.
 - Do not create `kind` host-port mappings for the preview HTTP port. Use
-  `kubectl port-forward` for `kind`, because host-port mappings reserve the
+  `kubectl port-forward` for `kind` because host-port mappings reserve the
   same loopback port that the developer-facing preview needs.
 - Keep command execution through the existing local preview command abstraction
   unless implementation proves that abstraction cannot express provider
@@ -419,7 +419,7 @@ teardown result in this plan's `Outcomes & Retrospective`.
   Milestone 4 gates. CodeRabbit reported zero findings.
 - [x] 2026-06-22: Updated `docs/local-k8s-preview-design.md`,
   `docs/developers-guide.md`, `docs/contents.md`, and the local preview
-  package summary so the documented workflow covers Docker plus `k3d`,
+  package summary, so the documented workflow covers Docker plus `k3d`,
   rootless Podman plus `kind`, provider-neutral environment variables, legacy
   aliases, required tools, kube context naming, and kind port-forward usage.
 - [x] 2026-06-22: Ran `make markdownlint` after the Milestone 5 documentation
@@ -510,11 +510,11 @@ teardown result in this plan's `Outcomes & Retrospective`.
   developer last selected with `kubectl config use-context`.
 - 2026-06-22: The Helm chart's service name is not always the release name.
   The kind port-forward output therefore needs the same Helm fullname helper
-  as status checks, otherwise renamed releases would print a command for the
+  as status checks; otherwise, renamed releases would print a command for the
   wrong service.
 - 2026-06-22: The documentation index, developer guide, and package docstring
   all used k3d-specific language. Milestone 5 needs to update those secondary
-  references as well as the main design document; otherwise repository search
+  references as well as the main design document; otherwise, repository search
   still advertises the old single-provider contract.
 - 2026-06-22: Live Podman plus kind validation revealed that kind's default
   node image can outrun the chart's supported Kubernetes range. The fix is to
