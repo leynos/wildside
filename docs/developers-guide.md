@@ -844,8 +844,10 @@ removed; update `package.json` and recommit.
 other tooling:
 
 - **`checkOverridesPolicy(packageJson)`** — accepts a parsed `package.json`
-  object and returns a structured report with `ok`, `pnpmOverridesToCheck`,
-  `rootOverrides`, and `reason` fields. It is a query helper and must not write
+  object and returns a structured report with `OK`, `pnpmOverridesToCheck`,
+  `rootOverrides`, and `reason` fields. `OK` is the outcome flag, while
+  `pnpmOverridesToCheck`, `rootOverrides`, and `reason` provide the policy
+  details. It is a query helper and must not write
   to stdout or stderr.
 - **`formatOverrideValue(value)`** — formats a single override value for
   human-readable diagnostics; returns `"<missing>"` for `undefined` and a
@@ -859,14 +861,14 @@ Example import:
 
 ```js
 import {
-  checkOverridesParity,
+  checkOverridesPolicy,
   formatOverrideValue,
-  reportOverridesParity,
+  reportOverridesPolicy,
 } from './scripts/check-overrides-policy.mjs';
 ```
 
-The CLI entry point is protected by a direct-invocation guard so importing the
-module does not trigger any file I/O or process side-effects:
+The CLI entry point is protected by a direct-invocation guard, so importing the
+module does not trigger any file I/O or process side effects:
 
 ```js
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

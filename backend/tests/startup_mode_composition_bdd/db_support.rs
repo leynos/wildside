@@ -10,7 +10,7 @@ use pg_embedded_setup_unpriv::TemporaryDatabase;
 use uuid::Uuid;
 
 use super::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use super::support::provision_template_database;
+use super::support::embedded_postgres::provision_template_database;
 
 /// Database context for DB-present startup mode tests.
 pub(crate) struct DbContext {

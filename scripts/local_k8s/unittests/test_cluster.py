@@ -165,6 +165,15 @@ class TestImageImport:
     """Provider command-contract tests for preview image loading."""
 
     @staticmethod
+    def _archive_path_from_save(commands: list[tuple[str, list[str]]]) -> Path:
+        """Return the archive path passed to ``podman save``."""
+        save_commands = [
+            args for command, args in commands if command == "podman" and args[:2] == ["save", "--output"]
+        ]
+        assert len(save_commands) == 1, "Podman import must save exactly one image archive"
+        return Path(save_commands[0][2])
+
+    @staticmethod
     def _capture_commands(
         monkeypatch: pytest.MonkeyPatch,
         config: PreviewConfig,
@@ -241,18 +250,20 @@ class TestImageImport:
     ) -> None:
         """Verify rootless Podman kind uses an archive load path."""
         removed_archives: list[Path] = []
-        archive_path = tmp_path / "wildside-preview-image.tar"
         commands = self._capture_commands(
             monkeypatch,
             preview_config_kind,
             archive_dir=tmp_path,
             on_remove_archive=removed_archives.append,
         )
+        archive_path = self._archive_path_from_save(commands)
 
-        assert removed_archives == [
-            archive_path,
-            archive_path,
-        ], "Podman image archives must be removed before save and after load"
+        assert archive_path.parent == tmp_path, "Podman image archives must use the configured directory"
+        assert archive_path.name.startswith("wildside-preview-"), (
+            "Podman image archives must include the cluster name for operator diagnostics"
+        )
+        assert archive_path.name.endswith("-image.tar"), "Podman image archives must keep a tar suffix"
+        assert removed_archives == [archive_path], "Podman image archives must be removed after load"
         assert commands == [
             (
                 "podman",
@@ -292,10 +303,11 @@ class TestImageImport:
         tmp_path: Path,
     ) -> None:
         """Verify failed kind loads do not leave Podman image archives behind."""
-        archive_path = tmp_path / "wildside-preview-image.tar"
         removed_archives: list[Path] = []
+        command_log: list[tuple[str, list[str]]] = []
 
         def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+            command_log.append((command, args))
             if command == "env" and args[:3] == ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", "load"]:
                 raise LocalK8sError("kind load failed")
             return MockCommandResult()
@@ -307,10 +319,8 @@ class TestImageImport:
         with pytest.raises(LocalK8sError, match="kind load failed"):
             import_image(preview_config_kind, archive_dir=tmp_path)
 
-        assert removed_archives == [
-            archive_path,
-            archive_path,
-        ], "Podman image archives must be removed even when kind load fails"
+        archive_path = self._archive_path_from_save(command_log)
+        assert removed_archives == [archive_path], "Podman image archives must be removed even when kind load fails"
 
     def test_podman_kind_image_import_keeps_registry_qualified_archive_tag(
         self,
@@ -323,8 +333,8 @@ class TestImageImport:
             preview_config_kind,
             image_name="registry.example.test/wildside/backend:local",
         )
-        archive_path = tmp_path / "wildside-preview-image.tar"
         commands = self._capture_commands(monkeypatch, config, archive_dir=tmp_path)
+        archive_path = self._archive_path_from_save(commands)
 
         assert commands[0] == (
             "podman",
@@ -347,8 +357,8 @@ class TestImageImport:
             preview_config_kind,
             image_name="leynos/wildside-backend:local",
         )
-        archive_path = tmp_path / "wildside-preview-image.tar"
         commands = self._capture_commands(monkeypatch, config, archive_dir=tmp_path)
+        archive_path = self._archive_path_from_save(commands)
 
         assert commands[:2] == [
             (
@@ -369,6 +379,20 @@ class TestImageImport:
                 ],
             ),
         ], "namespaced Podman images must use Kubernetes' Docker Hub pull name"
+
+    def test_podman_kind_image_import_uses_unique_archive_names(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config_kind: PreviewConfig,
+        tmp_path: Path,
+    ) -> None:
+        """Verify duplicate imports do not contend for one archive path."""
+        first_commands = self._capture_commands(monkeypatch, preview_config_kind, archive_dir=tmp_path)
+        second_commands = self._capture_commands(monkeypatch, preview_config_kind, archive_dir=tmp_path)
+
+        assert self._archive_path_from_save(first_commands) != self._archive_path_from_save(
+            second_commands
+        ), "Podman image imports must use unique archive paths"
 
 
 def test_kind_delete_is_idempotent_when_cluster_is_absent(

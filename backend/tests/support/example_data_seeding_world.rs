@@ -21,7 +21,8 @@ use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 use super::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use super::{handle_cluster_setup_failure, provision_template_database};
+use super::cluster_skip::handle_cluster_setup_failure;
+use super::embedded_postgres::provision_template_database;
 
 /// Wrapper for non-Clone runtime handle.
 #[derive(Clone)]

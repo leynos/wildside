@@ -88,6 +88,17 @@ describe('checkOverridesPolicy', () => {
     });
   });
 
+  it('reports root overrides before missing pnpm overrides', async () => {
+    const { checkOverridesPolicy } = await loadModule();
+
+    expect(checkOverridesPolicy({ overrides: { dompurify: '3.4.11' } })).toMatchObject({
+      ok: false,
+      pnpmOverridesToCheck: [],
+      rootOverrides: ['dompurify'],
+      reason: 'root-overrides-present',
+    });
+  });
+
   it('keeps the live package manifest npm-compatible', async () => {
     const { checkOverridesPolicy } = await loadModule();
 

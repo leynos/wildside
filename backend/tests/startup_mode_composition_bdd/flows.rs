@@ -26,7 +26,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use super::flow_support::{Snapshot, World, is_skipped};
-use super::support::profile_interests::build_session_middleware;
+use super::support::session_middleware::build_session_middleware;
 use super::{ServerConfig, build_http_state};
 
 fn parse_json_body(bytes: &[u8]) -> Option<Value> {

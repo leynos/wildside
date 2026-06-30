@@ -99,14 +99,6 @@ def ensure_session_secret(
         preview sessions on every deployment.
     """
 
-    logger.info(
-        "local_k8s_session_secret_apply",
-        extra={
-            "cluster": config.cluster_name,
-            "namespace": config.namespace,
-            "secret": SESSION_SECRET_NAME,
-        },
-    )
     existing_key = run(
         "kubectl",
         [
@@ -122,6 +114,14 @@ def ensure_session_secret(
         ],
     )
     if existing_key.stdout.strip():
+        logger.info(
+            "local_k8s_session_secret_reuse",
+            extra={
+                "cluster": config.cluster_name,
+                "namespace": config.namespace,
+                "secret": SESSION_SECRET_NAME,
+            },
+        )
         return
 
     key = key_generator(96)
@@ -136,17 +136,38 @@ type: Opaque
 data:
   {SESSION_SECRET_KEY_NAME}: {encoded_key}
 """
-    run(
-        "kubectl",
-        [
-            "--context",
-            config.kube_context,
-            "apply",
-            "-f",
-            "-",
-        ],
-        input_text=manifest,
+    logger.info(
+        "local_k8s_session_secret_apply",
+        extra={
+            "cluster": config.cluster_name,
+            "namespace": config.namespace,
+            "secret": SESSION_SECRET_NAME,
+        },
     )
+    try:
+        run(
+            "kubectl",
+            [
+                "--context",
+                config.kube_context,
+                "create",
+                "-f",
+                "-",
+            ],
+            input_text=manifest,
+        )
+    except LocalK8sError as exc:
+        if "already exists" in str(exc):
+            logger.info(
+                "local_k8s_session_secret_reuse",
+                extra={
+                    "cluster": config.cluster_name,
+                    "namespace": config.namespace,
+                    "secret": SESSION_SECRET_NAME,
+                },
+            )
+            return
+        raise
 
 
 def helm_upgrade(config: PreviewConfig) -> None:

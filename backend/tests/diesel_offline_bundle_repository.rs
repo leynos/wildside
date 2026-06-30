@@ -15,11 +15,28 @@ use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-mod support;
+mod support {
+    //! Test-local view of shared support helpers.
+    include!("support/mod.rs");
+    #[path = "../support/atexit_cleanup.rs"]
+    pub mod atexit_cleanup;
+    #[path = "../support/cluster_skip.rs"]
+    pub mod cluster_skip;
+    #[path = "../support/embedded_postgres.rs"]
+    pub mod embedded_postgres;
+    #[path = "../support/seed_connection_helpers.rs"]
+    pub mod seed_connection_helpers;
+    #[path = "../support/seed_helpers.rs"]
+    pub mod seed_helpers;
+    #[path = "../support/table_helpers.rs"]
+    pub mod table_helpers;
+}
 
-use crate::support::seed_helpers::seed_user_and_route;
+use crate::support::seed_connection_helpers::seed_user_and_route;
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{drop_table, handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
+use support::table_helpers::drop_table;
 
 struct TestContext {
     runtime: Runtime,

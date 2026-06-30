@@ -21,8 +21,9 @@ use url::Url;
 use uuid::Uuid;
 
 use super::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use super::support::profile_interests::build_session_middleware;
-use super::support::{format_postgres_error, provision_template_database};
+use super::support::embedded_postgres::provision_template_database;
+use super::support::format_postgres_error;
+use super::support::session_middleware::build_session_middleware;
 
 const ADMIN_USER_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
 pub(crate) const ORDERED_USER_IDS: [&str; 5] = [

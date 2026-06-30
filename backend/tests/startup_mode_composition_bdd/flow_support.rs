@@ -12,7 +12,8 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use super::db_support::DbContext;
-use super::support::profile_interests::FIXTURE_AUTH_ID;
+
+pub(crate) const FIXTURE_AUTH_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
 
 /// Snapshot of an HTTP response for assertion purposes.
 #[derive(Debug)]

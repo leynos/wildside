@@ -31,7 +31,16 @@ mod assertions;
 #[path = "catalogue_descriptor_ingestion_bdd/error_steps.rs"]
 mod error_steps;
 
-mod support;
+mod support {
+    //! Test-local view of shared support helpers.
+    include!("support/mod.rs");
+    #[path = "../support/atexit_cleanup.rs"]
+    pub mod atexit_cleanup;
+    #[path = "../support/cluster_skip.rs"]
+    pub mod cluster_skip;
+    #[path = "../support/embedded_postgres.rs"]
+    pub mod embedded_postgres;
+}
 
 use assertions::{
     assert_badges_stored, assert_community_picks_stored, assert_image_asset_json_shape,
@@ -43,7 +52,8 @@ use assertions::{
 use builders::{CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, ROUTE_ID};
 use snapshots::{build_edge_community_pick, build_ingestion_snapshots};
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
 
 struct TestContext {
     runtime: Runtime,

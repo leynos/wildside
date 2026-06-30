@@ -15,6 +15,10 @@ use std::time::Duration;
 
 use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
 
+#[cfg(unix)]
+#[path = "password_state.rs"]
+mod password_state;
+
 const SHARED_CLUSTER_RETRIES: usize = 5;
 const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
 
@@ -261,14 +265,20 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
 /// subject to transient GitHub Releases fetch failures (misreported by reqwest
 /// as "error decoding response body").
 pub(crate) fn ensure_stable_cluster_environment() {
-    if std::env::var_os("PG_PASSWORD").is_none() {
-        // SAFETY: called before the library spawns any threads. The shared
-        // cluster singleton serializes access with a `Mutex`, so this runs at
-        // most once per process.
-        unsafe {
-            std::env::set_var("PG_PASSWORD", "wildside_embedded_test");
+    let password = match std::env::var("PG_PASSWORD") {
+        Ok(value) => value,
+        Err(_) => {
+            let value = "wildside_embedded_test".to_owned();
+            // SAFETY: called before the library spawns any threads. The shared
+            // cluster singleton serializes access with a `Mutex`, so this runs at
+            // most once per process.
+            unsafe {
+                std::env::set_var("PG_PASSWORD", value.as_str());
+            }
+            value
         }
-    }
+    };
+
     if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
         // Pin to Theseus binaries to avoid transient fetch failures in CI that
         // reqwest misreports as "error decoding response body".
@@ -282,6 +292,15 @@ pub(crate) fn ensure_stable_cluster_environment() {
             );
         }
     }
+    repair_default_password_state(password.as_bytes());
+}
+
+#[cfg(not(unix))]
+fn repair_default_password_state(_password: &[u8]) {}
+
+#[cfg(unix)]
+fn repair_default_password_state(password: &[u8]) {
+    password_state::repair_default_password_state(password);
 }
 
 #[cfg(test)]

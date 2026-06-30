@@ -52,8 +52,8 @@ def test_run_wraps_subprocess_failures(monkeypatch: pytest.MonkeyPatch) -> None:
         cwd: str | None = None,
         input_text: str,
     ) -> CommandResult:
-        assert cwd is None
-        assert input_text == "invalid"
+        assert cwd is None, "subprocess runner must receive the default working directory"
+        assert input_text == "invalid", "subprocess runner must receive the provided stdin text"
         raise subprocess.CalledProcessError(
             1,
             ["kind", "create", "cluster"],
@@ -66,6 +66,30 @@ def test_run_wraps_subprocess_failures(monkeypatch: pytest.MonkeyPatch) -> None:
         run("kind", ["create", "cluster"], input_text="invalid")
 
 
+def test_run_returns_plumbum_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify successful plumbum execution is returned unchanged."""
+    expected = CommandResult(stdout="release ok\n", stderr="")
+    calls: list[tuple[str, list[str], str | None]] = []
+
+    def record_run_with_plumbum(
+        command: str,
+        args: list[str],
+        *,
+        cwd: str | None = None,
+    ) -> CommandResult:
+        calls.append((command, args, cwd))
+        return expected
+
+    monkeypatch.setattr("local_k8s.commands._run_with_plumbum", record_run_with_plumbum)
+
+    result = run("helm", ["status", "wildside"], cwd="/repo", input_text=None)
+
+    assert result is expected, "run must return the plumbum result unchanged"
+    assert calls == [
+        ("helm", ["status", "wildside"], "/repo")
+    ], "run must forward command arguments and cwd to the plumbum runner"
+
+
 def test_run_wraps_plumbum_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify plumbum failures are normalized to LocalK8sError."""
 
@@ -75,7 +99,7 @@ def test_run_wraps_plumbum_failures(monkeypatch: pytest.MonkeyPatch) -> None:
         *,
         cwd: str | None = None,
     ) -> CommandResult:
-        assert cwd is None
+        assert cwd is None, "plumbum runner must receive the default working directory"
         raise ProcessExecutionError(["helm", "status"], 1, "", "release missing\n")
 
     monkeypatch.setattr("local_k8s.commands._run_with_plumbum", fail_with_process_execution_error)

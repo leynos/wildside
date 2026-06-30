@@ -13,7 +13,7 @@ use backend::inbound::http::users::{InterestsRequest, LoginRequest, login, updat
 use backend::outbound::persistence::DbPool;
 use serde_json::Value;
 
-use super::support::profile_interests::{FIXTURE_AUTH_ID, build_session_middleware};
+use super::support::session_middleware::build_session_middleware;
 use super::{ServerConfig, build_http_state as build_server_http_state};
 
 mod db_support;
@@ -22,6 +22,7 @@ pub(crate) use self::db_support::{
     SeedPreferences, World, is_skipped, seed_preferences, seed_user, setup_db_context,
 };
 
+pub(crate) const FIXTURE_AUTH_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
 pub(crate) const FIRST_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 pub(crate) const SECOND_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa7";
 pub(crate) const THIRD_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa9";

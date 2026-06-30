@@ -21,10 +21,20 @@ use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use tokio::runtime::Runtime;
 
-mod support;
+mod support {
+    //! Test-local view of shared support helpers.
+    include!("support/mod.rs");
+    #[path = "../support/atexit_cleanup.rs"]
+    pub mod atexit_cleanup;
+    #[path = "../support/cluster_skip.rs"]
+    pub mod cluster_skip;
+    #[path = "../support/embedded_postgres.rs"]
+    pub mod embedded_postgres;
+}
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
 
 const TEST_SEED_KEY: &str = "test-seed";
 const TEST_USER_COUNT: i32 = 12;

@@ -9,7 +9,8 @@ use backend::outbound::persistence::{DbPool, PoolConfig};
 use super::super::support::atexit_cleanup::{
     ensure_stable_cluster_environment, shared_cluster_handle,
 };
-use super::super::support::{format_postgres_error, provision_template_database};
+use super::super::support::embedded_postgres::provision_template_database;
+use super::super::support::format_postgres_error;
 
 pub(crate) struct DbContext {
     pub(crate) database_url: String,

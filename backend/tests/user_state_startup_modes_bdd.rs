@@ -26,11 +26,21 @@ use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
 
-mod support;
+mod support {
+    //! Test-local view of shared support helpers.
+    include!("support/mod.rs");
+    #[path = "../support/atexit_cleanup.rs"]
+    pub mod atexit_cleanup;
+    #[path = "../support/cluster_skip.rs"]
+    pub mod cluster_skip;
+    #[path = "../support/embedded_postgres.rs"]
+    pub mod embedded_postgres;
+}
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::drop_users_table;
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::embedded_postgres::provision_template_database;
 
 const FIXTURE_USERS_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 const FIXTURE_USERS_NAME: &str = "Ada Lovelace";

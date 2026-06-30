@@ -101,7 +101,9 @@ Podman stores unqualified image names under `localhost/`, while Kubernetes
 resolves an unqualified image such as `wildside-backend:local` as
 `docker.io/library/wildside-backend:local`. The helper tags the archive export
 with Docker's implicit registry name before `kind load image-archive`, so the
-image already present on the node matches the pod spec.
+image already present on the node matches the pod spec. Each import uses a
+unique temporary archive path and removes it after success or failure, so
+parallel preview imports do not contend for one shared file.
 
 The `kind` cluster deliberately has no host-port mapping. After `up` or
 `status`, run the printed `kubectl port-forward` command to open the preview
@@ -114,7 +116,9 @@ kubectl --context kind-wildside-preview --namespace wildside port-forward svc/wi
 If `WILDSIDE_HELM_RELEASE` changes the release name, the service name in the
 printed command follows Helm's fullname rule.
 
-Required executables depend on the selected mode:
+Required executables table:
+
+The required executables depend on the selected mode:
 
 | Mode                  | Required executables                                           |
 | --------------------- | -------------------------------------------------------------- |
@@ -127,6 +131,8 @@ Required executables depend on the selected mode:
     builds use the selected container engine and cluster lifecycle uses the
     selected Kubernetes provider. The primary rootless path is Podman plus
     `kind`.
+
+Configuration variables table:
 
 Configuration can be overridden with environment variables:
 
@@ -151,9 +157,10 @@ currently `>=1.26.0-0 <1.32.0-0`. Leaving it unset uses Kubernetes `v1.31.0`.
 
 The local values file enables `sessionSecret` and sets
 `SESSION_KEY_FILE=/var/run/secrets/wildside-session/session_key`. The helper
-creates the `wildside-session-key` Secret when missing and reuses existing key
-material on later `up` runs, avoiding committed secret material while keeping
-the release-mode session configuration path.
+creates the `wildside-session-key` Secret when missing, treats concurrent
+already-exists responses as reuse, and reuses existing key material on later
+`up` runs. This avoids committed secret material while keeping the release-mode
+session configuration path.
 
 The kube context name is derived as `{provider}-{cluster}`. For the default
 cluster, this is `k3d-wildside-preview`; for the rootless Podman plus `kind`

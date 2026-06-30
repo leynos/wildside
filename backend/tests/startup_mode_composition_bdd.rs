@@ -10,11 +10,21 @@ use rstest_bdd_macros::{given, scenario, then, when};
 use std::sync::Arc;
 use uuid::Uuid;
 
-mod support;
+mod support {
+    //! Test-local view of shared support helpers.
+    include!("support/mod.rs");
+    #[path = "../support/atexit_cleanup.rs"]
+    pub mod atexit_cleanup;
+    #[path = "../support/cluster_skip.rs"]
+    pub mod cluster_skip;
+    #[path = "../support/embedded_postgres.rs"]
+    pub mod embedded_postgres;
+    #[path = "../support/session_middleware.rs"]
+    pub mod session_middleware;
+}
 
+use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::drop_users_table;
-use support::handle_cluster_setup_failure;
-use support::profile_interests::FIXTURE_AUTH_ID;
 
 #[path = "startup_mode_composition_bdd/db_support.rs"]
 mod db_support;
@@ -27,8 +37,8 @@ mod flows;
 
 use db_support::{seed_route, seed_user, setup_db_context};
 use flow_support::{
-    World, assert_internal, assert_user_state_adapter_selection, extract_validation_baseline,
-    is_skipped,
+    FIXTURE_AUTH_ID, World, assert_internal, assert_user_state_adapter_selection,
+    extract_validation_baseline, is_skipped,
 };
 use flows::{run_comprehensive_flow, run_validation_error_flow};
 

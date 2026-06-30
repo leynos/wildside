@@ -47,14 +47,14 @@ Useful overrides:
 | `WILDSIDE_CONTAINER_ENGINE` | `docker`                 | Container engine used for local image builds and imports. Set to `podman` for the rootless `kind` flow.                   |
 | `WILDSIDE_K8S_PROVIDER`     | `k3d`                    | Local Kubernetes provider. Use `k3d` for the default Docker-backed preview or `kind` for rootless Podman.                 |
 | `WILDSIDE_K8S_CLUSTER`      | `wildside-preview`       | Provider-neutral cluster name. Overrides the legacy `WILDSIDE_K3D_CLUSTER` alias when both are set.                       |
-| `WILDSIDE_K8S_PORT`         | `8088`                   | Host-port ingress binding for the `k3d` flow only. It does not affect the `kind` flow, which uses `kubectl port-forward`. |
+| `WILDSIDE_K8S_PORT`         | `8088`                   | Host-port ingress binding for the `k3d` flow only. The `kind` flow uses `kubectl port-forward` instead.                   |
 | `WILDSIDE_K8S_NAMESPACE`    | `wildside`               | Kubernetes namespace used by Helm, kubectl, and the local session Secret.                                                 |
 | `WILDSIDE_HELM_RELEASE`     | `wildside`               | Helm release name for the local preview chart install.                                                                    |
 | `WILDSIDE_IMAGE`            | `wildside-backend:local` | Tagged backend image name built, imported, and passed to Helm.                                                            |
 
 `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT` remain legacy aliases when the
 provider-neutral names are unset. `WILDSIDE_K3D_PORT` follows
-`WILDSIDE_K8S_PORT`: it only affects the `k3d` host-port ingress binding.
+`WILDSIDE_K8S_PORT` and is used only for the `k3d` host-port ingress binding.
 
 Set `WILDSIDE_KIND_NODE_IMAGE` only when testing a different kind node image.
 The default is `kindest/node:v1.31.0`, which satisfies the chart's Kubernetes
@@ -69,7 +69,7 @@ Kube contexts are named `{provider}-{cluster}`. The default context is
 `k3d-wildside-preview`; Podman plus kind with the default cluster uses
 `kind-wildside-preview`.
 
-The local session key is generated when missing, applied as the
+The local session key is generated when missing, created as the
 `wildside-session-key` Secret, reused on later deploys, and mounted by the
 chart at `/var/run/secrets/wildside-session/session_key`.
 

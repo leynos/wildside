@@ -20,7 +20,8 @@ use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use crate::support::{handle_cluster_setup_failure, provision_template_database};
+use crate::support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::embedded_postgres::provision_template_database;
 use crate::{
     DatabaseHandle, ImmediateSleeper, LAUNCH_A_BOUNDS, MutableClock, NoJitter,
     OverpassEnrichmentWorld, RecordingEnrichmentMetrics, RuntimeHandle, ScriptedOverpassSource,

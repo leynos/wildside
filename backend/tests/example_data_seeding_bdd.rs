@@ -8,7 +8,18 @@
 use rstest_bdd_macros::scenario;
 use support::example_data_seeding_world::{ExampleDataSeedingWorld, world};
 
-mod support;
+mod support {
+    //! Test-local view of shared support helpers.
+    include!("support/mod.rs");
+    #[path = "../support/atexit_cleanup.rs"]
+    pub mod atexit_cleanup;
+    #[path = "../support/cluster_skip.rs"]
+    pub mod cluster_skip;
+    #[path = "../support/embedded_postgres.rs"]
+    pub mod embedded_postgres;
+    #[path = "../support/example_data_seeding_world.rs"]
+    pub mod example_data_seeding_world;
+}
 
 // -----------------------------------------------------------------------------
 // Scenario Bindings

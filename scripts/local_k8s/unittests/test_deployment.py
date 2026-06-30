@@ -28,6 +28,7 @@ from local_k8s.deployment import (
     print_logs,
     print_status,
 )
+from local_k8s.validation import LocalK8sError
 
 CommandRecord = tuple[str, list[str], str | None]
 RunHook = Callable[[str, list[str], str | None], None]
@@ -68,7 +69,24 @@ def install_run_recorder(
     stdout: str = "",
     on_run: RunHook | None = None,
 ) -> list[CommandRecord]:
-    """Replace deployment command execution with a command recorder."""
+    """Replace deployment command execution with a command recorder.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Pytest monkeypatch fixture used to replace ``local_k8s.deployment.run``.
+    stdout : str, optional
+        Standard output returned by every recorded command.
+    on_run : RunHook | None, optional
+        Callback invoked with the command, argument list, and optional input
+        text before the command is recorded.
+
+    Returns
+    -------
+    list[CommandRecord]
+        Mutable command log populated with ``(command, args, input_text)``
+        records for each deployment command invocation.
+    """
     commands: list[CommandRecord] = []
 
     def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
@@ -251,12 +269,12 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
         [
             "--context",
             "k3d-wildside-preview",
-            "apply",
+            "create",
             "-f",
             "-",
         ],
         commands[1][2],
-    ), "local preview must apply the session Secret before Helm"
+    ), "local preview must atomically create the session Secret before Helm"
     manifest = commands[1][2]
     assert manifest is not None
     assert "name: wildside-session-key" in manifest
@@ -297,6 +315,31 @@ def test_ensure_session_secret_reuses_existing_key(
             None,
         )
     ], "existing local preview session keys must be reused without apply"
+
+
+def test_ensure_session_secret_reuses_concurrent_create(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify duplicate deploys do not overwrite a concurrently created Secret."""
+    commands: list[CommandRecord] = []
+
+    def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
+        input_text = kwargs.get("input_text")
+        if input_text is not None and not isinstance(input_text, str):
+            raise AssertionError("input_text must be text when provided")
+        commands.append((command, args, input_text))
+        if args[4:7] == ["get", "secret", "wildside-session-key"]:
+            return SimpleNamespace(stdout="")
+        if args[2:5] == ["create", "-f", "-"]:
+            raise LocalK8sError('secrets "wildside-session-key" already exists')
+        raise AssertionError(f"unexpected command: {command} {args}")
+
+    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+
+    ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
+
+    assert len(commands) == 2, "concurrent create reuse must stop after the create conflict"
 
 
 def test_print_status_uses_provider_context_and_prints_kind_port_forward(

@@ -5,21 +5,31 @@ use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use uuid::Uuid;
 
-mod support;
+mod support {
+    //! Test-local view of shared support helpers.
+    include!("support/mod.rs");
+    #[path = "../support/atexit_cleanup.rs"]
+    pub mod atexit_cleanup;
+    #[path = "../support/cluster_skip.rs"]
+    pub mod cluster_skip;
+    #[path = "../support/embedded_postgres.rs"]
+    pub mod embedded_postgres;
+    #[path = "../support/session_middleware.rs"]
+    pub mod session_middleware;
+}
 
-use support::handle_cluster_setup_failure;
+use support::cluster_skip::handle_cluster_setup_failure;
 
 #[path = "user_interests_revision_conflicts_bdd/flow_support.rs"]
 mod flow_support;
 
 use flow_support::{
-    ExpectedPreferences, FIRST_THEME_ID, SAFETY_TOGGLE_ID, SECOND_THEME_ID, SeedPreferences,
-    THIRD_THEME_ID, World, assert_conflict_snapshot, assert_interests_snapshot,
+    ExpectedPreferences, FIRST_THEME_ID, FIXTURE_AUTH_ID, SAFETY_TOGGLE_ID, SECOND_THEME_ID,
+    SeedPreferences, THIRD_THEME_ID, World, assert_conflict_snapshot, assert_interests_snapshot,
     assert_preferences_snapshot, is_skipped, run_first_write, run_matching_revision_write,
     run_missing_revision_conflict, run_preserve_non_interest_flow, run_stale_revision_conflict,
     seed_preferences, seed_user, setup_db_context,
 };
-use support::profile_interests::FIXTURE_AUTH_ID;
 
 fn with_world<F: FnOnce(&mut World)>(world: &mut World, f: F) {
     if !is_skipped(world) {

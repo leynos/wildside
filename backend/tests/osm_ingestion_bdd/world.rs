@@ -11,7 +11,9 @@ use postgres::NoTls;
 use tokio::runtime::Runtime;
 
 use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use crate::support::{drop_table, handle_cluster_setup_failure, provision_template_database};
+use crate::support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::embedded_postgres::provision_template_database;
+use crate::support::table_helpers::drop_table;
 use crate::{
     DatabaseHandle, FixtureOsmSource, GEOFENCE_BOUNDS, INPUT_DIGEST, OsmIngestionWorld,
     RuntimeHandle, SOURCE_URL,

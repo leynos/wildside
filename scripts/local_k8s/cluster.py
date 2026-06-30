@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -164,7 +165,6 @@ def import_image(config: PreviewConfig, *, archive_dir: Path | None = None) -> N
         case ("kind", "podman"):
             archive_path = _image_archive_path(config, archive_dir=archive_dir)
             archive_image_name = _podman_archive_image_name(config.image_name)
-            _remove_stale_archive(archive_path)
             try:
                 if archive_image_name != config.image_name:
                     run("podman", ["tag", config.image_name, archive_image_name])
@@ -357,10 +357,18 @@ nodes:
 
 
 def _image_archive_path(config: PreviewConfig, *, archive_dir: Path | None = None) -> Path:
-    """Return the temporary Podman image archive path for kind loading."""
+    """Return a unique temporary Podman image archive path for kind loading."""
 
     base_dir = Path(tempfile.gettempdir()) if archive_dir is None else archive_dir
-    return base_dir / f"{config.cluster_name}-image.tar"
+    file_descriptor, archive_path = tempfile.mkstemp(
+        prefix=f"{config.cluster_name}-",
+        suffix="-image.tar",
+        dir=base_dir,
+    )
+    os.close(file_descriptor)
+    path = Path(archive_path)
+    path.unlink(missing_ok=True)
+    return path
 
 
 def _is_registry_host(component: str) -> bool:
