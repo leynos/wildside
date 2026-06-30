@@ -118,8 +118,6 @@ printed command follows Helm's fullname rule.
 
 Required executables table:
 
-The required executables depend on the selected mode:
-
 | Mode                  | Required executables                                           |
 | --------------------- | -------------------------------------------------------------- |
 | Docker plus `k3d`     | `docker`, `helm`, `k3d`, `kubectl`, and `uv`                   |
@@ -133,8 +131,6 @@ The required executables depend on the selected mode:
     `kind`.
 
 Configuration variables table:
-
-Configuration can be overridden with environment variables:
 
 | Variable                    | Default                  | Purpose                                      |
 | --------------------------- | ------------------------ | -------------------------------------------- |

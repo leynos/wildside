@@ -844,8 +844,8 @@ removed; update `package.json` and recommit.
 other tooling:
 
 - **`checkOverridesPolicy(packageJson)`** — accepts a parsed `package.json`
-  object and returns a structured report with `OK`, `pnpmOverridesToCheck`,
-  `rootOverrides`, and `reason` fields. `OK` is the outcome flag, while
+  object and returns a structured report with `ok`, `pnpmOverridesToCheck`,
+  `rootOverrides`, and `reason` fields. `ok` is the outcome flag, while
   `pnpmOverridesToCheck`, `rootOverrides`, and `reason` provide the policy
   details. It is a query helper and must not write
   to stdout or stderr.
