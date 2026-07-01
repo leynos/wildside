@@ -1,5 +1,6 @@
 //! Behaviour coverage for 3.5.3 profile/interests startup-mode stability.
 
+use backend::inbound::http::users::INTEREST_THEME_IDS_MAX;
 pub(crate) use backend::test_support::server::{ServerConfig, build_http_state};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
@@ -28,8 +29,6 @@ use support::profile_interests::{
     DB_PROFILE_NAME, FIRST_THEME_ID, FIXTURE_AUTH_ID, FIXTURE_PROFILE_NAME, SECOND_THEME_ID,
 };
 use support::table_helpers::drop_table;
-
-const INTEREST_THEME_IDS_MAX: usize = 100;
 
 #[path = "user_state_profile_interests_startup_modes_bdd/flow_support.rs"]
 mod flow_support;

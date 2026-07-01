@@ -6,8 +6,10 @@ import json
 import os
 import subprocess
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 from shutil import which
+from typing import cast
 
 
 def test_local_k8s_cli_help_smoke() -> None:
@@ -104,9 +106,11 @@ def _write_fake_tool(fake_bin: Path) -> None:
 
 def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
     """Run preview Makefile targets through the real CLI boundary."""
+    make = which("make")
+    assert make is not None, "make must be available to execute preview targets"
     for target in targets:
         completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
-            ["make", "--no-print-directory", target],
+            [make, "--no-print-directory", target],
             text=True,
             capture_output=True,
             check=False,
@@ -127,6 +131,19 @@ def _load_log_entries(log_path: Path) -> list[list[object]]:
     ]
 
 
+def _assert_command_logged(
+    log_entries: list[list[object]],
+    tool: str,
+    predicate: Callable[[list[object]], bool],
+    message: str,
+) -> None:
+    """Assert a fake-tool log contains a matching command."""
+    assert any(
+        entry[0] == tool and predicate(cast(list[object], entry[1]))
+        for entry in log_entries
+    ), message
+
+
 def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
     """Verify Makefile preview targets cross the real CLI boundary."""
     uv = which("uv")
@@ -143,14 +160,23 @@ def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
     _run_make_targets(env, ("local-k8s-up", "local-k8s-status", "local-k8s-logs", "local-k8s-down"))
 
     log_entries = _load_log_entries(Path(env["WILDSIDE_FAKE_TOOL_LOG"]))
-    assert any(entry[0] == "docker" and entry[1][0] == "build" for entry in log_entries), (
-        "local-k8s-up must build the backend image through the CLI boundary"
+    _assert_command_logged(
+        log_entries,
+        "docker",
+        lambda args: args[0] == "build",
+        "local-k8s-up must build the backend image through the CLI boundary",
     )
-    assert any(entry[0] == "helm" and "status" in entry[1] for entry in log_entries), (
-        "local-k8s-status must inspect the Helm release through the CLI boundary"
+    _assert_command_logged(
+        log_entries,
+        "helm",
+        lambda args: "status" in args,
+        "local-k8s-status must inspect the Helm release through the CLI boundary",
     )
-    assert any(entry[0] == "kubectl" and "logs" in entry[1] for entry in log_entries), (
-        "local-k8s-logs must stream pod logs through the CLI boundary"
+    _assert_command_logged(
+        log_entries,
+        "kubectl",
+        lambda args: "logs" in args,
+        "local-k8s-logs must stream pod logs through the CLI boundary",
     )
     assert not Path(env["WILDSIDE_FAKE_TOOL_STATE"]).exists(), (
         "local-k8s-down must delete the preview cluster through the CLI boundary"

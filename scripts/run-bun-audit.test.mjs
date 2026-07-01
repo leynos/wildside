@@ -54,4 +54,12 @@ describe('runBunAudit', () => {
       }),
     ).toThrow('bun audit was terminated by signal SIGTERM.');
   });
+
+  it('returns the bun audit exit status when vulnerabilities are found', () => {
+    expect(
+      runBunAudit([], {
+        spawnSync: () => ({ status: 1, signal: null }),
+      }),
+    ).toBe(1);
+  });
 });

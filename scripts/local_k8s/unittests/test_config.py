@@ -15,6 +15,8 @@ import pytest
 from local_k8s.config import PreviewConfig
 from local_k8s.validation import LocalK8sError
 
+UNSAFE_KUBERNETES_NAMES = ["../wildside", "Wildside", "wildside_", "-wildside", "wildside-"]
+
 
 def test_wildside_environment_is_isolated() -> None:
     """Verify local preview tests start without inherited WILDSIDE variables."""
@@ -108,7 +110,7 @@ def test_preview_config_rejects_unknown_provider_values(
 
 @pytest.mark.parametrize(
     "cluster_name",
-    ["../wildside", "Wildside", "wildside_", "-wildside", "wildside-"],
+    UNSAFE_KUBERNETES_NAMES,
 )
 def test_preview_config_rejects_unsafe_cluster_names(
     monkeypatch: pytest.MonkeyPatch,
@@ -123,7 +125,7 @@ def test_preview_config_rejects_unsafe_cluster_names(
 
 @pytest.mark.parametrize(
     "namespace",
-    ["../wildside", "Wildside", "wildside_", "-wildside", "wildside-"],
+    UNSAFE_KUBERNETES_NAMES,
 )
 def test_preview_config_rejects_unsafe_namespaces(
     monkeypatch: pytest.MonkeyPatch,

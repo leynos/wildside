@@ -31,7 +31,9 @@ def test_run_sends_input_text_through_subprocess(
 
     result = run("kind", ["create", "cluster", "--config", "-"], cwd="/repo", input_text="kind: Cluster\n")
 
-    assert result == CommandResult(stdout="created\n", stderr="")
+    assert result == CommandResult(stdout="created\n", stderr=""), (
+        "run must return the subprocess result unchanged"
+    )
     assert calls == [
         (
             "kind",
@@ -39,7 +41,7 @@ def test_run_sends_input_text_through_subprocess(
             "/repo",
             "kind: Cluster\n",
         )
-    ]
+    ], "run must forward command arguments, cwd, and stdin to the subprocess runner"
 
 
 def test_run_wraps_subprocess_failures(monkeypatch: pytest.MonkeyPatch) -> None:

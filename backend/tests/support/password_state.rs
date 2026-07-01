@@ -2,7 +2,7 @@
 //!
 //! `postgresql_embedded` only writes the initdb password file when it does not
 //! already exist. When the shared stable test password changes, a stale
-//! `.pgpass` can initialise a fresh data directory with the old password while
+//! `.pgpass` can initialize a fresh data directory with the old password while
 //! clients connect with the new one.
 
 use std::io;
@@ -99,6 +99,7 @@ mod tests {
     //! Unit tests for stale embedded PostgreSQL password-state repair.
 
     use super::*;
+    use rstest::rstest;
 
     struct PasswordStateFixture {
         _sandbox: tempfile::TempDir,
@@ -142,69 +143,63 @@ mod tests {
         }
     }
 
-    #[test]
-    fn repair_password_file_state_removes_stale_default_data() {
-        let fixture = PasswordStateFixture::new(true);
-        fixture.write_pgpass(b"old-password");
-
-        repair_password_file_state(
-            b"new-password",
-            &fixture.install_dir,
-            &fixture.data_parent,
-            &fixture.paths,
-        );
-
-        assert!(
-            !fixture.install_dir.exists(".pgpass"),
-            "stale password file should be removed"
-        );
-        assert!(
-            !fixture.data_parent.exists("data"),
-            "default stale data dir should be removed"
-        );
+    struct ExpectedPasswordState {
+        should_keep_pgpass: bool,
+        should_keep_data: bool,
     }
 
-    #[test]
-    fn repair_password_file_state_preserves_matching_default_data() {
-        let fixture = PasswordStateFixture::new(true);
-        fixture.write_pgpass(b"same-password");
+    #[rstest]
+    #[case::stale_default(
+        PasswordStateFixture::new(true),
+        b"old-password".as_slice(),
+        b"new-password".as_slice(),
+        ExpectedPasswordState {
+            should_keep_pgpass: false,
+            should_keep_data: false,
+        },
+    )]
+    #[case::matching_default(
+        PasswordStateFixture::new(true),
+        b"same-password".as_slice(),
+        b"same-password".as_slice(),
+        ExpectedPasswordState {
+            should_keep_pgpass: true,
+            should_keep_data: true,
+        },
+    )]
+    #[case::custom_data(
+        PasswordStateFixture::new(false),
+        b"old-password".as_slice(),
+        b"new-password".as_slice(),
+        ExpectedPasswordState {
+            should_keep_pgpass: false,
+            should_keep_data: true,
+        },
+    )]
+    fn repair_password_file_state_handles_password_state(
+        #[case] fixture: PasswordStateFixture,
+        #[case] written_password: &[u8],
+        #[case] repaired_password: &[u8],
+        #[case] expected: ExpectedPasswordState,
+    ) {
+        fixture.write_pgpass(written_password);
 
         repair_password_file_state(
-            b"same-password",
+            repaired_password,
             &fixture.install_dir,
             &fixture.data_parent,
             &fixture.paths,
         );
 
-        assert!(
+        assert_eq!(
             fixture.install_dir.exists(".pgpass"),
-            "matching password file should remain"
+            expected.should_keep_pgpass,
+            "password file existence should match the scenario expectation"
         );
-        assert!(
+        assert_eq!(
             fixture.data_parent.exists("data"),
-            "matching data dir should remain"
-        );
-    }
-
-    #[test]
-    fn repair_password_file_state_preserves_custom_data() {
-        let fixture = PasswordStateFixture::new(false);
-        fixture.write_pgpass(b"old-password");
-
-        repair_password_file_state(
-            b"new-password",
-            &fixture.install_dir,
-            &fixture.data_parent,
-            &fixture.paths,
-        );
-
-        assert!(
-            !fixture.install_dir.exists(".pgpass"),
-            "stale password file should be removed"
-        );
-        assert!(
-            fixture.data_parent.exists("data"),
-            "custom data dir should not be removed automatically"
+            expected.should_keep_data,
+            "data dir existence should match the scenario expectation"
         );
     }
 }

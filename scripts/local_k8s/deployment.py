@@ -258,7 +258,20 @@ def print_status(config: PreviewConfig) -> None:
 
 
 def print_kind_port_forward_command(config: PreviewConfig) -> None:
-    """Print the port-forward command needed for kind previews."""
+    """Print the kind port-forward command.
+
+    Parameters
+    ----------
+    config
+        Preview configuration describing the selected provider, kube context,
+        namespace, release name, and ingress port.
+
+    Returns
+    -------
+    None
+        Prints the `kubectl port-forward` command for `kind` previews. Returns
+        silently for other providers, including `k3d`.
+    """
 
     if config.k8s_provider != "kind":
         return

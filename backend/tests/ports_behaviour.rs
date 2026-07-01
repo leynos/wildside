@@ -14,6 +14,8 @@ use uuid::Uuid;
 mod support {
     //! Test-local view of shared support helpers.
     include!("support/mod.rs");
+    // These attributes resolve from the nested `support` module name, so the
+    // `../support/` prefix points back to `backend/tests/support`.
     #[path = "../support/atexit_cleanup.rs"]
     pub mod atexit_cleanup;
     #[path = "../support/cluster_skip.rs"]

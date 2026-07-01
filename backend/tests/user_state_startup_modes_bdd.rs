@@ -1,6 +1,5 @@
 //! Behaviour coverage for 3.5.2 startup modes.
 
-use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -16,11 +15,11 @@ use actix_web::{
     test as actix_test, web,
 };
 use backend::domain::TRACE_ID_HEADER;
-use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+use backend::domain::ports::FixtureRouteSubmissionService;
 use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{LoginRequest, list_users, login};
 use backend::outbound::persistence::{DbPool, PoolConfig};
-use backend::test_support::server::{ServerConfig, build_http_state};
+use backend::test_support::server::ServerConfig;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
@@ -42,8 +41,10 @@ use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::drop_users_table;
 use support::embedded_postgres::provision_template_database;
 
-const FIXTURE_USERS_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
-const FIXTURE_USERS_NAME: &str = "Ada Lovelace";
+#[path = "user_state_startup_modes_bdd/flow_support.rs"]
+mod flow_support;
+
+use flow_support::{build_http_state_for_tests, is_fixture_users, parse_json_body, run_async};
 
 #[derive(Debug, Clone, Copy)]
 enum Mode {
@@ -71,38 +72,6 @@ struct World {
     login: Option<Snapshot>,
     users: Option<Snapshot>,
     skip_reason: Option<String>,
-}
-
-fn run_async<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new()
-        .expect("runtime")
-        .block_on(future)
-}
-
-fn build_http_state_for_tests(
-    config: &ServerConfig,
-    route_submission: Arc<dyn RouteSubmissionService>,
-) -> web::Data<HttpState> {
-    build_http_state(config, route_submission)
-}
-
-fn is_fixture_users(body: &Value) -> bool {
-    let users = body
-        .get("data")
-        .and_then(Value::as_array)
-        .expect("users data array");
-    users.iter().any(|user| {
-        user.get("id").and_then(Value::as_str) == Some(FIXTURE_USERS_ID)
-            && user.get("displayName").and_then(Value::as_str) == Some(FIXTURE_USERS_NAME)
-    })
-}
-
-fn parse_json_body(bytes: &[u8]) -> Option<Value> {
-    if bytes.is_empty() {
-        None
-    } else {
-        Some(serde_json::from_slice(bytes).expect("json body"))
-    }
 }
 
 async fn build_test_app_with_session(

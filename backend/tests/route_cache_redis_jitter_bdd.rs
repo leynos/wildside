@@ -21,6 +21,8 @@ use tokio::runtime::Runtime;
 
 mod support {
     //! Test-local view of shared support helpers.
+    // These attributes resolve from the nested `support` module name, so the
+    // `../support/` prefix points back to `backend/tests/support`.
     #[path = "../support/redis.rs"]
     pub mod redis;
     #[path = "../support/redis_skip.rs"]

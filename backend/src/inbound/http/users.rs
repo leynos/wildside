@@ -51,7 +51,7 @@ pub struct InterestsRequest {
 // InterestsRequest::interest_theme_ids.
 /// Maximum interest theme IDs per user; prevents payload bloat and ensures
 /// reasonable UI rendering.
-const INTEREST_THEME_IDS_MAX: usize = 100;
+pub const INTEREST_THEME_IDS_MAX: usize = 100;
 #[derive(Debug)]
 enum InterestsRequestError {
     TooManyInterestThemeIds {

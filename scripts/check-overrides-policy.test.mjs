@@ -189,4 +189,23 @@ describe('direct execution guard', () => {
     );
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
+
+  it('sets exitCode and logs failures when invoked directly', async () => {
+    readFileMock.mockResolvedValueOnce(
+      JSON.stringify({ overrides: { dompurify: '3.4.11' } }),
+    );
+    process.argv = [process.argv[0], modulePath];
+
+    await loadModule();
+
+    expect(process.exitCode).toBe(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      [
+        'Override policy check failed.',
+        'Top-level overrides are not allowed because npm and npx consume them.',
+        'Move these entries under pnpm.overrides only: dompurify',
+      ].join('\n'),
+    );
+    expect(consoleLogSpy).not.toHaveBeenCalled();
+  });
 });

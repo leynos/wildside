@@ -5,9 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 from shutil import which
 
-from cuprum import ProgramCatalogue as Catalogue
-from cuprum import ProjectSettings, UnknownProgramError, sh
-
 
 class LocalK8sError(RuntimeError):
     """Raised when a local preview preflight or command fails."""
@@ -38,22 +35,4 @@ def require_tools(tools: Iterable[str]) -> None:
 
 def _is_missing(tool: str) -> bool:
     """Return True when an executable cannot be resolved on PATH."""
-    try:
-        sh.make(tool, catalogue=_catalogue_for(tool))
-    except UnknownProgramError:
-        return True
     return which(tool) is None
-
-
-def _catalogue_for(tool: str) -> Catalogue:
-    """Return a one-tool catalogue for preflight command construction."""
-    return Catalogue(
-        projects=(
-            ProjectSettings(
-                name="local-k8s-preflight",
-                programs=(tool,),
-                documentation_locations=(),
-                noise_rules=(),
-            ),
-        )
-    )

@@ -9,9 +9,9 @@ use super::seed_helpers::seed_user_and_route_with_client;
 
 /// Seed a `users` row and matching `routes` row by creating a connection.
 ///
-/// # Examples
+/// The following illustrates the expected call shape:
 ///
-/// ```no_run
+/// ```ignore
 /// use backend::domain::UserId;
 /// use uuid::Uuid;
 ///
@@ -25,6 +25,11 @@ use super::seed_helpers::seed_user_and_route_with_client;
 /// );
 /// assert!(result.is_ok());
 /// ```
+///
+/// # Errors
+///
+/// Returns an error when the database connection cannot be established or when
+/// seeding the `users` and `routes` rows fails.
 pub fn seed_user_and_route(url: &str, user_id: &UserId, route_id: Uuid) -> Result<(), String> {
     let mut client = Client::connect(url, NoTls).map_err(|err| format_postgres_error(&err))?;
     seed_user_and_route_with_client(&mut client, user_id, route_id)

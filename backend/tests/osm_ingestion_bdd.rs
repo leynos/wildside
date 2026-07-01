@@ -19,18 +19,16 @@ use tokio::runtime::Runtime;
 
 #[path = "osm_ingestion_bdd/world.rs"]
 mod osm_ingestion_world;
-mod support {
-    //! Test-local view of shared support helpers.
-    include!("support/mod.rs");
-    #[path = "../support/atexit_cleanup.rs"]
-    pub mod atexit_cleanup;
-    #[path = "../support/cluster_skip.rs"]
-    pub mod cluster_skip;
-    #[path = "../support/embedded_postgres.rs"]
-    pub mod embedded_postgres;
-    #[path = "../support/table_helpers.rs"]
-    pub mod table_helpers;
-}
+include!("support/entrypoint.rs");
+// The macro keeps the `../support/` path prefix because these attributes are
+// expanded inside `mod support`; removing it makes rustc look under
+// `backend/tests/support/support`.
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    table_helpers,
+);
 
 const INPUT_DIGEST: &str = "2e7d2c03a9507ae265ecf5b5356885a53393a2029f7c98f0f8f9f8f2a5f1f7c6";
 const SOURCE_URL: &str = "https://example.test/launch.osm.pbf";
