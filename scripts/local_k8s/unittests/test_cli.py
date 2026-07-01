@@ -51,12 +51,8 @@ def test_local_k8s_status_reports_configuration_errors_at_cli_boundary() -> None
     assert "WILDSIDE_K8S_CLUSTER" in completed.stderr
 
 
-def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
-    """Verify Makefile preview targets cross the real CLI boundary."""
-    uv = which("uv")
-    assert uv is not None, "uv must be available to execute scripts/local_k8s.py"
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
+def _write_fake_tool(fake_bin: Path) -> None:
+    """Write fake preview executables used by the Makefile smoke test."""
     fake_tool = fake_bin / "fake_tool.py"
     fake_tool.write_text(
         textwrap.dedent(
@@ -105,12 +101,10 @@ def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
     for tool_name in ("docker", "helm", "k3d", "kubectl"):
         (fake_bin / tool_name).symlink_to(fake_tool)
 
-    env = os.environ.copy()
-    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
-    env["WILDSIDE_FAKE_TOOL_LOG"] = str(tmp_path / "commands.jsonl")
-    env["WILDSIDE_FAKE_TOOL_STATE"] = str(tmp_path / "cluster-state")
 
-    for target in ("local-k8s-up", "local-k8s-status", "local-k8s-logs", "local-k8s-down"):
+def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
+    """Run preview Makefile targets through the real CLI boundary."""
+    for target in targets:
         completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
             ["make", "--no-print-directory", target],
             text=True,
@@ -124,10 +118,31 @@ def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
             f"stdout={completed.stdout!r} stderr={completed.stderr!r}"
         )
 
-    log_entries = [
+
+def _load_log_entries(log_path: Path) -> list[list[object]]:
+    """Load fake tool command records from the JSON-lines log."""
+    return [
         json.loads(line)
-        for line in Path(env["WILDSIDE_FAKE_TOOL_LOG"]).read_text(encoding="utf8").splitlines()
+        for line in log_path.read_text(encoding="utf8").splitlines()
     ]
+
+
+def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
+    """Verify Makefile preview targets cross the real CLI boundary."""
+    uv = which("uv")
+    assert uv is not None, "uv must be available to execute scripts/local_k8s.py"
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    _write_fake_tool(fake_bin)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    env["WILDSIDE_FAKE_TOOL_LOG"] = str(tmp_path / "commands.jsonl")
+    env["WILDSIDE_FAKE_TOOL_STATE"] = str(tmp_path / "cluster-state")
+
+    _run_make_targets(env, ("local-k8s-up", "local-k8s-status", "local-k8s-logs", "local-k8s-down"))
+
+    log_entries = _load_log_entries(Path(env["WILDSIDE_FAKE_TOOL_LOG"]))
     assert any(entry[0] == "docker" and entry[1][0] == "build" for entry in log_entries), (
         "local-k8s-up must build the backend image through the CLI boundary"
     )

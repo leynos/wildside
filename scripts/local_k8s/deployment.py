@@ -75,6 +75,73 @@ def build_image(config: PreviewConfig) -> None:
     )
 
 
+def _fetch_existing_session_key(config: PreviewConfig) -> str:
+    """Return the existing local session key payload, when Kubernetes has one."""
+    existing_key = run(
+        "kubectl",
+        [
+            "--context",
+            config.kube_context,
+            "-n",
+            config.namespace,
+            "get",
+            "secret",
+            SESSION_SECRET_NAME,
+            "--ignore-not-found",
+            f"-o=jsonpath={{.data.{SESSION_SECRET_KEY_NAME}}}",
+        ],
+    )
+    return existing_key.stdout.strip()
+
+
+def _render_session_secret_manifest(config: PreviewConfig, encoded_key: str) -> str:
+    """Render the Kubernetes Secret manifest for the generated session key."""
+    return f"""\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {SESSION_SECRET_NAME}
+  namespace: {config.namespace}
+type: Opaque
+data:
+  {SESSION_SECRET_KEY_NAME}: {encoded_key}
+"""
+
+
+def _log_session_secret_event(config: PreviewConfig, event: str) -> None:
+    """Log a session Secret lifecycle event with the standard preview fields."""
+    logger.info(
+        event,
+        extra={
+            "cluster": config.cluster_name,
+            "namespace": config.namespace,
+            "secret": SESSION_SECRET_NAME,
+        },
+    )
+
+
+def _apply_session_secret_manifest(config: PreviewConfig, manifest: str) -> None:
+    """Create the session Secret, treating concurrent creation as reuse."""
+    _log_session_secret_event(config, "local_k8s_session_secret_apply")
+    try:
+        run(
+            "kubectl",
+            [
+                "--context",
+                config.kube_context,
+                "create",
+                "-f",
+                "-",
+            ],
+            input_text=manifest,
+        )
+    except LocalK8sError as exc:
+        if "already exists" in str(exc):
+            _log_session_secret_event(config, "local_k8s_session_secret_reuse")
+            return
+        raise
+
+
 def ensure_session_secret(
     config: PreviewConfig,
     *,
@@ -99,75 +166,14 @@ def ensure_session_secret(
         preview sessions on every deployment.
     """
 
-    existing_key = run(
-        "kubectl",
-        [
-            "--context",
-            config.kube_context,
-            "-n",
-            config.namespace,
-            "get",
-            "secret",
-            SESSION_SECRET_NAME,
-            "--ignore-not-found",
-            f"-o=jsonpath={{.data.{SESSION_SECRET_KEY_NAME}}}",
-        ],
-    )
-    if existing_key.stdout.strip():
-        logger.info(
-            "local_k8s_session_secret_reuse",
-            extra={
-                "cluster": config.cluster_name,
-                "namespace": config.namespace,
-                "secret": SESSION_SECRET_NAME,
-            },
-        )
+    if _fetch_existing_session_key(config):
+        _log_session_secret_event(config, "local_k8s_session_secret_reuse")
         return
 
     key = key_generator(96)
     encoded_key = base64.b64encode(key).decode("ascii")
-    manifest = f"""\
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {SESSION_SECRET_NAME}
-  namespace: {config.namespace}
-type: Opaque
-data:
-  {SESSION_SECRET_KEY_NAME}: {encoded_key}
-"""
-    logger.info(
-        "local_k8s_session_secret_apply",
-        extra={
-            "cluster": config.cluster_name,
-            "namespace": config.namespace,
-            "secret": SESSION_SECRET_NAME,
-        },
-    )
-    try:
-        run(
-            "kubectl",
-            [
-                "--context",
-                config.kube_context,
-                "create",
-                "-f",
-                "-",
-            ],
-            input_text=manifest,
-        )
-    except LocalK8sError as exc:
-        if "already exists" in str(exc):
-            logger.info(
-                "local_k8s_session_secret_reuse",
-                extra={
-                    "cluster": config.cluster_name,
-                    "namespace": config.namespace,
-                    "secret": SESSION_SECRET_NAME,
-                },
-            )
-            return
-        raise
+    manifest = _render_session_secret_manifest(config, encoded_key)
+    _apply_session_secret_manifest(config, manifest)
 
 
 def helm_upgrade(config: PreviewConfig) -> None:
