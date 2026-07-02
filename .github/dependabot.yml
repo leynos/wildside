@@ -12,10 +12,15 @@ updates:
       day: "sunday"
       time: "02:00"
       timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
 
-  # Enable version updates for Cargo
+  # Enable version updates for Cargo. The workspace root covers the
+  # backend, backend/crates/pagination, crates/example-data, and
+  # tools/architecture-lint member crates.
   - package-ecosystem: "cargo"
-    directory: "/backend"
+    directory: "/"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -24,14 +29,17 @@ updates:
       interval: "daily"
       time: "02:00"
       timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
 
-  # Enable version updates for npm at the repository root
-  - package-ecosystem: "npm"
+  # Enable version updates for bun at the repository root (bun.lock)
+  - package-ecosystem: "bun"
     directory: "/"
     open-pull-requests-limit: 2
     labels:
       - "dependencies"
-      - "npm"
+      - "bun"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -44,6 +52,9 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
 
   # Enable version updates for npm in the frontend PWA
   - package-ecosystem: "npm"
@@ -64,6 +75,9 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
 
   # Enable version updates for npm in the tokens package
   - package-ecosystem: "npm"
@@ -84,6 +98,9 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
 
   # Enable version updates for npm in the types package
   - package-ecosystem: "npm"
@@ -104,6 +121,9 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
 
   # Enable version updates for Helm charts
   - package-ecosystem: "helm"
@@ -117,3 +137,6 @@ updates:
       day: "sunday"
       time: "03:00"
       timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
