@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 camino = "1"
-cap-std = "3"
+cap-std = "4"
 syn = { version = "2", features = ["full", "visit"] }
 
 [dev-dependencies]
