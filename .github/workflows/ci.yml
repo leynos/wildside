@@ -94,10 +94,16 @@ jobs:
           mmdc --version
           bun --version
 
+      # Dependency audits report advisories against the whole lockfile, so a
+      # newly published advisory would fail every Dependabot PR regardless of
+      # content and deadlock auto-merge. The scheduled audit workflow covers
+      # Dependabot merges instead.
       - name: Install cargo-audit
+        if: github.actor != 'dependabot[bot]'
         run: cargo binstall --no-confirm cargo-audit@0.22.1
 
       - name: Audit
+        if: github.actor != 'dependabot[bot]'
         run: make audit
 
       - name: Install Nixie
