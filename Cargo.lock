@@ -448,9 +448,9 @@ dependencies = [
 
 [[package]]
 name = "apalis-postgres"
-version = "1.0.0-rc.6"
+version = "1.0.0-rc.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e7fccc55fd309574036c472fd42ef1d5e802d246e0b2c70e749951722783f0a"
+checksum = "90b81cb781d7d8e6c634625f04365d5599cba199c8a41a361b7fa57393410669"
 dependencies = [
  "apalis-codec",
  "apalis-core",
