@@ -689,7 +689,7 @@ dependencies = [
  "libc",
  "mockable",
  "mockall 0.13.1",
- "ortho_config 0.7.0",
+ "ortho_config 0.8.0",
  "pagination",
  "paste",
  "pg-embed-setup-unpriv",
@@ -3779,11 +3779,12 @@ dependencies = [
 
 [[package]]
 name = "ortho_config"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ee9d60c6be312d7c6ce47b7146e3c9b8464c54fc304ef8f7656e29c268faeb1"
+checksum = "9314c7a4be184287f3f9a66fcbcec054ac215d4975152df86b7aadeae8d5e019"
 dependencies = [
  "camino",
+ "cap-std 3.4.5",
  "clap",
  "clap-dispatch",
  "directories",
@@ -3792,7 +3793,7 @@ dependencies = [
  "figment",
  "fluent-bundle",
  "fluent-syntax",
- "ortho_config_macros 0.7.0",
+ "ortho_config_macros 0.8.0",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -3817,9 +3818,9 @@ dependencies = [
 
 [[package]]
 name = "ortho_config_macros"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "992d8fc0b33823adb993fe8968614ac0df3964d9e3564f7a147fd253e27a3acd"
+checksum = "a3941ab7c592a0b93aadf12ce30e0ef3d01af87b46c8f363d8157dc33273ba83"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
