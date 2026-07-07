@@ -2,7 +2,9 @@ macro_rules! declare_test_support {
     ($($module:ident),+ $(,)?) => {
         mod support {
             //! Test-local view of shared support helpers.
-            include!("support/mod.rs");
+            #[path = "../support/mod.rs"]
+            mod shared;
+            pub use shared::*;
             $(declare_test_support!(@module $module);)+
         }
     };

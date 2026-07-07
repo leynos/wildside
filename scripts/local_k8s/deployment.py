@@ -7,7 +7,7 @@ import logging
 import secrets
 from collections.abc import Callable
 
-from .commands import run
+from .commands import run, run_streaming
 from .config import PreviewConfig
 from .cluster import ensure_cluster, import_image, print_cluster_status
 from .k8s import ensure_namespace, helm_fullname, print_kubernetes_status
@@ -301,4 +301,6 @@ def print_logs(config: PreviewConfig, *, follow: bool) -> None:
     ]
     if follow:
         args.append("--follow")
+        run_streaming("kubectl", args)
+        return
     print(run("kubectl", args).stdout, end="")

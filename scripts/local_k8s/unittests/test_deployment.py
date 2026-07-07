@@ -407,12 +407,18 @@ def test_print_logs_uses_configured_kube_context(
     """Verify log streaming targets the provider-specific kube context."""
     config = replace(preview_config, k8s_provider="kind")
     commands = install_run_recorder(monkeypatch)
+    streaming_commands: list[tuple[str, list[str]]] = []
+
+    def record_streaming(command: str, args: list[str]) -> None:
+        streaming_commands.append((command, args))
 
     monkeypatch.setattr("local_k8s.deployment.require_tools", lambda _: None)
+    monkeypatch.setattr("local_k8s.deployment.run_streaming", record_streaming)
 
     print_logs(config, follow=True)
 
-    assert commands == [
+    assert commands == [], "followed logs must stream rather than capture output"
+    assert streaming_commands == [
         (
             "kubectl",
             [
@@ -429,6 +435,5 @@ def test_print_logs_uses_configured_kube_context(
                 "200",
                 "--follow",
             ],
-            None,
         )
     ], "logs must use the provider-specific kube context"

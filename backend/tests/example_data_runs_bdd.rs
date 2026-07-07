@@ -16,7 +16,9 @@ use tokio::runtime::Runtime;
 
 mod support {
     //! Test-local view of shared support helpers.
-    include!("support/mod.rs");
+    #[path = "../support/mod.rs"]
+    mod shared;
+    pub use shared::*;
     #[path = "../support/atexit_cleanup.rs"]
     pub mod atexit_cleanup;
     #[path = "../support/cluster_skip.rs"]

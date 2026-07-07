@@ -76,6 +76,20 @@ def _run_with_plumbum(
     return CommandResult(stdout=out[1], stderr=out[2])
 
 
+def _run_streaming_with_subprocess(
+    command: str,
+    args: Sequence[str],
+    *,
+    cwd: str | None = None,
+) -> None:
+    """Run a command with inherited stdout and stderr."""
+    subprocess.run(  # noqa: S603, S607 - local preview tools are PATH-resolved.
+        [command, *args],
+        check=True,
+        cwd=cwd,
+    )
+
+
 def _command_error_message(
     exc: ProcessExecutionError | subprocess.CalledProcessError,
 ) -> str:
@@ -122,6 +136,43 @@ def run(
             return _run_with_input(command, args, cwd=cwd, input_text=input_text)
         return _run_with_plumbum(command, args, cwd=cwd)
     except (ProcessExecutionError, subprocess.CalledProcessError) as exc:
+        logger.exception(
+            "local_k8s_command_failed",
+            extra={
+                "command": command,
+                "failure_category": type(exc).__name__,
+            },
+        )
+        raise LocalK8sError(_command_error_message(exc)) from exc
+
+
+def run_streaming(
+    command: str,
+    args: Sequence[str],
+    *,
+    cwd: str | None = None,
+) -> None:
+    """Run a local command while inheriting stdout and stderr.
+
+    Parameters
+    ----------
+    command : str
+        Executable name resolved from ``PATH``.
+    args : Sequence[str]
+        Positional arguments forwarded to the executable.
+    cwd : str | None, optional
+        Working directory for execution. Uses the process current directory
+        when unset.
+
+    Raises
+    ------
+    LocalK8sError
+        Raised when the process exits with a non-zero status.
+    """
+
+    try:
+        _run_streaming_with_subprocess(command, args, cwd=cwd)
+    except subprocess.CalledProcessError as exc:
         logger.exception(
             "local_k8s_command_failed",
             extra={

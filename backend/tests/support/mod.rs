@@ -1,9 +1,9 @@
-// Shared helper utilities for backend integration tests.
-//
-// Integration tests compile as separate crates under `backend/tests/`, which
-// makes it awkward to share small helpers without copy/paste. This module
-// provides a small, dependency-free (relative to the test crate) home for
-// common test-only utilities.
+//! Shared helper utilities for backend integration tests.
+//!
+//! Integration tests compile as separate crates under `backend/tests/`, which
+//! makes it awkward to share small helpers without copy/paste. This module
+//! provides a small, dependency-free (relative to the test crate) home for
+//! common test-only utilities.
 
 /// Render a `postgres` error with enough detail to be useful in CI logs.
 ///
