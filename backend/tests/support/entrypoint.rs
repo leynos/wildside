@@ -24,6 +24,10 @@ macro_rules! declare_test_support {
         #[path = "../support/example_data_seeding_world.rs"]
         pub mod example_data_seeding_world;
     };
+    (@module fixture_auth) => {
+        #[path = "../support/fixture_auth.rs"]
+        pub mod fixture_auth;
+    };
     (@module profile_interests) => {
         #[path = "../support/profile_interests.rs"]
         pub mod profile_interests;

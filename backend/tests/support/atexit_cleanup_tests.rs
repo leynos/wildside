@@ -36,15 +36,22 @@ fn read_postmaster_pid_returns_none_for_non_numeric_content() {
     assert_eq!(super::unix_atexit::read_postmaster_pid(dir.path()), None);
 }
 
+fn lock_pg_env(
+    pg_password: Option<&'static str>,
+    postgresql_releases_url: Option<&'static str>,
+) -> env_lock::EnvGuard<'static> {
+    env_lock::lock_env([
+        ("PG_PASSWORD", pg_password),
+        ("POSTGRESQL_RELEASES_URL", postgresql_releases_url),
+    ])
+}
+
 #[test]
 fn ensure_stable_cluster_environment_does_not_overwrite_existing_values() {
-    let _guard = env_lock::lock_env([
-        ("PG_PASSWORD", Some("custom_value")),
-        (
-            "POSTGRESQL_RELEASES_URL",
-            Some("https://example.invalid/postgresql-binaries"),
-        ),
-    ]);
+    let _guard = lock_pg_env(
+        Some("custom_value"),
+        Some("https://example.invalid/postgresql-binaries"),
+    );
     super::ensure_stable_cluster_environment();
     assert_eq!(
         std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
@@ -60,10 +67,7 @@ fn ensure_stable_cluster_environment_does_not_overwrite_existing_values() {
 
 #[test]
 fn ensure_stable_cluster_environment_sets_release_url_when_missing() {
-    let _guard = env_lock::lock_env([
-        ("PG_PASSWORD", Some("custom_value")),
-        ("POSTGRESQL_RELEASES_URL", None),
-    ]);
+    let _guard = lock_pg_env(Some("custom_value"), None);
     super::ensure_stable_cluster_environment();
     assert_eq!(
         std::env::var("POSTGRESQL_RELEASES_URL").expect("POSTGRESQL_RELEASES_URL should be set"),
@@ -73,13 +77,7 @@ fn ensure_stable_cluster_environment_sets_release_url_when_missing() {
 
 #[test]
 fn ensure_stable_cluster_environment_sets_password_when_missing() {
-    let _guard = env_lock::lock_env([
-        ("PG_PASSWORD", None),
-        (
-            "POSTGRESQL_RELEASES_URL",
-            Some("https://example.invalid/postgresql-binaries"),
-        ),
-    ]);
+    let _guard = lock_pg_env(None, Some("https://example.invalid/postgresql-binaries"));
     super::ensure_stable_cluster_environment();
     assert_eq!(
         std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),

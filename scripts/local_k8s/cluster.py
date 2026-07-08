@@ -53,7 +53,9 @@ def _dispatch_provider_command(
     """Execute the provider-specific cluster command via kind or k3d."""
     match config.k8s_provider:
         case "kind":
-            command, args = _kind_command(config, spec.kind_args, use_scope=spec.use_scope)
+            command, args = _kind_command(
+                config, spec.kind_args, use_scope=spec.use_scope
+            )
             logger.info(
                 "local_k8s_provider_command",
                 extra={
@@ -193,11 +195,26 @@ def import_image(config: PreviewConfig, *, archive_dir: Path | None = None) -> N
         case ("kind", _):
             command, args = _kind_command(
                 config,
-                ["load", "docker-image", config.image_name, "--name", config.cluster_name],
+                [
+                    "load",
+                    "docker-image",
+                    config.image_name,
+                    "--name",
+                    config.cluster_name,
+                ],
             )
             run(command, args)
         case _:
-            run("k3d", ["image", "import", config.image_name, "--cluster", config.cluster_name])
+            run(
+                "k3d",
+                [
+                    "image",
+                    "import",
+                    config.image_name,
+                    "--cluster",
+                    config.cluster_name,
+                ],
+            )
 
 
 def print_cluster_status(config: PreviewConfig) -> None:
@@ -229,7 +246,9 @@ def print_cluster_status(config: PreviewConfig) -> None:
         },
     )
     if not _cluster_exists(config):
-        error_message = f"{config.k8s_provider} cluster {config.cluster_name!r} does not exist"
+        error_message = (
+            f"{config.k8s_provider} cluster {config.cluster_name!r} does not exist"
+        )
         raise LocalK8sError(error_message)
     print(f"cluster: {config.cluster_name}")
     print(f"provider: {config.k8s_provider}")
@@ -356,7 +375,9 @@ nodes:
 """
 
 
-def _image_archive_path(config: PreviewConfig, *, archive_dir: Path | None = None) -> Path:
+def _image_archive_path(
+    config: PreviewConfig, *, archive_dir: Path | None = None
+) -> Path:
     """Return a unique temporary Podman image archive path for kind loading."""
 
     base_dir = Path(tempfile.gettempdir()) if archive_dir is None else archive_dir
@@ -395,7 +416,7 @@ def _podman_archive_image_name(image_name: str) -> str:
 
 
 def _remove_stale_archive(archive_path: Path) -> None:
-    """Remove a stale image archive before writing a fresh Podman export."""
+    """Remove the temporary Podman image archive after kind loads it."""
 
     archive_path.unlink(missing_ok=True)
 
@@ -413,6 +434,13 @@ def _kind_command(
             podman_args = ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", *kind_args]
             if not use_scope:
                 return "env", podman_args
-            return "systemd-run", ["--scope", "--user", "-p", "Delegate=yes", "env", *podman_args]
+            return "systemd-run", [
+                "--scope",
+                "--user",
+                "-p",
+                "Delegate=yes",
+                "env",
+                *podman_args,
+            ]
         case _:
             return "kind", kind_args

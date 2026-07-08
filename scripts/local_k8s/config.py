@@ -27,7 +27,35 @@ K8sProvider = Literal["k3d", "kind"]
 
 @dataclass(frozen=True, slots=True)
 class PreviewConfig:
-    """Repository-local configuration for a Wildside preview deployment."""
+    """Repository-local configuration for a Wildside preview deployment.
+
+    Attributes
+    ----------
+    repository_root : Path
+        Root directory of the Wildside checkout.
+    container_engine : ContainerEngine
+        Container runtime used to build and import the preview image.
+    k8s_provider : K8sProvider
+        Local Kubernetes provider used for the preview cluster.
+    cluster_name : str
+        Name of the local Kubernetes cluster.
+    namespace : str
+        Kubernetes namespace used by the preview release.
+    release_name : str
+        Helm release name for the preview deployment.
+    image_name : str
+        Fully tagged image reference built for the preview.
+    kind_node_image : str
+        Node image used when creating a kind-backed cluster.
+    ingress_port : int
+        Host port used for preview ingress or port-forwarding.
+    chart_path : Path
+        Path to the Wildside Helm chart.
+    local_values_path : Path
+        Path to the local preview Helm values file.
+    dockerfile_path : Path
+        Path to the backend Dockerfile.
+    """
 
     repository_root: Path
     container_engine: ContainerEngine
@@ -61,11 +89,7 @@ class PreviewConfig:
         repository_root = Path(__file__).resolve().parents[2]
         container_engine = _container_engine_from_env()
         k8s_provider = _k8s_provider_from_env()
-        ingress_port = validate_port(
-            os.environ.get("WILDSIDE_K8S_PORT") or os.environ.get("WILDSIDE_K3D_PORT"),
-            default=DEFAULT_INGRESS_PORT,
-            name="WILDSIDE_K8S_PORT",
-        )
+        ingress_port = _ingress_port_from_env()
         chart_path = repository_root / "deploy" / "charts" / "wildside"
         return cls(
             repository_root=repository_root,
@@ -82,7 +106,10 @@ class PreviewConfig:
             ingress_port=ingress_port,
             chart_path=chart_path,
             local_values_path=chart_path / "values.local.yaml",
-            dockerfile_path=repository_root / "deploy" / "docker" / "backend.Dockerfile",
+            dockerfile_path=repository_root
+            / "deploy"
+            / "docker"
+            / "backend.Dockerfile",
         )
 
 
@@ -91,10 +118,10 @@ def _container_engine_from_env() -> ContainerEngine:
     raw_value = os.environ.get("WILDSIDE_CONTAINER_ENGINE", DEFAULT_CONTAINER_ENGINE)
     if raw_value in ("docker", "podman"):
         return raw_value
-    raise LocalK8sError(
-        "WILDSIDE_CONTAINER_ENGINE must be one of docker, podman; "
-        f"got {raw_value!r}"
+    message = (
+        f"WILDSIDE_CONTAINER_ENGINE must be one of docker, podman; got {raw_value!r}"
     )
+    raise LocalK8sError(message)
 
 
 def _k8s_provider_from_env() -> K8sProvider:
@@ -102,9 +129,21 @@ def _k8s_provider_from_env() -> K8sProvider:
     raw_value = os.environ.get("WILDSIDE_K8S_PROVIDER", DEFAULT_K8S_PROVIDER)
     if raw_value in ("k3d", "kind"):
         return raw_value
-    raise LocalK8sError(
-        "WILDSIDE_K8S_PROVIDER must be one of k3d, kind; "
-        f"got {raw_value!r}"
+    message = f"WILDSIDE_K8S_PROVIDER must be one of k3d, kind; got {raw_value!r}"
+    raise LocalK8sError(message)
+
+
+def _ingress_port_from_env() -> int:
+    """Return the ingress port and attribute errors to the source variable."""
+    port_name = "WILDSIDE_K8S_PORT"
+    raw_value = os.environ.get(port_name)
+    if raw_value is None:
+        port_name = "WILDSIDE_K3D_PORT"
+        raw_value = os.environ.get(port_name)
+    return validate_port(
+        raw_value,
+        default=DEFAULT_INGRESS_PORT,
+        name=port_name,
     )
 
 
@@ -124,17 +163,19 @@ def _kind_node_image_from_env() -> str:
 def _validate_dns_1123_label(value: str, *, name: str) -> None:
     """Reject values unsafe for Kubernetes DNS-1123 label fields."""
     if DNS_1123_LABEL_PATTERN.fullmatch(value) is None:
-        raise LocalK8sError(
+        message = (
             f"{name} must contain only lowercase letters, "
             "digits, and hyphens; start and end with an alphanumeric "
             "character; and be at most 63 characters"
         )
+        raise LocalK8sError(message)
 
 
 def _validate_kind_node_image(value: str) -> None:
     """Reject kind node image values unsafe for YAML rendering."""
     if KIND_NODE_IMAGE_PATTERN.fullmatch(value) is None:
-        raise LocalK8sError(
+        message = (
             "WILDSIDE_KIND_NODE_IMAGE must be a non-empty image reference "
             "without whitespace or control characters"
         )
+        raise LocalK8sError(message)

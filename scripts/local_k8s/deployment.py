@@ -20,7 +20,24 @@ logger = logging.getLogger(__name__)
 
 
 def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
-    """Build the image and install or upgrade the Wildside Helm release."""
+    """Build the image and install or upgrade the Wildside Helm release.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Local preview settings that select the runtime tools, cluster,
+        namespace, image, and Helm release.
+    skip_build : bool
+        When ``True``, reuse the currently tagged local image instead of
+        rebuilding it before import.
+
+    Notes
+    -----
+    Deployment ensures the cluster, namespace, and session-signing Secret
+    before building or importing the image. This order keeps
+    ``ensure_session_secret`` idempotent and avoids rotating local preview
+    sessions during normal Helm upgrades.
+    """
 
     require_tools(_deploy_preview_tools(config, skip_build=skip_build))
     logger.info(
@@ -43,10 +60,18 @@ def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
     print_status(config)
 
 
-def _deploy_preview_tools(config: PreviewConfig, *, skip_build: bool) -> tuple[str, ...]:
+def _deploy_preview_tools(
+    config: PreviewConfig, *, skip_build: bool
+) -> tuple[str, ...]:
     """Return the required command-line tools for the requested deploy mode."""
 
-    cluster_tool = "kind" if config.k8s_provider == "kind" else "k3d"
+    match config.k8s_provider:
+        case "kind":
+            cluster_tool = "kind"
+        case "k3d":
+            cluster_tool = "k3d"
+        case unexpected:
+            raise LocalK8sError(f"Unsupported Kubernetes provider: {unexpected!r}")
     if skip_build:
         return ("helm", cluster_tool, "kubectl")
     return (config.container_engine, "helm", cluster_tool, "kubectl")

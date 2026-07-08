@@ -25,11 +25,11 @@ declare_test_support!(
     table_helpers,
 );
 
+use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::embedded_postgres::provision_template_database;
 use crate::support::seed_connection_helpers::seed_user_and_route;
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::cluster_skip::handle_cluster_setup_failure;
-use support::embedded_postgres::provision_template_database;
-use support::table_helpers::drop_table;
+use crate::support::table_helpers::drop_table;
 
 struct TestContext {
     runtime: Runtime,

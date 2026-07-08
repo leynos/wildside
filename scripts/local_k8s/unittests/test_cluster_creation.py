@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 import pytest
@@ -18,6 +19,36 @@ class MockCommandResult:
     stderr: str = ""
 
 
+CommandRecord = tuple[str, list[str], str | None]
+
+
+def install_cluster_run_recorder(
+    monkeypatch: pytest.MonkeyPatch,
+    responder: Callable[[str, list[str], str | None], MockCommandResult],
+    *,
+    on_require_tools: Callable[[tuple[str, ...]], None] | None = None,
+) -> list[CommandRecord]:
+    """Install cluster command recording for provider contract tests."""
+    commands: list[CommandRecord] = []
+
+    def record_run(
+        command: str,
+        args: list[str],
+        *,
+        input_text: str | None = None,
+    ) -> MockCommandResult:
+        commands.append((command, args, input_text))
+        return responder(command, args, input_text)
+
+    def record_require_tools(tools: tuple[str, ...]) -> None:
+        if on_require_tools is not None:
+            on_require_tools(tuple(tools))
+
+    monkeypatch.setattr("local_k8s.cluster.require_tools", record_require_tools)
+    monkeypatch.setattr("local_k8s.cluster.run", record_run)
+    return commands
+
+
 class TestClusterCreation:
     """Provider command-contract tests for preview cluster creation."""
 
@@ -27,16 +58,15 @@ class TestClusterCreation:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify the default k3d path keeps its existing port mapping contract."""
-        commands: list[tuple[str, list[str], str | None]] = []
 
-        def record_run(command: str, args: list[str], **kwargs: object) -> MockCommandResult:
-            commands.append((command, args, kwargs.get("input_text")))
+        def respond(
+            command: str, args: list[str], _input_text: str | None
+        ) -> MockCommandResult:
             if args == ["cluster", "list", "--output", "json"]:
                 return MockCommandResult(stdout="[]")
             return MockCommandResult()
 
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        commands = install_cluster_run_recorder(monkeypatch, respond)
 
         ensure_cluster(preview_config)
 
@@ -67,20 +97,21 @@ class TestClusterCreation:
     ) -> None:
         """Verify Docker-backed kind creation avoids host-port mappings."""
         config = replace(preview_config, k8s_provider="kind")
-        commands: list[tuple[str, list[str], str | None]] = []
 
-        def record_run(command: str, args: list[str], **kwargs: object) -> MockCommandResult:
-            commands.append((command, args, kwargs.get("input_text")))
+        def respond(
+            command: str, args: list[str], _input_text: str | None
+        ) -> MockCommandResult:
             if command == "kind" and args == ["get", "clusters"]:
                 return MockCommandResult(stdout="other\n")
             return MockCommandResult()
 
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        commands = install_cluster_run_recorder(monkeypatch, respond)
 
         ensure_cluster(config)
 
-        assert commands[0] == ("kind", ["get", "clusters"], None), "kind must check for existing clusters"
+        assert commands[0] == ("kind", ["get", "clusters"], None), (
+            "kind must check for existing clusters"
+        )
         assert commands[1][0:2] == (
             "kind",
             [
@@ -94,13 +125,19 @@ class TestClusterCreation:
                 "180s",
             ],
         ), "kind cluster creation must use stdin config via --config -"
-        assert commands[1][2] is not None, "kind cluster creation must pass config on stdin"
-        assert "kind: Cluster" in commands[1][2], "stdin config must be valid kind Cluster YAML"
+        assert commands[1][2] is not None, (
+            "kind cluster creation must pass config on stdin"
+        )
+        assert "kind: Cluster" in commands[1][2], (
+            "stdin config must be valid kind Cluster YAML"
+        )
         assert 'image: "kindest/node:v1.31.0"' in commands[1][2], (
             "kind cluster creation must pin a Kubernetes version compatible "
             "with the Helm chart kubeVersion range"
         )
-        assert "extraPortMappings" not in commands[1][2], "Docker-backed kind must not use host port mappings"
+        assert "extraPortMappings" not in commands[1][2], (
+            "Docker-backed kind must not use host port mappings"
+        )
 
     def test_podman_kind_cluster_creation_uses_rootless_scope(
         self,
@@ -110,19 +147,24 @@ class TestClusterCreation:
         """Verify rootless Podman kind creation runs in a delegated user scope."""
         config = replace(preview_config, container_engine="podman", k8s_provider="kind")
         required_tools: list[tuple[str, ...]] = []
-        commands: list[tuple[str, list[str], str | None]] = []
 
-        def record_run(command: str, args: list[str], **kwargs: object) -> MockCommandResult:
-            commands.append((command, args, kwargs.get("input_text")))
-            if command == "env" and args == ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", "get", "clusters"]:
+        def respond(
+            command: str, args: list[str], _input_text: str | None
+        ) -> MockCommandResult:
+            if command == "env" and args == [
+                "KIND_EXPERIMENTAL_PROVIDER=podman",
+                "kind",
+                "get",
+                "clusters",
+            ]:
                 return MockCommandResult()
             return MockCommandResult()
 
-        monkeypatch.setattr(
-            "local_k8s.cluster.require_tools",
-            lambda tools: required_tools.append(tuple(tools)),
+        commands = install_cluster_run_recorder(
+            monkeypatch,
+            respond,
+            on_require_tools=required_tools.append,
         )
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
 
         ensure_cluster(config)
 
@@ -132,7 +174,9 @@ class TestClusterCreation:
             ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", "get", "clusters"],
             None,
         ), "KIND_EXPERIMENTAL_PROVIDER must be set for Podman-backed kind"
-        assert commands[1][0] == "systemd-run", "Podman-backed kind must be wrapped in systemd-run"
+        assert commands[1][0] == "systemd-run", (
+            "Podman-backed kind must be wrapped in systemd-run"
+        )
         assert commands[1][1][:7] == [
             "--scope",
             "--user",
@@ -142,4 +186,16 @@ class TestClusterCreation:
             "KIND_EXPERIMENTAL_PROVIDER=podman",
             "kind",
         ], "systemd-run must use --user --scope with Delegate=yes for rootless Podman"
-        assert commands[1][2] is not None, "Podman kind creation must pass config on stdin"
+        assert commands[1][2] is not None, (
+            "Podman kind creation must pass config on stdin"
+        )
+        assert "kind: Cluster" in commands[1][2], (
+            "stdin config must be valid kind Cluster YAML"
+        )
+        assert 'image: "kindest/node:v1.31.0"' in commands[1][2], (
+            "Podman kind creation must pin a Kubernetes version compatible "
+            "with the Helm chart kubeVersion range"
+        )
+        assert "extraPortMappings" not in commands[1][2], (
+            "Podman-backed kind must rely on port-forwarding rather than host port mappings"
+        )

@@ -13,11 +13,12 @@ from __future__ import annotations
 import base64
 from collections.abc import Callable
 from dataclasses import replace
-from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
+from local_k8s.config import K8sProvider
 from local_k8s.config import PreviewConfig
 from local_k8s.deployment import (
     _deploy_preview_tools,
@@ -25,81 +26,10 @@ from local_k8s.deployment import (
     deploy_preview,
     ensure_session_secret,
     helm_upgrade,
-    print_logs,
-    print_status,
 )
 from local_k8s.validation import LocalK8sError
 
-CommandRecord = tuple[str, list[str], str | None]
-RunHook = Callable[[str, list[str], str | None], None]
-
-
-@pytest.fixture
-def preview_config() -> PreviewConfig:
-    """Representative local preview configuration for deployment tests.
-
-    Returns
-    -------
-    PreviewConfig
-        Configuration for a local preview release named ``preview`` in the
-        ``wildside`` namespace. The image tag, chart path, values path, and
-        Dockerfile path match the deployment fields that ``deploy_preview``
-        passes through its build, import, and Helm orchestration steps.
-    """
-
-    return PreviewConfig(
-        repository_root=Path("/repo"),
-        container_engine="docker",
-        k8s_provider="k3d",
-        cluster_name="wildside-preview",
-        namespace="wildside",
-        release_name="preview",
-        image_name="wildside-backend:local",
-        kind_node_image="kindest/node:v1.31.0",
-        ingress_port=8088,
-        chart_path=Path("/repo/deploy/charts/wildside"),
-        local_values_path=Path("/repo/deploy/charts/wildside/values.local.yaml"),
-        dockerfile_path=Path("/repo/deploy/docker/backend.Dockerfile"),
-    )
-
-
-def install_run_recorder(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    stdout: str = "",
-    on_run: RunHook | None = None,
-) -> list[CommandRecord]:
-    """Replace deployment command execution with a command recorder.
-
-    Parameters
-    ----------
-    monkeypatch : pytest.MonkeyPatch
-        Pytest monkeypatch fixture used to replace ``local_k8s.deployment.run``.
-    stdout : str, optional
-        Standard output returned by every recorded command.
-    on_run : RunHook | None, optional
-        Callback invoked with the command, argument list, and optional input
-        text before the command is recorded.
-
-    Returns
-    -------
-    list[CommandRecord]
-        Mutable command log populated with ``(command, args, input_text)``
-        records for each deployment command invocation.
-    """
-    commands: list[CommandRecord] = []
-
-    def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
-        input_text = kwargs.get("input_text")
-        if input_text is not None and not isinstance(input_text, str):
-            raise AssertionError("input_text must be text when provided")
-        if on_run is not None:
-            on_run(command, args, input_text)
-        commands.append((command, args, input_text))
-        return SimpleNamespace(stdout=stdout)
-
-    monkeypatch.setattr("local_k8s.deployment.run", record_run)
-    return commands
+from conftest import CommandRecord, install_run_recorder
 
 
 @pytest.mark.parametrize(
@@ -130,14 +60,30 @@ def test_deploy_preview_docker_requirement_conditional_on_skip_build(
 
     monkeypatch.setattr(
         "local_k8s.deployment.require_tools",
-        lambda tools: (calls.append("require_tools"), required_tools.append(tuple(tools))),
+        lambda tools: (
+            calls.append("require_tools"),
+            required_tools.append(tuple(tools)),
+        ),
     )
-    monkeypatch.setattr("local_k8s.deployment.ensure_cluster", record_step("ensure_cluster"))
-    monkeypatch.setattr("local_k8s.deployment.ensure_namespace", record_step("ensure_namespace"))
-    monkeypatch.setattr("local_k8s.deployment.ensure_session_secret", record_step("ensure_session_secret"))
-    monkeypatch.setattr("local_k8s.deployment.import_image", record_step("import_image"))
-    monkeypatch.setattr("local_k8s.deployment.helm_upgrade", record_step("helm_upgrade"))
-    monkeypatch.setattr("local_k8s.deployment.print_status", record_step("print_status"))
+    monkeypatch.setattr(
+        "local_k8s.deployment.ensure_cluster", record_step("ensure_cluster")
+    )
+    monkeypatch.setattr(
+        "local_k8s.deployment.ensure_namespace", record_step("ensure_namespace")
+    )
+    monkeypatch.setattr(
+        "local_k8s.deployment.ensure_session_secret",
+        record_step("ensure_session_secret"),
+    )
+    monkeypatch.setattr(
+        "local_k8s.deployment.import_image", record_step("import_image")
+    )
+    monkeypatch.setattr(
+        "local_k8s.deployment.helm_upgrade", record_step("helm_upgrade")
+    )
+    monkeypatch.setattr(
+        "local_k8s.deployment.print_status", record_step("print_status")
+    )
     monkeypatch.setattr("local_k8s.deployment.build_image", record_step("build_image"))
 
     deploy_preview(preview_config, skip_build=skip_build)
@@ -170,6 +116,16 @@ def test_deploy_preview_tools_follow_configured_kubernetes_provider(
         "kind",
         "kubectl",
     )
+
+
+def test_deploy_preview_tools_reject_unexpected_kubernetes_provider(
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify provider preflight rejects impossible provider values."""
+    invalid_config = replace(preview_config, k8s_provider=cast(K8sProvider, "minikube"))
+
+    with pytest.raises(LocalK8sError, match="Unsupported Kubernetes provider"):
+        _deploy_preview_tools(invalid_config, skip_build=True)
 
 
 def test_build_image_uses_configured_container_engine(
@@ -264,6 +220,20 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
         ],
         None,
     ), "local preview must check for an existing session Secret before applying"
+    apply_command, apply_args, manifest = commands[1]
+    assert apply_command == "kubectl", (
+        "local preview must create the session Secret with kubectl"
+    )
+    assert apply_args == [
+        "--context",
+        "k3d-wildside-preview",
+        "create",
+        "-f",
+        "-",
+    ], "local preview must atomically create the session Secret before Helm"
+    assert manifest is not None, (
+        "session Secret creation must send the manifest on stdin"
+    )
     assert commands[1] == (
         "kubectl",
         [
@@ -273,10 +243,8 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
             "-f",
             "-",
         ],
-        commands[1][2],
+        manifest,
     ), "local preview must atomically create the session Secret before Helm"
-    manifest = commands[1][2]
-    assert manifest is not None
     assert "name: wildside-session-key" in manifest
     assert "namespace: wildside" in manifest
     encoded_key = manifest.rsplit("session_key: ", maxsplit=1)[1].strip()
@@ -339,101 +307,6 @@ def test_ensure_session_secret_reuses_concurrent_create(
 
     ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
 
-    assert len(commands) == 2, "concurrent create reuse must stop after the create conflict"
-
-
-def test_print_status_uses_provider_context_and_prints_kind_port_forward(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    preview_config: PreviewConfig,
-) -> None:
-    """Verify kind status uses provider tools and prints the operator command."""
-    config = replace(preview_config, k8s_provider="kind")
-    required_tools: list[tuple[str, ...]] = []
-    calls: list[str] = []
-    commands = install_run_recorder(
-        monkeypatch,
-        stdout="helm status\n",
-        on_run=lambda _command, _args, _input_text: calls.append("helm_status"),
+    assert len(commands) == 2, (
+        "concurrent create reuse must stop after the create conflict"
     )
-
-    monkeypatch.setattr(
-        "local_k8s.deployment.require_tools",
-        lambda tools: (calls.append("require_tools"), required_tools.append(tuple(tools))),
-    )
-    monkeypatch.setattr(
-        "local_k8s.deployment.print_cluster_status",
-        lambda _: calls.append("print_cluster_status"),
-    )
-    monkeypatch.setattr(
-        "local_k8s.deployment.print_kubernetes_status",
-        lambda _: calls.append("print_kubernetes_status"),
-    )
-
-    print_status(config)
-
-    output = capsys.readouterr().out
-    assert required_tools == [("helm", "kind", "kubectl")]
-    assert calls == [
-        "require_tools",
-        "print_cluster_status",
-        "helm_status",
-        "print_kubernetes_status",
-    ]
-    assert commands == [
-        (
-            "helm",
-            [
-                "--kube-context",
-                "kind-wildside-preview",
-                "-n",
-                "wildside",
-                "status",
-                "preview",
-            ],
-            None,
-        )
-    ], "Helm status must use the provider-specific kube context"
-    assert (
-        "kubectl --context kind-wildside-preview --namespace wildside "
-        "port-forward svc/preview-wildside 8088:80"
-    ) in output, "kind status must print the port-forward command for the Helm service"
-
-
-def test_print_logs_uses_configured_kube_context(
-    monkeypatch: pytest.MonkeyPatch,
-    preview_config: PreviewConfig,
-) -> None:
-    """Verify log streaming targets the provider-specific kube context."""
-    config = replace(preview_config, k8s_provider="kind")
-    commands = install_run_recorder(monkeypatch)
-    streaming_commands: list[tuple[str, list[str]]] = []
-
-    def record_streaming(command: str, args: list[str]) -> None:
-        streaming_commands.append((command, args))
-
-    monkeypatch.setattr("local_k8s.deployment.require_tools", lambda _: None)
-    monkeypatch.setattr("local_k8s.deployment.run_streaming", record_streaming)
-
-    print_logs(config, follow=True)
-
-    assert commands == [], "followed logs must stream rather than capture output"
-    assert streaming_commands == [
-        (
-            "kubectl",
-            [
-                "--context",
-                "kind-wildside-preview",
-                "-n",
-                "wildside",
-                "logs",
-                "-l",
-                "app.kubernetes.io/instance=preview",
-                "-c",
-                "app",
-                "--tail",
-                "200",
-                "--follow",
-            ],
-        )
-    ], "logs must use the provider-specific kube context"

@@ -12,35 +12,31 @@ from shutil import which
 from typing import cast
 
 
-def test_local_k8s_cli_help_smoke() -> None:
+def test_local_k8s_cli_help_smoke(uv_executable: str, local_k8s_script: Path) -> None:
     """Verify the script entry point loads and exposes the preview CLI."""
-    uv = which("uv")
-    assert uv is not None, "uv must be available to execute scripts/local_k8s.py"
-    script_path = Path(__file__).resolve().parents[2] / "local_k8s.py"
-
     completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
-        [uv, "run", str(script_path), "--help"],
+        [uv_executable, "run", str(local_k8s_script), "--help"],
         text=True,
         capture_output=True,
         check=True,
         timeout=60,
     )
 
-    assert "Manage a local Kubernetes Wildside preview environment." in completed.stdout, (
-        "local_k8s.py --help must return the preview CLI help text"
-    )
+    assert (
+        "Manage a local Kubernetes Wildside preview environment." in completed.stdout
+    ), "local_k8s.py --help must return the preview CLI help text"
 
 
-def test_local_k8s_status_reports_configuration_errors_at_cli_boundary() -> None:
+def test_local_k8s_status_reports_configuration_errors_at_cli_boundary(
+    uv_executable: str,
+    local_k8s_script: Path,
+) -> None:
     """Verify workflow commands surface validation failures through the CLI."""
-    uv = which("uv")
-    assert uv is not None
-    script_path = Path(__file__).resolve().parents[2] / "local_k8s.py"
     env = os.environ.copy()
     env["WILDSIDE_K8S_CLUSTER"] = "../wildside"
 
     completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
-        [uv, "run", str(script_path), "status"],
+        [uv_executable, "run", str(local_k8s_script), "status"],
         text=True,
         capture_output=True,
         check=False,
@@ -48,9 +44,15 @@ def test_local_k8s_status_reports_configuration_errors_at_cli_boundary() -> None
         timeout=60,
     )
 
-    assert completed.returncode != 0
-    assert "local preview status failed:" in completed.stderr
-    assert "WILDSIDE_K8S_CLUSTER" in completed.stderr
+    assert completed.returncode != 0, (
+        "invalid configuration must make the CLI return a nonzero status"
+    )
+    assert "local preview status failed:" in completed.stderr, (
+        "CLI boundary must include the workflow failure prefix"
+    )
+    assert "WILDSIDE_K8S_CLUSTER" in completed.stderr, (
+        "CLI boundary must surface the invalid environment variable name"
+    )
 
 
 def _write_fake_tool(fake_bin: Path) -> None:
@@ -126,8 +128,7 @@ def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
 def _load_log_entries(log_path: Path) -> list[list[object]]:
     """Load fake tool command records from the JSON-lines log."""
     return [
-        json.loads(line)
-        for line in log_path.read_text(encoding="utf8").splitlines()
+        json.loads(line) for line in log_path.read_text(encoding="utf8").splitlines()
     ]
 
 
@@ -146,8 +147,6 @@ def _assert_command_logged(
 
 def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
     """Verify Makefile preview targets cross the real CLI boundary."""
-    uv = which("uv")
-    assert uv is not None, "uv must be available to execute scripts/local_k8s.py"
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     _write_fake_tool(fake_bin)
@@ -157,7 +156,9 @@ def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
     env["WILDSIDE_FAKE_TOOL_LOG"] = str(tmp_path / "commands.jsonl")
     env["WILDSIDE_FAKE_TOOL_STATE"] = str(tmp_path / "cluster-state")
 
-    _run_make_targets(env, ("local-k8s-up", "local-k8s-status", "local-k8s-logs", "local-k8s-down"))
+    _run_make_targets(
+        env, ("local-k8s-up", "local-k8s-status", "local-k8s-logs", "local-k8s-down")
+    )
 
     log_entries = _load_log_entries(Path(env["WILDSIDE_FAKE_TOOL_LOG"]))
     _assert_command_logged(

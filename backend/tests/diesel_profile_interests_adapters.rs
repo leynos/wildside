@@ -30,6 +30,8 @@ mod support {
     pub mod cluster_skip;
     #[path = "../support/embedded_postgres.rs"]
     pub mod embedded_postgres;
+    #[path = "../support/fixture_auth.rs"]
+    pub mod fixture_auth;
     #[path = "../support/profile_interests.rs"]
     pub mod profile_interests;
     #[path = "../support/session_middleware.rs"]

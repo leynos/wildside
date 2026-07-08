@@ -7,24 +7,16 @@ use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
 use uuid::Uuid;
 
-mod support {
-    //! Test-local view of shared support helpers.
-    #[path = "../support/mod.rs"]
-    mod shared;
-    pub use shared::*;
-    #[path = "../support/atexit_cleanup.rs"]
-    pub mod atexit_cleanup;
-    #[path = "../support/cluster_skip.rs"]
-    pub mod cluster_skip;
-    #[path = "../support/embedded_postgres.rs"]
-    pub mod embedded_postgres;
-    #[path = "../support/profile_interests.rs"]
-    pub mod profile_interests;
-    #[path = "../support/session_middleware.rs"]
-    pub mod session_middleware;
-    #[path = "../support/table_helpers.rs"]
-    pub mod table_helpers;
-}
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    fixture_auth,
+    profile_interests,
+    session_middleware,
+    table_helpers,
+);
 
 use support::cluster_skip::handle_cluster_setup_failure;
 use support::profile_interests::{

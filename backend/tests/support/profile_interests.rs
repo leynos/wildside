@@ -4,7 +4,7 @@
 //! behavioural suites, so keeping the common constants here avoids drift
 //! between test crates.
 
-pub const FIXTURE_AUTH_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
+pub const FIXTURE_AUTH_ID: &str = super::fixture_auth::FIXTURE_AUTH_ID;
 pub const FIXTURE_PROFILE_NAME: &str = "Ada Lovelace";
 pub const DB_PROFILE_NAME: &str = "Database Ada";
 pub const FIRST_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";

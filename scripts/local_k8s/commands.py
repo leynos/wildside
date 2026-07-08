@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 import logging
 import subprocess
+from typing import NoReturn
 
 from plumbum import local
 from plumbum.commands.processes import ProcessExecutionError
@@ -98,6 +99,21 @@ def _command_error_message(
     return stderr.strip() or str(exc)
 
 
+def _log_and_raise(
+    command: str,
+    exc: ProcessExecutionError | subprocess.CalledProcessError,
+) -> NoReturn:
+    """Log a command failure and raise the local preview error wrapper."""
+    logger.exception(
+        "local_k8s_command_failed",
+        extra={
+            "command": command,
+            "failure_category": type(exc).__name__,
+        },
+    )
+    raise LocalK8sError(_command_error_message(exc)) from exc
+
+
 def run(
     command: str,
     args: Sequence[str],
@@ -136,14 +152,7 @@ def run(
             return _run_with_input(command, args, cwd=cwd, input_text=input_text)
         return _run_with_plumbum(command, args, cwd=cwd)
     except (ProcessExecutionError, subprocess.CalledProcessError) as exc:
-        logger.exception(
-            "local_k8s_command_failed",
-            extra={
-                "command": command,
-                "failure_category": type(exc).__name__,
-            },
-        )
-        raise LocalK8sError(_command_error_message(exc)) from exc
+        _log_and_raise(command, exc)
 
 
 def run_streaming(
@@ -173,11 +182,4 @@ def run_streaming(
     try:
         _run_streaming_with_subprocess(command, args, cwd=cwd)
     except subprocess.CalledProcessError as exc:
-        logger.exception(
-            "local_k8s_command_failed",
-            extra={
-                "command": command,
-                "failure_category": type(exc).__name__,
-            },
-        )
-        raise LocalK8sError(_command_error_message(exc)) from exc
+        _log_and_raise(command, exc)
