@@ -135,6 +135,73 @@ def delete_cluster(config: PreviewConfig) -> None:
     )
 
 
+def _import_image_via_podman_archive(
+    config: PreviewConfig,
+    *,
+    archive_dir: Path | None,
+) -> None:
+    """Import the local image into a kind cluster via a Podman archive."""
+
+    archive_path = _image_archive_path(config, archive_dir=archive_dir)
+    archive_image_name = _podman_archive_image_name(config.image_name)
+    try:
+        if archive_image_name != config.image_name:
+            run("podman", ["tag", config.image_name, archive_image_name])
+        run(
+            "podman",
+            [
+                "save",
+                "--output",
+                str(archive_path),
+                archive_image_name,
+            ],
+        )
+        command, args = _kind_command(
+            config,
+            [
+                "load",
+                "image-archive",
+                str(archive_path),
+                "--name",
+                config.cluster_name,
+            ],
+        )
+        run(command, args)
+    finally:
+        _remove_stale_archive(archive_path)
+
+
+def _import_image_via_kind_docker(config: PreviewConfig) -> None:
+    """Import the local image into a kind cluster via the Docker engine."""
+
+    command, args = _kind_command(
+        config,
+        [
+            "load",
+            "docker-image",
+            config.image_name,
+            "--name",
+            config.cluster_name,
+        ],
+    )
+    run(command, args)
+
+
+def _import_image_via_k3d(config: PreviewConfig) -> None:
+    """Import the local image into a k3d cluster."""
+
+    run(
+        "k3d",
+        [
+            "image",
+            "import",
+            config.image_name,
+            "--cluster",
+            config.cluster_name,
+        ],
+    )
+
+
 def import_image(config: PreviewConfig, *, archive_dir: Path | None = None) -> None:
     """Import the local backend image into the preview cluster.
 
@@ -165,56 +232,11 @@ def import_image(config: PreviewConfig, *, archive_dir: Path | None = None) -> N
     )
     match (config.k8s_provider, config.container_engine):
         case ("kind", "podman"):
-            archive_path = _image_archive_path(config, archive_dir=archive_dir)
-            archive_image_name = _podman_archive_image_name(config.image_name)
-            try:
-                if archive_image_name != config.image_name:
-                    run("podman", ["tag", config.image_name, archive_image_name])
-                run(
-                    "podman",
-                    [
-                        "save",
-                        "--output",
-                        str(archive_path),
-                        archive_image_name,
-                    ],
-                )
-                command, args = _kind_command(
-                    config,
-                    [
-                        "load",
-                        "image-archive",
-                        str(archive_path),
-                        "--name",
-                        config.cluster_name,
-                    ],
-                )
-                run(command, args)
-            finally:
-                _remove_stale_archive(archive_path)
+            _import_image_via_podman_archive(config, archive_dir=archive_dir)
         case ("kind", _):
-            command, args = _kind_command(
-                config,
-                [
-                    "load",
-                    "docker-image",
-                    config.image_name,
-                    "--name",
-                    config.cluster_name,
-                ],
-            )
-            run(command, args)
+            _import_image_via_kind_docker(config)
         case _:
-            run(
-                "k3d",
-                [
-                    "image",
-                    "import",
-                    config.image_name,
-                    "--cluster",
-                    config.cluster_name,
-                ],
-            )
+            _import_image_via_k3d(config)
 
 
 def print_cluster_status(config: PreviewConfig) -> None:
