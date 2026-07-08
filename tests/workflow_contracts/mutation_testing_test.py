@@ -34,8 +34,11 @@ EXPECTED_USES = (
 
 #: The exact caller configuration: workspace source prefixes (the
 #: vendored third_party/shellexpand patch crate stays out of scope),
-#: feature-gated test-support scaffolding excluded, and workspace-wide
-#: tests with all features to mirror the CI baseline.
+#: feature-gated test-support scaffolding excluded, workspace-wide
+#: tests with all features to mirror the CI baseline, and the embedded
+#: PostgreSQL version pin so the baseline skips postgresql_archive's
+#: rate-limited release-listing query (keep aligned with ci.yml's
+#: PG_VERSION).
 EXPECTED_WITH = {
     "paths": "backend/,crates/,tools/",
     "exclude-globs": (
@@ -45,6 +48,11 @@ EXPECTED_WITH = {
         "backend/src/outbound/queue/test_helpers.rs"
     ),
     "extra-args": "--all-features --test-workspace=true",
+    "setup-commands": (
+        'echo "POSTGRESQL_VERSION==16.10.0" >> "$GITHUB_ENV"\n'
+        'echo "POSTGRESQL_RELEASES_URL='
+        'https://github.com/theseus-rs/postgresql-binaries" >> "$GITHUB_ENV"\n'
+    ),
 }
 
 
