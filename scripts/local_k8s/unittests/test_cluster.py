@@ -97,3 +97,39 @@ class TestClusterStatus:
 
         with pytest.raises(LocalK8sError, match="does not exist"):
             print_cluster_status(replace(preview_config, k8s_provider="kind"))
+
+    def test_k3d_cluster_exists_rejects_malformed_json(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config: PreviewConfig,
+    ) -> None:
+        """Verify k3d status fails when `cluster list` emits non-JSON output."""
+        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+        monkeypatch.setattr(
+            "local_k8s.cluster.run",
+            lambda *_args, **_kwargs: CommandResult(stdout="not json", stderr=""),
+        )
+
+        with pytest.raises(
+            LocalK8sError, match="unexpected k3d cluster list JSON payload"
+        ):
+            print_cluster_status(preview_config)
+
+    def test_k3d_cluster_exists_rejects_non_list_payload(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config: PreviewConfig,
+    ) -> None:
+        """Verify k3d status fails when `cluster list` JSON is not a list."""
+        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
+        monkeypatch.setattr(
+            "local_k8s.cluster.run",
+            lambda *_args, **_kwargs: CommandResult(
+                stdout='{"name": "wildside-preview"}', stderr=""
+            ),
+        )
+
+        with pytest.raises(
+            LocalK8sError, match="unexpected k3d cluster list JSON shape"
+        ):
+            print_cluster_status(preview_config)

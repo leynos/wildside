@@ -2,7 +2,6 @@
 # /// script
 # requires-python = ">=3.13"
 # dependencies = [
-#   "cuprum==0.1.0",
 #   "cyclopts==4.10.1",
 #   "plumbum==1.9.0",
 # ]

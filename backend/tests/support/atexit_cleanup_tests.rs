@@ -86,6 +86,69 @@ fn ensure_stable_cluster_environment_sets_password_when_missing() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn ensure_stable_cluster_environment_serialises_concurrent_repair() {
+    // Two threads repairing the same stale password file concurrently must not
+    // race on removing it. Without the process-local repair lock, the second
+    // `remove_file` observes the file already gone and panics via `.expect`.
+    let sandbox = tempfile::tempdir().expect("tempdir");
+    let install_path = sandbox.path().join("install");
+    let data_parent_path = sandbox.path().join("data-parent");
+    let data_dir_path = data_parent_path.join("data");
+    Dir::create_ambient_dir_all(&install_path, ambient_authority()).expect("create install dir");
+    Dir::create_ambient_dir_all(&data_parent_path, ambient_authority())
+        .expect("create data parent");
+
+    let install_dir =
+        Dir::open_ambient_dir(&install_path, ambient_authority()).expect("open install");
+    install_dir
+        .write(".pgpass", b"stale-password")
+        .expect("seed stale password file");
+
+    // Pre-set every variable the repair path reads so the worker threads only
+    // read the environment (never `set_var`) and target the sandbox. A custom
+    // `PG_DATA_DIR` keeps `should_remove_data_dir` false, isolating the race to
+    // the `.pgpass` removal.
+    let _guard = env_lock::lock_env([
+        ("PG_PASSWORD", Some("wildside_embedded_test".to_owned())),
+        (
+            "POSTGRESQL_RELEASES_URL",
+            Some("https://example.invalid/postgresql-binaries".to_owned()),
+        ),
+        (
+            "PG_RUNTIME_DIR",
+            Some(
+                install_path
+                    .to_str()
+                    .expect("install path is valid UTF-8")
+                    .to_owned(),
+            ),
+        ),
+        (
+            "PG_DATA_DIR",
+            Some(
+                data_dir_path
+                    .to_str()
+                    .expect("data path is valid UTF-8")
+                    .to_owned(),
+            ),
+        ),
+    ]);
+
+    std::thread::scope(|scope| {
+        for _ in 0..2 {
+            scope.spawn(super::ensure_stable_cluster_environment);
+        }
+    });
+
+    assert!(
+        !install_dir.exists(".pgpass"),
+        "concurrent repair must remove the stale password file exactly once \
+         without panicking",
+    );
+}
+
 #[test]
 fn retry_budget_is_within_expected_bounds() {
     let retry_count = std::hint::black_box(SHARED_CLUSTER_RETRIES);

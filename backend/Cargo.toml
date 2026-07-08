@@ -78,6 +78,10 @@ example-data = ["dep:example-data"]
 metrics = ["dep:actix-web-prom", "dep:prometheus"]
 # Expose test utilities for integration tests
 test-support = ["dep:tempfile"]
+# Gate the trybuild compile-fail tests. `--all-features` (used by `make test`
+# and CI) enables them; leaving it unset keeps bare `cargo test` runs fast by
+# skipping the trybuild scratch compiles.
+trybuild-tests = []
 
 [dev-dependencies]
 # Enable test-support feature for integration tests
@@ -104,14 +108,16 @@ serial_test = "3"
 # Provides libc::atexit for graceful embedded PostgreSQL cluster shutdown under nextest.
 libc = "0.2"
 tempfile = "3"
+# Compile-fail coverage for the `declare_test_support!` module-wiring macro.
+trybuild = { version = "1", features = ["diff"] }
 
 [[bin]]
-name = "openapi-dump"
-path = "src/bin/openapi_dump.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
-name = "er-snapshots"
-path = "src/bin/er_snapshots.rs"
+name = "ingest-osm"
+path = "src/bin/ingest_osm.rs"
 
 [[bin]]
 name = "ingest-osm"

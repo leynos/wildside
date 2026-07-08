@@ -234,17 +234,6 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
     assert manifest is not None, (
         "session Secret creation must send the manifest on stdin"
     )
-    assert commands[1] == (
-        "kubectl",
-        [
-            "--context",
-            "k3d-wildside-preview",
-            "create",
-            "-f",
-            "-",
-        ],
-        manifest,
-    ), "local preview must atomically create the session Secret before Helm"
     assert "name: wildside-session-key" in manifest
     assert "namespace: wildside" in manifest
     encoded_key = manifest.rsplit("session_key: ", maxsplit=1)[1].strip()

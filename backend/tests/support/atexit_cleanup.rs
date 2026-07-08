@@ -298,11 +298,38 @@ pub(crate) fn ensure_stable_cluster_environment() {
             );
         }
     }
-    repair_default_password_state(password.as_bytes());
+    repair_password_state_serialised(password.as_bytes());
+}
+
+/// Serialises `.pgpass`/data-directory repair so concurrent callers cannot race
+/// on removing shared cluster state.
+///
+/// Two independent locks are required because the failure modes are distinct:
+///
+/// * **Cross-process** — concurrently starting nextest binaries share the
+///   embedded cluster's data directory. `acquire_shared_cluster_process_lock`
+///   takes the same `flock`-based process lock that `shared_cluster_handle`
+///   uses (it is idempotent within a process, short-circuiting once the fd is
+///   stored), so repair in one process cannot overlap repair in another.
+/// * **Intra-process** — the `flock` guards distinct processes only; within a
+///   single process the second caller short-circuits on the stored fd and never
+///   re-locks. Two threads (for example under the threaded `cargo test` runner)
+///   would then race on `.pgpass` removal, so a process-local mutex serialises
+///   them as well.
+#[cfg(unix)]
+fn repair_password_state_serialised(password: &[u8]) {
+    static PASSWORD_STATE_REPAIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    unix_atexit::acquire_shared_cluster_process_lock()
+        .expect("acquire shared cluster process lock before repairing password state");
+    let _repair_guard = PASSWORD_STATE_REPAIR_LOCK
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    repair_default_password_state(password);
 }
 
 #[cfg(not(unix))]
-fn repair_default_password_state(_password: &[u8]) {}
+fn repair_password_state_serialised(_password: &[u8]) {}
 
 #[cfg(unix)]
 fn repair_default_password_state(password: &[u8]) {
