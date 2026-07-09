@@ -101,6 +101,13 @@ def _podman_saved_image_name(monkeypatch: pytest.MonkeyPatch, image_name: str) -
     monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
     monkeypatch.setattr("local_k8s.cluster.run", record_run)
     monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", lambda _: None)
+    # This property exercises only the archived image name, so stub the archive
+    # path helper to avoid touching the filesystem for each generated example.
+    monkeypatch.setattr(
+        "local_k8s.cluster._image_archive_path",
+        lambda _config, *, archive_dir=None: Path(archive_dir or "/tmp")
+        / "wildside-preview-image.tar",
+    )
 
     import_image(
         replace(
@@ -109,7 +116,6 @@ def _podman_saved_image_name(monkeypatch: pytest.MonkeyPatch, image_name: str) -
             k8s_provider="kind",
             image_name=image_name,
         ),
-        archive_dir=Path("/repo/.local-preview"),
     )
 
     save_commands = [args for command, args in commands if command == "podman" and args[0] == "save"]

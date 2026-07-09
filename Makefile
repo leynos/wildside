@@ -65,7 +65,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts typecheck deps lockfile
+.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: spelling spelling-phrase-check spelling-config spelling-config-write spelling-helper-test
@@ -216,7 +216,7 @@ PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.1
 NEXTEST_TEST_THREADS ?= 1
 
 
-test: test-rust test-frontend
+test: test-rust test-frontend test-scripts
 
 test-rust: workspace-sync prepare-pg-worker
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast
@@ -228,6 +228,17 @@ test-frontend: deps typecheck
 # Validate the mutation-testing caller workflow contract
 test-workflow-contracts:
 	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' pytest tests/workflow_contracts -q
+
+# Python unit tests for the local Kubernetes preview helper
+# (scripts/local_k8s). Run from the repository root so the make-target smoke
+# test can resolve the real `local-k8s-*` targets, with the package exposed on
+# PYTHONPATH. Test dependencies are supplied through uv's `--with`, mirroring
+# the inline dependency declaration in scripts/local_k8s.py.
+test-scripts:
+	PYTHONPATH=scripts uv run \
+		--with pytest --with pytest-mock --with hypothesis \
+		--with cyclopts==4.10.1 --with plumbum==1.9.0 \
+		python -m pytest scripts/local_k8s/unittests
 
 .ONESHELL: prepare-pg-worker
 define PREPARE_PG_WORKER_CMD

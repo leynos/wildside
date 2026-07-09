@@ -152,6 +152,9 @@ jobs:
       - name: Type check
         run: make typecheck
 
+      - name: Local preview script tests
+        run: make test-scripts
+
       # Backend
       - name: Cache cargo
         uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
