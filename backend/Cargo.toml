@@ -62,7 +62,7 @@ prometheus = { version = "0.14", optional = true }
 
 zeroize = "1.7"
 # Cryptographic hashing for key fingerprinting
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 # Random number generation for TTL jitter
 rand = { version = "0.8", features = ["small_rng"] }
