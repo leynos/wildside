@@ -22,16 +22,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tokio::runtime::Runtime;
 
-mod support {
-    //! Test-local view of shared support helpers.
-    #[path = "../support/mod.rs"]
-    mod shared;
-    pub use shared::*;
-    #[path = "../support/atexit_cleanup.rs"]
-    pub mod atexit_cleanup;
-    #[path = "../support/embedded_postgres.rs"]
-    pub mod embedded_postgres;
-}
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, embedded_postgres);
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::embedded_postgres::provision_template_database;

@@ -3,6 +3,7 @@
 use super::*;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
+use rstest::rstest;
 
 #[cfg(unix)]
 fn write_postmaster_pid(dir_path: &std::path::Path, content: &str) {
@@ -11,29 +12,22 @@ fn write_postmaster_pid(dir_path: &std::path::Path, content: &str) {
 }
 
 #[cfg(unix)]
-#[test]
-fn read_postmaster_pid_parses_first_line() {
+#[rstest]
+#[case::parses_first_line(Some("12345\n/some/path\n5432\n"), Some(12345))]
+#[case::missing_file(None, None)]
+#[case::non_numeric_content(Some("not-a-number\n"), None)]
+fn read_postmaster_pid_reads_first_line(
+    #[case] content: Option<&str>,
+    #[case] expected: Option<i32>,
+) {
     let dir = tempfile::tempdir().expect("tempdir");
-    write_postmaster_pid(dir.path(), "12345\n/some/path\n5432\n");
+    if let Some(content) = content {
+        write_postmaster_pid(dir.path(), content);
+    }
     assert_eq!(
         super::unix_atexit::read_postmaster_pid(dir.path()),
-        Some(12345)
+        expected
     );
-}
-
-#[cfg(unix)]
-#[test]
-fn read_postmaster_pid_returns_none_for_missing_file() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    assert_eq!(super::unix_atexit::read_postmaster_pid(dir.path()), None);
-}
-
-#[cfg(unix)]
-#[test]
-fn read_postmaster_pid_returns_none_for_non_numeric_content() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    write_postmaster_pid(dir.path(), "not-a-number\n");
-    assert_eq!(super::unix_atexit::read_postmaster_pid(dir.path()), None);
 }
 
 fn lock_pg_env(

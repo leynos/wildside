@@ -171,9 +171,11 @@ fn the_interests_validation_error_envelope_remains_stable(world: &mut World) {
     let interests = world.interests.as_ref().expect("interests response");
     assert_eq!(interests.status, 400);
     let body = interests.body.as_ref().expect("error body");
+    let expected_message =
+        format!("interest theme ids must contain at most {INTEREST_THEME_IDS_MAX} items");
     assert_eq!(
         body.get("message").and_then(Value::as_str),
-        Some("interest theme ids must contain at most 100 items")
+        Some(expected_message.as_str())
     );
     assert_eq!(
         body.get("code").and_then(Value::as_str),

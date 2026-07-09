@@ -19,24 +19,15 @@ use rstest::rstest;
 use serde_json::Value;
 use uuid::Uuid;
 
-mod support {
-    //! Test-local view of shared support helpers.
-    #[path = "../support/mod.rs"]
-    mod shared;
-    pub use shared::*;
-    #[path = "../support/atexit_cleanup.rs"]
-    pub mod atexit_cleanup;
-    #[path = "../support/cluster_skip.rs"]
-    pub mod cluster_skip;
-    #[path = "../support/embedded_postgres.rs"]
-    pub mod embedded_postgres;
-    #[path = "../support/fixture_auth.rs"]
-    pub mod fixture_auth;
-    #[path = "../support/profile_interests.rs"]
-    pub mod profile_interests;
-    #[path = "../support/session_middleware.rs"]
-    pub mod session_middleware;
-}
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    fixture_auth,
+    profile_interests,
+    session_middleware
+);
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use support::cluster_skip::handle_cluster_setup_failure;
