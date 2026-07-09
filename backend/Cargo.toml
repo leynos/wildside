@@ -83,7 +83,7 @@ test-support = ["dep:tempfile"]
 # Enable test-support feature for integration tests
 backend = { path = ".", features = ["test-support"] }
 example-data = { path = "../crates/example-data" }
-mockall = "0.13"
+mockall = "0.15"
 mockable = { version = "3.0", features = ["clock", "mock"] }
 proptest = "1"
 actix-rt = "2"
