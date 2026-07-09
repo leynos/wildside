@@ -60,7 +60,7 @@ class TestClusterCreation:
         """Verify the default k3d path keeps its existing port mapping contract."""
 
         def respond(
-            command: str, args: list[str], _input_text: str | None
+            _command: str, args: list[str], _input_text: str | None
         ) -> MockCommandResult:
             if args == ["cluster", "list", "--output", "json"]:
                 return MockCommandResult(stdout="[]")
@@ -149,15 +149,8 @@ class TestClusterCreation:
         required_tools: list[tuple[str, ...]] = []
 
         def respond(
-            command: str, args: list[str], _input_text: str | None
+            _command: str, _args: list[str], _input_text: str | None
         ) -> MockCommandResult:
-            if command == "env" and args == [
-                "KIND_EXPERIMENTAL_PROVIDER=podman",
-                "kind",
-                "get",
-                "clusters",
-            ]:
-                return MockCommandResult()
             return MockCommandResult()
 
         commands = install_cluster_run_recorder(
@@ -174,18 +167,29 @@ class TestClusterCreation:
             ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", "get", "clusters"],
             None,
         ), "KIND_EXPERIMENTAL_PROVIDER must be set for Podman-backed kind"
-        assert commands[1][0] == "systemd-run", (
-            "Podman-backed kind must be wrapped in systemd-run"
+        assert commands[1][:2] == (
+            "systemd-run",
+            [
+                "--scope",
+                "--user",
+                "-p",
+                "Delegate=yes",
+                "env",
+                "KIND_EXPERIMENTAL_PROVIDER=podman",
+                "kind",
+                "create",
+                "cluster",
+                "--name",
+                "wildside-preview",
+                "--config",
+                "-",
+                "--wait",
+                "180s",
+            ],
+        ), (
+            "systemd-run must wrap the full kind create invocation in a "
+            "--user --scope with Delegate=yes for rootless Podman"
         )
-        assert commands[1][1][:7] == [
-            "--scope",
-            "--user",
-            "-p",
-            "Delegate=yes",
-            "env",
-            "KIND_EXPERIMENTAL_PROVIDER=podman",
-            "kind",
-        ], "systemd-run must use --user --scope with Delegate=yes for rootless Podman"
         assert commands[1][2] is not None, (
             "Podman kind creation must pass config on stdin"
         )

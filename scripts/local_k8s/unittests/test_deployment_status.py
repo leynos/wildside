@@ -26,12 +26,13 @@ def test_print_status_uses_provider_context_and_prints_kind_port_forward(
         on_run=lambda _command, _args, _input_text: calls.append("helm_status"),
     )
 
+    def record_require_tools(tools: tuple[str, ...]) -> None:
+        calls.append("require_tools")
+        required_tools.append(tuple(tools))
+
     monkeypatch.setattr(
         "local_k8s.deployment.require_tools",
-        lambda tools: (
-            calls.append("require_tools"),
-            required_tools.append(tuple(tools)),
-        ),
+        record_require_tools,
     )
     monkeypatch.setattr(
         "local_k8s.deployment.print_cluster_status",

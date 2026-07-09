@@ -115,7 +115,7 @@ def test_deploy_preview_tools_follow_configured_kubernetes_provider(
         "helm",
         "kind",
         "kubectl",
-    )
+    ), "kind preflight must require the kind provider tool alongside helm and kubectl"
 
 
 def test_deploy_preview_tools_reject_unexpected_kubernetes_provider(
@@ -234,10 +234,16 @@ def test_ensure_session_secret_applies_runtime_key_manifest(
     assert manifest is not None, (
         "session Secret creation must send the manifest on stdin"
     )
-    assert "name: wildside-session-key" in manifest
-    assert "namespace: wildside" in manifest
+    assert "name: wildside-session-key" in manifest, (
+        "session Secret manifest must name the wildside-session-key Secret"
+    )
+    assert "namespace: wildside" in manifest, (
+        "session Secret manifest must target the wildside namespace"
+    )
     encoded_key = manifest.rsplit("session_key: ", maxsplit=1)[1].strip()
-    assert base64.b64decode(encoded_key) == b"a" * 96
+    assert base64.b64decode(encoded_key) == b"a" * 96, (
+        "session Secret manifest must base64-encode the generated signing key"
+    )
 
 
 def test_ensure_session_secret_reuses_existing_key(

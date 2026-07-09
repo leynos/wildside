@@ -78,13 +78,27 @@ class PreviewConfig:
 
     @property
     def kube_context(self) -> str:
-        """Return the kube context name created by the selected provider."""
+        """Return the kube context name created by the selected provider.
+
+        Returns
+        -------
+        str
+            The provider-prefixed kube context name, formed as
+            ``{provider}-{cluster_name}``.
+        """
 
         return f"{self.k8s_provider}-{self.cluster_name}"
 
     @classmethod
     def from_env(cls) -> PreviewConfig:
-        """Build configuration from defaults and `WILDSIDE_` overrides."""
+        """Build configuration from defaults and `WILDSIDE_` overrides.
+
+        Returns
+        -------
+        PreviewConfig
+            Configuration resolved from repository defaults overlaid with any
+            ``WILDSIDE_`` environment variable overrides.
+        """
 
         repository_root = Path(__file__).resolve().parents[2]
         container_engine = _container_engine_from_env()
@@ -95,10 +109,7 @@ class PreviewConfig:
             repository_root=repository_root,
             container_engine=container_engine,
             k8s_provider=k8s_provider,
-            cluster_name=_cluster_name_from_env(
-                os.environ.get("WILDSIDE_K8S_CLUSTER")
-                or os.environ.get("WILDSIDE_K3D_CLUSTER", DEFAULT_CLUSTER_NAME)
-            ),
+            cluster_name=_cluster_name_from_env(),
             namespace=os.environ.get("WILDSIDE_K8S_NAMESPACE", DEFAULT_NAMESPACE),
             release_name=os.environ.get("WILDSIDE_HELM_RELEASE", DEFAULT_RELEASE_NAME),
             image_name=os.environ.get("WILDSIDE_IMAGE", DEFAULT_IMAGE_NAME),
@@ -147,9 +158,14 @@ def _ingress_port_from_env() -> int:
     )
 
 
-def _cluster_name_from_env(raw_value: str) -> str:
-    """Return the validated local Kubernetes cluster name."""
-    _validate_dns_1123_label(raw_value, name="WILDSIDE_K8S_CLUSTER")
+def _cluster_name_from_env() -> str:
+    """Return the cluster name and attribute errors to the source variable."""
+    cluster_name = "WILDSIDE_K8S_CLUSTER"
+    raw_value = os.environ.get(cluster_name)
+    if raw_value is None:
+        cluster_name = "WILDSIDE_K3D_CLUSTER"
+        raw_value = os.environ.get(cluster_name, DEFAULT_CLUSTER_NAME)
+    _validate_dns_1123_label(raw_value, name=cluster_name)
     return raw_value
 
 

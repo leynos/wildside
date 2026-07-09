@@ -142,7 +142,7 @@ def _assert_command_logged(
     assert any(
         entry[0] == tool and predicate(cast(list[object], entry[1]))
         for entry in log_entries
-    ), message
+    ), f"{message}; recorded commands: {log_entries!r}"
 
 
 def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
