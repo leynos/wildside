@@ -43,7 +43,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend typecheck deps lockfile
+.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: lint-rust lint-clippy lint-whitaker lint-frontend lint-asyncapi lint-openapi lint-makefile
@@ -201,6 +201,10 @@ test-rust: workspace-sync prepare-pg-worker
 test-frontend: deps typecheck
 	pnpm run test
 	pnpm run test:workspaces
+
+# Validate the mutation-testing caller workflow contract
+test-workflow-contracts:
+	uv run --with 'pytest>=8' --with 'pyyaml>=6' pytest tests/workflow_contracts -q
 
 .ONESHELL: prepare-pg-worker
 define PREPARE_PG_WORKER_CMD

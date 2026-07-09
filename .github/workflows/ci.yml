@@ -137,6 +137,9 @@ jobs:
       - name: YAML lint
         run: make yamllint
 
+      - name: Workflow contract tests
+        run: make test-workflow-contracts
+
       - name: Type check
         run: make typecheck
 
