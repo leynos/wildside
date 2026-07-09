@@ -1,7 +1,7 @@
 error: no rules expected `not_a_real_module`
-  --> tests/support/ui/declare_test_support_unknown_module.rs:11:31
+  --> tests/support/ui/declare_test_support_unknown_module.rs:13:31
    |
-11 | declare_test_support!(@module not_a_real_module);
+13 | declare_test_support!(@module not_a_real_module);
    |                               ^^^^^^^^^^^^^^^^^ no rules expected this token in macro call
    |
   ::: tests/support/ui/../entrypoint.rs

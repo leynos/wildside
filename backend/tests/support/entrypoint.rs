@@ -1,18 +1,19 @@
-// Macro for declaring the test-local `support` module used by BDD and
-// integration test binaries.
-//
-// This file is pulled into each test binary with `include!`, so its contents
-// are pasted inline rather than compiled as a module of their own; that is why
-// the file header uses regular `//` comments instead of `//!` inner doc
-// comments (an inner doc comment at an `include!` site is rejected by rustc
-// with E0753).
-//
-// `declare_test_support!` expands to a `support` submodule that re-exports the
-// shared helpers in `../support/mod.rs` and conditionally wires in additional
-// support submodules (for example `atexit_cleanup`, `cluster_skip`,
-// `embedded_postgres`) by name, so each test binary only compiles the support
-// code it actually uses.
+/**
+Declares the test-local `support` module used by BDD and integration test
+binaries.
 
+This file is pulled into each test binary with `include!`, so its contents are
+pasted inline rather than compiled as a module of their own. That is why this
+purpose documentation is an *outer* doc comment (`/** */`) attached to the
+macro rather than an inner `//!` module doc: an inner doc comment at an
+`include!` site is rejected by rustc with E0753.
+
+`declare_test_support!` expands to a `support` submodule that re-exports the
+shared helpers in `../support/mod.rs` and conditionally wires in additional
+support submodules (for example `atexit_cleanup`, `cluster_skip`,
+`embedded_postgres`) by name, so each test binary only compiles the support
+code it actually uses.
+*/
 macro_rules! declare_test_support {
     ($($module:ident),+ $(,)?) => {
         mod support {

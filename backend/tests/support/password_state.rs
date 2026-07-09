@@ -11,16 +11,19 @@ use std::path::{Path, PathBuf};
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
-pub(super) fn repair_default_password_state(password: &[u8]) {
+pub(super) fn repair_default_password_state(password: &[u8]) -> io::Result<()> {
     let paths = PasswordStatePaths::from_environment();
+    // A missing install/data directory means there is nothing to repair, so
+    // treat it as a quiet success. Genuine cleanup failures, however, are
+    // propagated so the caller can surface them at an explicit boundary.
     let Ok(install_dir) = Dir::open_ambient_dir(&paths.install_dir, ambient_authority()) else {
-        return;
+        return Ok(());
     };
     let Ok(data_parent) = Dir::open_ambient_dir(&paths.data_parent, ambient_authority()) else {
-        return;
+        return Ok(());
     };
 
-    repair_password_file_state(password, &install_dir, &data_parent, &paths);
+    repair_password_file_state(password, &install_dir, &data_parent, &paths)
 }
 
 struct PasswordStatePaths {
@@ -68,22 +71,21 @@ fn repair_password_file_state(
     install_dir: &Dir,
     data_parent: &Dir,
     paths: &PasswordStatePaths,
-) {
+) -> io::Result<()> {
     let Ok(existing_password) = install_dir.read(Path::new(".pgpass")) else {
-        return;
+        return Ok(());
     };
     if existing_password == password {
-        return;
+        return Ok(());
     }
 
-    install_dir
-        .remove_file(Path::new(".pgpass"))
-        .expect("remove stale embedded PostgreSQL password file");
+    install_dir.remove_file(Path::new(".pgpass"))?;
 
     if paths.should_remove_data_dir {
-        remove_dir_if_exists(data_parent, &paths.data_name)
-            .expect("remove stale embedded PostgreSQL data directory");
+        remove_dir_if_exists(data_parent, &paths.data_name)?;
     }
+
+    Ok(())
 }
 
 fn remove_dir_if_exists(parent: &Dir, path: &Path) -> io::Result<()> {
@@ -189,7 +191,8 @@ mod tests {
             &fixture.install_dir,
             &fixture.data_parent,
             &fixture.paths,
-        );
+        )
+        .expect("repair should succeed");
 
         assert_eq!(
             fixture.install_dir.exists(".pgpass"),

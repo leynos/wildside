@@ -298,10 +298,15 @@ pub(crate) fn ensure_stable_cluster_environment() {
             );
         }
     }
-    repair_password_state_serialised(password.as_bytes());
+    // The repair path is fallible (lock acquisition and filesystem cleanup);
+    // surface any failure explicitly at this single boundary rather than hiding
+    // it behind a deeper `.expect()`. This keeps the function's existing
+    // fail-fast style while making the fallibility part of the helper contract.
+    repair_password_state_serialised(password.as_bytes())
+        .expect("repair shared cluster password state before cluster bootstrap");
 }
 
-/// Serialises `.pgpass`/data-directory repair so concurrent callers cannot race
+/// Serializes `.pgpass`/data-directory repair so concurrent callers cannot race
 /// on removing shared cluster state.
 ///
 /// Two independent locks are required because the failure modes are distinct:
@@ -314,26 +319,31 @@ pub(crate) fn ensure_stable_cluster_environment() {
 /// * **Intra-process** — the `flock` guards distinct processes only; within a
 ///   single process the second caller short-circuits on the stored fd and never
 ///   re-locks. Two threads (for example under the threaded `cargo test` runner)
-///   would then race on `.pgpass` removal, so a process-local mutex serialises
+///   would then race on `.pgpass` removal, so a process-local mutex serializes
 ///   them as well.
 #[cfg(unix)]
-fn repair_password_state_serialised(password: &[u8]) {
+fn repair_password_state_serialised(password: &[u8]) -> BootstrapResult<()> {
     static PASSWORD_STATE_REPAIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    unix_atexit::acquire_shared_cluster_process_lock()
-        .expect("acquire shared cluster process lock before repairing password state");
+    unix_atexit::acquire_shared_cluster_process_lock()?;
     let _repair_guard = PASSWORD_STATE_REPAIR_LOCK
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
-    repair_default_password_state(password);
+    repair_default_password_state(password).map_err(|error| {
+        pg_embedded_setup_unpriv::BootstrapError::from(color_eyre::eyre::eyre!(
+            "repair shared cluster password state: {error}"
+        ))
+    })
 }
 
 #[cfg(not(unix))]
-fn repair_password_state_serialised(_password: &[u8]) {}
+fn repair_password_state_serialised(_password: &[u8]) -> BootstrapResult<()> {
+    Ok(())
+}
 
 #[cfg(unix)]
-fn repair_default_password_state(password: &[u8]) {
-    password_state::repair_default_password_state(password);
+fn repair_default_password_state(password: &[u8]) -> std::io::Result<()> {
+    password_state::repair_default_password_state(password)
 }
 
 #[cfg(test)]
