@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
+import pytest_mock
 
 from local_k8s.cluster import import_image
 from local_k8s.config import PreviewConfig
@@ -35,23 +36,23 @@ class TestImageImport:
 
     @staticmethod
     def _capture_commands(
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         config: PreviewConfig,
         *,
         archive_dir: Path | None = None,
         on_remove_archive: Callable[[Path], None] | None = None,
     ) -> list[tuple[str, list[str]]]:
-        """Monkeypatch cluster internals, run import_image, and return recorded commands."""
+        """Patch cluster internals, run import_image, and return recorded commands."""
         commands: list[tuple[str, list[str]]] = []
 
         def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
             commands.append((command, args))
             return MockCommandResult()
 
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.run", record_run)
         if archive_dir is not None:
-            monkeypatch.setattr(
+            mocker.patch(
                 "local_k8s.cluster._remove_stale_archive",
                 on_remove_archive if on_remove_archive is not None else lambda _: None,
             )
@@ -61,11 +62,11 @@ class TestImageImport:
 
     def test_k3d_image_import_uses_existing_provider_command(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config: PreviewConfig,
     ) -> None:
         """Verify k3d keeps its current image import command."""
-        commands = self._capture_commands(monkeypatch, preview_config)
+        commands = self._capture_commands(mocker, preview_config)
 
         assert commands == [
             (
@@ -82,12 +83,12 @@ class TestImageImport:
 
     def test_docker_kind_image_import_uses_docker_image_loader(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config: PreviewConfig,
     ) -> None:
         """Verify Docker-backed kind loads the local Docker image directly."""
         config = replace(preview_config, k8s_provider="kind")
-        commands = self._capture_commands(monkeypatch, config)
+        commands = self._capture_commands(mocker, config)
 
         assert commands == [
             (
@@ -104,14 +105,14 @@ class TestImageImport:
 
     def test_podman_kind_image_import_saves_archive_before_loading(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config_kind: PreviewConfig,
         tmp_path: Path,
     ) -> None:
         """Verify rootless Podman kind uses an archive load path."""
         removed_archives: list[Path] = []
         commands = self._capture_commands(
-            monkeypatch,
+            mocker,
             preview_config_kind,
             archive_dir=tmp_path,
             on_remove_archive=removed_archives.append,
@@ -158,7 +159,7 @@ class TestImageImport:
 
     def test_podman_kind_image_import_removes_archive_when_load_fails(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config_kind: PreviewConfig,
         tmp_path: Path,
     ) -> None:
@@ -172,9 +173,9 @@ class TestImageImport:
                 raise LocalK8sError("kind load failed")
             return MockCommandResult()
 
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
-        monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", removed_archives.append)
+        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.run", record_run)
+        mocker.patch("local_k8s.cluster._remove_stale_archive", removed_archives.append)
 
         with pytest.raises(LocalK8sError, match="kind load failed"):
             import_image(preview_config_kind, archive_dir=tmp_path)
@@ -184,7 +185,7 @@ class TestImageImport:
 
     def test_podman_kind_image_import_keeps_registry_qualified_archive_tag(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config_kind: PreviewConfig,
         tmp_path: Path,
     ) -> None:
@@ -193,7 +194,7 @@ class TestImageImport:
             preview_config_kind,
             image_name="registry.example.test/wildside/backend:local",
         )
-        commands = self._capture_commands(monkeypatch, config, archive_dir=tmp_path)
+        commands = self._capture_commands(mocker, config, archive_dir=tmp_path)
         archive_path = self._archive_path_from_save(commands)
 
         assert commands[0] == (
@@ -208,7 +209,7 @@ class TestImageImport:
 
     def test_podman_kind_image_import_normalizes_namespaced_archive_tag(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config_kind: PreviewConfig,
         tmp_path: Path,
     ) -> None:
@@ -217,7 +218,7 @@ class TestImageImport:
             preview_config_kind,
             image_name="leynos/wildside-backend:local",
         )
-        commands = self._capture_commands(monkeypatch, config, archive_dir=tmp_path)
+        commands = self._capture_commands(mocker, config, archive_dir=tmp_path)
         archive_path = self._archive_path_from_save(commands)
 
         assert commands[:2] == [
@@ -242,13 +243,13 @@ class TestImageImport:
 
     def test_podman_kind_image_import_uses_unique_archive_names(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config_kind: PreviewConfig,
         tmp_path: Path,
     ) -> None:
         """Verify duplicate imports do not contend for one archive path."""
-        first_commands = self._capture_commands(monkeypatch, preview_config_kind, archive_dir=tmp_path)
-        second_commands = self._capture_commands(monkeypatch, preview_config_kind, archive_dir=tmp_path)
+        first_commands = self._capture_commands(mocker, preview_config_kind, archive_dir=tmp_path)
+        second_commands = self._capture_commands(mocker, preview_config_kind, archive_dir=tmp_path)
 
         assert self._archive_path_from_save(first_commands) != self._archive_path_from_save(
             second_commands
