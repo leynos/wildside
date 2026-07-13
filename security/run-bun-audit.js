@@ -3,15 +3,10 @@
 /** @file Run `bun audit` with ignores sourced from the audit exception ledger. */
 
 import { spawnSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import auditExceptions from './audit-exceptions.json' with { type: 'json' };
 import { assertNoExpired } from './audit-exception-policy.js';
-
-const normalise = (path) =>
-  typeof realpathSync.native === 'function' ? realpathSync.native(path) : realpathSync(path);
+import { isExecutedDirectly } from '../scripts/direct-execution.mjs';
 
 /**
  * Build the `bun audit` command arguments for the supplied exception ledger.
@@ -50,20 +45,6 @@ export function runBunAudit(entries, auditIo = { spawnSync }) {
   }
 
   return result.status ?? 1;
-}
-
-function isExecutedDirectly(meta) {
-  const invokedPath = process.argv?.[1];
-  if (!invokedPath) {
-    return false;
-  }
-
-  try {
-    const scriptPath = fileURLToPath(meta.url);
-    return normalise(scriptPath) === normalise(resolve(invokedPath));
-  } catch {
-    return false;
-  }
 }
 
 if (isExecutedDirectly(import.meta)) {

@@ -9,8 +9,8 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+
+import { isExecutedDirectly } from './direct-execution.mjs';
 
 const PACKAGE_JSON_PATH = new URL('../package.json', import.meta.url);
 
@@ -113,7 +113,12 @@ export function reportOverridesPolicy(report, outputIo = console) {
   return 1;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const packageJson = await readPackageJson();
-  process.exitCode = reportOverridesPolicy(checkOverridesPolicy(packageJson));
+if (isExecutedDirectly(import.meta)) {
+  try {
+    const packageJson = await readPackageJson();
+    process.exitCode = reportOverridesPolicy(checkOverridesPolicy(packageJson));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }
 }
