@@ -29,7 +29,7 @@ jobs:
         with:
           bun-version: '1.2.21'
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@e4c6b0e200a057edf927c45c298e7ddf229b3934
+        uses: leynos/shared-actions/.github/actions/setup-rust@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
       - name: Install cargo-audit
         run: cargo binstall --no-confirm cargo-audit@0.22.1
       - name: Install dependencies (frozen)

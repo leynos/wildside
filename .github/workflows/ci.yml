@@ -62,7 +62,7 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@e4c6b0e200a057edf927c45c298e7ddf229b3934
+        uses: leynos/shared-actions/.github/actions/setup-rust@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
 
       - name: Install uv
         id: setup-uv
@@ -240,3 +240,78 @@ jobs:
           bun install
           bun run gen:api
           bun run build
+
+  # Rust coverage for CodeScene. This job is deliberately NOT a required
+  # check and does not gate the pull request. The CodeScene changed-line
+  # gate (upload-codescene-coverage with mode: check) is intentionally
+  # deferred: CodeScene project 70675 has no coverage `gates` configuration
+  # yet, so a `check` invocation would fail unconditionally
+  # ("received project-config isn't valid. Lacks the gates configuration").
+  # coverage-main.yml uploads main-branch coverage on push so the gate can
+  # be added in a small follow-up once CodeScene provisions the gates. For
+  # now this job only generates Rust coverage and advances the ratchet
+  # baseline that pull-request runs compare against. It skips Dependabot so
+  # dependency automerge stays off the expensive coverage path.
+  coverage:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubicloud-standard-8
+    env:
+      PG_VERSION: "16.10.0"
+      # The 927edd4 shared-actions pin caps a single cargo invocation's
+      # wall-clock (RUN_RUST_CARGO_WAIT_TIMEOUT, default 600s). The
+      # instrumented workspace build plus the serialized embedded-Postgres
+      # suite needs far longer — the repo's nextest global-timeout alone is
+      # 60 minutes — so raise the cap well above it.
+      RUN_RUST_CARGO_WAIT_TIMEOUT: '5400'
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v4
+        with:
+          # The deferred `cs-coverage check` diffs against the PR merge
+          # base; fetch full history now so enabling the gate later is a
+          # workflow-only change.
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: leynos/shared-actions/.github/actions/setup-rust@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
+      - name: Cache PostgreSQL embedded binaries
+        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
+        with:
+          path: |
+            ~/.theseus/postgresql
+            ~/.cache/pg-embedded/binaries
+          key: ${{ runner.os }}-pg-embedded-${{ env.PG_VERSION }}
+          restore-keys: ${{ runner.os }}-pg-embedded-
+      - name: Build pg_worker binary
+        run: make prepare-pg-worker
+      - name: Warm PostgreSQL embedded binary cache
+        env:
+          # Increase GitHub API rate limits for postgresql_embedded downloads.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin the embedded PostgreSQL version so postgresql_archive skips
+          # release-listing queries; the "=" prefix requests an exact match.
+          POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
+          POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
+        run: bash scripts/warm-pg-embedded-cache.sh
+      - name: Generate Rust coverage
+        uses: leynos/shared-actions/.github/actions/generate-coverage@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
+          POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
+          # Keep backend selection explicit for strict PG_TEST_BACKEND validation.
+          PG_TEST_BACKEND: postgresql_embedded
+          # Root-path bootstrap requires the worker binary for privilege demotion.
+          PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
+        with:
+          output-path: lcov.info
+          format: lcov
+          # nextest is required: .config/nextest.toml serializes the
+          # embedded-Postgres test binaries via the pg-embed test-group;
+          # plain `cargo test` would run them in parallel and race on the
+          # shared cluster directory.
+          use-cargo-nextest: 'true'
+          # Mirror ci.yml's --all-features except pagination's
+          # trybuild-tests: trybuild scratch compiles under coverage
+          # instrumentation exceed the repo's 60s nextest slow-timeout and
+          # would be killed. The compile-fail tests add no line coverage.
+          features: example-data metrics test-support
+          with-ratchet: 'true'
