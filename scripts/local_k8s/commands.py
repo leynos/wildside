@@ -67,13 +67,16 @@ def _run_with_plumbum(
     *,
     cwd: str | None = None,
 ) -> CommandResult:
-    """Run a command through plumbum and capture output."""
+    """Run a command through plumbum and capture output.
+
+    Binds the working directory to the command with ``with_cwd`` rather than the
+    process-wide ``local.cwd`` context manager, so concurrent ``run(..., cwd=)``
+    calls do not race on the global current directory.
+    """
     executable = local[command]
     if cwd:
-        with local.cwd(cwd):
-            out = executable.run(args)
-    else:
-        out = executable.run(args)
+        executable = executable.with_cwd(cwd)
+    out = executable.run(args)
     return CommandResult(stdout=out[1], stderr=out[2])
 
 

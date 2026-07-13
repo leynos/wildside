@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
+import pytest_mock
 
 from local_k8s.cluster import delete_cluster, print_cluster_status
 from local_k8s.commands import CommandResult
@@ -17,7 +18,7 @@ class TestClusterStatus:
 
     def test_kind_delete_is_idempotent_when_cluster_is_absent(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config: PreviewConfig,
     ) -> None:
         """Verify kind teardown skips deletion when the cluster is absent."""
@@ -28,8 +29,8 @@ class TestClusterStatus:
             commands.append((command, args))
             return CommandResult(stdout="other\n", stderr="")
 
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.run", record_run)
 
         delete_cluster(config)
 
@@ -39,7 +40,7 @@ class TestClusterStatus:
 
     def test_print_cluster_status_prints_provider_context(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         capsys: pytest.CaptureFixture[str],
         preview_config: PreviewConfig,
     ) -> None:
@@ -50,8 +51,8 @@ class TestClusterStatus:
             commands.append((command, args))
             return CommandResult(stdout="wildside-preview\n", stderr="")
 
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.run", record_run)
 
         print_cluster_status(replace(preview_config, k8s_provider="kind"))
 
@@ -64,7 +65,7 @@ class TestClusterStatus:
 
     def test_print_cluster_status_prints_k3d_ingress(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         capsys: pytest.CaptureFixture[str],
         preview_config: PreviewConfig,
     ) -> None:
@@ -73,8 +74,8 @@ class TestClusterStatus:
         def record_run(_command: str, _args: list[str], **_: object) -> CommandResult:
             return CommandResult(stdout='[{"name":"wildside-preview"}]\n', stderr="")
 
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr("local_k8s.cluster.run", record_run)
+        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.run", record_run)
 
         print_cluster_status(preview_config)
 
@@ -85,12 +86,12 @@ class TestClusterStatus:
 
     def test_print_cluster_status_rejects_missing_cluster(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config: PreviewConfig,
     ) -> None:
         """Verify cluster status fails before printing stale preview details."""
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr(
+        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch(
             "local_k8s.cluster.run",
             lambda *_args, **_kwargs: CommandResult(stdout="other\n", stderr=""),
         )
@@ -100,12 +101,12 @@ class TestClusterStatus:
 
     def test_k3d_cluster_exists_rejects_malformed_json(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config: PreviewConfig,
     ) -> None:
         """Verify k3d status fails when `cluster list` emits non-JSON output."""
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr(
+        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch(
             "local_k8s.cluster.run",
             lambda *_args, **_kwargs: CommandResult(stdout="not json", stderr=""),
         )
@@ -117,12 +118,12 @@ class TestClusterStatus:
 
     def test_k3d_cluster_exists_rejects_non_list_payload(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        mocker: pytest_mock.MockerFixture,
         preview_config: PreviewConfig,
     ) -> None:
         """Verify k3d status fails when `cluster list` JSON is not a list."""
-        monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
-        monkeypatch.setattr(
+        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch(
             "local_k8s.cluster.run",
             lambda *_args, **_kwargs: CommandResult(
                 stdout='{"name": "wildside-preview"}', stderr=""

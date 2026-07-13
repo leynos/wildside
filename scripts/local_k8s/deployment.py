@@ -71,14 +71,27 @@ def _deploy_preview_tools(
         case "k3d":
             cluster_tool = "k3d"
         case unexpected:
-            raise LocalK8sError(f"Unsupported Kubernetes provider: {unexpected!r}")
+            error_message = f"Unsupported Kubernetes provider: {unexpected!r}"
+            raise LocalK8sError(error_message)
     if skip_build:
         return ("helm", cluster_tool, "kubectl")
     return (config.container_engine, "helm", cluster_tool, "kubectl")
 
 
 def build_image(config: PreviewConfig) -> None:
-    """Build the Wildside backend image for local preview import."""
+    """Build the Wildside backend image for local preview import.
+
+    The image is built with the configured container engine
+    (``config.container_engine``, either ``docker`` or ``podman``) from
+    ``config.dockerfile_path``, using ``config.repository_root`` as the build
+    context and tagging the result ``config.image_name``.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Local preview settings that select the container engine, Dockerfile,
+        build context, and image tag.
+    """
 
     logger.info(
         "local_k8s_build_image",
@@ -202,7 +215,19 @@ def ensure_session_secret(
 
 
 def helm_upgrade(config: PreviewConfig) -> None:
-    """Install or upgrade the Wildside Helm release."""
+    """Install or upgrade the Wildside Helm release.
+
+    Runs ``helm upgrade --install`` against the provider-derived Kubernetes
+    context (``config.kube_context``) in ``config.namespace``, deploying the
+    chart at ``config.chart_path`` with ``config.local_values_path`` and the
+    repository and tag split from ``config.image_name``.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Local preview settings that select the kube context, namespace, Helm
+        release name, chart path, local values file, and image reference.
+    """
 
     image_repository, image_tag = image_repository_and_tag(config.image_name)
     logger.info(

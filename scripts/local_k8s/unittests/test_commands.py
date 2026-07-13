@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+import os
 import subprocess
+import sys
+import tempfile
 
 import pytest
 from plumbum.commands.processes import ProcessExecutionError
@@ -108,3 +112,33 @@ def test_run_wraps_plumbum_failures(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(LocalK8sError, match="release missing"):
         run("helm", ["status"])
+
+
+def test_run_cwd_is_thread_safe_under_concurrency() -> None:
+    """Verify concurrent ``run(..., cwd=...)`` calls do not race on the CWD.
+
+    Executes a real subprocess that reports its working directory from two
+    distinct directories concurrently. The former ``local.cwd`` context manager
+    mutated a process-wide directory, so overlapping calls could observe each
+    other's directory; ``with_cwd`` binds the directory to each command instead.
+    """
+    print_cwd = ["-c", "import os; print(os.getcwd())"]
+
+    with (
+        tempfile.TemporaryDirectory() as dir_a,
+        tempfile.TemporaryDirectory() as dir_b,
+    ):
+        targets = [dir_a, dir_b] * 15
+
+        def observed_cwd(directory: str) -> str:
+            result = run(sys.executable, print_cwd, cwd=directory)
+            return os.path.realpath(result.stdout.strip())
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(observed_cwd, targets))
+
+        for directory, observed in zip(targets, results, strict=True):
+            assert observed == os.path.realpath(directory), (
+                "run(..., cwd=...) must execute in the requested directory even "
+                "under concurrent invocation"
+            )

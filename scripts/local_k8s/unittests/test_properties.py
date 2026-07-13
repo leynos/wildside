@@ -119,7 +119,7 @@ def _podman_saved_image_name(monkeypatch: pytest.MonkeyPatch, image_name: str) -
     )
 
     save_commands = [args for command, args in commands if command == "podman" and args[0] == "save"]
-    assert len(save_commands) == 1
+    assert len(save_commands) == 1, "Podman import must issue exactly one save command"
     return save_commands[0][-1]
 
 
@@ -141,7 +141,9 @@ def _printed_service_name(monkeypatch: pytest.MonkeyPatch, config: PreviewConfig
         for command, args in commands
         if command == "kubectl" and "service" in args and "--ignore-not-found" in args
     ]
-    assert len(service_commands) == 1
+    assert len(service_commands) == 1, (
+        "status must query exactly one Kubernetes service"
+    )
     return service_commands[0][-2]
 
 
@@ -155,7 +157,9 @@ def test_podman_archive_image_name_prefixes_unqualified_images(
     """Verify unqualified images normalize to Docker Hub library pulls."""
     image_name = f"{repository}:{tag}"
 
-    assert _podman_saved_image_name(monkeypatch, image_name) == f"docker.io/library/{image_name}"
+    assert _podman_saved_image_name(monkeypatch, image_name) == f"docker.io/library/{image_name}", (
+        "unqualified images must normalize to the Docker Hub library namespace"
+    )
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
@@ -169,7 +173,9 @@ def test_podman_archive_image_name_prefixes_namespaced_images(
     """Verify namespaced Docker Hub images keep their namespace."""
     image_name = f"{namespace}/{repository}:{tag}"
 
-    assert _podman_saved_image_name(monkeypatch, image_name) == f"docker.io/{image_name}"
+    assert _podman_saved_image_name(monkeypatch, image_name) == f"docker.io/{image_name}", (
+        "namespaced Docker Hub images must keep their namespace under docker.io"
+    )
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
@@ -179,7 +185,9 @@ def test_podman_archive_image_name_preserves_registry_hosts(
     image_name: str,
 ) -> None:
     """Verify registry-qualified images are already Kubernetes-compatible."""
-    assert _podman_saved_image_name(monkeypatch, image_name) == image_name
+    assert _podman_saved_image_name(monkeypatch, image_name) == image_name, (
+        "registry-qualified images must be archived without rewriting"
+    )
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
@@ -195,12 +203,16 @@ def test_helm_fullname_obeys_kubernetes_name_bounds(
         _preview_config(release_name=release_name, chart_name=chart_name),
     )
 
-    assert len(fullname) <= 63
-    assert not fullname.endswith("-")
+    assert len(fullname) <= 63, "Helm fullname must fit within the 63-char DNS label limit"
+    assert not fullname.endswith("-"), "Helm fullname must not end with a trailing hyphen"
     if release_name == chart_name:
-        assert fullname == chart_name
+        assert fullname == chart_name, (
+            "a matching release and chart name must collapse to the chart name"
+        )
     else:
-        assert fullname == f"{release_name}-{chart_name}"[:63].rstrip("-")
+        assert fullname == f"{release_name}-{chart_name}"[:63].rstrip("-"), (
+            "Helm fullname must be the truncated release-chart join"
+        )
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
@@ -228,5 +240,9 @@ def test_provider_neutral_env_overrides_legacy_aliases(
 
         config = PreviewConfig.from_env()
 
-    assert config.cluster_name == cluster_name
-    assert config.ingress_port == ingress_port
+    assert config.cluster_name == cluster_name, (
+        "provider-neutral WILDSIDE_K8S_CLUSTER must override the legacy K3D alias"
+    )
+    assert config.ingress_port == ingress_port, (
+        "provider-neutral WILDSIDE_K8S_PORT must override the legacy K3D alias"
+    )

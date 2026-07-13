@@ -12,8 +12,8 @@ import pytest
 
 from local_k8s.config import ContainerEngine, K8sProvider, PreviewConfig
 
-CommandRecord = tuple[str, list[str], str | None]
-RunHook = Callable[[str, list[str], str | None], None]
+type CommandRecord = tuple[str, list[str], str | None]
+type RunHook = Callable[[str, list[str], str | None], None]
 
 
 @pytest.fixture(autouse=True)
@@ -102,7 +102,8 @@ def install_run_recorder(
     def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
         input_text = kwargs.get("input_text")
         if input_text is not None and not isinstance(input_text, str):
-            raise AssertionError("input_text must be text when provided")
+            error_message = "input_text must be text when provided"
+            raise TypeError(error_message)
         if on_run is not None:
             on_run(command, args, input_text)
         commands.append((command, args, input_text))
