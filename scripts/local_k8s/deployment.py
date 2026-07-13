@@ -89,8 +89,8 @@ def build_image(config: PreviewConfig) -> None:
     Parameters
     ----------
     config : PreviewConfig
-        Local preview settings that select the container engine, Dockerfile,
-        build context, and image tag.
+        Local preview settings that select the container engine, image name,
+        Dockerfile path, and repository root used for the build.
     """
 
     logger.info(
