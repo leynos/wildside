@@ -251,8 +251,18 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     }
 }
 
+/// Caches the resolved `PG_PASSWORD` so the environment is reconciled exactly
+/// once per process, no matter how many callers (or threads) invoke
+/// [`ensure_stable_cluster_environment`].
+static STABLE_ENV_INIT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 /// Ensures that `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are both set to
 /// stable values before the shared embedded cluster is initialized.
+///
+/// Both variables are resolved exactly once per process inside a
+/// [`OnceLock`](std::sync::OnceLock), so the `std::env::set_var` calls run at
+/// most once regardless of caller concurrency and concurrent callers within a
+/// single test binary cannot race on the environment.
 ///
 /// `postgresql_embedded::Settings::default()` generates a random password on
 /// each call. When the data directory already exists, `setup()` skips `initdb`,
@@ -265,39 +275,40 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
 /// subject to transient GitHub Releases fetch failures (misreported by reqwest
 /// as "error decoding response body").
 ///
-/// `ensure_stable_cluster_environment` also calls
-/// `repair_default_password_state` so stale embedded-cluster password files and
-/// default data directories are reconciled before initialization. That keeps
-/// the cluster aligned with the stable `PG_PASSWORD` override and prevents
+/// After the environment is resolved, `ensure_stable_cluster_environment` calls
+/// `repair_password_state_serialised` so stale embedded-cluster password files
+/// and default data directories are reconciled before initialization. That
+/// keeps the cluster aligned with the stable `PG_PASSWORD` override and prevents
 /// leftover authentication state from earlier runs.
 pub(crate) fn ensure_stable_cluster_environment() {
-    let password = match std::env::var("PG_PASSWORD") {
-        Ok(value) => value,
-        Err(_) => {
-            let value = "wildside_embedded_test".to_owned();
-            // SAFETY: called before the library spawns any threads. The shared
-            // cluster singleton serializes access with a `Mutex`, so this runs at
-            // most once per process.
-            unsafe {
-                std::env::set_var("PG_PASSWORD", value.as_str());
-            }
-            value
-        }
-    };
+    let password = STABLE_ENV_INIT
+        .get_or_init(|| {
+            let value = std::env::var("PG_PASSWORD").unwrap_or_else(|_| {
+                let value = "wildside_embedded_test".to_owned();
+                // SAFETY: guarded by OnceLock; this closure runs at most once
+                // per process regardless of caller concurrency.
+                unsafe {
+                    std::env::set_var("PG_PASSWORD", value.as_str());
+                }
+                value
+            });
 
-    if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
-        // Pin to Theseus binaries to avoid transient fetch failures in CI that
-        // reqwest misreports as "error decoding response body".
-        // SAFETY: called before the library spawns any threads. The shared-
-        // cluster singleton serializes access with a Mutex, so this runs at
-        // most once per process.
-        unsafe {
-            std::env::set_var(
-                "POSTGRESQL_RELEASES_URL",
-                "https://github.com/theseus-rs/postgresql-binaries",
-            );
-        }
-    }
+            if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
+                // Pin to Theseus binaries to avoid transient fetch failures in
+                // CI that reqwest misreports as "error decoding response body".
+                // SAFETY: guarded by OnceLock; see above.
+                unsafe {
+                    std::env::set_var(
+                        "POSTGRESQL_RELEASES_URL",
+                        "https://github.com/theseus-rs/postgresql-binaries",
+                    );
+                }
+            }
+
+            value
+        })
+        .clone();
+
     // The repair path is fallible (lock acquisition and filesystem cleanup);
     // surface any failure explicitly at this single boundary rather than hiding
     // it behind a deeper `.expect()`. This keeps the function's existing

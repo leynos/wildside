@@ -82,6 +82,64 @@ fn ensure_stable_cluster_environment_sets_password_when_missing() {
 
 #[cfg(unix)]
 #[test]
+fn ensure_stable_cluster_environment_resolves_env_once_under_concurrency() {
+    // Many threads resolving the stable environment at once must not race on
+    // `std::env::set_var`. The OnceLock guard resolves `PG_PASSWORD` and
+    // `POSTGRESQL_RELEASES_URL` exactly once, so every caller observes the same
+    // stable default password and pinned release URL without panicking.
+    let sandbox = tempfile::tempdir().expect("tempdir");
+    let install_path = sandbox.path().join("install");
+    let data_parent_path = sandbox.path().join("data-parent");
+    Dir::create_ambient_dir_all(&install_path, ambient_authority()).expect("create install dir");
+    Dir::create_ambient_dir_all(&data_parent_path, ambient_authority())
+        .expect("create data parent");
+
+    // Clear the resolved variables so the OnceLock closure applies the defaults,
+    // and sandbox the repair paths so the incidental repair stays hermetic.
+    let _guard = env_lock::lock_env([
+        ("PG_PASSWORD", None),
+        ("POSTGRESQL_RELEASES_URL", None),
+        (
+            "PG_RUNTIME_DIR",
+            Some(
+                install_path
+                    .to_str()
+                    .expect("install path is valid UTF-8")
+                    .to_owned(),
+            ),
+        ),
+        (
+            "PG_DATA_DIR",
+            Some(
+                data_parent_path
+                    .join("data")
+                    .to_str()
+                    .expect("data path is valid UTF-8")
+                    .to_owned(),
+            ),
+        ),
+    ]);
+
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            scope.spawn(super::ensure_stable_cluster_environment);
+        }
+    });
+
+    assert_eq!(
+        std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
+        "wildside_embedded_test",
+        "concurrent resolution must apply the stable default PG_PASSWORD exactly once",
+    );
+    assert_eq!(
+        std::env::var("POSTGRESQL_RELEASES_URL").expect("POSTGRESQL_RELEASES_URL should be set"),
+        "https://github.com/theseus-rs/postgresql-binaries",
+        "concurrent resolution must pin the release URL exactly once",
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn ensure_stable_cluster_environment_serialises_concurrent_repair() {
     // Two threads repairing the same stale password file concurrently must not
     // race on removing it. Without the process-local repair lock, the second
