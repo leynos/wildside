@@ -16,6 +16,24 @@ from local_k8s.validation import LocalK8sError
 class TestClusterStatus:
     """Provider command-contract tests for cluster status and deletion."""
 
+    @staticmethod
+    def _assert_cluster_status_rejects(
+        mocker: pytest_mock.MockerFixture,
+        config: PreviewConfig,
+        *,
+        stdout: str,
+        match: str,
+    ) -> None:
+        """Stub `run()` with stdout and assert print_cluster_status raises matching LocalK8sError."""
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
+        mocker.patch(
+            "local_k8s.cluster.run",
+            lambda *_args, **_kwargs: CommandResult(stdout=stdout, stderr=""),
+        )
+
+        with pytest.raises(LocalK8sError, match=match):
+            print_cluster_status(config)
+
     def test_kind_delete_is_idempotent_when_cluster_is_absent(
         self,
         mocker: pytest_mock.MockerFixture,
@@ -90,14 +108,12 @@ class TestClusterStatus:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify cluster status fails before printing stale preview details."""
-        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
-        mocker.patch(
-            "local_k8s.cluster.run",
-            lambda *_args, **_kwargs: CommandResult(stdout="other\n", stderr=""),
+        self._assert_cluster_status_rejects(
+            mocker,
+            replace(preview_config, k8s_provider="kind"),
+            stdout="other\n",
+            match="does not exist",
         )
-
-        with pytest.raises(LocalK8sError, match="does not exist"):
-            print_cluster_status(replace(preview_config, k8s_provider="kind"))
 
     def test_k3d_cluster_exists_rejects_malformed_json(
         self,
@@ -105,16 +121,12 @@ class TestClusterStatus:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify k3d status fails when `cluster list` emits non-JSON output."""
-        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
-        mocker.patch(
-            "local_k8s.cluster.run",
-            lambda *_args, **_kwargs: CommandResult(stdout="not json", stderr=""),
+        self._assert_cluster_status_rejects(
+            mocker,
+            preview_config,
+            stdout="not json",
+            match="unexpected k3d cluster list JSON payload",
         )
-
-        with pytest.raises(
-            LocalK8sError, match="unexpected k3d cluster list JSON payload"
-        ):
-            print_cluster_status(preview_config)
 
     def test_k3d_cluster_exists_rejects_non_list_payload(
         self,
@@ -122,18 +134,12 @@ class TestClusterStatus:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify k3d status fails when `cluster list` JSON is not a list."""
-        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
-        mocker.patch(
-            "local_k8s.cluster.run",
-            lambda *_args, **_kwargs: CommandResult(
-                stdout='{"name": "wildside-preview"}', stderr=""
-            ),
+        self._assert_cluster_status_rejects(
+            mocker,
+            preview_config,
+            stdout='{"name": "wildside-preview"}',
+            match="unexpected k3d cluster list JSON shape",
         )
-
-        with pytest.raises(
-            LocalK8sError, match="unexpected k3d cluster list JSON shape"
-        ):
-            print_cluster_status(preview_config)
 
     def test_k3d_cluster_exists_rejects_malformed_entry(
         self,
@@ -141,11 +147,9 @@ class TestClusterStatus:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify a k3d entry without a string name is rejected, not ignored."""
-        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
-        mocker.patch(
-            "local_k8s.cluster.run",
-            lambda *_args, **_kwargs: CommandResult(stdout="[{}]", stderr=""),
+        self._assert_cluster_status_rejects(
+            mocker,
+            preview_config,
+            stdout="[{}]",
+            match="unexpected k3d cluster list entry",
         )
-
-        with pytest.raises(LocalK8sError, match="unexpected k3d cluster list entry"):
-            print_cluster_status(preview_config)
