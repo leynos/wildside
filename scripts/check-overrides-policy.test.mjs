@@ -107,19 +107,20 @@ describe('checkOverridesPolicy', () => {
 });
 
 describe('reportOverridesPolicy', () => {
-  it('logs success and returns 0 for a passing report', async () => {
+  async function runReportOverridesPolicy(report) {
     const { reportOverridesPolicy } = await loadModule();
     const outputIo = { log: vi.fn(), error: vi.fn() };
+    const exitCode = reportOverridesPolicy(report, outputIo);
+    return { exitCode, outputIo };
+  }
 
-    const exitCode = reportOverridesPolicy(
-      {
-        ok: true,
-        pnpmOverridesToCheck: ['basic-ftp', 'dompurify'],
-        rootOverrides: [],
-        reason: 'matched',
-      },
-      outputIo,
-    );
+  it('logs success and returns 0 for a passing report', async () => {
+    const { exitCode, outputIo } = await runReportOverridesPolicy({
+      ok: true,
+      pnpmOverridesToCheck: ['basic-ftp', 'dompurify'],
+      rootOverrides: [],
+      reason: 'matched',
+    });
 
     expect(exitCode).toBe(0);
     expect(outputIo.log).toHaveBeenCalledWith(
@@ -129,18 +130,12 @@ describe('reportOverridesPolicy', () => {
   });
 
   it('logs root override failures and returns 1', async () => {
-    const { reportOverridesPolicy } = await loadModule();
-    const outputIo = { log: vi.fn(), error: vi.fn() };
-
-    const exitCode = reportOverridesPolicy(
-      {
-        ok: false,
-        pnpmOverridesToCheck: ['dompurify'],
-        rootOverrides: ['ajv', 'dompurify'],
-        reason: 'root-overrides-present',
-      },
-      outputIo,
-    );
+    const { exitCode, outputIo } = await runReportOverridesPolicy({
+      ok: false,
+      pnpmOverridesToCheck: ['dompurify'],
+      rootOverrides: ['ajv', 'dompurify'],
+      reason: 'root-overrides-present',
+    });
 
     expect(exitCode).toBe(1);
     expect(outputIo.error).toHaveBeenCalledWith(
@@ -154,18 +149,12 @@ describe('reportOverridesPolicy', () => {
   });
 
   it('logs missing pnpm overrides and returns 1', async () => {
-    const { reportOverridesPolicy } = await loadModule();
-    const outputIo = { log: vi.fn(), error: vi.fn() };
-
-    const exitCode = reportOverridesPolicy(
-      {
-        ok: false,
-        pnpmOverridesToCheck: [],
-        rootOverrides: [],
-        reason: 'missing-pnpm-overrides',
-      },
-      outputIo,
-    );
+    const { exitCode, outputIo } = await runReportOverridesPolicy({
+      ok: false,
+      pnpmOverridesToCheck: [],
+      rootOverrides: [],
+      reason: 'missing-pnpm-overrides',
+    });
 
     expect(exitCode).toBe(1);
     expect(outputIo.error).toHaveBeenCalledWith(
