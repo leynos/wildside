@@ -140,7 +140,7 @@ fn ensure_stable_cluster_environment_resolves_env_once_under_concurrency() {
 
 #[cfg(unix)]
 #[test]
-fn ensure_stable_cluster_environment_serialises_concurrent_repair() {
+fn ensure_stable_cluster_environment_serializes_concurrent_repair() {
     // Two threads repairing the same stale password file concurrently must not
     // race on removing it. Without the process-local repair lock, the second
     // `remove_file` observes the file already gone and panics via `.expect`.

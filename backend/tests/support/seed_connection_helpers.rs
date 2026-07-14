@@ -1,4 +1,10 @@
 //! Connection-owning seed helpers for selected integration tests.
+//!
+//! These helpers open their own PostgreSQL connections to the shared embedded
+//! cluster and delegate the actual row seeding to [`super::seed_helpers`]. This
+//! keeps connection lifecycle management separate from the fixture-building
+//! logic: callers that already hold a client use `seed_helpers` directly, while
+//! callers that only need a one-shot seed use these connection-owning wrappers.
 
 use backend::domain::UserId;
 use postgres::{Client, NoTls};
