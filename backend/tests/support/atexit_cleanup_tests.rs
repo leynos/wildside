@@ -41,28 +41,28 @@ fn lock_pg_env(
 }
 
 #[test]
-fn ensure_stable_cluster_environment_does_not_overwrite_existing_values() {
+fn resolve_stable_env_does_not_overwrite_existing_values() {
     let _guard = lock_pg_env(
         Some("custom_value"),
         Some("https://example.invalid/postgresql-binaries"),
     );
-    super::ensure_stable_cluster_environment();
+    super::resolve_stable_env();
     assert_eq!(
         std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
         "custom_value",
-        "ensure_stable_cluster_environment should not overwrite an existing PG_PASSWORD"
+        "resolve_stable_env should not overwrite an existing PG_PASSWORD"
     );
     assert_eq!(
         std::env::var("POSTGRESQL_RELEASES_URL").expect("POSTGRESQL_RELEASES_URL should be set"),
         "https://example.invalid/postgresql-binaries",
-        "ensure_stable_cluster_environment should not overwrite an existing release URL"
+        "resolve_stable_env should not overwrite an existing release URL"
     );
 }
 
 #[test]
-fn ensure_stable_cluster_environment_sets_release_url_when_missing() {
+fn resolve_stable_env_sets_release_url_when_missing() {
     let _guard = lock_pg_env(Some("custom_value"), None);
-    super::ensure_stable_cluster_environment();
+    super::resolve_stable_env();
     assert_eq!(
         std::env::var("POSTGRESQL_RELEASES_URL").expect("POSTGRESQL_RELEASES_URL should be set"),
         "https://github.com/theseus-rs/postgresql-binaries"
@@ -70,13 +70,13 @@ fn ensure_stable_cluster_environment_sets_release_url_when_missing() {
 }
 
 #[test]
-fn ensure_stable_cluster_environment_sets_password_when_missing() {
+fn resolve_stable_env_sets_password_when_missing() {
     let _guard = lock_pg_env(None, Some("https://example.invalid/postgresql-binaries"));
-    super::ensure_stable_cluster_environment();
+    super::resolve_stable_env();
     assert_eq!(
         std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
         "wildside_embedded_test",
-        "ensure_stable_cluster_environment should set the stable default PG_PASSWORD"
+        "resolve_stable_env should set the stable default PG_PASSWORD"
     );
 }
 

@@ -262,7 +262,9 @@ static STABLE_ENV_INIT: std::sync::OnceLock<String> = std::sync::OnceLock::new()
 /// Both variables are resolved exactly once per process inside a
 /// [`OnceLock`](std::sync::OnceLock), so the `std::env::set_var` calls run at
 /// most once regardless of caller concurrency and concurrent callers within a
-/// single test binary cannot race on the environment.
+/// single test binary cannot race on the environment. The resolution itself
+/// lives in `resolve_stable_env` so tests can exercise the first-call logic
+/// directly, separately from the cached-reuse path.
 ///
 /// `postgresql_embedded::Settings::default()` generates a random password on
 /// each call. When the data directory already exists, `setup()` skips `initdb`,
@@ -276,45 +278,61 @@ static STABLE_ENV_INIT: std::sync::OnceLock<String> = std::sync::OnceLock::new()
 /// as "error decoding response body").
 ///
 /// After the environment is resolved, `ensure_stable_cluster_environment` calls
-/// `repair_password_state_serialised` so stale embedded-cluster password files
+/// `repair_password_state_serialized` so stale embedded-cluster password files
 /// and default data directories are reconciled before initialization. That
 /// keeps the cluster aligned with the stable `PG_PASSWORD` override and prevents
 /// leftover authentication state from earlier runs.
 pub(crate) fn ensure_stable_cluster_environment() {
-    let password = STABLE_ENV_INIT
-        .get_or_init(|| {
-            let value = std::env::var("PG_PASSWORD").unwrap_or_else(|_| {
-                let value = "wildside_embedded_test".to_owned();
-                // SAFETY: guarded by OnceLock; this closure runs at most once
-                // per process regardless of caller concurrency.
-                unsafe {
-                    std::env::set_var("PG_PASSWORD", value.as_str());
-                }
-                value
-            });
-
-            if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
-                // Pin to Theseus binaries to avoid transient fetch failures in
-                // CI that reqwest misreports as "error decoding response body".
-                // SAFETY: guarded by OnceLock; see above.
-                unsafe {
-                    std::env::set_var(
-                        "POSTGRESQL_RELEASES_URL",
-                        "https://github.com/theseus-rs/postgresql-binaries",
-                    );
-                }
-            }
-
-            value
-        })
-        .clone();
+    // Borrow the cached password directly; no clone is needed because the
+    // repair helper only reads the bytes.
+    let password = STABLE_ENV_INIT.get_or_init(resolve_stable_env);
 
     // The repair path is fallible (lock acquisition and filesystem cleanup);
     // surface any failure explicitly at this single boundary rather than hiding
     // it behind a deeper `.expect()`. This keeps the function's existing
     // fail-fast style while making the fallibility part of the helper contract.
-    repair_password_state_serialised(password.as_bytes())
+    repair_password_state_serialized(password.as_bytes())
         .expect("repair shared cluster password state before cluster bootstrap");
+}
+
+/// Resolves `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` to their stable values,
+/// applying the defaults when either is unset, and returns the resolved
+/// password.
+///
+/// This is the first-call body cached by `STABLE_ENV_INIT`. Tests call it
+/// directly to cover the resolution logic in isolation from the process-wide
+/// `OnceLock` caching.
+///
+/// # Safety of the `set_var` calls
+///
+/// `std::env::set_var` is not thread-safe, so callers must hold exclusive
+/// access to the environment: production reaches this function through
+/// `STABLE_ENV_INIT.get_or_init`, which runs it at most once per process, and
+/// tests hold the `env_lock` mutex around their calls.
+fn resolve_stable_env() -> String {
+    let value = std::env::var("PG_PASSWORD").unwrap_or_else(|_| {
+        let value = "wildside_embedded_test".to_owned();
+        // SAFETY: the caller holds exclusive environment access; see the
+        // function's Safety section.
+        unsafe {
+            std::env::set_var("PG_PASSWORD", value.as_str());
+        }
+        value
+    });
+
+    if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
+        // Pin to Theseus binaries to avoid transient fetch failures in CI that
+        // reqwest misreports as "error decoding response body".
+        // SAFETY: the caller holds exclusive environment access; see above.
+        unsafe {
+            std::env::set_var(
+                "POSTGRESQL_RELEASES_URL",
+                "https://github.com/theseus-rs/postgresql-binaries",
+            );
+        }
+    }
+
+    value
 }
 
 /// Serializes `.pgpass`/data-directory repair so concurrent callers cannot race
@@ -333,7 +351,7 @@ pub(crate) fn ensure_stable_cluster_environment() {
 ///   would then race on `.pgpass` removal, so a process-local mutex serializes
 ///   them as well.
 #[cfg(unix)]
-fn repair_password_state_serialised(password: &[u8]) -> BootstrapResult<()> {
+fn repair_password_state_serialized(password: &[u8]) -> BootstrapResult<()> {
     static PASSWORD_STATE_REPAIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     unix_atexit::acquire_shared_cluster_process_lock()?;
@@ -348,7 +366,7 @@ fn repair_password_state_serialised(password: &[u8]) -> BootstrapResult<()> {
 }
 
 #[cfg(not(unix))]
-fn repair_password_state_serialised(_password: &[u8]) -> BootstrapResult<()> {
+fn repair_password_state_serialized(_password: &[u8]) -> BootstrapResult<()> {
     Ok(())
 }
 
