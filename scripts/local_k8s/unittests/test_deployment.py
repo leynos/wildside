@@ -293,6 +293,14 @@ def _valid_session_key_stdout() -> str:
     return base64.b64encode(b"a" * 96).decode("ascii")
 
 
+def _validated_input_text(input_text: object) -> str | None:
+    """Return `input_text` unchanged, or raise if it is a non-`str` value."""
+    if input_text is not None and not isinstance(input_text, str):
+        error_message = "input_text must be text when provided"
+        raise AssertionError(error_message)
+    return input_text
+
+
 @dataclass
 class _ConcurrentSecretResponder:
     """Fake `run` simulating a Secret created concurrently by another process."""
@@ -303,13 +311,13 @@ class _ConcurrentSecretResponder:
     def __call__(
         self, command: str, args: list[str], **kwargs: object
     ) -> SimpleNamespace:
-        input_text = kwargs.get("input_text")
-        if input_text is not None and not isinstance(input_text, str):
-            error_message = "input_text must be text when provided"
-            raise AssertionError(error_message)
+        input_text = _validated_input_text(kwargs.get("input_text"))
         self.commands.append((command, args, input_text))
         if _is_get_session_secret(args):
             return self._respond_to_get()
+        return self._respond_to_write(command, args)
+
+    def _respond_to_write(self, command: str, args: list[str]) -> SimpleNamespace:
         if args[2:5] == ["create", "-f", "-"]:
             error_message = 'secrets "wildside-session-key" already exists'
             raise LocalK8sError(error_message)
