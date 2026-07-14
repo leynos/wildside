@@ -29,7 +29,7 @@ class TestClusterStatus:
             commands.append((command, args))
             return CommandResult(stdout="other\n", stderr="")
 
-        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch("local_k8s.cluster.run", record_run)
 
         delete_cluster(config)
@@ -51,7 +51,7 @@ class TestClusterStatus:
             commands.append((command, args))
             return CommandResult(stdout="wildside-preview\n", stderr="")
 
-        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch("local_k8s.cluster.run", record_run)
 
         print_cluster_status(replace(preview_config, k8s_provider="kind"))
@@ -74,7 +74,7 @@ class TestClusterStatus:
         def record_run(_command: str, _args: list[str], **_: object) -> CommandResult:
             return CommandResult(stdout='[{"name":"wildside-preview"}]\n', stderr="")
 
-        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch("local_k8s.cluster.run", record_run)
 
         print_cluster_status(preview_config)
@@ -90,7 +90,7 @@ class TestClusterStatus:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify cluster status fails before printing stale preview details."""
-        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch(
             "local_k8s.cluster.run",
             lambda *_args, **_kwargs: CommandResult(stdout="other\n", stderr=""),
@@ -105,7 +105,7 @@ class TestClusterStatus:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify k3d status fails when `cluster list` emits non-JSON output."""
-        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch(
             "local_k8s.cluster.run",
             lambda *_args, **_kwargs: CommandResult(stdout="not json", stderr=""),
@@ -122,7 +122,7 @@ class TestClusterStatus:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify k3d status fails when `cluster list` JSON is not a list."""
-        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch(
             "local_k8s.cluster.run",
             lambda *_args, **_kwargs: CommandResult(
@@ -133,4 +133,19 @@ class TestClusterStatus:
         with pytest.raises(
             LocalK8sError, match="unexpected k3d cluster list JSON shape"
         ):
+            print_cluster_status(preview_config)
+
+    def test_k3d_cluster_exists_rejects_malformed_entry(
+        self,
+        mocker: pytest_mock.MockerFixture,
+        preview_config: PreviewConfig,
+    ) -> None:
+        """Verify a k3d entry without a string name is rejected, not ignored."""
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
+        mocker.patch(
+            "local_k8s.cluster.run",
+            lambda *_args, **_kwargs: CommandResult(stdout="[{}]", stderr=""),
+        )
+
+        with pytest.raises(LocalK8sError, match="unexpected k3d cluster list entry"):
             print_cluster_status(preview_config)

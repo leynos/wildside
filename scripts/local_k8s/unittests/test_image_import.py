@@ -49,13 +49,19 @@ class TestImageImport:
             commands.append((command, args))
             return MockCommandResult()
 
-        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch("local_k8s.cluster.run", record_run)
         if archive_dir is not None:
-            mocker.patch(
-                "local_k8s.cluster._remove_stale_archive",
-                on_remove_archive if on_remove_archive is not None else lambda _: None,
-            )
+            if on_remove_archive is not None:
+                mocker.patch(
+                    "local_k8s.cluster._remove_stale_archive",
+                    on_remove_archive,
+                )
+            else:
+                mocker.patch(
+                    "local_k8s.cluster._remove_stale_archive",
+                    return_value=None,
+                )
 
         import_image(config, archive_dir=archive_dir)
         return commands
@@ -173,7 +179,7 @@ class TestImageImport:
                 raise LocalK8sError("kind load failed")
             return MockCommandResult()
 
-        mocker.patch("local_k8s.cluster.require_tools", lambda _: None)
+        mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch("local_k8s.cluster.run", record_run)
         mocker.patch("local_k8s.cluster._remove_stale_archive", removed_archives.append)
 

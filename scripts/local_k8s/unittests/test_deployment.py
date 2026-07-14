@@ -14,11 +14,10 @@ import base64
 from collections.abc import Callable
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from local_k8s.config import K8sProvider
 from local_k8s.config import PreviewConfig
 from local_k8s.deployment import (
     _deploy_preview_tools,
@@ -30,6 +29,9 @@ from local_k8s.deployment import (
 from local_k8s.validation import LocalK8sError
 
 from conftest import CommandRecord, install_run_recorder
+
+if TYPE_CHECKING:
+    from local_k8s.config import K8sProvider
 
 
 @pytest.mark.parametrize(
@@ -122,7 +124,7 @@ def test_deploy_preview_tools_reject_unexpected_kubernetes_provider(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify provider preflight rejects impossible provider values."""
-    invalid_config = replace(preview_config, k8s_provider=cast(K8sProvider, "minikube"))
+    invalid_config = replace(preview_config, k8s_provider=cast("K8sProvider", "minikube"))
 
     with pytest.raises(LocalK8sError, match="Unsupported Kubernetes provider"):
         _deploy_preview_tools(invalid_config, skip_build=True)
@@ -257,7 +259,8 @@ def test_ensure_session_secret_reuses_existing_key(
     )
 
     def fail_on_rotation(_length: int) -> bytes:
-        raise AssertionError("existing local preview session keys must be reused")
+        error_message = "existing local preview session keys must be reused"
+        raise AssertionError(error_message)
 
     ensure_session_secret(preview_config, key_generator=fail_on_rotation)
 
@@ -280,28 +283,112 @@ def test_ensure_session_secret_reuses_existing_key(
     ], "existing local preview session keys must be reused without apply"
 
 
+def _is_get_session_secret(args: list[str]) -> bool:
+    """Return whether the kubectl args read the session Secret."""
+    return args[4:7] == ["get", "secret", "wildside-session-key"]
+
+
+def _valid_session_key_stdout() -> str:
+    """Return a base64 session_key payload for a healthy Secret."""
+    return base64.b64encode(b"a" * 96).decode("ascii")
+
+
 def test_ensure_session_secret_reuses_concurrent_create(
     monkeypatch: pytest.MonkeyPatch,
     preview_config: PreviewConfig,
 ) -> None:
-    """Verify duplicate deploys do not overwrite a concurrently created Secret."""
+    """Verify a concurrently created Secret with key material is reused."""
     commands: list[CommandRecord] = []
 
     def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
         input_text = kwargs.get("input_text")
         if input_text is not None and not isinstance(input_text, str):
-            raise AssertionError("input_text must be text when provided")
+            error_message = "input_text must be text when provided"
+            raise AssertionError(error_message)
         commands.append((command, args, input_text))
-        if args[4:7] == ["get", "secret", "wildside-session-key"]:
-            return SimpleNamespace(stdout="")
+        if _is_get_session_secret(args):
+            get_calls = sum(1 for _c, a, _i in commands if _is_get_session_secret(a))
+            # The first check finds no key; the re-fetch after the create
+            # conflict observes the concurrently written key material.
+            return SimpleNamespace(
+                stdout="" if get_calls == 1 else _valid_session_key_stdout()
+            )
         if args[2:5] == ["create", "-f", "-"]:
-            raise LocalK8sError('secrets "wildside-session-key" already exists')
-        raise AssertionError(f"unexpected command: {command} {args}")
+            error_message = 'secrets "wildside-session-key" already exists'
+            raise LocalK8sError(error_message)
+        error_message = f"unexpected command: {command} {args}"
+        raise AssertionError(error_message)
 
     monkeypatch.setattr("local_k8s.deployment.run", record_run)
 
     ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
 
-    assert len(commands) == 2, (
-        "concurrent create reuse must stop after the create conflict"
+    assert len(commands) == 3, (
+        "concurrent create reuse must re-fetch and validate the existing Secret"
     )
+    assert _is_get_session_secret(commands[-1][1]), (
+        "reuse must confirm the concurrently created Secret's key material"
+    )
+    assert all(cmd[1][2:5] != ["replace", "-f", "-"] for cmd in commands), (
+        "a valid concurrent Secret must be reused without replacement"
+    )
+
+
+def test_ensure_session_secret_repairs_malformed_concurrent_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify a concurrently created Secret without a key is repaired, then reused."""
+    commands: list[CommandRecord] = []
+
+    def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
+        commands.append((command, args, kwargs.get("input_text")))
+        if _is_get_session_secret(args):
+            get_calls = sum(1 for _c, a, _i in commands if _is_get_session_secret(a))
+            # First check and the post-conflict re-fetch find no key; only after
+            # the repair replace does the Secret carry key material.
+            return SimpleNamespace(
+                stdout=_valid_session_key_stdout() if get_calls >= 3 else ""
+            )
+        if args[2:5] == ["create", "-f", "-"]:
+            error_message = 'secrets "wildside-session-key" already exists'
+            raise LocalK8sError(error_message)
+        if args[2:5] == ["replace", "-f", "-"]:
+            return SimpleNamespace(stdout="")
+        error_message = f"unexpected command: {command} {args}"
+        raise AssertionError(error_message)
+
+    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+
+    ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
+
+    replace_commands = [cmd for cmd in commands if cmd[1][2:5] == ["replace", "-f", "-"]]
+    assert len(replace_commands) == 1, (
+        "a malformed concurrent Secret must be repaired with a single replace"
+    )
+    assert replace_commands[0][2] is not None, (
+        "repair must send the fresh session Secret manifest on stdin"
+    )
+
+
+def test_ensure_session_secret_fails_when_secret_stays_malformed(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify an unrepairable malformed Secret fails explicitly."""
+
+    def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
+        if _is_get_session_secret(args):
+            return SimpleNamespace(stdout="")
+        if args[2:5] == ["create", "-f", "-"]:
+            error_message = 'secrets "wildside-session-key" already exists'
+            raise LocalK8sError(error_message)
+        if args[2:5] == ["replace", "-f", "-"]:
+            return SimpleNamespace(stdout="")
+        error_message = f"unexpected command: {command} {args}"
+        raise AssertionError(error_message)
+
+    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+
+    with pytest.raises(LocalK8sError, match="still lacks session_key after repair"):
+        ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)

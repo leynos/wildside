@@ -128,6 +128,17 @@ def test_preview_config_attributes_legacy_port_validation_errors(
         PreviewConfig.from_env()
 
 
+def test_preview_config_attributes_legacy_cluster_validation_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify legacy cluster-name validation errors name the legacy variable."""
+    monkeypatch.delenv("WILDSIDE_K8S_CLUSTER", raising=False)
+    monkeypatch.setenv("WILDSIDE_K3D_CLUSTER", "Invalid_Name")
+
+    with pytest.raises(LocalK8sError, match="WILDSIDE_K3D_CLUSTER"):
+        PreviewConfig.from_env()
+
+
 @pytest.mark.parametrize(
     ("env_name", "env_value"),
     [
