@@ -30,7 +30,7 @@ jobs:
       # wall-clock cap above the repo's 60-minute nextest global-timeout.
       RUN_RUST_CARGO_WAIT_TIMEOUT: '5400'
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
       - name: Install Rust toolchain
         uses: leynos/shared-actions/.github/actions/setup-rust@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
       - name: Cache PostgreSQL embedded binaries
