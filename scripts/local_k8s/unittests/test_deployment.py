@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
@@ -293,63 +293,23 @@ def _valid_session_key_stdout() -> str:
     return base64.b64encode(b"a" * 96).decode("ascii")
 
 
-def test_ensure_session_secret_reuses_concurrent_create(
-    monkeypatch: pytest.MonkeyPatch,
-    preview_config: PreviewConfig,
-) -> None:
-    """Verify a concurrently created Secret with key material is reused."""
-    commands: list[CommandRecord] = []
+@dataclass
+class _ConcurrentSecretResponder:
+    """Fake `run` simulating a Secret created concurrently by another process."""
 
-    def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
+    ready_after_get_calls: int
+    commands: list[CommandRecord] = field(default_factory=list)
+
+    def __call__(
+        self, command: str, args: list[str], **kwargs: object
+    ) -> SimpleNamespace:
         input_text = kwargs.get("input_text")
         if input_text is not None and not isinstance(input_text, str):
             error_message = "input_text must be text when provided"
             raise AssertionError(error_message)
-        commands.append((command, args, input_text))
+        self.commands.append((command, args, input_text))
         if _is_get_session_secret(args):
-            get_calls = sum(1 for _c, a, _i in commands if _is_get_session_secret(a))
-            # The first check finds no key; the re-fetch after the create
-            # conflict observes the concurrently written key material.
-            return SimpleNamespace(
-                stdout="" if get_calls == 1 else _valid_session_key_stdout()
-            )
-        if args[2:5] == ["create", "-f", "-"]:
-            error_message = 'secrets "wildside-session-key" already exists'
-            raise LocalK8sError(error_message)
-        error_message = f"unexpected command: {command} {args}"
-        raise AssertionError(error_message)
-
-    monkeypatch.setattr("local_k8s.deployment.run", record_run)
-
-    ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
-
-    assert len(commands) == 3, (
-        "concurrent create reuse must re-fetch and validate the existing Secret"
-    )
-    assert _is_get_session_secret(commands[-1][1]), (
-        "reuse must confirm the concurrently created Secret's key material"
-    )
-    assert all(cmd[1][2:5] != ["replace", "-f", "-"] for cmd in commands), (
-        "a valid concurrent Secret must be reused without replacement"
-    )
-
-
-def test_ensure_session_secret_repairs_malformed_concurrent_secret(
-    monkeypatch: pytest.MonkeyPatch,
-    preview_config: PreviewConfig,
-) -> None:
-    """Verify a concurrently created Secret without a key is repaired, then reused."""
-    commands: list[CommandRecord] = []
-
-    def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
-        commands.append((command, args, kwargs.get("input_text")))
-        if _is_get_session_secret(args):
-            get_calls = sum(1 for _c, a, _i in commands if _is_get_session_secret(a))
-            # First check and the post-conflict re-fetch find no key; only after
-            # the repair replace does the Secret carry key material.
-            return SimpleNamespace(
-                stdout=_valid_session_key_stdout() if get_calls >= 3 else ""
-            )
+            return self._respond_to_get()
         if args[2:5] == ["create", "-f", "-"]:
             error_message = 'secrets "wildside-session-key" already exists'
             raise LocalK8sError(error_message)
@@ -358,11 +318,50 @@ def test_ensure_session_secret_repairs_malformed_concurrent_secret(
         error_message = f"unexpected command: {command} {args}"
         raise AssertionError(error_message)
 
-    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+    def _respond_to_get(self) -> SimpleNamespace:
+        get_calls = sum(1 for _c, a, _i in self.commands if _is_get_session_secret(a))
+        stdout = (
+            _valid_session_key_stdout()
+            if get_calls >= self.ready_after_get_calls
+            else ""
+        )
+        return SimpleNamespace(stdout=stdout)
+
+
+def test_ensure_session_secret_reuses_concurrent_create(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify a concurrently created Secret with key material is reused."""
+    responder = _ConcurrentSecretResponder(ready_after_get_calls=2)
+    monkeypatch.setattr("local_k8s.deployment.run", responder)
 
     ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
 
-    replace_commands = [cmd for cmd in commands if cmd[1][2:5] == ["replace", "-f", "-"]]
+    assert len(responder.commands) == 3, (
+        "concurrent create reuse must re-fetch and validate the existing Secret"
+    )
+    assert _is_get_session_secret(responder.commands[-1][1]), (
+        "reuse must confirm the concurrently created Secret's key material"
+    )
+    assert all(
+        cmd[1][2:5] != ["replace", "-f", "-"] for cmd in responder.commands
+    ), "a valid concurrent Secret must be reused without replacement"
+
+
+def test_ensure_session_secret_repairs_malformed_concurrent_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify a concurrently created Secret without a key is repaired, then reused."""
+    responder = _ConcurrentSecretResponder(ready_after_get_calls=3)
+    monkeypatch.setattr("local_k8s.deployment.run", responder)
+
+    ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
+
+    replace_commands = [
+        cmd for cmd in responder.commands if cmd[1][2:5] == ["replace", "-f", "-"]
+    ]
     assert len(replace_commands) == 1, (
         "a malformed concurrent Secret must be repaired with a single replace"
     )
