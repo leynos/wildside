@@ -28,12 +28,16 @@ use super::embedded_postgres::provision_template_database;
 #[derive(Clone)]
 struct RuntimeHandle(Arc<Runtime>);
 
-/// Wrapper for the temporary database handle.
+/// Wrapper that keeps the scenario's temporary database alive for its lifetime.
+///
+/// The handle is never read; it exists solely so the `Arc<TemporaryDatabase>`
+/// (and the database it owns) is dropped when the scenario's world is. The
+/// field name is underscore-prefixed so the `dead_code` lint recognises it as
+/// deliberately unused, avoiding a lint suppression.
 #[derive(Clone)]
-struct DatabaseHandle(
-    #[expect(dead_code, reason = "Retains the temporary database for each scenario")]
-    Arc<TemporaryDatabase>,
-);
+struct DatabaseHandle {
+    _database: Arc<TemporaryDatabase>,
+}
 
 /// Count row for raw SQL queries.
 #[derive(QueryableByName)]
@@ -91,7 +95,9 @@ impl ExampleDataSeedingWorld {
 
         self.runtime.set(RuntimeHandle(Arc::new(runtime)));
         self.pool.set(pool);
-        self._database.set(DatabaseHandle(Arc::new(temp_db)));
+        self._database.set(DatabaseHandle {
+            _database: Arc::new(temp_db),
+        });
     }
 
     fn is_skipped(&self) -> bool {
