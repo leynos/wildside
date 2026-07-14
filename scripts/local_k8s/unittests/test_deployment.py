@@ -301,7 +301,7 @@ def _validated_input_text(input_text: object) -> str | None:
     return input_text
 
 
-@dataclass
+@dataclass(slots=True)
 class _ConcurrentSecretResponder:
     """Fake `run` simulating a Secret created concurrently by another process."""
 
@@ -321,7 +321,7 @@ class _ConcurrentSecretResponder:
         if args[2:5] == ["create", "-f", "-"]:
             error_message = 'secrets "wildside-session-key" already exists'
             raise LocalK8sError(error_message)
-        if args[2:5] == ["replace", "-f", "-"]:
+        if args[2:5] == ["apply", "-f", "-"]:
             return SimpleNamespace(stdout="")
         error_message = f"unexpected command: {command} {args}"
         raise AssertionError(error_message)
@@ -353,8 +353,8 @@ def test_ensure_session_secret_reuses_concurrent_create(
         "reuse must confirm the concurrently created Secret's key material"
     )
     assert all(
-        cmd[1][2:5] != ["replace", "-f", "-"] for cmd in responder.commands
-    ), "a valid concurrent Secret must be reused without replacement"
+        cmd[1][2:5] != ["apply", "-f", "-"] for cmd in responder.commands
+    ), "a valid concurrent Secret must be reused without re-applying it"
 
 
 def test_ensure_session_secret_repairs_malformed_concurrent_secret(
@@ -367,13 +367,13 @@ def test_ensure_session_secret_repairs_malformed_concurrent_secret(
 
     ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
 
-    replace_commands = [
-        cmd for cmd in responder.commands if cmd[1][2:5] == ["replace", "-f", "-"]
+    apply_commands = [
+        cmd for cmd in responder.commands if cmd[1][2:5] == ["apply", "-f", "-"]
     ]
-    assert len(replace_commands) == 1, (
-        "a malformed concurrent Secret must be repaired with a single replace"
+    assert len(apply_commands) == 1, (
+        "a malformed concurrent Secret must be repaired with a single apply"
     )
-    assert replace_commands[0][2] is not None, (
+    assert apply_commands[0][2] is not None, (
         "repair must send the fresh session Secret manifest on stdin"
     )
 
@@ -383,19 +383,11 @@ def test_ensure_session_secret_fails_when_secret_stays_malformed(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify an unrepairable malformed Secret fails explicitly."""
-
-    def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
-        if _is_get_session_secret(args):
-            return SimpleNamespace(stdout="")
-        if args[2:5] == ["create", "-f", "-"]:
-            error_message = 'secrets "wildside-session-key" already exists'
-            raise LocalK8sError(error_message)
-        if args[2:5] == ["replace", "-f", "-"]:
-            return SimpleNamespace(stdout="")
-        error_message = f"unexpected command: {command} {args}"
-        raise AssertionError(error_message)
-
-    monkeypatch.setattr("local_k8s.deployment.run", record_run)
+    # A `ready_after_get_calls` beyond every get keeps the Secret malformed
+    # through the initial check, the post-conflict re-fetch, and the re-fetch
+    # after the apply-based repair.
+    responder = _ConcurrentSecretResponder(ready_after_get_calls=99)
+    monkeypatch.setattr("local_k8s.deployment.run", responder)
 
     with pytest.raises(LocalK8sError, match="still lacks session_key after repair"):
         ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)

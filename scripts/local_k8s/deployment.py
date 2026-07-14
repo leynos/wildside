@@ -174,10 +174,11 @@ def _apply_session_secret_manifest(config: PreviewConfig, manifest: str) -> None
             ["--context", config.kube_context, "create", "-f", "-"],
             input_text=manifest,
         )
-        return
     except LocalK8sError as exc:
         if "already exists" not in str(exc):
             raise
+    else:
+        return
 
     _reconcile_existing_session_secret(config, manifest)
 
@@ -188,11 +189,11 @@ def _reconcile_existing_session_secret(config: PreviewConfig, manifest: str) -> 
         _log_session_secret_event(config, "local_k8s_session_secret_reuse")
         return
 
-    # The existing Secret carries no session_key; replace it with fresh material.
+    # The existing Secret carries no session_key; apply fresh key material.
     _log_session_secret_event(config, "local_k8s_session_secret_repair")
     run(
         "kubectl",
-        ["--context", config.kube_context, "replace", "-f", "-"],
+        ["--context", config.kube_context, "apply", "-f", "-"],
         input_text=manifest,
     )
     if not _fetch_existing_session_key(config):
