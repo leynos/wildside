@@ -218,4 +218,15 @@ describe('direct execution guard', () => {
     );
     expect(consoleLogSpy).not.toHaveBeenCalled();
   });
+
+  it('sets exitCode and logs the error when package.json cannot be read', async () => {
+    readFileMock.mockRejectedValueOnce(new Error('boom: cannot read package.json'));
+    process.argv = [process.argv[0], modulePath];
+
+    await loadModule();
+
+    expect(process.exitCode).toBe(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith('boom: cannot read package.json');
+    expect(consoleLogSpy).not.toHaveBeenCalled();
+  });
 });
