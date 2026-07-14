@@ -176,7 +176,8 @@ class TestImageImport:
         def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
             command_log.append((command, args))
             if command == "env" and args[:3] == ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", "load"]:
-                raise LocalK8sError("kind load failed")
+                error_message = "kind load failed"
+                raise LocalK8sError(error_message)
             return MockCommandResult()
 
         mocker.patch("local_k8s.cluster.require_tools", return_value=None)

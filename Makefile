@@ -236,7 +236,7 @@ test-workflow-contracts:
 # the inline dependency declaration in scripts/local_k8s.py.
 test-scripts:
 	PYTHONPATH=scripts uv run \
-		--with pytest --with pytest-mock --with hypothesis \
+		--with pytest --with pytest-mock --with hypothesis --with 'pyyaml>=6' \
 		--with cyclopts==4.10.1 --with plumbum==1.9.0 \
 		python -m pytest scripts/local_k8s/unittests
 

@@ -161,7 +161,9 @@ class TestClusterCreation:
 
         ensure_cluster(config)
 
-        assert required_tools == [("kind", "podman", "kubectl", "helm", "systemd-run")]
+        assert required_tools == [("kind", "podman", "kubectl", "helm", "systemd-run")], (
+            "Podman-backed kind must require kind, podman, kubectl, helm, and systemd-run"
+        )
         assert commands[0] == (
             "env",
             ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", "get", "clusters"],

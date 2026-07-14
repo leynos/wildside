@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-import os
+from pathlib import Path
 import subprocess
 import sys
 import tempfile
@@ -130,15 +130,15 @@ def test_run_cwd_is_thread_safe_under_concurrency() -> None:
     ):
         targets = [dir_a, dir_b] * 15
 
-        def observed_cwd(directory: str) -> str:
+        def observed_cwd(directory: str) -> Path:
             result = run(sys.executable, print_cwd, cwd=directory)
-            return os.path.realpath(result.stdout.strip())
+            return Path(result.stdout.strip()).resolve()
 
         with ThreadPoolExecutor(max_workers=8) as pool:
             results = list(pool.map(observed_cwd, targets))
 
         for directory, observed in zip(targets, results, strict=True):
-            assert observed == os.path.realpath(directory), (
+            assert observed == Path(directory).resolve(), (
                 "run(..., cwd=...) must execute in the requested directory even "
                 "under concurrent invocation"
             )

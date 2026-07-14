@@ -28,7 +28,7 @@ class TestClusterStatus:
         mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch(
             "local_k8s.cluster.run",
-            lambda *_args, **_kwargs: CommandResult(stdout=stdout, stderr=""),
+            return_value=CommandResult(stdout=stdout, stderr=""),
         )
 
         with pytest.raises(LocalK8sError, match=match):
@@ -115,41 +115,34 @@ class TestClusterStatus:
             match="does not exist",
         )
 
-    def test_k3d_cluster_exists_rejects_malformed_json(
+    @pytest.mark.parametrize(
+        ("stdout", "match"),
+        [
+            pytest.param(
+                "not json",
+                "unexpected k3d cluster list JSON payload",
+                id="malformed_json",
+            ),
+            pytest.param(
+                '{"name": "wildside-preview"}',
+                "unexpected k3d cluster list JSON shape",
+                id="non_list_payload",
+            ),
+            pytest.param(
+                "[{}]",
+                "unexpected k3d cluster list entry",
+                id="malformed_entry",
+            ),
+        ],
+    )
+    def test_k3d_cluster_exists_rejects_invalid_payload(
         self,
         mocker: pytest_mock.MockerFixture,
         preview_config: PreviewConfig,
+        stdout: str,
+        match: str,
     ) -> None:
-        """Verify k3d status fails when `cluster list` emits non-JSON output."""
+        """Verify k3d status fails on malformed `cluster list` output."""
         self._assert_cluster_status_rejects(
-            mocker,
-            preview_config,
-            stdout="not json",
-            match="unexpected k3d cluster list JSON payload",
-        )
-
-    def test_k3d_cluster_exists_rejects_non_list_payload(
-        self,
-        mocker: pytest_mock.MockerFixture,
-        preview_config: PreviewConfig,
-    ) -> None:
-        """Verify k3d status fails when `cluster list` JSON is not a list."""
-        self._assert_cluster_status_rejects(
-            mocker,
-            preview_config,
-            stdout='{"name": "wildside-preview"}',
-            match="unexpected k3d cluster list JSON shape",
-        )
-
-    def test_k3d_cluster_exists_rejects_malformed_entry(
-        self,
-        mocker: pytest_mock.MockerFixture,
-        preview_config: PreviewConfig,
-    ) -> None:
-        """Verify a k3d entry without a string name is rejected, not ignored."""
-        self._assert_cluster_status_rejects(
-            mocker,
-            preview_config,
-            stdout="[{}]",
-            match="unexpected k3d cluster list entry",
+            mocker, preview_config, stdout=stdout, match=match
         )

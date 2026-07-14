@@ -89,7 +89,9 @@ def _preview_config(*, release_name: str, chart_name: str) -> PreviewConfig:
     )
 
 
-def _podman_saved_image_name(monkeypatch: pytest.MonkeyPatch, image_name: str) -> str:
+def _podman_saved_image_name(
+    monkeypatch: pytest.MonkeyPatch, image_name: str, tmp_path: Path
+) -> str:
     """Return the image name passed to ``podman save`` for a preview import."""
     commands: list[tuple[str, list[str]]] = []
 
@@ -105,7 +107,7 @@ def _podman_saved_image_name(monkeypatch: pytest.MonkeyPatch, image_name: str) -
     # path helper to avoid touching the filesystem for each generated example.
     monkeypatch.setattr(
         "local_k8s.cluster._image_archive_path",
-        lambda _config, *, archive_dir=None: Path(archive_dir or "/tmp")
+        lambda _config, *, archive_dir=None: Path(archive_dir or tmp_path)
         / "wildside-preview-image.tar",
     )
 
@@ -153,13 +155,14 @@ def test_podman_archive_image_name_prefixes_unqualified_images(
     monkeypatch: pytest.MonkeyPatch,
     repository: str,
     tag: str,
+    tmp_path: Path,
 ) -> None:
     """Verify unqualified images normalize to Docker Hub library pulls."""
     image_name = f"{repository}:{tag}"
 
-    assert _podman_saved_image_name(monkeypatch, image_name) == f"docker.io/library/{image_name}", (
-        "unqualified images must normalize to the Docker Hub library namespace"
-    )
+    assert _podman_saved_image_name(monkeypatch, image_name, tmp_path) == (
+        f"docker.io/library/{image_name}"
+    ), "unqualified images must normalize to the Docker Hub library namespace"
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
@@ -169,13 +172,14 @@ def test_podman_archive_image_name_prefixes_namespaced_images(
     namespace: str,
     repository: str,
     tag: str,
+    tmp_path: Path,
 ) -> None:
     """Verify namespaced Docker Hub images keep their namespace."""
     image_name = f"{namespace}/{repository}:{tag}"
 
-    assert _podman_saved_image_name(monkeypatch, image_name) == f"docker.io/{image_name}", (
-        "namespaced Docker Hub images must keep their namespace under docker.io"
-    )
+    assert _podman_saved_image_name(monkeypatch, image_name, tmp_path) == (
+        f"docker.io/{image_name}"
+    ), "namespaced Docker Hub images must keep their namespace under docker.io"
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
@@ -183,9 +187,10 @@ def test_podman_archive_image_name_prefixes_namespaced_images(
 def test_podman_archive_image_name_preserves_registry_hosts(
     monkeypatch: pytest.MonkeyPatch,
     image_name: str,
+    tmp_path: Path,
 ) -> None:
     """Verify registry-qualified images are already Kubernetes-compatible."""
-    assert _podman_saved_image_name(monkeypatch, image_name) == image_name, (
+    assert _podman_saved_image_name(monkeypatch, image_name, tmp_path) == image_name, (
         "registry-qualified images must be archived without rewriting"
     )
 
