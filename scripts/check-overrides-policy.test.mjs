@@ -152,6 +152,27 @@ describe('reportOverridesPolicy', () => {
     );
     expect(outputIo.log).not.toHaveBeenCalled();
   });
+
+  it('logs missing pnpm overrides and returns 1', async () => {
+    const { reportOverridesPolicy } = await loadModule();
+    const outputIo = { log: vi.fn(), error: vi.fn() };
+
+    const exitCode = reportOverridesPolicy(
+      {
+        ok: false,
+        pnpmOverridesToCheck: [],
+        rootOverrides: [],
+        reason: 'missing-pnpm-overrides',
+      },
+      outputIo,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(outputIo.error).toHaveBeenCalledWith(
+      'Override policy check failed.\nNo pnpm.overrides entries were found.',
+    );
+    expect(outputIo.log).not.toHaveBeenCalled();
+  });
 });
 
 describe('direct execution guard', () => {
