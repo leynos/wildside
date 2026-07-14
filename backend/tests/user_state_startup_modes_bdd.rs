@@ -25,23 +25,13 @@ use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
 
-mod support {
-    //! Test-local view of shared support helpers.
-    #[path = "../support/mod.rs"]
-    mod shared;
-    pub use shared::*;
-    #[path = "../support/atexit_cleanup.rs"]
-    pub mod atexit_cleanup;
-    #[path = "../support/cluster_skip.rs"]
-    pub mod cluster_skip;
-    #[path = "../support/embedded_postgres.rs"]
-    pub mod embedded_postgres;
-}
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::cluster_skip::handle_cluster_setup_failure;
-use support::embedded_postgres::drop_users_table;
-use support::embedded_postgres::provision_template_database;
+use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::embedded_postgres::drop_users_table;
+use crate::support::embedded_postgres::provision_template_database;
 
 #[path = "user_state_startup_modes_bdd/flow_support.rs"]
 mod flow_support;

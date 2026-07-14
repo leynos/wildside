@@ -14,31 +14,22 @@ use uuid::Uuid;
 
 #[path = "diesel_walk_session_repository/test_params.rs"]
 mod diesel_walk_session_repository_test_params;
-mod support {
-    //! Test-local view of shared support helpers.
-    #[path = "../support/mod.rs"]
-    mod shared;
-    pub use shared::*;
-    #[path = "../support/atexit_cleanup.rs"]
-    pub mod atexit_cleanup;
-    #[path = "../support/cluster_skip.rs"]
-    pub mod cluster_skip;
-    #[path = "../support/embedded_postgres.rs"]
-    pub mod embedded_postgres;
-    #[path = "../support/seed_connection_helpers.rs"]
-    pub mod seed_connection_helpers;
-    #[path = "../support/seed_helpers.rs"]
-    pub mod seed_helpers;
-    #[path = "../support/table_helpers.rs"]
-    pub mod table_helpers;
-}
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    seed_connection_helpers,
+    seed_helpers,
+    table_helpers
+);
 
+use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::embedded_postgres::provision_template_database;
 use crate::support::seed_connection_helpers::seed_user_and_route;
+use crate::support::table_helpers::drop_table;
 use diesel_walk_session_repository_test_params::{WalkSessionStats, WalkSessionTestParams};
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::cluster_skip::handle_cluster_setup_failure;
-use support::embedded_postgres::provision_template_database;
-use support::table_helpers::drop_table;
 
 struct TestContext {
     runtime: Runtime,

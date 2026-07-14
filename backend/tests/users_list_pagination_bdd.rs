@@ -6,22 +6,15 @@ use rstest_bdd_macros::{given, scenario, then, when};
 #[cfg(feature = "metrics")]
 use serial_test::serial;
 
-mod support {
-    //! Test-local view of shared support helpers.
-    #[path = "../support/mod.rs"]
-    mod shared;
-    pub use shared::*;
-    #[path = "../support/atexit_cleanup.rs"]
-    pub mod atexit_cleanup;
-    #[path = "../support/cluster_skip.rs"]
-    pub mod cluster_skip;
-    #[path = "../support/embedded_postgres.rs"]
-    pub mod embedded_postgres;
-    #[path = "../support/session_middleware.rs"]
-    pub mod session_middleware;
-}
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    session_middleware
+);
 
-use support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::cluster_skip::handle_cluster_setup_failure;
 
 #[path = "users_list_pagination_bdd/flow_support.rs"]
 mod flow_support;
