@@ -333,23 +333,30 @@ def _k3d_cluster_exists(cluster_name: str) -> bool:
         raise LocalK8sError(error_message) from exc
     match clusters:
         case list():
-            return any(
-                _cluster_name_from_k3d_payload(cluster) == cluster_name
-                for cluster in clusters
-            )
+            # Resolve every entry so a malformed one raises instead of looking
+            # absent; a bad payload must not silently drive create/delete choices.
+            names = [_cluster_name_from_k3d_payload(cluster) for cluster in clusters]
+            return cluster_name in names
         case _:
             error_message = "unexpected k3d cluster list JSON shape"
             raise LocalK8sError(error_message)
 
 
-def _cluster_name_from_k3d_payload(cluster: object) -> str | None:
-    """Return a k3d cluster name from a decoded JSON cluster payload."""
+def _cluster_name_from_k3d_payload(cluster: object) -> str:
+    """Return a k3d cluster name from a decoded JSON cluster payload.
+
+    Raises
+    ------
+    LocalK8sError
+        Raised when the entry is not an object containing a string ``name``.
+    """
 
     match cluster:
         case {"name": str(name)}:
             return name
         case _:
-            return None
+            error_message = "unexpected k3d cluster list entry"
+            raise LocalK8sError(error_message)
 
 
 def _k3d_create_args(config: PreviewConfig) -> list[str]:

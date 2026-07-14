@@ -159,25 +159,49 @@ def _log_session_secret_event(config: PreviewConfig, event: str) -> None:
 
 
 def _apply_session_secret_manifest(config: PreviewConfig, manifest: str) -> None:
-    """Create the session Secret, treating concurrent creation as reuse."""
+    """Create the session Secret, reconciling a concurrently created one.
+
+    On the normal path the Secret is created from ``manifest``. If another deploy
+    created it first (``already exists``), the existing Secret is validated: when
+    it already carries a non-empty ``session_key`` it is reused; otherwise it is
+    repaired by replacing it with the fresh key material in ``manifest``. A
+    Secret that still lacks key material after repair raises ``LocalK8sError``.
+    """
     _log_session_secret_event(config, "local_k8s_session_secret_apply")
     try:
         run(
             "kubectl",
-            [
-                "--context",
-                config.kube_context,
-                "create",
-                "-f",
-                "-",
-            ],
+            ["--context", config.kube_context, "create", "-f", "-"],
             input_text=manifest,
         )
+        return
     except LocalK8sError as exc:
-        if "already exists" in str(exc):
-            _log_session_secret_event(config, "local_k8s_session_secret_reuse")
-            return
-        raise
+        if "already exists" not in str(exc):
+            raise
+
+    _reconcile_existing_session_secret(config, manifest)
+
+
+def _reconcile_existing_session_secret(config: PreviewConfig, manifest: str) -> None:
+    """Reuse a concurrently created Secret, repairing it if it lacks a key."""
+    if _fetch_existing_session_key(config):
+        _log_session_secret_event(config, "local_k8s_session_secret_reuse")
+        return
+
+    # The existing Secret carries no session_key; replace it with fresh material.
+    _log_session_secret_event(config, "local_k8s_session_secret_repair")
+    run(
+        "kubectl",
+        ["--context", config.kube_context, "replace", "-f", "-"],
+        input_text=manifest,
+    )
+    if not _fetch_existing_session_key(config):
+        error_message = (
+            f"session Secret {SESSION_SECRET_NAME!r} still lacks "
+            f"{SESSION_SECRET_KEY_NAME} after repair"
+        )
+        raise LocalK8sError(error_message)
+    _log_session_secret_event(config, "local_k8s_session_secret_reuse")
 
 
 def ensure_session_secret(
@@ -279,7 +303,25 @@ def image_repository_and_tag(image_name: str) -> tuple[str, str]:
 
 
 def print_status(config: PreviewConfig) -> None:
-    """Print cluster and workload status."""
+    """Print the local preview cluster and workload status.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Local preview settings selecting the provider, kube context, namespace,
+        and Helm release inspected for status.
+
+    Returns
+    -------
+    None
+        Prints the provider cluster status, the ``helm status`` output for the
+        release, and the Kubernetes workload status to standard output.
+
+    Raises
+    ------
+    LocalK8sError
+        Raised when a required tool is missing or a status command fails.
+    """
 
     require_tools(_deploy_preview_tools(config, skip_build=True))
     logger.info(
@@ -312,7 +354,7 @@ def print_kind_port_forward_command(config: PreviewConfig) -> None:
 
     Parameters
     ----------
-    config
+    config : PreviewConfig
         Preview configuration describing the selected provider, kube context,
         namespace, release name, and ingress port.
 
@@ -333,7 +375,27 @@ def print_kind_port_forward_command(config: PreviewConfig) -> None:
 
 
 def print_logs(config: PreviewConfig, *, follow: bool) -> None:
-    """Print backend pod logs from the preview namespace."""
+    """Print backend pod logs from the preview namespace.
+
+    Parameters
+    ----------
+    config : PreviewConfig
+        Local preview settings selecting the kube context, namespace, and Helm
+        release whose backend pod logs are read.
+    follow : bool
+        When true, stream logs continuously (``kubectl logs --follow``);
+        otherwise print the most recent lines once.
+
+    Returns
+    -------
+    None
+        Prints (or streams) the backend pod logs to standard output.
+
+    Raises
+    ------
+    LocalK8sError
+        Raised when ``kubectl`` is missing or the logs command fails.
+    """
 
     require_tools(("kubectl",))
     args = [
