@@ -166,15 +166,18 @@ def test_podman_archive_image_name_prefixes_unqualified_images(
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(namespace=repository_components(), repository=repository_components(), tag=image_tags())
+@given(
+    namespaced_repository=st.tuples(repository_components(), repository_components()),
+    tag=image_tags(),
+)
 def test_podman_archive_image_name_prefixes_namespaced_images(
     monkeypatch: pytest.MonkeyPatch,
-    namespace: str,
-    repository: str,
+    namespaced_repository: tuple[str, str],
     tag: str,
     tmp_path: Path,
 ) -> None:
     """Verify namespaced Docker Hub images keep their namespace."""
+    namespace, repository = namespaced_repository
     image_name = f"{namespace}/{repository}:{tag}"
 
     assert _podman_saved_image_name(monkeypatch, image_name, tmp_path) == (
