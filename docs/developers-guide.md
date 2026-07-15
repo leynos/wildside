@@ -69,8 +69,8 @@ aliases when the provider-neutral names are unset. In `kind` mode, use
 The helper also creates a `wildside-session-key` Secret when missing before
 Helm installs the release, and reuses an existing key on later deploys.
 `values.local.yaml` mounts that key at
-`/var/run/secrets/wildside-session/session_key`, so local preview follows the release-mode
-session-key path without committing secret material.
+`/var/run/secrets/wildside-session/session_key`, so local preview follows
+the release-mode session-key path without committing secret material.
 
 ## Front-end development
 
