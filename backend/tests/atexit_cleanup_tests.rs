@@ -97,10 +97,13 @@ fn resolve_stable_env_sets_password_when_missing() {
 #[cfg(unix)]
 #[test]
 fn ensure_stable_cluster_environment_resolves_env_once_under_concurrency() {
-    // Many threads resolving the stable environment at once must not race on
-    // `std::env::set_var`. The OnceLock guard resolves `PG_PASSWORD` and
-    // `POSTGRESQL_RELEASES_URL` exactly once, so every caller observes the same
-    // stable default password and pinned release URL without panicking.
+    // Concurrent callers of `ensure_stable_cluster_environment` must observe a
+    // consistent stable environment without racing or panicking. First-call
+    // initialization (which runs `std::env::set_var`) happens once on this
+    // single thread *before* any threads are spawned, so `set_var` never
+    // executes while other threads exist. The spawned threads then exercise only
+    // the cached, post-initialization path guarded by the `STABLE_ENV_INIT`
+    // OnceLock.
     let sandbox = tempfile::tempdir().expect("tempdir");
     let install_path = sandbox.path().join("install");
     let data_parent_path = sandbox.path().join("data-parent");
@@ -134,12 +137,23 @@ fn ensure_stable_cluster_environment_resolves_env_once_under_concurrency() {
         ),
     ]);
 
+    // Perform first-call initialization on the current (single) thread. The
+    // process-global `STABLE_ENV_INIT` OnceLock resolves and `set_var` runs
+    // while single-threaded, which is sound.
+    stable_cluster_env::ensure_stable_cluster_environment();
+
+    // The spawned threads now hit only the cached post-initialization path (no
+    // `set_var`), proving concurrent callers observe consistent state without
+    // racing or panicking.
     std::thread::scope(|scope| {
         for _ in 0..8 {
             scope.spawn(stable_cluster_env::ensure_stable_cluster_environment);
         }
     });
 
+    // `STABLE_ENV_INIT` is process-global and every caller resolves to the same
+    // stable default, so these assertions hold regardless of which test
+    // initialized it first (order-independent).
     assert_eq!(
         std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
         "wildside_embedded_test",
