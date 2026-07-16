@@ -139,7 +139,10 @@ mod tests {
     }
 
     impl PasswordStateFixture {
-        fn new(should_remove_data_dir: bool) -> Self {
+        fn with_data_entry(
+            should_remove_data_dir: bool,
+            create_data_entry: impl FnOnce(&Dir),
+        ) -> Self {
             let sandbox = tempfile::tempdir().expect("tempdir");
             let install_path = sandbox.path().join("install");
             let data_parent_path = sandbox.path().join("data-parent");
@@ -151,7 +154,8 @@ mod tests {
                 Dir::open_ambient_dir(&install_path, ambient_authority()).expect("open install");
             let data_parent = Dir::open_ambient_dir(&data_parent_path, ambient_authority())
                 .expect("open data parent");
-            data_parent.create_dir("data").expect("create data dir");
+
+            create_data_entry(&data_parent);
 
             Self {
                 _sandbox: sandbox,
@@ -164,6 +168,12 @@ mod tests {
                     should_remove_data_dir,
                 },
             }
+        }
+
+        fn new(should_remove_data_dir: bool) -> Self {
+            Self::with_data_entry(should_remove_data_dir, |data_parent| {
+                data_parent.create_dir("data").expect("create data dir");
+            })
         }
 
         /// Build a fixture whose data parent directory does not exist on disk.
@@ -203,32 +213,11 @@ mod tests {
         /// (ENOTDIR), exercising the path where data cleanup fails while the
         /// stale `.pgpass` must remain in place for a retry.
         fn with_data_entry_as_file() -> Self {
-            let sandbox = tempfile::tempdir().expect("tempdir");
-            let install_path = sandbox.path().join("install");
-            let data_parent_path = sandbox.path().join("data-parent");
-            Dir::create_ambient_dir_all(&install_path, ambient_authority())
-                .expect("create install dir");
-            Dir::create_ambient_dir_all(&data_parent_path, ambient_authority())
-                .expect("create data parent");
-            let install_dir =
-                Dir::open_ambient_dir(&install_path, ambient_authority()).expect("open install");
-            let data_parent = Dir::open_ambient_dir(&data_parent_path, ambient_authority())
-                .expect("open data parent");
-            // The "data" entry is a file, so `remove_dir_all` fails with a
-            // non-NotFound error rather than deleting a directory.
-            data_parent.write("data", b"x").expect("write data file");
-
-            Self {
-                _sandbox: sandbox,
-                install_dir,
-                data_parent,
-                paths: PasswordStatePaths {
-                    install_dir: install_path,
-                    data_parent: data_parent_path,
-                    data_name: PathBuf::from("data"),
-                    should_remove_data_dir: true,
-                },
-            }
+            Self::with_data_entry(true, |data_parent| {
+                // The "data" entry is a file, so `remove_dir_all` fails with a
+                // non-NotFound error rather than deleting a directory.
+                data_parent.write("data", b"x").expect("write data file");
+            })
         }
 
         fn write_pgpass(&self, contents: &[u8]) {
