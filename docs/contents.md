@@ -106,7 +106,7 @@
   images, Helm chart, and developer-local Kubernetes preview helper that Nile
   Valley deploys or exercises.
 - [Rootless Podman and kind local preview ExecPlan](execplans/podman-kind-support.md)
-  – planned adaptation of Wildside's Nile Valley local preview integration for
+  – completed adaptation of Wildside's Nile Valley local preview integration for
   rootless Podman plus `kind`. _Audience: backend developers and platform
   engineers._
 

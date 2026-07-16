@@ -118,17 +118,15 @@ printed command follows Helm's fullname rule.
 
 Required executables table:
 
-| Mode                  | Required executables                                           |
-| --------------------- | -------------------------------------------------------------- |
-| Docker plus `k3d`     | `docker`, `helm`, `k3d`, `kubectl`, and `uv`                   |
-| Docker plus `kind`    | `docker`, `helm`, `kind`, `kubectl`, and `uv`                  |
-| Podman plus `kind`    | `podman`, `helm`, `kind`, `kubectl`, `systemd-run`, and `uv`   |
-| Podman plus `k3d`[^1] | `podman`, `helm`, `k3d`, `kubectl`, and `uv`                   |
+| Mode               | Required executables                                         |
+| ------------------ | ------------------------------------------------------------ |
+| Docker plus `k3d`  | `docker`, `helm`, `k3d`, `kubectl`, and `uv`                 |
+| Docker plus `kind` | `docker`, `helm`, `kind`, `kubectl`, and `uv`                |
+| Podman plus `kind` | `podman`, `helm`, `kind`, `kubectl`, `systemd-run`, and `uv` |
 
-[^1]: Podman plus `k3d` is accepted by the configuration surface because image
-    builds use the selected container engine and cluster lifecycle uses the
-    selected Kubernetes provider. The primary rootless path is Podman plus
-    `kind`.
+Podman requires `kind`: `PreviewConfig` rejects the Podman plus `k3d`
+combination fail-fast, so the only supported rootless path is Podman plus
+`kind`.
 
 Configuration variables table:
 
