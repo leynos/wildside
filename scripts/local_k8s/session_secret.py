@@ -14,7 +14,24 @@ from .validation import LocalK8sError
 SESSION_SECRET_KEY_NAME = "session_key"  # noqa: S105 - Secret data key name, not secret material.
 SESSION_SECRET_NAME = "wildside-session-key"  # noqa: S105 - Secret resource name, not secret material.
 
+# kubectl reports a genuine create conflict as
+# ``Error from server (AlreadyExists): secrets "..." already exists``. The
+# ``(AlreadyExists)`` server reason is the structured signal we key on, rather
+# than a bare "already exists" substring that could appear incidentally in an
+# unrelated failure message.
+_ALREADY_EXISTS_SERVER_REASON = "(AlreadyExists)"
+
 logger = logging.getLogger(__name__)
+
+
+def _is_already_exists_conflict(exc: LocalK8sError) -> bool:
+    """Return True only for a genuine kubectl ``AlreadyExists`` server conflict.
+
+    Classification relies on the preserved raw ``stderr`` carrying kubectl's
+    structured ``(AlreadyExists)`` server reason, so a failure whose message
+    merely mentions "already exists" incidentally is not misclassified.
+    """
+    return exc.stderr is not None and _ALREADY_EXISTS_SERVER_REASON in exc.stderr
 
 
 def _fetch_existing_session_key(config: PreviewConfig) -> str:
@@ -66,10 +83,11 @@ def _apply_session_secret_manifest(config: PreviewConfig, manifest: str) -> None
     """Create the session Secret, reconciling a concurrently created one.
 
     On the normal path the Secret is created from ``manifest``. If another deploy
-    created it first (``already exists``), the existing Secret is validated: when
-    it already carries a non-empty ``session_key`` it is reused; otherwise it is
-    repaired by replacing it with the fresh key material in ``manifest``. A
-    Secret that still lacks key material after repair raises ``LocalK8sError``.
+    created it first (a kubectl ``AlreadyExists`` server conflict), the existing
+    Secret is validated: when it already carries a non-empty ``session_key`` it
+    is reused; otherwise it is repaired by replacing it with the fresh key
+    material in ``manifest``. A Secret that still lacks key material after repair
+    raises ``LocalK8sError``.
     """
     _log_session_secret_event(config, "local_k8s_session_secret_apply")
     try:
@@ -79,7 +97,7 @@ def _apply_session_secret_manifest(config: PreviewConfig, manifest: str) -> None
             input_text=manifest,
         )
     except LocalK8sError as exc:
-        if "already exists" not in str(exc):
+        if not _is_already_exists_conflict(exc):
             raise
     else:
         return

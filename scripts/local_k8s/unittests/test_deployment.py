@@ -26,6 +26,7 @@ from local_k8s.deployment import (
     ensure_session_secret,
     helm_upgrade,
 )
+from local_k8s.session_secret import _apply_session_secret_manifest
 from local_k8s.validation import LocalK8sError
 
 from conftest import CommandRecord, install_run_recorder
@@ -286,6 +287,19 @@ def test_ensure_session_secret_reuses_existing_key(
     ], "existing local preview session keys must be reused without apply"
 
 
+def _already_exists_stderr() -> str:
+    """Return kubectl stderr carrying the structured AlreadyExists reason."""
+    return (
+        'Error from server (AlreadyExists): secrets "wildside-session-key" '
+        "already exists"
+    )
+
+
+def _already_exists_message() -> str:
+    """Return the formatted error message for an AlreadyExists conflict."""
+    return 'secrets "wildside-session-key" already exists'
+
+
 def _is_get_session_secret(args: list[str]) -> bool:
     """Return whether the kubectl args read the session Secret."""
     return args[4:7] == ["get", "secret", "wildside-session-key"]
@@ -322,8 +336,10 @@ class _ConcurrentSecretResponder:
 
     def _respond_to_write(self, command: str, args: list[str]) -> SimpleNamespace:
         if args[2:5] == ["create", "-f", "-"]:
-            error_message = 'secrets "wildside-session-key" already exists'
-            raise LocalK8sError(error_message)
+            raise LocalK8sError(
+                _already_exists_message(),
+                stderr=_already_exists_stderr(),
+            )
         if args[2:5] == ["apply", "-f", "-"]:
             return SimpleNamespace(stdout="")
         error_message = f"unexpected command: {command} {args}"
@@ -394,3 +410,97 @@ def test_ensure_session_secret_fails_when_secret_stays_malformed(
 
     with pytest.raises(LocalK8sError, match="still lacks session_key after repair"):
         ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
+
+
+def _raise_on_create(
+    exc: LocalK8sError,
+) -> Callable[..., SimpleNamespace]:
+    """Return a ``run`` replacement that raises ``exc`` on the create call."""
+
+    def _run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
+        _validated_input_text(kwargs.get("input_text"))
+        if args[2:5] == ["create", "-f", "-"]:
+            raise exc
+        error_message = f"unexpected command: {command} {args}"
+        raise AssertionError(error_message)
+
+    return _run
+
+
+def test_apply_session_secret_reconciles_genuine_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify a genuine AlreadyExists conflict triggers reconciliation."""
+    conflict = LocalK8sError(
+        _already_exists_message(), stderr=_already_exists_stderr()
+    )
+    monkeypatch.setattr(
+        "local_k8s.session_secret.run", _raise_on_create(conflict)
+    )
+    reconciled: list[str] = []
+    monkeypatch.setattr(
+        "local_k8s.session_secret._reconcile_existing_session_secret",
+        lambda _config, manifest: reconciled.append(manifest),
+    )
+
+    _apply_session_secret_manifest(preview_config, "manifest-body")
+
+    assert reconciled == ["manifest-body"], (
+        "a genuine AlreadyExists server conflict must reconcile the existing Secret"
+    )
+
+
+def test_apply_session_secret_reraises_non_conflict_error(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify a non-conflict kubectl failure propagates without reconciling."""
+    failure = LocalK8sError(
+        "connection refused",
+        stderr="Unable to connect to the server: connection refused",
+    )
+    monkeypatch.setattr(
+        "local_k8s.session_secret.run", _raise_on_create(failure)
+    )
+    reconciled: list[str] = []
+    monkeypatch.setattr(
+        "local_k8s.session_secret._reconcile_existing_session_secret",
+        lambda _config, manifest: reconciled.append(manifest),
+    )
+
+    with pytest.raises(LocalK8sError, match="connection refused"):
+        _apply_session_secret_manifest(preview_config, "manifest-body")
+
+    assert reconciled == [], (
+        "a non-conflict kubectl failure must propagate without reconciling"
+    )
+
+
+def test_apply_session_secret_reraises_incidental_already_exists_message(
+    monkeypatch: pytest.MonkeyPatch,
+    preview_config: PreviewConfig,
+) -> None:
+    """Verify an incidental "already exists" message without the server reason re-raises."""
+    # The message mentions "already exists" but the stderr lacks the structured
+    # ``(AlreadyExists)`` server reason, so it must not be treated as a conflict.
+    misleading = LocalK8sError(
+        'the namespace "already exists" is terminating',
+        stderr='Error from server (Forbidden): namespace "already exists" is terminating',
+    )
+    monkeypatch.setattr(
+        "local_k8s.session_secret.run", _raise_on_create(misleading)
+    )
+    reconciled: list[str] = []
+    monkeypatch.setattr(
+        "local_k8s.session_secret._reconcile_existing_session_secret",
+        lambda _config, manifest: reconciled.append(manifest),
+    )
+
+    with pytest.raises(LocalK8sError, match="already exists"):
+        _apply_session_secret_manifest(preview_config, "manifest-body")
+
+    assert reconciled == [], (
+        "an incidental 'already exists' message without the AlreadyExists "
+        "server reason must propagate without reconciling"
+    )

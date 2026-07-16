@@ -102,6 +102,18 @@ def _command_error_message(
     return stderr.strip() or str(exc)
 
 
+def _command_return_code(
+    exc: ProcessExecutionError | subprocess.CalledProcessError,
+) -> int | None:
+    """Return the process exit status from either failure type."""
+    # ProcessExecutionError exposes ``retcode``; CalledProcessError uses
+    # ``returncode``. Prefer whichever attribute the exception carries.
+    code = getattr(exc, "returncode", None)
+    if code is None:
+        code = getattr(exc, "retcode", None)
+    return code
+
+
 def _log_and_raise(
     command: str,
     exc: ProcessExecutionError | subprocess.CalledProcessError,
@@ -114,7 +126,11 @@ def _log_and_raise(
             "failure_category": type(exc).__name__,
         },
     )
-    raise LocalK8sError(_command_error_message(exc)) from exc
+    raise LocalK8sError(
+        _command_error_message(exc),
+        stderr=exc.stderr,
+        returncode=_command_return_code(exc),
+    ) from exc
 
 
 def run(
