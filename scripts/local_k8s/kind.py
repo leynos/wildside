@@ -48,21 +48,36 @@ nodes:
 """
 
 
+def _reserve_unique_temp_path(*, prefix: str, suffix: str, base_dir: Path) -> Path:
+    """Reserve a unique filename by creating and immediately removing a temp file.
+
+    Side effect: creates a temporary file via :func:`tempfile.mkstemp` to claim a
+    collision-free name, closes the descriptor, then unlinks it so the caller can
+    create the real artefact at that path. Returns the reserved path.
+    """
+
+    file_descriptor, reserved = tempfile.mkstemp(
+        prefix=prefix,
+        suffix=suffix,
+        dir=base_dir,
+    )
+    os.close(file_descriptor)
+    path = Path(reserved)
+    path.unlink(missing_ok=True)
+    return path
+
+
 def _image_archive_path(
     config: PreviewConfig, *, archive_dir: Path | None = None
 ) -> Path:
     """Return a unique temporary Podman image archive path for kind loading."""
 
     base_dir = Path(tempfile.gettempdir()) if archive_dir is None else archive_dir
-    file_descriptor, archive_path = tempfile.mkstemp(
+    return _reserve_unique_temp_path(
         prefix=f"{config.cluster_name}-",
         suffix="-image.tar",
-        dir=base_dir,
+        base_dir=base_dir,
     )
-    os.close(file_descriptor)
-    path = Path(archive_path)
-    path.unlink(missing_ok=True)
-    return path
 
 
 def _is_registry_host(component: str) -> bool:
