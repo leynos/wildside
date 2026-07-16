@@ -214,6 +214,7 @@ def test_local_k8s_make_targets_smoke_successful_flow(
     _write_fake_tool(fake_bin)
 
     env = os.environ.copy()
+    # A host BASH_ENV can rewrite PATH when Make starts its recipe shell.
     env.pop("BASH_ENV", None)
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
     env["UV"] = str(fake_bin / "uv")
