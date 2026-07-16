@@ -8,6 +8,16 @@
 use rstest_bdd_macros::scenario;
 use support::example_data_seeding_world::{ExampleDataSeedingWorld, world};
 
+// NOTE: This binary keeps a handwritten `support` module rather than the
+// shared `declare_test_support!` entrypoint. Its Gherkin step definitions live
+// in the `example_data_seeding_world` support submodule, and rstest-bdd's
+// `#[scenario]` macro resolves steps from a proc-macro-global registry that the
+// `#[given]`/`#[when]`/`#[then]` macros must populate *before* the scenarios
+// expand. A directly-written `mod support` guarantees that expansion order; a
+// `declare_test_support!` bang-macro expansion does not, so routing this
+// binary through the shared entrypoint breaks step resolution ("No matching
+// step definition found"). The consolidated binaries are unaffected because
+// their steps are defined inline rather than in a support submodule.
 mod support {
     //! Test-local view of shared support helpers.
     #[path = "../support/mod.rs"]

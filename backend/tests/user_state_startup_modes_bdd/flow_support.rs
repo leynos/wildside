@@ -23,6 +23,21 @@ const FIXTURE_USERS_NAME: &str = "Ada Lovelace";
 /// # Returns
 ///
 /// The assembled [`HttpState`], wrapped in [`web::Data`] for Actix handlers.
+///
+/// # Examples
+///
+/// ```ignore
+/// use std::net::SocketAddr;
+/// use actix_web::cookie::{Key, SameSite};
+/// use backend::domain::ports::FixtureRouteSubmissionService;
+/// use backend::test_support::server::ServerConfig;
+///
+/// let bind_addr = SocketAddr::from(([127, 0, 0, 1], 0));
+/// let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, bind_addr);
+/// // Fixture-fallback state: no DB pool wired, so handlers serve fixtures.
+/// let state = build_http_state_for_tests(&config, Arc::new(FixtureRouteSubmissionService));
+/// let _app_data = state; // pass to `App::new().app_data(state)`
+/// ```
 pub(crate) fn build_http_state_for_tests(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
@@ -43,6 +58,28 @@ pub(crate) fn build_http_state_for_tests(
 /// # Panics
 ///
 /// Panics if `body` has no `data` array.
+///
+/// # Examples
+///
+/// ```ignore
+/// use serde_json::json;
+///
+/// // A payload containing the seeded fixture user matches.
+/// let fixture = json!({
+///     "data": [
+///         { "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "displayName": "Ada Lovelace" }
+///     ]
+/// });
+/// assert!(is_fixture_users(&fixture));
+///
+/// // A DB-backed payload with a different user does not match.
+/// let db_backed = json!({
+///     "data": [
+///         { "id": "00000000-0000-0000-0000-000000000001", "displayName": "Test User DB" }
+///     ]
+/// });
+/// assert!(!is_fixture_users(&db_backed));
+/// ```
 pub(crate) fn is_fixture_users(body: &Value) -> bool {
     let users = body
         .get("data")

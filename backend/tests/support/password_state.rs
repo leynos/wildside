@@ -14,16 +14,30 @@ use cap_std::fs::Dir;
 pub(super) fn repair_default_password_state(password: &[u8]) -> io::Result<()> {
     let paths = PasswordStatePaths::from_environment();
     // A missing install/data directory means there is nothing to repair, so
-    // treat it as a quiet success. Genuine cleanup failures, however, are
-    // propagated so the caller can surface them at an explicit boundary.
-    let Ok(install_dir) = Dir::open_ambient_dir(&paths.install_dir, ambient_authority()) else {
+    // treat it as a quiet success. Genuine failures (permissions, a path that
+    // is not a directory, and so on) are propagated so the caller can surface
+    // them at an explicit boundary rather than mistaking them for absent state.
+    let Some(install_dir) = open_dir_if_exists(&paths.install_dir)? else {
         return Ok(());
     };
-    let Ok(data_parent) = Dir::open_ambient_dir(&paths.data_parent, ambient_authority()) else {
+    let Some(data_parent) = open_dir_if_exists(&paths.data_parent)? else {
         return Ok(());
     };
 
     repair_password_file_state(password, &install_dir, &data_parent, &paths)
+}
+
+/// Open an ambient directory, treating only a missing path as a quiet no-op.
+///
+/// Returns `Ok(None)` when the directory does not exist, `Ok(Some(dir))` when
+/// it opens successfully, and propagates every other I/O error (for example a
+/// permission failure or a non-directory path) instead of hiding it as absent.
+fn open_dir_if_exists(path: &Path) -> io::Result<Option<Dir>> {
+    match Dir::open_ambient_dir(path, ambient_authority()) {
+        Ok(dir) => Ok(Some(dir)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 struct PasswordStatePaths {
@@ -72,8 +86,12 @@ fn repair_password_file_state(
     data_parent: &Dir,
     paths: &PasswordStatePaths,
 ) -> io::Result<()> {
-    let Ok(existing_password) = install_dir.read(Path::new(".pgpass")) else {
-        return Ok(());
+    let existing_password = match install_dir.read(Path::new(".pgpass")) {
+        Ok(contents) => contents,
+        // No stale password file means nothing to repair.
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        // Permission or other read failures must not be mistaken for absence.
+        Err(error) => return Err(error),
     };
     if existing_password == password {
         return Ok(());
@@ -203,6 +221,57 @@ mod tests {
             fixture.data_parent.exists("data"),
             expected.should_keep_data,
             "data dir existence should match the scenario expectation"
+        );
+    }
+
+    #[test]
+    fn open_dir_if_exists_reports_absent_directory_as_none() {
+        let sandbox = tempfile::tempdir().expect("tempdir");
+        let missing = sandbox.path().join("missing");
+        assert!(
+            open_dir_if_exists(&missing)
+                .expect("a missing directory must be a quiet no-op")
+                .is_none(),
+            "an absent directory should resolve to None rather than erroring"
+        );
+    }
+
+    #[test]
+    fn open_dir_if_exists_propagates_non_not_found_errors() {
+        let sandbox = tempfile::tempdir().expect("tempdir");
+        // A regular file is not a directory, so opening it fails with a
+        // non-NotFound error that must be propagated rather than swallowed.
+        let not_a_dir = sandbox.path().join("not-a-dir");
+        std::fs::write(&not_a_dir, b"x").expect("write file");
+        let error =
+            open_dir_if_exists(&not_a_dir).expect_err("opening a file as a directory must fail");
+        assert_ne!(
+            error.kind(),
+            io::ErrorKind::NotFound,
+            "a non-directory path must surface as a real error, not absent state"
+        );
+    }
+
+    #[test]
+    fn repair_password_file_state_propagates_non_not_found_read_errors() {
+        let fixture = PasswordStateFixture::new(true);
+        // Make `.pgpass` a directory so reading it as a file fails with a
+        // non-NotFound error that must propagate rather than look absent.
+        fixture
+            .install_dir
+            .create_dir(".pgpass")
+            .expect("create .pgpass directory");
+        let error = repair_password_file_state(
+            b"new-password",
+            &fixture.install_dir,
+            &fixture.data_parent,
+            &fixture.paths,
+        )
+        .expect_err("reading a directory as a file must fail");
+        assert_ne!(
+            error.kind(),
+            io::ErrorKind::NotFound,
+            "an unreadable password file must surface as a real error"
         );
     }
 }
