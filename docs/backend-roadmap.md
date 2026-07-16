@@ -350,3 +350,81 @@ that repository when deployment or infrastructure behaviour needs updates.
 - [x] 7.1. Align Wildside with Nile Valley preview and GitOps workflows by
   hardening the backend health contract, container image, Helm chart, and
   repository-local provider-aware Kubernetes preview helper.
+
+## 8. Local preview stateful backing services
+
+The repository-local Kubernetes preview delivered in 7.1 deploys the backend as
+a stateless application and expects database and cache credentials from an
+external Secret. To prove out what can run on Nile Valley, the preview must be
+able to provision the same operator-managed stateful services the deployment
+target uses — CloudNativePG (CNPG) for PostgreSQL and the Valkey operator for
+the Redis-compatible cache — as optional, composable orchestration stages. This
+mirrors the approach proven in the sibling `corbusier` project's
+`scripts/local_k8s/` (`cnpg.py`, `valkey.py`). Backing-service provisioning must
+stay optional so the lightweight app-only preview remains available for fast
+iteration and offline or rootless flows, and it must not regress the rootless
+Podman plus `kind` or Docker plus `k3d` support hardened in 7.1.
+
+### 8.1. PostgreSQL via CloudNativePG
+
+- [ ] 8.1.1. Add a `scripts/local_k8s/cnpg.py` module that installs the
+  CloudNativePG operator via Helm (repository add and update,
+  `helm upgrade --install` into a dedicated namespace, and a wait for operator
+  readiness) and applies a single-instance PostgreSQL `Cluster` custom resource
+  (CR) sized for local previews.
+- [ ] 8.1.2. Derive the application `DATABASE_URL` from the operator-generated
+  connection Secret and thread it into the backend deployment, extending the
+  external-Secret path in `deploy/charts/wildside/values.local.yaml` so the
+  previewed application runs against the provisioned database.
+- [ ] 8.1.3. Apply the backend Diesel migrations against the provisioned cluster
+  before the application becomes ready (an init container or a pre-deploy step)
+  so the preview exercises the real schema.
+- [ ] 8.1.4. Gate the stage on operator and `Cluster` readiness with explicit
+  fail-fast diagnostics, and ensure `local-k8s-down` removes the `Cluster`, its
+  persistent volume claims (PVCs), and the operator cleanly.
+
+### 8.2. Redis-compatible cache via the Valkey operator
+
+- [ ] 8.2.1. Add a `scripts/local_k8s/valkey.py` module that installs the Valkey
+  operator via Helm and provisions a single-instance Valkey resource in the
+  preview namespace.
+- [ ] 8.2.2. Derive the Redis-compatible uniform resource identifier (URI) from
+  the operator-managed Secret and inject it into the backend deployment,
+  matching the `RouteCache` Redis adapter configuration from 5.1.
+- [ ] 8.2.3. Gate the stage on Valkey readiness with fail-fast diagnostics and
+  clean teardown on `local-k8s-down`.
+
+### 8.3. Orchestration and configuration
+
+- [ ] 8.3.1. Extend the preview orchestration flow in `scripts/local_k8s/` to
+  compose the stages as provision database, then provision cache, then deploy
+  application, while preserving the existing app-only path when backing services
+  are disabled.
+- [ ] 8.3.2. Add `PreviewConfig` toggles (for example
+  `WILDSIDE_PREVIEW_DATABASE=cnpg|external|none` and
+  `WILDSIDE_PREVIEW_CACHE=valkey|external|none`) with validation that rejects
+  incompatible combinations and fails fast, mirroring the container-engine and
+  provider validation already in `scripts/local_k8s/config.py`.
+- [ ] 8.3.3. Preserve rootless Podman plus `kind` and Docker plus `k3d` support
+  across the new stages, extend the fail-before-changes preflight to account for
+  operator image pulls, and document any additional required executables.
+- [ ] 8.3.4. Make provisioning idempotent and re-runnable (safe to re-apply
+  operators and CRs) with deterministic teardown that leaves no orphaned
+  namespaces, custom resources, or persistent volumes.
+
+### 8.4. Nile Valley parity and verification
+
+- [ ] 8.4.1. Align the preview's CNPG and Valkey manifests (operator versions,
+  CR shapes, and Secret keys) with the Nile Valley deployment definitions so the
+  local stack proves what will run there, and document any intentional
+  divergences.
+- [ ] 8.4.2. Add an end-to-end preview smoke test that brings up the stateful
+  preview, applies migrations, and exercises a database-backed and cache-backed
+  request path, asserting the backend reports healthy against the provisioned
+  services rather than fixture fallback.
+- [ ] 8.4.3. Extend `scripts/local_k8s/unittests/` coverage for the new
+  configuration validation, manifest rendering, and orchestration stage
+  sequencing, including the disabled app-only path.
+- [ ] 8.4.4. Update `docs/local-k8s-preview-design.md` and
+  `docs/developers-guide.md` to document the stateful preview, the new toggles,
+  the required operators and executables, and the Nile Valley parity contract.
