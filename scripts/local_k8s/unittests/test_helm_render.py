@@ -39,7 +39,10 @@ def _dig(mapping: dict[str, YamlValue], *keys: str) -> YamlValue:
     """Walk nested YAML mappings by ``keys``, asserting each level is a mapping."""
     value: YamlValue = mapping
     for key in keys:
-        assert isinstance(value, dict)
+        assert isinstance(value, dict), (
+            f"expected a mapping while walking to {key!r} via {keys!r}, "
+            f"got {type(value).__name__}"
+        )
         value = value[key]
     return value
 
@@ -83,23 +86,29 @@ def test_local_render_wires_session_key_env(local_preview_render: str) -> None:
     config_map = _first_of_kind(manifests, "ConfigMap")
 
     containers = _dig(deployment, "spec", "template", "spec", "containers")
-    assert isinstance(containers, list)
+    assert isinstance(containers, list), (
+        "Deployment spec.template.spec.containers must be a list"
+    )
     env_by_name: dict[str, Manifest] = {}
     for container in containers:
-        assert isinstance(container, dict)
+        assert isinstance(container, dict), (
+            "each Deployment container must be a mapping"
+        )
         env = container.get("env", [])
-        assert isinstance(env, list)
+        assert isinstance(env, list), "container 'env' must be a list of env entries"
         for entry in env:
-            assert isinstance(entry, dict)
+            assert isinstance(entry, dict), "each container env entry must be a mapping"
             name = entry["name"]
-            assert isinstance(name, str)
+            assert isinstance(name, str), "each container env entry 'name' must be a string"
             env_by_name[name] = entry
     session_env = env_by_name["SESSION_KEY_FILE"]
     config_map_key = _dig(session_env, "valueFrom", "configMapKeyRef", "key")
-    assert isinstance(config_map_key, str)
+    assert isinstance(config_map_key, str), (
+        "SESSION_KEY_FILE valueFrom.configMapKeyRef.key must be a string"
+    )
 
     data = _dig(config_map, "data")
-    assert isinstance(data, dict)
+    assert isinstance(data, dict), "ConfigMap 'data' must be a mapping"
     assert data[config_map_key] == f"{SESSION_MOUNT_PATH}/session_key", (
         "SESSION_KEY_FILE must resolve to the mounted session key path"
     )
