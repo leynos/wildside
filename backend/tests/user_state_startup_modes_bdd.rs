@@ -119,7 +119,8 @@ where
             .cookies()
             .find(|cookie| cookie.name() == "session")
             .map(|cookie| cookie.into_owned()),
-        body: parse_json_body(actix_test::read_body(login_res).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(login_res).await.as_ref())
+            .expect("login response must contain valid JSON"),
     }
 }
 
@@ -140,7 +141,8 @@ where
             .and_then(|value| value.to_str().ok())
             .map(ToOwned::to_owned),
         session_cookie: None,
-        body: parse_json_body(actix_test::read_body(users_res).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(users_res).await.as_ref())
+            .expect("users response must contain valid JSON"),
     }
 }
 

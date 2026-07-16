@@ -58,7 +58,8 @@ async fn capture_snapshot(
                     .map(|cookie| cookie.into_owned())
             })
             .flatten(),
-        body: parse_json_body(actix_test::read_body(res).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(res).await.as_ref())
+            .expect("interests response must contain valid JSON"),
     }
 }
 

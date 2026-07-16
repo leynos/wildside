@@ -163,7 +163,8 @@ async fn capture_snapshot(res: actix_web::dev::ServiceResponse, with_cookie: boo
                     .map(|cookie| cookie.into_owned())
             })
             .flatten(),
-        body: parse_json_body(actix_test::read_body(res).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(res).await.as_ref())
+            .expect("response must contain valid JSON"),
     }
 }
 

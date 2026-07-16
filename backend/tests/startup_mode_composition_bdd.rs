@@ -15,6 +15,7 @@ declare_test_support!(
     atexit_cleanup,
     cluster_skip,
     embedded_postgres,
+    flow_helpers,
     fixture_auth,
     session_middleware,
 );

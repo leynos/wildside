@@ -178,7 +178,8 @@ where
     Snapshot {
         status: response.status().as_u16(),
         trace_id,
-        body: parse_json_body(actix_test::read_body(response).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(response).await.as_ref())
+            .expect("users response must contain valid JSON"),
     }
 }
 
