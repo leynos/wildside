@@ -64,7 +64,7 @@ pub struct ExampleDataSeedingWorld {
 impl ExampleDataSeedingWorld {
     fn setup_fresh_database(&self) {
         // Resolve the stable cluster environment (which performs `set_var`)
-        // before constructing the Tokio runtime. `Runtime::new()` spawns worker
+        // before constructing the Tokio runtime, which spawns worker
         // threads, and `std::env::set_var` is undefined behaviour once other
         // threads exist, so the environment must be reconciled first.
         ensure_stable_cluster_environment();

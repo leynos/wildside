@@ -68,8 +68,9 @@ struct TestContext {
 type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> Result<TestContext, String> {
-    let runtime = Runtime::new().map_err(|e| e.to_string())?;
+    // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
     ensure_stable_cluster_environment();
+    let runtime = Runtime::new().map_err(|e| e.to_string())?;
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|e| e.to_string())?;
 

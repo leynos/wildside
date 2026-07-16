@@ -39,9 +39,10 @@ impl OverpassEnrichmentWorld {
         config: OverpassEnrichmentWorkerConfig,
         source_data: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
     ) {
+        // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+        ensure_stable_cluster_environment();
         let runtime = Runtime::new().expect("create runtime");
 
-        ensure_stable_cluster_environment();
         let cluster = match shared_cluster_handle() {
             Ok(cluster) => cluster,
             Err(reason) => {

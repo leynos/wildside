@@ -55,9 +55,10 @@ struct ExampleDataRunsWorld {
 
 impl ExampleDataRunsWorld {
     fn setup_fresh_database(&self) {
+        // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+        ensure_stable_cluster_environment();
         let runtime = Runtime::new().expect("create runtime");
 
-        ensure_stable_cluster_environment();
         let cluster = match shared_cluster_handle() {
             Ok(c) => c,
             Err(reason) => {

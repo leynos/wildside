@@ -267,6 +267,15 @@ static STABLE_ENV_INIT: std::sync::OnceLock<String> = std::sync::OnceLock::new()
 /// lives in `resolve_stable_env` so tests can exercise the first-call logic
 /// directly, separately from the cached-reuse path.
 ///
+/// # Ordering invariant
+///
+/// On its first call this helper may invoke `std::env::set_var`, which is
+/// undefined behaviour once other threads exist. Every test setup path **must**
+/// call `ensure_stable_cluster_environment` before constructing a Tokio runtime
+/// (`Runtime::new` spawns worker threads). Concretely, place this call above the
+/// first runtime construction in each setup function; do not defer it until
+/// after a runtime — or a runtime-owning fixture — has been created.
+///
 /// `postgresql_embedded::Settings::default()` generates a random password on
 /// each call. When the data directory already exists, `setup()` skips `initdb`,
 /// leaving the cluster configured with the *original* password. Without a

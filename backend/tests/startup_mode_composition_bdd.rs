@@ -20,6 +20,7 @@ declare_test_support!(
     session_middleware,
 );
 
+use support::atexit_cleanup::ensure_stable_cluster_environment;
 use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::drop_users_table;
 
@@ -44,8 +45,11 @@ const FIXTURE_PROFILE_NAME: &str = "Ada Lovelace";
 
 #[fixture]
 fn world() -> World {
+    // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+    ensure_stable_cluster_environment();
+    let runtime = Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime for BDD scenario"));
     World {
-        runtime: Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime for BDD scenario")),
+        runtime,
         db: None,
         seeded_route_id: None,
         login: None,
