@@ -96,17 +96,22 @@ fn repair_password_file_state(
         return Ok(());
     }
 
-    install_dir.remove_file(Path::new(".pgpass"))?;
-
+    // Clean the stale data directory before removing `.pgpass`. If the data
+    // cleanup fails, this returns early with the error and leaves `.pgpass` in
+    // place so a subsequent retry still detects the stale state; deleting
+    // `.pgpass` first would let a retry short-circuit as "nothing to repair"
+    // while the data directory stayed orphaned.
     if paths.should_remove_data_dir {
         // Open the data parent only when there is a default data directory to
         // delete. An absent parent means the directory never existed, so it is
-        // a quiet no-op rather than a reason to skip the `.pgpass` cleanup that
-        // has already happened above.
+        // a quiet no-op rather than a reason to skip the `.pgpass` cleanup
+        // below.
         if let Some(data_parent) = open_dir_if_exists(&paths.data_parent)? {
             remove_dir_if_exists(&data_parent, &paths.data_name)?;
         }
     }
+
+    install_dir.remove_file(Path::new(".pgpass"))?;
 
     Ok(())
 }
@@ -178,6 +183,40 @@ mod tests {
             // absent path in `paths` is what the repair actually resolves.
             let data_parent =
                 Dir::open_ambient_dir(sandbox.path(), ambient_authority()).expect("open sandbox");
+
+            Self {
+                _sandbox: sandbox,
+                install_dir,
+                data_parent,
+                paths: PasswordStatePaths {
+                    install_dir: install_path,
+                    data_parent: data_parent_path,
+                    data_name: PathBuf::from("data"),
+                    should_remove_data_dir: true,
+                },
+            }
+        }
+
+        /// Build a fixture whose data entry is a regular file, not a directory.
+        ///
+        /// Removing it via `remove_dir_all` then fails with a non-NotFound error
+        /// (ENOTDIR), exercising the path where data cleanup fails while the
+        /// stale `.pgpass` must remain in place for a retry.
+        fn with_data_entry_as_file() -> Self {
+            let sandbox = tempfile::tempdir().expect("tempdir");
+            let install_path = sandbox.path().join("install");
+            let data_parent_path = sandbox.path().join("data-parent");
+            Dir::create_ambient_dir_all(&install_path, ambient_authority())
+                .expect("create install dir");
+            Dir::create_ambient_dir_all(&data_parent_path, ambient_authority())
+                .expect("create data parent");
+            let install_dir =
+                Dir::open_ambient_dir(&install_path, ambient_authority()).expect("open install");
+            let data_parent = Dir::open_ambient_dir(&data_parent_path, ambient_authority())
+                .expect("open data parent");
+            // The "data" entry is a file, so `remove_dir_all` fails with a
+            // non-NotFound error rather than deleting a directory.
+            data_parent.write("data", b"x").expect("write data file");
 
             Self {
                 _sandbox: sandbox,
@@ -273,6 +312,28 @@ mod tests {
         assert!(
             !fixture.install_dir.exists(".pgpass"),
             "the stale password file should be removed despite the absent data parent"
+        );
+    }
+
+    #[test]
+    fn repair_keeps_pgpass_when_data_cleanup_fails() {
+        // When the data-directory removal fails, `.pgpass` must remain so a
+        // retry still detects the stale state. Cleaning the data directory
+        // before deleting `.pgpass` keeps the repair retryable.
+        let fixture = PasswordStateFixture::with_data_entry_as_file();
+        fixture.write_pgpass(b"old-password");
+
+        let error =
+            repair_password_file_state(b"new-password", &fixture.install_dir, &fixture.paths)
+                .expect_err("data cleanup failure must propagate");
+        assert_ne!(
+            error.kind(),
+            io::ErrorKind::NotFound,
+            "a failed data removal must surface as a real error"
+        );
+        assert!(
+            fixture.install_dir.exists(".pgpass"),
+            "the stale password file must remain so the repair stays retryable"
         );
     }
 
