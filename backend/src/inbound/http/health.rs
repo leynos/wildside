@@ -41,7 +41,7 @@ fn probe_response(check_name: &'static str, probe_ok: bool) -> HttpResponse {
         .json(HealthProbeBody::new(check_name, probe_ok))
 }
 
-/// Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.
+/// Readiness probe. Return 200 when dependencies are initialized and the server can handle traffic; return 503 otherwise.
 #[utoipa::path(
     get,
     path = "/health/ready",

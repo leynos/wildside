@@ -45,7 +45,7 @@ fn is_foreign_key_message(message: &str) -> bool {
 ///
 /// Identifies route FK violations by inspecting the constraint name (when
 /// available) and the error message for route-id-related constraints.
-/// Unrecognised FK violations are logged for monitoring.
+/// Unrecognized FK violations are logged for monitoring.
 fn map_foreign_key_violation(
     message: &str,
     constraint_name: Option<&str>,
@@ -63,7 +63,7 @@ fn map_foreign_key_violation(
     if references_route_fk {
         RouteAnnotationRepositoryError::route_not_found("referenced route".to_string())
     } else {
-        // Log unrecognised FK violations for monitoring; may indicate new FK
+        // Log unrecognized FK violations for monitoring; may indicate new FK
         // constraints that need specific handling.
         warn!(
             message,

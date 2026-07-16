@@ -2,7 +2,7 @@
 //!
 //! Responsibilities:
 //! - validate upgrade requests (origin allow-list)
-//! - initialise the per-connection WebSocket handler
+//! - initialize the per-connection WebSocket handler
 //! - keep WebSocket-specific concerns at the edge of the system
 
 use actix_web::rt;

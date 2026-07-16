@@ -156,7 +156,7 @@ Acceptance criteria:
 - If a migration step fails validation, revert the uncommitted hunk and rerun
   targeted tests before full gateways.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Current gate logs:
 

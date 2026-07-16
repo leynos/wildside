@@ -109,7 +109,7 @@ cleanup_download_work_dir() {
 #
 # Returns:
 #   0 on success, exits non-zero for non-numeric versions.
-normalise_version() {
+normalize_version() {
   local raw_version="${PG_EMBEDDED_VERSION:-${POSTGRESQL_VERSION:-16.10.0}}"
   local version_pattern='^[0-9]+[.][0-9]+[.][0-9]+$'
   raw_version="${raw_version#=}"
@@ -587,7 +587,7 @@ main() {
   local triple
   local version_dir
 
-  version="$(normalise_version)"
+  version="$(normalize_version)"
   root_dir="$(cache_dir)"
   triple="$(platform_triple)"
   version_dir="${root_dir}/${version}"

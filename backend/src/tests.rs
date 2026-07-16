@@ -1,4 +1,4 @@
-//! Tests for the backend application bootstrap, covering metrics initialisation
+//! Tests for the backend application bootstrap, covering metrics initialization
 //! and readiness signalling.
 
 #[cfg(feature = "metrics")]

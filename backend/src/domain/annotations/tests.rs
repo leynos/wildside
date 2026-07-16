@@ -51,7 +51,7 @@ fn route_note_builder() {
 }
 
 #[rstest]
-fn route_progress_new_initialises_empty() {
+fn route_progress_new_initializes_empty() {
     let route_id = Uuid::new_v4();
     let user_id = UserId::random();
     let progress = RouteProgress::new(route_id, user_id.clone());

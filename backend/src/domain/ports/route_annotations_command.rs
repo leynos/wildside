@@ -50,7 +50,7 @@ pub struct UpsertNoteResponse {
 pub struct DeleteNoteRequest {
     /// The note's unique identifier.
     pub note_id: Uuid,
-    /// The user requesting deletion (for authorisation).
+    /// The user requesting deletion (for authorization).
     pub user_id: UserId,
     /// Optional idempotency key for safe retries.
     pub idempotency_key: Option<IdempotencyKey>,
@@ -134,7 +134,7 @@ pub trait RouteAnnotationsCommand: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - The user is not authorised to delete the note.
+    /// - The user is not authorized to delete the note.
     /// - The idempotency key was used with a different payload (conflict).
     /// - A database or connection error occurs.
     async fn delete_note(&self, request: DeleteNoteRequest) -> Result<DeleteNoteResponse, Error>;

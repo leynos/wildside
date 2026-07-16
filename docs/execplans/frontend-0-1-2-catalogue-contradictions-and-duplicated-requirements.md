@@ -264,7 +264,7 @@ rather than rewritten. The Decision Log captures the convention.
 
 ## Progress
 
-Use a list with checkboxes to summarise granular steps. Every stopping point
+Use a list with checkboxes to summarize granular steps. Every stopping point
 must be documented here, even if it requires splitting a partially completed
 task into two ("done" vs. "remaining"). This section must always reflect the
 actual current state of the work.
@@ -305,7 +305,7 @@ actual current state of the work.
   proceeding to the next milestone.
 - [ ] Stage D.4 — Mark roadmap item 0.1.2 as done in
   `docs/frontend-roadmap.md`. Commit and push.
-- [ ] Stage D.5 — Update PR description with completion notes, summarise
+- [ ] Stage D.5 — Update PR description with completion notes, summarize
   outcomes here, and move the ExecPlan status to COMPLETE.
 
 Progress notes:
@@ -661,7 +661,7 @@ choices.
   require their own resolution path.
   Rationale: without this axis, the Tailwind/DaisyUI stack drift seeds
   several findings whose lifecycle is dominated by an unrelated downstream
-  PR. The flag lets reviewers prioritise durable findings and lets a single
+  PR. The flag lets reviewers prioritize durable findings and lets a single
   v2a-migration sweep close the perishable ones in bulk.
   Date/Author: 2026-06-05, plan draft, after Logisphere panel review.
 
@@ -1097,7 +1097,7 @@ All steps are repeatable.
   `main`. If a force-push is needed, document the reason in the Decision
   Log first.
 
-## Artifacts and notes
+## Artefacts and notes
 
 The plan-time research dispatch surfaced an initial inventory of roughly 28
 candidate findings spanning schema-shape clashes (image alt localization,

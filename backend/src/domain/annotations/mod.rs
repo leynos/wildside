@@ -98,7 +98,7 @@ impl RouteNote {
     /// Create a new note with initial revision.
     ///
     /// Sets both `created_at` and `updated_at` to the current time and
-    /// initialises `revision` to 1.
+    /// initializes `revision` to 1.
     pub fn new(id: Uuid, route_id: Uuid, user_id: UserId, content: RouteNoteContent) -> Self {
         let now = Utc::now();
         Self {
@@ -306,7 +306,7 @@ pub struct RouteAnnotations {
 impl RouteProgress {
     /// Create new progress tracking with no visited stops.
     ///
-    /// Initialises with an empty `visited_stop_ids` list, revision 1, and the
+    /// Initializes with an empty `visited_stop_ids` list, revision 1, and the
     /// current timestamp.
     pub fn new(route_id: Uuid, user_id: UserId) -> Self {
         RouteProgressBuilder::new(route_id, user_id).build()

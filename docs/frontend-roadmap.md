@@ -374,7 +374,7 @@ informs every later feature review. See
 
 ## 2. Vertical slice 1: Catalogue-led onboarding and discovery
 
-Idea: if Welcome, Discover, Explore, and Customise can render from localized
+Idea: if Welcome, Discover, Explore, and Customize can render from localized
 catalogue entities with cached fallback data, Wildside proves the UI can move
 from mockup fixtures to backend-compatible projections before route generation
 is fully live.
@@ -411,7 +411,7 @@ Catalogue.
     Applications (ARIA) scaffolding.
   - See `docs/v2a-front-end-stack.md` §§Localization stack and Data model-driven
     card architecture; `docs/wildside-pwa-design.md` §§Internationalization and
-    Locale normalisation and RTL; and
+    Locale normalization and RTL; and
     `docs/pure-accessible-and-localizable-react-components.md` §4.1.
   - Success: missing exact locales fall back predictably to `en-GB`, and RTL
     locales update document direction.
@@ -687,7 +687,7 @@ Client-Side Logic with XState.
     impossible combinations cannot render.
   - See `docs/pure-accessible-and-localizable-react-components.md` §2.2 and
     `docs/local-first-react.md` §§Orchestrating Complex Client-Side Logic with
-    XState and The Division of Labor.
+    XState and The Division of Labour.
   - Success: transition tests cover the user experience graph wizard edges
     without relying on incidental component state.
 
@@ -704,7 +704,7 @@ informs offline tile caching and navigation. See `docs/wildside-pwa-design.md`
   - Load MapLibre and CSS lazily, register RTL text support, and render an
     accessible fallback when WebGL or style loading fails.
   - See `docs/v2a-front-end-stack.md` §Map stack; `docs/wildside-pwa-design.md`
-    §§Map architecture and Locale normalisation and RTL; and
+    §§Map architecture and Locale normalization and RTL; and
     `docs/wildside-ux-state-graph-v0.1.json` states `map.canvas_error` and
     `map.location_denied`.
   - Success: map load failures do not block route details, stops, or notes.
@@ -895,7 +895,7 @@ and `docs/building-accessible-and-responsive-progressive-web-applications.md`
     `docs/building-accessible-and-responsive-progressive-web-applications.md`
     §1.1 and `docs/wildside-pwa-design.md` §Service worker, manifest, and
     caching strategy.
-  - Success: Lighthouse recognises the app as installable in a production
+  - Success: Lighthouse recognizes the app as installable in a production
     preview build.
 - [ ] 4.1.2. Add a service worker with app-shell precache and navigation
       fallback.

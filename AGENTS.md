@@ -65,7 +65,7 @@
   - New functionality or behaviour changes are fully validated by relevant unit
     and behavioural tests.
   - Bug fixes include a failing test before the fix and a passing test
-    afterward.
+    afterwards.
   - Code passes lint checks.
   - Formatting is correct and validated.
 - **For Python files:**
@@ -79,7 +79,7 @@
   - **Mermaid diagrams:** Passes validation using nixie (`make nixie`).
 - **Committing:**
   - Only changes that meet all quality gates should be committed.
-  - Write clear, descriptive commit messages that summarise the change,
+  - Write clear, descriptive commit messages that summarize the change,
     following:
     - **Imperative mood** in the subject line (for example, "Fix bug", "Add feature").
     - **Subject line length:** around 50 characters or fewer.
@@ -223,6 +223,22 @@ The following tooling is available in this environment:
 - `checkmake` — Linter for `Makefile`s, ensuring best practices.
 - `srgn` — Structural grep and syntax-tree pattern editing.
 - `difft` **(Difftastic)** — Semantic diff tool that compares code structure.
+
+## Spelling policy
+
+- `make markdownlint` also enforces en-GB-oxendict spelling with the pinned
+  `typos` release.
+- `typos.toml` is generated. Edit `typos.local.toml` for narrow repository
+  terminology, then run `make spelling-config-write`; never edit generated
+  entries by hand.
+- The configuration builder refreshes the untracked shared dictionary cache
+  only when the authoritative copy is newer. `make spelling-config` verifies
+  the tracked output without replacing it.
+- The standalone Python 3.13-compatible phrase checker is an explicit
+  exception to the repository's usual script conventions.
+- Preserve external APIs, identifiers, fixtures, snapshots, formal names and
+  serialized values. Put quoted prose and identifiers in backticks or fenced
+  blocks where possible rather than weakening the shared policy.
 
 ## Key takeaway
 

@@ -3,11 +3,11 @@
  *
  * Provides the audit pipeline's JSON parsing, PNPM command execution, installed
  * package-version collection, bulk-advisory fallback, and advisory flattening
- * utilities. Pure helpers accept parsed JSON-shaped objects and return normalised
+ * utilities. Pure helpers accept parsed JSON-shaped objects and return normalized
  * maps or arrays; effectful helpers cross the IO boundary through `auditIo`,
  * whose default implementation wraps filesystem, CLI, timer, and fetch effects.
  * `audit-reporting.js` owns advisory partitioning and stderr formatting, while
- * `validate-audit.js` applies policy to these normalised audit results. Callers
+ * `validate-audit.js` applies policy to these normalized audit results. Callers
  * can assume exported helpers either return parsed audit data in the documented
  * shapes or throw explicit errors for failed, signalled, malformed, or
  * unavailable audit inputs.
@@ -95,7 +95,7 @@ function normalizeRegistryUrl(rawRegistry) {
 
 /** Read the npm registry URL from the environment or pnpm config.
  * @param {object} [auditIo=defaultAuditIo] Audit IO adapter; `defaultAuditIo` is used when omitted.
- * @returns {string} Normalised registry URL, or the npm default when lookup fails.
+ * @returns {string} Normalized registry URL, or the npm default when lookup fails.
  * @example // With `npm_config_registry=https://registry.npmjs.org`: readRegistryUrl(); // 'https://registry.npmjs.org/'
  * @example const auditIo = { ...defaultAuditIo, getEnv: () => undefined, execFileSync: () => 'https://registry.npmjs.org\n' }; readRegistryUrl(auditIo); // 'https://registry.npmjs.org/'
  */

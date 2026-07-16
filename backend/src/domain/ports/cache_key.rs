@@ -12,7 +12,7 @@ const COORDINATE_PRECISION_FACTOR: f64 = 100_000.0;
 const SORTED_ARRAY_KEYS: &[&str] = &["themes", "themeIds", "interestThemeIds"];
 const ROUNDED_COORDINATE_KEYS: &[&str] = &["lat", "lng", "lon", "latitude", "longitude"];
 
-/// Cache key used to store and retrieve canonicalised route plans.
+/// Cache key used to store and retrieve canonicalized route plans.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RouteCacheKey(String);
 

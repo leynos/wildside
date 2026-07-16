@@ -59,7 +59,7 @@ impl std::fmt::Display for UnitSystem {
 /// Error returned when parsing an unknown unit system string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseUnitSystemError {
-    /// The unrecognised input value.
+    /// The unrecognized input value.
     pub input: String,
 }
 
@@ -128,7 +128,7 @@ pub struct UserPreferences {
 impl UserPreferences {
     /// Create a new preferences instance with default values.
     ///
-    /// Initialises with empty theme and safety selections, metric units,
+    /// Initializes with empty theme and safety selections, metric units,
     /// revision 1, and the current timestamp.
     pub fn new_default(user_id: UserId) -> Self {
         UserPreferencesBuilder::new(user_id).build()

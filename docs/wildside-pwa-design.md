@@ -31,7 +31,7 @@ In scope:
 
 Out of scope:
 
-- Backend route-generation algorithm details (scoring, optimisation).
+- Backend route-generation algorithm details (scoring, optimization).
 - Backend infrastructure and deployment specifics beyond client-facing
   contracts.
 - Extract–Transform–Load (ETL) details for ingestion pipelines.
@@ -54,7 +54,7 @@ review checklist.
    - Introduce schema validation for network boundaries (Zod) at the fetch
      boundary.
 3. **Local-first data layer**
-   - TanStack Query is the primary server-state cache and synchronisation
+   - TanStack Query is the primary server-state cache and synchronization
      engine.
    - Query cache persistence to IndexedDB is enabled and treated as a normal
      part of runtime (not a dev-only feature).
@@ -64,7 +64,7 @@ review checklist.
        Storage via a Service Worker).
 4. **Feature flows**
    - Implement the core mockup flows as feature modules:
-     Explore/Discover → Customise → Map → Wizard → Completion → Offline/Safety.
+     Explore/Discover → Customize → Map → Wizard → Completion → Offline/Safety.
    - Each feature is UI-driven by the data model; fixtures are replaced by
      backend responses without reworking components.
 5. **PWA hardening**
@@ -84,7 +84,7 @@ Wildside’s frontend follows “local-first” principles:
 
 - The UI renders from local state first.
 - The network is treated as optional and unreliable.
-- Synchronisation is explicit and observable (not “magic”).
+- Synchronization is explicit and observable (not “magic”).
 
 At a high level:
 
@@ -127,7 +127,7 @@ Proposed `frontend-pwa/src` shape:
 - `src/app/providers/`
   - `query-client.tsx`: QueryClient creation, persistence wiring, devtools.
   - `theme-provider.tsx`: theme selection and `data-theme` toggling.
-  - `i18n-provider.tsx`: i18next initialisation and language switching.
+  - `i18n-provider.tsx`: i18next initialization and language switching.
 - `src/app/layout/`
   - `mobile-shell.tsx`: safe-area padding, skip link, shared header/footer.
   - `app-header.tsx`: shared top bar with navigation and contextual actions.
@@ -252,11 +252,11 @@ In practice:
 - UI registries (where appropriate) store stable IDs and Fluent keys rather
   than hard-coded strings.
 
-### Locale normalisation and RTL
+### Locale normalization and RTL
 
 The PWA should treat locale tags as user input:
 
-- Normalise language tags to a supported `LocaleCode` set.
+- Normalize language tags to a supported `LocaleCode` set.
 - Default to `en-GB` when an unsupported tag is supplied.
 - Prefer CSS logical properties (`margin-inline`, `padding-inline`, etc.) so
   RTL does not require duplicated markup.
@@ -320,7 +320,7 @@ Wildside uses an explicit outbox table for offline writes:
 - Each outbound write carries `Idempotency-Key = outboxItem.id`, allowing safe
   retries.
 
-This design keeps the UI responsive offline and keeps synchronisation
+This design keeps the UI responsive offline and keeps synchronization
 observable and testable.
 
 ### Offline bundles and tiles
@@ -412,7 +412,7 @@ In practice, this means:
 - Treat “no `data-testid` in tests” as a default lint/CI rule, with narrowly
   scoped exceptions when semantics are genuinely absent.
 - Ensure at least one locale-switching regression test exists for each major
-  registry-driven surface (for example, Discover, Customise, Wizard).
+  registry-driven surface (for example, Discover, Customize, Wizard).
 
 For concrete patterns and harness guidance, use:
 

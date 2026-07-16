@@ -22,7 +22,7 @@ import { VALIDATOR_ADVISORY_ID, VALIDATOR_MIN_SAFE_VERSION } from '../../securit
 import { isValidatorPatched } from '../../security/validator-patch.js';
 import packageJson from '../package.json' with { type: 'json' };
 
-const normalise = (path) =>
+const normalize = (path) =>
   typeof realpathSync.native === 'function' ? realpathSync.native(path) : realpathSync(path);
 
 const frontendPackageName = packageJson.name;
@@ -33,7 +33,7 @@ const workspaceKeys = new Set([
     : frontendPackageName,
 ]);
 const unexpectedHeading = 'Unexpected vulnerabilities detected by pnpm audit:';
-// biome-ignore lint/style/useNamingConvention: constant emphasises unit size.
+// biome-ignore lint/style/useNamingConvention: constant emphasizes unit size.
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function buildLedgerMaps(workspaceKeys, auditEntries, referenceDate) {
@@ -164,7 +164,7 @@ function isExecutedDirectly(meta) {
   try {
     const scriptPath = fileURLToPath(meta.url);
     const absoluteInvokedPath = resolve(invokedPath);
-    return normalise(scriptPath) === normalise(absoluteInvokedPath);
+    return normalize(scriptPath) === normalize(absoluteInvokedPath);
   } catch {
     return false;
   }

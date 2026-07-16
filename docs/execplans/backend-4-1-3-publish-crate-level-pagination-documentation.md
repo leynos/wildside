@@ -261,7 +261,7 @@ Hand-off order:
 
 1. **Expanded crate-level documentation** (`lib.rs`): Added four comprehensive
    sections (ordering requirements, default/maximum limits, error mapping
-   guidelines, scope boundaries) totaling ~100 lines of documentation. Final
+   guidelines, scope boundaries) totalling ~100 lines of documentation. Final
    line count: 167 lines.
 
 2. **Enhanced module-level documentation**: Expanded `//!` comments in
@@ -688,7 +688,7 @@ because they are comments rather than code. The embedded Postgres tests (if any
 run as part of `make test`) use temporary data directories that are cleaned up
 automatically.
 
-## Artifacts and notes
+## Artefacts and notes
 
 ### Expected documentation structure in `lib.rs`
 

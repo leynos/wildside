@@ -535,7 +535,7 @@ make nixie
 - The embedded Postgres tests (if any) use temporary data directories that are
   cleaned up automatically.
 
-## Artifacts and notes
+## Artefacts and notes
 
 ### Expected test output
 

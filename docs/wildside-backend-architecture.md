@@ -51,7 +51,7 @@ components and interactions:
 - **Observability Stack:** Monitoring and logging components including
   Prometheus (metrics), Loki (logs via FluentBit), Grafana (dashboards), and
   PostHog (analytics) ensure full visibility into system
-  behavior([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L50-L58)).
+  behaviour([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L50-L58)).
 
 All these pieces communicate primarily through well-defined interfaces
 (HTTP/HTTPS, WebSocket, PostgreSQL-backed job tables for Apalis queueing, and
@@ -69,7 +69,7 @@ dependencies)([2](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2
 The domain defines abstract interfaces (ports) for external interactions like
 persistence, caching, or messaging. Surrounding this, infrastructure and
 framework-specific code (adapters) implement these interfaces – for example,
-the database adapter uses Diesel to fulfill the persistence port, and the web
+the database adapter uses Diesel to fulfil the persistence port, and the web
 API layer (Actix Web controllers) acts as an adapter converting HTTP requests
 into domain service calls. This design prevents business logic from depending
 on details of Actix, Diesel, or other external tools. It also simplifies
@@ -95,7 +95,7 @@ etc.([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11f
 )(
 [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L727-L735)).
 Additionally, the backend emits high-level **analytics events** to **PostHog**
-to track user behavior (for example, when a route is generated or a POI is
+to track user behaviour (for example, when a route is generated or a POI is
 viewed)(
 [1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L88-L95)).
 This observability stack ensures that developers and operators can monitor
@@ -473,7 +473,7 @@ stability.
 | `GET`    | `/api/v1/catalogue/explore`             | Fetch the Explore catalogue snapshot.                                                                                                                                                                        | Session cookie       |
 | `GET`    | `/api/v1/catalogue/descriptors`         | Fetch descriptor registries (tags, badges, safety).                                                                                                                                                          | Session cookie       |
 | `GET`    | `/api/v1/admin/enrichment/provenance`   | List persisted enrichment provenance rows with `limit` and `before` query params. Returns `{ records, nextBefore? }`, `400` for validation failures, and `503` when the reporting repository is unavailable. | Admin session cookie |
-| `POST`   | `/api/v1/routes`                        | Request generation of a personalised walking route.                                                                                                                                                          | Session cookie       |
+| `POST`   | `/api/v1/routes`                        | Request generation of a personalized walking route.                                                                                                                                                          | Session cookie       |
 | `GET`    | `/api/v1/routes/{request_id}`           | Poll for completion or fetch a generated route.                                                                                                                                                              | Session cookie       |
 | `GET`    | `/api/v1/routes/{route_id}`             | Fetch a generated route plan by ID.                                                                                                                                                                          | Session cookie       |
 | `GET`    | `/api/v1/routes/{route_id}/annotations` | Fetch notes and progress for a route.                                                                                                                                                                        | Session cookie       |
@@ -526,7 +526,7 @@ below:
   existing payload with different parameters. Keys are persisted in PostgreSQL
   for 24 hours (configurable via `IDEMPOTENCY_TTL_HOURS`) so retries survive
   restarts.
-- Standardised errors use the structure
+- Standardized errors use the structure
   `{ "error": { "code": "string", "message": "string", "trace_id": "uuid" } }`
   allowing clients to correlate failures with server logs.
 
@@ -1162,7 +1162,7 @@ state entirely client-side. The production configuration must observe the
 following rules:
 
 - Load the signing key from `SESSION_KEY_FILE`; require ≥64 bytes in release
-  builds and zeroise the raw bytes after deriving `Key`.
+  builds and zeroize the raw bytes after deriving `Key`.
 - Abort start-up unless a key is available. Development builds may fall back
   to an ephemeral key; release builds require `SESSION_ALLOW_EPHEMERAL=0` and
   fail fast if the toggle is missing or malformed.
@@ -1644,7 +1644,7 @@ For example, when a route is successfully created, the system (or client) could
 send a PostHog event “RouteGenerated” with properties like the number of POIs
 in the route, the total distance, the categories of POIs included,
 etc.([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L260-L265)).
-This helps the team analyze what kinds of routes are popular and adjust the
+This helps the team analyse what kinds of routes are popular and adjust the
 engine’s heuristics over time.
 
 In logs, because the engine runs inside a job which is traced, we include the
@@ -1662,7 +1662,7 @@ user data, routes, and enrichment provenance.
 
 #### Schema Overview
 
-The diagram below summarises the core entities and relationships. PostGIS types
+The diagram below summarizes the core entities and relationships. PostGIS types
 are annotated using Mermaid-friendly labels; the actual schema uses the
 canonical `GEOGRAPHY` and `GEOMETRY` column declarations.
 
@@ -2150,7 +2150,7 @@ providers.
 
 #### Implementation Tasks
 
-- [ ] Build or customise a Martin container image bundling `config.yaml`.
+- [ ] Build or customize a Martin container image bundling `config.yaml`.
 - [ ] Add Kubernetes manifests for the Deployment, Service, and IngressRoute.
 - [ ] Provision the read-only Postgres role and rotate credentials via
       Secrets.
@@ -2497,7 +2497,7 @@ entire flow: e.g. “HTTP POST /routes” → “Enqueued GenerateRouteJob [id=a
 “WebSocket event sent to user”. We also log important events with structured
 fields. For example, if route generation fails due to a specific error, we log
 an error with fields like `error.kind = "NoPOIsFound"`, `request_id = ...`,
-`user_id = ...`. This structured approach makes it easier to filter and analyze
+`user_id = ...`. This structured approach makes it easier to filter and analyse
 logs in **Loki** (our log aggregation system, fed via
 FluentBit)([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L50-L58)).
 Logs are kept relatively concise but with enough context to diagnose issues.
@@ -2564,7 +2564,7 @@ events, we fire PostHog events. For example, after successfully creating a user
 account, we might send a `UserSignedUp` event. After a route is generated, a
 `RouteGenerated` event with properties (route length, POI count, etc.) is
 sent([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L260-L265)).
-PostHog captures these events for analysis of user behavior. We ensure not to
+PostHog captures these events for analysis of user behaviour. We ensure not to
 send personally identifiable information without consent – events are either
 anonymous or use a user ID that PostHog can map (depending on our privacy
 approach). The integration is done either by backend sending an HTTP request to
@@ -2606,7 +2606,7 @@ observability like Actix’s performance counters or Diesel’s trace feature to
 fine-tune queries. We also have extensive tests (unit tests for domain with
 mocked ports, integration tests hitting the API and checking DB state) to
 ensure correctness. These are part of the pipeline but also serve as an
-executable spec of the system’s behavior.
+executable spec of the system’s behaviour.
 
 In conclusion, each component of Wildside’s backend is built to be observable:
 from an HTTP request down to a DB query, we can trace what happened, measure

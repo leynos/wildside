@@ -1,6 +1,6 @@
 //! Declarative macro for generating recording test doubles.
 //!
-//! This macro standardises the boilerplate for recording calls and returning
+//! This macro standardizes the boilerplate for recording calls and returning
 //! configured responses in adapter guardrails tests.
 
 macro_rules! recording_double {

@@ -112,7 +112,7 @@ impl TryFrom<LoginRequest> for LoginCredentials {
 
 /// Authenticate user and establish a session.
 ///
-/// Uses the centralised `Error` type so clients get a consistent
+/// Uses the centralized `Error` type so clients get a consistent
 /// error schema across all endpoints.
 #[utoipa::path(
     post,
@@ -206,7 +206,7 @@ fn map_interests_request_error(err: InterestsRequestError) -> Error {
     responses(
         (status = 200, description = "Users", body = PaginatedUsersResponse),
         (status = 400, description = "Invalid request", body = ErrorSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 403, description = "Forbidden", body = ErrorSchema),
         (status = 404, description = "Not found", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
@@ -235,7 +235,7 @@ pub async fn list_users(
     path = "/api/v1/users/me",
     responses(
         (status = 200, description = "User profile", body = UserSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
     tags = ["users"],
@@ -260,7 +260,7 @@ pub async fn current_user(
     responses(
         (status = 200, description = "Updated interests", body = UserInterestsSchema),
         (status = 400, description = "Invalid request", body = ErrorSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 409, description = "Conflict", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),

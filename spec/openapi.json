@@ -1,9 +1,247 @@
 {
   "components": {
     "schemas": {
+      "BoundsBody": {
+        "description": "Bounds payload for offline bundle requests and responses.",
+        "properties": {
+          "maxLat": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxLng": {
+            "format": "double",
+            "type": "number"
+          },
+          "minLat": {
+            "format": "double",
+            "type": "number"
+          },
+          "minLng": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "minLng",
+          "minLat",
+          "maxLng",
+          "maxLat"
+        ],
+        "type": "object"
+      },
+      "CreateWalkSessionRequestBody": {
+        "description": "Request payload for creating a walk session.",
+        "properties": {
+          "endedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "highlightedPoiIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "primaryStats": {
+            "items": {
+              "$ref": "#/components/schemas/WalkPrimaryStatBody"
+            },
+            "type": "array"
+          },
+          "routeId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "secondaryStats": {
+            "items": {
+              "$ref": "#/components/schemas/WalkSecondaryStatBody"
+            },
+            "type": "array"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "routeId",
+          "startedAt",
+          "primaryStats",
+          "secondaryStats",
+          "highlightedPoiIds"
+        ],
+        "type": "object"
+      },
+      "CreateWalkSessionResponseBody": {
+        "description": "Response payload for walk session creation.",
+        "properties": {
+          "completionSummary": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WalkCompletionSummaryResponseBody"
+              }
+            ]
+          },
+          "sessionId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "type": "object"
+      },
+      "DeleteOfflineBundleResponseBody": {
+        "description": "Response payload for deleting an offline bundle.",
+        "properties": {
+          "bundleId": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bundleId",
+          "replayed"
+        ],
+        "type": "object"
+      },
+      "DescriptorsResponse": {
+        "description": "Response payload for the descriptor registries snapshot.",
+        "properties": {
+          "badges": {
+            "description": "Badge descriptors.",
+            "items": {},
+            "type": "array"
+          },
+          "generatedAt": {
+            "description": "ISO 8601 timestamp when the snapshot was assembled.",
+            "example": "2026-01-15T12:00:00Z",
+            "type": "string"
+          },
+          "interestThemes": {
+            "description": "Interest theme descriptors.",
+            "items": {},
+            "type": "array"
+          },
+          "safetyPresets": {
+            "description": "Safety preset descriptors.",
+            "items": {},
+            "type": "array"
+          },
+          "safetyToggles": {
+            "description": "Safety toggle descriptors.",
+            "items": {},
+            "type": "array"
+          },
+          "tags": {
+            "description": "Tag descriptors.",
+            "items": {},
+            "type": "array"
+          }
+        },
+        "required": [
+          "generatedAt",
+          "tags",
+          "badges",
+          "safetyToggles",
+          "safetyPresets",
+          "interestThemes"
+        ],
+        "type": "object"
+      },
+      "EnrichmentProvenanceRecordBody": {
+        "description": "JSON record payload for admin enrichment provenance reporting.",
+        "properties": {
+          "boundingBox": {
+            "$ref": "#/components/schemas/ProvenanceBoundsBody"
+          },
+          "importedAt": {
+            "type": "string"
+          },
+          "sourceUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceUrl",
+          "importedAt",
+          "boundingBox"
+        ],
+        "type": "object"
+      },
+      "ExploreCatalogueResponse": {
+        "description": "Response payload for the explore catalogue snapshot.",
+        "properties": {
+          "categories": {
+            "description": "Route categories for browse navigation.",
+            "items": {},
+            "type": "array"
+          },
+          "collections": {
+            "description": "Curated route collections.",
+            "items": {},
+            "type": "array"
+          },
+          "communityPick": {
+            "description": "Current community pick, if any."
+          },
+          "generatedAt": {
+            "description": "ISO 8601 timestamp when the snapshot was assembled.",
+            "example": "2026-01-15T12:00:00Z",
+            "type": "string"
+          },
+          "routes": {
+            "description": "Route summaries for listing cards.",
+            "items": {},
+            "type": "array"
+          },
+          "themes": {
+            "description": "Thematic groupings.",
+            "items": {},
+            "type": "array"
+          },
+          "trending": {
+            "description": "Trending route highlights.",
+            "items": {},
+            "type": "array"
+          }
+        },
+        "required": [
+          "generatedAt",
+          "categories",
+          "routes",
+          "themes",
+          "collections",
+          "trending"
+        ],
+        "type": "object"
+      },
       "InterestsRequest": {
         "description": "Interest theme update payload for `PUT /api/v1/users/me/interests`.",
         "properties": {
+          "expectedRevision": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "interestThemeIds": {
             "items": {
               "type": "string"
@@ -14,6 +252,76 @@
         },
         "required": [
           "interestThemeIds"
+        ],
+        "type": "object"
+      },
+      "ListEnrichmentProvenanceQuery": {
+        "description": "Query parameters for enrichment provenance reporting.",
+        "properties": {
+          "before": {
+            "description": "Optional exclusive cursor.\n\nAccepts either bare `RFC3339` or `RFC3339|UUID` for `(importedAt,id)`.\nBare timestamps are interpreted as `(timestamp, Uuid::max())`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "description": "Maximum number of rows to return. Defaults to 50, maximum 200.",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ListEnrichmentProvenanceResponseBody": {
+        "description": "Response payload for enrichment provenance reporting.",
+        "properties": {
+          "nextBefore": {
+            "description": "Exclusive `RFC3339|UUID` cursor for the next page.\n\nClients should round-trip this value into the `before` query\nparameter to continue pagination.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/EnrichmentProvenanceRecordBody"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "records"
+        ],
+        "type": "object"
+      },
+      "ListOfflineBundlesQuery": {
+        "description": "Query parameters for listing offline bundles.",
+        "properties": {
+          "deviceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ListOfflineBundlesResponseBody": {
+        "description": "Response payload for listing offline bundles.",
+        "properties": {
+          "bundles": {
+            "items": {
+              "$ref": "#/components/schemas/OfflineBundleResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "bundles"
         ],
         "type": "object"
       },
@@ -65,6 +373,134 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "OfflineBundleResponse": {
+        "description": "Response payload for an offline bundle manifest.",
+        "properties": {
+          "bounds": {
+            "$ref": "#/components/schemas/BoundsBody"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "estimatedSizeBytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "ownerUserId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "progress": {
+            "format": "float",
+            "type": "number"
+          },
+          "regionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "routeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "zoomRange": {
+            "$ref": "#/components/schemas/ZoomRangeBody"
+          }
+        },
+        "required": [
+          "id",
+          "deviceId",
+          "kind",
+          "bounds",
+          "zoomRange",
+          "estimatedSizeBytes",
+          "createdAt",
+          "updatedAt",
+          "status",
+          "progress"
+        ],
+        "type": "object"
+      },
+      "PaginatedUsersResponse": {
+        "description": "OpenAPI schema for the paginated users response envelope.",
+        "properties": {
+          "data": {
+            "description": "Users in stable `(createdAt, id)` order.",
+            "items": {
+              "$ref": "#/components/schemas/crate.domain.User"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Effective page size for this response.",
+            "example": 20,
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinksSchema",
+            "description": "Hypermedia links for page navigation."
+          }
+        },
+        "required": [
+          "data",
+          "limit",
+          "links"
+        ],
+        "type": "object"
+      },
+      "PaginationLinksSchema": {
+        "description": "OpenAPI schema for pagination links in `GET /api/v1/users` responses.",
+        "properties": {
+          "next": {
+            "description": "URL for the next page, when a following page exists.",
+            "example": "https://example.test/api/v1/users?limit=20&cursor=opaque",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prev": {
+            "description": "URL for the previous page, when an earlier page exists.",
+            "example": "https://example.test/api/v1/users?limit=20&cursor=opaque",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "self": {
+            "description": "Canonical URL for the current page.",
+            "example": "https://example.test/api/v1/users?limit=20",
+            "type": "string"
+          }
+        },
+        "required": [
+          "self"
+        ],
         "type": "object"
       },
       "PreferencesRequest": {
@@ -129,6 +565,34 @@
         },
         "required": [
           "visitedStopIds"
+        ],
+        "type": "object"
+      },
+      "ProvenanceBoundsBody": {
+        "description": "Bounds payload for one provenance record.",
+        "properties": {
+          "maxLat": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxLng": {
+            "format": "double",
+            "type": "number"
+          },
+          "minLat": {
+            "format": "double",
+            "type": "number"
+          },
+          "minLng": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "minLng",
+          "minLat",
+          "maxLng",
+          "maxLat"
         ],
         "type": "object"
       },
@@ -241,6 +705,89 @@
         ],
         "type": "object"
       },
+      "UpsertOfflineBundleRequestBody": {
+        "description": "Request payload for creating or updating an offline bundle manifest.",
+        "properties": {
+          "bounds": {
+            "$ref": "#/components/schemas/BoundsBody"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "estimatedSizeBytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "progress": {
+            "format": "float",
+            "type": "number"
+          },
+          "regionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "routeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "zoomRange": {
+            "$ref": "#/components/schemas/ZoomRangeBody"
+          }
+        },
+        "required": [
+          "id",
+          "deviceId",
+          "kind",
+          "bounds",
+          "zoomRange",
+          "estimatedSizeBytes",
+          "createdAt",
+          "updatedAt",
+          "status",
+          "progress"
+        ],
+        "type": "object"
+      },
+      "UpsertOfflineBundleResponseBody": {
+        "description": "Response payload for upserting an offline bundle.",
+        "properties": {
+          "bundle": {
+            "$ref": "#/components/schemas/OfflineBundleResponse"
+          },
+          "bundleId": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bundleId",
+          "replayed",
+          "bundle"
+        ],
+        "type": "object"
+      },
       "UserPreferencesResponse": {
         "description": "Response payload for user preferences.",
         "properties": {
@@ -267,11 +814,9 @@
             "type": "string"
           },
           "updatedAt": {
-            "format": "date-time",
             "type": "string"
           },
           "userId": {
-            "format": "uuid",
             "type": "string"
           }
         },
@@ -285,12 +830,120 @@
         ],
         "type": "object"
       },
-      "UsersListResponse": {
-        "items": {
-          "$ref": "#/components/schemas/crate.domain.User"
+      "WalkCompletionSummaryResponseBody": {
+        "description": "Completion summary payload returned when a walk is complete.",
+        "properties": {
+          "endedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "highlightedPoiIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "primaryStats": {
+            "items": {
+              "$ref": "#/components/schemas/WalkPrimaryStatBody"
+            },
+            "type": "array"
+          },
+          "routeId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "secondaryStats": {
+            "items": {
+              "$ref": "#/components/schemas/WalkSecondaryStatBody"
+            },
+            "type": "array"
+          },
+          "sessionId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          }
         },
-        "maxItems": 100,
-        "type": "array"
+        "required": [
+          "sessionId",
+          "userId",
+          "routeId",
+          "startedAt",
+          "endedAt",
+          "primaryStats",
+          "secondaryStats",
+          "highlightedPoiIds"
+        ],
+        "type": "object"
+      },
+      "WalkPrimaryStatBody": {
+        "description": "Primary walk statistic payload.",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "WalkSecondaryStatBody": {
+        "description": "Secondary walk statistic payload.",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ZoomRangeBody": {
+        "description": "Zoom payload for offline bundle requests and responses.",
+        "properties": {
+          "maxZoom": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minZoom": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minZoom",
+          "maxZoom"
+        ],
+        "type": "object"
       },
       "crate.domain.Error": {
         "description": "OpenAPI schema for [`crate::domain::Error`].\n\nAPI error response payload with machine-readable code and human-readable\nmessage.",
@@ -344,6 +997,12 @@
       "crate.domain.User": {
         "description": "OpenAPI schema for [`crate::domain::User`].\n\nApplication user with stable identifier and display name.",
         "properties": {
+          "createdAt": {
+            "description": "Creation timestamp used as the first users pagination key.",
+            "example": "2026-01-01T00:00:00Z",
+            "format": "date-time",
+            "type": "string"
+          },
           "displayName": {
             "description": "Display name shown to other users.\n\nSchema constraints: 3–32 characters, alphanumeric plus spaces and\nunderscores. The domain layer additionally validates that the value\nis non-empty when trimmed.",
             "example": "Ada Lovelace",
@@ -361,7 +1020,8 @@
         },
         "required": [
           "id",
-          "displayName"
+          "displayName",
+          "createdAt"
         ],
         "type": "object"
       },
@@ -376,6 +1036,12 @@
             "maxItems": 100,
             "type": "array"
           },
+          "revision": {
+            "description": "Shared aggregate revision after the interests update.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
           "userId": {
             "description": "Stable user identifier.",
             "example": "11111111-1111-1111-1111-111111111111",
@@ -385,7 +1051,8 @@
         },
         "required": [
           "userId",
-          "interestThemeIds"
+          "interestThemeIds",
+          "revision"
         ],
         "type": "object"
       }
@@ -410,9 +1077,226 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/enrichment/provenance": {
+      "get": {
+        "operationId": "listEnrichmentProvenance",
+        "parameters": [
+          {
+            "description": "Number of records to return, default 50, max 200",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Exclusive cursor RFC3339 or RFC3339|UUID for importedAt/id ordering; bare timestamps map to RFC3339|ffffffff-ffff-ffff-ffff-ffffffffffff",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEnrichmentProvenanceResponseBody"
+                }
+              }
+            },
+            "description": "Enrichment provenance records"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List persisted enrichment provenance records for admin reporting.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/catalogue/descriptors": {
+      "get": {
+        "description": "Return all descriptor registries for the Progressive Web App (PWA). Example request: GET /api/v1/catalogue/descriptors",
+        "operationId": "getDescriptors",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DescriptorsResponse"
+                }
+              }
+            },
+            "description": "Descriptor snapshot",
+            "headers": {
+              "Cache-Control": {
+                "description": "Cache control header",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Fetch the descriptor registries snapshot.",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/v1/catalogue/explore": {
+      "get": {
+        "description": "Return the explore catalogue snapshot for the Progressive Web App (PWA) landing page. Example request: GET /api/v1/catalogue/explore",
+        "operationId": "getExploreCatalogue",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExploreCatalogueResponse"
+                }
+              }
+            },
+            "description": "Catalogue snapshot",
+            "headers": {
+              "Cache-Control": {
+                "description": "Cache control header",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Fetch the explore catalogue snapshot.",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
     "/api/v1/login": {
       "post": {
-        "description": "Uses the centralised `Error` type so clients get a consistent\nerror schema across all endpoints.",
+        "description": "Uses the centralized `Error` type so clients get a consistent\nerror schema across all endpoints.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -469,6 +1353,283 @@
         ]
       }
     },
+    "/api/v1/offline/bundles": {
+      "get": {
+        "description": "# Examples\n```no_run\nuse backend::inbound::http::offline::ListOfflineBundlesQuery;\n\nlet query = ListOfflineBundlesQuery { device_id: Some(\"ios-iphone-15\".to_owned()) };\nlet expected_json_shape = r#\"{\"bundles\":[{\"id\":\"...\"}]}\"#;\nassert_eq!(query.device_id.as_deref(), Some(\"ios-iphone-15\"));\nassert!(expected_json_shape.contains(\"\\\"bundles\\\"\"));\n```",
+        "operationId": "listOfflineBundles",
+        "parameters": [
+          {
+            "description": "Client device identifier",
+            "in": "query",
+            "name": "deviceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListOfflineBundlesResponseBody"
+                }
+              }
+            },
+            "description": "Offline bundles"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List offline bundle manifests for the authenticated user and device.",
+        "tags": [
+          "offline"
+        ]
+      },
+      "post": {
+        "description": "# Examples\n```no_run\nlet idempotency_header = (\"Idempotency-Key\", \"550e8400-e29b-41d4-a716-446655440000\");\nlet request_json = r#\"{\"id\":\"...\",\"deviceId\":\"ios-iphone-15\",\"kind\":\"route\",\"routeId\":\"...\",\"regionId\":null}\"#;\nlet expected_json_shape = r#\"{\"bundleId\":\"...\",\"replayed\":false,\"bundle\":{\"id\":\"...\"}}\"#;\nassert_eq!(idempotency_header.0, \"Idempotency-Key\");\nassert!(request_json.contains(\"\\\"deviceId\\\"\"));\nassert!(expected_json_shape.contains(\"\\\"replayed\\\"\"));\n```",
+        "operationId": "upsertOfflineBundle",
+        "parameters": [
+          {
+            "description": "UUID for idempotent requests",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertOfflineBundleRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpsertOfflineBundleResponseBody"
+                }
+              }
+            },
+            "description": "Bundle upserted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create or update an offline bundle manifest.",
+        "tags": [
+          "offline"
+        ]
+      }
+    },
+    "/api/v1/offline/bundles/{bundle_id}": {
+      "delete": {
+        "description": "# Examples\n```no_run\nlet request_url = \"/api/v1/offline/bundles/00000000-0000-0000-0000-000000000101\";\nlet idempotency_header = (\"Idempotency-Key\", \"550e8400-e29b-41d4-a716-446655440000\");\nlet expected_json_shape = r#\"{\"bundleId\":\"...\",\"replayed\":false}\"#;\nassert!(request_url.contains(\"/api/v1/offline/bundles/\"));\nassert_eq!(idempotency_header.0, \"Idempotency-Key\");\nassert!(expected_json_shape.contains(\"\\\"bundleId\\\"\"));\n```",
+        "operationId": "deleteOfflineBundle",
+        "parameters": [
+          {
+            "description": "Offline bundle identifier",
+            "in": "path",
+            "name": "bundle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "UUID for idempotent requests",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteOfflineBundleResponseBody"
+                }
+              }
+            },
+            "description": "Bundle deleted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete an offline bundle manifest.",
+        "tags": [
+          "offline"
+        ]
+      }
+    },
     "/api/v1/routes/{route_id}/annotations": {
       "get": {
         "operationId": "getRouteAnnotations",
@@ -479,7 +1640,6 @@
             "name": "route_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           }
@@ -513,7 +1673,7 @@
                 }
               }
             },
-            "description": "Unauthorised"
+            "description": "Unauthorized"
           },
           "404": {
             "content": {
@@ -557,7 +1717,6 @@
             "name": "route_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           },
@@ -567,7 +1726,6 @@
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
-              "format": "uuid",
               "type": [
                 "string",
                 "null"
@@ -614,7 +1772,7 @@
                 }
               }
             },
-            "description": "Unauthorised"
+            "description": "Unauthorized"
           },
           "404": {
             "content": {
@@ -678,7 +1836,6 @@
             "name": "route_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           },
@@ -688,7 +1845,6 @@
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
-              "format": "uuid",
               "type": [
                 "string",
                 "null"
@@ -735,7 +1891,7 @@
                 }
               }
             },
-            "description": "Unauthorised"
+            "description": "Unauthorized"
           },
           "404": {
             "content": {
@@ -793,12 +1949,33 @@
       "get": {
         "description": "# Examples\n```\nuse actix_web::App;\nuse backend::inbound::http::users::list_users;\n\nlet app = App::new().service(list_users);\n```",
         "operationId": "listUsers",
+        "parameters": [
+          {
+            "description": "Opaque users pagination cursor",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of users to return, default 20, max 100",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UsersListResponse"
+                  "$ref": "#/components/schemas/PaginatedUsersResponse"
                 }
               }
             },
@@ -822,7 +1999,7 @@
                 }
               }
             },
-            "description": "Unauthorised"
+            "description": "Unauthorized"
           },
           "403": {
             "content": {
@@ -888,7 +2065,7 @@
                 }
               }
             },
-            "description": "Unauthorised"
+            "description": "Unauthorized"
           },
           "500": {
             "content": {
@@ -954,7 +2131,17 @@
                 }
               }
             },
-            "description": "Unauthorised"
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "500": {
             "content": {
@@ -1009,7 +2196,7 @@
                 }
               }
             },
-            "description": "Unauthorised"
+            "description": "Unauthorized"
           },
           "500": {
             "content": {
@@ -1041,7 +2228,6 @@
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
-              "format": "uuid",
               "type": [
                 "string",
                 "null"
@@ -1088,7 +2274,7 @@
                 }
               }
             },
-            "description": "Unauthorised"
+            "description": "Unauthorized"
           },
           "409": {
             "content": {
@@ -1119,6 +2305,73 @@
         "summary": "Update the authenticated user's preferences.",
         "tags": [
           "users"
+        ]
+      }
+    },
+    "/api/v1/walk-sessions": {
+      "post": {
+        "description": "# Examples\n```no_run\nuse backend::inbound::http::walk_sessions::{\n    CreateWalkSessionRequestBody, WalkPrimaryStatBody,\n};\n\nlet payload = CreateWalkSessionRequestBody {\n    id: \"00000000-0000-0000-0000-000000000501\".to_owned(),\n    route_id: \"00000000-0000-0000-0000-000000000202\".to_owned(),\n    started_at: \"2026-02-01T11:00:00Z\".to_owned(),\n    ended_at: Some(\"2026-02-01T11:40:00Z\".to_owned()),\n    primary_stats: vec![WalkPrimaryStatBody {\n        kind: \"distance\".to_owned(),\n        value: 1234.0,\n    }],\n    secondary_stats: vec![],\n    highlighted_poi_ids: vec![],\n};\n\nassert_eq!(payload.primary_stats.len(), 1);\nassert_eq!(payload.highlighted_poi_ids.len(), 0);\n```",
+        "operationId": "createWalkSession",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWalkSessionRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateWalkSessionResponseBody"
+                }
+              }
+            },
+            "description": "Walk session recorded"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record a walk session for the authenticated user.",
+        "tags": [
+          "walk-sessions"
         ]
       }
     },
@@ -1162,7 +2415,7 @@
         "security": [
           {}
         ],
-        "summary": "Readiness probe. Return 200 when dependencies are initialised and the server can handle traffic; return 503 otherwise.",
+        "summary": "Readiness probe. Return 200 when dependencies are initialized and the server can handle traffic; return 503 otherwise.",
         "tags": [
           "health"
         ]
@@ -1192,6 +2445,22 @@
     {
       "description": "Endpoints for health checks",
       "name": "health"
+    },
+    {
+      "description": "Catalogue and descriptor read endpoints",
+      "name": "catalogue"
+    },
+    {
+      "description": "Admin reporting endpoints",
+      "name": "admin"
+    },
+    {
+      "description": "Offline bundle manifest operations",
+      "name": "offline"
+    },
+    {
+      "description": "Walk session recording operations",
+      "name": "walk-sessions"
     }
   ]
 }

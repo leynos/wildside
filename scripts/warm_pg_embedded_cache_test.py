@@ -72,23 +72,23 @@ def run_bash(
         ({}, "16.10.0"),
     ],
 )
-def test_normalise_version_accepts_exact_versions(
+def test_normalize_version_accepts_exact_versions(
     env: dict[str, str], expected: str
 ) -> None:
-    result = run_bash("normalise_version", env=env)
+    result = run_bash("normalize_version", env=env)
 
     assert result.returncode == 0, result_diagnostics(result)
     assert result.stdout.strip() == expected, result_diagnostics(result)
 
 
-def test_normalise_version_rejects_non_numeric_values() -> None:
+def test_normalize_version_rejects_non_numeric_values() -> None:
     result = run_bash(
-        "normalise_version",
+        "normalize_version",
         env={"PG_EMBEDDED_VERSION": "", "POSTGRESQL_VERSION": "main"},
     )
 
     assert result.returncode != 0, (
-        f"normalise_version should reject non-numeric value; "
+        f"normalize_version should reject non-numeric value; "
         f"got {result_diagnostics(result)}"
     )
     assert "expected an exact PostgreSQL version" in result.stderr, (
@@ -96,9 +96,9 @@ def test_normalise_version_rejects_non_numeric_values() -> None:
     )
 
 
-def test_normalise_version_prefers_pg_embedded_version() -> None:
+def test_normalize_version_prefers_pg_embedded_version() -> None:
     result = run_bash(
-        "normalise_version",
+        "normalize_version",
         env={"PG_EMBEDDED_VERSION": "=16.11.0", "POSTGRESQL_VERSION": "16.10.0"},
     )
 
@@ -112,23 +112,23 @@ def test_normalise_version_prefers_pg_embedded_version() -> None:
     patch=st.integers(min_value=0, max_value=99),
 )
 @settings(max_examples=50)
-def test_normalise_version_accepts_all_valid_numeric_versions(
+def test_normalize_version_accepts_all_valid_numeric_versions(
     major: int, minor: int, patch: int
 ) -> None:
-    """normalise_version accepts any dot-separated numeric triple."""
+    """normalize_version accepts any dot-separated numeric triple."""
 
     version = f"{major}.{minor}.{patch}"
     result = run_bash(
-        "normalise_version",
+        "normalize_version",
         env={"POSTGRESQL_VERSION": version},
     )
 
     assert result.returncode == 0, (
-        f"normalise_version rejected valid version '{version}'; "
+        f"normalize_version rejected valid version '{version}'; "
         f"{result_diagnostics(result)}"
     )
     assert result.stdout.strip() == version, (
-        f"normalise_version returned '{result.stdout.strip()}' for input '{version}'; "
+        f"normalize_version returned '{result.stdout.strip()}' for input '{version}'; "
         f"{result_diagnostics(result)}"
     )
 
@@ -162,22 +162,22 @@ def test_normalise_version_accepts_all_valid_numeric_versions(
     )
 )
 @settings(max_examples=30)
-def test_normalise_version_rejects_all_non_numeric_versions(
+def test_normalize_version_rejects_all_non_numeric_versions(
     version: str,
 ) -> None:
-    """normalise_version rejects every non-numeric or non-exact version string."""
+    """normalize_version rejects every non-numeric or non-exact version string."""
 
     result = run_bash(
-        "normalise_version",
+        "normalize_version",
         env={"POSTGRESQL_VERSION": version},
     )
 
     assert result.returncode != 0, (
-        f"normalise_version should reject non-numeric version '{version}'; "
+        f"normalize_version should reject non-numeric version '{version}'; "
         f"got {result_diagnostics(result)}"
     )
     assert "expected an exact PostgreSQL version" in result.stderr, (
-        f"normalise_version should reject '{version}' with the expected message; "
+        f"normalize_version should reject '{version}' with the expected message; "
         f"{result_diagnostics(result)}"
     )
 

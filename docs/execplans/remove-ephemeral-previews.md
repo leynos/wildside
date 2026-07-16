@@ -253,7 +253,7 @@ All removal steps should be repeatable. If a deletion is too broad, restore the
 removed paths using git and adjust the removal list before retrying. Re-run the
 same Makefile targets after each correction.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Record key command outputs (diff summaries and audit searches) in the commit
 messages or attach the `tee` logs for reference. Keep only the log paths in the

@@ -290,7 +290,7 @@ Acceptance criteria:
 - If a config or migration error is introduced, revert only the new seeding
   wiring and re-run the tests to confirm rollback.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 - Expected log examples (shape only, not exact text):
 

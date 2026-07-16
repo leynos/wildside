@@ -2,12 +2,10 @@ name: Coverage (main)
 
 # CodeScene accepts `cs-coverage upload` only for analysed branches, so
 # main-branch coverage is uploaded here on push. Pull requests generate
-# coverage in ci.yml's `coverage` job (for the ratchet); the changed-line
-# gate (`cs-coverage check`) is deferred until CodeScene provisions the
-# project's coverage gates. This workflow also advances the coverage
-# ratchet baseline: caches saved on main are readable by every
-# pull-request run, so the baseline written here is the one PR ratchet
-# checks compare against.
+# coverage and enforce changed-line gates in ci.yml's `coverage` job. This
+# workflow also advances the coverage ratchet baseline: caches saved on main
+# are readable by every pull-request run, so the baseline written here is the
+# one PR ratchet checks compare against.
 #
 # workflow_dispatch is mandatory: merges performed by the automerge
 # workflow's GITHUB_TOKEN do not fire push-event workflows, so automerged
@@ -79,8 +77,8 @@ jobs:
         uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
         with:
           # mode defaults to "upload"; CodeScene infers project 70675 from
-          # the git remote, so no project-url is needed here (it is only
-          # required by the deferred PR `mode: check` gate).
+          # the git remote, so no project-url is needed here. The PR check
+          # supplies it explicitly because `mode: check` requires it.
           format: lcov
           access-token: ${{ env.CS_ACCESS_TOKEN }}
           installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}

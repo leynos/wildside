@@ -1,7 +1,7 @@
 """Command execution primitives for the local preview workflow.
 
 Runs local tooling commands (Docker, Helm, k3d, kubectl) via plumbum and
-normalises execution failures into `LocalK8sError` for use by CLI workflows.
+normalizes execution failures into `LocalK8sError` for use by CLI workflows.
 
 Examples
 --------

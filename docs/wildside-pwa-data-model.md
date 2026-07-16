@@ -29,7 +29,7 @@ behaviour being specified in multiple places.
 In scope:
 
 - Entity and value-object schemas that cover the PWA’s core flows:
-  Explore, Discover, Customise, Map, Safety, Offline downloads, and Walk
+  Explore, Discover, Customize, Map, Safety, Offline downloads, and Walk
   completion.
 - How those entities map onto the backend’s hexagonal architecture (domain
   modules, ports, and inbound/outbound adapters).
@@ -40,7 +40,7 @@ In scope:
 
 Out of scope:
 
-- Full route-generation engine design (scoring, optimisation, enrichment).
+- Full route-generation engine design (scoring, optimization, enrichment).
 - Exact PostGIS table layouts for tiles beyond what the PWA needs.
 - Conflict-free Replicated Data Types (CRDTs). The model remains compatible
   with later upgrades, but does not require them for the Minimum Viable Product
@@ -55,7 +55,7 @@ Out of scope:
 - **Offline-first assets:** offline bundles are first-class entities, but tile
   bytes are stored outside React state (Cache Storage keyed by bundle metadata).
 - **Dexie’s role:** Dexie is a durable storage engine for heavy/binary assets
-  and an outbox, not a synchronisation worldview.
+  and an outbox, not a synchronization worldview.
 
 ## Model layering
 

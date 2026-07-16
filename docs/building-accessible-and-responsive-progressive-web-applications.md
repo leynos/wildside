@@ -6,7 +6,7 @@
 
 Progressive Web Applications (PWAs) represent a paradigm shift in web
 development, leveraging modern web platform capabilities to deliver user
-experiences that are reliable, fast, and engaging, rivaling those of
+experiences that are reliable, fast, and engaging, rivalling those of
 platform-specific native applications.[^1] A PWA is not a distinct technology
 or framework but rather a design philosophy and a set of technical criteria
 built upon standard web technologies---HTML, CSS, and JavaScript---and powered
@@ -35,7 +35,7 @@ these three domains, which together define the gold standard for modern web
 applications.
 
 1. **Reliability & Capability (PWA):** This pillar encompasses the core
-   technical features that define a PWA. It is centered on the application's
+   technical features that define a PWA. It is centred on the application's
    ability to provide a consistent and dependable experience, regardless of
    network conditions. This includes the capacity to work offline, load
    instantly from a local cache, be installable on user devices, and leverage
@@ -179,9 +179,9 @@ recommended to create a more polished and integrated user experience.
 
 - **`background_color` and `theme_color`**: These members allow for theming of
   the application's presentation. `background_color` defines a placeholder
-  background color that is displayed before the application's stylesheet has
+  background colour that is displayed before the application's stylesheet has
   loaded, creating a smoother transition on startup. `theme_color` suggests a
-  color for the user agent to use in its UI, such as the address bar or
+  colour for the user agent to use in its UI, such as the address bar or
   taskbar, helping the PWA feel more integrated with the host operating
   system.[^3]
 
@@ -206,7 +206,7 @@ setting `purpose` to `"maskable"` in the icon's definition.
 
 It is also advisable to avoid transparency in icons. Operating systems like
 iOS, iPadOS, and modern Android versions may fill transparent areas with an
-uncontrollable background color, leading to unexpected visual results.[^17]
+uncontrollable background colour, leading to unexpected visual results.[^17]
 Providing a square, non-transparent icon ensures consistent presentation. While
 providing icons in sizes 192x192 and 512x512 is the minimum, it is best
 practice to also include larger resolutions, such as 1024x1024, to accommodate
@@ -631,7 +631,7 @@ Furthermore, WCAG 2.2 Success Criterion 2.5.8: Target Size (Minimum) requires
 that interactive elements have a minimum size to be easily activated by users
 with motor impairments or those using touch devices.[^39] The mobile-first
 design philosophy, with its emphasis on creating large, "fat-finger-friendly"
-touch targets, directly aligns with and helps fulfill this accessibility
+touch targets, directly aligns with and helps fulfil this accessibility
 requirement.[^11] Consequently, building a responsive PWA is an integral part
 of the process of building an accessible one.
 
@@ -656,7 +656,7 @@ property (which controls `flex-grow`, `flex-shrink`, and `flex-basis`) give
 developers precise control over how items expand to fill space, shrink to fit,
 and are distributed within their container.[^40] Flexbox is exceptionally
 well-suited for component-level layouts, such as navigation bars, card layouts,
-and vertical centering of content.[^45]
+and vertical centring of content.[^45]
 
 #### Grid for Two-Dimensional Layout
 
@@ -823,7 +823,7 @@ success criteria are particularly relevant to modern PWAs:
 - **SC 1.4.11 Non-text Contrast:** This requires a contrast ratio of at least
   **3:1** for user interface components (like input borders and focus
   indicators) and meaningful graphics (like icons or parts of a chart) against
-  adjacent colors.[^54]
+  adjacent colours.[^54]
 
 - **SC 2.4.11 Focus Not Obscured (Minimum):** This new criterion in WCAG 2.2
   ensures that when an element receives keyboard focus, it is not entirely
@@ -952,7 +952,7 @@ expectations during periods of intermittent or no connectivity is crucial.[^12]
 - **Status Indication:** The application should provide clear, non-intrusive
   feedback when the network connection is lost and when it is restored. This
   can be achieved through subtle UI changes, such as displaying a "toast"
-  notification, an icon, or graying out features that are only available
+  notification, an icon, or greying out features that are only available
   online.[^18] This helps manage user expectations and prevents confusion.
 
 - **Meaningful Fallback Content:** Instead of displaying a generic browser error
@@ -971,7 +971,7 @@ expectations during periods of intermittent or no connectivity is crucial.[^12]
 - **Skeleton Screens:** To improve perceived performance during both initial
   load and when fetching data from the cache or a slow network, skeleton
   screens are highly effective. These are placeholder UIs, often showing a
-  wireframe or grayed-out version of the content that is about to load. This
+  wireframe or greyed-out version of the content that is about to load. This
   reassures the user that the application is working and provides a smoother
   visual transition than a blank screen or a loading spinner.[^18]
 
@@ -1036,7 +1036,7 @@ the previous "page".[^84]
 #### The Two-Part Solution
 
 To make SPA routing accessible, developers must manually replicate the
-browser's native behavior on every view change:
+browser's native behaviour on every view change:
 
 1. **Update the Page Title:** Immediately after the new content is rendered, the
    page title must be updated via JavaScript to reflect the new view's content.
@@ -1132,7 +1132,7 @@ subcategories [^96]:
   the minimum installability requirements.
 
 - **PWA Optimized:** Audits for best practices such as redirecting HTTP traffic
-  to HTTPS, configuring a custom splash screen and theme color in the manifest,
+  to HTTPS, configuring a custom splash screen and theme colour in the manifest,
   and having a valid viewport tag.
 
 Passing these audits is a prerequisite for a PWA to be considered installable
@@ -1143,7 +1143,7 @@ by Chrome and other browsers.[^97]
 In addition to the PWA-specific checks, Lighthouse provides invaluable reports
 on **Performance**, **Accessibility**, and **SEO**. A high-quality PWA must
 score well in all these areas. The accessibility audit, in particular, can
-automatically detect common issues like insufficient color contrast, missing
+automatically detect common issues like insufficient colour contrast, missing
 image alt text, and improper ARIA role usage, providing a crucial first pass on
 inclusivity.[^96]
 
@@ -1246,7 +1246,7 @@ The creation of a modern Progressive Web Application is an exercise in
 synthesis. It demands the integration of three distinct but deeply interwoven
 disciplines: the robust, offline-first architecture of PWAs; the fluid,
 device-agnostic principles of Responsive Web Design; and the inclusive,
-human-centered standards of Web Accessibility. A PWA that excels in only one or
+human-centred standards of Web Accessibility. A PWA that excels in only one or
 two of these areas is incomplete. True excellence is achieved only when an
 application is simultaneously reliable, adaptable, and accessible to all.
 

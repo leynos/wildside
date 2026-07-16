@@ -284,7 +284,7 @@ Acceptance criteria:
   again.
 - If a command fails, fix the issue and re-run only the failed command.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Keep log files created by the `tee` commands until the work is complete:
 

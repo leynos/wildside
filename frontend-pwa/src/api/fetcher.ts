@@ -37,7 +37,7 @@ const isNativeBodyType = (value: unknown): boolean => {
   return isFormData(value) || isBlob(value) || isUrlEncoded(value) || isBinary(value);
 };
 
-/** Predicate: treat POJOs and arrays as JSON serialisable structures. */
+/** Predicate: treat POJOs and arrays as JSON serializable structures. */
 const isPlainObjectLike = (value: unknown): boolean =>
   typeof value === 'object' &&
   value !== null &&
@@ -53,13 +53,13 @@ const looksLikeJsonString = (text: string): boolean => {
 };
 
 /**
- * Normalise the request body for JSON APIs.
+ * Normalize the request body for JSON APIs.
  * - Auto-JSON-stringify plain objects to reduce caller friction and header mistakes.
  * - Preserve native body types (FormData, Blob, URLSearchParams, ArrayBuffer/View).
  *
  * Returns the possibly transformed body and whether we produced JSON.
  */
-const normaliseBody = (body: unknown): { body: BodyInit | null | undefined; isJson: boolean } => {
+const normalizeBody = (body: unknown): { body: BodyInit | null | undefined; isJson: boolean } => {
   // Be explicit to satisfy strict‑equality lint rules and avoid coercion.
   if (body === null || body === undefined) {
     return { body: body as null | undefined, isJson: false };
@@ -76,7 +76,7 @@ const normaliseBody = (body: unknown): { body: BodyInit | null | undefined; isJs
 
 /**
  * Build default headers and attach JSON content-type when appropriate.
- * Keeps header logic centralised so callers do not need to manage it.
+ * Keeps header logic centralized so callers do not need to manage it.
  */
 const defaultHeaders = (init: RequestInit | undefined, bodyInfo: { isJson: boolean }): Headers => {
   const headers = new Headers(init?.headers as HeadersInit | undefined);
@@ -116,7 +116,7 @@ const shouldParseJson = (res: Response): boolean => {
  * ArrayBuffer/View). Returns null when the Content-Type should not be set
  * automatically.
  *
- * This helper centralises body type detection to reduce cognitive complexity
+ * This helper centralizes body type detection to reduce cognitive complexity
  * in the request code while preserving existing behaviour exactly.
  *
  * @param body - The raw `RequestInit.body` value provided by the caller.
@@ -136,8 +136,8 @@ function getContentTypeForBody(body: unknown): string | null {
 export const customFetch = async <T>(input: string, init?: RequestInit): Promise<T> => {
   const url = new URL(input, apiBase());
 
-  // Normalise body upfront so header logic sees the final representation.
-  const { body, isJson } = normaliseBody(init?.body as unknown);
+  // Normalize body upfront so header logic sees the final representation.
+  const { body, isJson } = normalizeBody(init?.body as unknown);
   const headers = defaultHeaders(init, { isJson });
 
   const res = await fetch(url, { credentials: 'include', ...init, body, headers });

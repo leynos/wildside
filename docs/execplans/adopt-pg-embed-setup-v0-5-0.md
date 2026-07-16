@@ -311,7 +311,7 @@ Acceptance is behavioural and repository-visible:
   after confirming unchanged code, then treat repeated failure as a tolerance
   breach.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Implementation should preserve concise evidence:
 

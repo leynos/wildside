@@ -2,7 +2,7 @@
 //!
 //! These scenarios confirm that `/api/v1/users/me` and
 //! `/api/v1/users/me/interests` require authenticated sessions and return trace
-//! identifiers on unauthorised responses.
+//! identifiers on unauthorized responses.
 // Shared test doubles include helpers unused in this specific crate.
 #[expect(
     dead_code,
@@ -210,7 +210,7 @@ fn the_client_updates_interests_with_an_invalid_interest_theme_id(world: &WorldF
 }
 
 #[then("the response is unauthorised with a trace id")]
-fn the_response_is_unauthorised_with_a_trace_id(world: &WorldFixture) {
+fn the_response_is_unauthorized_with_a_trace_id(world: &WorldFixture) {
     let ctx = world.world();
     let ctx = ctx.borrow();
     assert_eq!(ctx.last_status, Some(401));

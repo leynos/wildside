@@ -397,7 +397,7 @@ migration tracking, which prevents reapplication of previously applied
 migrations. To make the SQL itself idempotent, use `CREATE TABLE IF NOT EXISTS`
 in future migrations.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Example migration up.sql content:
 

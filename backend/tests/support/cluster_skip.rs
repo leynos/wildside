@@ -2,7 +2,7 @@
 //!
 //! Integration tests that depend on embedded PostgreSQL can be optionally
 //! skipped in environments where the cluster cannot be started. This module
-//! centralises the `SKIP_TEST_CLUSTER` policy and error messaging so all test
+//! centralizes the `SKIP_TEST_CLUSTER` policy and error messaging so all test
 //! suites behave consistently.
 
 /// Returns true when the `SKIP_TEST_CLUSTER` environment variable is set to a

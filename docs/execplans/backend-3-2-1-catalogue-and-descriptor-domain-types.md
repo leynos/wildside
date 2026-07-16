@@ -417,9 +417,9 @@ Documentation acceptance:
   existing helpers in `backend/tests/support/pg_embed.rs` rather than mutating
   shared global database state manually.
 
-## Artifacts and notes
+## Artefacts and notes
 
-Expected artifacts during implementation:
+Expected artefacts during implementation:
 
 - New domain modules for catalogue and descriptor entities.
 - Updated ingestion ports referencing domain types.
