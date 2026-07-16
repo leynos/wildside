@@ -186,6 +186,25 @@ describe('reportOverridesPolicy', () => {
     expect(outputIo.log).not.toHaveBeenCalled();
   });
 
+  it('instructs removal when root overrides are present but empty', async () => {
+    const { exitCode, outputIo } = await runReportOverridesPolicy({
+      ok: false,
+      pnpmOverridesToCheck: [],
+      rootOverrides: [],
+      reason: 'root-overrides-present',
+    });
+
+    expect(exitCode).toBe(1);
+    expect(outputIo.error).toHaveBeenCalledWith(
+      [
+        'Override policy check failed.',
+        'Top-level overrides are not allowed because npm and npx consume them.',
+        'Remove the top-level overrides property; move any entries under pnpm.overrides only.',
+      ].join('\n'),
+    );
+    expect(outputIo.log).not.toHaveBeenCalled();
+  });
+
   it('logs missing pnpm overrides and returns 1', async () => {
     const { exitCode, outputIo } = await runReportOverridesPolicy({
       ok: false,

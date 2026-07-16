@@ -107,11 +107,15 @@ export function reportOverridesPolicy(report, outputIo = console) {
     return 1;
   }
 
+  const remediation =
+    report.rootOverrides.length > 0
+      ? `Move these entries under pnpm.overrides only: ${report.rootOverrides.join(', ')}`
+      : 'Remove the top-level overrides property; move any entries under pnpm.overrides only.';
   outputIo.error(
     [
       'Override policy check failed.',
       'Top-level overrides are not allowed because npm and npx consume them.',
-      `Move these entries under pnpm.overrides only: ${report.rootOverrides.join(', ')}`,
+      remediation,
     ].join('\n'),
   );
   return 1;
