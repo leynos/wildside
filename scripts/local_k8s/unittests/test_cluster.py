@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+import dataclasses as dc
+import typing as typ
 
 import pytest
-import pytest_mock
-
 from local_k8s.cluster import delete_cluster, print_cluster_status
 from local_k8s.commands import CommandResult
-from local_k8s.config import PreviewConfig
 from local_k8s.validation import LocalK8sError
+
+if typ.TYPE_CHECKING:
+    import pytest_mock
+    from local_k8s.config import PreviewConfig
 
 
 class TestClusterStatus:
@@ -25,7 +27,10 @@ class TestClusterStatus:
         stdout: str,
         match: str,
     ) -> None:
-        """Stub `run()` with stdout and assert print_cluster_status raises matching LocalK8sError."""
+        """Assert ``print_cluster_status`` raises a matching error.
+
+        Stubs ``run()`` with the given stdout payload first.
+        """
         mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch(
             "local_k8s.cluster.run",
@@ -45,7 +50,7 @@ class TestClusterStatus:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify kind teardown skips deletion when the cluster is absent."""
-        config = replace(preview_config, k8s_provider="kind")
+        config = dc.replace(preview_config, k8s_provider="kind")
         commands: list[tuple[str, list[str]]] = []
 
         def record_run(command: str, args: list[str], **_: object) -> CommandResult:
@@ -77,7 +82,7 @@ class TestClusterStatus:
         mocker.patch("local_k8s.cluster.require_tools", return_value=None)
         mocker.patch("local_k8s.cluster.run", record_run)
 
-        print_cluster_status(replace(preview_config, k8s_provider="kind"))
+        print_cluster_status(dc.replace(preview_config, k8s_provider="kind"))
 
         output = capsys.readouterr().out
         assert commands == [("kind", ["get", "clusters"])]
@@ -116,7 +121,7 @@ class TestClusterStatus:
         """Verify cluster status fails before printing stale preview details."""
         self._assert_cluster_status_rejects(
             mocker,
-            replace(preview_config, k8s_provider="kind"),
+            dc.replace(preview_config, k8s_provider="kind"),
             capsys,
             stdout="other\n",
             match="does not exist",

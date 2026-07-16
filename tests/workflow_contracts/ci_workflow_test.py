@@ -1,15 +1,13 @@
 """Contract tests for pull-request coverage enforcement in CI."""
-
 from __future__ import annotations
 
-import re
 from pathlib import Path
-from typing import cast
+import re
 
+import typing as typ
 import yaml
 
 WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
-
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -39,7 +37,7 @@ def _load_steps(job_name: str = "coverage") -> list[dict[str, object]]:
     assert all(isinstance(step, dict) for step in steps), (
         "every coverage step must be a mapping"
     )
-    return cast("list[dict[str, object]]", steps)
+    return typ.cast("list[dict[str, object]]", steps)
 
 
 def test_build_checkout_fetches_origin_main_history() -> None:

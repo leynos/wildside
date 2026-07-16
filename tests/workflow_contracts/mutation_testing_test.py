@@ -16,6 +16,7 @@ Run via ``make test-workflow-contracts``.
 from __future__ import annotations
 
 import re
+import typing as typ
 from pathlib import Path
 
 import yaml
@@ -67,24 +68,27 @@ def _triggers(workflow: dict[str, object]) -> dict[str, object]:
     """Return the ``on:`` mapping (PyYAML parses the bare key as True)."""
     triggers = workflow.get("on", workflow.get(True))
     assert isinstance(triggers, dict), "the workflow must declare an on: mapping"
-    return triggers
+    return typ.cast("dict[str, object]", triggers)
 
 
 def _mutation_job(workflow: dict[str, object]) -> dict[str, object]:
     """Return the single calling job."""
-    jobs = workflow.get("jobs")
-    assert isinstance(jobs, dict), "the workflow must declare a jobs mapping"
+    raw_jobs = workflow.get("jobs")
+    assert isinstance(raw_jobs, dict), "the workflow must declare a jobs mapping"
+    jobs = typ.cast("dict[str, object]", raw_jobs)
     assert jobs, "the workflow must declare at least one job"
     assert list(jobs) == ["mutation"], (
         f"expected a single job named 'mutation', found {sorted(jobs)}"
     )
-    return jobs["mutation"]
+    mutation_job = jobs["mutation"]
+    assert isinstance(mutation_job, dict), "jobs.mutation must be a mapping"
+    return typ.cast("dict[str, object]", mutation_job)
 
 
 def test_uses_reference_is_pinned_to_a_commit_sha() -> None:
     """The job must call the correct shared workflow at a commit SHA."""
     uses = _mutation_job(_load()).get("uses")
-    assert uses is not None, "jobs.mutation.uses is missing"
+    assert isinstance(uses, str), "jobs.mutation.uses is missing"
     assert USES_RE.match(uses), (
         "jobs.mutation.uses must reference "
         "leynos/shared-actions/.github/workflows/mutation-cargo.yml pinned "
@@ -133,7 +137,9 @@ def test_triggers_keep_schedule_and_plain_dispatch() -> None:
     )
     assert "workflow_dispatch" in triggers, "on.workflow_dispatch is missing"
     dispatch = triggers.get("workflow_dispatch") or {}
+    assert isinstance(dispatch, dict), "on.workflow_dispatch must be a mapping"
     inputs = dispatch.get("inputs") or {}
+    assert isinstance(inputs, dict), "on.workflow_dispatch.inputs must be a mapping"
     assert "branch" not in inputs, (
         "on.workflow_dispatch must not declare a branch input; the Actions "
         "run-workflow control selects the ref"

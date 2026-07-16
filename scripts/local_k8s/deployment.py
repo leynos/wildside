@@ -5,13 +5,16 @@ from __future__ import annotations
 import logging
 import re
 import shlex
+import typing as typ
 
-from .commands import run, run_streaming
-from .config import PreviewConfig
 from .cluster import ensure_cluster, import_image, print_cluster_status
+from .commands import run, run_streaming
 from .k8s import ensure_namespace, helm_fullname, print_kubernetes_status
 from .session_secret import ensure_session_secret
 from .validation import LocalK8sError, require_tools
+
+if typ.TYPE_CHECKING:
+    from .config import PreviewConfig
 
 # ``ensure_session_secret`` is re-exported so callers (and tests that patch
 # ``local_k8s.deployment.ensure_session_secret``) keep resolving it here.
@@ -47,7 +50,6 @@ def deploy_preview(config: PreviewConfig, *, skip_build: bool) -> None:
     ``ensure_session_secret`` idempotent and avoids rotating local preview
     sessions during normal Helm upgrades.
     """
-
     require_tools(_deploy_preview_tools(config, skip_build=skip_build))
     logger.info(
         "local_k8s_deploy_preview",
@@ -73,7 +75,6 @@ def _deploy_preview_tools(
     config: PreviewConfig, *, skip_build: bool
 ) -> tuple[str, ...]:
     """Return the required command-line tools for the requested deploy mode."""
-
     match config.k8s_provider:
         case "kind":
             cluster_tool = "kind"
@@ -101,7 +102,6 @@ def build_image(config: PreviewConfig) -> None:
         Local preview settings that select the container engine, image name,
         Dockerfile path, and repository root used for the build.
     """
-
     logger.info(
         "local_k8s_build_image",
         extra={
@@ -136,7 +136,6 @@ def helm_upgrade(config: PreviewConfig) -> None:
         Local preview settings that select the kube context, namespace, Helm
         release name, chart path, local values file, and image reference.
     """
-
     image_repository, image_tag = image_repository_and_tag(config.image_name)
     logger.info(
         "local_k8s_helm_upgrade",
@@ -202,7 +201,6 @@ def image_repository_and_tag(image_name: str) -> tuple[str, str]:
         Raised when ``image_name`` omits a tag, or when the repository or tag
         fails OCI-safe grammar validation.
     """
-
     repository, separator, tag = image_name.rpartition(":")
     if _image_ref_lacks_tag(repository, separator, tag):
         msg = "WILDSIDE_IMAGE must include a tag, for example wildside-backend:local"
@@ -242,7 +240,6 @@ def print_status(config: PreviewConfig) -> None:
     LocalK8sError
         Raised when a required tool is missing or a status command fails.
     """
-
     require_tools(_deploy_preview_tools(config, skip_build=True))
     logger.info(
         "local_k8s_print_status",
@@ -284,24 +281,21 @@ def print_kind_port_forward_command(config: PreviewConfig) -> None:
         Prints the `kubectl port-forward` command for `kind` previews. Returns
         silently for other providers, including `k3d`.
     """
-
     if config.k8s_provider != "kind":
         return
     # Build the hint from separately quoted argv segments so no unescaped shell
     # string is ever emitted, even though the underlying names are validated as
     # DNS-1123 labels upstream in PreviewConfig.
-    command = shlex.join(
-        [
-            "kubectl",
-            "--context",
-            config.kube_context,
-            "--namespace",
-            config.namespace,
-            "port-forward",
-            f"svc/{helm_fullname(config)}",
-            f"{config.ingress_port}:80",
-        ]
-    )
+    command = shlex.join([
+        "kubectl",
+        "--context",
+        config.kube_context,
+        "--namespace",
+        config.namespace,
+        "port-forward",
+        f"svc/{helm_fullname(config)}",
+        f"{config.ingress_port}:80",
+    ])
     print("port-forward:")
     print(command)
 
@@ -328,7 +322,6 @@ def print_logs(config: PreviewConfig, *, follow: bool) -> None:
     LocalK8sError
         Raised when ``kubectl`` is missing or the logs command fails.
     """
-
     require_tools(("kubectl",))
     args = [
         "--context",

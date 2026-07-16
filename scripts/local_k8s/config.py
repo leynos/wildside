@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses as dc
 import os
 import re
-from dataclasses import dataclass
+import typing as typ
 from pathlib import Path
-from typing import Literal
 
 from .validation import LocalK8sError, validate_port
 
@@ -24,11 +24,11 @@ DNS_1123_LABEL_PATTERN = re.compile(r"[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?")
 HELM_RELEASE_NAME_PATTERN = re.compile(r"[a-z0-9](?:[-a-z0-9]{0,51}[a-z0-9])?")
 KIND_NODE_IMAGE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@_+-]{0,254}")
 
-type ContainerEngine = Literal["docker", "podman"]
-type K8sProvider = Literal["k3d", "kind"]
+type ContainerEngine = typ.Literal["docker", "podman"]
+type K8sProvider = typ.Literal["k3d", "kind"]
 
 
-@dataclass(frozen=True, slots=True)
+@dc.dataclass(frozen=True, slots=True)
 class PreviewConfig:
     """Repository-local configuration for a Wildside preview deployment.
 
@@ -79,9 +79,7 @@ class PreviewConfig:
         _validate_dns_1123_label(self.namespace, name="WILDSIDE_K8S_NAMESPACE")
         _validate_helm_release_name(self.release_name)
         _validate_kind_node_image(self.kind_node_image)
-        _validate_engine_provider_combination(
-            self.container_engine, self.k8s_provider
-        )
+        _validate_engine_provider_combination(self.container_engine, self.k8s_provider)
 
     @property
     def kube_context(self) -> str:
@@ -93,7 +91,6 @@ class PreviewConfig:
             The provider-prefixed kube context name, formed as
             ``{provider}-{cluster_name}``.
         """
-
         return f"{self.k8s_provider}-{self.cluster_name}"
 
     @classmethod
@@ -106,7 +103,6 @@ class PreviewConfig:
             Configuration resolved from repository defaults overlaid with any
             ``WILDSIDE_`` environment variable overrides.
         """
-
         repository_root = Path(__file__).resolve().parents[2]
         container_engine = _container_engine_from_env()
         k8s_provider = _k8s_provider_from_env()
@@ -134,8 +130,9 @@ class PreviewConfig:
 def _container_engine_from_env() -> ContainerEngine:
     """Return the validated container engine environment value."""
     raw_value = os.environ.get("WILDSIDE_CONTAINER_ENGINE", DEFAULT_CONTAINER_ENGINE)
-    if raw_value in ("docker", "podman"):
-        return raw_value
+    if raw_value in {"docker", "podman"}:
+        # A membership test does not narrow str to the Literal alias for ty.
+        return typ.cast("ContainerEngine", raw_value)
     message = (
         f"WILDSIDE_CONTAINER_ENGINE must be one of docker, podman; got {raw_value!r}"
     )
@@ -145,8 +142,9 @@ def _container_engine_from_env() -> ContainerEngine:
 def _k8s_provider_from_env() -> K8sProvider:
     """Return the validated Kubernetes provider environment value."""
     raw_value = os.environ.get("WILDSIDE_K8S_PROVIDER", DEFAULT_K8S_PROVIDER)
-    if raw_value in ("k3d", "kind"):
-        return raw_value
+    if raw_value in {"k3d", "kind"}:
+        # A membership test does not narrow str to the Literal alias for ty.
+        return typ.cast("K8sProvider", raw_value)
     message = f"WILDSIDE_K8S_PROVIDER must be one of k3d, kind; got {raw_value!r}"
     raise LocalK8sError(message)
 
