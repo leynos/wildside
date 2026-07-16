@@ -19,11 +19,11 @@ use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
 #[path = "password_state.rs"]
 mod password_state;
 
-const SHARED_CLUSTER_RETRIES: usize = 5;
-const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
+pub(crate) const SHARED_CLUSTER_RETRIES: usize = 5;
+pub(crate) const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
 
 #[cfg(unix)]
-mod unix_atexit {
+pub(crate) mod unix_atexit {
     //! Unix-only process-exit cleanup for the shared embedded PostgreSQL cluster.
 
     use std::ffi::CString;
@@ -104,7 +104,7 @@ mod unix_atexit {
     }
 
     /// Reads the postmaster PID from the `postmaster.pid` file in `data_dir`.
-    pub(super) fn read_postmaster_pid(data_dir: &std::path::Path) -> Option<i32> {
+    pub(crate) fn read_postmaster_pid(data_dir: &std::path::Path) -> Option<i32> {
         let dir =
             cap_std::fs::Dir::open_ambient_dir(data_dir, cap_std::ambient_authority()).ok()?;
         let content = dir.read_to_string("postmaster.pid").ok()?;
@@ -228,7 +228,8 @@ mod unix_atexit {
 // requires a live embedded PostgreSQL cluster. Coverage is provided
 // end-to-end by every BDD integration-test binary in the `pg-embed` nextest
 // group. The internal helpers (`ensure_stable_cluster_environment`,
-// `unix_atexit::read_postmaster_pid`, etc.) are unit-tested below.
+// `unix_atexit::read_postmaster_pid`, etc.) are unit-tested in the dedicated
+// `atexit_cleanup_tests` integration-test target.
 pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     #[cfg(unix)]
     unix_atexit::acquire_shared_cluster_process_lock()?;
@@ -309,7 +310,7 @@ pub(crate) fn ensure_stable_cluster_environment() {
 /// access to the environment: production reaches this function through
 /// `STABLE_ENV_INIT.get_or_init`, which runs it at most once per process, and
 /// tests hold the `env_lock` mutex around their calls.
-fn resolve_stable_env() -> String {
+pub(crate) fn resolve_stable_env() -> String {
     let value = std::env::var("PG_PASSWORD").unwrap_or_else(|_| {
         let value = "wildside_embedded_test".to_owned();
         // SAFETY: the caller holds exclusive environment access; see the
@@ -375,7 +376,3 @@ fn repair_password_state_serialized(_password: &[u8]) -> BootstrapResult<()> {
 fn repair_default_password_state(password: &[u8]) -> std::io::Result<()> {
     password_state::repair_default_password_state(password)
 }
-
-#[cfg(test)]
-#[path = "atexit_cleanup_tests.rs"]
-mod tests;
