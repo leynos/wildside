@@ -24,13 +24,19 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from .commands import run
 from .config import PreviewConfig
+from .kind import (
+    _image_archive_path,
+    _kind_cluster_config,
+    _kind_command,
+    _kind_create_args,
+    _podman_archive_image_name,
+    _remove_stale_archive,
+)
 from .validation import LocalK8sError, require_tools
 
 logger = logging.getLogger(__name__)
@@ -90,6 +96,11 @@ def ensure_cluster(config: PreviewConfig) -> None:
     ------
     LocalK8sError
         Raised when required executables are missing or cluster creation fails.
+
+    Examples
+    --------
+    >>> ensure_cluster(config)  # doctest: +SKIP
+    kind cluster 'wildside-preview' already exists
     """
 
     require_tools(_cluster_tools(config))
@@ -120,6 +131,11 @@ def delete_cluster(config: PreviewConfig) -> None:
     ------
     LocalK8sError
         Raised when required executables are missing or cluster deletion fails.
+
+    Examples
+    --------
+    >>> delete_cluster(config)  # doctest: +SKIP
+    kind cluster 'wildside-preview' does not exist
     """
 
     require_tools((_provider_tool(config),))
@@ -219,6 +235,11 @@ def import_image(config: PreviewConfig, *, archive_dir: Path | None = None) -> N
     ------
     LocalK8sError
         Raised when required executables are missing or image import fails.
+
+    Examples
+    --------
+    >>> import_image(config)  # doctest: +SKIP
+    >>> import_image(config, archive_dir=Path("/var/tmp"))  # doctest: +SKIP
     """
 
     require_tools(_image_import_tools(config))
@@ -257,6 +278,12 @@ def print_cluster_status(config: PreviewConfig) -> None:
     LocalK8sError
         Raised when required executables are missing or the configured cluster
         does not exist.
+
+    Examples
+    --------
+    >>> print_cluster_status(config)  # doctest: +SKIP
+    cluster: wildside-preview
+    provider: kind
     """
 
     require_tools((_provider_tool(config),))
@@ -375,101 +402,3 @@ def _k3d_create_args(config: PreviewConfig) -> list[str]:
         "--wait",
     ]
 
-
-def _kind_create_args(config: PreviewConfig) -> list[str]:
-    """Return kind cluster creation arguments."""
-
-    return [
-        "create",
-        "cluster",
-        "--name",
-        config.cluster_name,
-        "--config",
-        "-",
-        "--wait",
-        "180s",
-    ]
-
-
-def _kind_cluster_config(config: PreviewConfig) -> str:
-    """Return a minimal kind cluster config with no host-port mapping."""
-
-    node_image = json.dumps(config.kind_node_image)
-    return f"""\
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-nodes:
-  - role: control-plane
-    image: {node_image}
-"""
-
-
-def _image_archive_path(
-    config: PreviewConfig, *, archive_dir: Path | None = None
-) -> Path:
-    """Return a unique temporary Podman image archive path for kind loading."""
-
-    base_dir = Path(tempfile.gettempdir()) if archive_dir is None else archive_dir
-    file_descriptor, archive_path = tempfile.mkstemp(
-        prefix=f"{config.cluster_name}-",
-        suffix="-image.tar",
-        dir=base_dir,
-    )
-    os.close(file_descriptor)
-    path = Path(archive_path)
-    path.unlink(missing_ok=True)
-    return path
-
-
-def _is_registry_host(component: str) -> bool:
-    """Return True when a repository path component identifies a registry host.
-
-    A component is treated as a registry host when it contains a dot (FQDN),
-    a colon (host:port), or is the literal string ``localhost``.
-    """
-    return "." in component or ":" in component or component == "localhost"
-
-
-def _podman_archive_image_name(image_name: str) -> str:
-    """Return an archive tag that matches Kubernetes' unqualified pull name."""
-
-    repository, separator, tag = image_name.rpartition(":")
-    if not separator:
-        return image_name
-    first_component = repository.split("/", maxsplit=1)[0]
-    if _is_registry_host(first_component):
-        return image_name
-    if "/" in repository:
-        return f"docker.io/{repository}:{tag}"
-    return f"docker.io/library/{repository}:{tag}"
-
-
-def _remove_stale_archive(archive_path: Path) -> None:
-    """Remove the temporary Podman image archive after kind loads it."""
-
-    archive_path.unlink(missing_ok=True)
-
-
-def _kind_command(
-    config: PreviewConfig,
-    kind_args: list[str],
-    *,
-    use_scope: bool = False,
-) -> tuple[str, list[str]]:
-    """Return the command and arguments for Docker- or Podman-backed kind."""
-
-    match (config.container_engine, use_scope):
-        case ("podman", _):
-            podman_args = ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", *kind_args]
-            if not use_scope:
-                return "env", podman_args
-            return "systemd-run", [
-                "--scope",
-                "--user",
-                "-p",
-                "Delegate=yes",
-                "env",
-                *podman_args,
-            ]
-        case _:
-            return "kind", kind_args

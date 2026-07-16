@@ -148,6 +148,13 @@ def run(
     ------
     LocalK8sError
         Raised when the process exits with a non-zero status.
+
+    Examples
+    --------
+    >>> result = run("kubectl", ["version", "--client"])  # doctest: +SKIP
+    >>> print(result.stdout)  # doctest: +SKIP
+    >>> run("kind", ["create", "cluster", "--config", "-"],
+    ...     input_text=config_yaml)  # doctest: +SKIP
     """
 
     try:
@@ -180,6 +187,10 @@ def run_streaming(
     ------
     LocalK8sError
         Raised when the process exits with a non-zero status.
+
+    Examples
+    --------
+    >>> run_streaming("kubectl", ["logs", "-f", "deploy/backend"])  # doctest: +SKIP
     """
 
     try:
