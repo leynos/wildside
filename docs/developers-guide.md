@@ -392,6 +392,44 @@ Scenario state is isolated by default:
   - Scenario bindings: `backend/crates/<crate>/tests/*_bdd.rs`
   - Shared fixtures: `backend/crates/<crate>/tests/common.rs`
 
+### Test-support module wiring
+
+Backend integration binaries compile as separate crates, so shared helpers
+under `backend/tests/support/` are wired in per binary rather than linked once.
+Three pieces cooperate here:
+
+- **`declare_test_support!`** (`backend/tests/support/entrypoint.rs`) is a
+  bang macro each binary invokes after `include!("support/entrypoint.rs")`. It
+  expands to a `mod support { … }` that re-exports the shared helpers and pulls
+  in only the named support submodules, for example:
+
+  ```rust
+  include!("support/entrypoint.rs");
+  declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
+  ```
+
+  Each `@module` arm maps a name to a `#[path]`-included file, so a binary
+  compiles only the support code it lists. Referencing an unregistered module
+  name fails during macro expansion rather than expanding to nothing.
+
+- **`trybuild-tests` feature** (`backend/Cargo.toml`) gates the compile-fail
+  coverage for that macro (`backend/tests/declare_test_support_compile_fail.rs`),
+  which asserts an unknown `@module` name produces a clear diagnostic. It is
+  off by default so ordinary `cargo test` stays fast; `make test` and CI enable
+  it via `--all-features`.
+
+- **Shared embedded-cluster environment repair** lives in
+  `backend/tests/support/stable_cluster_env.rs`
+  (`ensure_stable_cluster_environment`): it resolves stable `PG_PASSWORD` and
+  `POSTGRESQL_RELEASES_URL` values once per process, then repairs stale
+  `.pgpass`/data-directory state before the cluster bootstraps. Because its
+  first call may `std::env::set_var`, every setup path must call it **before**
+  constructing a Tokio runtime (worker threads make `set_var` undefined
+  behaviour). The `libc::atexit` process-exit machinery that stops the shared
+  cluster stays in `backend/tests/support/atexit_cleanup.rs`, which re-exports
+  `ensure_stable_cluster_environment` for callers. The pure helpers are
+  unit-tested by the dedicated `atexit_cleanup_tests` target.
+
 ## Adding or changing behavioural tests
 
 When adding a new behaviour:
