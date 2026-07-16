@@ -90,6 +90,30 @@ class TestClusterCreation:
             ),
         ], "k3d cluster creation must keep 127.0.0.1:8088:80@loadbalancer"
 
+    def test_ensure_cluster_skips_creation_when_cluster_exists(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        preview_config: PreviewConfig,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """An already-present cluster is reported and never recreated."""
+
+        def respond(
+            _command: str, args: list[str], _input_text: str | None
+        ) -> MockCommandResult:
+            if args == ["cluster", "list", "--output", "json"]:
+                return MockCommandResult(stdout='[{"name": "wildside-preview"}]')
+            return MockCommandResult()
+
+        commands = install_cluster_run_recorder(monkeypatch, respond)
+
+        ensure_cluster(preview_config)
+
+        assert commands == [
+            ("k3d", ["cluster", "list", "--output", "json"], None),
+        ], "an existing cluster must be detected without issuing a create command"
+        assert "already exists" in capsys.readouterr().out
+
     def test_kind_cluster_creation_uses_stdin_config_without_host_ports(
         self,
         monkeypatch: pytest.MonkeyPatch,

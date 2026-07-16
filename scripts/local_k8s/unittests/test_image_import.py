@@ -11,6 +11,7 @@ import pytest_mock
 
 from local_k8s.cluster import import_image
 from local_k8s.config import PreviewConfig
+from local_k8s.kind import _remove_stale_archive
 from local_k8s.validation import LocalK8sError
 
 
@@ -270,3 +271,45 @@ class TestImageImport:
         assert first_archive.parent != second_archive.parent, (
             "each import must own a private archive directory"
         )
+
+
+class TestRemoveStaleArchive:
+    """Cover cleanup of the private archive directory."""
+
+    def test_removes_private_archive_directory(self, tmp_path: Path) -> None:
+        """Verify the archive's parent directory is deleted."""
+        archive_dir = tmp_path / "wildside-abc123"
+        archive_dir.mkdir()
+        archive_path = archive_dir / "image.tar"
+        archive_path.write_bytes(b"payload")
+
+        _remove_stale_archive(archive_path)
+
+        assert not archive_dir.exists(), "private archive directory must be removed"
+
+    def test_cleanup_failure_is_logged_not_raised(
+        self,
+        mocker: pytest_mock.MockerFixture,
+        caplog: pytest.LogCaptureFixture,
+        tmp_path: Path,
+    ) -> None:
+        """Verify a rmtree failure is logged at WARNING and not propagated."""
+        archive_dir = tmp_path / "wildside-def456"
+        archive_dir.mkdir()
+        archive_path = archive_dir / "image.tar"
+        archive_path.write_bytes(b"payload")
+
+        # Force rmtree to fail on the directory, then drive the onexc handler so
+        # the logging path runs exactly as it would on a real cleanup error.
+        def fake_rmtree(path: object, *, onexc: Callable[..., None]) -> None:
+            onexc(fake_rmtree, str(path), OSError("permission denied"))
+
+        mocker.patch("local_k8s.kind.shutil.rmtree", side_effect=fake_rmtree)
+
+        with caplog.at_level("WARNING", logger="local_k8s.kind"):
+            _remove_stale_archive(archive_path)  # must not raise
+
+        assert any(
+            record.levelname == "WARNING" and str(archive_dir) in record.getMessage()
+            for record in caplog.records
+        ), "cleanup failure must be logged at WARNING with the archive directory"

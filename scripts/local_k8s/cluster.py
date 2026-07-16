@@ -30,6 +30,7 @@ from pathlib import Path
 from .commands import run
 from .config import PreviewConfig
 from .kind import (
+    _create_private_archive_dir,
     _image_archive_path,
     _kind_cluster_config,
     _kind_command,
@@ -158,7 +159,8 @@ def _import_image_via_podman_archive(
 ) -> None:
     """Import the local image into a kind cluster via a Podman archive."""
 
-    archive_path = _image_archive_path(config, archive_dir=archive_dir)
+    private_dir = _create_private_archive_dir(config, parent_dir=archive_dir)
+    archive_path = _image_archive_path(private_dir)
     archive_image_name = _podman_archive_image_name(config.image_name)
     try:
         if archive_image_name != config.image_name:

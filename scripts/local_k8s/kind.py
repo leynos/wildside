@@ -13,11 +13,15 @@ input text that :mod:`local_k8s.cluster` runs.
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import tempfile
 from pathlib import Path
+from types import TracebackType
 
 from .config import PreviewConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _kind_create_args(config: PreviewConfig) -> list[str]:
@@ -48,25 +52,31 @@ nodes:
 """
 
 
-def _image_archive_path(
-    config: PreviewConfig, *, archive_dir: Path | None = None
+def _create_private_archive_dir(
+    config: PreviewConfig, *, parent_dir: Path | None = None
 ) -> Path:
-    """Return a Podman image archive path inside a fresh private directory.
+    """Create and return a fresh private directory for a Podman image archive.
 
-    Creates a per-import directory via :func:`tempfile.mkdtemp`, which is owned
-    by the current process with ``0700`` permissions, and returns a fixed-named
-    archive path within it. Because the directory is freshly created and
-    private, no other user can pre-plant a symlink at the archive path, closing
-    the time-of-check/time-of-use window that a bare reserved path would leave
-    open. ``archive_dir`` selects the parent under which the private directory
-    is created and defaults to the system temporary directory.
+    Side effect: creates a per-import directory via :func:`tempfile.mkdtemp`,
+    owned by the current process with ``0700`` permissions, under ``parent_dir``
+    (the system temporary directory by default). Because the directory is
+    freshly created and private, no other user can pre-plant a symlink at the
+    archive path within it, closing the time-of-check/time-of-use window that a
+    bare reserved path would leave open. Returns the created directory.
     """
 
-    base_dir = Path(tempfile.gettempdir()) if archive_dir is None else archive_dir
-    private_dir = Path(
-        tempfile.mkdtemp(prefix=f"{config.cluster_name}-", dir=base_dir)
-    )
-    return private_dir / "image.tar"
+    base_dir = Path(tempfile.gettempdir()) if parent_dir is None else parent_dir
+    return Path(tempfile.mkdtemp(prefix=f"{config.cluster_name}-", dir=base_dir))
+
+
+def _image_archive_path(archive_dir: Path) -> Path:
+    """Return the Podman image archive path within ``archive_dir``.
+
+    Pure path computation with no filesystem side effects. ``archive_dir`` is
+    the private directory produced by :func:`_create_private_archive_dir`.
+    """
+
+    return archive_dir / "image.tar"
 
 
 def _is_registry_host(component: str) -> bool:
@@ -96,11 +106,36 @@ def _remove_stale_archive(archive_path: Path) -> None:
     """Remove the private archive directory after kind loads the image.
 
     The archive lives inside a per-import private directory created by
-    :func:`_image_archive_path`; remove that whole directory so no temporary
-    files are left behind once ``podman save`` and ``kind load`` complete.
+    :func:`_create_private_archive_dir`; remove that whole directory so no
+    temporary files are left behind once ``podman save`` and ``kind load``
+    complete.
+
+    This runs from the ``finally`` block of the archive import, so cleanup
+    failures are logged at ``WARNING`` and swallowed rather than raised: a
+    cleanup error must not mask the original ``podman``/``kind`` failure that
+    may already be propagating.
     """
 
-    shutil.rmtree(archive_path.parent, ignore_errors=True)
+    archive_dir = archive_path.parent
+
+    def _log_cleanup_failure(
+        function: object,
+        path: str,
+        excinfo: (
+            BaseException
+            | tuple[type[BaseException], BaseException, TracebackType | None]
+        ),
+    ) -> None:
+        exc = excinfo[1] if isinstance(excinfo, tuple) else excinfo
+        logger.warning(
+            "Failed to clean up local preview image archive directory %s (%s on %s)",
+            archive_dir,
+            getattr(function, "__name__", function),
+            path,
+            exc_info=exc,
+        )
+
+    shutil.rmtree(archive_dir, onexc=_log_cleanup_failure)
 
 
 def _kind_command(
