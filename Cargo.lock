@@ -509,7 +509,7 @@ dependencies = [
  "camino",
  "cap-std 4.0.2",
  "rstest",
- "rstest-bdd 0.4.0",
+ "rstest-bdd",
  "rstest-bdd-macros 0.4.0",
  "syn 2.0.118",
  "tempfile",
@@ -700,7 +700,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.24",
  "rstest",
- "rstest-bdd 0.5.0",
+ "rstest-bdd",
  "rstest-bdd-macros 0.5.0",
  "serde",
  "serde_json",
@@ -974,7 +974,7 @@ dependencies = [
  "maybe-owned",
  "rustix 1.1.4",
  "rustix-linux-procfs",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
  "winx",
 ]
 
@@ -1875,7 +1875,7 @@ dependencies = [
  "rand 0.9.2",
  "rand_chacha 0.9.0",
  "rstest",
- "rstest-bdd 0.5.0",
+ "rstest-bdd",
  "rstest-bdd-macros 0.5.0",
  "serde",
  "serde_json",
@@ -2123,7 +2123,7 @@ checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
 dependencies = [
  "io-lifetimes 2.0.4",
  "rustix 1.1.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3087,7 +3087,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2285ddfe3054097ef4b2fe909ef8c3bcd1ea52a8f0d274416caebeef39f04a65"
 dependencies = [
  "io-lifetimes 2.0.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3857,7 +3857,7 @@ dependencies = [
  "insta",
  "proptest",
  "rstest",
- "rstest-bdd 0.5.0",
+ "rstest-bdd",
  "rstest-bdd-macros 0.5.0",
  "serde",
  "serde_json",
@@ -5056,30 +5056,6 @@ dependencies = [
 
 [[package]]
 name = "rstest-bdd"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e741d97bce6ea0a7d0f074716041e0d0eebe6ab9edcd243e7d12f9fd2b5e8b6"
-dependencies = [
- "ctor",
- "derive_more 0.99.20",
- "fluent",
- "gherkin",
- "hashbrown 0.16.0",
- "i18n-embed",
- "inventory",
- "log",
- "regex",
- "rstest-bdd-patterns 0.4.0",
- "rstest-bdd-policy 0.4.0",
- "rust-embed",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "unic-langid",
-]
-
-[[package]]
-name = "rstest-bdd"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "138d8e4f97e16906ebeb0bfb12d2c94f0b05913a96fc522111bec62ca8328522"
@@ -5281,7 +5257,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7354,7 +7330,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -7669,7 +7645,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f3fd376f71958b862e7afb20cfe5a22830e1963462f3a17f49d82a6c1d1f42d"
 dependencies = [
  "bitflags",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
