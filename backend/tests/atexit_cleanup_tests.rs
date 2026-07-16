@@ -1,27 +1,23 @@
-//! Unit tests for the atexit cleanup helpers.
+//! Unit tests for the stable-cluster-environment helpers.
 //!
 //! These tests live in a dedicated integration-test target so they compile and
-//! run exactly once. The helpers under test are declared in
-//! `support/atexit_cleanup.rs`, which is included by many test binaries via
-//! `declare_test_support!`. Keeping the tests as a `#[cfg(test)] mod tests`
-//! inside that shared support module would compile and run them once per
-//! including binary; hosting them here avoids that duplicated work.
+//! run exactly once. They include `support/stable_cluster_env.rs` directly —
+//! rather than pulling the whole shared support surface in via
+//! `declare_test_support!` — so this binary compiles only the helpers it
+//! exercises. That keeps the target honest about its dependencies and avoids
+//! any `#[allow(dead_code)]`/`#[allow(unused_imports)]` suppression: the
+//! `libc::atexit` registration and cluster-handle acquisition it never calls
+//! stay in `support/atexit_cleanup.rs` and are not compiled here.
 
-// `declare_test_support!` pulls in the full shared cluster support scaffold
-// (postgres error formatting, cluster bootstrap, process-exit cleanup). This
-// dedicated target only unit-tests a subset of `atexit_cleanup`, so the helpers
-// it does not exercise are legitimately unused here rather than a real defect.
-#![allow(dead_code, unused_imports)]
-
-include!("support/entrypoint.rs");
-declare_test_support!(atexit_cleanup);
+#[path = "support/stable_cluster_env.rs"]
+mod stable_cluster_env;
 
 use std::time::Duration;
 
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 use rstest::rstest;
-use support::atexit_cleanup::{SHARED_CLUSTER_RETRIES, SHARED_CLUSTER_RETRY_DELAY};
+use stable_cluster_env::{SHARED_CLUSTER_RETRIES, SHARED_CLUSTER_RETRY_DELAY};
 
 #[cfg(unix)]
 fn write_postmaster_pid(dir_path: &std::path::Path, content: &str) {
@@ -43,7 +39,7 @@ fn read_postmaster_pid_reads_first_line(
         write_postmaster_pid(dir.path(), content);
     }
     assert_eq!(
-        support::atexit_cleanup::unix_atexit::read_postmaster_pid(dir.path()),
+        stable_cluster_env::unix_atexit::read_postmaster_pid(dir.path()),
         expected
     );
 }
@@ -64,7 +60,7 @@ fn resolve_stable_env_does_not_overwrite_existing_values() {
         Some("custom_value"),
         Some("https://example.invalid/postgresql-binaries"),
     );
-    support::atexit_cleanup::resolve_stable_env();
+    stable_cluster_env::resolve_stable_env();
     assert_eq!(
         std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
         "custom_value",
@@ -80,7 +76,7 @@ fn resolve_stable_env_does_not_overwrite_existing_values() {
 #[test]
 fn resolve_stable_env_sets_release_url_when_missing() {
     let _guard = lock_pg_env(Some("custom_value"), None);
-    support::atexit_cleanup::resolve_stable_env();
+    stable_cluster_env::resolve_stable_env();
     assert_eq!(
         std::env::var("POSTGRESQL_RELEASES_URL").expect("POSTGRESQL_RELEASES_URL should be set"),
         "https://github.com/theseus-rs/postgresql-binaries"
@@ -90,7 +86,7 @@ fn resolve_stable_env_sets_release_url_when_missing() {
 #[test]
 fn resolve_stable_env_sets_password_when_missing() {
     let _guard = lock_pg_env(None, Some("https://example.invalid/postgresql-binaries"));
-    support::atexit_cleanup::resolve_stable_env();
+    stable_cluster_env::resolve_stable_env();
     assert_eq!(
         std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
         "wildside_embedded_test",
@@ -140,7 +136,7 @@ fn ensure_stable_cluster_environment_resolves_env_once_under_concurrency() {
 
     std::thread::scope(|scope| {
         for _ in 0..8 {
-            scope.spawn(support::atexit_cleanup::ensure_stable_cluster_environment);
+            scope.spawn(stable_cluster_env::ensure_stable_cluster_environment);
         }
     });
 
@@ -208,7 +204,7 @@ fn ensure_stable_cluster_environment_serializes_concurrent_repair() {
 
     std::thread::scope(|scope| {
         for _ in 0..2 {
-            scope.spawn(support::atexit_cleanup::ensure_stable_cluster_environment);
+            scope.spawn(stable_cluster_env::ensure_stable_cluster_environment);
         }
     });
 
