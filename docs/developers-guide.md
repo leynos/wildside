@@ -415,7 +415,7 @@ Three pieces cooperate here:
 - **`trybuild-tests` feature** (`backend/Cargo.toml`) gates the compile-fail
   coverage for that macro (`backend/tests/declare_test_support_compile_fail.rs`),
   which asserts an unknown `@module` name produces a clear diagnostic. It is
-  off by default so ordinary `cargo test` stays fast; `make test` and CI enable
+  off by default, so ordinary `cargo test` stays fast; `make test` and CI enable
   it via `--all-features`.
 
 - **Shared embedded-cluster environment repair** lives in
