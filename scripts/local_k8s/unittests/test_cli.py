@@ -11,6 +11,8 @@ from pathlib import Path
 from shutil import which
 from typing import cast
 
+import pytest
+
 
 def test_local_k8s_cli_help_smoke(uv_executable: str, local_k8s_script: Path) -> None:
     """Verify the script entry point loads and exposes the preview CLI."""
@@ -80,6 +82,29 @@ def _write_fake_tool(fake_bin: Path) -> None:
                 else json.dumps([name, args, bool(stdin_text)]) + "\\n"
             )
 
+
+            def _unwrap(name: str, args: list[str]) -> tuple[str, list[str]]:
+                # Emulate `systemd-run --scope --user -p KEY=VAL env VAR=x kind ...`
+                # and `env VAR=x kind ...` by stripping scope flags and leading
+                # `VAR=value` assignments, then re-dispatching to the wrapped tool.
+                while name in ("env", "systemd-run"):
+                    rest = list(args)
+                    while rest and (
+                        rest[0].startswith("-") or "=" in rest[0] or rest[0] == "env"
+                    ):
+                        if rest[0] == "-p":
+                            rest = rest[2:]
+                        else:
+                            rest = rest[1:]
+                    if not rest:
+                        return name, args
+                    name, args = rest[0], rest[1:]
+                return name, args
+
+
+            name, args = _unwrap(name, args)
+
+
             def has_cluster() -> bool:
                 return state_path.exists() and state_path.read_text() == "created"
 
@@ -89,7 +114,16 @@ def _write_fake_tool(fake_bin: Path) -> None:
                 state_path.write_text("created")
             elif name == "k3d" and args[:2] == ["cluster", "delete"]:
                 state_path.unlink(missing_ok=True)
-            elif name == "helm" and args[:2] == ["--kube-context", "k3d-wildside-preview"]:
+            elif name == "kind" and args[:2] == ["get", "clusters"]:
+                print("wildside-preview" if has_cluster() else "other")
+            elif name == "kind" and args[:2] == ["create", "cluster"]:
+                state_path.write_text("created")
+            elif name == "kind" and args[:2] == ["delete", "cluster"]:
+                state_path.unlink(missing_ok=True)
+            elif name == "helm" and args[:2] in (
+                ["--kube-context", "k3d-wildside-preview"],
+                ["--kube-context", "kind-wildside-preview"],
+            ):
                 print("helm status")
             elif name == "kubectl" and "logs" in args:
                 print("backend log")
@@ -102,7 +136,16 @@ def _write_fake_tool(fake_bin: Path) -> None:
         encoding="utf8",
     )
     fake_tool.chmod(0o755)
-    for tool_name in ("docker", "helm", "k3d", "kubectl"):
+    for tool_name in (
+        "docker",
+        "podman",
+        "helm",
+        "k3d",
+        "kind",
+        "kubectl",
+        "env",
+        "systemd-run",
+    ):
         (fake_bin / tool_name).symlink_to(fake_tool)
 
 
@@ -145,7 +188,18 @@ def _assert_command_logged(
     ), f"{message}; recorded commands: {log_entries!r}"
 
 
-def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("container_engine", "k8s_provider"),
+    [
+        pytest.param("docker", "k3d", id="docker-k3d"),
+        pytest.param("podman", "kind", id="podman-kind"),
+    ],
+)
+def test_local_k8s_make_targets_smoke_successful_flow(
+    tmp_path: Path,
+    container_engine: str,
+    k8s_provider: str,
+) -> None:
     """Verify Makefile preview targets cross the real CLI boundary."""
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -155,6 +209,8 @@ def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
     env["WILDSIDE_FAKE_TOOL_LOG"] = str(tmp_path / "commands.jsonl")
     env["WILDSIDE_FAKE_TOOL_STATE"] = str(tmp_path / "cluster-state")
+    env["WILDSIDE_CONTAINER_ENGINE"] = container_engine
+    env["WILDSIDE_K8S_PROVIDER"] = k8s_provider
 
     _run_make_targets(
         env, ("local-k8s-up", "local-k8s-status", "local-k8s-logs", "local-k8s-down")
@@ -163,7 +219,7 @@ def test_local_k8s_make_targets_smoke_successful_flow(tmp_path: Path) -> None:
     log_entries = _load_log_entries(Path(env["WILDSIDE_FAKE_TOOL_LOG"]))
     _assert_command_logged(
         log_entries,
-        "docker",
+        container_engine,
         lambda args: args[0] == "build",
         "local-k8s-up must build the backend image through the CLI boundary",
     )

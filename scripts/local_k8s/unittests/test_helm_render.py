@@ -10,7 +10,6 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
 
 import pytest
 import yaml
@@ -19,16 +18,30 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CHART_DIR = REPO_ROOT / "deploy" / "charts" / "wildside"
 LOCAL_VALUES = CHART_DIR / "values.local.yaml"
 SESSION_MOUNT_PATH = "/var/run/secrets/wildside-session"
+HELM_TEMPLATE_TIMEOUT_SECONDS = 120
+
+type YamlScalar = str | int | float | bool | None
+type YamlValue = YamlScalar | list["YamlValue"] | dict[str, "YamlValue"]
+type Manifest = dict[str, YamlValue]
 
 
-def _manifests(rendered: str) -> list[dict[str, Any]]:
+def _manifests(rendered: str) -> list[Manifest]:
     """Return the rendered multi-document YAML as a list of manifest mappings."""
     return [doc for doc in yaml.safe_load_all(rendered) if isinstance(doc, dict)]
 
 
-def _first_of_kind(manifests: list[dict[str, Any]], kind: str) -> dict[str, Any]:
+def _first_of_kind(manifests: list[Manifest], kind: str) -> Manifest:
     """Return the first rendered manifest with the given ``kind``."""
     return next(manifest for manifest in manifests if manifest.get("kind") == kind)
+
+
+def _dig(mapping: dict[str, YamlValue], *keys: str) -> YamlValue:
+    """Walk nested YAML mappings by ``keys``, asserting each level is a mapping."""
+    value: YamlValue = mapping
+    for key in keys:
+        assert isinstance(value, dict)
+        value = value[key]
+    return value
 
 
 @pytest.fixture(scope="module")
@@ -51,6 +64,7 @@ def local_preview_render() -> str:
         capture_output=True,
         text=True,
         check=True,
+        timeout=HELM_TEMPLATE_TIMEOUT_SECONDS,
     )
     return completed.stdout
 
@@ -68,15 +82,24 @@ def test_local_render_wires_session_key_env(local_preview_render: str) -> None:
     deployment = _first_of_kind(manifests, "Deployment")
     config_map = _first_of_kind(manifests, "ConfigMap")
 
-    containers = deployment["spec"]["template"]["spec"]["containers"]
-    env_by_name = {
-        entry["name"]: entry
-        for container in containers
-        for entry in container.get("env", [])
-    }
+    containers = _dig(deployment, "spec", "template", "spec", "containers")
+    assert isinstance(containers, list)
+    env_by_name: dict[str, Manifest] = {}
+    for container in containers:
+        assert isinstance(container, dict)
+        env = container.get("env", [])
+        assert isinstance(env, list)
+        for entry in env:
+            assert isinstance(entry, dict)
+            name = entry["name"]
+            assert isinstance(name, str)
+            env_by_name[name] = entry
     session_env = env_by_name["SESSION_KEY_FILE"]
-    config_map_key = session_env["valueFrom"]["configMapKeyRef"]["key"]
+    config_map_key = _dig(session_env, "valueFrom", "configMapKeyRef", "key")
+    assert isinstance(config_map_key, str)
 
-    assert config_map["data"][config_map_key] == f"{SESSION_MOUNT_PATH}/session_key", (
+    data = _dig(config_map, "data")
+    assert isinstance(data, dict)
+    assert data[config_map_key] == f"{SESSION_MOUNT_PATH}/session_key", (
         "SESSION_KEY_FILE must resolve to the mounted session key path"
     )

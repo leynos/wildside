@@ -50,6 +50,10 @@ function isRecord(value) {
  * }} Structured policy result.
  */
 export function checkOverridesPolicy(packageJson) {
+  // npm consumes any top-level `overrides` property, so reject its mere
+  // presence — empty object, populated, or malformed (non-object) — rather than
+  // only a non-empty one.
+  const hasRootOverrides = Object.hasOwn(packageJson, 'overrides');
   const rootOverrides = isRecord(packageJson.overrides)
     ? Object.keys(packageJson.overrides).sort()
     : [];
@@ -57,7 +61,7 @@ export function checkOverridesPolicy(packageJson) {
     ? Object.keys(packageJson.pnpm.overrides).sort()
     : [];
 
-  if (rootOverrides.length > 0) {
+  if (hasRootOverrides) {
     return {
       ok: false,
       pnpmOverridesToCheck: pnpmOverrides,

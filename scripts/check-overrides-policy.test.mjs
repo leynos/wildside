@@ -77,6 +77,44 @@ describe('checkOverridesPolicy', () => {
     });
   });
 
+  it('reports both root and pnpm overrides when the root key is present', async () => {
+    const { checkOverridesPolicy } = await loadModule();
+
+    expect(
+      checkOverridesPolicy({
+        overrides: { ajv: '8.20.0' },
+        pnpm: { overrides: PNPM_OVERRIDES },
+      }),
+    ).toEqual({
+      ok: false,
+      pnpmOverridesToCheck: ['basic-ftp', 'dompurify', 'ip-address', 'uuid'],
+      rootOverrides: ['ajv'],
+      reason: 'root-overrides-present',
+    });
+  });
+
+  it('rejects a present-but-empty root overrides object', async () => {
+    const { checkOverridesPolicy } = await loadModule();
+
+    expect(checkOverridesPolicy({ overrides: {} })).toEqual({
+      ok: false,
+      pnpmOverridesToCheck: [],
+      rootOverrides: [],
+      reason: 'root-overrides-present',
+    });
+  });
+
+  it('rejects a malformed (non-object) root overrides value', async () => {
+    const { checkOverridesPolicy } = await loadModule();
+
+    expect(checkOverridesPolicy({ overrides: 'nope' })).toEqual({
+      ok: false,
+      pnpmOverridesToCheck: [],
+      rootOverrides: [],
+      reason: 'root-overrides-present',
+    });
+  });
+
   it('reports missing pnpm overrides', async () => {
     const { checkOverridesPolicy } = await loadModule();
 

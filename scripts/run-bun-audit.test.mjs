@@ -29,7 +29,10 @@ describe('runBunAudit', () => {
           {
             addedAt: '2026-06-28',
             advisory: 'GHSA-vghf-hv5q-vc2g',
-            expiresAt: '2026-07-28',
+            // Far-future expiry keeps the ledger non-expired regardless of the
+            // run date, so this Bun-invocation assertion stays deterministic.
+            // Expiry-policy behaviour is covered by the audit policy tests.
+            expiresAt: '9999-12-31',
             id: 'TEST_EXCEPTION',
             package: 'validator',
             reason: 'Regression test fixture',

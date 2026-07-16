@@ -46,13 +46,18 @@ def test_print_status_uses_provider_context_and_prints_kind_port_forward(
     print_status(config)
 
     output = capsys.readouterr().out
-    assert required_tools == [("helm", "kind", "kubectl")]
+    assert required_tools == [("helm", "kind", "kubectl")], (
+        "kind status must require the helm, kind, and kubectl provider tools"
+    )
     assert calls == [
         "require_tools",
         "print_cluster_status",
         "helm_status",
         "print_kubernetes_status",
-    ]
+    ], (
+        "status must require tools, then print cluster status, inspect the Helm "
+        "release, and print Kubernetes status in that order"
+    )
     assert commands == [
         (
             "helm",

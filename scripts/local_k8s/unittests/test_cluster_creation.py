@@ -19,7 +19,7 @@ class MockCommandResult:
     stderr: str = ""
 
 
-CommandRecord = tuple[str, list[str], str | None]
+type CommandRecord = tuple[str, list[str], str | None]
 
 
 def install_cluster_run_recorder(

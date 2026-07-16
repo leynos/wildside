@@ -20,6 +20,7 @@ class TestClusterStatus:
     def _assert_cluster_status_rejects(
         mocker: pytest_mock.MockerFixture,
         config: PreviewConfig,
+        capsys: pytest.CaptureFixture[str],
         *,
         stdout: str,
         match: str,
@@ -33,6 +34,10 @@ class TestClusterStatus:
 
         with pytest.raises(LocalK8sError, match=match):
             print_cluster_status(config)
+
+        assert capsys.readouterr().out == "", (
+            "status must not print stale details before rejecting"
+        )
 
     def test_kind_delete_is_idempotent_when_cluster_is_absent(
         self,
@@ -105,12 +110,14 @@ class TestClusterStatus:
     def test_print_cluster_status_rejects_missing_cluster(
         self,
         mocker: pytest_mock.MockerFixture,
+        capsys: pytest.CaptureFixture[str],
         preview_config: PreviewConfig,
     ) -> None:
         """Verify cluster status fails before printing stale preview details."""
         self._assert_cluster_status_rejects(
             mocker,
             replace(preview_config, k8s_provider="kind"),
+            capsys,
             stdout="other\n",
             match="does not exist",
         )
@@ -138,11 +145,12 @@ class TestClusterStatus:
     def test_k3d_cluster_exists_rejects_invalid_payload(
         self,
         mocker: pytest_mock.MockerFixture,
+        capsys: pytest.CaptureFixture[str],
         preview_config: PreviewConfig,
         stdout: str,
         match: str,
     ) -> None:
         """Verify k3d status fails on malformed `cluster list` output."""
         self._assert_cluster_status_rejects(
-            mocker, preview_config, stdout=stdout, match=match
+            mocker, preview_config, capsys, stdout=stdout, match=match
         )
