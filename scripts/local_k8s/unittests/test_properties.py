@@ -35,14 +35,37 @@ def cluster_names(draw: DrawFn) -> str:
 
 @st.composite
 def helm_names(draw: DrawFn, *, max_suffix_size: int = 90) -> str:
-    """Generate Helm release and chart names, including truncation cases.
+    """Generate Helm release and chart name candidates, including truncation cases.
 
-    ``max_suffix_size`` bounds the generated *suffix* (the characters after the
-    required first character), so the full generated name is one character
-    longer. Passing ``max_suffix_size=52`` therefore yields names of up to 53
-    characters -- the DNS-1123 / Helm release-name boundary enforced by
-    ``PreviewConfig``. Chart names use the larger default to stretch further and
-    exercise fullname truncation in ``helm_fullname``.
+    Parameters
+    ----------
+    draw : DrawFn
+        The Hypothesis draw function supplied to a ``@st.composite`` strategy,
+        used to pull values from the underlying character strategies.
+    max_suffix_size : int, optional
+        Upper bound on the generated *suffix* -- the characters following the
+        required leading character. Because a first character is always
+        prepended, the full generated name is one character longer than the
+        suffix, so ``max_suffix_size=52`` yields names of up to 53 characters,
+        the DNS-1123 / Helm release-name boundary enforced by ``PreviewConfig``.
+        The larger default stretches names further to exercise fullname
+        truncation in ``helm_fullname``. Defaults to ``90``.
+
+    Returns
+    -------
+    str
+        A Helm release or chart name candidate: a leading ``_NAME_CHARS``
+        character followed by up to ``max_suffix_size`` ``_NAME_REST_CHARS``
+        characters, with any trailing hyphen replaced so the result stays a
+        valid name.
+
+    Examples
+    --------
+    Draw bounded release names inside a property test::
+
+        >>> @given(name=helm_names(max_suffix_size=52))  # doctest: +SKIP
+        ... def test_release_name(name: str) -> None:
+        ...     assert len(name) <= 53
     """
     first = draw(st.sampled_from(_NAME_CHARS))
     middle = draw(st.lists(st.sampled_from(_NAME_REST_CHARS), max_size=max_suffix_size)).copy()
@@ -111,12 +134,12 @@ def _podman_saved_image_name(
     monkeypatch.setattr("local_k8s.cluster.require_tools", lambda _: None)
     monkeypatch.setattr("local_k8s.cluster.run", record_run)
     monkeypatch.setattr("local_k8s.cluster._remove_stale_archive", lambda _: None)
-    # This property exercises only the archived image name, so stub the archive
-    # path helper to avoid touching the filesystem for each generated example.
+    # This property exercises only the archived image name, so stub the private
+    # archive directory creation to avoid touching the filesystem for each
+    # generated example; the pure `_image_archive_path` then runs unmodified.
     monkeypatch.setattr(
-        "local_k8s.cluster._image_archive_path",
-        lambda _config, *, archive_dir=None: Path(archive_dir or tmp_path)
-        / "wildside-preview-image.tar",
+        "local_k8s.cluster._create_private_archive_dir",
+        lambda _config, *, parent_dir=None: Path(parent_dir or tmp_path),
     )
 
     import_image(

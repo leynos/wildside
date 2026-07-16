@@ -14,6 +14,37 @@ class LocalK8sError(RuntimeError):
     Kubernetes ``AlreadyExists`` server conflict from an incidental mention of
     "already exists" in an unrelated error message) rather than inspecting the
     formatted string representation.
+
+    Parameters
+    ----------
+    message : str
+        Human-readable description of the failure.
+    stderr : str | None, optional
+        The raw command stderr, preserved for structured classification of the
+        failure. Defaults to ``None``.
+    returncode : int | None, optional
+        The process exit status when available. Defaults to ``None``.
+
+    Attributes
+    ----------
+    stderr : str | None
+        The raw command stderr passed at construction, or ``None``.
+    returncode : int | None
+        The process exit status passed at construction, or ``None``.
+
+    Examples
+    --------
+    Raise with structured context captured from a completed process::
+
+        raise LocalK8sError(
+            "kubectl create failed",
+            stderr=completed.stderr,
+            returncode=completed.returncode,
+        )
+
+    Or raise with a plain message when no command context applies::
+
+        raise LocalK8sError("invalid configuration")
     """
 
     def __init__(
