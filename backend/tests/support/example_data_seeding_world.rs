@@ -21,18 +21,23 @@ use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 use super::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use super::{handle_cluster_setup_failure, provision_template_database};
+use super::cluster_skip::handle_cluster_setup_failure;
+use super::embedded_postgres::provision_template_database;
 
 /// Wrapper for non-Clone runtime handle.
 #[derive(Clone)]
 struct RuntimeHandle(Arc<Runtime>);
 
-/// Wrapper for the temporary database handle.
+/// Wrapper that keeps the scenario's temporary database alive for its lifetime.
+///
+/// The handle is never read; it exists solely so the `Arc<TemporaryDatabase>`
+/// (and the database it owns) is dropped when the scenario's world is. The
+/// field name is underscore-prefixed so the `dead_code` lint recognizes it as
+/// deliberately unused, avoiding a lint suppression.
 #[derive(Clone)]
-struct DatabaseHandle(
-    #[expect(dead_code, reason = "Retains the temporary database for each scenario")]
-    Arc<TemporaryDatabase>,
-);
+struct DatabaseHandle {
+    _database: Arc<TemporaryDatabase>,
+}
 
 /// Count row for raw SQL queries.
 #[derive(QueryableByName)]
@@ -58,8 +63,13 @@ pub struct ExampleDataSeedingWorld {
 
 impl ExampleDataSeedingWorld {
     fn setup_fresh_database(&self) {
+        // Resolve the stable cluster environment (which performs `set_var`)
+        // before constructing the Tokio runtime, which spawns worker
+        // threads, and `std::env::set_var` is undefined behaviour once other
+        // threads exist, so the environment must be reconciled first.
+        ensure_stable_cluster_environment()
+            .expect("reconcile stable cluster environment before cluster access");
         let runtime = Runtime::new().expect("create runtime");
-        ensure_stable_cluster_environment();
         let cluster = match shared_cluster_handle() {
             Ok(c) => c,
             Err(reason) => {
@@ -90,7 +100,9 @@ impl ExampleDataSeedingWorld {
 
         self.runtime.set(RuntimeHandle(Arc::new(runtime)));
         self.pool.set(pool);
-        self._database.set(DatabaseHandle(Arc::new(temp_db)));
+        self._database.set(DatabaseHandle {
+            _database: Arc::new(temp_db),
+        });
     }
 
     fn is_skipped(&self) -> bool {

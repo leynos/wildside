@@ -15,11 +15,21 @@ use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    seed_connection_helpers,
+    seed_helpers,
+    table_helpers,
+);
 
-use crate::support::seed_helpers::seed_user_and_route;
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{drop_table, handle_cluster_setup_failure, provision_template_database};
+use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::embedded_postgres::provision_template_database;
+use crate::support::seed_connection_helpers::seed_user_and_route;
+use crate::support::table_helpers::drop_table;
 
 struct TestContext {
     runtime: Runtime,
@@ -115,8 +125,9 @@ fn build_region_bundle() -> OfflineBundle {
 }
 
 fn setup_context() -> Result<TestContext, String> {
+    // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temp_db.url().to_string();

@@ -14,10 +14,12 @@ use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use tokio::runtime::Runtime;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
 
 // -----------------------------------------------------------------------------
 // Test World
@@ -53,9 +55,15 @@ struct ExampleDataRunsWorld {
 
 impl ExampleDataRunsWorld {
     fn setup_fresh_database(&self) {
+        // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+        if let Err(error) = ensure_stable_cluster_environment() {
+            let message = error.to_string();
+            let _: Option<()> = handle_cluster_setup_failure(&message);
+            self.setup_error.set(message);
+            return;
+        }
         let runtime = Runtime::new().expect("create runtime");
 
-        ensure_stable_cluster_environment();
         let cluster = match shared_cluster_handle() {
             Ok(c) => c,
             Err(reason) => {

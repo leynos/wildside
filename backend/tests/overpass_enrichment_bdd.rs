@@ -20,7 +20,8 @@ use tokio::sync::{Mutex as AsyncMutex, Notify, mpsc};
 
 #[path = "overpass_enrichment_bdd/world.rs"]
 mod overpass_enrichment_world;
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 const LAUNCH_A_BOUNDS: [f64; 4] = [-3.30, 55.90, -3.10, 56.00];
 

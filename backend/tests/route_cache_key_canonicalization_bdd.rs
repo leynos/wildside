@@ -17,9 +17,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::runtime::Runtime;
 
-mod support;
+mod support {
+    //! Test-local view of shared support helpers.
+    // These paths resolve from the nested `support` module name, so the
+    // `../support/` prefix intentionally points back to `backend/tests/support`.
+    // Removing it makes rustc search under `backend/tests/support/support`.
+    #[path = "../support/redis.rs"]
+    pub mod redis;
+    #[path = "../support/redis_skip.rs"]
+    pub mod redis_skip;
+}
 
-use support::{redis::RedisTestServer, should_skip_redis_tests};
+use support::redis::RedisTestServer;
+use support::redis_skip::should_skip_redis_tests;
 
 #[derive(Clone)]
 struct RuntimeHandle(Arc<Runtime>);

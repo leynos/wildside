@@ -502,10 +502,12 @@ Deployment automation for clusters and preview environments lives in the Nile
 Valley repository. Refer to its documentation for GitOps workflows and
 infrastructure state handling.
 
-This repository also provides a developer-local k3d preview helper:
+This repository also provides a developer-local Kubernetes preview helper:
 `scripts/local_k8s.py` and `scripts/local_k8s/*`. The helper builds the backend
-image, imports it into a local `k3d` cluster, and installs the Wildside chart
-with `deploy/charts/wildside/values.local.yaml`. It validates the application
+image, imports it into a local `k3d` or `kind` cluster, applies the
+`wildside-session-key` session Secret (creating it, or reusing the existing
+resource when one is already present), and installs the Wildside chart with
+`deploy/charts/wildside/values.local.yaml`. It validates the application
 packaging contract; Nile Valley remains the owner of shared cluster and GitOps
 automation.
 

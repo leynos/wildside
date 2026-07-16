@@ -10,11 +10,19 @@ use rstest_bdd_macros::{given, scenario, then, when};
 use std::sync::Arc;
 use uuid::Uuid;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    flow_helpers,
+    fixture_auth,
+    session_middleware,
+);
 
+use support::atexit_cleanup::ensure_stable_cluster_environment;
+use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::drop_users_table;
-use support::handle_cluster_setup_failure;
-use support::profile_interests::FIXTURE_AUTH_ID;
 
 #[path = "startup_mode_composition_bdd/db_support.rs"]
 mod db_support;
@@ -27,8 +35,8 @@ mod flows;
 
 use db_support::{seed_route, seed_user, setup_db_context};
 use flow_support::{
-    World, assert_internal, assert_user_state_adapter_selection, extract_validation_baseline,
-    is_skipped,
+    FIXTURE_AUTH_ID, World, assert_internal, assert_user_state_adapter_selection,
+    extract_validation_baseline, is_skipped,
 };
 use flows::{run_comprehensive_flow, run_validation_error_flow};
 
@@ -37,8 +45,15 @@ const FIXTURE_PROFILE_NAME: &str = "Ada Lovelace";
 
 #[fixture]
 fn world() -> World {
+    // Reconcile the stable env before the runtime spawns threads (`set_var` is
+    // unsound afterwards); a repair failure skips the scenario rather than
+    // panicking.
+    let skip_reason = ensure_stable_cluster_environment()
+        .err()
+        .map(|error| error.to_string());
+    let runtime = Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime for BDD scenario"));
     World {
-        runtime: Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime for BDD scenario")),
+        runtime,
         db: None,
         seeded_route_id: None,
         login: None,
@@ -54,7 +69,7 @@ fn world() -> World {
         route_annotations: None,
         route_submission: None,
         validation_baseline: None,
-        skip_reason: None,
+        skip_reason,
     }
 }
 

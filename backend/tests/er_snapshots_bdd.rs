@@ -14,10 +14,12 @@ use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use uuid::Uuid;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
 
 #[derive(Debug)]
 struct SnapshotWorld {
@@ -98,7 +100,11 @@ fn skip_if_needed(world: &SnapshotWorld) -> bool {
 
 #[fixture]
 fn world() -> SnapshotWorld {
-    ensure_stable_cluster_environment();
+    if let Err(error) = ensure_stable_cluster_environment() {
+        let message = error.to_string();
+        let _: Option<()> = handle_cluster_setup_failure(&message);
+        return SnapshotWorld::skipped(message);
+    }
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(reason) => {

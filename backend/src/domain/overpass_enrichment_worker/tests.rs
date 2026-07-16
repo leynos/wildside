@@ -1,7 +1,5 @@
 //! Unit tests for Overpass enrichment worker orchestration.
 
-#![cfg(test)]
-
 use std::collections::{BTreeMap, VecDeque};
 use std::error::Error as StdError;
 use std::io;

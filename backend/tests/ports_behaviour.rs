@@ -11,12 +11,14 @@ use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use uuid::Uuid;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::embedded_postgres::drop_users_table;
-use support::format_postgres_error;
-use support::{handle_cluster_setup_failure, provision_template_database};
+use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::embedded_postgres::drop_users_table;
+use crate::support::embedded_postgres::provision_template_database;
+use crate::support::format_postgres_error;
 
 #[fixture]
 fn sample_id() -> String {
@@ -115,7 +117,8 @@ type SharedContext = Arc<Mutex<RepoContext>>;
 
 #[fixture]
 fn repo_context() -> Option<RepoContext> {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment()
+        .expect("reconcile stable cluster environment before cluster access");
     let cluster = match shared_cluster_handle() {
         Ok(c) => c,
         Err(reason) => return handle_cluster_setup_failure(reason),

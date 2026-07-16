@@ -11,7 +11,9 @@ use postgres::NoTls;
 use tokio::runtime::Runtime;
 
 use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use crate::support::{drop_table, handle_cluster_setup_failure, provision_template_database};
+use crate::support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::embedded_postgres::provision_template_database;
+use crate::support::table_helpers::drop_table;
 use crate::{
     DatabaseHandle, FixtureOsmSource, GEOFENCE_BOUNDS, INPUT_DIGEST, OsmIngestionWorld,
     RuntimeHandle, SOURCE_URL,
@@ -19,9 +21,11 @@ use crate::{
 
 impl OsmIngestionWorld {
     pub fn setup_command(&self) {
+        // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+        ensure_stable_cluster_environment()
+            .expect("reconcile stable cluster environment before cluster access");
         let runtime = Runtime::new().expect("create runtime");
 
-        ensure_stable_cluster_environment();
         let cluster = match shared_cluster_handle() {
             Ok(cluster) => cluster,
             Err(reason) => {

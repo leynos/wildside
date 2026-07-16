@@ -1,14 +1,18 @@
 //! Integration tests for template-cloned database isolation.
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 use postgres::{Client, NoTls};
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
+use support::format_postgres_error;
 
 #[test]
 fn temporary_databases_are_isolated_from_template() {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment()
+        .expect("reconcile stable cluster environment before cluster access");
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(reason) => {

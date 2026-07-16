@@ -22,16 +22,12 @@ use backend::inbound::http::users::{
 };
 use backend::inbound::http::walk_sessions::create_walk_session;
 use backend::test_support::server::build_route_submission_service;
-use serde_json::Value;
 use uuid::Uuid;
 
 use super::flow_support::{Snapshot, World, is_skipped};
-use super::support::profile_interests::build_session_middleware;
+use super::support::flow_helpers::parse_json_body;
+use super::support::session_middleware::build_session_middleware;
 use super::{ServerConfig, build_http_state};
-
-fn parse_json_body(bytes: &[u8]) -> Option<Value> {
-    (!bytes.is_empty()).then(|| serde_json::from_slice(bytes).expect("json body"))
-}
 
 /// Build a server configuration from the world state.
 fn build_server_config(world: &World) -> ServerConfig {
@@ -70,7 +66,7 @@ where
         None
     };
     let body_bytes = actix_test::read_body(resp).await;
-    let body = parse_json_body(&body_bytes);
+    let body = parse_json_body(&body_bytes).expect("response body must contain valid JSON");
     Snapshot {
         status,
         body,

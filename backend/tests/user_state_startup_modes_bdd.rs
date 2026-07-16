@@ -1,6 +1,5 @@
 //! Behaviour coverage for 3.5.2 startup modes.
 
-use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -16,24 +15,33 @@ use actix_web::{
     test as actix_test, web,
 };
 use backend::domain::TRACE_ID_HEADER;
-use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+use backend::domain::ports::FixtureRouteSubmissionService;
 use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{LoginRequest, list_users, login};
 use backend::outbound::persistence::{DbPool, PoolConfig};
-use backend::test_support::server::{ServerConfig, build_http_state};
+use backend::test_support::server::ServerConfig;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    flow_helpers
+);
 
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::embedded_postgres::drop_users_table;
-use support::{handle_cluster_setup_failure, provision_template_database};
+use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::cluster_skip::handle_cluster_setup_failure;
+use crate::support::embedded_postgres::drop_users_table;
+use crate::support::embedded_postgres::provision_template_database;
 
-const FIXTURE_USERS_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
-const FIXTURE_USERS_NAME: &str = "Ada Lovelace";
+#[path = "user_state_startup_modes_bdd/flow_support.rs"]
+mod flow_support;
+
+use flow_support::{build_http_state_for_tests, is_fixture_users, parse_json_body, run_async};
 
 #[derive(Debug, Clone, Copy)]
 enum Mode {
@@ -61,38 +69,6 @@ struct World {
     login: Option<Snapshot>,
     users: Option<Snapshot>,
     skip_reason: Option<String>,
-}
-
-fn run_async<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new()
-        .expect("runtime")
-        .block_on(future)
-}
-
-fn build_http_state_for_tests(
-    config: &ServerConfig,
-    route_submission: Arc<dyn RouteSubmissionService>,
-) -> web::Data<HttpState> {
-    build_http_state(config, route_submission)
-}
-
-fn is_fixture_users(body: &Value) -> bool {
-    let users = body
-        .get("data")
-        .and_then(Value::as_array)
-        .expect("users data array");
-    users.iter().any(|user| {
-        user.get("id").and_then(Value::as_str) == Some(FIXTURE_USERS_ID)
-            && user.get("displayName").and_then(Value::as_str) == Some(FIXTURE_USERS_NAME)
-    })
-}
-
-fn parse_json_body(bytes: &[u8]) -> Option<Value> {
-    if bytes.is_empty() {
-        None
-    } else {
-        Some(serde_json::from_slice(bytes).expect("json body"))
-    }
 }
 
 async fn build_test_app_with_session(
@@ -143,7 +119,8 @@ where
             .cookies()
             .find(|cookie| cookie.name() == "session")
             .map(|cookie| cookie.into_owned()),
-        body: parse_json_body(actix_test::read_body(login_res).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(login_res).await.as_ref())
+            .expect("login response must contain valid JSON"),
     }
 }
 
@@ -164,7 +141,8 @@ where
             .and_then(|value| value.to_str().ok())
             .map(ToOwned::to_owned),
         session_cookie: None,
-        body: parse_json_body(actix_test::read_body(users_res).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(users_res).await.as_ref())
+            .expect("users response must contain valid JSON"),
     }
 }
 
@@ -186,7 +164,7 @@ async fn run_flow(
 }
 
 fn setup_db() -> Result<DbContext, String> {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();

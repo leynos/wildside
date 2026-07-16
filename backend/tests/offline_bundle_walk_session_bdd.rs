@@ -12,10 +12,17 @@ mod offline_bundle_walk_session_bdd {
     pub mod test_data;
     pub mod walk_session_steps;
 }
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    seed_helpers,
+    table_helpers
+);
 
+use crate::support::cluster_skip::handle_cluster_setup_failure;
 use offline_bundle_walk_session_bdd::steps_helpers::{SharedContext, setup_test_context};
-use support::handle_cluster_setup_failure;
 
 #[fixture]
 fn world() -> SharedContext {

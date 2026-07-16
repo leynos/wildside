@@ -15,6 +15,14 @@ global-timeout = "60m"
 [test-groups.pg-embed]
 max-threads = 1
 
+# The `declare_test_support` compile-fail test drives a full `trybuild` scratch
+# compilation against the backend crate's dependency graph. Even with a warm
+# dependency cache, resolving and linking that scratch bin routinely exceeds the
+# default 60s slow-timeout, so give it the same headroom as the pg-embed suite.
+[[profile.default.overrides]]
+filter = "binary(declare_test_support_compile_fail)"
+slow-timeout = { period = "300s", terminate-after = 1, grace-period = "5s" }
+
 [[profile.default.overrides]]
 filter = """
   binary(diesel_user_repository)

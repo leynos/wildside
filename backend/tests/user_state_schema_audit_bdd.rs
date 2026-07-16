@@ -9,11 +9,19 @@ use pg_embedded_setup_unpriv::TemporaryDatabase;
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    table_helpers,
+);
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::drop_users_table;
-use support::{drop_table, handle_cluster_setup_failure, provision_template_database};
+use support::embedded_postgres::provision_template_database;
+use support::table_helpers::drop_table;
 
 #[derive(Debug)]
 struct UserStateSchemaAuditWorld {
@@ -110,7 +118,11 @@ fn assert_users_and_profile_state(
 
 #[fixture]
 fn world() -> UserStateSchemaAuditWorld {
-    ensure_stable_cluster_environment();
+    if let Err(error) = ensure_stable_cluster_environment() {
+        let message = error.to_string();
+        let _: Option<()> = handle_cluster_setup_failure(&message);
+        return UserStateSchemaAuditWorld::skipped(message);
+    }
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(reason) => {

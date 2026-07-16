@@ -5,6 +5,10 @@ image:
 
 config:
   APP_ENV: "local-k8s"
+  SESSION_ALLOW_EPHEMERAL: "0"
+  SESSION_COOKIE_SECURE: "0"
+  SESSION_KEY_FILE: "/var/run/secrets/wildside-session/session_key"
+  SESSION_SAMESITE: "Lax"
 
 ingress:
   enabled: true
@@ -23,3 +27,9 @@ externalSecret:
 
 serviceAccount:
   create: true
+
+sessionSecret:
+  enabled: true
+  name: "wildside-session-key"
+  keyName: "session_key"
+  mountPath: "/var/run/secrets/wildside-session"

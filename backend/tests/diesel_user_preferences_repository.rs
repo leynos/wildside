@@ -12,10 +12,13 @@ use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
+use support::format_postgres_error;
 
 struct TestContext {
     runtime: Runtime,
@@ -38,8 +41,9 @@ fn seed_user(url: &str, user_id: &UserId) -> Result<(), String> {
 }
 
 fn setup_context() -> Result<TestContext, String> {
+    // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temp_db.url().to_string();

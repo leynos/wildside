@@ -75,7 +75,7 @@ sessionSecret:
   # Key within the Secret that holds the 64+ byte signing key.
   keyName: "session_key"
   # Mount path for the session key file.
-  mountPath: "/var/run/secrets"
+  mountPath: "/var/run/secrets/wildside-session"
 
 affinity: {}
 

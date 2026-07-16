@@ -1,1 +1,114 @@
-[]
+[
+  {
+    "id": "BUN_SMOL_TOML_DOS_2026_06",
+    "package": "smol-toml",
+    "advisory": "GHSA-v3rj-xjv7-4jmq",
+    "reason": "Bun reports the transitive markdownlint-cli advisory; pnpm keeps the patched transitive resolution through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-07-18"
+  },
+  {
+    "id": "BUN_YAML_STACK_OVERFLOW_2026_06",
+    "package": "yaml",
+    "advisory": "GHSA-48c2-rrv3-qjmp",
+    "reason": "Bun reports this transitive tooling advisory; pnpm keeps the patched transitive resolution through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-07-20"
+  },
+  {
+    "id": "BUN_MINIMATCH_WILDCARD_REDOS_2026_06",
+    "package": "minimatch",
+    "advisory": "GHSA-3ppc-4f35-3m26",
+    "reason": "Bun reports transitive frontend-tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-07-22"
+  },
+  {
+    "id": "BUN_MINIMATCH_GLOBSTAR_REDOS_2026_06",
+    "package": "minimatch",
+    "advisory": "GHSA-7r86-cg39-jmmj",
+    "reason": "Bun reports transitive frontend-tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-07-24"
+  },
+  {
+    "id": "BUN_MINIMATCH_EXTGLOB_REDOS_2026_06",
+    "package": "minimatch",
+    "advisory": "GHSA-23c5-xmqv-rm74",
+    "reason": "Bun reports transitive frontend-tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-07-26"
+  },
+  {
+    "id": "BUN_GLOB_CLI_COMMAND_INJECTION_2026_06",
+    "package": "glob",
+    "advisory": "GHSA-5j98-mcp5-4vw2",
+    "reason": "Bun reports transitive frontend-tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-07-28"
+  },
+  {
+    "id": "BUN_MARKDOWN_IT_SMARTQUOTES_DOS_2026_06",
+    "package": "markdown-it",
+    "advisory": "GHSA-6v5v-wf23-fmfq",
+    "reason": "Bun reports transitive frontend-tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-07-30"
+  },
+  {
+    "id": "BUN_ESBUILD_DEV_SERVER_FILE_READ_2026_06",
+    "package": "esbuild",
+    "advisory": "GHSA-g7r4-m6w7-qqqr",
+    "reason": "Bun reports transitive Vite tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-08-01"
+  },
+  {
+    "id": "BUN_JS_YAML_ALIAS_DOS_2026_06",
+    "package": "js-yaml",
+    "advisory": "GHSA-h67p-54hq-rp68",
+    "reason": "Bun reports transitive frontend-tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-08-03"
+  },
+  {
+    "id": "BUN_POSTCSS_STRINGIFY_XSS_2026_06",
+    "package": "postcss",
+    "advisory": "GHSA-qx2v-qp2m-jg93",
+    "reason": "Bun reports this transitive frontend-tooling advisory; keep it ledgered until the Bun lockfile resolves a patched PostCSS without npm-visible overrides.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-08-05"
+  },
+  {
+    "id": "BUN_VITE_LAUNCH_EDITOR_2026_06",
+    "package": "vite",
+    "advisory": "GHSA-v6wh-96g9-6wx3",
+    "reason": "Bun reports the Vite tooling advisory despite package.json requesting a safe Vite range; keep it explicit until the Bun lockfile no longer reports it.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-08-07"
+  },
+  {
+    "id": "BUN_VITE_FS_DENY_2026_06",
+    "package": "vite",
+    "advisory": "GHSA-fx2h-pf6j-xcff",
+    "reason": "Bun reports the Vite tooling advisory despite package.json requesting a safe Vite range; keep it explicit until the Bun lockfile no longer reports it.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-08-09"
+  },
+  {
+    "id": "BUN_PICOMATCH_POSIX_2026_06",
+    "package": "picomatch",
+    "advisory": "GHSA-3v7f-55p6-f55p",
+    "reason": "Bun reports transitive Picomatch versions from frontend tooling; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-08-11"
+  },
+  {
+    "id": "BUN_PICOMATCH_REDOS_2026_06",
+    "package": "picomatch",
+    "advisory": "GHSA-c2c7-rcm5-vvqj",
+    "reason": "Bun reports transitive Picomatch versions from frontend tooling; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "addedAt": "2026-06-28",
+    "expiresAt": "2026-08-13"
+  }
+]

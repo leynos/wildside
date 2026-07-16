@@ -1,7 +1,5 @@
 //! Tests for HTTP error mapping.
 
-#![cfg(test)]
-
 use std::{error::Error as StdError, io};
 
 use super::*;

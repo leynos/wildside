@@ -29,7 +29,8 @@ mod read_models_assertions;
 #[path = "support/catalogue_descriptor_snapshots.rs"]
 mod snapshots;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 use builders::{CURATOR_USER_ID, ROUTE_ID};
 use read_models_assertions::{
@@ -39,7 +40,8 @@ use read_models_assertions::{
 };
 use snapshots::build_ingestion_snapshots;
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
 
 struct TestContext {
     runtime: Runtime,
@@ -56,8 +58,9 @@ struct TestContext {
 type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> Result<TestContext, String> {
+    // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|e| e.to_string())?;
-    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|e| e.to_string())?;
 

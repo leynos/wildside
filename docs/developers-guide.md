@@ -62,10 +62,11 @@ as a test assertion on the SHA string.
 
 ## Local Kubernetes preview
 
-Use the repository-local k3d preview when validating the backend image and Helm
-chart before handing values to Nile Valley. The preview workflow is documented
-in
-[Local k3d preview and Nile Valley integration design](local-k8s-preview-design.md).
+Use the repository-local Kubernetes preview when validating the backend image
+and Helm chart before handing values to Nile Valley. The preview workflow is
+documented in
+[Local Kubernetes preview and Nile Valley integration
+design](local-k8s-preview-design.md).
 
 ```bash
 make local-k8s-up
@@ -77,8 +78,35 @@ make local-k8s-down
 The Makefile targets call `uv run scripts/local_k8s.py ...`. Keep helper logic
 in `scripts/local_k8s/`, unit-test pure validation behaviour under
 `scripts/local_k8s/unittests/`, and keep cluster creation idempotent. The
-helper must fail before making changes when required tools such as Docker, Helm,
-`k3d`, or `kubectl` are missing.
+helper must fail before making changes when required tools for the selected
+mode are missing.
+
+Docker plus `k3d` remains the default local mode:
+
+```bash
+make local-k8s-up
+```
+
+Rootless Podman plus `kind` is a supported alternative local mode:
+
+```bash
+WILDSIDE_CONTAINER_ENGINE=podman WILDSIDE_K8S_PROVIDER=kind make local-k8s-up
+```
+
+The preferred configuration variables are `WILDSIDE_CONTAINER_ENGINE`,
+`WILDSIDE_K8S_PROVIDER`, `WILDSIDE_K8S_CLUSTER`, and `WILDSIDE_K8S_PORT`.
+`WILDSIDE_KIND_NODE_IMAGE` is an optional testing-only override for supported
+Kubernetes upgrades; the default `kindest/node:v1.31.0` satisfies the chart's
+kubeVersion range. `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT` remain legacy
+aliases when the provider-neutral names are unset. In `kind` mode, use
+`make local-k8s-status` to print the provider-specific
+`kubectl port-forward` command before opening the preview port.
+
+The helper also creates a `wildside-session-key` Secret when missing before
+Helm installs the release, and reuses an existing key on later deploys.
+`values.local.yaml` mounts that key at
+`/var/run/secrets/wildside-session/session_key`, so local preview follows
+the release-mode session-key path without committing secret material.
 
 ## Front-end development
 
@@ -398,6 +426,44 @@ Scenario state is isolated by default:
   - Feature files: `backend/crates/<crate>/tests/features/`
   - Scenario bindings: `backend/crates/<crate>/tests/*_bdd.rs`
   - Shared fixtures: `backend/crates/<crate>/tests/common.rs`
+
+### Test-support module wiring
+
+Backend integration binaries compile as separate crates, so shared helpers
+under `backend/tests/support/` are wired in per binary rather than linked once.
+Three pieces cooperate here:
+
+- **`declare_test_support!`** (`backend/tests/support/entrypoint.rs`) is a
+  bang macro each binary invokes after `include!("support/entrypoint.rs")`. It
+  expands to a `mod support { … }` that re-exports the shared helpers and pulls
+  in only the named support submodules, for example:
+
+  ```rust
+  include!("support/entrypoint.rs");
+  declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
+  ```
+
+  Each `@module` arm maps a name to a `#[path]`-included file, so a binary
+  compiles only the support code it lists. Referencing an unregistered module
+  name fails during macro expansion rather than expanding to nothing.
+
+- **`trybuild-tests` feature** (`backend/Cargo.toml`) gates the compile-fail
+  coverage for that macro (`backend/tests/declare_test_support_compile_fail.rs`),
+  which asserts an unknown `@module` name produces a clear diagnostic. It is
+  off by default, so ordinary `cargo test` stays fast; `make test` and CI enable
+  it via `--all-features`.
+
+- **Shared embedded-cluster environment repair** lives in
+  `backend/tests/support/stable_cluster_env.rs`
+  (`ensure_stable_cluster_environment`): it resolves stable `PG_PASSWORD` and
+  `POSTGRESQL_RELEASES_URL` values once per process, then repairs stale
+  `.pgpass`/data-directory state before the cluster bootstraps. Because its
+  first call may `std::env::set_var`, every setup path must call it **before**
+  constructing a Tokio runtime (worker threads make `set_var` undefined
+  behaviour). The `libc::atexit` process-exit machinery that stops the shared
+  cluster stays in `backend/tests/support/atexit_cleanup.rs`, which re-exports
+  `ensure_stable_cluster_environment` for callers. The pure helpers are
+  unit-tested by the dedicated `atexit_cleanup_tests` target.
 
 ## Adding or changing behavioural tests
 
@@ -741,7 +807,7 @@ dependency declarations (PEP 723 inline metadata), and style guidance.
 1. Create a test file alongside the script: `scripts/<name>.test.mjs`.
 2. Use `vi.mock` / `vi.resetModules` from Vitest to isolate each import.
 3. If the script has CLI side-effects, gate them behind a direct-invocation
-   guard (see "Programmatic API" under "Override parity check") so the module
+   guard (see "Programmatic API" under "Override policy check") so the module
    can be imported cleanly in tests.
 
 ## UX audit helpers
@@ -783,72 +849,84 @@ sitemap.
 
 ```sh
 bun run scripts/audit-ux-state-graph.mjs \
-  --graph <state-graph.json> \
-  --sitemap <sitemap.md>
+  --graph docs/wildside-ux-state-graph-v0.1.json \
+  --sitemap docs/sitemap.md
 ```
 
-Tests for this helper must cover the example cases with Vitest, graph
-invariants with the root workspace `fast-check` dev dependency, and CLI text
-output with Vitest snapshots.
+A run prints one line per state:
 
-## Override parity check
+```text
+<state-id> in=<count> out=<count> route=<route-or-NONE> [ORPHAN]
+```
 
-This repository pins certain security-sensitive dependencies in two separate
-override blocks so they resolve correctly regardless of whether Bun or pnpm is
-used for installation:
+Input or parsing errors are printed to stderr and exit with code `1`.
 
-- `overrides` — top-level; consumed by Bun.
-- `pnpm.overrides` — consumed by pnpm.
+## Override policy check
 
-The script `scripts/check-overrides-parity.mjs` verifies that both blocks
-contain identical values for every pinned dependency. It is run automatically
-in Continuous Integration (CI) after the lockfile step and before dependency
-installation.
+This repository pins certain security-sensitive dependencies with
+`pnpm.overrides`. Keep these install-time dependency patches scoped to pnpm.
+Do not add a top-level `overrides` block: npm consumes that block for ordinary
+commands such as `npx`, and rejects overrides that conflict with direct
+dependency ranges.
+
+Bun audit exceptions are handled by `security/run-bun-audit.js`, which turns
+non-expired entries in `security/audit-exceptions.json` into explicit
+`bun audit --ignore=<GHSA>` flags. This keeps Bun audit policy visible without
+changing npm's dependency resolution surface.
+
+The script `scripts/check-overrides-policy.mjs` verifies that
+`pnpm.overrides` is present and that top-level overrides are absent. It is run
+automatically in Continuous Integration (CI) after the lockfile step and before
+dependency installation.
 
 ### Running locally
 
 ```sh
-node ./scripts/check-overrides-parity.mjs
+node ./scripts/check-overrides-policy.mjs
 ```
 
 A passing run prints:
 
 ```text
-Override parity verified for basic-ftp, dompurify, ip-address, uuid.
+pnpm override policy verified for basic-ftp, dompurify, ip-address, uuid.
 ```
 
-A failing run prints a per-dependency diff to stderr and exits with code `1`.
+A failing run prints a policy diagnostic to stderr and exits with code `1`.
 
 ### Resolving failures
 
-When the check fails, open `package.json` and ensure the version string in
-`overrides.<package>` exactly matches the version string in
-`pnpm.overrides.<package>`. Both entries must be present and identical.
+When the check fails, open `package.json` and remove any top-level
+`overrides` entries. Keep dependency patches under `pnpm.overrides`; for Bun
+audit output, add a time-bound entry to `security/audit-exceptions.json` and
+let `pnpm run audit:bun` pass the corresponding advisory ID to Bun.
 
 ### CI integration
 
 The check runs as a step in `.github/workflows/ci.yml`:
 
 ```yaml
-- run: node ./scripts/check-overrides-parity.mjs
+- run: node ./scripts/check-overrides-policy.mjs
 ```
 
 It appears after `make lockfile` and before `make deps`. A failure here means
-the two override blocks have drifted; update `package.json` and recommit.
+an npm-visible override has been added or the pnpm override policy has been
+removed; update `package.json` and recommit.
 
 ### Programmatic API
 
-`scripts/check-overrides-parity.mjs` exports two functions for use in tests or
+`scripts/check-overrides-policy.mjs` exports three functions for use in tests or
 other tooling:
 
-- **`checkOverridesParity(packageJson)`** — accepts a parsed `package.json`
-  object and returns a structured report with `ok`, `overridesToCheck`,
-  `mismatches`, and `reason` fields. It is a query helper and must not write to
-  stdout or stderr.
+- **`checkOverridesPolicy(packageJson)`** — accepts a parsed `package.json`
+  object and returns a structured report with `ok`, `pnpmOverridesToCheck`,
+  `rootOverrides`, and `reason` fields. `ok` is the outcome flag, while
+  `pnpmOverridesToCheck`, `rootOverrides`, and `reason` provide the policy
+  details. It is a query helper and must not write
+  to stdout or stderr.
 - **`formatOverrideValue(value)`** — formats a single override value for
   human-readable diagnostics; returns `"<missing>"` for `undefined` and a
   JSON-stringified value otherwise.
-- **`reportOverridesParity(report, outputIo?)`** — writes the structured report
+- **`reportOverridesPolicy(report, outputIo?)`** — writes the structured report
   to a console-like adapter and returns process exit code `0` or `1`. The CLI
   entrypoint is the only production caller that uses the default `console`
   adapter.
@@ -857,18 +935,18 @@ Example import:
 
 ```js
 import {
-  checkOverridesParity,
+  checkOverridesPolicy,
   formatOverrideValue,
-  reportOverridesParity,
-} from './scripts/check-overrides-parity.mjs';
+  reportOverridesPolicy,
+} from './scripts/check-overrides-policy.mjs';
 ```
 
-The CLI entry point is protected by a direct-invocation guard so importing the
-module does not trigger any file I/O or process side-effects:
+The CLI entry point is protected by a direct-invocation guard, so importing the
+module does not trigger any file I/O or process side effects:
 
 ```js
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  // only runs when invoked directly as `node ./scripts/check-overrides-parity.mjs`
+  // only runs when invoked directly as `node ./scripts/check-overrides-policy.mjs`
 }
 ```
 

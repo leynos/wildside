@@ -1,7 +1,5 @@
 //! Unit tests for catalogue domain type construction.
 
-#![cfg(test)]
-
 use std::{collections::BTreeMap, error::Error as StdError};
 
 use rstest::{fixture, rstest};

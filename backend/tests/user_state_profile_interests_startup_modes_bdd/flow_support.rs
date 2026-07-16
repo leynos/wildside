@@ -1,6 +1,5 @@
 //! Shared flow and assertion helpers for profile/interests startup-mode BDD.
 
-use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -18,8 +17,10 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use super::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use super::support::profile_interests::{FIXTURE_AUTH_ID, build_session_middleware};
-use super::support::{format_postgres_error, provision_template_database};
+use super::support::embedded_postgres::provision_template_database;
+use super::support::format_postgres_error;
+use super::support::profile_interests::FIXTURE_AUTH_ID;
+use super::support::session_middleware::build_session_middleware;
 use super::{ServerConfig, build_http_state};
 
 #[derive(Debug)]
@@ -45,15 +46,7 @@ pub(crate) struct World {
     pub(crate) skip_reason: Option<String>,
 }
 
-fn run_async<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new()
-        .expect("runtime")
-        .block_on(future)
-}
-
-fn parse_json_body(bytes: &[u8]) -> Option<Value> {
-    (!bytes.is_empty()).then(|| serde_json::from_slice(bytes).expect("json body"))
-}
+use crate::support::flow_helpers::{parse_json_body, run_async};
 
 pub(crate) fn assert_internal(snapshot: &Snapshot) {
     assert_eq!(snapshot.status, 500);
@@ -123,7 +116,7 @@ pub(crate) fn is_skipped(world: &World) -> bool {
 }
 
 pub(crate) fn setup_db_context() -> Result<DbContext, String> {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();
@@ -170,7 +163,8 @@ async fn capture_snapshot(res: actix_web::dev::ServiceResponse, with_cookie: boo
                     .map(|cookie| cookie.into_owned())
             })
             .flatten(),
-        body: parse_json_body(actix_test::read_body(res).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(res).await.as_ref())
+            .expect("response must contain valid JSON"),
     }
 }
 

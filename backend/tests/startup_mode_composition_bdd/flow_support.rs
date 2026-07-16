@@ -12,7 +12,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use super::db_support::DbContext;
-use super::support::profile_interests::FIXTURE_AUTH_ID;
+pub(crate) use super::support::fixture_auth::FIXTURE_AUTH_ID;
 
 /// Snapshot of an HTTP response for assertion purposes.
 #[derive(Debug)]

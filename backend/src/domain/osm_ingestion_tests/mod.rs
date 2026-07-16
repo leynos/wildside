@@ -1,7 +1,5 @@
 //! Shared test fixtures and module wiring for OSM ingestion unit tests.
 
-#![cfg(test)]
-
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::io;

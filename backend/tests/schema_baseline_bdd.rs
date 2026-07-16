@@ -7,10 +7,12 @@ use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use uuid::Uuid;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, embedded_postgres);
 
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{format_postgres_error, provision_template_database};
+use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::embedded_postgres::provision_template_database;
+use crate::support::format_postgres_error;
 
 struct BaselineWorld {
     client: Client,
@@ -67,7 +69,8 @@ impl BaselineWorld {
 
 #[fixture]
 fn world() -> BaselineWorld {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment()
+        .expect("reconcile stable cluster environment before cluster access");
     let cluster = shared_cluster_handle().expect("embedded postgres cluster should be available");
     let database = provision_template_database(cluster)
         .map_err(|error: UserPersistenceError| error.to_string())

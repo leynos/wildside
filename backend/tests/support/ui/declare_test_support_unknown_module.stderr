@@ -1,0 +1,16 @@
+error: no rules expected `not_a_real_module`
+  --> tests/support/ui/declare_test_support_unknown_module.rs:13:31
+   |
+13 | declare_test_support!(@module not_a_real_module);
+   |                               ^^^^^^^^^^^^^^^^^ no rules expected this token in macro call
+   |
+  ::: tests/support/ui/../entrypoint.rs
+   |
+   | macro_rules! declare_test_support {
+   | --------------------------------- when calling this macro
+   |
+note: while trying to match `atexit_cleanup`
+  --> tests/support/ui/../entrypoint.rs
+   |
+   |     (@module atexit_cleanup) => {
+   |              ^^^^^^^^^^^^^^

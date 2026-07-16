@@ -1,7 +1,5 @@
 //! Unit tests for ER snapshot orchestration behaviour.
 
-#![cfg(test)]
-
 use std::{env, error::Error as StdError, path::PathBuf};
 
 use cap_std::{ambient_authority, fs::Dir};

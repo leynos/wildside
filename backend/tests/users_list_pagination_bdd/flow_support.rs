@@ -1,6 +1,6 @@
 //! Flow helpers for users list pagination BDD coverage.
 
-use std::future::Future;
+pub(crate) use crate::support::flow_helpers::{parse_json_body, run_async};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -21,8 +21,9 @@ use url::Url;
 use uuid::Uuid;
 
 use super::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use super::support::profile_interests::build_session_middleware;
-use super::support::{format_postgres_error, provision_template_database};
+use super::support::embedded_postgres::provision_template_database;
+use super::support::format_postgres_error;
+use super::support::session_middleware::build_session_middleware;
 
 const ADMIN_USER_ID: &str = "123e4567-e89b-12d3-a456-426614174000";
 pub(crate) const ORDERED_USER_IDS: [&str; 5] = [
@@ -54,12 +55,6 @@ struct Snapshot {
     body: Option<Value>,
 }
 
-pub(crate) fn run_async<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new()
-        .expect("runtime")
-        .block_on(future)
-}
-
 pub(crate) fn is_skipped(world: &World) -> bool {
     if let Some(reason) = world.skip_reason.as_deref() {
         eprintln!("SKIP-TEST-CLUSTER: users list pagination scenario skipped ({reason})");
@@ -76,7 +71,7 @@ fn with_world<F: FnOnce(&mut World)>(world: &mut World, f: F) {
 }
 
 pub(crate) fn setup_db_context() -> Result<DbContext, String> {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();
@@ -183,7 +178,8 @@ where
     Snapshot {
         status: response.status().as_u16(),
         trace_id,
-        body: parse_json_body(actix_test::read_body(response).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(response).await.as_ref())
+            .expect("users response must contain valid JSON"),
     }
 }
 
@@ -202,10 +198,6 @@ where
         }
     }
     panic!("pagination traversal did not terminate");
-}
-
-fn parse_json_body(bytes: &[u8]) -> Option<Value> {
-    (!bytes.is_empty()).then(|| serde_json::from_slice(bytes).expect("json body"))
 }
 
 fn build_path_from_link(link: &str) -> String {

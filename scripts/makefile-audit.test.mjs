@@ -28,6 +28,7 @@ describe('Makefile audit targets', () => {
 
     expect(stdout).toContain('pnpm -r --if-present run audit');
     expect(stdout).toContain('pnpm run audit:validate');
+    expect(stdout).toContain('pnpm run audit:bun');
     expect(stdout).toContain('cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071');
   });
 
@@ -36,6 +37,7 @@ describe('Makefile audit targets', () => {
 
     expect(stdout).toContain('pnpm -r --if-present run audit');
     expect(stdout).toContain('pnpm run audit:validate');
+    expect(stdout).toContain('pnpm run audit:bun');
     expect(stdout).not.toContain('pnpm -r install');
   });
 

@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex};
 use super::repository_impl::{PgOfflineBundleRepository, PgWalkSessionRepository};
 use super::test_data::{build_region_bundle, build_route_bundle, build_walk_session};
 use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::embedded_postgres::provision_template_database;
 use crate::support::seed_helpers::seed_user_and_route_with_client;
-use crate::support::{drop_table, provision_template_database};
+use crate::support::table_helpers::drop_table;
 
 pub(crate) struct TestContext {
     pub(crate) offline_repo: PgOfflineBundleRepository,
@@ -30,7 +31,7 @@ pub(crate) struct TestContext {
 pub(crate) type SharedContext = Arc<Mutex<TestContext>>;
 
 pub(crate) fn setup_test_context() -> Result<TestContext, String> {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let cluster = shared_cluster_handle().map_err(|err| err.to_string())?;
     let temporary_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temporary_db.url().to_owned();

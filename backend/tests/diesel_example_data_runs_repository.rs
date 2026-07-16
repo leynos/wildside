@@ -21,10 +21,12 @@ use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, then, when};
 use tokio::runtime::Runtime;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
 
 const TEST_SEED_KEY: &str = "test-seed";
 const TEST_USER_COUNT: i32 = 12;
@@ -75,8 +77,9 @@ fn with_context_async<F, R, U>(
 }
 
 fn setup_test_context() -> Result<TestContext, String> {
+    // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
 

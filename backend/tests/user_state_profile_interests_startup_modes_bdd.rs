@@ -1,18 +1,29 @@
 //! Behaviour coverage for 3.5.3 profile/interests startup-mode stability.
 
+use backend::inbound::http::users::INTEREST_THEME_IDS_MAX;
 pub(crate) use backend::test_support::server::{ServerConfig, build_http_state};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
 use uuid::Uuid;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    fixture_auth,
+    flow_helpers,
+    profile_interests,
+    session_middleware,
+    table_helpers,
+);
 
+use support::cluster_skip::handle_cluster_setup_failure;
 use support::profile_interests::{
-    DB_PROFILE_NAME, FIRST_THEME_ID, FIXTURE_AUTH_ID, FIXTURE_PROFILE_NAME, INTEREST_THEME_IDS_MAX,
-    SECOND_THEME_ID,
+    DB_PROFILE_NAME, FIRST_THEME_ID, FIXTURE_AUTH_ID, FIXTURE_PROFILE_NAME, SECOND_THEME_ID,
 };
-use support::{drop_table, handle_cluster_setup_failure};
+use support::table_helpers::drop_table;
 
 #[path = "user_state_profile_interests_startup_modes_bdd/flow_support.rs"]
 mod flow_support;
@@ -161,9 +172,11 @@ fn the_interests_validation_error_envelope_remains_stable(world: &mut World) {
     let interests = world.interests.as_ref().expect("interests response");
     assert_eq!(interests.status, 400);
     let body = interests.body.as_ref().expect("error body");
+    let expected_message =
+        format!("interest theme ids must contain at most {INTEREST_THEME_IDS_MAX} items");
     assert_eq!(
         body.get("message").and_then(Value::as_str),
-        Some("interest theme ids must contain at most 100 items")
+        Some(expected_message.as_str())
     );
     assert_eq!(
         body.get("code").and_then(Value::as_str),

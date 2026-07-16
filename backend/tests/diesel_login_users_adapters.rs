@@ -20,11 +20,14 @@ use postgres::{Client, NoTls};
 use rstest::rstest;
 use serde_json::Value;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::drop_users_table;
-use support::{format_postgres_error, handle_cluster_setup_failure, provision_template_database};
+use support::embedded_postgres::provision_template_database;
+use support::format_postgres_error;
 
 const FIXTURE_USERS_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 const FIXTURE_USERS_NAME: &str = "Ada Lovelace";
@@ -227,7 +230,8 @@ async fn run_flow(
 }
 
 fn setup_db_context() -> Option<DbContext> {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment()
+        .expect("reconcile stable cluster environment before cluster access");
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(error) => {

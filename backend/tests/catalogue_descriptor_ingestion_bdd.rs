@@ -31,7 +31,8 @@ mod assertions;
 #[path = "catalogue_descriptor_ingestion_bdd/error_steps.rs"]
 mod error_steps;
 
-mod support;
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 use assertions::{
     assert_badges_stored, assert_community_picks_stored, assert_image_asset_json_shape,
@@ -43,7 +44,8 @@ use assertions::{
 use builders::{CURATOR_USER_ID, EDGE_COMMUNITY_PICK_ID, ROUTE_ID};
 use snapshots::{build_edge_community_pick, build_ingestion_snapshots};
 use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
-use support::{handle_cluster_setup_failure, provision_template_database};
+use support::cluster_skip::handle_cluster_setup_failure;
+use support::embedded_postgres::provision_template_database;
 
 struct TestContext {
     runtime: Runtime,
@@ -58,8 +60,9 @@ struct TestContext {
 type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> Result<TestContext, String> {
+    // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|e| e.to_string())?;
-    ensure_stable_cluster_environment();
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|e| e.to_string())?;
 

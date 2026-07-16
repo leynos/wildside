@@ -13,7 +13,8 @@ use backend::inbound::http::users::{InterestsRequest, LoginRequest, login, updat
 use backend::outbound::persistence::DbPool;
 use serde_json::Value;
 
-use super::support::profile_interests::{FIXTURE_AUTH_ID, build_session_middleware};
+pub(crate) use super::support::fixture_auth::FIXTURE_AUTH_ID;
+use super::support::session_middleware::build_session_middleware;
 use super::{ServerConfig, build_http_state as build_server_http_state};
 
 mod db_support;
@@ -21,7 +22,6 @@ mod db_support;
 pub(crate) use self::db_support::{
     SeedPreferences, World, is_skipped, seed_preferences, seed_user, setup_db_context,
 };
-
 pub(crate) const FIRST_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 pub(crate) const SECOND_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa7";
 pub(crate) const THIRD_THEME_ID: &str = "3fa85f64-5717-4562-b3fc-2c963f66afa9";
@@ -41,15 +41,8 @@ pub(crate) struct ExpectedPreferences<'a> {
     pub(crate) revision: u32,
 }
 
-pub(crate) fn run_async<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new()
-        .expect("runtime")
-        .block_on(future)
-}
-
-fn parse_json_body(bytes: &[u8]) -> Option<Value> {
-    (!bytes.is_empty()).then(|| serde_json::from_slice(bytes).expect("json body"))
-}
+use crate::support::flow_helpers::parse_json_body;
+pub(crate) use crate::support::flow_helpers::run_async;
 
 async fn capture_snapshot(
     res: actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
@@ -65,7 +58,8 @@ async fn capture_snapshot(
                     .map(|cookie| cookie.into_owned())
             })
             .flatten(),
-        body: parse_json_body(actix_test::read_body(res).await.as_ref()),
+        body: parse_json_body(actix_test::read_body(res).await.as_ref())
+            .expect("interests response must contain valid JSON"),
     }
 }
 
