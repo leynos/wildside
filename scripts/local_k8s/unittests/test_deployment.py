@@ -345,7 +345,7 @@ def test_ensure_session_secret_reuses_concurrent_create(
 ) -> None:
     """Verify a concurrently created Secret with key material is reused."""
     responder = _ConcurrentSecretResponder(ready_after_get_calls=2)
-    monkeypatch.setattr("local_k8s.deployment.run", responder)
+    monkeypatch.setattr("local_k8s.session_secret.run", responder)
 
     ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
 
@@ -366,7 +366,7 @@ def test_ensure_session_secret_repairs_malformed_concurrent_secret(
 ) -> None:
     """Verify a concurrently created Secret without a key is repaired, then reused."""
     responder = _ConcurrentSecretResponder(ready_after_get_calls=3)
-    monkeypatch.setattr("local_k8s.deployment.run", responder)
+    monkeypatch.setattr("local_k8s.session_secret.run", responder)
 
     ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
 
@@ -390,7 +390,7 @@ def test_ensure_session_secret_fails_when_secret_stays_malformed(
     # through the initial check, the post-conflict re-fetch, and the re-fetch
     # after the apply-based repair.
     responder = _ConcurrentSecretResponder(ready_after_get_calls=99)
-    monkeypatch.setattr("local_k8s.deployment.run", responder)
+    monkeypatch.setattr("local_k8s.session_secret.run", responder)
 
     with pytest.raises(LocalK8sError, match="still lacks session_key after repair"):
         ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)

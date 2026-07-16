@@ -19,6 +19,9 @@ DEFAULT_CONTAINER_ENGINE = "docker"
 DEFAULT_K8S_PROVIDER = "k3d"
 DEFAULT_KIND_NODE_IMAGE = "kindest/node:v1.31.0"
 DNS_1123_LABEL_PATTERN = re.compile(r"[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?")
+# Helm release names must be DNS-1123 labels capped at 53 characters so the
+# generated resource names leave room for chart-appended suffixes.
+HELM_RELEASE_NAME_PATTERN = re.compile(r"[a-z0-9](?:[-a-z0-9]{0,51}[a-z0-9])?")
 KIND_NODE_IMAGE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@_+-]{0,254}")
 
 type ContainerEngine = Literal["docker", "podman"]
@@ -74,6 +77,7 @@ class PreviewConfig:
         """Validate fields that are later forwarded to paths or YAML."""
         _validate_dns_1123_label(self.cluster_name, name="WILDSIDE_K8S_CLUSTER")
         _validate_dns_1123_label(self.namespace, name="WILDSIDE_K8S_NAMESPACE")
+        _validate_helm_release_name(self.release_name)
         _validate_kind_node_image(self.kind_node_image)
         _validate_engine_provider_combination(
             self.container_engine, self.k8s_provider
@@ -204,6 +208,17 @@ def _validate_dns_1123_label(value: str, *, name: str) -> None:
             f"{name} must contain only lowercase letters, "
             "digits, and hyphens; start and end with an alphanumeric "
             "character; and be at most 63 characters"
+        )
+        raise LocalK8sError(message)
+
+
+def _validate_helm_release_name(value: str) -> None:
+    """Reject Helm release names unsafe for shell hints or resource naming."""
+    if HELM_RELEASE_NAME_PATTERN.fullmatch(value) is None:
+        message = (
+            "WILDSIDE_HELM_RELEASE must contain only lowercase letters, "
+            "digits, and hyphens; start and end with an alphanumeric "
+            "character; and be at most 53 characters"
         )
         raise LocalK8sError(message)
 

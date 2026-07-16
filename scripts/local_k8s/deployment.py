@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-import base64
 import logging
 import re
-import secrets
-from collections.abc import Callable
+import shlex
 
 from .commands import run, run_streaming
 from .config import PreviewConfig
 from .cluster import ensure_cluster, import_image, print_cluster_status
 from .k8s import ensure_namespace, helm_fullname, print_kubernetes_status
+from .session_secret import ensure_session_secret
 from .validation import LocalK8sError, require_tools
 
-SESSION_SECRET_KEY_NAME = "session_key"  # noqa: S105 - Secret data key name, not secret material.
-SESSION_SECRET_NAME = "wildside-session-key"  # noqa: S105 - Secret resource name, not secret material.
+# ``ensure_session_secret`` is re-exported so callers (and tests that patch
+# ``local_k8s.deployment.ensure_session_secret``) keep resolving it here.
+__all__ = ["ensure_session_secret"]
 
 # Helm's ``--set`` splits values on commas and treats ``=`` as a key/value
 # separator, so an image reference containing those (or backslash/brace)
@@ -122,132 +122,6 @@ def build_image(config: PreviewConfig) -> None:
     )
 
 
-def _fetch_existing_session_key(config: PreviewConfig) -> str:
-    """Return the existing local session key payload, when Kubernetes has one."""
-    existing_key = run(
-        "kubectl",
-        [
-            "--context",
-            config.kube_context,
-            "-n",
-            config.namespace,
-            "get",
-            "secret",
-            SESSION_SECRET_NAME,
-            "--ignore-not-found",
-            f"-o=jsonpath={{.data.{SESSION_SECRET_KEY_NAME}}}",
-        ],
-    )
-    return existing_key.stdout.strip()
-
-
-def _render_session_secret_manifest(config: PreviewConfig, encoded_key: str) -> str:
-    """Render the Kubernetes Secret manifest for the generated session key."""
-    return f"""\
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {SESSION_SECRET_NAME}
-  namespace: {config.namespace}
-type: Opaque
-data:
-  {SESSION_SECRET_KEY_NAME}: {encoded_key}
-"""
-
-
-def _log_session_secret_event(config: PreviewConfig, event: str) -> None:
-    """Log a session Secret lifecycle event with the standard preview fields."""
-    logger.info(
-        event,
-        extra={
-            "cluster": config.cluster_name,
-            "namespace": config.namespace,
-            "secret": SESSION_SECRET_NAME,
-        },
-    )
-
-
-def _apply_session_secret_manifest(config: PreviewConfig, manifest: str) -> None:
-    """Create the session Secret, reconciling a concurrently created one.
-
-    On the normal path the Secret is created from ``manifest``. If another deploy
-    created it first (``already exists``), the existing Secret is validated: when
-    it already carries a non-empty ``session_key`` it is reused; otherwise it is
-    repaired by replacing it with the fresh key material in ``manifest``. A
-    Secret that still lacks key material after repair raises ``LocalK8sError``.
-    """
-    _log_session_secret_event(config, "local_k8s_session_secret_apply")
-    try:
-        run(
-            "kubectl",
-            ["--context", config.kube_context, "create", "-f", "-"],
-            input_text=manifest,
-        )
-    except LocalK8sError as exc:
-        if "already exists" not in str(exc):
-            raise
-    else:
-        return
-
-    _reconcile_existing_session_secret(config, manifest)
-
-
-def _reconcile_existing_session_secret(config: PreviewConfig, manifest: str) -> None:
-    """Reuse a concurrently created Secret, repairing it if it lacks a key."""
-    if _fetch_existing_session_key(config):
-        _log_session_secret_event(config, "local_k8s_session_secret_reuse")
-        return
-
-    # The existing Secret carries no session_key; apply fresh key material.
-    _log_session_secret_event(config, "local_k8s_session_secret_repair")
-    run(
-        "kubectl",
-        ["--context", config.kube_context, "apply", "-f", "-"],
-        input_text=manifest,
-    )
-    if not _fetch_existing_session_key(config):
-        error_message = (
-            f"session Secret {SESSION_SECRET_NAME!r} still lacks "
-            f"{SESSION_SECRET_KEY_NAME} after repair"
-        )
-        raise LocalK8sError(error_message)
-    _log_session_secret_event(config, "local_k8s_session_secret_reuse")
-
-
-def ensure_session_secret(
-    config: PreviewConfig,
-    *,
-    key_generator: Callable[[int], bytes] = secrets.token_bytes,
-) -> None:
-    """Create the local preview session signing key Secret when absent.
-
-    Parameters
-    ----------
-    config : PreviewConfig
-        Local preview settings that select the kube context, namespace, and
-        Secret location used by the deployment.
-    key_generator : Callable[[int], bytes], optional
-        Injectable source of key bytes. Tests use this seam to make the
-        rendered Secret deterministic; production uses ``secrets.token_bytes``.
-
-    Returns
-    -------
-    None
-        The function applies a Kubernetes Secret only when the expected key is
-        missing. Existing key material is reused to avoid rotating local
-        preview sessions on every deployment.
-    """
-
-    if _fetch_existing_session_key(config):
-        _log_session_secret_event(config, "local_k8s_session_secret_reuse")
-        return
-
-    key = key_generator(96)
-    encoded_key = base64.b64encode(key).decode("ascii")
-    manifest = _render_session_secret_manifest(config, encoded_key)
-    _apply_session_secret_manifest(config, manifest)
-
-
 def helm_upgrade(config: PreviewConfig) -> None:
     """Install or upgrade the Wildside Helm release.
 
@@ -310,23 +184,41 @@ def image_repository_and_tag(image_name: str) -> tuple[str, str]:
     they are returned so that neither can carry characters that Helm's
     ``--set``/``--set-string`` flags treat specially (commas, ``=``, braces,
     or backslashes), preventing chart-value injection via ``WILDSIDE_IMAGE``.
+
+    Parameters
+    ----------
+    image_name : str
+        Fully tagged image reference (``repository:tag``) to split, typically
+        sourced from ``WILDSIDE_IMAGE``.
+
+    Returns
+    -------
+    tuple[str, str]
+        The validated ``(repository, tag)`` pair extracted from ``image_name``.
+
+    Raises
+    ------
+    LocalK8sError
+        Raised when ``image_name`` omits a tag, or when the repository or tag
+        fails OCI-safe grammar validation.
     """
 
     repository, separator, tag = image_name.rpartition(":")
     if _image_ref_lacks_tag(repository, separator, tag):
-        raise LocalK8sError(
-            "WILDSIDE_IMAGE must include a tag, for example wildside-backend:local"
-        )
+        msg = "WILDSIDE_IMAGE must include a tag, for example wildside-backend:local"
+        raise LocalK8sError(msg)
     if _IMAGE_REPOSITORY_PATTERN.fullmatch(repository) is None:
-        raise LocalK8sError(
+        msg = (
             "WILDSIDE_IMAGE repository must be a valid OCI reference without "
             "whitespace or Helm --set metacharacters (',', '=', '{', '}', '\\')"
         )
+        raise LocalK8sError(msg)
     if _IMAGE_TAG_PATTERN.fullmatch(tag) is None:
-        raise LocalK8sError(
+        msg = (
             "WILDSIDE_IMAGE tag must be a valid OCI tag without whitespace or "
             "Helm --set metacharacters (',', '=', '{', '}', '\\')"
         )
+        raise LocalK8sError(msg)
     return repository, tag
 
 
@@ -395,11 +287,23 @@ def print_kind_port_forward_command(config: PreviewConfig) -> None:
 
     if config.k8s_provider != "kind":
         return
-    print("port-forward:")
-    print(
-        f"kubectl --context {config.kube_context} --namespace {config.namespace} "
-        f"port-forward svc/{helm_fullname(config)} {config.ingress_port}:80"
+    # Build the hint from separately quoted argv segments so no unescaped shell
+    # string is ever emitted, even though the underlying names are validated as
+    # DNS-1123 labels upstream in PreviewConfig.
+    command = shlex.join(
+        [
+            "kubectl",
+            "--context",
+            config.kube_context,
+            "--namespace",
+            config.namespace,
+            "port-forward",
+            f"svc/{helm_fullname(config)}",
+            f"{config.ingress_port}:80",
+        ]
     )
+    print("port-forward:")
+    print(command)
 
 
 def print_logs(config: PreviewConfig, *, follow: bool) -> None:
