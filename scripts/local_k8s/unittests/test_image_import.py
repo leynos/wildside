@@ -124,12 +124,17 @@ class TestImageImport:
             on_remove_archive=removed_archives.append,
         )
         archive_path = self._archive_path_from_save(commands)
+        private_dir = archive_path.parent
 
-        assert archive_path.parent == tmp_path, "Podman image archives must use the configured directory"
-        assert archive_path.name.startswith("wildside-preview-"), (
-            "Podman image archives must include the cluster name for operator diagnostics"
+        assert private_dir.parent == tmp_path, "Podman image archives must use the configured directory"
+        assert private_dir.is_dir(), "Podman image archives must live in a freshly created private directory"
+        assert (private_dir.stat().st_mode & 0o777) == 0o700, (
+            "the private archive directory must be owner-only to close the TOCTOU window"
         )
-        assert archive_path.name.endswith("-image.tar"), "Podman image archives must keep a tar suffix"
+        assert private_dir.name.startswith("wildside-preview-"), (
+            "the private archive directory must include the cluster name for operator diagnostics"
+        )
+        assert archive_path.name == "image.tar", "Podman image archives must keep a tar filename"
         assert removed_archives == [archive_path], "Podman image archives must be removed after load"
         assert commands == [
             (
@@ -258,6 +263,10 @@ class TestImageImport:
         first_commands = self._capture_commands(mocker, preview_config_kind, archive_dir=tmp_path)
         second_commands = self._capture_commands(mocker, preview_config_kind, archive_dir=tmp_path)
 
-        assert self._archive_path_from_save(first_commands) != self._archive_path_from_save(
-            second_commands
-        ), "Podman image imports must use unique archive paths"
+        first_archive = self._archive_path_from_save(first_commands)
+        second_archive = self._archive_path_from_save(second_commands)
+
+        assert first_archive != second_archive, "Podman image imports must use unique archive paths"
+        assert first_archive.parent != second_archive.parent, (
+            "each import must own a private archive directory"
+        )

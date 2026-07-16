@@ -13,7 +13,7 @@ input text that :mod:`local_k8s.cluster` runs.
 from __future__ import annotations
 
 import json
-import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -48,36 +48,25 @@ nodes:
 """
 
 
-def _reserve_unique_temp_path(*, prefix: str, suffix: str, base_dir: Path) -> Path:
-    """Reserve a unique filename by creating and immediately removing a temp file.
-
-    Side effect: creates a temporary file via :func:`tempfile.mkstemp` to claim a
-    collision-free name, closes the descriptor, then unlinks it so the caller can
-    create the real artefact at that path. Returns the reserved path.
-    """
-
-    file_descriptor, reserved = tempfile.mkstemp(
-        prefix=prefix,
-        suffix=suffix,
-        dir=base_dir,
-    )
-    os.close(file_descriptor)
-    path = Path(reserved)
-    path.unlink(missing_ok=True)
-    return path
-
-
 def _image_archive_path(
     config: PreviewConfig, *, archive_dir: Path | None = None
 ) -> Path:
-    """Return a unique temporary Podman image archive path for kind loading."""
+    """Return a Podman image archive path inside a fresh private directory.
+
+    Creates a per-import directory via :func:`tempfile.mkdtemp`, which is owned
+    by the current process with ``0700`` permissions, and returns a fixed-named
+    archive path within it. Because the directory is freshly created and
+    private, no other user can pre-plant a symlink at the archive path, closing
+    the time-of-check/time-of-use window that a bare reserved path would leave
+    open. ``archive_dir`` selects the parent under which the private directory
+    is created and defaults to the system temporary directory.
+    """
 
     base_dir = Path(tempfile.gettempdir()) if archive_dir is None else archive_dir
-    return _reserve_unique_temp_path(
-        prefix=f"{config.cluster_name}-",
-        suffix="-image.tar",
-        base_dir=base_dir,
+    private_dir = Path(
+        tempfile.mkdtemp(prefix=f"{config.cluster_name}-", dir=base_dir)
     )
+    return private_dir / "image.tar"
 
 
 def _is_registry_host(component: str) -> bool:
@@ -104,9 +93,14 @@ def _podman_archive_image_name(image_name: str) -> str:
 
 
 def _remove_stale_archive(archive_path: Path) -> None:
-    """Remove the temporary Podman image archive after kind loads it."""
+    """Remove the private archive directory after kind loads the image.
 
-    archive_path.unlink(missing_ok=True)
+    The archive lives inside a per-import private directory created by
+    :func:`_image_archive_path`; remove that whole directory so no temporary
+    files are left behind once ``podman save`` and ``kind load`` complete.
+    """
+
+    shutil.rmtree(archive_path.parent, ignore_errors=True)
 
 
 def _kind_command(
