@@ -39,43 +39,12 @@ BIOME_VERSION ?= 2.3.1
 TSC_VERSION ?= 5.9.2
 MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 YAMLLINT_VERSION ?= 1.35.1
-NIXIE_VERSION ?= 1.1.0
 PATHSPEC_VERSION ?= 1.1.1
 RUFF_VERSION ?= 0.15.12
 TYPOS_VERSION ?= 1.48.0
 UV ?= uv
 export UV_CACHE_DIR := $(CURDIR)/.uv-cache
 export UV_TOOL_DIR := $(CURDIR)/.uv-tools
-export REPOSITORY_TMPDIR := $(CURDIR)/.tmp
-NIXIE = $(UV) tool run --python 3.14 \
-	--from nixie-cli@$(NIXIE_VERSION) nixie
-export NIXIE_WORKLIST_HELPER := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))scripts/nixie_worklist.py
-define NIXIE_CMD
-@paths_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-paths.XXXXXX") || exit 1; \
-	committed_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-committed.XXXXXX") || exit 1; \
-	staged_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-staged.XXXXXX") || exit 1; \
-	unstaged_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-unstaged.XXXXXX") || exit 1; \
-	untracked_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-untracked.XXXXXX") || exit 1; \
-	trap 'rm -f "$$paths_file" "$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file"' EXIT HUP INT TERM; \
-	git diff --name-only -z --diff-filter=ACMR \
-		origin/main...HEAD -- '*.md' > "$$committed_file" || exit 1; \
-	git diff --cached --name-only -z --diff-filter=ACMR \
-		-- '*.md' > "$$staged_file" || exit 1; \
-	git diff --name-only -z --diff-filter=ACMR \
-		-- '*.md' > "$$unstaged_file" || exit 1; \
-	git ls-files --others --exclude-standard -z \
-		-- '*.md' > "$$untracked_file" || exit 1; \
-	python3 "$$NIXIE_WORKLIST_HELPER" \
-		"$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file" \
-		> "$$paths_file" || exit 1; \
-	if [ -s "$$paths_file" ]; then \
-	  xargs -0 -r env TMPDIR="$$REPOSITORY_TMPDIR" $(NIXIE) \
-	    --no-sandbox --max-concurrency 1 -- < "$$paths_file" || exit 1; \
-	else \
-	  env TMPDIR="$$REPOSITORY_TMPDIR" $(NIXIE) \
-	    --no-sandbox --max-concurrency 1 -- . || exit 1; \
-	fi
-endef
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
 TYPOS_CONFIG_BUILDER_SOURCE := git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_COMMIT)
 TYPOS_CONFIG_BUILDER := $(UV) tool run --python 3.14 \
@@ -356,11 +325,9 @@ markdownlint: spelling
 	fi
 
 nixie:
-	mkdir -p "$$REPOSITORY_TMPDIR"
-	TMPDIR="$$REPOSITORY_TMPDIR" bun install --frozen-lockfile
-	TMPDIR="$$REPOSITORY_TMPDIR" bun scripts/install-mermaid-browser.mjs
-	# CI needs --no-sandbox; serial runs avoid browser EAGAIN writes.
-	$(NIXIE_CMD)
+	$(call ensure_tool,nixie)
+	$(call ensure_tool,merman-cli)
+	nixie
 
 spelling: spelling-phrase-check
 	@git ls-files -z | xargs -0 -r env \
