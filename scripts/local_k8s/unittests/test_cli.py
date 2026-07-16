@@ -13,6 +13,90 @@ from typing import cast
 
 import pytest
 
+FAKE_TOOL_SOURCE = textwrap.dedent(
+    """\
+    #!/usr/bin/env python3
+    from __future__ import annotations
+
+    import json
+    import os
+    import sys
+    from pathlib import Path
+
+    name = Path(sys.argv[0]).name
+    args = sys.argv[1:]
+    state_path = Path(os.environ["WILDSIDE_FAKE_TOOL_STATE"])
+    log_path = Path(os.environ["WILDSIDE_FAKE_TOOL_LOG"])
+    stdin_text = sys.stdin.read()
+    log_path.write_text(
+        log_path.read_text() + json.dumps([name, args, bool(stdin_text)]) + "\\n"
+        if log_path.exists()
+        else json.dumps([name, args, bool(stdin_text)]) + "\\n"
+    )
+
+
+    def _unwrap(name: str, args: list[str]) -> tuple[str, list[str]]:
+        # Emulate `systemd-run --scope --user -p KEY=VAL env VAR=x kind ...`
+        # and `env VAR=x kind ...` by stripping scope flags and leading
+        # `VAR=value` assignments, then re-dispatching to the wrapped tool.
+        while name in ("env", "systemd-run"):
+            rest = list(args)
+            while rest and (
+                rest[0].startswith("-") or "=" in rest[0] or rest[0] == "env"
+            ):
+                if rest[0] == "-p":
+                    rest = rest[2:]
+                else:
+                    rest = rest[1:]
+            if not rest:
+                return name, args
+            name, args = rest[0], rest[1:]
+        return name, args
+
+
+    name, args = _unwrap(name, args)
+
+
+    def has_cluster() -> bool:
+        return state_path.exists() and state_path.read_text() == "created"
+
+    if name == "k3d" and args[:3] == ["cluster", "list", "--output"]:
+        print('[{"name":"wildside-preview"}]' if has_cluster() else "[]")
+    elif name == "k3d" and args[:2] == ["cluster", "create"]:
+        state_path.write_text("created")
+    elif name == "k3d" and args[:2] == ["cluster", "delete"]:
+        state_path.unlink(missing_ok=True)
+    elif name == "kind" and args[:2] == ["get", "clusters"]:
+        print("wildside-preview" if has_cluster() else "other")
+    elif name == "kind" and args[:2] == ["create", "cluster"]:
+        state_path.write_text("created")
+    elif name == "kind" and args[:2] == ["delete", "cluster"]:
+        state_path.unlink(missing_ok=True)
+    elif name == "helm" and args[:2] in (
+        ["--kube-context", "k3d-wildside-preview"],
+        ["--kube-context", "kind-wildside-preview"],
+    ):
+        print("helm status")
+    elif name == "kubectl" and "logs" in args:
+        print("backend log")
+    elif name == "kubectl" and "get" in args and "pods" in args:
+        print("pod/wildside-backend Running")
+    elif name == "kubectl" and "get" in args and "service" in args:
+        print("service/wildside")
+    """
+)
+
+FAKE_TOOL_NAMES = (
+    "docker",
+    "podman",
+    "helm",
+    "k3d",
+    "kind",
+    "kubectl",
+    "env",
+    "systemd-run",
+)
+
 
 def test_local_k8s_cli_help_smoke(uv_executable: str, local_k8s_script: Path) -> None:
     """Verify the script entry point loads and exposes the preview CLI."""
@@ -60,92 +144,9 @@ def test_local_k8s_status_reports_configuration_errors_at_cli_boundary(
 def _write_fake_tool(fake_bin: Path) -> None:
     """Write fake preview executables used by the Makefile smoke test."""
     fake_tool = fake_bin / "fake_tool.py"
-    fake_tool.write_text(
-        textwrap.dedent(
-            """\
-            #!/usr/bin/env python3
-            from __future__ import annotations
-
-            import json
-            import os
-            import sys
-            from pathlib import Path
-
-            name = Path(sys.argv[0]).name
-            args = sys.argv[1:]
-            state_path = Path(os.environ["WILDSIDE_FAKE_TOOL_STATE"])
-            log_path = Path(os.environ["WILDSIDE_FAKE_TOOL_LOG"])
-            stdin_text = sys.stdin.read()
-            log_path.write_text(
-                log_path.read_text() + json.dumps([name, args, bool(stdin_text)]) + "\\n"
-                if log_path.exists()
-                else json.dumps([name, args, bool(stdin_text)]) + "\\n"
-            )
-
-
-            def _unwrap(name: str, args: list[str]) -> tuple[str, list[str]]:
-                # Emulate `systemd-run --scope --user -p KEY=VAL env VAR=x kind ...`
-                # and `env VAR=x kind ...` by stripping scope flags and leading
-                # `VAR=value` assignments, then re-dispatching to the wrapped tool.
-                while name in ("env", "systemd-run"):
-                    rest = list(args)
-                    while rest and (
-                        rest[0].startswith("-") or "=" in rest[0] or rest[0] == "env"
-                    ):
-                        if rest[0] == "-p":
-                            rest = rest[2:]
-                        else:
-                            rest = rest[1:]
-                    if not rest:
-                        return name, args
-                    name, args = rest[0], rest[1:]
-                return name, args
-
-
-            name, args = _unwrap(name, args)
-
-
-            def has_cluster() -> bool:
-                return state_path.exists() and state_path.read_text() == "created"
-
-            if name == "k3d" and args[:3] == ["cluster", "list", "--output"]:
-                print('[{"name":"wildside-preview"}]' if has_cluster() else "[]")
-            elif name == "k3d" and args[:2] == ["cluster", "create"]:
-                state_path.write_text("created")
-            elif name == "k3d" and args[:2] == ["cluster", "delete"]:
-                state_path.unlink(missing_ok=True)
-            elif name == "kind" and args[:2] == ["get", "clusters"]:
-                print("wildside-preview" if has_cluster() else "other")
-            elif name == "kind" and args[:2] == ["create", "cluster"]:
-                state_path.write_text("created")
-            elif name == "kind" and args[:2] == ["delete", "cluster"]:
-                state_path.unlink(missing_ok=True)
-            elif name == "helm" and args[:2] in (
-                ["--kube-context", "k3d-wildside-preview"],
-                ["--kube-context", "kind-wildside-preview"],
-            ):
-                print("helm status")
-            elif name == "kubectl" and "logs" in args:
-                print("backend log")
-            elif name == "kubectl" and "get" in args and "pods" in args:
-                print("pod/wildside-backend Running")
-            elif name == "kubectl" and "get" in args and "service" in args:
-                print("service/wildside")
-            """
-        ),
-        encoding="utf8",
-    )
+    fake_tool.write_text(FAKE_TOOL_SOURCE, encoding="utf8")
     fake_tool.chmod(0o755)
-    for tool_name in (
-        "docker",
-        "podman",
-        "helm",
-        "k3d",
-        "kind",
-        "kubectl",
-        "env",
-        "systemd-run",
-    ):
+    for tool_name in FAKE_TOOL_NAMES:
         (fake_bin / tool_name).symlink_to(fake_tool)
 
 
