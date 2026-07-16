@@ -7,9 +7,17 @@ name: ci
 env:
   PG_VERSION: "16.10.0"
 
+# Default GITHUB_TOKEN to no access; each job re-grants only what it needs.
+# Both jobs only read repository contents — the token's sole runtime use is
+# raising GitHub API rate limits for public postgresql_embedded downloads, and
+# the CodeScene upload authenticates with its own CS_ACCESS_TOKEN.
+permissions: {}
+
 jobs:
   build:
     runs-on: ubicloud-standard-8
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
@@ -264,6 +272,8 @@ jobs:
   coverage:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubicloud-standard-8
+    permissions:
+      contents: read
     env:
       PG_VERSION: "16.10.0"
       # The 927edd4 shared-actions pin caps a single cargo invocation's
