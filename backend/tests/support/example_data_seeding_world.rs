@@ -32,7 +32,7 @@ struct RuntimeHandle(Arc<Runtime>);
 ///
 /// The handle is never read; it exists solely so the `Arc<TemporaryDatabase>`
 /// (and the database it owns) is dropped when the scenario's world is. The
-/// field name is underscore-prefixed so the `dead_code` lint recognises it as
+/// field name is underscore-prefixed so the `dead_code` lint recognizes it as
 /// deliberately unused, avoiding a lint suppression.
 #[derive(Clone)]
 struct DatabaseHandle {

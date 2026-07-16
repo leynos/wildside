@@ -15,10 +15,10 @@ import { fileURLToPath } from 'node:url';
  * Resolves a filesystem path through symlinks, preferring the native
  * implementation when available.
  *
- * @param {string} path - The path to normalise.
+ * @param {string} path - The path to normalize.
  * @returns {string} The canonical, symlink-resolved path.
  */
-export const normalise = (path) =>
+export const normalize = (path) =>
   typeof realpathSync.native === 'function' ? realpathSync.native(path) : realpathSync(path);
 
 /**
@@ -35,7 +35,7 @@ export function isExecutedDirectly(meta) {
 
   try {
     const scriptPath = fileURLToPath(meta.url);
-    return normalise(scriptPath) === normalise(resolve(invokedPath));
+    return normalize(scriptPath) === normalize(resolve(invokedPath));
   } catch {
     return false;
   }

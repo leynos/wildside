@@ -352,6 +352,7 @@ fn resolve_stable_env() -> String {
 ///   them as well.
 #[cfg(unix)]
 fn repair_password_state_serialized(password: &[u8]) -> BootstrapResult<()> {
+    use color_eyre::eyre::eyre;
     static PASSWORD_STATE_REPAIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     unix_atexit::acquire_shared_cluster_process_lock()?;
@@ -359,7 +360,7 @@ fn repair_password_state_serialized(password: &[u8]) -> BootstrapResult<()> {
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
     repair_default_password_state(password).map_err(|error| {
-        pg_embedded_setup_unpriv::BootstrapError::from(color_eyre::eyre::eyre!(
+        pg_embedded_setup_unpriv::BootstrapError::from(eyre!(
             "repair shared cluster password state: {error}"
         ))
     })
