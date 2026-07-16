@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import subprocess
+import subprocess  # noqa: S404 - tests deliberately exercise Make via subprocess.
 from pathlib import Path
 from shutil import which
 
@@ -89,9 +89,13 @@ def _read_invocations(log_path: Path) -> list[ToolInvocation]:
         uv_tool_dir = next(fields).decode()
         argument_count = int(next(fields))
         arguments = tuple(next(fields).decode() for _ in range(argument_count))
-        invocations.append(
-            (tool.decode(), tmpdir, uv_cache_dir, uv_tool_dir, arguments)
-        )
+        invocations.append((
+            tool.decode(),
+            tmpdir,
+            uv_cache_dir,
+            uv_tool_dir,
+            arguments,
+        ))
     return invocations
 
 

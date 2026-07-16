@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+import subprocess  # noqa: S404 - tests deliberately exercise the CLI via subprocess.
 import sys
-from collections.abc import Callable
+import typing as typ
 from pathlib import Path
 from shutil import which
 
 import pytest
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 FAKE_TOOL_SOURCE = (
     Path(__file__)
@@ -195,7 +198,7 @@ def test_load_log_entries_validates_each_json_line(
 def _assert_command_logged(
     log_entries: list[list[object]],
     tool: str,
-    predicate: Callable[[list[object]], bool],
+    predicate: cabc.Callable[[list[object]], bool],
     message: str,
 ) -> None:
     """Assert a fake-tool log contains a matching command."""
@@ -204,7 +207,8 @@ def _assert_command_logged(
         assert isinstance(arguments, list), "validated command arguments must be a list"
         if entry[0] == tool and predicate(arguments):
             return
-    raise AssertionError(f"{message}; recorded commands: {log_entries!r}")
+    failure = f"{message}; recorded commands: {log_entries!r}"
+    raise AssertionError(failure)
 
 
 def test_fake_tool_rejects_unsupported_wrapper_options(tmp_path: Path) -> None:

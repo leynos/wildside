@@ -22,13 +22,12 @@ malformed or the requested cluster cannot be inspected.
 
 from __future__ import annotations
 
+import dataclasses as dc
 import json
 import logging
-from dataclasses import dataclass
-from pathlib import Path
+import typing as typ
 
 from .commands import run
-from .config import PreviewConfig
 from .kind import (
     _create_private_archive_dir,
     _image_archive_path,
@@ -40,10 +39,15 @@ from .kind import (
 )
 from .validation import LocalK8sError, require_tools
 
+if typ.TYPE_CHECKING:
+    from pathlib import Path
+
+    from .config import PreviewConfig
+
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dc.dataclass(frozen=True)
 class _ProviderCommandSpec:
     """Provider-specific command arguments for cluster lifecycle operations."""
 
@@ -103,7 +107,6 @@ def ensure_cluster(config: PreviewConfig) -> None:
     >>> ensure_cluster(config)  # doctest: +SKIP
     kind cluster 'wildside-preview' already exists
     """
-
     require_tools(_cluster_tools(config))
     if _cluster_exists(config):
         print(f"{config.k8s_provider} cluster {config.cluster_name!r} already exists")
@@ -138,7 +141,6 @@ def delete_cluster(config: PreviewConfig) -> None:
     >>> delete_cluster(config)  # doctest: +SKIP
     kind cluster 'wildside-preview' does not exist
     """
-
     require_tools((_provider_tool(config),))
     if not _cluster_exists(config):
         print(f"{config.k8s_provider} cluster {config.cluster_name!r} does not exist")
@@ -158,7 +160,6 @@ def _import_image_via_podman_archive(
     archive_dir: Path | None,
 ) -> None:
     """Import the local image into a kind cluster via a Podman archive."""
-
     private_dir = _create_private_archive_dir(config, parent_dir=archive_dir)
     archive_path = _image_archive_path(private_dir)
     archive_image_name = _podman_archive_image_name(config.image_name)
@@ -191,7 +192,6 @@ def _import_image_via_podman_archive(
 
 def _import_image_via_kind_docker(config: PreviewConfig) -> None:
     """Import the local image into a kind cluster via the Docker engine."""
-
     command, args = _kind_command(
         config,
         [
@@ -207,7 +207,6 @@ def _import_image_via_kind_docker(config: PreviewConfig) -> None:
 
 def _import_image_via_k3d(config: PreviewConfig) -> None:
     """Import the local image into a k3d cluster."""
-
     run(
         "k3d",
         [
@@ -243,7 +242,6 @@ def import_image(config: PreviewConfig, *, archive_dir: Path | None = None) -> N
     >>> import_image(config)  # doctest: +SKIP
     >>> import_image(config, archive_dir=Path("/var/tmp"))  # doctest: +SKIP
     """
-
     require_tools(_image_import_tools(config))
     logger.info(
         "local_k8s_import_image",
@@ -287,7 +285,6 @@ def print_cluster_status(config: PreviewConfig) -> None:
     cluster: wildside-preview
     provider: kind
     """
-
     require_tools((_provider_tool(config),))
     logger.info(
         "local_k8s_cluster_status",
@@ -309,7 +306,6 @@ def print_cluster_status(config: PreviewConfig) -> None:
 
 def _cluster_tools(config: PreviewConfig) -> tuple[str, ...]:
     """Return command-line tools needed to manage the configured cluster."""
-
     match (config.k8s_provider, config.container_engine):
         case ("kind", "podman"):
             return ("kind", "podman", "kubectl", "helm", "systemd-run")
@@ -321,7 +317,6 @@ def _cluster_tools(config: PreviewConfig) -> tuple[str, ...]:
 
 def _provider_tool(config: PreviewConfig) -> str:
     """Return the executable that owns the configured cluster provider."""
-
     match config.k8s_provider:
         case "kind":
             return "kind"
@@ -331,7 +326,6 @@ def _provider_tool(config: PreviewConfig) -> str:
 
 def _image_import_tools(config: PreviewConfig) -> tuple[str, ...]:
     """Return tools needed to import the local image into the cluster."""
-
     match (config.k8s_provider, config.container_engine):
         case ("kind", "podman"):
             return ("kind", "podman")
@@ -341,7 +335,6 @@ def _image_import_tools(config: PreviewConfig) -> tuple[str, ...]:
 
 def _cluster_exists(config: PreviewConfig) -> bool:
     """Return whether the configured provider reports the preview cluster."""
-
     match config.k8s_provider:
         case "kind":
             command, args = _kind_command(config, ["get", "clusters"])
@@ -353,7 +346,6 @@ def _cluster_exists(config: PreviewConfig) -> bool:
 
 def _k3d_cluster_exists(cluster_name: str) -> bool:
     """Return whether k3d reports a cluster with the given name."""
-
     result = run("k3d", ["cluster", "list", "--output", "json"])
     try:
         clusters = json.loads(result.stdout or "[]")
@@ -379,9 +371,8 @@ def _cluster_name_from_k3d_payload(cluster: object) -> str:
     LocalK8sError
         Raised when the entry is not an object containing a string ``name``.
     """
-
     match cluster:
-        case {"name": str(name)}:
+        case {"name": str() as name}:
             return name
         case _:
             error_message = "unexpected k3d cluster list entry"
@@ -390,7 +381,6 @@ def _cluster_name_from_k3d_payload(cluster: object) -> str:
 
 def _k3d_create_args(config: PreviewConfig) -> list[str]:
     """Return the k3d cluster creation arguments."""
-
     return [
         "cluster",
         "create",
@@ -403,4 +393,3 @@ def _k3d_create_args(config: PreviewConfig) -> list[str]:
         f"127.0.0.1:{config.ingress_port}:80@loadbalancer",
         "--wait",
     ]
-

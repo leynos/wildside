@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-
-import pytest
+import dataclasses as dc
+import typing as typ
 
 from conftest import install_run_recorder
-from local_k8s.config import PreviewConfig
 from local_k8s.deployment import print_logs, print_status
+
+if typ.TYPE_CHECKING:
+    import pytest
+    from local_k8s.config import PreviewConfig
 
 
 def test_print_status_uses_provider_context_and_prints_kind_port_forward(
@@ -17,7 +19,7 @@ def test_print_status_uses_provider_context_and_prints_kind_port_forward(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify kind status uses provider tools and prints the operator command."""
-    config = replace(preview_config, k8s_provider="kind")
+    config = dc.replace(preview_config, k8s_provider="kind")
     required_tools: list[tuple[str, ...]] = []
     calls: list[str] = []
     commands = install_run_recorder(
@@ -83,7 +85,7 @@ def test_print_logs_uses_configured_kube_context(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify log streaming targets the provider-specific kube context."""
-    config = replace(preview_config, k8s_provider="kind")
+    config = dc.replace(preview_config, k8s_provider="kind")
     commands = install_run_recorder(monkeypatch)
     streaming_commands: list[tuple[str, list[str]]] = []
 
