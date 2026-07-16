@@ -381,7 +381,7 @@ Documentation and roadmap:
 - Do not mark roadmap progress as done until final gates pass in the same
   change set.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Primary artefacts expected from implementation:
 

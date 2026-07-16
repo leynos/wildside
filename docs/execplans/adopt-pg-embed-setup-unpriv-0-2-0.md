@@ -268,7 +268,7 @@ path (for example, the `target/pg-embed` subtree created by the helper) and
 re-run the bootstrap. Recreate the template by re-running the first test that
 needs it.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Keep short logs showing the successful update and test run in the files created
 by `tee` in `/tmp`. If unexpected failures occur, capture the error output and

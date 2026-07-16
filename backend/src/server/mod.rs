@@ -215,7 +215,7 @@ fn build_app(
 /// Construct an Actix HTTP server using the provided health state and configuration.
 ///
 /// # Parameters
-/// - `health_state`: shared readiness state updated once the server is initialised.
+/// - `health_state`: shared readiness state updated once the server is initialized.
 /// - `config`: pre-built server configuration containing session, binding, and
 ///   optional metrics settings.
 ///

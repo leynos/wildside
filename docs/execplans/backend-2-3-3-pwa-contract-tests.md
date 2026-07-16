@@ -506,7 +506,7 @@ All steps are safe to repeat:
 
 If a step fails partway through, re-run from the beginning of that stage.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Expected test output (partial):
 

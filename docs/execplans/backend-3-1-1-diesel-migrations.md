@@ -152,7 +152,7 @@ Done means:
 Migration is reversible via `down.sql`. Template database (DB) strategy allows
 rerunning integration/behaviour tests without persistent state conflicts.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Quality gate logs are captured via `tee` in `/tmp` before final commit.
 

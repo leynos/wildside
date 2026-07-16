@@ -34,7 +34,7 @@ fn http_users_list_rejects_without_session(world: WorldFixture) {
 
     steps::a_running_server_wired_with_mocked_http_and_ws_ports(shared_world.clone());
     steps::the_client_requests_the_users_list_without_a_valid_session(shared_world.clone());
-    steps::the_http_response_is_unauthorised(shared_world.clone());
+    steps::the_http_response_is_unauthorized(shared_world.clone());
     steps::the_users_port_is_not_called(shared_world.clone());
 }
 
@@ -44,7 +44,7 @@ fn http_unhappy_path_does_not_set_cookie(world: WorldFixture) {
 
     steps::a_running_server_wired_with_mocked_http_and_ws_ports(shared_world.clone());
     steps::the_client_logs_in_with_invalid_credentials(shared_world.clone());
-    steps::the_http_response_is_unauthorised_and_no_session_cookie_is_set(shared_world.clone());
+    steps::the_http_response_is_unauthorized_and_no_session_cookie_is_set(shared_world.clone());
 
     {
         let ctx = shared_world.borrow();

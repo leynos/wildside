@@ -59,7 +59,7 @@ findings are as follows:
   algorithmic foundation. It is recommended to build upon a powerful open-data
   stack, leveraging OpenStreetMap (OSM) for its comprehensive geospatial fabric
   and Wikidata for rich semantic context. The route generation itself will be
-  modeled as a variant of the computationally complex Orienteering Problem,
+  modelled as a variant of the computationally complex Orienteering Problem,
   requiring a specialized solver.
 
 - **System Architecture:** For the Minimum Viable Product (MVP), a monolithic
@@ -105,7 +105,7 @@ physical exercise.
 - **Core Focus:** The primary user value is derived from metrics and
   performance tracking. Features include detailed statistics on pace, distance,
   elevation gain, heart rate, and progress over time. The social component is
-  often competitive, centered around leaderboards, challenges, and sharing
+  often competitive, centred around leaderboards, challenges, and sharing
   workout achievements.
 
 - **Monetization:** These apps typically operate on a freemium model. The free
@@ -163,10 +163,10 @@ particularly among tourists.
   pre-defined, static walking tours. The content is often professionally
   created by tour guides or travel writers and may include rich media like
   audio narration. The user experience is one of consumption, selecting from a
-  catalog of available tours.
+  catalogue of available tours.
 
 - **Monetization:** The typical model involves a free application download that
-  allows users to browse the tour catalog. Accessing a specific tour's route
+  allows users to browse the tour catalogue. Accessing a specific tour's route
   map and turn-by-turn navigation requires an in-app purchase. Alternatively,
   users can purchase an all-access subscription for a yearly fee.
 
@@ -175,7 +175,7 @@ particularly among tourists.
   disruption of this model. By shifting from a static library of finite tours
   to a dynamic, generative engine, Wildside can offer a theoretically infinite
   number of personalized routes, a level of customization and spontaneity that
-  catalog-based apps cannot match.
+  catalogue-based apps cannot match.
 
 #### Segment 4: General-Purpose Mapping (Indirect Competitors)
 
@@ -192,7 +192,7 @@ These are the ubiquitous navigation utilities used by billions of people daily.
   optimization for efficiency is, in fact, the antithesis of Wildside's
   optimization for experience. A user seeking the quickest way to the post
   office will use Google Maps; a user seeking an interesting 45-minute stroll
-  through a neighborhood will (or should) use Wildside.
+  through a neighbourhood will (or should) use Wildside.
 
 ### App Store Optimization (ASO) & Marketing Analysis
 
@@ -218,7 +218,7 @@ go-to-market strategy[^1]
   through interesting but non-obvious streets, highlighting POIs like "Hidden
   Courtyard" or "Art Deco Facade," and emphasizing the personalization controls.
 
-- **User Review Sentiment:** Analyzing negative reviews of competitors provides
+- **User Review Sentiment:** Analysing negative reviews of competitors provides
   a roadmap of pitfalls to avoid[^1] Common complaints across the space include
   inaccurate GPS tracking, excessive battery drain from background location
   services, opaque or frustrating paywalls, and application instability. To
@@ -269,16 +269,16 @@ ______________________________________________________________________
 
 ### Table 1: Competitive Feature Matrix
 
-| Feature             | Wildside (Proposed)             | AllTrails                             | Komoot                          | Strava                         | GPSmyCity                   |
-| ------------------- | ------------------------------- | ------------------------------------- | ------------------------------- | ------------------------------ | --------------------------- |
-| Primary Focus       | Experiential Urban Exploration  | Outdoor/Wilderness Trail Hiking       | Multi-sport Outdoor Routing     | Fitness & Performance Tracking | Static City Tourism         |
-| Route Generation    | Dynamic, Algorithmic, On-Demand | Static Database, User-Generated       | Static Database, User-Generated | Manual or from past activities | Static, Pre-defined Catalog |
-| Personalization     | High (based on interests, time) | Medium (filters for difficulty, etc.) | Medium (filters for sport type) | Low (performance goals)        | None (pre-defined tours)    |
-| Primary Data Source | OpenStreetMap + Wikidata        | Proprietary + OSM + UGC               | OpenStreetMap + UGC             | Proprietary + OSM              | Proprietary                 |
-| Offline Maps        | Yes (Premium Feature)           | Yes (Premium Feature)                 | Yes (Paid Regions/Premium)      | Yes (Premium Feature)          | Yes (Per-tour purchase)     |
-| Audio Guidance      | Post-MVP                        | No                                    | Yes (Turn-by-turn)              | Yes (Pace cues)                | Yes (Narrated tours)        |
-| Community Content   | Post-MVP (Ratings, Sharing)     | Yes (Reviews, Photos, Conditions)     | Yes (Reviews, Photos)           | Yes (Segments, Social Feed)    | No                          |
-| Monetization Model  | Freemium (Subscription)         | Freemium (Subscription)               | Freemium (Region Packs/Sub)     | Freemium (Subscription)        | Freemium (IAP/Subscription) |
+| Feature             | Wildside (Proposed)             | AllTrails                             | Komoot                          | Strava                         | GPSmyCity                     |
+| ------------------- | ------------------------------- | ------------------------------------- | ------------------------------- | ------------------------------ | ----------------------------- |
+| Primary Focus       | Experiential Urban Exploration  | Outdoor/Wilderness Trail Hiking       | Multi-sport Outdoor Routing     | Fitness & Performance Tracking | Static City Tourism           |
+| Route Generation    | Dynamic, Algorithmic, On-Demand | Static Database, User-Generated       | Static Database, User-Generated | Manual or from past activities | Static, Pre-defined Catalogue |
+| Personalization     | High (based on interests, time) | Medium (filters for difficulty, etc.) | Medium (filters for sport type) | Low (performance goals)        | None (pre-defined tours)      |
+| Primary Data Source | OpenStreetMap + Wikidata        | Proprietary + OSM + UGC               | OpenStreetMap + UGC             | Proprietary + OSM              | Proprietary                   |
+| Offline Maps        | Yes (Premium Feature)           | Yes (Premium Feature)                 | Yes (Paid Regions/Premium)      | Yes (Premium Feature)          | Yes (Per-tour purchase)       |
+| Audio Guidance      | Post-MVP                        | No                                    | Yes (Turn-by-turn)              | Yes (Pace cues)                | Yes (Narrated tours)          |
+| Community Content   | Post-MVP (Ratings, Sharing)     | Yes (Reviews, Photos, Conditions)     | Yes (Reviews, Photos)           | Yes (Segments, Social Feed)    | No                            |
+| Monetization Model  | Freemium (Subscription)         | Freemium (Subscription)               | Freemium (Region Packs/Sub)     | Freemium (Subscription)        | Freemium (IAP/Subscription)   |
 
 ______________________________________________________________________
 
@@ -421,7 +421,7 @@ foundation for efficient expansion to desktop and mobile platforms.
 
   - **Community & Social Features:** To build defensibility and improve the
     core algorithm, community features will be introduced. Users will be able
-    to save, rate, and share their favorite generated walks. This creates a
+    to save, rate, and share their favourite generated walks. This creates a
     powerful feedback loop to refine the POI scoring and route generation
     algorithms, addressing the strong competitive advantage of community-driven
     platforms like AllTrails[^2]
@@ -488,7 +488,7 @@ technique analogous to personalized lead scoring in marketing.
   Here, P(POI) is the static, global popularity score of the POI, and
   U(POI,user_profile) is the personalized relevance score for the current user.
   The weights, wp​ and wu​, can be adjusted, potentially via a user-facing slider
-  in the UI labeled "Popular Hotspots" vs. "Hidden Gems," allowing users to
+  in the UI labelled "Popular Hotspots" vs. "Hidden Gems," allowing users to
   control the balance between visiting well-known landmarks and discovering
   more obscure points of interest.
 
@@ -547,7 +547,7 @@ well-studied problem in combinatorial optimization.
   - **Time Budget (Tmax​):** The maximum walk duration specified by the user.
 
   - **Time Windows (Post-MVP feature):** The opening hours of POIs (e.g.,
-    museums, cafes, shops) can be modeled as time windows, adding a layer of
+    museums, cafes, shops) can be modelled as time windows, adding a layer of
     practical constraint. A walk will not be routed to a museum after it has
     closed for the day.
 
@@ -584,7 +584,7 @@ well-studied problem in combinatorial optimization.
      This powerful, open-source software suite contains highly optimized
      solvers for a wide range of vehicle routing problems (VRPs), of which the
      OP is a well-known variant. Its flexible CP-SAT solver is particularly
-     well-suited for modeling the unique constraints of our problem, such as
+     well-suited for modelling the unique constraints of our problem, such as
      maximizing a collected score under a time budget[^12] This provides a
      robust, production-ready foundation for our core processing layer.
 
@@ -686,7 +686,7 @@ technology choices prioritize performance, safety, and productivity.
 
   - Diesel is a mature and widely-adopted Object-Relational Mapper (ORM) and
     query builder for Rust[^20] It is chosen for its strong emphasis on
-    compile-time safety. Diesel's macros analyze SQL queries at compile time,
+    compile-time safety. Diesel's macros analyse SQL queries at compile time,
     catching errors like mismatched types or incorrect column names before the
     code is ever run. This significantly increases developer productivity and
     reduces the likelihood of runtime database errors[^20] While it has a
@@ -834,7 +834,7 @@ is proposed to balance these requirements.
     2. **Prompt Optimization:** Prompts will be engineered to be concise and
        effective, minimizing token usage[^33]
 
-    3. **Model Selection:** Choosing a model with a favorable
+    3. **Model Selection:** Choosing a model with a favourable
        price-to-performance ratio, like Claude 3.5 Sonnet ($3/M input, $15/M
        output tokens) or GPT-4o mini ($0.60/M input, $2.40/M output), is
        critical.
@@ -1241,7 +1241,7 @@ Wildside and proposes concrete strategies for their mitigation.
      prioritize areas for data improvement.
 
   3. **Strategic Rollout:** The initial launch of the application will focus on
-     major urban centers where the density and quality of both OSM and Wikidata
+     major urban centres where the density and quality of both OSM and Wikidata
      are known to be highest. Expansion to other regions will be contingent on
      a preliminary assessment of data quality.
 
@@ -1307,7 +1307,7 @@ Wildside and proposes concrete strategies for their mitigation.
 
   1. **Secure Architectural Patterns:** The Dual LLM and Plan-Then-Execute
      patterns described in Section 5.4 will be strictly implemented. This
-     architectural separation is the most robust defense against prompt
+     architectural separation is the most robust defence against prompt
      injection.
 
   2. **Treat External Data as Untrusted:** All data retrieved from external
@@ -1343,14 +1343,14 @@ Wildside and proposes concrete strategies for their mitigation.
 
      - **Offline Maps & Navigation:** This is a proven and powerful driver for
        subscription conversion in competitor apps like AllTrails and is a
-       critical feature for travelers[^2]
+       critical feature for travellers[^2]
 
      - **Advanced Features (Post-MVP):** Future features like Audio Guides and
        AR overlays will be exclusive to premium subscribers.
 
   3. **Targeted Marketing:** Marketing efforts will be focused on the UVP of
      experiential discovery. The target audience is not the fitness community
-     but rather travelers, urban explorers, local history enthusiasts, and
+     but rather travellers, urban explorers, local history enthusiasts, and
      architecture buffs. Content marketing and partnerships with travel
      bloggers and local interest groups will be more effective than competing
      for fitness-related keywords.
@@ -1405,7 +1405,7 @@ against a set of critical recommendations:
 
 3. **Strategically Control Variable Costs through Self-Hosting:** The business
    model is only viable if variable costs are aggressively managed. The two
-   most significant potential cost centers—map tiles and routing
+   most significant potential cost centres—map tiles and routing
    calculations—must be brought in-house using open-source solutions
    (self-hosted vector tiles and a self-hosted Valhalla instance). This
    converts potentially unbounded API fees into predictable, fixed

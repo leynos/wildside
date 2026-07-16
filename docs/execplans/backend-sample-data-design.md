@@ -140,7 +140,7 @@ Documentation edits and the formatting/lint commands are safe to re-run. If
 review feedback changes the design scope, update this ExecPlan's `Decision Log`
 and `Progress` sections to reflect the new direction.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 The design deliverables are:
 

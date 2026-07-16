@@ -130,7 +130,7 @@ fn the_users_response_is_bad_request_with_unsupported_direction_details(world: &
 }
 
 #[then("the users response is unauthorised")]
-fn the_users_response_is_unauthorised(world: &mut World) {
+fn the_users_response_is_unauthorized(world: &mut World) {
     assert_status(world, 401);
 }
 

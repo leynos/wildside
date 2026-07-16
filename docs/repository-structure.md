@@ -122,7 +122,7 @@ myapp/
 
 ### Helm chart values structure
 
-The Helm chart values file (`values.yaml`) is organised in the following
+The Helm chart values file (`values.yaml`) is organized in the following
 hierarchy. See [values-class-diagram.mmd](values-class-diagram.mmd) for a
 visual overview. Validation via
 [`values.schema.json`](../deploy/charts/wildside/values.schema.json) enforces
@@ -485,10 +485,10 @@ to this chart.
 ### 7.2 CI/CD Outline
 
 1. **Lint & test**: cargo fmt/clippy/test; bun lint/type‑check/unit tests.
-2. **Build artifacts**:
+2. **Build artefacts**:
    - Build backend image → push to registry.
    - Build frontend dist → upload to object storage.
-   - Emit `spec/openapi.json` and publish as build artifact; run `orval` in a
+   - Emit `spec/openapi.json` and publish as build artefact; run `orval` in a
      “types up‑to‑date” check.
    - (Optional) Generate AsyncAPI HTML docs and publish to an internal docs
      bucket.

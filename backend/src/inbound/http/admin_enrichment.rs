@@ -151,7 +151,7 @@ fn encode_before_cursor(cursor: EnrichmentProvenanceCursor) -> String {
     responses(
         (status = 200, description = "Enrichment provenance records", body = ListEnrichmentProvenanceResponseBody),
         (status = 400, description = "Invalid request", body = ErrorSchema),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 503, description = "Service unavailable", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),

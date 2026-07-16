@@ -238,7 +238,7 @@ requires escalation, not a workaround.
 - 2026-05-01: Adding `created_at` to `User` exposed PostgreSQL's timestamp
   precision boundary: Diesel round-trips `timestamptz` values at microsecond
   precision, while `Utc::now()` supplies nanoseconds. `User::new` now
-  normalises the domain timestamp to microsecond precision so persisted users,
+  normalizes the domain timestamp to microsecond precision so persisted users,
   cursor keys, and test equality all use the same precision.
 - 2026-05-01: `backend/tests/ports_behaviour.rs` had an independent
   PostgreSQL test adapter that still inserted only `id` and `display_name`. It
@@ -299,9 +299,9 @@ requires escalation, not a workaround.
   have a deterministic no-database path. Date/Author: 2026-05-01,
   implementation agent.
 
-- Decision: normalise `User::created_at` to microsecond precision in the
+- Decision: normalize `User::created_at` to microsecond precision in the
   domain constructor. Rationale: users are persisted to PostgreSQL
-  `timestamptz`, which stores microsecond precision. Normalising once at the
+  `timestamptz`, which stores microsecond precision. Normalizing once at the
   domain boundary avoids adapter-specific timestamp drift and keeps cursor keys
   based on the same values that will be read back from storage. Date/Author:
   2026-05-01, implementation agent.
@@ -318,7 +318,7 @@ requires escalation, not a workaround.
 - Decision: reject `GET /api/v1/users` limits above
   `pagination::MAX_LIMIT` in the users inbound adapter rather than changing the
   shared pagination crate. Rationale: the pagination crate deliberately
-  normalises generic page params and existing documentation describes that
+  normalizes generic page params and existing documentation describes that
   behaviour. The users endpoint has a stricter acceptance criterion
   (`limit=200` returns HTTP 400 with structured details), so adapter-local
   validation satisfies the endpoint contract while preserving the crate's
@@ -338,7 +338,7 @@ Forward and reverse pages are returned to callers in stable ascending order,
 with overflow trimming handled in the query adapter.
 
 The main implementation friction was reconciling the generic pagination crate's
-limit-normalisation behaviour with the users endpoint's stricter acceptance
+limit-normalization behaviour with the users endpoint's stricter acceptance
 criterion. The endpoint now performs adapter-local raw limit validation, which
 keeps the shared crate reusable while returning the required structured
 `invalid_limit` response for oversized requests.
@@ -658,7 +658,7 @@ Behavioural tests (M5):
    - Following `prev` from the final page returns the prior page intact.
    - Requesting `limit=200` returns HTTP 400 with the
      `invalid_limit` detail code.
-   - Requesting an unparseable `cursor` returns HTTP 400 with the
+   - Requesting an unparsable `cursor` returns HTTP 400 with the
      `invalid_cursor` detail code.
    - Unauthenticated request returns HTTP 401 (regression for existing
      session behaviour).
@@ -774,7 +774,7 @@ Quality method (how we check):
 - `pg-embedded-setup-unpriv` test clusters are auto-cleaned via the
   existing `atexit_cleanup` machinery in `backend/tests/support`.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Expected JSON envelope (first page, default limit):
 

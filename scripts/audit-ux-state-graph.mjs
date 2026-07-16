@@ -144,7 +144,7 @@ export function hasStringTransitionEndpoints(transition) {
 /**
  * Count transition endpoint references by field.
  *
- * @param {{from: string, to: string}[]} transitions Normalised transitions.
+ * @param {{from: string, to: string}[]} transitions Normalized transitions.
  * @param {"from" | "to"} field Endpoint field to count.
  * @returns {Map<string, number>} Count per referenced state id.
  */

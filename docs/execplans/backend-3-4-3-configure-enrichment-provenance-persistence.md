@@ -335,7 +335,7 @@ Branch-specific expected evidence paths:
 - [x] (2026-02-28) Created context pack `pk_rqbwrf2z` with code/doc anchors.
 - [x] (2026-02-28) Ran agent-team planning synthesis for architecture, testing,
       and closure.
-- [x] (2026-02-28) Drafted this implementation ExecPlan artifact.
+- [x] (2026-02-28) Drafted this implementation ExecPlan artefact.
 - [x] (2026-02-28) Implemented Milestone 1: added
       `EnrichmentProvenanceRepository` domain port and integrated worker
       provenance persistence.

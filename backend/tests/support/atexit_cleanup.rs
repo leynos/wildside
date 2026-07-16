@@ -248,7 +248,7 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
 }
 
 /// Ensures that `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are both set to
-/// stable values before the shared embedded cluster is initialised.
+/// stable values before the shared embedded cluster is initialized.
 ///
 /// `postgresql_embedded::Settings::default()` generates a random password on
 /// each call. When the data directory already exists, `setup()` skips `initdb`,

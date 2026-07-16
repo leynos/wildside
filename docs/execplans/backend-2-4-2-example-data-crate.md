@@ -340,7 +340,7 @@ All steps are idempotent. Files can be recreated by re-running the
 implementation. No database or external state is modified (Postgres integration
 deferred to 2.4.3).
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Key code patterns to follow:
 

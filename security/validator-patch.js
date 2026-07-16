@@ -65,7 +65,7 @@ export function resolveValidatorPath() {
   return rulesetRequire.resolve('validator/lib/isURL');
 }
 
-function normaliseVersionTuple(version) {
+function normalizeVersionTuple(version) {
   const parts = String(version)
     .split('.')
     .slice(0, 3)
@@ -77,8 +77,8 @@ function normaliseVersionTuple(version) {
 }
 
 function isAtLeastVersion(version, minimum) {
-  const current = normaliseVersionTuple(version);
-  const target = normaliseVersionTuple(minimum);
+  const current = normalizeVersionTuple(version);
+  const target = normalizeVersionTuple(minimum);
 
   for (let index = 0; index < target.length; index += 1) {
     if (current[index] > target[index]) return true;

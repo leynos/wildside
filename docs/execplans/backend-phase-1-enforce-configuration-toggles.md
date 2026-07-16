@@ -262,7 +262,7 @@ Acceptance criteria:
 - If `make test` fails because the Postgres worker path is unwritable, rerun
   with `PG_WORKER_PATH` set to a user-writable directory as shown above.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Keep log files created by the `tee` commands until the work is complete, then
 remove them if no longer needed. Key logs:
@@ -326,7 +326,7 @@ new module using `DefaultEnv` and a `BuildMode` derived from
 
 This ExecPlan was updated to reflect completed implementation work, test runs,
 and the switch to `DefaultEnv` for production reads. Progress, decisions,
-artifacts, and interfaces now match the shipped code and the remaining work is
+artefacts, and interfaces now match the shipped code and the remaining work is
 fully complete. Updated the decision log and interface guidance to describe the
 local `SessionEnv` trait and `DefaultEnv`, reflecting the shift of `mockable`
 to a dev-only dependency.

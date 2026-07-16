@@ -245,7 +245,7 @@ composite keys, we have a couple of representation options:
 - **Object format:** e.g.
   `{"dir":"Next","key":{"created_at":"2025-10-10T19:17:56Z","id":"<uuid>"}}`.
   This is more verbose but self-describing and robust if we extend the key with
-  additional fields later. We favor this **object format** for clarity and
+  additional fields later. We favour this **object format** for clarity and
   extensibility, at the cost of a slightly longer token.
 
 **Direction Encoding:** As noted, we embed a `dir` field (`"Next"` or `"Prev"`)
@@ -601,7 +601,7 @@ On a subsequent page, `prev` would be a URL and `self` would include the
   expectations in issue #52 client expectations[^issue-52-client-defaults].
 
 - **Components:** Add `PaginationLinks` and a paginated response schema for each
-  resource (or a generic one parameterised by item type). In our case,
+  resource (or a generic one parameterized by item type). In our case,
   `PaginatedUsers` is defined as above, matching the outline from issue #52
   link schema[^issue-52-links]. If using **utoipa**, we can implement
   `ToSchema` for `PaginationLinks` and `Paginated<T>` and use them in the
@@ -670,7 +670,7 @@ the extra and **reverse** the list before returning, to still present ascending
 order to the client. This approach is more complex in code (because you have to
 branch the sorting and remember to reverse output), so our design sticks to a
 single sort order (asc) and handles prev via logic. Both approaches are valid;
-the chosen method favors simplicity of maintaining one ordering code path.
+the chosen method favours simplicity of maintaining one ordering code path.
 
 **Usage Example for Another Endpoint:** To demonstrate reuse, imagine an
 endpoint `/api/points` that lists points of interest sorted by `name`

@@ -193,7 +193,7 @@ Acceptance criteria:
 - If a long-running command times out, re-run it with a longer timeout and
   keep the log file for inspection.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 - Key test harness pattern for async + `rstest-bdd`:
   see `backend/tests/diesel_user_repository.rs` for a context holding a Tokio

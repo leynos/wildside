@@ -125,7 +125,7 @@ impl TryFrom<DescriptorSnapshot> for DescriptorsResponse {
             headers(("Cache-Control" = String, description = "Cache control header")),
             body = ExploreCatalogueResponse
         ),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 503, description = "Service unavailable", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),
@@ -158,7 +158,7 @@ pub async fn get_explore_catalogue(
             headers(("Cache-Control" = String, description = "Cache control header")),
             body = DescriptorsResponse
         ),
-        (status = 401, description = "Unauthorised", body = ErrorSchema),
+        (status = 401, description = "Unauthorized", body = ErrorSchema),
         (status = 503, description = "Service unavailable", body = ErrorSchema),
         (status = 500, description = "Internal server error", body = ErrorSchema)
     ),

@@ -541,7 +541,7 @@ This plan is intentionally re-runnable.
 - Do not mark the roadmap item complete until the final gate logs exist and
   show success.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Retain at least these logs:
 

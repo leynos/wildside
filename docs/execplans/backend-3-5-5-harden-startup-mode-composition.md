@@ -171,7 +171,7 @@ told that other agents may be editing the repository.
   without changing the public `build_http_state` signature.
 - [x] (2026-05-26) Ran Stage B targeted checks:
   `cargo test -p backend`
-  `startup_modes_reject_invalid_credentials_with_unauthorised_envelope`
+  `startup_modes_reject_invalid_credentials_with_unauthorized_envelope`
   `-- --nocapture` passed 2 selected tests, and
   `cargo test -p backend --test state_builders_composition_unit -- --nocapture`
   passed the fixture-mode composition unit test.
@@ -240,7 +240,7 @@ told that other agents may be editing the repository.
 - Observation: the Stage B targeted command named in the draft plan selects
   existing invalid-credential adapter tests rather than the
   `state_builders_composition_unit` test. Evidence: `cargo test -p backend`
-  `startup_modes_reject_invalid_credentials_with_unauthorised_envelope`
+  `startup_modes_reject_invalid_credentials_with_unauthorized_envelope`
   `-- --nocapture` passed two selected tests from
   `diesel_login_users_adapters.rs` and filtered out the state-builder
   composition test. Impact: keep the drafted command as historical evidence,
@@ -440,7 +440,7 @@ Run targeted Rust tests for the changed module or nearest suite, then commit
 this stage if it passes:
 
 ```bash
-cargo test -p backend startup_modes_reject_invalid_credentials_with_unauthorised_envelope -- --nocapture 2>&1 | tee /tmp/test-targeted-user-state-seam-backend-3-5-5-harden-startup-mode-composition.out
+cargo test -p backend startup_modes_reject_invalid_credentials_with_unauthorized_envelope -- --nocapture 2>&1 | tee /tmp/test-targeted-user-state-seam-backend-3-5-5-harden-startup-mode-composition.out
 ```
 
 After the commit, run:
@@ -627,7 +627,7 @@ immediate previous commit after rerunning the relevant gate.
 Embedded PostgreSQL setup failures should use the repository's existing skip
 diagnostics. Do not replace them with silent fixture fallback.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Planning evidence collected before this draft:
 

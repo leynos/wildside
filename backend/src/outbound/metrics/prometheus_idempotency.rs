@@ -194,7 +194,7 @@ mod tests {
         Ok(())
     }
 
-    /// Parameterised test for all three outcome recording methods.
+    /// Parameterized test for all three outcome recording methods.
     #[rstest]
     #[case::miss("miss", None)]
     #[case::hit("hit", Some("5-30m"))]

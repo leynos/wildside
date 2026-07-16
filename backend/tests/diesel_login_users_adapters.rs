@@ -134,7 +134,7 @@ fn classify_users(body: &Value) -> UsersMode {
     panic!("unknown users response: {body}");
 }
 
-fn assert_unauthorised(snapshot: &Snapshot) {
+fn assert_unauthorized(snapshot: &Snapshot) {
     assert_eq!(snapshot.status, 401);
     let body = snapshot.body.as_ref().expect("error body");
     assert_eq!(
@@ -322,11 +322,11 @@ fn db_present_mode_supports_login_and_users_with_stable_contracts() {
 #[rstest]
 #[case(false)]
 #[case(true)]
-fn startup_modes_reject_invalid_credentials_with_unauthorised_envelope(#[case] db_present: bool) {
+fn startup_modes_reject_invalid_credentials_with_unauthorized_envelope(#[case] db_present: bool) {
     let pool = if db_present {
         let Some(db) = setup_db_context() else {
             eprintln!(
-                "SKIP-TEST-CLUSTER: startup_modes_reject_invalid_credentials_with_unauthorised_envelope"
+                "SKIP-TEST-CLUSTER: startup_modes_reject_invalid_credentials_with_unauthorized_envelope"
             );
             return;
         };
@@ -339,7 +339,7 @@ fn startup_modes_reject_invalid_credentials_with_unauthorised_envelope(#[case] d
         Arc::new(FixtureRouteSubmissionService),
     );
     let (login_snapshot, users_snapshot) = run_async(run_flow(state, "admin", "wrong-password"));
-    assert_unauthorised(&login_snapshot);
+    assert_unauthorized(&login_snapshot);
     assert!(users_snapshot.is_none(), "users request should not run");
 }
 

@@ -1,6 +1,6 @@
 //! Session configuration parsing and validation.
 //!
-//! This module centralises the environment-driven session settings so they are
+//! This module centralizes the environment-driven session settings so they are
 //! validated consistently and can be tested in isolation.
 
 use actix_web::cookie::{Key, SameSite};

@@ -158,7 +158,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn missing_user_is_unauthorised() {
+    async fn missing_user_is_unauthorized() {
         let app = test::init_service(session_test_app().route(
             "/require",
             web::get().to(|session: SessionContext| async move {
@@ -174,7 +174,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn tampered_user_id_is_unauthorised() {
+    async fn tampered_user_id_is_unauthorized() {
         let app = test::init_service(
             session_test_app()
                 .route(
@@ -219,7 +219,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn non_admin_user_is_unauthorised_for_admin_requirement() {
+    async fn non_admin_user_is_unauthorized_for_admin_requirement() {
         let app = test::init_service(
             session_test_app()
                 .route(
@@ -264,7 +264,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn admin_user_is_authorised_for_admin_requirement() {
+    async fn admin_user_is_authorized_for_admin_requirement() {
         let app = test::init_service(
             session_test_app()
                 .route(

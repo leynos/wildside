@@ -145,7 +145,7 @@ fn the_response_is_ok(world: &WorldFixture) {
 }
 
 #[then("the response is unauthorised")]
-fn the_response_is_unauthorised(world: &WorldFixture) {
+fn the_response_is_unauthorized(world: &WorldFixture) {
     let ctx = world.world();
     let ctx = ctx.borrow();
     assert_eq!(ctx.last_status, Some(401));

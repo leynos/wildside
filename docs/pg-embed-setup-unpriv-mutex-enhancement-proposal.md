@@ -258,7 +258,7 @@ This functionality belongs in `pg-embed-setup-unpriv` because:
   - re-implementing locking themselves, or
   - disabling parallelism.
 
-By internalising the lock, the crate provides:
+By internalizing the lock, the crate provides:
 
 - a stable, deterministic interface for tests,
 - a single, audited implementation of the tricky "global state" concerns, and

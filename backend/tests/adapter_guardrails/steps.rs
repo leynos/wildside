@@ -160,13 +160,13 @@ pub(crate) fn the_http_response_is_success_and_a_session_cookie_is_set(world: Sh
 }
 
 #[then("the HTTP response is unauthorised")]
-pub(crate) fn the_http_response_is_unauthorised(world: SharedWorld) {
+pub(crate) fn the_http_response_is_unauthorized(world: SharedWorld) {
     let ctx = world.borrow();
     assert_eq!(ctx.last_status, Some(401));
 }
 
 #[then("the HTTP response is unauthorised and no session cookie is set")]
-pub(crate) fn the_http_response_is_unauthorised_and_no_session_cookie_is_set(world: SharedWorld) {
+pub(crate) fn the_http_response_is_unauthorized_and_no_session_cookie_is_set(world: SharedWorld) {
     let ctx = world.borrow();
     assert_eq!(ctx.last_status, Some(401));
     assert!(

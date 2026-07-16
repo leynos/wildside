@@ -616,7 +616,7 @@ Do not use destructive git commands such as `git reset --hard` or
 `git checkout --`. If an implementation milestone needs rollback, use normal
 revert commits or ask for direction. Leave unrelated worktree changes intact.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Firecrawl prior art used during planning:
 

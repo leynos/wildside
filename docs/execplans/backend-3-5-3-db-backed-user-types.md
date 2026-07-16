@@ -343,7 +343,7 @@ Acceptance is behavioural, not structural.
 - If DB bootstrap is unavailable, suites should skip with
   `SKIP-TEST-CLUSTER` messaging rather than false-failing unrelated work.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture and retain:
 

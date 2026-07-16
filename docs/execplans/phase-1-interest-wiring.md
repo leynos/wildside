@@ -80,7 +80,7 @@ Observable success:
 
 - Session enforcement is now wired for `/api/v1/users/me` and
   `/api/v1/users/me/interests`, with domain ports supplying stateful behaviour
-  and trace IDs propagated on unauthorised responses.
+  and trace IDs propagated on unauthorized responses.
 - New domain types, ports, fixtures, and OpenAPI schema wrappers document the
   interest selection workflow.
 - Behavioural coverage includes authenticated/unauthenticated scenarios, and
@@ -260,7 +260,7 @@ Acceptance criteria:
 - If a command times out, re-run with a higher timeout and keep the log file
   for inspection.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 - Existing patterns for adapter tests live in
   `backend/tests/adapter_guardrails/*` and can be reused for new endpoints.

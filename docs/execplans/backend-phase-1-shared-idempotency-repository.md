@@ -570,7 +570,7 @@ Acceptance criteria:
 - If a command fails, fix the issue and re-run only the failed command.
 - The migration is additive (adding column with default), so rollback is safe.
 
-## Artifacts and Notes
+## Artefacts and Notes
 
 Keep log files created by the `tee` commands until the work is complete:
 

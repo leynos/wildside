@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import { resolveToken as baseResolveToken } from './resolve-token.js';
 
-// Load and parse the token JSON at module initialisation.
+// Load and parse the token JSON at module initialization.
 // Using URL ensures correctness regardless of CWD.
 const tokensJson = JSON.parse(readFileSync(new URL('../tokens.json', import.meta.url), 'utf8'));
 

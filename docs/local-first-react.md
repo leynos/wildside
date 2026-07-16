@@ -26,7 +26,7 @@ user's devices or with other collaborators.[^2] This fundamental shift is not
 merely a technical implementation detail; it is a re-evaluation of the
 relationship between the user, their data, and the network. The motivation is
 to create applications that are inherently faster, more reliable, and that
-grant users true ownership and control over their digital artifacts.[^1] The
+grant users true ownership and control over their digital artefacts.[^1] The
 ultimate goal is to achieve the best of both worlds: the rich, real-time
 collaboration of modern cloud applications combined with the performance,
 longevity, and data sovereignty of traditional, offline-capable desktop
@@ -95,7 +95,7 @@ deliver.[^1]
 ### Acknowledging the Core Challenge: Eventual Consistency
 
 The profound benefits of the local-first paradigm come with a significant
-architectural trade-off: the abandonment of strong consistency in favor of
+architectural trade-off: the abandonment of strong consistency in favour of
 **eventual consistency**.[^2] In a traditional cloud-first model, the server
 acts as a single, authoritative source of truth, ensuring that all users see a
 consistent view of the data at all times. In a local-first system, however,
@@ -209,7 +209,7 @@ easier to maintain at scale.
 
 ### Core Concepts: The ,`create`, API
 
-Zustand's API is intentionally minimalist, centered around a single function:
+Zustand's API is intentionally minimalist, centred around a single function:
 `create`. This function takes a "creator" function as an argument, which
 defines the initial state and the actions that can modify it.[^10] The
 
@@ -397,7 +397,7 @@ fetch and maintain it.
 
 Understanding the distinction between `staleTime` and `gcTime` (garbage
 collection time) is the absolute key to mastering Tanstack Query's caching
-behavior. These two configuration options govern the entire lifecycle of a
+behaviour. These two configuration options govern the entire lifecycle of a
 cached query and are often a point of confusion.
 
 - `staleTime`**:** This option determines the duration, in milliseconds, for
@@ -502,7 +502,7 @@ export function useAddTodo() {
 ```
 
 The relationship between `staleTime` and `gcTime` is the central mechanism that
-governs Tanstack Query's behavior. In a standard online application, these
+governs Tanstack Query's behaviour. In a standard online application, these
 defaults provide a sensible balance of responsiveness and network efficiency.
 However, the decision to build a local-first application with offline
 persistence fundamentally alters the operational context. Data for an offline
@@ -821,7 +821,7 @@ Tanstack Query has a built-in `onlineManager` that tracks the network status of
 the application. By default, it operates in an "online" mode. If the
 application goes offline, any attempt to execute a mutation will be paused. The
 mutation will be held in a pending state and will automatically be fired as
-soon as network connectivity is restored.[^29] This default behavior works
+soon as network connectivity is restored.[^29] This default behaviour works
 seamlessly with the persistence layer. A user can perform multiple actions
 while offline; these actions are queued up as paused mutations, and the UI can
 be updated optimistically (as described in the next section). When the user
@@ -1314,7 +1314,7 @@ useEffect(() => {
 
 While Zustand excels at managing simple, discrete pieces of client state, some
 application features involve complex, multi-step processes, intricate user
-flows, or behaviors with a finite number of well-defined states. For these
+flows, or behaviours with a finite number of well-defined states. For these
 scenarios, a more robust solution is needed to prevent bugs and manage
 complexity. This is where XState, a library for creating and managing state
 machines and statecharts, becomes an invaluable addition to our
@@ -1327,7 +1327,7 @@ _orchestration_ solution.[^46] It uses the formal concepts of
 
 **finite state machines (FSMs)** and **statecharts** to model application
 logic.[^47] This approach provides a declarative and predictable way to handle
-complex behavior.[^47]
+complex behaviour.[^47]
 
 The core concepts include[^47]:
 
@@ -1344,11 +1344,11 @@ The core concepts include[^47]:
 - **Actors:** Long-running processes or side effects that can be invoked by the
   machine.[^47]
 
-By modeling logic this way, XState makes complex flows visualizable, easier to
+By modelling logic this way, XState makes complex flows visualizable, easier to
 reason about, and more robust, especially for features like multi-step forms,
 onboarding flows, or intricate UI interactions.[^49]
 
-### The Division of Labor: XState vs. Zustand
+### The Division of Labour: XState vs. Zustand
 
 At first glance, XState and Zustand seem to overlap as they both manage client
 state. However, they are designed to solve different classes of problems, and
@@ -1359,9 +1359,9 @@ understanding their distinct roles is key to using them effectively.[^51]
   Think of it as a lightweight, global key-value store. Examples include the
   status of a modal (`isOpen`), the content of a search input, or a theme
   preference.[^52]
-- **XState is for modeling _state flows_.** It excels at managing
+- **XState is for modelling _state flows_.** It excels at managing
   complex, interdependent states where the sequence of operations and the
-  transitions between states are critical. It defines the _behavior_ of a
+  transitions between states are critical. It defines the _behaviour_ of a
   system, ensuring that only valid transitions can occur.[^50]
 
 The primary impedance mismatch arises when one tool is used for the other's
@@ -1373,7 +1373,7 @@ unnecessary complexity.[^50]
 
 The best practice is to use them together, not as mutually exclusive options.
 Use Zustand for simple, global UI state, and introduce XState for specific,
-complex components or features that benefit from the rigor of a state machine.
+complex components or features that benefit from the rigour of a state machine.
 
 ### Best Practices for Seamless Integration with Tanstack Query
 
@@ -1754,7 +1754,7 @@ accessed on August 20, 2025,
 accessed on August 20, 2025,
 [https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query](https://stackoverflow.com/questions/68690221/how-to-use-zustand-to-store-the-result-of-a-query)
 
-[^24] Behavior of onSuccess and idea for callbacks · TanStack query - GitHub,
+[^24] Behaviour of onSuccess and idea for callbacks · TanStack query - GitHub,
 accessed on August 20, 2025,
 [https://github.com/TanStack/query/discussions/5034](https://github.com/TanStack/query/discussions/5034)
 

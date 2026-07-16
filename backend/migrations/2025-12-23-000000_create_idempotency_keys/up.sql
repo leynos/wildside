@@ -10,7 +10,7 @@ CREATE TABLE idempotency_keys (
     -- Client-provided idempotency key (UUID v4).
     key UUID PRIMARY KEY,
 
-    -- SHA-256 hash of the canonicalised request payload (32 bytes).
+    -- SHA-256 hash of the canonicalized request payload (32 bytes).
     payload_hash BYTEA NOT NULL,
 
     -- Snapshot of the original response to replay on duplicate requests.

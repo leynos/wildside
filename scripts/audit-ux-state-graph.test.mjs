@@ -40,7 +40,7 @@ function stripAnsi(value) {
 /**
  * Create temporary graph and sitemap files for filesystem-backed tests.
  *
- * @param {unknown} graph Graph payload to serialise.
+ * @param {unknown} graph Graph payload to serialize.
  * @param {string} sitemap Markdown sitemap contents.
  * @returns {Promise<{dir: string, graphPath: string, sitemapPath: string}>} Paths to created fixtures.
  */
