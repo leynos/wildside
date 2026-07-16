@@ -293,8 +293,8 @@ tracking `origin/backend-5-2-2-job-structs-for-generate-route-and-enrichment`
   `JobDispatchError::{Unavailable, Rejected}` enum.
 - `backend/src/outbound/queue/apalis_route_queue.rs:171` exports
   `pub type ApalisRouteQueue<P> = GenericApalisRouteQueue<P, ApalisPostgresProvider>;`
-  parameterised over `P: Serialize + Send + Sync`. The production storage is
-  still `PostgresStorage<serde_json::Value>` and the typed `P` is serialised
+  parameterized over `P: Serialize + Send + Sync`. The production storage is
+  still `PostgresStorage<serde_json::Value>` and the typed `P` is serialized
   at enqueue time.
 - `backend/src/outbound/queue/stub_route_queue.rs:31` exports
   `StubRouteQueue<P>` which discards plans. This is the cheap test seam for
@@ -320,7 +320,7 @@ Key terms used in this plan:
   execute one unit of background work. In this plan it is also the
   associated `Plan` type fed into `RouteQueue::enqueue`.
 - A versioning envelope is the outermost enum that carries a `v` tag in
-  serialised form so old payloads remain decodable when new shapes are
+  serialized form so old payloads remain decodable when new shapes are
   introduced.
 - A driven port is a domain-owned trait that adapters implement to provide
   infrastructure. `RouteQueue` is the relevant driven port here.
@@ -1103,7 +1103,7 @@ The plan ships in two PRs:
   the route job's `serde_json::Value` fields without `Eq`, so the
   whole envelope tree drops `Eq` for consistency. Test code that wants
   hashing-based comparison should use snapshot equality or
-  `pretty_assertions::assert_eq!` on the serialised form.
+  `pretty_assertions::assert_eq!` on the serialized form.
   Date/Author: 2026-06-06 / planning agent (post-Logisphere review).
 
 - Decision: Use human-readable string tags (`"v1"`) for the envelope
