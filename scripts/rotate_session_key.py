@@ -16,8 +16,10 @@ Prerequisites:
   - Secret must already exist (use kubectl create secret first)
 
 Usage:
-  ./scripts/rotate_session_key.py --namespace wildside --secret-name wildside-session-key
-  ./scripts/rotate_session_key.py -n wildside -s wildside-session-key --deployment wildside-backend
+  ./scripts/rotate_session_key.py --namespace wildside \
+      --secret-name wildside-session-key
+  ./scripts/rotate_session_key.py -n wildside -s wildside-session-key \
+      --deployment wildside-backend
 
 See docs/runbooks/session-key-rotation.md for the complete rotation procedure.
 """
@@ -25,17 +27,12 @@ See docs/runbooks/session-key-rotation.md for the complete rotation procedure.
 from __future__ import annotations
 
 import base64
+import dataclasses as dc
 import hashlib
 import secrets
 import sys
-from dataclasses import dataclass
-from pathlib import Path
-from typing import TYPE_CHECKING
 
 from plumbum import ProcessExecutionError, local
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 # Session key must be at least 64 bytes per backend requirements.
 SESSION_KEY_LENGTH = 64
@@ -43,9 +40,12 @@ FINGERPRINT_BYTES = 8
 # HKDF parameters matching actix-web cookie crate's Key::derive_from
 HKDF_SIGNING_INFO = b"COOKIE;SIGNING"
 HKDF_SIGNING_KEY_LENGTH = 32
+# Zero-downtime rotation requires at least this many replicas so that the
+# rolling restart always leaves an old-key pod available to serve requests.
+MIN_REPLICAS_FOR_ZERO_DOWNTIME = 2
 
 
-@dataclass(frozen=True, slots=True)
+@dc.dataclass(frozen=True, slots=True)
 class RotationConfig:
     """Configuration for session key rotation."""
 
@@ -55,7 +55,7 @@ class RotationConfig:
     deployment_name: str | None
 
 
-@dataclass(frozen=True, slots=True)
+@dc.dataclass(frozen=True, slots=True)
 class RotationResult:
     """Result of a session key rotation."""
 
@@ -71,8 +71,8 @@ def derive_signing_key(key_bytes: bytes) -> bytes:
     string "COOKIE;SIGNING" to derive a 32-byte signing key from the input
     material.
     """
-    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
     from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
@@ -231,7 +231,7 @@ def validate_replica_count(config: RotationConfig) -> bool:
         return True
 
     replicas = check_replica_count(config)
-    if replicas >= 2:
+    if replicas >= MIN_REPLICAS_FOR_ZERO_DOWNTIME:
         return True
 
     print(
@@ -241,7 +241,7 @@ def validate_replica_count(config: RotationConfig) -> bool:
     )
     print("Continue anyway? [y/N] ", end="", file=sys.stderr)
     response = input().strip().lower()
-    if response not in ("y", "yes"):
+    if response not in {"y", "yes"}:
         print("Rotation cancelled.", file=sys.stderr)
         return False
     return True
@@ -268,8 +268,10 @@ def handle_rollout(config: RotationConfig, result: RotationResult) -> None:
         except ProcessExecutionError as exc:
             print(f"warning: rollout status check failed: {exc}", file=sys.stderr)
             print("Check deployment status manually with:")
-            print(f"  kubectl rollout status deployment/{config.deployment_name} "
-                  f"-n {config.namespace}")
+            print(
+                f"  kubectl rollout status deployment/{config.deployment_name} "
+                f"-n {config.namespace}"
+            )
     else:
         print("\nNo deployment specified; rollout not triggered.")
         print("Trigger manually with:")
@@ -282,8 +284,10 @@ def print_verification_instructions(
     """Print post-rotation verification instructions."""
     print("\n=== Post-Rotation Verification ===")
     print("Verify the new fingerprint appears in pod logs:")
-    print(f'  kubectl logs -n {config.namespace} -l app.kubernetes.io/name=wildside '
-          f'| grep "fingerprint={result.new_fingerprint}"')
+    print(
+        f"  kubectl logs -n {config.namespace} -l app.kubernetes.io/name=wildside "
+        f'| grep "fingerprint={result.new_fingerprint}"'
+    )
 
 
 def parse_args(argv: list[str]) -> RotationConfig:
@@ -295,22 +299,26 @@ def parse_args(argv: list[str]) -> RotationConfig:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "-n", "--namespace",
+        "-n",
+        "--namespace",
         default="default",
         help="Kubernetes namespace (default: default)",
     )
     parser.add_argument(
-        "-s", "--secret-name",
+        "-s",
+        "--secret-name",
         default="wildside-session-key",
         help="Secret name (default: wildside-session-key)",
     )
     parser.add_argument(
-        "-k", "--secret-key",
+        "-k",
+        "--secret-key",
         default="session_key",
         help="Key within secret (default: session_key)",
     )
     parser.add_argument(
-        "-d", "--deployment",
+        "-d",
+        "--deployment",
         dest="deployment_name",
         default=None,
         help="Deployment name for rollout (optional)",
@@ -336,8 +344,10 @@ def main(argv: list[str] | None = None) -> int:
     if not validate_replica_count(config):
         return 1
 
-    print(f"Rotating session key in secret '{config.secret_name}' "
-          f"(namespace: {config.namespace})")
+    print(
+        f"Rotating session key in secret '{config.secret_name}' "
+        f"(namespace: {config.namespace})"
+    )
 
     try:
         result = rotate_session_key(config)

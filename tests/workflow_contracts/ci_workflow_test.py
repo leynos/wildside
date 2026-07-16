@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import typing as typ
 from pathlib import Path
-from typing import cast
 
 import yaml
 
@@ -22,7 +22,7 @@ def _load_steps() -> list[dict[str, object]]:
     assert all(isinstance(step, dict) for step in steps), (
         "every coverage step must be a mapping"
     )
-    return cast("list[dict[str, object]]", steps)
+    return typ.cast("list[dict[str, object]]", steps)
 
 
 def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:

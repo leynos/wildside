@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Keep Cargo workspace members in sync with the repository layout."""
+
 from __future__ import annotations
 
 import sys
@@ -15,6 +16,13 @@ MANIFEST = ROOT / "Cargo.toml"
 
 
 def read_patterns() -> list[str]:
+    """Return the workspace autodiscover glob patterns from Cargo.toml.
+
+    Returns
+    -------
+    list of str
+        Configured autodiscover globs, or an empty list if none are set.
+    """
     data = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
     workspace = data.get("workspace", {})
     metadata = workspace.get("metadata", {})
@@ -26,6 +34,19 @@ def read_patterns() -> list[str]:
 
 
 def discover_members(globs: list[str]) -> list[str]:
+    """Return workspace-relative paths of crates matching *globs*.
+
+    Parameters
+    ----------
+    globs : list of str
+        Glob patterns, resolved relative to the repository root.
+
+    Returns
+    -------
+    list of str
+        POSIX-style paths, relative to the repository root, of directories
+        matching *globs* that contain a ``Cargo.toml`` file.
+    """
     members: list[str] = []
     for pattern in globs:
         for path in sorted(ROOT.glob(pattern)):
@@ -37,6 +58,23 @@ def discover_members(globs: list[str]) -> list[str]:
 
 
 def unique_preserving_order(items: list[str]) -> list[str]:
+    """Return *items* with duplicates removed, preserving first occurrence.
+
+    Parameters
+    ----------
+    items : list of str
+        Values to deduplicate.
+
+    Returns
+    -------
+    list of str
+        *items* in original order, with later duplicates dropped.
+
+    Examples
+    --------
+    >>> unique_preserving_order(["a", "b", "a", "c"])
+    ['a', 'b', 'c']
+    """
     seen: set[str] = set()
     result: list[str] = []
     for item in items:
@@ -48,11 +86,25 @@ def unique_preserving_order(items: list[str]) -> list[str]:
 
 
 def format_members(members: list[str], indent: str) -> list[str]:
+    """Render *members* as TOML lines for the workspace ``members`` array.
+
+    Parameters
+    ----------
+    members : list of str
+        Workspace member paths to render.
+    indent : str
+        Leading whitespace to apply to each rendered line.
+
+    Returns
+    -------
+    list of str
+        Lines forming a TOML ``members = [...]`` array, single-line when
+        there is exactly one member and multi-line otherwise.
+    """
     if len(members) == 1:
         return [f'{indent}members = ["{members[0]}"]']
     lines = [f"{indent}members = ["]
-    for member in members:
-        lines.append(f'{indent}    "{member}",')
+    lines.extend(f'{indent}    "{member}",' for member in members)
     lines.append(f"{indent}]")
     return lines
 
@@ -77,7 +129,6 @@ def _calculate_bracket_depth_change(line: str) -> int:
     >>> _calculate_bracket_depth_change('    ]')
     -1
     """
-
     return line.count("[") - line.count("]")
 
 
@@ -105,7 +156,6 @@ def _find_members_array_bounds(lines: list[str]) -> tuple[int, int, str]:
     >>> _find_members_array_bounds(example)
     (1, 3, '')
     """
-
     start = None
     indent = ""
     depth = 0
@@ -123,10 +173,24 @@ def _find_members_array_bounds(lines: list[str]) -> tuple[int, int, str]:
         depth += _calculate_bracket_depth_change(line)
         if depth <= 0:
             return start, idx, indent
-    raise SystemExit("workspace members array not found in Cargo.toml")
+    message = "workspace members array not found in Cargo.toml"
+    raise SystemExit(message)
 
 
 def update_manifest(members: list[str]) -> bool:
+    """Rewrite the workspace ``members`` array in Cargo.toml if it changed.
+
+    Parameters
+    ----------
+    members : list of str
+        Desired workspace member paths, in order.
+
+    Returns
+    -------
+    bool
+        ``True`` if the manifest was rewritten, ``False`` if it already
+        matched *members*.
+    """
     lines = MANIFEST.read_text(encoding="utf-8").splitlines()
     start, end, indent = _find_members_array_bounds(lines)
     replacement = format_members(members, indent)
@@ -139,6 +203,13 @@ def update_manifest(members: list[str]) -> bool:
 
 
 def main() -> int:
+    """Discover Cargo workspace members and rewrite the manifest if stale.
+
+    Returns
+    -------
+    int
+        Process exit code; always ``0``.
+    """
     patterns = read_patterns()
     discovered = discover_members(patterns)
     ordered = unique_preserving_order(["backend", *discovered])

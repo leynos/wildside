@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+import subprocess  # noqa: S404 - tests deliberately exercise the CLI via subprocess.
 import textwrap
-from collections.abc import Callable
+import typing as typ
 from pathlib import Path
 from shutil import which
-from typing import cast
 
 import pytest
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 FAKE_TOOL_SOURCE = textwrap.dedent(
     """\
@@ -179,12 +181,12 @@ def _load_log_entries(log_path: Path) -> list[list[object]]:
 def _assert_command_logged(
     log_entries: list[list[object]],
     tool: str,
-    predicate: Callable[[list[object]], bool],
+    predicate: cabc.Callable[[list[object]], bool],
     message: str,
 ) -> None:
     """Assert a fake-tool log contains a matching command."""
     assert any(
-        entry[0] == tool and predicate(cast(list[object], entry[1]))
+        entry[0] == tool and predicate(typ.cast("list[object]", entry[1]))
         for entry in log_entries
     ), f"{message}; recorded commands: {log_entries!r}"
 
