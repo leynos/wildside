@@ -242,7 +242,7 @@ the pinned versions before running the Mermaid gate:
 
 ```bash
 uv tool install "nixie-cli==1.1.0"
-cargo binstall merman-cli@0.7.0
+cargo binstall --locked merman-cli@0.7.0
 ```
 
 The Nixie package provides the `nixie` command, while the Merman package
