@@ -84,7 +84,8 @@ def install_run_recorder(
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-        Pytest monkeypatch fixture used to replace ``local_k8s.deployment.run``.
+        Pytest monkeypatch fixture used to replace the ``run`` bound in both
+        ``local_k8s.deployment`` and ``local_k8s.session_secret``.
     stdout : str, optional
         Standard output returned by every recorded command.
     on_run : RunHook | None, optional
@@ -110,4 +111,5 @@ def install_run_recorder(
         return SimpleNamespace(stdout=stdout)
 
     monkeypatch.setattr("local_k8s.deployment.run", record_run)
+    monkeypatch.setattr("local_k8s.session_secret.run", record_run)
     return commands

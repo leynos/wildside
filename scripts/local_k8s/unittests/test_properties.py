@@ -34,10 +34,15 @@ def cluster_names(draw: DrawFn) -> str:
 
 
 @st.composite
-def helm_names(draw: DrawFn) -> str:
-    """Generate Helm release and chart names, including truncation cases."""
+def helm_names(draw: DrawFn, *, max_size: int = 90) -> str:
+    """Generate Helm release and chart names, including truncation cases.
+
+    ``max_size`` bounds the generated length. Release names must satisfy the
+    53-character Helm bound enforced by ``PreviewConfig``, while chart names may
+    stretch further to exercise fullname truncation in ``helm_fullname``.
+    """
     first = draw(st.sampled_from(_NAME_CHARS))
-    middle = draw(st.lists(st.sampled_from(_NAME_REST_CHARS), max_size=90)).copy()
+    middle = draw(st.lists(st.sampled_from(_NAME_REST_CHARS), max_size=max_size)).copy()
     if middle and middle[-1] == "-":
         middle[-1] = "0"
     return first + "".join(middle)
@@ -199,7 +204,7 @@ def test_podman_archive_image_name_preserves_registry_hosts(
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(release_name=helm_names(), chart_name=helm_names())
+@given(release_name=helm_names(max_size=52), chart_name=helm_names())
 def test_helm_fullname_obeys_kubernetes_name_bounds(
     monkeypatch: pytest.MonkeyPatch,
     release_name: str,
