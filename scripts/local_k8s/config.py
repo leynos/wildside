@@ -21,8 +21,8 @@ DEFAULT_KIND_NODE_IMAGE = "kindest/node:v1.31.0"
 DNS_1123_LABEL_PATTERN = re.compile(r"[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?")
 KIND_NODE_IMAGE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@_+-]{0,254}")
 
-ContainerEngine = Literal["docker", "podman"]
-K8sProvider = Literal["k3d", "kind"]
+type ContainerEngine = Literal["docker", "podman"]
+type K8sProvider = Literal["k3d", "kind"]
 
 
 @dataclass(frozen=True, slots=True)

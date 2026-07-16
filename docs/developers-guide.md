@@ -30,7 +30,8 @@ All suites run through the same quality gateways:
 Use the repository-local Kubernetes preview when validating the backend image
 and Helm chart before handing values to Nile Valley. The preview workflow is
 documented in
-[Local Kubernetes preview and Nile Valley integration design](local-k8s-preview-design.md).
+[Local Kubernetes preview and Nile Valley integration
+design](local-k8s-preview-design.md).
 
 ```bash
 make local-k8s-up
