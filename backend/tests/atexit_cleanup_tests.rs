@@ -143,12 +143,16 @@ fn ensure_stable_cluster_environment_resolves_env_once_under_concurrency() {
     stable_cluster_env::ensure_stable_cluster_environment()
         .expect("reconcile stable cluster environment before cluster access");
 
-    // The spawned threads now hit only the cached post-initialization path (no
-    // `set_var`), proving concurrent callers observe consistent state without
-    // racing or panicking.
+    // After single-threaded initialization, the spawned threads exercise the
+    // repair-only helper — never the env-initializing entrypoint — so no worker
+    // can mutate process-environment state. They must observe consistent state
+    // without racing or panicking.
     std::thread::scope(|scope| {
         for _ in 0..8 {
-            scope.spawn(stable_cluster_env::ensure_stable_cluster_environment);
+            scope.spawn(|| {
+                stable_cluster_env::repair_password_state_serialized(b"wildside_embedded_test")
+                    .expect("repair stale password state");
+            });
         }
     });
 
@@ -172,7 +176,13 @@ fn ensure_stable_cluster_environment_resolves_env_once_under_concurrency() {
 fn ensure_stable_cluster_environment_serializes_concurrent_repair() {
     // Two threads repairing the same stale password file concurrently must not
     // race on removing it. Without the process-local repair lock, the second
-    // `remove_file` observes the file already gone and panics via `.expect`.
+    // removal would observe the file already gone.
+    //
+    // Concurrent repair is exercised through the repair-only helper
+    // `repair_password_state_serialized`, never through
+    // `ensure_stable_cluster_environment`, so no spawned thread can touch
+    // process-environment state. The environment is initialized once on this
+    // single thread, before any threads are spawned.
     let sandbox = tempfile::tempdir().expect("tempdir");
     let install_path = sandbox.path().join("install");
     let data_parent_path = sandbox.path().join("data-parent");
@@ -183,14 +193,11 @@ fn ensure_stable_cluster_environment_serializes_concurrent_repair() {
 
     let install_dir =
         Dir::open_ambient_dir(&install_path, ambient_authority()).expect("open install");
-    install_dir
-        .write(".pgpass", b"stale-password")
-        .expect("seed stale password file");
 
-    // Pre-set every variable the repair path reads so the worker threads only
-    // read the environment (never `set_var`) and target the sandbox. A custom
-    // `PG_DATA_DIR` keeps `should_remove_data_dir` false, isolating the race to
-    // the `.pgpass` removal.
+    // Pre-set every variable the repair path reads so nothing mutates the
+    // environment and the repair targets the sandbox. A custom `PG_DATA_DIR`
+    // keeps `should_remove_data_dir` false, isolating the race to the `.pgpass`
+    // removal.
     let _guard = env_lock::lock_env([
         ("PG_PASSWORD", Some("wildside_embedded_test".to_owned())),
         (
@@ -217,9 +224,28 @@ fn ensure_stable_cluster_environment_serializes_concurrent_repair() {
         ),
     ]);
 
+    // Initialize the process environment once on this single thread. With every
+    // variable pre-set this performs no `set_var`, and with no `.pgpass` present
+    // yet the incidental repair is a no-op — the stale-file race is left to the
+    // spawned threads below.
+    stable_cluster_env::ensure_stable_cluster_environment()
+        .expect("initialize stable cluster environment");
+
+    // Seed the stale password file *after* initialization so the concurrent
+    // repair threads below are the ones that race to remove it.
+    install_dir
+        .write(".pgpass", b"stale-password")
+        .expect("seed stale password file");
+
+    // Each thread runs only the repair/locking stage with the fixed password;
+    // the process-local lock must serialize the `.pgpass` removal so neither
+    // thread fails on an already-removed file.
     std::thread::scope(|scope| {
         for _ in 0..2 {
-            scope.spawn(stable_cluster_env::ensure_stable_cluster_environment);
+            scope.spawn(|| {
+                stable_cluster_env::repair_password_state_serialized(b"wildside_embedded_test")
+                    .expect("repair stale password state");
+            });
         }
     });
 

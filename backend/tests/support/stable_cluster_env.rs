@@ -210,8 +210,15 @@ pub(crate) fn resolve_stable_env() -> String {
 ///   re-locks. Two threads (for example under the threaded `cargo test` runner)
 ///   would then race on `.pgpass` removal, so a process-local mutex serializes
 ///   them as well.
+///
+/// Crate-visible so the concurrency tests can exercise the repair/locking
+/// stage directly with a fixed password, without going through
+/// [`ensure_stable_cluster_environment`] (which resolves `STABLE_ENV_INIT` and
+/// may mutate the process environment). This helper reads only the supplied
+/// password bytes and never touches `PG_PASSWORD`, `POSTGRESQL_RELEASES_URL`,
+/// `STABLE_ENV_INIT`, or `resolve_stable_env`.
 #[cfg(unix)]
-fn repair_password_state_serialized(password: &[u8]) -> BootstrapResult<()> {
+pub(crate) fn repair_password_state_serialized(password: &[u8]) -> BootstrapResult<()> {
     use color_eyre::eyre::eyre;
     static PASSWORD_STATE_REPAIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -227,7 +234,7 @@ fn repair_password_state_serialized(password: &[u8]) -> BootstrapResult<()> {
 }
 
 #[cfg(not(unix))]
-fn repair_password_state_serialized(_password: &[u8]) -> BootstrapResult<()> {
+pub(crate) fn repair_password_state_serialized(_password: &[u8]) -> BootstrapResult<()> {
     Ok(())
 }
 
