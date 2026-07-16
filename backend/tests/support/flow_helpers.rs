@@ -89,6 +89,8 @@ pub fn parse_json_body(bytes: &[u8]) -> Result<Option<Value>, serde_json::Error>
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the shared JSON-body and async-runtime helpers.
+
     use super::*;
 
     #[test]

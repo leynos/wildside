@@ -241,8 +241,12 @@ mod tests {
         let sandbox = tempfile::tempdir().expect("tempdir");
         // A regular file is not a directory, so opening it fails with a
         // non-NotFound error that must be propagated rather than swallowed.
+        // Create the file through a cap-std handle to honour the ambient-
+        // authority filesystem policy rather than touching std::fs directly.
+        let sandbox_dir =
+            Dir::open_ambient_dir(sandbox.path(), ambient_authority()).expect("open sandbox");
+        sandbox_dir.write("not-a-dir", b"x").expect("write file");
         let not_a_dir = sandbox.path().join("not-a-dir");
-        std::fs::write(&not_a_dir, b"x").expect("write file");
         let error =
             open_dir_if_exists(&not_a_dir).expect_err("opening a file as a directory must fail");
         assert_ne!(
