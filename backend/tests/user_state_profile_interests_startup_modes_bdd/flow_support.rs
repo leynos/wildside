@@ -1,6 +1,5 @@
 //! Shared flow and assertion helpers for profile/interests startup-mode BDD.
 
-use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -47,15 +46,7 @@ pub(crate) struct World {
     pub(crate) skip_reason: Option<String>,
 }
 
-fn run_async<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new()
-        .expect("runtime")
-        .block_on(future)
-}
-
-fn parse_json_body(bytes: &[u8]) -> Option<Value> {
-    (!bytes.is_empty()).then(|| serde_json::from_slice(bytes).expect("json body"))
-}
+use crate::support::flow_helpers::{parse_json_body, run_async};
 
 pub(crate) fn assert_internal(snapshot: &Snapshot) {
     assert_eq!(snapshot.status, 500);

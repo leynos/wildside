@@ -44,6 +44,10 @@ macro_rules! declare_test_support {
         #[path = "../support/fixture_auth.rs"]
         pub mod fixture_auth;
     };
+    (@module flow_helpers) => {
+        #[path = "../support/flow_helpers.rs"]
+        pub mod flow_helpers;
+    };
     (@module profile_interests) => {
         #[path = "../support/profile_interests.rs"]
         pub mod profile_interests;

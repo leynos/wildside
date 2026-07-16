@@ -1,6 +1,6 @@
 //! Flow helpers for users list pagination BDD coverage.
 
-use std::future::Future;
+pub(crate) use crate::support::flow_helpers::{parse_json_body, run_async};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -53,12 +53,6 @@ struct Snapshot {
     status: u16,
     trace_id: Option<String>,
     body: Option<Value>,
-}
-
-pub(crate) fn run_async<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new()
-        .expect("runtime")
-        .block_on(future)
 }
 
 pub(crate) fn is_skipped(world: &World) -> bool {
@@ -203,10 +197,6 @@ where
         }
     }
     panic!("pagination traversal did not terminate");
-}
-
-fn parse_json_body(bytes: &[u8]) -> Option<Value> {
-    (!bytes.is_empty()).then(|| serde_json::from_slice(bytes).expect("json body"))
 }
 
 fn build_path_from_link(link: &str) -> String {

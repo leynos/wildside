@@ -26,7 +26,12 @@ use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::Value;
 
 include!("support/entrypoint.rs");
-declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
+declare_test_support!(
+    atexit_cleanup,
+    cluster_skip,
+    embedded_postgres,
+    flow_helpers
+);
 
 use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use crate::support::cluster_skip::handle_cluster_setup_failure;

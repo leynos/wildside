@@ -41,15 +41,8 @@ pub(crate) struct ExpectedPreferences<'a> {
     pub(crate) revision: u32,
 }
 
-pub(crate) fn run_async<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new()
-        .expect("runtime")
-        .block_on(future)
-}
-
-fn parse_json_body(bytes: &[u8]) -> Option<Value> {
-    (!bytes.is_empty()).then(|| serde_json::from_slice(bytes).expect("json body"))
-}
+use crate::support::flow_helpers::parse_json_body;
+pub(crate) use crate::support::flow_helpers::run_async;
 
 async fn capture_snapshot(
     res: actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
