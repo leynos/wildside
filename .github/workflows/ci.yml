@@ -161,6 +161,14 @@ jobs:
       - name: Workflow contract tests
         run: make test-workflow-contracts
 
+      - name: Python format check
+        run: make check-fmt-python
+
+      # Pylint runs on a uv-managed PyPy (downloaded on demand), mirroring
+      # the pylint-pypy-shim setup in leynos/lading.
+      - name: Python lint
+        run: make lint-python
+
       - name: Type check
         run: make typecheck
 

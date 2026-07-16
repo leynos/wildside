@@ -63,6 +63,35 @@ SPELLING_HELPER_PYTEST = PYTHONPATH=scripts $(PYTHON_NO_BYTECODE_ENV) \
 	--with pytest-cov==7.0.0 python -m pytest
 OPENAPI_SPEC ?= spec/openapi.json
 
+# Python quality tooling (rule sets live in pyproject.toml; ported from
+# leynos/lading and leynos/prosidy-darn so Python is held to the same
+# standard). RUFF_VERSION is pinned above alongside the spelling tooling so
+# `make` invokes the same Ruff as CI; bump every site together — a version
+# mismatch causes version-skew lint failures because rule sets differ
+# between Ruff releases.
+RUFF ?= uv tool run --from ruff==$(RUFF_VERSION) ruff
+TY_VERSION ?= 0.0.59
+INTERROGATE_VERSION ?= 1.7.0
+# Pylint runs on PyPy via the pylint-pypy shim for speed, mirroring
+# leynos/lading; uv downloads a managed PyPy when none is installed.
+PYLINT_PYTHON ?= pypy
+PYLINT_TARGETS ?= scripts tests
+PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
+PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
+PYLINT = uv tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
+# The spelling-rollout helper (SPELLING_PY_SRCS) is excluded: it targets
+# Python 3.14 with pathspec and is gated separately by spelling-helper-test.
+PY_SOURCES := $(sort $(filter-out $(SPELLING_PY_SRCS),\
+	$(shell find scripts tests -type f -name '*.py' -print)))
+# Runtime and test dependencies the helper scripts import. ty resolves
+# imports from a materialized virtual environment (`uv run --with` builds a
+# layered environment ty cannot discover), so typecheck-python installs these
+# into .venv and points ty at it. Versions mirror the test-scripts target and
+# the inline metadata in scripts/local_k8s.py; tomli and cryptography cover
+# imports in sync_workspace_members.py and rotate_session_key.py.
+PY_TYPECHECK_DEPS = pytest pytest-mock hypothesis 'pyyaml>=6' \
+	cyclopts==4.10.1 plumbum==1.9.0 cryptography tomli
+
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
@@ -72,6 +101,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 .PHONY: spelling spelling-phrase-check spelling-config spelling-config-write spelling-helper-test
 .PHONY: lint-rust lint-clippy lint-whitaker lint-frontend lint-asyncapi lint-openapi lint-makefile
 .PHONY: lint-actions lint-architecture workspace-sync prepare-pg-worker
+.PHONY: lint-python typecheck-python check-fmt-python
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -108,27 +138,29 @@ docker-down:
 	cd deploy && docker compose down
 
 local-k8s-up:
-	uv run scripts/local_k8s.py up
+	uv run --no-project scripts/local_k8s.py up
 
 local-k8s-down:
-	uv run scripts/local_k8s.py down
+	uv run --no-project scripts/local_k8s.py down
 
 local-k8s-status:
-	uv run scripts/local_k8s.py status
+	uv run --no-project scripts/local_k8s.py status
 
 local-k8s-logs:
-	uv run scripts/local_k8s.py logs
+	uv run --no-project scripts/local_k8s.py logs
 
 fmt: workspace-sync
 	cargo fmt --all
 	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+	$(RUFF) format
+	$(RUFF) check --select I --fix
 
 lint: workspace-sync
 	$(MAKE) lint-rust
 	$(MAKE) lint-architecture
 	$(MAKE) lint-frontend
 	$(MAKE) lint-specs
-	$(MAKE) lint-makefile lint-actions
+	$(MAKE) lint-python lint-makefile lint-actions
 
 lint-rust:
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --workspace --no-deps
@@ -157,6 +189,14 @@ lint-frontend:
 
 
 lint-specs: lint-asyncapi lint-openapi
+
+# Python lint tier: Ruff (style and correctness), interrogate (docstring
+# coverage on the shipped helper code; unittests are excluded via
+# pyproject.toml), and Pylint (second-tier rule families) over all Python.
+lint-python:
+	$(RUFF) check
+	uv tool run --from interrogate==$(INTERROGATE_VERSION) interrogate --fail-under 100 scripts
+	$(PYLINT) $(PYLINT_TARGETS)
 
 lint-architecture:
 	$(RUST_FLAGS_ENV) cargo run -p architecture-lint --quiet
@@ -229,7 +269,7 @@ test-frontend: deps typecheck
 
 # Validate the mutation-testing caller workflow contract
 test-workflow-contracts:
-	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' pytest tests/workflow_contracts -q
+	$(PYTHON_NO_BYTECODE_ENV) uv run --no-project --with 'pytest>=8' --with 'pyyaml>=6' pytest tests/workflow_contracts -q
 
 # Python unit tests for the local Kubernetes preview helper
 # (scripts/local_k8s). Run from the repository root so the make-target smoke
@@ -237,7 +277,7 @@ test-workflow-contracts:
 # PYTHONPATH. Test dependencies are supplied through uv's `--with`, mirroring
 # the inline dependency declaration in scripts/local_k8s.py.
 test-scripts:
-	PYTHONPATH=scripts uv run \
+	PYTHONPATH=scripts uv run --no-project \
 		--with pytest --with pytest-mock --with hypothesis --with 'pyyaml>=6' \
 		--with cyclopts==4.10.1 --with plumbum==1.9.0 \
 		python -m pytest scripts/local_k8s/unittests
@@ -280,7 +320,16 @@ $(NODE_MODULES_STAMP): $(PNPM_LOCK_FILE) package.json
 	@rm -f node_modules/.pnpm-install-*
 	@touch $@
 
-typecheck: deps ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,--noEmit -p $$dir/tsconfig.json,typescript@$(TSC_VERSION)) || exit 1; done
+typecheck: deps typecheck-python ; for dir in $(TS_WORKSPACES); do $(call exec_or_bunx,tsc,--noEmit -p $$dir/tsconfig.json,typescript@$(TSC_VERSION)) || exit 1; done
+
+# Typecheck the Python helper scripts with ty against a materialized .venv
+# so third-party imports (cyclopts, plumbum, etc.) resolve. The scripts/
+# search path lives in [tool.ty.environment] in pyproject.toml.
+typecheck-python:
+	uv venv --allow-existing .venv
+	uv pip install --quiet --python .venv $(PY_TYPECHECK_DEPS)
+	uv tool run --from ty==$(TY_VERSION) ty check --python .venv \
+		--python-version 3.13 $(PY_SOURCES)
 
 
 audit: deps audit-node rust-audit
@@ -307,10 +356,15 @@ else \
 	cargo fmt --all -- --check; \
 fi
 $(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+$(RUFF) format --check
 endef
 
 check-fmt:
 	$(CHECK_FMT_CMD)
+
+# Standalone Python formatting gate so CI can report it as a discrete step.
+check-fmt-python:
+	$(RUFF) format --check
 
 markdownlint: spelling
 	@if PATH="$(BUN_PATH)" command -v markdownlint-cli2 >/dev/null 2>&1; then \
