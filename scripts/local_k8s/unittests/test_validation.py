@@ -60,3 +60,20 @@ def test_image_repository_and_tag_rejects_untagged_images(image_name: str) -> No
     """Verify untagged image references fail before Helm rendering."""
     with pytest.raises(LocalK8sError, match="WILDSIDE_IMAGE"):
         image_repository_and_tag(image_name)
+
+
+@pytest.mark.parametrize(
+    "image_name",
+    [
+        # A comma or ``=`` in the tag would smuggle extra Helm chart values.
+        "wildside-backend:local,ingress.enabled=true",
+        "wildside-backend:local=oops",
+        # The same characters must be rejected in the repository component.
+        "wildside,ingress.enabled=true/backend:local",
+        "wildside-backend:with space",
+    ],
+)
+def test_image_repository_and_tag_rejects_helm_set_metacharacters(image_name: str) -> None:
+    """Verify image references cannot inject Helm ``--set`` chart values."""
+    with pytest.raises(LocalK8sError, match="WILDSIDE_IMAGE"):
+        image_repository_and_tag(image_name)

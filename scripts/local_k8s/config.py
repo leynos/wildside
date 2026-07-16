@@ -75,6 +75,9 @@ class PreviewConfig:
         _validate_dns_1123_label(self.cluster_name, name="WILDSIDE_K8S_CLUSTER")
         _validate_dns_1123_label(self.namespace, name="WILDSIDE_K8S_NAMESPACE")
         _validate_kind_node_image(self.kind_node_image)
+        _validate_engine_provider_combination(
+            self.container_engine, self.k8s_provider
+        )
 
     @property
     def kube_context(self) -> str:
@@ -174,6 +177,24 @@ def _kind_node_image_from_env() -> str:
     raw_value = os.environ.get("WILDSIDE_KIND_NODE_IMAGE", DEFAULT_KIND_NODE_IMAGE)
     _validate_kind_node_image(raw_value)
     return raw_value
+
+
+def _validate_engine_provider_combination(
+    container_engine: ContainerEngine, k8s_provider: K8sProvider
+) -> None:
+    """Reject unsupported container-engine and provider pairings.
+
+    Rootless Podman previews only support the ``kind`` provider; k3d has no
+    rootless-Podman story, so the ``podman`` plus ``k3d`` pairing is refused.
+    The supported combinations are ``docker`` plus ``k3d`` or ``kind`` and
+    ``podman`` plus ``kind``.
+    """
+    if container_engine == "podman" and k8s_provider == "k3d":
+        message = (
+            "Podman previews require the kind provider; set "
+            "WILDSIDE_K8S_PROVIDER=kind (k3d is not supported with Podman)"
+        )
+        raise LocalK8sError(message)
 
 
 def _validate_dns_1123_label(value: str, *, name: str) -> None:

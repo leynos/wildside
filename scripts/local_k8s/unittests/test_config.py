@@ -158,6 +158,17 @@ def test_preview_config_rejects_unknown_provider_values(
         PreviewConfig.from_env()
 
 
+def test_preview_config_rejects_podman_with_k3d(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify the unsupported Podman plus k3d pairing fails fast."""
+    monkeypatch.setenv("WILDSIDE_CONTAINER_ENGINE", "podman")
+    monkeypatch.setenv("WILDSIDE_K8S_PROVIDER", "k3d")
+
+    with pytest.raises(LocalK8sError, match="Podman previews require"):
+        PreviewConfig.from_env()
+
+
 @pytest.mark.parametrize(
     "cluster_name",
     UNSAFE_KUBERNETES_NAMES,

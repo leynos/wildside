@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 import secrets
 from collections.abc import Callable
 
@@ -15,6 +16,14 @@ from .validation import LocalK8sError, require_tools
 
 SESSION_SECRET_KEY_NAME = "session_key"  # noqa: S105 - Secret data key name, not secret material.
 SESSION_SECRET_NAME = "wildside-session-key"  # noqa: S105 - Secret resource name, not secret material.
+
+# Helm's ``--set`` splits values on commas and treats ``=`` as a key/value
+# separator, so an image reference containing those (or backslash/brace)
+# characters could smuggle additional chart values into the release. Constrain
+# the repository and tag to an OCI-safe grammar that excludes every Helm
+# ``--set`` metacharacter before forwarding them.
+_IMAGE_REPOSITORY_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}")
+_IMAGE_TAG_PATTERN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]{0,127}")
 
 logger = logging.getLogger(__name__)
 
@@ -276,9 +285,11 @@ def helm_upgrade(config: PreviewConfig) -> None:
             config.namespace,
             "--values",
             str(config.local_values_path),
-            "--set",
+            # Use --set-string so the validated repository and tag are always
+            # passed as literal strings, never coerced (e.g. a numeric tag).
+            "--set-string",
             f"image.repository={image_repository}",
-            "--set",
+            "--set-string",
             f"image.tag={image_tag}",
             "--wait",
             "--timeout",
@@ -293,12 +304,28 @@ def _image_ref_lacks_tag(repository: str, separator: str, tag: str) -> bool:
 
 
 def image_repository_and_tag(image_name: str) -> tuple[str, str]:
-    """Split a Docker image reference into Helm repository and tag values."""
+    """Split a Docker image reference into Helm repository and tag values.
+
+    The repository and tag are validated against an OCI-safe grammar before
+    they are returned so that neither can carry characters that Helm's
+    ``--set``/``--set-string`` flags treat specially (commas, ``=``, braces,
+    or backslashes), preventing chart-value injection via ``WILDSIDE_IMAGE``.
+    """
 
     repository, separator, tag = image_name.rpartition(":")
     if _image_ref_lacks_tag(repository, separator, tag):
         raise LocalK8sError(
             "WILDSIDE_IMAGE must include a tag, for example wildside-backend:local"
+        )
+    if _IMAGE_REPOSITORY_PATTERN.fullmatch(repository) is None:
+        raise LocalK8sError(
+            "WILDSIDE_IMAGE repository must be a valid OCI reference without "
+            "whitespace or Helm --set metacharacters (',', '=', '{', '}', '\\')"
+        )
+    if _IMAGE_TAG_PATTERN.fullmatch(tag) is None:
+        raise LocalK8sError(
+            "WILDSIDE_IMAGE tag must be a valid OCI tag without whitespace or "
+            "Helm --set metacharacters (',', '=', '{', '}', '\\')"
         )
     return repository, tag
 

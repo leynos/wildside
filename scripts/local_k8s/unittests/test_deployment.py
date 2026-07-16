@@ -135,7 +135,10 @@ def test_build_image_uses_configured_container_engine(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify local image builds use Docker or Podman from configuration."""
-    podman_config = replace(preview_config, container_engine="podman")
+    # Podman is only supported with the kind provider, so pair the engines.
+    podman_config = replace(
+        preview_config, container_engine="podman", k8s_provider="kind"
+    )
     commands = install_run_recorder(monkeypatch)
 
     build_image(podman_config)
@@ -180,9 +183,9 @@ def test_helm_upgrade_uses_configured_kube_context(
                 "wildside",
                 "--values",
                 "/repo/deploy/charts/wildside/values.local.yaml",
-                "--set",
+                "--set-string",
                 "image.repository=wildside-backend",
-                "--set",
+                "--set-string",
                 "image.tag=local",
                 "--wait",
                 "--timeout",
@@ -297,7 +300,7 @@ def _validated_input_text(input_text: object) -> str | None:
     """Return `input_text` unchanged, or raise if it is a non-`str` value."""
     if input_text is not None and not isinstance(input_text, str):
         error_message = "input_text must be text when provided"
-        raise AssertionError(error_message)
+        raise TypeError(error_message)
     return input_text
 
 
