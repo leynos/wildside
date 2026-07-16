@@ -29,18 +29,8 @@ mod read_models_assertions;
 #[path = "support/catalogue_descriptor_snapshots.rs"]
 mod snapshots;
 
-mod support {
-    //! Test-local view of shared support helpers.
-    #[path = "../support/mod.rs"]
-    mod shared;
-    pub use shared::*;
-    #[path = "../support/atexit_cleanup.rs"]
-    pub mod atexit_cleanup;
-    #[path = "../support/cluster_skip.rs"]
-    pub mod cluster_skip;
-    #[path = "../support/embedded_postgres.rs"]
-    pub mod embedded_postgres;
-}
+include!("support/entrypoint.rs");
+declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 use builders::{CURATOR_USER_ID, ROUTE_ID};
 use read_models_assertions::{
