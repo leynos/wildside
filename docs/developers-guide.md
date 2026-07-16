@@ -52,7 +52,7 @@ Docker plus `k3d` remains the default local mode:
 make local-k8s-up
 ```
 
-Rootless Podman plus `kind` is the supported VM mode:
+Rootless Podman plus `kind` is a supported alternative local mode:
 
 ```bash
 WILDSIDE_CONTAINER_ENGINE=podman WILDSIDE_K8S_PROVIDER=kind make local-k8s-up

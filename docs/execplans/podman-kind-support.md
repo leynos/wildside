@@ -4,8 +4,8 @@ This ExecPlan is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: APPROVED AND IN IMPLEMENTATION. The user approved implementation on
-2026-06-22. Keep this plan current as each milestone lands.
+Status: COMPLETE. The user approved implementation on 2026-06-22. All
+milestones, validation, and final gates landed (PR #378).
 
 ## Purpose / big picture
 
@@ -616,7 +616,7 @@ teardown result in this plan's `Outcomes & Retrospective`.
 
 ## Outcomes & Retrospective
 
-Implementation is in progress. Milestone 1 establishes provider-neutral
+Implementation is complete. Milestone 1 established provider-neutral
 configuration while preserving Docker plus `k3d` defaults and legacy
 `WILDSIDE_K3D_*` aliases. Milestone 2 adds provider-aware cluster lifecycle
 commands for Docker plus `k3d`, Docker plus `kind`, and rootless Podman plus
