@@ -100,8 +100,11 @@ fn skip_if_needed(world: &SnapshotWorld) -> bool {
 
 #[fixture]
 fn world() -> SnapshotWorld {
-    ensure_stable_cluster_environment()
-        .expect("reconcile stable cluster environment before cluster access");
+    if let Err(error) = ensure_stable_cluster_environment() {
+        let message = error.to_string();
+        let _: Option<()> = handle_cluster_setup_failure(&message);
+        return SnapshotWorld::skipped(message);
+    }
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(reason) => {
