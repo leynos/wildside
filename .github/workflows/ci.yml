@@ -250,17 +250,12 @@ jobs:
           bun run gen:api
           bun run build
 
-  # Rust coverage for CodeScene. This job is deliberately NOT a required
-  # check and does not gate the pull request. The CodeScene changed-line
-  # gate (upload-codescene-coverage with mode: check) is intentionally
-  # deferred: CodeScene project 70675 has no coverage `gates` configuration
-  # yet, so a `check` invocation would fail unconditionally
-  # ("received project-config isn't valid. Lacks the gates configuration").
-  # coverage-main.yml uploads main-branch coverage on push so the gate can
-  # be added in a small follow-up once CodeScene provisions the gates. For
-  # now this job only generates Rust coverage and advances the ratchet
-  # baseline that pull-request runs compare against. It skips Dependabot so
-  # dependency automerge stays off the expensive coverage path.
+  # Rust coverage for CodeScene. The changed-line gate runs immediately after
+  # generation when CS_ACCESS_TOKEN is available; the explicit token guard
+  # lets forked pull requests skip the secret-dependent step safely.
+  # coverage-main.yml uploads main-branch coverage and advances the ratchet
+  # baseline that pull-request runs compare against. This job skips Dependabot
+  # so dependency automerge stays off the expensive coverage path.
   coverage:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubicloud-standard-8
@@ -275,9 +270,8 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
-          # The deferred `cs-coverage check` diffs against the PR merge
-          # base; fetch full history now so enabling the gate later is a
-          # workflow-only change.
+          # `cs-coverage check` diffs against the pull-request merge base, so
+          # fetch the full history used by the active changed-line gate.
           fetch-depth: 0
       - name: Install Rust toolchain
         uses: leynos/shared-actions/.github/actions/setup-rust@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
@@ -324,3 +318,14 @@ jobs:
           # would be killed. The compile-fail tests add no line coverage.
           features: example-data metrics test-support
           with-ratchet: 'true'
+      - name: Check coverage against CodeScene gates
+        env:
+          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
+        if: github.event_name == 'pull_request' && env.CS_ACCESS_TOKEN != ''
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
+        with:
+          format: lcov
+          mode: check
+          project-url: https://api.codescene.io/v2/projects/70675
+          access-token: ${{ env.CS_ACCESS_TOKEN }}
+          installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
