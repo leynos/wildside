@@ -118,11 +118,8 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         run: make audit
 
-      - name: Install Rust for Merman
-        run: rustup toolchain install 1.95.0 --profile minimal --no-self-update
-
       - name: Install Merman CLI
-        run: cargo +1.95.0 install merman-cli --version "=0.7.0" --locked
+        run: cargo binstall --no-confirm --locked merman-cli@0.7.0
 
       - name: Install Nixie
         run: uv tool install --python 3.14 "nixie-cli==1.1.0"
