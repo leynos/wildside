@@ -40,7 +40,7 @@ struct TestContext {
 
 fn setup_context() -> Result<TestContext, String> {
     // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;

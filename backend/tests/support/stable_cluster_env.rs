@@ -143,17 +143,16 @@ static STABLE_ENV_INIT: std::sync::OnceLock<String> = std::sync::OnceLock::new()
 /// and default data directories are reconciled before initialization. That
 /// keeps the cluster aligned with the stable `PG_PASSWORD` override and prevents
 /// leftover authentication state from earlier runs.
-pub(crate) fn ensure_stable_cluster_environment() {
+pub(crate) fn ensure_stable_cluster_environment() -> BootstrapResult<()> {
     // Borrow the cached password directly; no clone is needed because the
     // repair helper only reads the bytes.
     let password = STABLE_ENV_INIT.get_or_init(resolve_stable_env);
 
     // The repair path is fallible (lock acquisition and filesystem cleanup);
-    // surface any failure explicitly at this single boundary rather than hiding
-    // it behind a deeper `.expect()`. This keeps the function's existing
-    // fail-fast style while making the fallibility part of the helper contract.
+    // propagate any failure to the caller rather than hiding it behind a
+    // deeper `.expect()`, so fallibility is part of the helper's signature and
+    // each setup boundary decides how to surface it.
     repair_password_state_serialized(password.as_bytes())
-        .expect("repair shared cluster password state before cluster bootstrap");
 }
 
 /// Resolves `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` to their stable values,

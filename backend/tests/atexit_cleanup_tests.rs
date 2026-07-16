@@ -140,7 +140,8 @@ fn ensure_stable_cluster_environment_resolves_env_once_under_concurrency() {
     // Perform first-call initialization on the current (single) thread. The
     // process-global `STABLE_ENV_INIT` OnceLock resolves and `set_var` runs
     // while single-threaded, which is sound.
-    stable_cluster_env::ensure_stable_cluster_environment();
+    stable_cluster_env::ensure_stable_cluster_environment()
+        .expect("reconcile stable cluster environment before cluster access");
 
     // The spawned threads now hit only the cached post-initialization path (no
     // `set_var`), proving concurrent callers observe consistent state without

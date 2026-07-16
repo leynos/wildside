@@ -67,7 +67,8 @@ impl ExampleDataSeedingWorld {
         // before constructing the Tokio runtime, which spawns worker
         // threads, and `std::env::set_var` is undefined behaviour once other
         // threads exist, so the environment must be reconciled first.
-        ensure_stable_cluster_environment();
+        ensure_stable_cluster_environment()
+            .expect("reconcile stable cluster environment before cluster access");
         let runtime = Runtime::new().expect("create runtime");
         let cluster = match shared_cluster_handle() {
             Ok(c) => c,

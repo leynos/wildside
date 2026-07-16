@@ -117,7 +117,8 @@ type SharedContext = Arc<Mutex<RepoContext>>;
 
 #[fixture]
 fn repo_context() -> Option<RepoContext> {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment()
+        .expect("reconcile stable cluster environment before cluster access");
     let cluster = match shared_cluster_handle() {
         Ok(c) => c,
         Err(reason) => return handle_cluster_setup_failure(reason),

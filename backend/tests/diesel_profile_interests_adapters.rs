@@ -207,7 +207,8 @@ async fn run_flow(
 }
 
 fn setup_db_context() -> Option<DbContext> {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment()
+        .expect("reconcile stable cluster environment before cluster access");
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(error) => {

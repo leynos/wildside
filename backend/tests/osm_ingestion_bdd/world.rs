@@ -22,7 +22,8 @@ use crate::{
 impl OsmIngestionWorld {
     pub fn setup_command(&self) {
         // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
-        ensure_stable_cluster_environment();
+        ensure_stable_cluster_environment()
+            .expect("reconcile stable cluster environment before cluster access");
         let runtime = Runtime::new().expect("create runtime");
 
         let cluster = match shared_cluster_handle() {

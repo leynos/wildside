@@ -46,7 +46,8 @@ const FIXTURE_PROFILE_NAME: &str = "Ada Lovelace";
 #[fixture]
 fn world() -> World {
     // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment()
+        .expect("reconcile stable cluster environment before cluster access");
     let runtime = Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime for BDD scenario"));
     World {
         runtime,

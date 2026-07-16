@@ -31,7 +31,7 @@ pub(crate) struct TestContext {
 pub(crate) type SharedContext = Arc<Mutex<TestContext>>;
 
 pub(crate) fn setup_test_context() -> Result<TestContext, String> {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let cluster = shared_cluster_handle().map_err(|err| err.to_string())?;
     let temporary_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temporary_db.url().to_owned();

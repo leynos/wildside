@@ -11,7 +11,8 @@ use support::format_postgres_error;
 
 #[test]
 fn temporary_databases_are_isolated_from_template() {
-    ensure_stable_cluster_environment();
+    ensure_stable_cluster_environment()
+        .expect("reconcile stable cluster environment before cluster access");
     let cluster = match shared_cluster_handle() {
         Ok(cluster) => cluster,
         Err(reason) => {
