@@ -153,7 +153,7 @@ PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions typecheck deps lockfile
+.PHONY: fmt lint docs-check test test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: spelling spelling-phrase-check spelling-config spelling-config-write spelling-helper-test
@@ -164,7 +164,7 @@ PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
 workspace-sync:
 	./scripts/sync_workspace_members.py
 
-all: check-fmt lint test spelling
+all: check-fmt lint docs-check test spelling
 
 clean:
 	cargo clean --manifest-path backend/Cargo.toml
@@ -301,6 +301,12 @@ PG_WORKER_PATH ?= $(CURDIR)/target/pg_worker
 PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.2
 NEXTEST_TEST_THREADS ?= 1
 
+
+# Zero-tolerance documentation gate: TypeDoc's notDocumented validation over
+# the frontend-pwa, packages/types, and packages/tokens surfaces (their
+# typedoc.json files). Emits no documentation artefacts.
+docs-check:
+	pnpm run docs:check
 
 test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
 
