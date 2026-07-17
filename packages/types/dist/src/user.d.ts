@@ -11,7 +11,9 @@ export declare const UserIdSchema: z.ZodBranded<z.ZodString, "UserId">;
 export type UserId = z.infer<typeof UserIdSchema>;
 /** Runtime schema for a user record. */
 export declare const UserSchema: z.ZodObject<{
+    /** Branded unique identifier for the user. */
     id: z.ZodBranded<z.ZodString, "UserId">;
+    /** Human-readable name; trimmed and guaranteed non-empty by the schema. */
     displayName: z.ZodString;
 }, "strict", z.ZodTypeAny, {
     id: string & z.BRAND<"UserId">;
@@ -24,7 +26,9 @@ export declare const UserSchema: z.ZodObject<{
 export type User = z.infer<typeof UserSchema>;
 /** Runtime schema for a list of user records. */
 export declare const UsersSchema: z.ZodArray<z.ZodObject<{
+    /** Branded unique identifier for the user. */
     id: z.ZodBranded<z.ZodString, "UserId">;
+    /** Human-readable name; trimmed and guaranteed non-empty by the schema. */
     displayName: z.ZodString;
 }, "strict", z.ZodTypeAny, {
     id: string & z.BRAND<"UserId">;
