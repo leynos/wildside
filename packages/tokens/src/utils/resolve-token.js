@@ -173,6 +173,16 @@ function isValidTokenValue(value) {
   return value !== null && value !== undefined && typeof value === 'string';
 }
 
+/**
+ * Resolve a design-token reference like `{color.brand}` against a token tree.
+ *
+ * Follows nested references until a literal value is reached, so aliases of
+ * aliases resolve; a non-reference string is returned unchanged.
+ *
+ * @param {string} ref - Token reference or literal string.
+ * @param {object} tokens - Token tree supplying `{path: {value}}` leaves.
+ * @returns {string} The resolved literal token value.
+ */
 export function resolveToken(ref, tokens) {
   if (typeof ref !== 'string') {
     throw new TypeError('ref must be a string like "{path.to.token}" or a literal string');
