@@ -860,16 +860,18 @@ sitemap.
 ### Running locally
 
 ```sh
-node ./scripts/check-overrides-policy.mjs
+bun run scripts/audit-ux-state-graph.mjs \
+  --graph docs/wildside-ux-state-graph-v0.1.json \
+  --sitemap docs/sitemap.md
 ```
 
-A passing run prints:
+A run prints one line per state:
 
 ```text
-pnpm override policy verified for basic-ftp, dompurify, ip-address, uuid.
+<state-id> in=<count> out=<count> route=<route-or-NONE> [ORPHAN]
 ```
 
-A failing run prints a policy diagnostic to stderr and exits with code `1`.
+Input or parsing errors are printed to stderr and exit with code `1`.
 
 ## Override policy check
 
