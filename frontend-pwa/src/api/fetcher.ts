@@ -133,6 +133,10 @@ function getContentTypeForBody(body: unknown): string | null {
   if (isBinary(body)) return null;
   return 'application/json';
 }
+/**
+ * Fetch wrapper used by the generated Orval client: sets a JSON content type
+ * only for plain-object bodies and rejects on non-2xx responses.
+ */
 export const customFetch = async <T>(input: string, init?: RequestInit): Promise<T> => {
   const url = new URL(input, apiBase());
 
@@ -171,6 +175,10 @@ export const customFetchParsed = async <Schema extends z.ZodTypeAny>(
   return schema.parse(data);
 };
 
+/**
+ * Like `customFetchParsed`, but returns Zod's safe-parse result instead of
+ * throwing, so callers can branch on validation failure.
+ */
 export const customFetchParsedSafe = async <Schema extends z.ZodTypeAny>(
   input: string,
   schema: Schema,
