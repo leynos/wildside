@@ -14,7 +14,9 @@ export type UserId = z.infer<typeof UserIdSchema>;
 /** Runtime schema for a user record. */
 export const UserSchema = z
   .object({
+    /** Branded unique identifier for the user. */
     id: UserIdSchema,
+    /** Human-readable name; trimmed and guaranteed non-empty by the schema. */
     displayName: z.string().trim().min(1, 'displayName must not be empty'),
   })
   .strict();
