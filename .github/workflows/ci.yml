@@ -18,6 +18,8 @@ jobs:
     runs-on: ubicloud-standard-8
     permissions:
       contents: read
+    env:
+      WHITAKER_INSTALLER_VERSION: '0.2.6'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
@@ -190,10 +192,24 @@ jobs:
       - name: Rust clippy
         run: make lint-clippy
 
+      - name: Cache Whitaker installer
+        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
+        with:
+          path: |
+            ~/.cargo/bin/whitaker-installer
+            ~/.cache/cargo-binstall
+          key: whitaker-installer-${{ runner.os }}-${{ runner.arch }}-${{ env.WHITAKER_INSTALLER_VERSION }}
       - name: Install whitaker
         run: |
-          cargo install whitaker-installer --version 0.2.0
-          whitaker-installer --experimental
+          if ! command -v whitaker-installer >/dev/null 2>&1; then
+            if cargo binstall --version >/dev/null 2>&1; then
+              cargo binstall --no-confirm --locked "whitaker-installer@${WHITAKER_INSTALLER_VERSION}"
+            else
+              echo "cargo-binstall unavailable; building whitaker-installer from crates.io"
+              cargo install --locked whitaker-installer --version "${WHITAKER_INSTALLER_VERSION}"
+            fi
+          fi
+          whitaker-installer
       - name: Whitaker lint
         run: make lint-whitaker
 

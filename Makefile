@@ -1,6 +1,7 @@
 SHELL := bash
 BUN_PATH := $(HOME)/.bun/bin:$(PATH)
 CARGO ?= cargo
+WHITAKER ?= whitaker
 KUBE_VERSION ?= 1.31.0
 export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go/bin:$(CURDIR)/node_modules/.bin:$(PATH)
 CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071
@@ -142,13 +143,14 @@ lint-rust:
 lint-clippy:
 	cargo clippy --locked --workspace --all-targets --all-features -- $(RUST_FLAGS)
 
-# Whitaker is expected to be on PATH; install with `whitaker-installer
-# --experimental` (CI bootstraps it in a separate step). Runs under
-# RUSTFLAGS="-D warnings" so a workspace warning fails the lint, matching
-# the clippy gate. CI invokes this target so both surfaces stay in lockstep.
+# Whitaker is expected to be on PATH; install with `whitaker-installer`
+# (CI bootstraps it in a separate step, pinned via
+# WHITAKER_INSTALLER_VERSION). Runs under RUSTFLAGS="-D warnings" so a
+# workspace warning fails the lint, matching the clippy gate. CI invokes
+# this target so both surfaces stay in lockstep.
 lint-whitaker:
-	$(RUST_FLAGS_ENV) whitaker --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
-	$(RUST_FLAGS_ENV) whitaker --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
+	$(RUST_FLAGS_ENV) $(WHITAKER) --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
+	$(RUST_FLAGS_ENV) $(WHITAKER) --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
 
 lint-frontend:
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
