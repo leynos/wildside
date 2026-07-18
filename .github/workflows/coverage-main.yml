@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
+        uses: leynos/shared-actions/.github/actions/setup-rust@18bed1ca49a6de3d8882bd72635a32ae3f023d57
       - name: Cache PostgreSQL embedded binaries
         uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
         with:
@@ -51,7 +51,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
+        uses: leynos/shared-actions/.github/actions/generate-coverage@18bed1ca49a6de3d8882bd72635a32ae3f023d57
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -74,7 +74,7 @@ jobs:
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@18bed1ca49a6de3d8882bd72635a32ae3f023d57
         with:
           # mode defaults to "upload"; CodeScene infers project 70675 from
           # the git remote, so no project-url is needed here. The PR check

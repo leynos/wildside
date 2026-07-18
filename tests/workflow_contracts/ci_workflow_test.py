@@ -60,7 +60,7 @@ def test_codescene_check_uses_the_guarded_project_contract() -> None:
     ), "the CodeScene check must skip pull requests without the secret"
     assert check.get("uses") == (
         "leynos/shared-actions/.github/actions/upload-codescene-coverage@"
-        "927edd45ae77be4251a8a18ca9eb5613a2e32cbd"
+        "18bed1ca49a6de3d8882bd72635a32ae3f023d57"
     ), "the CodeScene check must use the reviewed shared-action pin"
     assert check.get("with") == {
         "format": "lcov",
