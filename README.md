@@ -1,5 +1,8 @@
 # wildside
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](
+https://deepwiki.com/leynos/wildside)
+
 Wildside is a mobile “serendipity engine” for urban exploration, generating
 bespoke, narrative-rich walking tours tailored to user interests, time, and
 location. Leveraging OpenStreetMap, Wikidata, and a custom orienteering-based
