@@ -60,6 +60,69 @@ If a workflow's behaviour genuinely depends on a feature only present from a
 particular commit onwards, express that as a comment or a changelog note, not
 as a test assertion on the SHA string.
 
+## Mutation-testing workflow contract tests
+
+This repository runs scheduled, informational mutation testing through a thin
+caller workflow,
+[`.github/workflows/mutation-testing.yml`](../.github/workflows/mutation-testing.yml),
+which delegates to the shared reusable workflow
+`leynos/shared-actions/.github/workflows/mutation-cargo.yml`. The heavy
+lifting — running `cargo-mutants`, sharding, and summarizing survivors —
+lives in `shared-actions`; this repository carries only declarative
+configuration. The run is **informational only**: it never gates a pull
+request. Survivors are reported through the job summary and downloadable
+artefacts so they can be triaged into tests, not enforced as a blocking
+check.
+
+The workflow runs in two modes. A **daily schedule** fires a change-scoped
+run that mutates only the source files touched within the detection window,
+so quiet days are cheap no-ops. A **manual dispatch** (the Actions "Run
+workflow" control) mutates the whole workspace; select a branch in that
+control to exercise a feature branch.
+
+The caller passes a small set of configuration inputs, each carrying intent:
+
+- `paths` — the change-detection globs (`backend/,crates/,tools/`) that
+  decide whether a scheduled run has anything to mutate, bounding the
+  scheduled run to real source changes; the vendored
+  `third_party/shellexpand` patch crate stays out of scope.
+- `exclude-globs` — feature-gated test-support modules
+  (`backend/src/test_support.rs`, `backend/src/test_support/**`, and the
+  cache and queue `test_helpers.rs` files) that compile in under
+  `--all-features`; mutating them only produces noise.
+- `extra-args` — `--all-features --test-workspace=true`, so `cargo-mutants`
+  runs the whole workspace's tests against each mutant, matching the
+  workspace-wide `make test-rust` baseline (crates such as pagination are
+  exercised by backend's tests).
+- `setup-commands` — pins the embedded PostgreSQL version so
+  `postgresql_archive` skips its unauthenticated, rate-limited
+  release-listing query, mirroring the `ci` job's Rust-tests environment;
+  keep the version aligned with `ci.yml`'s `PG_VERSION`.
+
+The `uses:` reference pins the shared workflow to a full 40-character commit
+SHA rather than a branch or tag, so a force-push upstream cannot silently
+change what runs here. The contract test asserts only that the pin is a full
+commit SHA, not a particular value, so Dependabot bumps it automatically
+without any accompanying test edit.
+
+Because the caller is configuration rather than code, a contract test pins
+the shape it must uphold, failing the pull request when the caller drifts —
+repointing the pin at a branch, widening the token scope, or dropping a
+configuration input — rather than letting the breakage surface only in a
+scheduled run. Run it locally with `make test-workflow-contracts`. The test
+validates:
+
+- the `uses:` reference targets `mutation-cargo.yml` pinned to a full commit
+  SHA;
+- the `with:` block carries exactly the expected configuration (the paths,
+  excludes, feature arguments, and PostgreSQL setup commands above);
+- job permissions are least-privilege (`contents: read`, `id-token: write`)
+  and the workflow-level default token scope is empty;
+- `concurrency` serializes runs per ref without cancelling one in progress;
+  and
+- the triggers keep the daily schedule and a plain `workflow_dispatch` with
+  no legacy branch input.
+
 ## Local Kubernetes preview
 
 Use the repository-local Kubernetes preview when validating the backend image
