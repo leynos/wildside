@@ -346,6 +346,10 @@ jobs:
           # Root-path bootstrap requires the worker binary for privilege demotion.
           PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
         with:
+          # Force Rust-only coverage: the repo's root pyproject.toml is
+          # tooling-only (no [project] table), so auto-detection would classify
+          # the repo as mixed and reject lcov. See leynos/shared-actions#373.
+          language: rust
           output-path: lcov.info
           format: lcov
           # nextest is required: .config/nextest.toml serializes the
