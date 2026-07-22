@@ -161,6 +161,14 @@ jobs:
       - name: Workflow contract tests
         run: make test-workflow-contracts
 
+      - name: Python format check
+        run: make check-fmt-python
+
+      # Pylint runs on a uv-managed PyPy (downloaded on demand), mirroring
+      # the pylint-pypy-shim setup in leynos/lading.
+      - name: Python lint
+        run: make lint-python
+
       - name: Type check
         run: make typecheck
 
@@ -327,7 +335,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@18bed1ca49a6de3d8882bd72635a32ae3f023d57
+        uses: leynos/shared-actions/.github/actions/generate-coverage@074f7d8ba75a6e5d18532b72cbe38fccbda4e9c6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -337,6 +345,10 @@ jobs:
           # Root-path bootstrap requires the worker binary for privilege demotion.
           PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
         with:
+          # Force Rust-only coverage: the repo's root pyproject.toml is
+          # tooling-only (no [project] table), so auto-detection would classify
+          # the repo as mixed and reject lcov. See leynos/shared-actions#373.
+          language: rust
           output-path: lcov.info
           format: lcov
           # nextest is required: .config/nextest.toml serializes the

@@ -8,7 +8,7 @@ values regression that breaks the local preview is caught before deploy.
 from __future__ import annotations
 
 import shutil
-import subprocess
+import subprocess  # noqa: S404 - test drives helm via subprocess.
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,7 @@ SESSION_MOUNT_PATH = "/var/run/secrets/wildside-session"
 HELM_TEMPLATE_TIMEOUT_SECONDS = 120
 
 type YamlScalar = str | int | float | bool | None
-type YamlValue = YamlScalar | list["YamlValue"] | dict[str, "YamlValue"]
+type YamlValue = YamlScalar | list[YamlValue] | dict[str, YamlValue]
 type Manifest = dict[str, YamlValue]
 
 
@@ -99,7 +99,9 @@ def test_local_render_wires_session_key_env(local_preview_render: str) -> None:
         for entry in env:
             assert isinstance(entry, dict), "each container env entry must be a mapping"
             name = entry["name"]
-            assert isinstance(name, str), "each container env entry 'name' must be a string"
+            assert isinstance(name, str), (
+                "each container env entry 'name' must be a string"
+            )
             env_by_name[name] = entry
     session_env = env_by_name["SESSION_KEY_FILE"]
     config_map_key = _dig(session_env, "valueFrom", "configMapKeyRef", "key")

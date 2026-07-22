@@ -12,21 +12,23 @@ Examples
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+import dataclasses as dc
 import logging
-import subprocess
-from typing import NoReturn
+import subprocess  # noqa: S404 - repo's deliberate subprocess boundary module.
+import typing as typ
 
 from plumbum import local
 from plumbum.commands.processes import ProcessExecutionError
 
 from .validation import LocalK8sError
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
+@dc.dataclass(frozen=True, slots=True)
 class CommandResult:
     """Captured output from an external command.
 
@@ -44,7 +46,7 @@ class CommandResult:
 
 def _run_with_input(
     command: str,
-    args: Sequence[str],
+    args: cabc.Sequence[str],
     *,
     cwd: str | None = None,
     input_text: str,
@@ -63,7 +65,7 @@ def _run_with_input(
 
 def _run_with_plumbum(
     command: str,
-    args: Sequence[str],
+    args: cabc.Sequence[str],
     *,
     cwd: str | None = None,
 ) -> CommandResult:
@@ -82,12 +84,12 @@ def _run_with_plumbum(
 
 def _run_streaming_with_subprocess(
     command: str,
-    args: Sequence[str],
+    args: cabc.Sequence[str],
     *,
     cwd: str | None = None,
 ) -> None:
     """Run a command with inherited stdout and stderr."""
-    subprocess.run(  # noqa: S603, S607 - local preview tools are PATH-resolved.
+    subprocess.run(  # noqa: S603 - local preview tools are PATH-resolved.
         [command, *args],
         check=True,
         cwd=cwd,
@@ -117,10 +119,13 @@ def _command_return_code(
 def _log_and_raise(
     command: str,
     exc: ProcessExecutionError | subprocess.CalledProcessError,
-) -> NoReturn:
+) -> typ.NoReturn:
     """Log a command failure and raise the local preview error wrapper."""
-    logger.exception(
+    logger.error(
         "local_k8s_command_failed",
+        # Pass the exception explicitly: this helper runs outside the except
+        # block, so exc_info=True would capture nothing (Ruff LOG014).
+        exc_info=exc,
         extra={
             "command": command,
             "failure_category": type(exc).__name__,
@@ -135,7 +140,7 @@ def _log_and_raise(
 
 def run(
     command: str,
-    args: Sequence[str],
+    args: cabc.Sequence[str],
     *,
     cwd: str | None = None,
     input_text: str | None = None,
@@ -146,7 +151,7 @@ def run(
     ----------
     command : str
         Executable name resolved from ``PATH``.
-    args : Sequence[str]
+    args : cabc.Sequence[str]
         Positional arguments forwarded to the executable.
     cwd : str | None, optional
         Working directory for execution. Uses the process current directory
@@ -172,7 +177,6 @@ def run(
     >>> run("kind", ["create", "cluster", "--config", "-"],
     ...     input_text=config_yaml)  # doctest: +SKIP
     """
-
     try:
         if input_text is not None:
             return _run_with_input(command, args, cwd=cwd, input_text=input_text)
@@ -183,7 +187,7 @@ def run(
 
 def run_streaming(
     command: str,
-    args: Sequence[str],
+    args: cabc.Sequence[str],
     *,
     cwd: str | None = None,
 ) -> None:
@@ -193,7 +197,7 @@ def run_streaming(
     ----------
     command : str
         Executable name resolved from ``PATH``.
-    args : Sequence[str]
+    args : cabc.Sequence[str]
         Positional arguments forwarded to the executable.
     cwd : str | None, optional
         Working directory for execution. Uses the process current directory
@@ -208,7 +212,6 @@ def run_streaming(
     --------
     >>> run_streaming("kubectl", ["logs", "-f", "deploy/backend"])  # doctest: +SKIP
     """
-
     try:
         _run_streaming_with_subprocess(command, args, cwd=cwd)
     except subprocess.CalledProcessError as exc:

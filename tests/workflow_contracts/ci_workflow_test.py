@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import typing as typ
 from pathlib import Path
-from typing import cast
 
 import yaml
 
@@ -22,7 +22,7 @@ def _load_steps() -> list[dict[str, object]]:
     assert all(isinstance(step, dict) for step in steps), (
         "every coverage step must be a mapping"
     )
-    return cast("list[dict[str, object]]", steps)
+    return typ.cast("list[dict[str, object]]", steps)
 
 
 def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
@@ -41,12 +41,13 @@ def test_codescene_check_immediately_follows_coverage_generation() -> None:
         "the CodeScene check must immediately follow coverage generation"
     )
     assert generation.get("with") == {
+        "language": "rust",
         "output-path": "lcov.info",
         "format": "lcov",
         "use-cargo-nextest": "true",
         "features": "example-data metrics test-support",
         "with-ratchet": "true",
-    }, "coverage generation must preserve Wildside's ratcheted LCOV mapping"
+    }, "coverage generation must force Rust-only LCOV via language: rust"
 
 
 def test_codescene_check_uses_the_guarded_project_contract() -> None:

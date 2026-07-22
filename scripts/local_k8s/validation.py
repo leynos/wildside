@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import typing as typ
 from shutil import which
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+MAX_PORT = 65535
 
 
 class LocalK8sError(RuntimeError):
@@ -54,6 +59,7 @@ class LocalK8sError(RuntimeError):
         stderr: str | None = None,
         returncode: int | None = None,
     ) -> None:
+        """Store the message alongside optional command diagnostics."""
         super().__init__(message)
         self.stderr = stderr
         self.returncode = returncode
@@ -61,25 +67,26 @@ class LocalK8sError(RuntimeError):
 
 def validate_port(raw_value: str | None, *, default: int, name: str) -> int:
     """Return a TCP port from an optional environment variable value."""
-
-    if raw_value is None or raw_value == "":
+    if raw_value is None or not raw_value:
         return default
     try:
         port = int(raw_value)
     except ValueError as exc:
-        raise LocalK8sError(f"{name} must be an integer TCP port") from exc
-    if not 1 <= port <= 65535:
-        raise LocalK8sError(f"{name} must be between 1 and 65535")
+        message = f"{name} must be an integer TCP port"
+        raise LocalK8sError(message) from exc
+    if not 1 <= port <= MAX_PORT:
+        message = f"{name} must be between 1 and {MAX_PORT}"
+        raise LocalK8sError(message)
     return port
 
 
-def require_tools(tools: Iterable[str]) -> None:
+def require_tools(tools: cabc.Iterable[str]) -> None:
     """Fail with a concise preflight error when required executables are absent."""
-
     missing = [tool for tool in tools if _is_missing(tool)]
     if missing:
         joined = ", ".join(missing)
-        raise LocalK8sError(f"missing required executable(s): {joined}")
+        message = f"missing required executable(s): {joined}"
+        raise LocalK8sError(message)
 
 
 def _is_missing(tool: str) -> bool:

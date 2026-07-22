@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-import subprocess
+import subprocess  # noqa: S404 - subprocess.CalledProcessError models a real failure.
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
-from plumbum.commands.processes import ProcessExecutionError
-
 from local_k8s.commands import CommandResult, run
 from local_k8s.validation import LocalK8sError
+from plumbum.commands.processes import ProcessExecutionError
 
 
 def test_run_sends_input_text_through_subprocess(
@@ -33,7 +32,12 @@ def test_run_sends_input_text_through_subprocess(
 
     monkeypatch.setattr("local_k8s.commands._run_with_input", record_run_with_input)
 
-    result = run("kind", ["create", "cluster", "--config", "-"], cwd="/repo", input_text="kind: Cluster\n")
+    result = run(
+        "kind",
+        ["create", "cluster", "--config", "-"],
+        cwd="/repo",
+        input_text="kind: Cluster\n",
+    )
 
     assert result == CommandResult(stdout="created\n", stderr=""), (
         "run must return the subprocess result unchanged"
@@ -58,15 +62,21 @@ def test_run_wraps_subprocess_failures(monkeypatch: pytest.MonkeyPatch) -> None:
         cwd: str | None = None,
         input_text: str,
     ) -> CommandResult:
-        assert cwd is None, "subprocess runner must receive the default working directory"
-        assert input_text == "invalid", "subprocess runner must receive the provided stdin text"
+        assert cwd is None, (
+            "subprocess runner must receive the default working directory"
+        )
+        assert input_text == "invalid", (
+            "subprocess runner must receive the provided stdin text"
+        )
         raise subprocess.CalledProcessError(
             1,
             ["kind", "create", "cluster"],
             stderr="kind rejected config\n",
         )
 
-    monkeypatch.setattr("local_k8s.commands._run_with_input", fail_with_called_process_error)
+    monkeypatch.setattr(
+        "local_k8s.commands._run_with_input", fail_with_called_process_error
+    )
 
     with pytest.raises(LocalK8sError, match="kind rejected config"):
         run("kind", ["create", "cluster"], input_text="invalid")
@@ -91,9 +101,9 @@ def test_run_returns_plumbum_results(monkeypatch: pytest.MonkeyPatch) -> None:
     result = run("helm", ["status", "wildside"], cwd="/repo", input_text=None)
 
     assert result is expected, "run must return the plumbum result unchanged"
-    assert calls == [
-        ("helm", ["status", "wildside"], "/repo")
-    ], "run must forward command arguments and cwd to the plumbum runner"
+    assert calls == [("helm", ["status", "wildside"], "/repo")], (
+        "run must forward command arguments and cwd to the plumbum runner"
+    )
 
 
 def test_run_wraps_plumbum_failures(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -108,7 +118,9 @@ def test_run_wraps_plumbum_failures(monkeypatch: pytest.MonkeyPatch) -> None:
         assert cwd is None, "plumbum runner must receive the default working directory"
         raise ProcessExecutionError(["helm", "status"], 1, "", "release missing\n")
 
-    monkeypatch.setattr("local_k8s.commands._run_with_plumbum", fail_with_process_execution_error)
+    monkeypatch.setattr(
+        "local_k8s.commands._run_with_plumbum", fail_with_process_execution_error
+    )
 
     with pytest.raises(LocalK8sError, match="release missing"):
         run("helm", ["status"])

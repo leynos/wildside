@@ -5,11 +5,15 @@ from __future__ import annotations
 import base64
 import logging
 import secrets
-from collections.abc import Callable
+import typing as typ
 
 from .commands import run
-from .config import PreviewConfig
 from .validation import LocalK8sError
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+    from .config import PreviewConfig
 
 SESSION_SECRET_KEY_NAME = "session_key"  # noqa: S105 - Secret data key name, not secret material.
 SESSION_SECRET_NAME = "wildside-session-key"  # noqa: S105 - Secret resource name, not secret material.
@@ -130,7 +134,7 @@ def _reconcile_existing_session_secret(config: PreviewConfig, manifest: str) -> 
 def ensure_session_secret(
     config: PreviewConfig,
     *,
-    key_generator: Callable[[int], bytes] = secrets.token_bytes,
+    key_generator: cabc.Callable[[int], bytes] = secrets.token_bytes,
 ) -> None:
     """Create the local preview session signing key Secret when absent.
 
@@ -139,7 +143,7 @@ def ensure_session_secret(
     config : PreviewConfig
         Local preview settings that select the kube context, namespace, and
         Secret location used by the deployment.
-    key_generator : Callable[[int], bytes], optional
+    key_generator : cabc.Callable[[int], bytes], optional
         Injectable source of key bytes. Tests use this seam to make the
         rendered Secret deterministic; production uses ``secrets.token_bytes``.
 
@@ -150,7 +154,6 @@ def ensure_session_secret(
         missing. Existing key material is reused to avoid rotating local
         preview sessions on every deployment.
     """
-
     if _fetch_existing_session_key(config):
         _log_session_secret_event(config, "local_k8s_session_secret_reuse")
         return

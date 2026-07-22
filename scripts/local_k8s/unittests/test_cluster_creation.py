@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass, replace
-
-import pytest
+import dataclasses as dc
+import typing as typ
 
 from local_k8s.cluster import ensure_cluster
-from local_k8s.config import PreviewConfig
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+    import pytest
+    from local_k8s.config import PreviewConfig
 
 
-@dataclass(frozen=True, slots=True)
+@dc.dataclass(frozen=True, slots=True)
 class MockCommandResult:
     """Minimal command result for cluster command-runner tests."""
 
@@ -24,9 +27,9 @@ type CommandRecord = tuple[str, list[str], str | None]
 
 def install_cluster_run_recorder(
     monkeypatch: pytest.MonkeyPatch,
-    responder: Callable[[str, list[str], str | None], MockCommandResult],
+    responder: cabc.Callable[[str, list[str], str | None], MockCommandResult],
     *,
-    on_require_tools: Callable[[tuple[str, ...]], None] | None = None,
+    on_require_tools: cabc.Callable[[tuple[str, ...]], None] | None = None,
 ) -> list[CommandRecord]:
     """Install cluster command recording for provider contract tests."""
     commands: list[CommandRecord] = []
@@ -120,7 +123,7 @@ class TestClusterCreation:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify Docker-backed kind creation avoids host-port mappings."""
-        config = replace(preview_config, k8s_provider="kind")
+        config = dc.replace(preview_config, k8s_provider="kind")
 
         def respond(
             command: str, args: list[str], _input_text: str | None
@@ -169,7 +172,9 @@ class TestClusterCreation:
         preview_config: PreviewConfig,
     ) -> None:
         """Verify rootless Podman kind creation runs in a delegated user scope."""
-        config = replace(preview_config, container_engine="podman", k8s_provider="kind")
+        config = dc.replace(
+            preview_config, container_engine="podman", k8s_provider="kind"
+        )
         required_tools: list[tuple[str, ...]] = []
 
         def respond(
@@ -185,8 +190,11 @@ class TestClusterCreation:
 
         ensure_cluster(config)
 
-        assert required_tools == [("kind", "podman", "kubectl", "helm", "systemd-run")], (
-            "Podman-backed kind must require kind, podman, kubectl, helm, and systemd-run"
+        assert required_tools == [
+            ("kind", "podman", "kubectl", "helm", "systemd-run")
+        ], (
+            "Podman-backed kind must require kind, podman, kubectl, helm, "
+            "and systemd-run"
         )
         assert commands[0] == (
             "env",
@@ -227,5 +235,6 @@ class TestClusterCreation:
             "with the Helm chart kubeVersion range"
         )
         assert "extraPortMappings" not in commands[1][2], (
-            "Podman-backed kind must rely on port-forwarding rather than host port mappings"
+            "Podman-backed kind must rely on port-forwarding rather than "
+            "host port mappings"
         )
