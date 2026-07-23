@@ -156,7 +156,7 @@ def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
     assert make is not None, "make must be available to execute preview targets"
     for target in targets:
         completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
-            [make, "--no-print-directory", target],
+            [make, "--no-print-directory", f"PATH={env['PATH']}", target],
             text=True,
             capture_output=True,
             check=False,
@@ -207,6 +207,8 @@ def test_local_k8s_make_targets_smoke_successful_flow(
     _write_fake_tool(fake_bin)
 
     env = os.environ.copy()
+    # A host BASH_ENV can rewrite PATH when Make starts its recipe shell.
+    env.pop("BASH_ENV", None)
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
     env["WILDSIDE_FAKE_TOOL_LOG"] = str(tmp_path / "commands.jsonl")
     env["WILDSIDE_FAKE_TOOL_STATE"] = str(tmp_path / "cluster-state")

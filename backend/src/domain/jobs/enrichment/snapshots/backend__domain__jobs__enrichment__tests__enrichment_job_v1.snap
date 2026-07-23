@@ -1,0 +1,21 @@
+---
+source: backend/src/domain/jobs/enrichment/tests.rs
+assertion_line: 191
+expression: value
+---
+{
+  "boundingBox": [
+    -0.2,
+    51.4,
+    0.1,
+    51.6
+  ],
+  "enqueuedAt": "2026-06-14T12:30:00Z",
+  "idempotencyKey": "55555555-5555-5555-5555-555555555555",
+  "jobId": "44444444-4444-4444-4444-444444444444",
+  "tags": [
+    "amenity",
+    "tourism"
+  ],
+  "v": "v1"
+}
