@@ -244,7 +244,7 @@ Nixie and its Merman rendering backend are required work-system tools. Install
 the pinned versions before running the Mermaid gate:
 
 ```bash
-uv tool install "nixie-cli==1.1.0"
+uv tool install --python 3.14 "nixie-cli==1.1.0"
 cargo binstall --locked merman-cli@0.7.0
 ```
 
@@ -903,18 +903,16 @@ sitemap.
 ### Running locally
 
 ```sh
-bun run scripts/audit-ux-state-graph.mjs \
-  --graph docs/wildside-ux-state-graph-v0.1.json \
-  --sitemap docs/sitemap.md
+node ./scripts/check-overrides-policy.mjs
 ```
 
-A run prints one line per state:
+A passing run prints:
 
 ```text
-<state-id> in=<count> out=<count> route=<route-or-NONE> [ORPHAN]
+pnpm override policy verified for basic-ftp, dompurify, ip-address, uuid.
 ```
 
-Input or parsing errors are printed to stderr and exit with code `1`.
+A failing run prints a policy diagnostic to stderr and exits with code `1`.
 
 ## Override policy check
 
@@ -1178,7 +1176,7 @@ directly. Keep repository exceptions narrow: preserve external APIs, formal
 names, wire values and immutable fixtures without adding ordinary bare-word
 exceptions.
 
-The standalone phrase helper and its tests use Python 3.14 at runtime,
-Pathspec 1.1.1 and a Python 3.13 Ruff compatibility target. Continuous
-integration installs Nixie 1.1.0 and Merman CLI 0.7.0 before validating the
-repository's Mermaid diagrams with `make nixie`.
+The standalone phrase helper and its tests run with Python 3.14. They depend
+on Pathspec 1.1.1. Ruff has a Python 3.13 compatibility target.
+Continuous integration installs Nixie 1.1.0 and Merman CLI 0.7.0 before
+validating the repository's Mermaid diagrams with `make nixie`.

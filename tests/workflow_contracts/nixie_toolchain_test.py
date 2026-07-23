@@ -14,13 +14,24 @@ MAKEFILE_PATH = REPOSITORY_ROOT / "Makefile"
 
 def _build_steps() -> list[dict[str, object]]:
     """Return the steps from the CI build job."""
-    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
-    jobs = workflow.get("jobs")
-    assert isinstance(jobs, dict), "the CI workflow must declare jobs"
-    build = jobs.get("build")
-    assert isinstance(build, dict), "the CI workflow must declare the build job"
-    steps = build.get("steps")
-    assert isinstance(steps, list), "the CI build job must declare steps"
+    workflow = cast(
+        "object", yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    )
+    match workflow:
+        case {"jobs": dict() as jobs}:
+            pass
+        case _:
+            raise AssertionError("the CI workflow must declare jobs")
+    match jobs:
+        case {"build": dict() as build}:
+            pass
+        case _:
+            raise AssertionError("the CI workflow must declare the build job")
+    match build:
+        case {"steps": list() as steps}:
+            pass
+        case _:
+            raise AssertionError("the CI build job must declare steps")
     assert all(isinstance(step, dict) for step in steps), (
         "every CI build step must be a mapping"
     )
