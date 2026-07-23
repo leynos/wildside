@@ -241,7 +241,7 @@ Nixie and its Merman rendering backend are required work-system tools. Install
 the pinned versions before running the Mermaid gate:
 
 ```bash
-uv tool install "nixie-cli==1.1.0"
+uv tool install --python 3.14 "nixie-cli==1.1.0"
 cargo binstall --locked merman-cli@0.7.0
 ```
 
@@ -1129,5 +1129,5 @@ directly. Keep repository exceptions narrow: preserve external APIs, formal
 names, wire values and immutable fixtures without adding ordinary bare-word
 exceptions.
 
-The standalone phrase helper and its tests use Python 3.14 at runtime,
-Pathspec 1.1.1 and a Python 3.13 Ruff compatibility target.
+The standalone phrase helper and its tests run with Python 3.14. They depend
+on Pathspec 1.1.1. Ruff has a Python 3.13 compatibility target.

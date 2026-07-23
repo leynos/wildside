@@ -105,16 +105,16 @@ docker-down:
 	cd deploy && docker compose down
 
 local-k8s-up:
-	uv run scripts/local_k8s.py up
+	$(UV) run scripts/local_k8s.py up
 
 local-k8s-down:
-	uv run scripts/local_k8s.py down
+	$(UV) run scripts/local_k8s.py down
 
 local-k8s-status:
-	uv run scripts/local_k8s.py status
+	$(UV) run scripts/local_k8s.py status
 
 local-k8s-logs:
-	uv run scripts/local_k8s.py logs
+	$(UV) run scripts/local_k8s.py logs
 
 fmt: workspace-sync
 	cargo fmt --all
@@ -161,7 +161,7 @@ lint-architecture:
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
 	if [ -f spec/asyncapi.yaml ]; then \
-	  bun x --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) asyncapi validate spec/asyncapi.yaml --fail-severity=info; \
+	  npm exec --yes --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) -- asyncapi validate spec/asyncapi.yaml --fail-severity=info; \
 	fi
 
 # Lint OpenAPI spec with Redocly CLI

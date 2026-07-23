@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import textwrap
 from collections.abc import Callable
 from pathlib import Path
@@ -57,6 +58,11 @@ FAKE_TOOL_SOURCE = textwrap.dedent(
     name, args = _unwrap(name, args)
 
 
+    if name == "uv" and args[:1] == ["run"]:
+        python = os.environ["WILDSIDE_FAKE_PYTHON"]
+        os.execv(python, [str(python), *args[1:]])
+
+
     def has_cluster() -> bool:
         return state_path.exists() and state_path.read_text() == "created"
 
@@ -93,6 +99,7 @@ FAKE_TOOL_NAMES = (
     "k3d",
     "kind",
     "kubectl",
+    "uv",
     "env",
     "systemd-run",
 )
@@ -156,7 +163,7 @@ def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
     assert make is not None, "make must be available to execute preview targets"
     for target in targets:
         completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
-            [make, "--no-print-directory", target],
+            [make, "--no-print-directory", f"PATH={env['PATH']}", target],
             text=True,
             capture_output=True,
             check=False,
@@ -207,7 +214,10 @@ def test_local_k8s_make_targets_smoke_successful_flow(
     _write_fake_tool(fake_bin)
 
     env = os.environ.copy()
+    env.pop("BASH_ENV", None)
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    env["UV"] = str(fake_bin / "uv")
+    env["WILDSIDE_FAKE_PYTHON"] = sys.executable
     env["WILDSIDE_FAKE_TOOL_LOG"] = str(tmp_path / "commands.jsonl")
     env["WILDSIDE_FAKE_TOOL_STATE"] = str(tmp_path / "cluster-state")
     env["WILDSIDE_CONTAINER_ENGINE"] = container_engine
