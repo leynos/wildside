@@ -237,6 +237,18 @@ Changes that touch Mermaid diagrams must also pass:
 make nixie
 ```
 
+Nixie and its Merman rendering backend are required work-system tools. Install
+the pinned versions before running the Mermaid gate:
+
+```bash
+uv tool install --python 3.14 "nixie-cli==1.1.0"
+cargo binstall --locked merman-cli@0.7.0
+```
+
+The Nixie package provides the `nixie` command, while the Merman package
+provides `merman-cli`. Continuous integration installs both tools before its
+first call to `make nixie`.
+
 Code changes under `frontend-pwa/` or `packages/tokens/` must pass the relevant
 front-end gates plus the repository-wide commit gates:
 
@@ -1117,7 +1129,5 @@ directly. Keep repository exceptions narrow: preserve external APIs, formal
 names, wire values and immutable fixtures without adding ordinary bare-word
 exceptions.
 
-The standalone phrase helper and its tests use Python 3.14 at runtime,
-Pathspec 1.1.1 and a Python 3.13 Ruff compatibility target. Continuous
-integration installs Nixie 1.1.0 and Merman CLI 0.7.0 before validating the
-repository's Mermaid diagrams with `make nixie`.
+The standalone phrase helper and its tests run with Python 3.14. They depend
+on Pathspec 1.1.1. Ruff has a Python 3.13 compatibility target.

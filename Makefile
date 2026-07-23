@@ -39,14 +39,11 @@ BIOME_VERSION ?= 2.3.1
 TSC_VERSION ?= 5.9.2
 MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 YAMLLINT_VERSION ?= 1.35.1
-NIXIE_VERSION ?= 1.1.0
 PATHSPEC_VERSION ?= 1.1.1
 RUFF_VERSION ?= 0.15.12
 TYPOS_VERSION ?= 1.48.0
 UV ?= uv
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
-NIXIE = $(UV_ENV) $(UV) tool run --python 3.14 \
-	--from nixie-cli@$(NIXIE_VERSION) nixie
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
 TYPOS_CONFIG_BUILDER_SOURCE := git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_COMMIT)
 TYPOS_CONFIG_BUILDER := $(UV_ENV) $(UV) tool run --python 3.14 \
@@ -108,16 +105,16 @@ docker-down:
 	cd deploy && docker compose down
 
 local-k8s-up:
-	uv run scripts/local_k8s.py up
+	$(UV) run scripts/local_k8s.py up
 
 local-k8s-down:
-	uv run scripts/local_k8s.py down
+	$(UV) run scripts/local_k8s.py down
 
 local-k8s-status:
-	uv run scripts/local_k8s.py status
+	$(UV) run scripts/local_k8s.py status
 
 local-k8s-logs:
-	uv run scripts/local_k8s.py logs
+	$(UV) run scripts/local_k8s.py logs
 
 fmt: workspace-sync
 	cargo fmt --all
@@ -164,7 +161,7 @@ lint-architecture:
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
 	if [ -f spec/asyncapi.yaml ]; then \
-	  bun x --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) asyncapi validate spec/asyncapi.yaml --fail-severity=info; \
+	  npm exec --yes --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) -- asyncapi validate spec/asyncapi.yaml --fail-severity=info; \
 	fi
 
 # Lint OpenAPI spec with Redocly CLI
@@ -320,11 +317,9 @@ markdownlint: spelling
 	fi
 
 nixie:
-	bun install
-	bun scripts/install-mermaid-browser.mjs
-	# CI needs --no-sandbox; serial runs (--max-concurrency 1) avoid browser
-	# EAGAIN writes. Remove --no-sandbox once nixie supports env-var control.
-	$(NIXIE) --no-sandbox --max-concurrency 1
+	$(call ensure_tool,nixie)
+	$(call ensure_tool,merman-cli)
+	nixie
 
 spelling: spelling-phrase-check
 	@git ls-files -z | xargs -0 -r env $(UV_ENV) \
