@@ -191,7 +191,7 @@ def _assert_command_logged(
 ) -> None:
     """Assert a fake-tool log contains a matching command."""
     assert any(
-        entry[0] == tool and predicate(cast(list[object], entry[1]))
+        entry[0] == tool and predicate(cast("list[object]", entry[1]))
         for entry in log_entries
     ), f"{message}; recorded commands: {log_entries!r}"
 
@@ -224,9 +224,14 @@ def test_local_k8s_make_targets_smoke_successful_flow(
     env["WILDSIDE_CONTAINER_ENGINE"] = container_engine
     env["WILDSIDE_K8S_PROVIDER"] = k8s_provider
 
-    _run_make_targets(
-        env, ("local-k8s-up", "local-k8s-status", "local-k8s-logs", "local-k8s-down")
+    state_path = Path(env["WILDSIDE_FAKE_TOOL_STATE"])
+
+    _run_make_targets(env, ("local-k8s-up",))
+    assert state_path.exists(), (
+        "local-k8s-up must create the preview cluster through the CLI boundary"
     )
+
+    _run_make_targets(env, ("local-k8s-status", "local-k8s-logs"))
 
     log_entries = _load_log_entries(Path(env["WILDSIDE_FAKE_TOOL_LOG"]))
     _assert_command_logged(
@@ -247,6 +252,8 @@ def test_local_k8s_make_targets_smoke_successful_flow(
         lambda args: "logs" in args,
         "local-k8s-logs must stream pod logs through the CLI boundary",
     )
-    assert not Path(env["WILDSIDE_FAKE_TOOL_STATE"]).exists(), (
+
+    _run_make_targets(env, ("local-k8s-down",))
+    assert not state_path.exists(), (
         "local-k8s-down must delete the preview cluster through the CLI boundary"
     )
