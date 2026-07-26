@@ -134,7 +134,7 @@ Hard invariants. Violation requires escalation, not workarounds.
 Each risk lists severity, likelihood, and the mitigation that keeps it
 contained within this plan.
 
-- Risk: V1 schema is wrong on first publication and we have to break it
+- Risk: V1 schema is wrong on first publication and must be broken
   before any consumer ships.
   Severity: medium. Likelihood: low.
   Mitigation: pin the V1 JSON shape under an `insta` snapshot from the
@@ -639,7 +639,9 @@ pub mod enrichment;
 pub mod generate_route;
 
 pub use bounding_box::{BoundingBox, BoundingBoxError};
-pub use enrichment::{EnrichmentJob, EnrichmentJobBuildError, EnrichmentJobV1};
+pub use enrichment::{
+    EnrichmentJob, EnrichmentJobBuildError, EnrichmentJobParams, EnrichmentJobV1,
+};
 pub use generate_route::{
     GenerateRouteJob, GenerateRouteJobBuildError, GenerateRouteJobV1,
 };
@@ -748,7 +750,7 @@ In `backend/src/domain/jobs/enrichment.rs`:
 
 ```rust
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
 use crate::domain::IdempotencyKey;
@@ -760,6 +762,16 @@ pub const ENRICHMENT_JOB_V1_MAX_TAGS: usize = 64;
 /// Maximum UTF-8 length (bytes) of any single tag in V1.
 pub const ENRICHMENT_JOB_V1_MAX_TAG_LENGTH: usize = 64;
 
+/// Parameters for building an `EnrichmentJob::V1` payload.
+pub struct EnrichmentJobParams {
+    pub job_id: Uuid,
+    pub idempotency_key: Option<IdempotencyKey>,
+    pub bounding_box: BoundingBox,
+    /// Raw tag list to canonicalize into sorted, deduplicated form.
+    pub tags: Vec<String>,
+    pub enqueued_at: DateTime<Utc>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "v")]
 pub enum EnrichmentJob {
@@ -767,20 +779,28 @@ pub enum EnrichmentJob {
     V1(EnrichmentJobV1),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Version 1 payload for `EnrichmentJob`. Fields are private so the only
+/// construction paths are `EnrichmentJob::v1` and the validating
+/// `Deserialize` impl below; both funnel tags through `canonicalize_tags`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnrichmentJobV1 {
-    pub job_id: Uuid,
-    pub idempotency_key: Option<IdempotencyKey>,
-    pub bounding_box: BoundingBox,
+    job_id: Uuid,
+    idempotency_key: Option<IdempotencyKey>,
+    bounding_box: BoundingBox,
     /// Sorted, deduplicated tag list. Bounded by
     /// `ENRICHMENT_JOB_V1_MAX_TAGS` and per-tag
     /// `ENRICHMENT_JOB_V1_MAX_TAG_LENGTH` at construction time.
-    pub tags: Vec<String>,
-    pub enqueued_at: DateTime<Utc>,
+    tags: Vec<String>,
+    enqueued_at: DateTime<Utc>,
 }
 
 impl EnrichmentJob {
+    /// Build a V1 enrichment job, validating and canonicalizing the tags.
+    pub fn v1(params: EnrichmentJobParams) -> Result<Self, EnrichmentJobBuildError> {
+        /* canonicalize_tags(params.tags)?, then wrap in V1 */
+    }
+
     /// Convert any envelope variant into the existing Overpass port
     /// request shape. V1 is infallible; future variants whose conversion
     /// can fail must return `Result<OverpassEnrichmentRequest,
@@ -789,17 +809,30 @@ impl EnrichmentJob {
     pub fn to_overpass_request(&self) -> OverpassEnrichmentRequest { /* ... */ }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+// `EnrichmentJobV1` implements `Deserialize` by hand: it decodes a private
+// `EnrichmentJobV1Raw` mirror (with `deny_unknown_fields`) and then runs the
+// same `canonicalize_tags` validation as `EnrichmentJob::v1`, so a wire
+// payload cannot smuggle in empty, oversized, or unbounded tag vectors.
+impl<'de> Deserialize<'de> for EnrichmentJobV1 { /* validate then construct */ }
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EnrichmentJobBuildError {
-    BoundingBox(BoundingBoxError),
+    #[error(transparent)]
+    BoundingBox(#[from] BoundingBoxError),
+    #[error("enrichment job requires at least one tag")]
     EmptyTags,
+    #[error("enrichment job has too many tags: {observed} > {limit}")]
     TooManyTags { limit: usize, observed: usize },
+    #[error("enrichment job tag is too long: {observed} > {limit}")]
     TagTooLong { limit: usize, observed: usize },
 }
 ```
 
 `to_overpass_request` lives on the envelope, not on `V1`, so workers
-always go through the version-aware seam.
+always go through the version-aware seam. `EnrichmentJobV1` keeps its
+fields private and constructs only through `EnrichmentJob::v1` or the
+validating `Deserialize` impl, so every payload — built in-process or
+decoded off the wire — carries canonicalized, bounded tags.
 
 In `backend/Cargo.toml`'s `[dev-dependencies]` (new entries only):
 
@@ -951,6 +984,14 @@ The plan ships in two PRs:
   `make test`.
 - [x] (2026-06-15 04:08Z) Milestone 5 final CodeRabbit review completed with
   `findings: 0`; closure commit is ready.
+- [x] (2026-07-26) Rebased the branch onto `origin/main` (clean, only a
+  `Makefile` auto-merge) and realigned the docs with the shipped API:
+  documented `EnrichmentJobParams`, `EnrichmentJob::v1(params)`, private
+  `EnrichmentJobV1` fields and the validating `Deserialize` impl; corrected
+  the architecture doc so unknown envelope versions are rejected at the
+  deserialization boundary; and replaced the stale positional-constructor /
+  `too_many_arguments` decision records (no such clippy expectation exists in
+  the shipped code).
 
 ## Surprises & discoveries
 
@@ -997,16 +1038,20 @@ The plan ships in two PRs:
   milestone 2 CodeRabbit review: clippy rejected the approved
   seven-argument `GenerateRouteJob::v1` signature, and Whitaker did not treat
   helper fixtures in `backend/src/domain/jobs/generate_route/tests.rs` as
-  test functions for `.expect()` usage. The constructor now has a scoped
+  test functions for `.expect()` usage. The constructor then carried a scoped
   `#[expect(clippy::too_many_arguments)]` with a reason, and fixture helpers
-  use deterministic UUID constructors or explicit `match` panics.
+  use deterministic UUID constructors or explicit `match` panics. (This scoped
+  expectation was later removed when `GenerateRouteJob::v1` was reshaped to take
+  the whole `GenerateRouteJobV1` struct; see the Decision Log.)
 
 - (2026-06-15 01:02Z) `make lint` found two deterministic enrichment issues
   before CodeRabbit: clippy rejected the approved five-argument
   `EnrichmentJob::v1` constructor, and the parameterized invalid-bounding-box
-  test expanded to a helper with too many arguments. The constructor now has a
-  scoped `#[expect(clippy::too_many_arguments)]`; the test now passes one
-  structured case value per row.
+  test expanded to a helper with too many arguments. The constructor then
+  carried a scoped `#[expect(clippy::too_many_arguments)]`; the test now passes
+  one structured case value per row. (The scoped expectation was later removed
+  when `EnrichmentJob::v1` was reshaped to take an `EnrichmentJobParams` struct;
+  see the Decision Log.)
 
 - (2026-06-15 01:40Z) Milestone 4 did not add a PostgreSQL-backed scenario.
   `GenericApalisRouteQueue<EnrichmentJob, FakeQueueProvider>` exercises the
@@ -1077,22 +1122,29 @@ The plan ships in two PRs:
   intent explicit.
   Date/Author: 2026-06-06 / planning agent.
 
-- Decision: Keep the approved `GenerateRouteJob::v1` positional constructor
-  and use a scoped clippy expectation for `too_many_arguments`.
-  Rationale: the ExecPlan explicitly prescribes the constructor signature so
-  tests and later milestones can build V1 payloads without introducing an
-  additional builder type. Clippy correctly flags the risk, so the
-  expectation is limited to that function and documents that the argument list
-  mirrors the persisted schema fields.
-  Date/Author: 2026-06-15 / implementation agent.
+- Decision: Build each V1 payload from a single struct argument rather than
+  a positional constructor. `GenerateRouteJob::v1` takes the whole
+  `GenerateRouteJobV1` (its fields are `pub`), and `EnrichmentJob::v1` takes
+  an `EnrichmentJobParams` struct and returns
+  `Result<Self, EnrichmentJobBuildError>` after canonicalizing tags.
+  Rationale: passing a struct sidesteps the `too_many_arguments` lint without
+  a scoped clippy expectation, keeps call sites self-documenting through named
+  fields, and — for enrichment — lets the constructor own tag validation. This
+  supersedes the earlier plan to keep positional constructors under a scoped
+  `too_many_arguments` expectation; no such expectation exists in the shipped
+  code.
+  Date/Author: 2026-06-15 / implementation agent
+  (revised 2026-07-26 to match implementation).
 
-- Decision: Keep the approved `EnrichmentJob::v1` positional constructor and
-  use a scoped clippy expectation for `too_many_arguments`.
-  Rationale: the constructor mirrors the V1 durable payload fields and avoids
-  introducing an extra builder solely to satisfy a lint. The expectation is
-  limited to the constructor and carries the same schema-shape rationale as
-  `GenerateRouteJob::v1`.
-  Date/Author: 2026-06-15 / implementation agent.
+- Decision: Make `EnrichmentJobV1` fields private and hand-write its
+  `Deserialize` impl. `EnrichmentJob::v1` and the `Deserialize` impl (via a
+  private `EnrichmentJobV1Raw` mirror) are the only construction paths, and
+  both run `canonicalize_tags`.
+  Rationale: private fields plus a validating deserializer guarantee that no
+  payload — constructed in-process or decoded off the wire — can carry empty,
+  oversized, or unbounded tag vectors. `GenerateRouteJobV1` keeps `pub`
+  fields because it has no equivalent construction-time invariant to enforce.
+  Date/Author: 2026-07-26 / implementation agent.
 
 - Decision: Derive only `PartialEq` (not `Eq`) on the job envelopes and
   on `BoundingBox`.
@@ -1210,3 +1262,9 @@ nixie` green for future documentation changes.
   shifted; the implementation surface remains the same files and
   modules, only the type derives and a small number of validation
   constants changed.
+- 2026-07-26: Post-rebase review pass. Aligned the enrichment interface
+  snippet, the queue deserialization boundary in the architecture doc, and
+  the Decision Log with the implemented builder API (`EnrichmentJobParams`,
+  struct-argument `v1` constructors, private `EnrichmentJobV1` fields, and the
+  validating `Deserialize` impl); made the V1-schema risk wording impersonal.
+  No scope, tolerances, or milestones changed.

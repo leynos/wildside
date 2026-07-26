@@ -2250,11 +2250,15 @@ job payload, Apalis task metadata, or OpenTelemetry context. Until that work
 lands, `request_id`/`job_id` provide stable identifiers but are not a complete
 trace-propagation mechanism.
 
-Worker handlers must match on the envelope variant before processing. If a
-worker receives an unknown future variant, it must reject the job as
-`JobDispatchError::Rejected`, log the payload version loudly, and rely on the
-retry/dead-letter policy from 5.2.3 when that policy lands. Workers must not
-panic or silently drop unknown variants.
+The `#[serde(tag = "v")]` envelope is V1-only today, so an unknown future
+version (for example `"v": "v2"`) fails at deserialization rather than
+producing a variant a handler could match. The queue dispatch boundary must
+catch that deserialization failure, convert it into
+`JobDispatchError::Rejected`, and log the received payload version loudly, so
+the retry/dead-letter policy from 5.2.3 can act on it when that policy lands.
+Worker handlers then operate only on successfully deserialized envelope
+variants. Neither the dispatch boundary nor the handlers may panic or silently
+drop a job on an unknown version.
 
 **Communication between workers and API:** The workers operate asynchronously
 from the API, so how does the API know to send WebSocket updates to the right

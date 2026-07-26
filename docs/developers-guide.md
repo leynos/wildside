@@ -942,16 +942,20 @@ sitemap.
 ### Running locally
 
 ```sh
-node ./scripts/check-overrides-policy.mjs
+bun run scripts/audit-ux-state-graph.mjs --graph <graph.json> --sitemap docs/sitemap.md
 ```
 
-A passing run prints:
+A passing run prints one deterministic line per state on stdout and exits with
+code `0`:
 
 ```text
-pnpm override policy verified for basic-ftp, dompurify, ip-address, uuid.
+home in=0 out=2 route=/
+cards in=1 out=1 route=/cards
+detail in=1 out=0 route=/cards/:id [ORPHAN]
 ```
 
-A failing run prints a policy diagnostic to stderr and exits with code `1`.
+A failing run — missing `--graph`/`--sitemap` or an invalid input file — prints
+a diagnostic to stderr and exits with code `1`.
 
 ## Override policy check
 
