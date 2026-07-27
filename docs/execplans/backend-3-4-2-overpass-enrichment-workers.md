@@ -7,7 +7,8 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 3.4.2 only:
-`Add Overpass enrichment workers with semaphore-governed quotas, circuit breaking, and metrics wired to the enrichment job counters`. <!-- markdownlint-disable-line MD013 -->
+`Add Overpass enrichment workers with semaphore-governed quotas, circuit
+breaking, and metrics wired to the enrichment job counters`.
 
 ## Purpose / big picture
 
@@ -62,8 +63,7 @@ Observable success criteria:
 - Wire metrics through domain metrics ports and outbound Prometheus adapters.
 - Use `rstest` for unit coverage and `rstest-bdd` for behaviour coverage.
 - Use existing embedded PostgreSQL support patterns under
-  `backend/tests/support`
-  and `pg-embedded-setup-unpriv` guidance.
+  `backend/tests/support` and `pg-embedded-setup-unpriv` guidance.
 - Keep Markdown documentation in en-GB-oxendict and 80-column prose wrapping.
 
 ## Tolerances (exception triggers)

@@ -239,8 +239,8 @@ Acceptance criteria:
 
 - Running
   `cargo run -p example-data --bin example-data-seed -- \ --registry backend/fixtures/example-data/seeds.json`
-  appends a new seed and
-  prints a success line that includes the hyphen-joined seed name.
+  appends a new seed and prints a success line that includes the hyphen-joined
+  seed name.
 - The CLI rejects a duplicate seed name with a clear error message.
 - Unit tests cover registry update helpers using `rstest`.
 - Behavioural tests cover CLI scenarios using `rstest-bdd` v0.3.2.

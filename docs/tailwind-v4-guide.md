@@ -40,8 +40,7 @@ Radix UI and generated design tokens.
 Implementation expectations:
 
 - Keep Tailwind configuration close to the entry stylesheet unless a plugin
-  needs
-  JavaScript configuration.
+  needs JavaScript configuration.
 - Use `@tailwindcss/postcss` or the Vite integration selected by the front-end
   stack decision.
 - Keep build and check commands behind Makefile targets so local and CI usage do

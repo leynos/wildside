@@ -7,7 +7,8 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 5.1.3 only:
-`Implement time-to-live (TTL) with jitter (24-hour window, +/- 10%) to prevent thundering herd on cache expiry.` <!-- markdownlint-disable-line MD013 -->
+`Implement time-to-live (TTL) with jitter (24-hour window, +/- 10%) to prevent
+thundering herd on cache expiry.`
 
 ## Purpose / big picture
 
@@ -272,8 +273,7 @@ Hand-off order:
 
 3. **Type alias for test helpers**: Added
    `CachedValue = (Vec<u8>, Option<u64>)` type alias to satisfy Clippy's
-   `type_complexity` lint while
-   maintaining clarity.
+   `type_complexity` lint while maintaining clarity.
 
 4. **Backward compatibility**: Retained `set_bytes` method on
    `ConnectionProvider` alongside new `set_bytes_with_ttl` to avoid breaking

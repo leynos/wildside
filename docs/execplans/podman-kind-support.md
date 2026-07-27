@@ -1,8 +1,8 @@
 # Adapt Wildside local previews for rootless Podman and kind
 
-This ExecPlan is a living document. The sections `Constraints`,
-`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
-and `Outcomes & Retrospective` must be kept up to date as work proceeds.
+This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
+`Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
+`Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE. The user approved implementation on 2026-06-22. All
 milestones, validation, and final gates landed (PR #378).
@@ -29,10 +29,10 @@ The main observable success path is:
 WILDSIDE_CONTAINER_ENGINE=podman WILDSIDE_K8S_PROVIDER=kind make local-k8s-up
 ```
 
-The command creates or reuses a `kind` cluster using Podman's rootless provider,
-builds the Wildside backend image with Podman, saves the image to a temporary
-archive, loads that archive into `kind`, installs the Helm chart, and prints
-the `kubectl port-forward` command needed to open the preview on
+The command creates or reuses a `kind` cluster using Podman's rootless
+provider, builds the Wildside backend image with Podman, saves the image to a
+temporary archive, loads that archive into `kind`, installs the Helm chart, and
+prints the `kubectl port-forward` command needed to open the preview on
 `127.0.0.1:${WILDSIDE_K8S_PORT:-8088}`. The existing Docker plus `k3d` path
 continues to create a loopback-bound load-balancer port and remains usable with:
 
@@ -63,8 +63,8 @@ make local-k8s-up
   `kind load docker-image` is for Docker-backed clusters, while
   `kind load image-archive` works with the Podman provider.
 - Do not create `kind` host-port mappings for the preview HTTP port. Use
-  `kubectl port-forward` for `kind` because host-port mappings reserve the
-  same loopback port that the developer-facing preview needs.
+  `kubectl port-forward` for `kind` because host-port mappings reserve the same
+  loopback port that the developer-facing preview needs.
 - Keep command execution through the existing local preview command abstraction
   unless implementation proves that abstraction cannot express provider
   environment variables or standard input safely.
@@ -102,15 +102,15 @@ make local-k8s-up
 Risk: Wildside's current local preview modules are already decomposed around
 `k3d`, while Episodic's new helper is provider-neutral from the start.
 Mitigation: adapt the behaviour into Wildside's existing module boundaries
-first, and only rename or split modules when the `k3d` naming obscures the
-new provider contract.
+first, and only rename or split modules when the `k3d` naming obscures the new
+provider contract.
 
-Risk: existing users may have `WILDSIDE_K3D_CLUSTER` or `WILDSIDE_K3D_PORT`
-in local shells or scripts. Mitigation: keep those names as aliases and
-document the provider-neutral replacements as preferred.
+Risk: existing users may have `WILDSIDE_K3D_CLUSTER` or `WILDSIDE_K3D_PORT` in
+local shells or scripts. Mitigation: keep those names as aliases and document
+the provider-neutral replacements as preferred.
 
-Risk: rootless Podman plus `kind` depends on VM-level cgroup delegation and
-the experimental `kind` Podman provider. Mitigation: make the exact command
+Risk: rootless Podman plus `kind` depends on VM-level cgroup delegation and the
+experimental `kind` Podman provider. Mitigation: make the exact command
 sequence unit-testable, require `systemd-run`, surface missing tools before
 side effects, and document the live smoke command as environment-dependent.
 
@@ -119,16 +119,16 @@ Risk: `kind` cluster inspection uses container-engine JSON that differs from
 needed for validation and fail with a concise `LocalK8sError` when an existing
 cluster cannot be inspected.
 
-Risk: Episodic bootstraps a local Postgres StatefulSet before Helm install,
-but Wildside's current `values.local.yaml` does not describe that dependency.
+Risk: Episodic bootstraps a local Postgres StatefulSet before Helm install, but
+Wildside's current `values.local.yaml` does not describe that dependency.
 Mitigation: investigate Wildside readiness requirements during implementation;
 only add local dependency bootstrap when a failing test or live preview proves
 that the existing local values cannot become ready without it.
 
 Risk: the existing `scripts/local_k8s/unittests` pytest suite is not clearly
 wired into a Makefile target. Mitigation: run it explicitly during this work
-and either wire it into `make test` or document the accepted separate command
-in `docs/developers-guide.md` and this plan.
+and either wire it into `make test` or document the accepted separate command in
+`docs/developers-guide.md` and this plan.
 
 ## Current repository orientation
 
@@ -138,14 +138,13 @@ loads `PreviewConfig.from_env()` before delegating to helper modules under
 
 The current `PreviewConfig` in `scripts/local_k8s/config.py` carries a
 repository root, `k3d` cluster name, Kubernetes namespace, Helm release name,
-image name, ingress port, chart path, local values path, and backend
-Dockerfile path. The config currently reads `WILDSIDE_K3D_CLUSTER`,
-`WILDSIDE_K3D_PORT`, `WILDSIDE_K8S_NAMESPACE`, `WILDSIDE_HELM_RELEASE`, and
-`WILDSIDE_IMAGE`.
+image name, ingress port, chart path, local values path, and backend Dockerfile
+path. The config currently reads `WILDSIDE_K3D_CLUSTER`, `WILDSIDE_K3D_PORT`,
+`WILDSIDE_K8S_NAMESPACE`, `WILDSIDE_HELM_RELEASE`, and `WILDSIDE_IMAGE`.
 
-`scripts/local_k8s/deployment.py` orchestrates the preview. It validates
-tools, ensures the cluster, ensures the namespace, builds the Docker image,
-imports the image through `k3d`, runs Helm, and prints status.
+`scripts/local_k8s/deployment.py` orchestrates the preview. It validates tools,
+ensures the cluster, ensures the namespace, builds the Docker image, imports
+the image through `k3d`, runs Helm, and prints status.
 
 `scripts/local_k8s/k3d.py` owns cluster lifecycle, image import, and cluster
 status. Its name and command construction are the main `k3d` assumptions that
@@ -166,10 +165,9 @@ both supported provider modes.
 
 ## Episodic prior art
 
-The sibling Episodic commit
-`f19cbcf21ad3ecadf164822218ba8e152b3b68bf` added a rootless Podman plus
-`kind` path to its Nile Valley preview integration. The transferable decisions
-are:
+The sibling Episodic commit `f19cbcf21ad3ecadf164822218ba8e152b3b68bf` added a
+rootless Podman plus `kind` path to its Nile Valley preview integration. The
+transferable decisions are:
 
 - model the container engine as `docker` or `podman`;
 - model the cluster provider as `k3d` or `kind`;
@@ -188,8 +186,7 @@ are:
 - inspect existing clusters before reuse and fail clearly when the old
   host-port model conflicts with the desired local preview port;
 - print a success banner that names the preview URL, health URL, status,
-  logs, teardown, and, for `kind`, the required `kubectl port-forward`
-  command.
+  logs, teardown, and, for `kind`, the required `kubectl port-forward` command.
 
 Episodic also added container-image, Helm-chart, and health-contract tests.
 Wildside already has most of those deployment surfaces, so this plan uses
@@ -199,13 +196,12 @@ Episodic as a behavioural reference rather than a file-for-file port.
 
 Milestone 1 is configuration and tests for provider selection. Add explicit
 container-engine and cluster-provider fields to `PreviewConfig`. The preferred
-new environment variables are `WILDSIDE_CONTAINER_ENGINE`, with values
-`docker` or `podman`, and `WILDSIDE_K8S_PROVIDER`, with values `k3d` or
-`kind`. Add `WILDSIDE_K8S_CLUSTER` and `WILDSIDE_K8S_PORT` as
-provider-neutral names. Preserve `WILDSIDE_K3D_CLUSTER` and
-`WILDSIDE_K3D_PORT` as aliases when the new names are unset. Add validation
-tests for accepted values, rejected values, default values, and alias
-precedence.
+new environment variables are `WILDSIDE_CONTAINER_ENGINE`, with values `docker`
+or `podman`, and `WILDSIDE_K8S_PROVIDER`, with values `k3d` or `kind`. Add
+`WILDSIDE_K8S_CLUSTER` and `WILDSIDE_K8S_PORT` as provider-neutral names.
+Preserve `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT` as aliases when the new
+names are unset. Add validation tests for accepted values, rejected values,
+default values, and alias precedence.
 
 Milestone 2 is provider-aware cluster lifecycle. Introduce provider-neutral
 helpers while preserving the public CLI commands. The `k3d` path should keep
@@ -260,8 +256,8 @@ unit-test and Helm-render gates as the accepted substitute.
 
 Begin with a red test pass for Milestone 1. Add tests that expect
 `PreviewConfig.from_env()` to parse `WILDSIDE_CONTAINER_ENGINE=podman`,
-`WILDSIDE_K8S_PROVIDER=kind`, `WILDSIDE_K8S_CLUSTER`, and
-`WILDSIDE_K8S_PORT`. Run:
+`WILDSIDE_K8S_PROVIDER=kind`, `WILDSIDE_K8S_CLUSTER`, and `WILDSIDE_K8S_PORT`.
+Run:
 
 ```bash
 set -o pipefail
@@ -288,8 +284,8 @@ contract: Podman-backed `kind` creation, Podman archive image loading,
 Docker-backed `kind` loading, provider-aware tool preflights, idempotent kind
 down, or `kind` port-forward output.
 
-After each green milestone, refactor only enough to keep module ownership
-clear and files below 400 lines. Rerun the focused pytest command after every
+After each green milestone, refactor only enough to keep module ownership clear
+and files below 400 lines. Rerun the focused pytest command after every
 refactor.
 
 ## Validation plan
@@ -363,9 +359,8 @@ teardown result in this plan's `Outcomes & Retrospective`.
   passed.
 - [x] 2026-06-22: User approved this plan for implementation.
 - [x] 2026-06-22: Added failing Milestone 1 tests for
-  `WILDSIDE_CONTAINER_ENGINE`, `WILDSIDE_K8S_PROVIDER`,
-  `WILDSIDE_K8S_CLUSTER`, `WILDSIDE_K8S_PORT`, legacy alias precedence, and
-  unsupported provider values.
+  `WILDSIDE_CONTAINER_ENGINE`, `WILDSIDE_K8S_PROVIDER`, `WILDSIDE_K8S_CLUSTER`,
+  `WILDSIDE_K8S_PORT`, legacy alias precedence, and unsupported provider values.
 - [x] 2026-06-22: Implemented Milestone 1 by adding provider fields and
   validation to `PreviewConfig.from_env()`, while keeping Docker plus `k3d` as
   the default.
@@ -418,18 +413,18 @@ teardown result in this plan's `Outcomes & Retrospective`.
 - [x] 2026-06-22: Re-ran `coderabbit review --agent` after the deterministic
   Milestone 4 gates. CodeRabbit reported zero findings.
 - [x] 2026-06-22: Updated `docs/local-k8s-preview-design.md`,
-  `docs/developers-guide.md`, `docs/contents.md`, and the local preview
-  package summary, so the documented workflow covers Docker plus `k3d`,
-  rootless Podman plus `kind`, provider-neutral environment variables, legacy
-  aliases, required tools, kube context naming, and kind port-forward usage.
+  `docs/developers-guide.md`, `docs/contents.md`, and the local preview package
+  summary, so the documented workflow covers Docker plus `k3d`, rootless Podman
+  plus `kind`, provider-neutral environment variables, legacy aliases, required
+  tools, kube context naming, and kind port-forward usage.
 - [x] 2026-06-22: Ran `make markdownlint` after the Milestone 5 documentation
   edits. The first result found table alignment issues in the new required
   tools table; after aligning the table, `make markdownlint` passed.
 - [x] 2026-06-22: Attempted the live rootless Podman plus `kind` smoke path.
   The helper created a Podman-backed `kind` control plane and reached the
   Podman image build, but Helm refused to install because kind's default node
-  image used Kubernetes `v1.36.1`, outside the chart's
-  `>=1.26.0-0 <1.32.0-0` kubeVersion range.
+  image used Kubernetes `v1.36.1`, outside the chart's `>=1.26.0-0 <1.32.0-0`
+  kubeVersion range.
 - [x] 2026-06-22: Added a failing regression test for kind cluster config node
   image pinning, then implemented `WILDSIDE_KIND_NODE_IMAGE` with default
   `kindest/node:v1.31.0` so new kind clusters use a Kubernetes version
@@ -447,7 +442,8 @@ teardown result in this plan's `Outcomes & Retrospective`.
   creation before Helm install, and covered the manifest contract in the
   focused deployment tests.
 - [x] 2026-06-22: Re-ran the focused local preview pytest command after the
-  image-tag and session Secret fixes; it passed with 36 tests. `helm lint
+  image-tag and session Secret fixes; it passed with 36 tests.
+  `helm lint
   deploy/charts/wildside --values deploy/charts/wildside/values.local.yaml`
   also passed.
 - [x] 2026-06-22: Completed live rootless Podman plus `kind` smoke validation.
@@ -496,9 +492,10 @@ teardown result in this plan's `Outcomes & Retrospective`.
   extended the adapter with an `input_text` parameter rather than adding a
   second runner abstraction.
 - 2026-06-22: CodeRabbit suggested moving a `MockCommandResult` import from
-  `conftest` to a relative `.conftest` import, but `scripts/local_k8s/unittests`
-  is not a Python package. The better fix was to keep `conftest.py` fixture-only
-  and define the helper dataclass inside `test_cluster.py`.
+  `conftest` to a relative `.conftest` import, but
+  `scripts/local_k8s/unittests` is not a Python package. The better fix was to
+  keep `conftest.py` fixture-only and define the helper dataclass inside
+  `test_cluster.py`.
 - 2026-06-22: The local preview image build was colocated in
   `deployment.py`, while provider-specific image loading belongs with the
   cluster lifecycle adapter. Milestone 3 kept that split: build uses the
@@ -509,8 +506,8 @@ teardown result in this plan's `Outcomes & Retrospective`.
   everywhere makes the preview commands independent of whatever cluster a
   developer last selected with `kubectl config use-context`.
 - 2026-06-22: The Helm chart's service name is not always the release name.
-  The kind port-forward output therefore needs the same Helm fullname helper
-  as status checks; otherwise, renamed releases would print a command for the
+  The kind port-forward output therefore needs the same Helm fullname helper as
+  status checks; otherwise, renamed releases would print a command for the
   wrong service.
 - 2026-06-22: The documentation index, developer guide, and package docstring
   all used k3d-specific language. Milestone 5 needs to update those secondary
@@ -528,8 +525,7 @@ teardown result in this plan's `Outcomes & Retrospective`.
   Docker's implicit registry name.
 - 2026-06-22: The same image-name mismatch applies to namespaced Docker Hub
   names such as `leynos/wildside-backend:local`. Kubernetes resolves them as
-  `docker.io/leynos/wildside-backend:local`, not as the short Podman-local
-  name.
+  `docker.io/leynos/wildside-backend:local`, not as the short Podman-local name.
 - 2026-06-22: The local backend container is a release build. It refuses
   `SESSION_ALLOW_EPHEMERAL=1`, which is correct for the production safety
   contract. Local preview therefore needs a real generated Kubernetes Secret,

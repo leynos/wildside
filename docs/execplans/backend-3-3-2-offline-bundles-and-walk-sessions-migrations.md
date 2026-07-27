@@ -179,8 +179,7 @@ Coordination rules:
   radius. Date/Author: 2026-02-20 / Codex.
 
 - Decision: validate migration behaviour through domain-port contract tests
-  using
-  migrated template databases, replacing ad-hoc test table creation where
+  using migrated template databases, replacing ad-hoc test table creation where
   practical. Rationale: proves the migration artefacts, not a parallel test
   schema. Date/Author: 2026-02-20 / Codex.
 

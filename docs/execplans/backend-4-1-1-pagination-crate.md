@@ -7,7 +7,9 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 Status: COMPLETE
 
 This plan covers roadmap item 4.1.1 only:
-`Implement backend/crates/pagination providing opaque cursor encoding, PageParams, and Paginated<T> envelopes with navigation links, backed by unit tests for cursor round-tripping.` <!-- markdownlint-disable-line MD013 -->
+`Implement backend/crates/pagination providing opaque cursor encoding,
+PageParams, and Paginated<T> envelopes with navigation links, backed by unit
+tests for cursor round-tripping.`
 
 ## Purpose / big picture
 
@@ -217,10 +219,10 @@ Observable success for roadmap 4.1.1 is narrow and concrete:
   the repo-wide gate flow. Date/Author: 2026-03-22 / planning team.
 
 - Decision: keep roadmap 4.1.1 scoped to opaque cursor tokens without
-  direction metadata, and let the envelope builder accept caller-supplied `next`
-  /`prev` cursor strings for link generation. Rationale: this satisfies the
-  approved 4.1.1 deliverables while preserving a clean seam for roadmap 4.1.2
-  to add direction-aware traversal semantics separately. Date/Author:
+  direction metadata, and let the envelope builder accept caller-supplied
+  `next` /`prev` cursor strings for link generation. Rationale: this satisfies
+  the approved 4.1.1 deliverables while preserving a clean seam for roadmap
+  4.1.2 to add direction-aware traversal semantics separately. Date/Author:
   2026-03-22 / implementation.
 
 - Decision: make the workspace discovery rule include `backend/crates/*`

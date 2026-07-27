@@ -317,8 +317,7 @@ Run all commands from repository root:
 Acceptance is satisfied when all conditions below hold:
 
 - Running the ER snapshot command against current migrations writes
-  deterministic
-  artefacts under `docs/diagrams/er/`.
+  deterministic artefacts under `docs/diagrams/er/`.
 - Unit tests (`rstest`) pass for happy and unhappy paths plus edge cases.
 - Behavioural tests (`rstest-bdd`) pass against embedded Postgres provisioned
   via `pg-embed-setup-unpriv`.

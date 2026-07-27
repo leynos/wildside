@@ -134,9 +134,9 @@ Observable outcome:
   avoid duplicated models.
 
 - Observation (2026-02-10): The `grepai` index failed for one query
-  (`failed to decode index: EOF`).
-  Evidence: command-line interface (CLI) error during semantic search. Impact:
-  exact-text fallback (`rg`) is acceptable when semantic index is not usable.
+  (`failed to decode index: EOF`). Evidence: command-line interface (CLI) error
+  during semantic search. Impact: exact-text fallback (`rg`) is acceptable when
+  semantic index is not usable.
 
 - Observation (2026-02-10): A first-cut `catalogue` module exceeded the
   repository's 400-line code file limit. Evidence:

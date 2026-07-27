@@ -19,9 +19,9 @@ duplicate or skip records, and the underlying SQL is index-assisted by a new
 composite index. Success is observable in three ways:
 
 1. The handler returns the JSON envelope
-   `{ "data": [...], "limit": N, "links": { "self": "...", "next": "...", "prev": "..." } }` <!-- markdownlint-disable-line MD013 -->
-   with omitted
-   keys when no further page exists.
+  `{ "data": […], "limit": N, "links": { "self": "…", "next":
+  "…", "prev": "…" } }`
+  with omitted keys when no further page exists.
 2. Forward and backward cursor traversal returns every user exactly once
    (BDD scenario passes against an embedded PostgreSQL fixture seeded with more
    rows than fit on a single page).
@@ -307,13 +307,12 @@ requires escalation, not a workaround.
   2026-05-01, implementation agent.
 
 - Decision: keep `UserRepository::list_page` rows in `(created_at ASC, id ASC)`
-  order for both cursor directions.
-  Rationale: stable repository ordering keeps response assembly simple and
-  prevents inbound code from needing to know whether the page was fetched
-  forwards or backwards. For reverse pages, the Diesel adapter performs the
-  efficient descending SQL query internally, reverses the short page in memory,
-  and lets `DieselUsersQuery` trim the leading overflow row. Date/Author:
-  2026-05-01, implementation agent.
+  order for both cursor directions. Rationale: stable repository ordering keeps
+  response assembly simple and prevents inbound code from needing to know
+  whether the page was fetched forwards or backwards. For reverse pages, the
+  Diesel adapter performs the efficient descending SQL query internally,
+  reverses the short page in memory, and lets `DieselUsersQuery` trim the
+  leading overflow row. Date/Author: 2026-05-01, implementation agent.
 
 - Decision: reject `GET /api/v1/users` limits above
   `pagination::MAX_LIMIT` in the users inbound adapter rather than changing the

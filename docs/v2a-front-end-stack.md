@@ -14,9 +14,9 @@ orchestration tooling that is not yet fully declared in
 
 ## Overview
 
-The current Wildside PWA is a client-side React application built with Bun,
-Vite `^7.3.5`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`,
-TanStack Query, Zod, clsx, TypeScript, Vitest, and Orval.
+The current Wildside PWA is a client-side React application built with Bun, Vite
+`^7.3.5`, React 19, React DOM 18, Tailwind CSS `^3`, DaisyUI `^4`, TanStack
+Query, Zod, clsx, TypeScript, Vitest, and Orval.
 
 The fuller v2a target stack described by the roadmap and mockup adds TanStack
 Router, Tailwind CSS v4, DaisyUI v5, Radix UI primitives, i18next with Fluent

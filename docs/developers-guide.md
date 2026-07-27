@@ -27,15 +27,15 @@ All suites run through the same quality gateways:
 
 ## Workflow pins and Dependabot
 
-Dependabot owns the upgrade of GitHub Actions and reusable workflows,
-including calls into `leynos/shared-actions`. Contract tests that assert a
-caller's exact commit SHA create a lockstep dependency: every time Dependabot
-opens a bump PR, the test fails until a human edits the pinned constant to
-match. That defeats the purpose of automated dependency updates and turns a
-routine bump into a manual chore.
+Dependabot owns the upgrade of GitHub Actions and reusable workflows, including
+calls into `leynos/shared-actions`. Contract tests that assert a caller's exact
+commit SHA create a lockstep dependency: every time Dependabot opens a bump PR,
+the test fails until a human edits the pinned constant to match. That defeats
+the purpose of automated dependency updates and turns a routine bump into a
+manual chore.
 
-Contract tests may still verify the *shape* of a reusable-workflow caller.
-They must not verify the specific SHA value.
+Contract tests may still verify the *shape* of a reusable-workflow caller. They
+must not verify the specific SHA value.
 
 - Do assert the workflow references the correct reusable workflow path.
 - Do assert the ref is pinned to a full 40-character commit SHA, not a
@@ -65,8 +65,7 @@ as a test assertion on the SHA string.
 Use the repository-local Kubernetes preview when validating the backend image
 and Helm chart before handing values to Nile Valley. The preview workflow is
 documented in
-[Local Kubernetes preview and Nile Valley integration
-design](local-k8s-preview-design.md).
+[Local Kubernetes preview and Nile Valley integration design](local-k8s-preview-design.md).
 
 ```bash
 make local-k8s-up
@@ -99,14 +98,14 @@ The preferred configuration variables are `WILDSIDE_CONTAINER_ENGINE`,
 Kubernetes upgrades; the default `kindest/node:v1.31.0` satisfies the chart's
 kubeVersion range. `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT` remain legacy
 aliases when the provider-neutral names are unset. In `kind` mode, use
-`make local-k8s-status` to print the provider-specific
-`kubectl port-forward` command before opening the preview port.
+`make local-k8s-status` to print the provider-specific `kubectl port-forward`
+command before opening the preview port.
 
 The helper also creates a `wildside-session-key` Secret when missing before
 Helm installs the release, and reuses an existing key on later deploys.
 `values.local.yaml` mounts that key at
-`/var/run/secrets/wildside-session/session_key`, so local preview follows
-the release-mode session-key path without committing secret material.
+`/var/run/secrets/wildside-session/session_key`, so local preview follows the
+release-mode session-key path without committing secret material.
 
 ## Front-end development
 
@@ -160,15 +159,15 @@ make test
 ```
 
 `make audit` checks frontend and Rust dependencies. It expects Corepack to be
-enabled so `pnpm` is available locally and in CI, and it requires
-`cargo-audit` for the Rust dependency check.
+enabled so `pnpm` is available locally and in CI, and it requires `cargo-audit`
+for the Rust dependency check.
 
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.5`,
-React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`,
-Zod 3, TypeScript 5, Vitest `^4.1.8`, and Orval 8. TanStack Router, Radix UI,
+React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`, Zod
+3, TypeScript 5, Vitest `^4.1.8`, and Orval 8. TanStack Router, Radix UI,
 i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
-target-stack items until a roadmap task adds them to `frontend-pwa/package.json`
-and the lockfile.
+target-stack items until a roadmap task adds them to
+`frontend-pwa/package.json` and the lockfile.
 
 ### Build and preview workflow
 
@@ -429,8 +428,8 @@ Scenario state is isolated by default:
 
 ### Test-support module wiring
 
-Backend integration binaries compile as separate crates, so shared helpers
-under `backend/tests/support/` are wired in per binary rather than linked once.
+Backend integration binaries compile as separate crates, so shared helpers under
+`backend/tests/support/` are wired in per binary rather than linked once.
 Three pieces cooperate here:
 
 - **`declare_test_support!`** (`backend/tests/support/entrypoint.rs`) is a
@@ -448,10 +447,11 @@ Three pieces cooperate here:
   name fails during macro expansion rather than expanding to nothing.
 
 - **`trybuild-tests` feature** (`backend/Cargo.toml`) gates the compile-fail
-  coverage for that macro (`backend/tests/declare_test_support_compile_fail.rs`),
-  which asserts an unknown `@module` name produces a clear diagnostic. It is
-  off by default, so ordinary `cargo test` stays fast; `make test` and CI enable
-  it via `--all-features`.
+  coverage for that macro
+  (`backend/tests/declare_test_support_compile_fail.rs`), which asserts an
+  unknown `@module` name produces a clear diagnostic. It is off by default, so
+  ordinary `cargo test` stays fast; `make test` and CI enable it via
+  `--all-features`.
 
 - **Shared embedded-cluster environment repair** lives in
   `backend/tests/support/stable_cluster_env.rs`
@@ -864,8 +864,8 @@ Input or parsing errors are printed to stderr and exit with code `1`.
 ## Override policy check
 
 This repository pins certain security-sensitive dependencies with
-`pnpm.overrides`. Keep these install-time dependency patches scoped to pnpm.
-Do not add a top-level `overrides` block: npm consumes that block for ordinary
+`pnpm.overrides`. Keep these install-time dependency patches scoped to pnpm. Do
+not add a top-level `overrides` block: npm consumes that block for ordinary
 commands such as `npx`, and rejects overrides that conflict with direct
 dependency ranges.
 
@@ -874,10 +874,10 @@ non-expired entries in `security/audit-exceptions.json` into explicit
 `bun audit --ignore=<GHSA>` flags. This keeps Bun audit policy visible without
 changing npm's dependency resolution surface.
 
-The script `scripts/check-overrides-policy.mjs` verifies that
-`pnpm.overrides` is present and that top-level overrides are absent. It is run
-automatically in Continuous Integration (CI) after the lockfile step and before
-dependency installation.
+The script `scripts/check-overrides-policy.mjs` verifies that `pnpm.overrides`
+is present and that top-level overrides are absent. It is run automatically in
+Continuous Integration (CI) after the lockfile step and before dependency
+installation.
 
 ### Running locally
 
@@ -895,10 +895,10 @@ A failing run prints a policy diagnostic to stderr and exits with code `1`.
 
 ### Resolving failures
 
-When the check fails, open `package.json` and remove any top-level
-`overrides` entries. Keep dependency patches under `pnpm.overrides`; for Bun
-audit output, add a time-bound entry to `security/audit-exceptions.json` and
-let `pnpm run audit:bun` pass the corresponding advisory ID to Bun.
+When the check fails, open `package.json` and remove any top-level `overrides`
+entries. Keep dependency patches under `pnpm.overrides`; for Bun audit output,
+add a time-bound entry to `security/audit-exceptions.json` and let
+`pnpm run audit:bun` pass the corresponding advisory ID to Bun.
 
 ### CI integration
 
@@ -914,15 +914,14 @@ removed; update `package.json` and recommit.
 
 ### Programmatic API
 
-`scripts/check-overrides-policy.mjs` exports three functions for use in tests or
-other tooling:
+`scripts/check-overrides-policy.mjs` exports three functions for use in tests
+or other tooling:
 
 - **`checkOverridesPolicy(packageJson)`** — accepts a parsed `package.json`
   object and returns a structured report with `ok`, `pnpmOverridesToCheck`,
   `rootOverrides`, and `reason` fields. `ok` is the outcome flag, while
   `pnpmOverridesToCheck`, `rootOverrides`, and `reason` provide the policy
-  details. It is a query helper and must not write
-  to stdout or stderr.
+  details. It is a query helper and must not write to stdout or stderr.
 - **`formatOverrideValue(value)`** — formats a single override value for
   human-readable diagnostics; returns `"<missing>"` for `undefined` and a
   JSON-stringified value otherwise.
@@ -1117,7 +1116,7 @@ directly. Keep repository exceptions narrow: preserve external APIs, formal
 names, wire values and immutable fixtures without adding ordinary bare-word
 exceptions.
 
-The standalone phrase helper and its tests use Python 3.14 at runtime,
-Pathspec 1.1.1 and a Python 3.13 Ruff compatibility target. Continuous
-integration installs Nixie 1.1.0 and Merman CLI 0.7.0 before validating the
-repository's Mermaid diagrams with `make nixie`.
+The standalone phrase helper and its tests use Python 3.14 at runtime, Pathspec
+1.1.1 and a Python 3.13 Ruff compatibility target. Continuous integration
+installs Nixie 1.1.0 and Merman CLI 0.7.0 before validating the repository's
+Mermaid diagrams with `make nixie`.

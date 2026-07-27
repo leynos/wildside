@@ -6,10 +6,10 @@ Wildside ships the application artefacts that Nile Valley preview and GitOps
 workflows consume: the backend container image, Helm chart, and health
 contract. Nile Valley remains responsible for shared cluster automation,
 environment overlays, and cross-application GitOps reconciliation. This
-repository owns a developer-focused local preview loop that proves the
-Wildside chart can install into a small local Kubernetes cluster. The default
-mode remains Docker plus `k3d`; contributors on rootless Podman hosts can use
-Podman plus `kind`.
+repository owns a developer-focused local preview loop that proves the Wildside
+chart can install into a small local Kubernetes cluster. The default mode
+remains Docker plus `k3d`; contributors on rootless Podman hosts can use Podman
+plus `kind`.
 
 ## Runtime health contract
 
@@ -130,16 +130,16 @@ combination fail-fast, so the only supported rootless path is Podman plus
 
 Configuration variables table:
 
-| Variable                    | Default                  | Purpose                                      |
-| --------------------------- | ------------------------ | -------------------------------------------- |
-| `WILDSIDE_CONTAINER_ENGINE` | `docker`                 | Container engine: `docker` or `podman`.      |
-| `WILDSIDE_K8S_PROVIDER`     | `k3d`                    | Local cluster provider: `k3d` or `kind`.     |
-| `WILDSIDE_K8S_CLUSTER`      | `wildside-preview`       | Local cluster name.                          |
-| `WILDSIDE_K8S_PORT`         | `8088`                   | Loopback or port-forward preview port.       |
-| `WILDSIDE_K8S_NAMESPACE`    | `wildside`               | Kubernetes namespace.                        |
-| `WILDSIDE_HELM_RELEASE`     | `wildside`               | Helm release name.                           |
-| `WILDSIDE_IMAGE`            | `wildside-backend:local` | Local image reference.                       |
-| `WILDSIDE_KIND_NODE_IMAGE`  | `kindest/node:v1.31.0`   | `kind` node image.                           |
+| Variable                    | Default                  | Purpose                                  |
+| --------------------------- | ------------------------ | ---------------------------------------- |
+| `WILDSIDE_CONTAINER_ENGINE` | `docker`                 | Container engine: `docker` or `podman`.  |
+| `WILDSIDE_K8S_PROVIDER`     | `k3d`                    | Local cluster provider: `k3d` or `kind`. |
+| `WILDSIDE_K8S_CLUSTER`      | `wildside-preview`       | Local cluster name.                      |
+| `WILDSIDE_K8S_PORT`         | `8088`                   | Loopback or port-forward preview port.   |
+| `WILDSIDE_K8S_NAMESPACE`    | `wildside`               | Kubernetes namespace.                    |
+| `WILDSIDE_HELM_RELEASE`     | `wildside`               | Helm release name.                       |
+| `WILDSIDE_IMAGE`            | `wildside-backend:local` | Local image reference.                   |
+| `WILDSIDE_KIND_NODE_IMAGE`  | `kindest/node:v1.31.0`   | `kind` node image.                       |
 
 `WILDSIDE_IMAGE` must include a tag because the Helm chart receives repository
 and tag as separate values. `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT`
@@ -162,13 +162,13 @@ path, this is `kind-wildside-preview`.
 
 ## Validation
 
-The local preview helper has unit coverage for configuration parsing,
-preflight validation, image reference parsing, provider-aware cluster
-lifecycle commands, provider-aware image import commands, status, logs, and
-port-forward output. Full end-to-end preview validation requires the selected
-container engine, selected Kubernetes provider, `kubectl`, Helm, and an
-available loopback port. Rootless Podman plus `kind` also requires working
-user-level systemd scopes with cgroup delegation.
+The local preview helper has unit coverage for configuration parsing, preflight
+validation, image reference parsing, provider-aware cluster lifecycle commands,
+provider-aware image import commands, status, logs, and port-forward output.
+Full end-to-end preview validation requires the selected container engine,
+selected Kubernetes provider, `kubectl`, Helm, and an available loopback port.
+Rootless Podman plus `kind` also requires working user-level systemd scopes
+with cgroup delegation.
 
 If those tools are absent, the CLI must fail early with a clear
 missing-executable message rather than partially creating infrastructure.

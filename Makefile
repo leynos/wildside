@@ -122,6 +122,7 @@ local-k8s-logs:
 fmt: workspace-sync
 	cargo fmt --all
 	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+	mdformat-all
 
 lint: workspace-sync
 	$(MAKE) lint-rust

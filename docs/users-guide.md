@@ -42,15 +42,15 @@ context and the `kubectl port-forward` command for the Helm service.
 
 Useful overrides:
 
-| Variable                    | Default                  | Description                                                                                                               |
-| --------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| `WILDSIDE_CONTAINER_ENGINE` | `docker`                 | Container engine used for local image builds and imports. Set to `podman` for the rootless `kind` flow.                   |
-| `WILDSIDE_K8S_PROVIDER`     | `k3d`                    | Local Kubernetes provider. Use `k3d` for the default Docker-backed preview, or `kind` for rootless Podman.                |
-| `WILDSIDE_K8S_CLUSTER`      | `wildside-preview`       | Provider-neutral cluster name. Overrides the legacy `WILDSIDE_K3D_CLUSTER` alias when both are set.                       |
-| `WILDSIDE_K8S_PORT`         | `8088`                   | Host-port ingress binding for the `k3d` flow only. The `kind` flow uses `kubectl port-forward` instead.                   |
-| `WILDSIDE_K8S_NAMESPACE`    | `wildside`               | Kubernetes namespace used by Helm, kubectl, and the local session Secret.                                                 |
-| `WILDSIDE_HELM_RELEASE`     | `wildside`               | Helm release name for the local preview chart install.                                                                    |
-| `WILDSIDE_IMAGE`            | `wildside-backend:local` | Tagged backend image name built, imported, and passed to Helm.                                                            |
+| Variable                    | Default                  | Description                                                                                                |
+| --------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `WILDSIDE_CONTAINER_ENGINE` | `docker`                 | Container engine used for local image builds and imports. Set to `podman` for the rootless `kind` flow.    |
+| `WILDSIDE_K8S_PROVIDER`     | `k3d`                    | Local Kubernetes provider. Use `k3d` for the default Docker-backed preview, or `kind` for rootless Podman. |
+| `WILDSIDE_K8S_CLUSTER`      | `wildside-preview`       | Provider-neutral cluster name. Overrides the legacy `WILDSIDE_K3D_CLUSTER` alias when both are set.        |
+| `WILDSIDE_K8S_PORT`         | `8088`                   | Host-port ingress binding for the `k3d` flow only. The `kind` flow uses `kubectl port-forward` instead.    |
+| `WILDSIDE_K8S_NAMESPACE`    | `wildside`               | Kubernetes namespace used by Helm, kubectl, and the local session Secret.                                  |
+| `WILDSIDE_HELM_RELEASE`     | `wildside`               | Helm release name for the local preview chart install.                                                     |
+| `WILDSIDE_IMAGE`            | `wildside-backend:local` | Tagged backend image name built, imported, and passed to Helm.                                             |
 
 `WILDSIDE_K3D_CLUSTER` and `WILDSIDE_K3D_PORT` remain legacy aliases when the
 provider-neutral names are unset. `WILDSIDE_K3D_PORT` follows

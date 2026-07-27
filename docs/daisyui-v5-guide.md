@@ -38,8 +38,7 @@ Implementation expectations:
 3. Forced utility overrides such as `bg-red-500!` should be avoided except for a
    narrowly documented compatibility case.
 4. Product-specific repeated patterns belong in semantic wrappers or token
-   roles,
-   not long duplicated class lists.
+   roles, not long duplicated class lists.
 5. Placeholder imagery is only suitable for mockups and must not ship in product
    routes.
 

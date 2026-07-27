@@ -652,8 +652,8 @@ flow through the same hexagonal seams as production writes. The flow is:
 2. `seed_example_data_on_startup` in `backend::example_data` checks whether
    seeding is enabled and whether a database pool is available.
 3. The adapter loads the JSON registry
-   (`backend/fixtures/example-data/seeds.json`
-   by default) and resolves the configured seed name.
+   (`backend/fixtures/example-data/seeds.json` by default) and resolves the
+   configured seed name.
 4. `ExampleDataSeeder` (domain service) generates deterministic users from
    `crates/example-data` and prepares validated domain entities.
 5. `DieselExampleDataSeedRepository` applies the seed in one transaction:

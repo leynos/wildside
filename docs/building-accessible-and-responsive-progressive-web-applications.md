@@ -1132,8 +1132,8 @@ subcategories [^96]:
   the minimum installability requirements.
 
 - **PWA Optimized:** Audits for best practices such as redirecting HTTP traffic
-  to HTTPS, configuring a custom splash screen and theme colour in the manifest,
-  and having a valid viewport tag.
+  to HTTPS, configuring a custom splash screen and theme colour in the
+  manifest, and having a valid viewport tag.
 
 Passing these audits is a prerequisite for a PWA to be considered installable
 by Chrome and other browsers.[^97]
