@@ -869,10 +869,16 @@ not add a top-level `overrides` block: npm consumes that block for ordinary
 commands such as `npx`, and rejects overrides that conflict with direct
 dependency ranges.
 
+Bun does not consume `pnpm.overrides`. Mirror security fixes that Bun must
+resolve in the top-level `resolutions` block, which Bun consumes without
+exposing the fixes to npm's override handling. Regenerate both `pnpm-lock.yaml`
+and `bun.lock` after changing a shared security pin.
+
 Bun audit exceptions are handled by `security/run-bun-audit.js`, which turns
 non-expired entries in `security/audit-exceptions.json` into explicit
 `bun audit --ignore=<GHSA>` flags. This keeps Bun audit policy visible without
-changing npm's dependency resolution surface.
+changing npm's dependency resolution surface. Prefer a patched Bun resolution;
+use an exception only when no compatible patched release can be resolved.
 
 The script `scripts/check-overrides-policy.mjs` verifies that `pnpm.overrides`
 is present and that top-level overrides are absent. It is run automatically in
@@ -896,8 +902,9 @@ A failing run prints a policy diagnostic to stderr and exits with code `1`.
 ### Resolving failures
 
 When the check fails, open `package.json` and remove any top-level `overrides`
-entries. Keep dependency patches under `pnpm.overrides`; for Bun audit output,
-add a time-bound entry to `security/audit-exceptions.json` and let
+entries. Keep pnpm dependency patches under `pnpm.overrides` and put matching
+Bun patches under `resolutions`. If Bun cannot resolve a compatible patched
+release, add a time-bound entry to `security/audit-exceptions.json` and let
 `pnpm run audit:bun` pass the corresponding advisory ID to Bun.
 
 ### CI integration
