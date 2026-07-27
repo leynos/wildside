@@ -1125,5 +1125,8 @@ exceptions.
 
 The standalone phrase helper and its tests use Python 3.14 at runtime, Pathspec
 1.1.1 and a Python 3.13 Ruff compatibility target. Continuous integration
-installs Nixie 1.1.0 and Merman CLI 0.7.0 before validating the repository's
-Mermaid diagrams with `make nixie`.
+installs Nixie 1.1.0 and Merman CLI 0.7.0 before validating the changed Markdown
+files with `make nixie`. The target derives those files from
+`origin/main...HEAD`, uses the ignored `.tmp` directory for sandbox-compatible
+temporary files, and validates the full repository when that diff is empty. Set
+`NIXIE_PATHS=.` explicitly when a feature branch needs a full scan.

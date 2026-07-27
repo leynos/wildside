@@ -40,6 +40,8 @@ TSC_VERSION ?= 5.9.2
 MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 YAMLLINT_VERSION ?= 1.35.1
 NIXIE_VERSION ?= 1.1.0
+NIXIE_PATHS ?= $(shell git diff --name-only --diff-filter=ACMR \
+	origin/main...HEAD -- '*.md')
 PATHSPEC_VERSION ?= 1.1.1
 RUFF_VERSION ?= 0.15.12
 TYPOS_VERSION ?= 1.48.0
@@ -321,11 +323,15 @@ markdownlint: spelling
 	fi
 
 nixie:
-	bun install
-	bun scripts/install-mermaid-browser.mjs
+	mkdir -p "$(CURDIR)/.tmp"
+	@if [ ! -d node_modules ]; then \
+	  TMPDIR="$(CURDIR)/.tmp" bun install --frozen-lockfile; \
+	fi
+	TMPDIR="$(CURDIR)/.tmp" bun scripts/install-mermaid-browser.mjs
 	# CI needs --no-sandbox; serial runs (--max-concurrency 1) avoid browser
 	# EAGAIN writes. Remove --no-sandbox once nixie supports env-var control.
-	$(NIXIE) --no-sandbox --max-concurrency 1
+	TMPDIR="$(CURDIR)/.tmp" $(NIXIE) --no-sandbox --max-concurrency 1 \
+	  $(NIXIE_PATHS)
 
 spelling: spelling-phrase-check
 	@git ls-files -z | xargs -0 -r env $(UV_ENV) \
