@@ -2260,6 +2260,16 @@ Worker handlers then operate only on successfully deserialized envelope
 variants. Neither the dispatch boundary nor the handlers may panic or silently
 drop a job on an unknown version.
 
+This boundary is implemented by `decode_job` in
+`backend/src/outbound/queue/job_decode.rs`. It reads the raw persisted
+`serde_json::Value`, extracts the `"v"` discriminant for diagnostics, and
+decodes into the requested versioned job type. On any failure — an unknown
+version, a missing or non-string `"v"`, or an otherwise malformed body — it
+returns `JobDispatchError::Rejected` and emits a structured warning carrying
+only the received version, never the full payload (which can contain user
+data). The consumer added in 5.3.1 routes that rejection through the ordinary
+queue-processing error path so the retry/dead-letter policy applies.
+
 **Communication between workers and API:** The workers operate asynchronously
 from the API, so how does the API know to send WebSocket updates to the right
 client? We implement a mechanism for the worker to notify the API server when a
