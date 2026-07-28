@@ -4,5 +4,5 @@
 # after verifying the workspace builds green on the new nightly.
 [toolchain]
 channel = "nightly-2026-06-29"
-components = ["rustfmt", "clippy"]
+components = ["rustfmt", "clippy", "rust-analyzer"]
 profile = "minimal"

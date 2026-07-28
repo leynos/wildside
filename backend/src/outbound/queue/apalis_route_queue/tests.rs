@@ -44,79 +44,77 @@ fn plan(index: usize) -> TestPlan {
         name: format!("plan-{index}"),
     }
 }
-async fn assert_all_enqueues_succeed(handles: Vec<EnqueueHandle>) {
+async fn ensure_all_enqueues_succeed(handles: Vec<EnqueueHandle>) -> Result<(), String> {
     for result in join_all(handles).await {
-        assert!(
-            matches!(result, Ok(Ok(()))),
-            "concurrent enqueue task should succeed: {result:?}"
-        );
+        if !matches!(result, Ok(Ok(()))) {
+            return Err(format!("concurrent enqueue task failed: {result:?}"));
+        }
     }
+    Ok(())
 }
-async fn assert_plan_round_trips(plan: TestPlan) {
+async fn verify_plan_round_trip(plan: TestPlan) -> Result<(), String> {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<TestPlan, _> =
         GenericApalisRouteQueue::new(fake_provider.clone(), no_op_metrics());
 
-    let enqueue_result = queue.enqueue(&plan).await;
-    assert!(
-        enqueue_result.is_ok(),
-        "enqueue should succeed with fake provider: {enqueue_result:?}"
-    );
-
-    let pushed_jobs = match fake_provider.pushed_jobs() {
-        Ok(pushed_jobs) => pushed_jobs,
-        Err(error) => panic!("should be able to access pushed jobs: {error}"),
-    };
-    assert_eq!(pushed_jobs.len(), 1, "exactly one job should be pushed");
-    let deserialized: TestPlan = match serde_json::from_value(pushed_jobs[0].clone()) {
-        Ok(plan) => plan,
-        Err(error) => panic!("pushed payload should be valid JSON: {error}"),
-    };
-    assert_eq!(deserialized, plan, "deserialized plan should match");
+    queue
+        .enqueue(&plan)
+        .await
+        .map_err(|error| format!("enqueue failed: {error}"))?;
+    let pushed_jobs = fake_provider.pushed_jobs()?;
+    if pushed_jobs.len() != 1 {
+        return Err(format!("expected one pushed job, got {pushed_jobs:?}"));
+    }
+    let deserialized: TestPlan = serde_json::from_value(pushed_jobs[0].clone())
+        .map_err(|error| format!("pushed payload is not valid JSON: {error}"))?;
+    if deserialized != plan {
+        return Err(format!(
+            "round-trip mismatch: expected {plan:?}, got {deserialized:?}"
+        ));
+    }
+    Ok(())
 }
-async fn assert_failed_serialization_pushes_no_jobs(message: String) {
+async fn verify_failed_serialization_pushes_no_jobs(message: String) -> Result<(), String> {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
         GenericApalisRouteQueue::new(fake_provider.clone(), no_op_metrics());
 
-    let result = queue.enqueue(&FailingSerializePlan { message }).await;
-    assert!(
-        result.is_err(),
-        "serialization failure should reject enqueue"
-    );
-
-    let pushed_jobs = match fake_provider.pushed_jobs() {
-        Ok(pushed_jobs) => pushed_jobs,
-        Err(error) => panic!("should be able to access pushed jobs: {error}"),
-    };
-    assert_eq!(
-        pushed_jobs.len(),
-        0,
-        "no jobs should be pushed when serialization fails"
-    );
+    if queue
+        .enqueue(&FailingSerializePlan { message })
+        .await
+        .is_ok()
+    {
+        return Err("serialization failure unexpectedly enqueued a job".to_string());
+    }
+    let pushed_jobs = fake_provider.pushed_jobs()?;
+    if !pushed_jobs.is_empty() {
+        return Err(format!(
+            "serialization failure pushed unexpected jobs: {pushed_jobs:?}"
+        ));
+    }
+    Ok(())
 }
-fn block_on_property<F>(future: F)
+fn block_on_property<F, T>(future: F) -> Result<T, String>
 where
-    F: Future<Output = ()>,
+    F: Future<Output = Result<T, String>>,
 {
-    let runtime = match tokio::runtime::Builder::new_current_thread()
+    let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-    {
-        Ok(runtime) => runtime,
-        Err(error) => panic!("test runtime should start: {error}"),
-    };
-    runtime.block_on(future);
+        .map_err(|error| format!("failed to start test runtime: {error}"))?;
+    runtime.block_on(future)
 }
 proptest! {
     #[test]
     fn apalis_queue_round_trips_arbitrary_plan_names(name in "\\PC*") {
-        block_on_property(assert_plan_round_trips(TestPlan { name }));
+        block_on_property(verify_plan_round_trip(TestPlan { name }))
+            .expect("plan should round-trip through the queue");
     }
 
     #[test]
     fn apalis_queue_failed_serialization_pushes_no_jobs(message in "\\PC*") {
-        block_on_property(assert_failed_serialization_pushes_no_jobs(message));
+        block_on_property(verify_failed_serialization_pushes_no_jobs(message))
+            .expect("serialization failures should not push jobs");
     }
 }
 
@@ -213,7 +211,9 @@ async fn concurrent_enqueue_pushes_all_jobs() {
         fake_provider.as_ref().clone(),
         Arc::new(metrics.clone()),
     ));
-    assert_all_enqueues_succeed(spawn_enqueues(queue, 8)).await;
+    ensure_all_enqueues_succeed(spawn_enqueues(queue, 8))
+        .await
+        .expect("all concurrent enqueues should succeed");
     let pushed_jobs = fake_provider.pushed_jobs().expect("pushed jobs");
     assert_eq!(pushed_jobs.len(), 8, "all concurrent jobs should be pushed");
     let observations = metrics.observations().expect("metrics observations");

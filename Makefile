@@ -46,7 +46,9 @@ PATHSPEC_VERSION ?= 1.1.1
 RUFF_VERSION ?= 0.15.12
 TYPOS_VERSION ?= 1.48.0
 UV ?= uv
-UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
+export UV_CACHE_DIR := $(CURDIR)/.uv-cache
+export UV_TOOL_DIR := $(CURDIR)/.uv-tools
+UV_ENV = UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR)
 NIXIE = $(UV_ENV) $(UV) tool run --python 3.14 \
 	--from nixie-cli@$(NIXIE_VERSION) nixie
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
@@ -167,7 +169,7 @@ lint-architecture:
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
 	if [ -f spec/asyncapi.yaml ]; then \
-	  bun x --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) asyncapi validate spec/asyncapi.yaml --fail-severity=info; \
+	  pnpm dlx @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml --fail-severity=info; \
 	fi
 
 # Lint OpenAPI spec with Redocly CLI
