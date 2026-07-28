@@ -324,14 +324,10 @@ markdownlint: spelling
 
 nixie:
 	mkdir -p "$(CURDIR)/.tmp"
-	@if [ ! -d node_modules ]; then \
-	  TMPDIR="$(CURDIR)/.tmp" bun install --frozen-lockfile; \
-	fi
+	@if [ ! -d node_modules ]; then TMPDIR="$(CURDIR)/.tmp" bun install --frozen-lockfile; fi
 	TMPDIR="$(CURDIR)/.tmp" bun scripts/install-mermaid-browser.mjs
-	# CI needs --no-sandbox; serial runs (--max-concurrency 1) avoid browser
-	# EAGAIN writes. Remove --no-sandbox once nixie supports env-var control.
-	TMPDIR="$(CURDIR)/.tmp" $(NIXIE) --no-sandbox --max-concurrency 1 \
-	  $(NIXIE_PATHS)
+	# CI needs --no-sandbox; serial runs avoid browser EAGAIN writes.
+	TMPDIR="$(CURDIR)/.tmp" $(NIXIE) --no-sandbox --max-concurrency 1 $(NIXIE_PATHS)
 
 spelling: spelling-phrase-check
 	@git ls-files -z | xargs -0 -r env $(UV_ENV) \
