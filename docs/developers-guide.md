@@ -889,7 +889,9 @@ sitemap.
 ### Running locally
 
 ```sh
-bun run scripts/audit-ux-state-graph.mjs --graph <graph.json> --sitemap docs/sitemap.md
+bun run scripts/audit-ux-state-graph.mjs \
+  --graph docs/wildside-ux-state-graph-v0.1.json \
+  --sitemap docs/sitemap.md
 ```
 
 A passing run prints one deterministic line per state on stdout and exits with
