@@ -329,7 +329,7 @@ markdownlint: spelling
 nixie:
 	$(call ensure_tool,nixie)
 	$(call ensure_tool,merman-cli)
-	nixie
+	nixie --renderer merman
 
 spelling: spelling-phrase-check
 	@git ls-files -z | xargs -0 -r env \

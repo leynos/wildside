@@ -21,17 +21,17 @@ def _build_steps() -> list[dict[str, object]]:
         case {"jobs": dict() as jobs}:
             pass
         case _:
-            raise AssertionError("the CI workflow must declare jobs")
+            assert False, "the CI workflow must declare jobs"
     match jobs:
         case {"build": dict() as build}:
             pass
         case _:
-            raise AssertionError("the CI workflow must declare the build job")
+            assert False, "the CI workflow must declare the build job"
     match build:
         case {"steps": list() as steps}:
             pass
         case _:
-            raise AssertionError("the CI build job must declare steps")
+            assert False, "the CI build job must declare steps"
     assert all(isinstance(step, dict) for step in steps), (
         "every CI build step must be a mapping"
     )
@@ -88,5 +88,5 @@ def test_makefile_nixie_requires_both_installed_commands() -> None:
     assert _nixie_recipe() == [
         "$(call ensure_tool,nixie)",
         "$(call ensure_tool,merman-cli)",
-        "nixie",
+        "nixie --renderer merman",
     ], "the Nixie recipe must require both tools before validation"
