@@ -50,14 +50,19 @@ UV_ENV = UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR)
 NIXIE = $(UV_ENV) $(UV) tool run --python 3.14 \
 	--from nixie-cli@$(NIXIE_VERSION) nixie
 define NIXIE_CMD
-@{ \
-	git diff --name-only -z --diff-filter=ACMR origin/main...HEAD -- '*.md'; \
-	git diff --cached --name-only -z --diff-filter=ACMR -- '*.md'; \
-	git diff --name-only -z --diff-filter=ACMR -- '*.md'; \
-	git ls-files --others --exclude-standard -z -- '*.md'; \
-} | sort -zu | \
+@paths_file=$$(mktemp "$(CURDIR)/.tmp/nixie-paths.XXXXXX") || exit 1; \
+	trap 'rm -f "$$paths_file"' EXIT HUP INT TERM; \
+	git diff --name-only -z --diff-filter=ACMR \
+		origin/main...HEAD -- '*.md' > "$$paths_file" || exit 1; \
+	git diff --cached --name-only -z --diff-filter=ACMR \
+		-- '*.md' >> "$$paths_file" || exit 1; \
+	git diff --name-only -z --diff-filter=ACMR \
+		-- '*.md' >> "$$paths_file" || exit 1; \
+	git ls-files --others --exclude-standard -z \
+		-- '*.md' >> "$$paths_file" || exit 1; \
+	sort -zu -o "$$paths_file" "$$paths_file" || exit 1; \
 	xargs -0 -r env TMPDIR="$(CURDIR)/.tmp" $(NIXIE) \
-	--no-sandbox --max-concurrency 1 --
+	--no-sandbox --max-concurrency 1 -- < "$$paths_file"
 endef
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
 TYPOS_CONFIG_BUILDER_SOURCE := git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_COMMIT)
