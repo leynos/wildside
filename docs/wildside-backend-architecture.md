@@ -2222,8 +2222,8 @@ versioning envelope with a current `"v1"` variant. Existing V1 variants use
 variant such as V2 and a reviewed snapshot update.
 
 - `GenerateRouteJob` lives in
-  `backend/src/domain/jobs/generate_route.rs`. V1 carries `request_id`,
-  optional `idempotency_key`, `user_id`, `origin`, `destination`, optional
+  `backend/src/domain/jobs/generate_route.rs`. V1 carries `request_id`, optional
+  `idempotency_key`, `user_id`, `origin`, `destination`, optional
   `preferences`, and `enqueued_at`. The helper
   `GenerateRouteJob::try_from_submission` converts the existing
   `RouteSubmissionRequest` shape into the queued payload while keeping
@@ -2231,9 +2231,9 @@ variant such as V2 and a reviewed snapshot update.
 - `EnrichmentJob` lives in `backend/src/domain/jobs/enrichment.rs`. V1 carries
   `job_id`, optional `idempotency_key`, a validated `BoundingBox`, sorted and
   deduplicated tags, and `enqueued_at`. The bounding box is serialized as
-  `[min_lng, min_lat, max_lng, max_lat]`, matching
-  `OverpassEnrichmentRequest`. Antimeridian-wrapped boxes are not supported in
-  V1; callers spanning the dateline must split the request into two boxes.
+  `[min_lng, min_lat, max_lng, max_lat]`, matching `OverpassEnrichmentRequest`.
+  Antimeridian-wrapped boxes are not supported in V1; callers spanning the
+  dateline must split the request into two boxes.
 - `BoundingBox` lives in `backend/src/domain/jobs/bounding_box.rs` and rejects
   non-finite coordinates, out-of-range WGS84 coordinates, inverted latitude
   ordering, and longitude ordering that would imply an antimeridian wrap.
