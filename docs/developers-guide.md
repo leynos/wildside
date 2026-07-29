@@ -1055,14 +1055,13 @@ Domain-owned job payloads live under `backend/src/domain/jobs`. They are the
 only supported contract for values passed into `RouteQueue::enqueue`:
 
 - `GenerateRouteJob` is defined in
-  `backend/src/domain/jobs/generate_route.rs`. Build it from the existing
-  route submission port with `GenerateRouteJob::try_from_submission`, passing
-  the generated `request_id` and enqueue timestamp explicitly.
+  `backend/src/domain/jobs/generate_route.rs`. Build it from the existing route
+  submission port with `GenerateRouteJob::try_from_submission`, passing the
+  generated `request_id` and enqueue timestamp explicitly.
 - `EnrichmentJob` is defined in `backend/src/domain/jobs/enrichment.rs`. Build
   it through `EnrichmentJob::v1`, which validates tag count, tag length, and
   canonical tag ordering. Deserializing a persisted V1 job applies the same
-  validation, so workers never receive unchecked tag vectors from
-  `apalis.jobs`.
+  validation, so workers never receive unchecked tag vectors from `apalis.jobs`.
 - `BoundingBox` is defined in `backend/src/domain/jobs/bounding_box.rs`. It
   serializes as `[min_lng, min_lat, max_lng, max_lat]` and rejects
   antimeridian-wrapped boxes in V1. Split dateline-spanning inputs before
@@ -1070,9 +1069,9 @@ only supported contract for values passed into `RouteQueue::enqueue`:
 
 Both job families use a serde envelope with `#[serde(tag = "v")]`, currently
 `"v1"`. V1 structs use `deny_unknown_fields`; do not remove that restriction.
-Any additive schema change requires a new variant such as V2. A changed
-`insta` snapshot for a V1 job is a signal to stop and cut a new variant, not to
-edit V1 in place.
+Any additive schema change requires a new variant such as V2. A changed `insta`
+snapshot for a V1 job is a signal to stop and cut a new variant, not to edit V1
+in place.
 
 The payloads carry `idempotency_key` because the current Apalis pins predate
 framework-native idempotency support. Trace IDs are intentionally absent from
