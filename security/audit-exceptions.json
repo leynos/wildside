@@ -1,11 +1,11 @@
 [
   {
-    "id": "BUN_GLOB_CLI_COMMAND_INJECTION_2026_06",
-    "package": "glob",
-    "advisory": "GHSA-5j98-mcp5-4vw2",
-    "reason": "Bun reports transitive frontend-tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
-    "addedAt": "2026-06-28",
-    "expiresAt": "2026-07-28"
+    "id": "STYLE_DICTIONARY_PROTOTYPE_POLLUTION_2026_07",
+    "package": "frontend-pwa",
+    "advisory": "GHSA-vj5c-m527-mpff",
+    "reason": "Style Dictionary runs only against repository-controlled token files during builds; its patched release requires glob 13, which is incompatible with the Bun-wide glob 11 resolution needed for the current CLI command-injection advisory.",
+    "addedAt": "2026-07-29",
+    "expiresAt": "2026-08-28"
   },
   {
     "id": "BUN_MARKDOWN_IT_SMARTQUOTES_DOS_2026_06",

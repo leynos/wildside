@@ -40,8 +40,6 @@ TSC_VERSION ?= 5.9.2
 MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 YAMLLINT_VERSION ?= 1.35.1
 NIXIE_VERSION ?= 1.1.0
-NIXIE_PATHS ?= $(shell git diff --name-only --diff-filter=ACMR \
-	origin/main...HEAD -- '*.md')
 PATHSPEC_VERSION ?= 1.1.1
 RUFF_VERSION ?= 0.15.12
 TYPOS_VERSION ?= 1.48.0
@@ -51,6 +49,11 @@ export UV_TOOL_DIR := $(CURDIR)/.uv-tools
 UV_ENV = UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR)
 NIXIE = $(UV_ENV) $(UV) tool run --python 3.14 \
 	--from nixie-cli@$(NIXIE_VERSION) nixie
+define NIXIE_CMD
+@git diff --name-only -z --diff-filter=ACMR origin/main...HEAD -- '*.md' | \
+	xargs -0 -r env TMPDIR="$(CURDIR)/.tmp" $(NIXIE) \
+	--no-sandbox --max-concurrency 1 --
+endef
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
 TYPOS_CONFIG_BUILDER_SOURCE := git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_COMMIT)
 TYPOS_CONFIG_BUILDER := $(UV_ENV) $(UV) tool run --python 3.14 \
@@ -326,10 +329,10 @@ markdownlint: spelling
 
 nixie:
 	mkdir -p "$(CURDIR)/.tmp"
-	@if [ ! -d node_modules ]; then TMPDIR="$(CURDIR)/.tmp" bun install --frozen-lockfile; fi
+	TMPDIR="$(CURDIR)/.tmp" bun install --frozen-lockfile
 	TMPDIR="$(CURDIR)/.tmp" bun scripts/install-mermaid-browser.mjs
 	# CI needs --no-sandbox; serial runs avoid browser EAGAIN writes.
-	TMPDIR="$(CURDIR)/.tmp" $(NIXIE) --no-sandbox --max-concurrency 1 $(NIXIE_PATHS)
+	$(NIXIE_CMD)
 
 spelling: spelling-phrase-check
 	@git ls-files -z | xargs -0 -r env $(UV_ENV) \
