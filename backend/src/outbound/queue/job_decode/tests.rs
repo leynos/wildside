@@ -93,32 +93,28 @@ fn decode_rejection_warns_with_received_version() {
 }
 
 #[test]
-fn decode_missing_version_is_rejected_without_panic() {
-    let mut payload = valid_generate_route_v1();
-    payload
+fn decode_unreadable_version_is_rejected_without_panic() {
+    let mut missing_version = valid_generate_route_v1();
+    missing_version
         .as_object_mut()
         .expect("payload is a JSON object")
         .remove("v");
 
-    let error = decode_job::<GenerateRouteJob>(&payload)
-        .expect_err("a missing envelope version must be rejected");
-    assert!(
-        matches!(error, JobDispatchError::Rejected { .. }),
-        "missing version should be rejected, got {error:?}"
-    );
-}
+    let mut non_string_version = valid_generate_route_v1();
+    non_string_version["v"] = json!(2);
 
-#[test]
-fn decode_non_string_version_is_rejected_without_panic() {
-    let mut payload = valid_generate_route_v1();
-    payload["v"] = json!(2);
+    for (case, payload) in [
+        ("missing version", missing_version),
+        ("non-string version", non_string_version),
+    ] {
+        let error = decode_job::<GenerateRouteJob>(&payload)
+            .expect_err("an unreadable envelope version must be rejected");
 
-    let error = decode_job::<GenerateRouteJob>(&payload)
-        .expect_err("a non-string envelope version must be rejected");
-    assert!(
-        matches!(error, JobDispatchError::Rejected { .. }),
-        "non-string version should be rejected, got {error:?}"
-    );
+        assert!(
+            matches!(error, JobDispatchError::Rejected { .. }),
+            "{case} should be rejected, got {error:?}"
+        );
+    }
 }
 
 #[test]
