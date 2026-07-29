@@ -50,7 +50,12 @@ UV_ENV = UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR)
 NIXIE = $(UV_ENV) $(UV) tool run --python 3.14 \
 	--from nixie-cli@$(NIXIE_VERSION) nixie
 define NIXIE_CMD
-@git diff --name-only -z --diff-filter=ACMR origin/main...HEAD -- '*.md' | \
+@{ \
+	git diff --name-only -z --diff-filter=ACMR origin/main...HEAD -- '*.md'; \
+	git diff --cached --name-only -z --diff-filter=ACMR -- '*.md'; \
+	git diff --name-only -z --diff-filter=ACMR -- '*.md'; \
+	git ls-files --others --exclude-standard -z -- '*.md'; \
+} | sort -zu | \
 	xargs -0 -r env TMPDIR="$(CURDIR)/.tmp" $(NIXIE) \
 	--no-sandbox --max-concurrency 1 --
 endef
