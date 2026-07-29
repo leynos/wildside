@@ -220,7 +220,9 @@ NEXTEST_TEST_THREADS ?= 1
 test: test-rust test-frontend test-workflow-contracts test-scripts
 
 test-rust: workspace-sync prepare-pg-worker
-	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast
+	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
+		-E 'not binary(declare_test_support_compile_fail)'
+	$(RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features
 
 test-frontend: deps typecheck
 	pnpm run test

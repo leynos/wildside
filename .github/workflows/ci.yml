@@ -249,10 +249,13 @@ jobs:
           find target/ -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} + 2>/dev/null || true
           RUSTFLAGS="-D warnings" cargo nextest run --locked \
             --manifest-path backend/Cargo.toml \
-            --all-targets --all-features
+            --all-targets --all-features \
+            -E 'not binary(declare_test_support_compile_fail)'
 
-      - name: Compile-fail tests (pagination trait bounds)
-        run: cargo test --locked --features trybuild-tests -p pagination cursor_trait_bound_compile_fail_tests
+      - name: Compile-fail tests
+        run: |
+          cargo test --locked --all-features -p backend --test declare_test_support_compile_fail
+          cargo test --locked --features trybuild-tests -p pagination cursor_trait_bound_compile_fail_tests
 
       # OpenAPI dump (at runtime or via a small bin)
       - name: Generate OpenAPI specification

@@ -108,6 +108,7 @@ where
         .map_err(|error| format!("failed to start test runtime: {error}"))?;
     runtime.block_on(future)
 }
+
 proptest! {
     #[test]
     fn apalis_queue_round_trips_arbitrary_plan_names(name in "\\PC*") {
