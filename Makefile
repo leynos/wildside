@@ -61,8 +61,13 @@ define NIXIE_CMD
 	git ls-files --others --exclude-standard -z \
 		-- '*.md' >> "$$paths_file" || exit 1; \
 	sort -zu -o "$$paths_file" "$$paths_file" || exit 1; \
-	xargs -0 -r env TMPDIR="$(CURDIR)/.tmp" $(NIXIE) \
-	--no-sandbox --max-concurrency 1 -- < "$$paths_file"
+	if [ -s "$$paths_file" ]; then \
+	  xargs -0 -r env TMPDIR="$(CURDIR)/.tmp" $(NIXIE) \
+	    --no-sandbox --max-concurrency 1 -- < "$$paths_file" || exit 1; \
+	else \
+	  env TMPDIR="$(CURDIR)/.tmp" $(NIXIE) \
+	    --no-sandbox --max-concurrency 1 -- . || exit 1; \
+	fi
 endef
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
 TYPOS_CONFIG_BUILDER_SOURCE := git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_COMMIT)
