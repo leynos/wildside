@@ -81,6 +81,7 @@ route_queue_enqueue_total{outcome="success"} 1
     );
 }
 
+/// Encode the gathered route-queue metrics as Prometheus text.
 fn encode_route_queue_metrics(registry: &prometheus::Registry) -> Result<String, String> {
     let mut buffer = Vec::new();
     prometheus::TextEncoder::new()
@@ -89,6 +90,7 @@ fn encode_route_queue_metrics(registry: &prometheus::Registry) -> Result<String,
     String::from_utf8(buffer).map_err(|error| format!("metrics text is not UTF-8: {error}"))
 }
 
+/// Normalize route-queue samples for deterministic snapshot comparison.
 fn normalize_route_queue_metrics(text: &str) -> Result<String, String> {
     let mut lines = text
         .lines()
@@ -99,6 +101,7 @@ fn normalize_route_queue_metrics(text: &str) -> Result<String, String> {
     Ok(lines.join("\n"))
 }
 
+/// Replace nondeterministic timing values while preserving labels and counts.
 fn normalize_timing_sample(line: &str) -> Result<String, String> {
     if line.starts_with("route_queue_enqueue_latency_seconds_bucket") {
         let (labels, _) = line

@@ -236,7 +236,7 @@ PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.1
 NEXTEST_TEST_THREADS ?= 1
 
 
-test: test-rust test-frontend test-scripts
+test: test-rust test-frontend test-workflow-contracts test-scripts
 
 test-rust: workspace-sync prepare-pg-worker
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast

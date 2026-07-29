@@ -810,6 +810,31 @@ dependency declarations (PEP 723 inline metadata), and style guidance.
    guard (see "Programmatic API" under "Override policy check") so the module
    can be imported cleanly in tests.
 
+### Makefile tooling contracts
+
+Command-level Makefile coverage lives in
+`tests/workflow_contracts/makefile_tooling_test.py` and runs through
+`make test-workflow-contracts`, which is part of `make test`. The tests place
+command doubles on `PATH` while executing the real recipes, so runner choice,
+arguments and environment propagation remain covered without downloading the
+tools under test.
+
+UV-backed Makefile targets export repository-absolute `UV_CACHE_DIR` and
+`UV_TOOL_DIR` values that point to the ignored `.uv-cache` and `.uv-tools`
+directories. This keeps UV writes inside the worktree when a sandbox does not
+permit writes to the user cache.
+
+The `nixie` target also sets `TMPDIR` to the ignored `.tmp` directory for its
+frozen Bun install, browser setup and diagram validation. It collects committed,
+staged, unstaged and untracked Markdown paths as NUL-delimited records, checks
+each discovery command, deduplicates the records, and only then invokes Nixie.
+This preserves unusual filenames and prevents a discovery failure from
+producing a false-green validation result.
+
+The `lint-asyncapi` target invokes AsyncAPI CLI 3.4.2 through `pnpm dlx` and
+validates `spec/asyncapi.yaml` with `--fail-severity=info`. Keep this runner form
+because it resolves the package's `asyncapi` binary reliably in the workspace.
+
 ## UX audit helpers
 
 `scripts/audit-ux-state-graph.mjs` supports front-end source catalogue work by
@@ -1124,9 +1149,4 @@ names, wire values and immutable fixtures without adding ordinary bare-word
 exceptions.
 
 The standalone phrase helper and its tests use Python 3.14 at runtime, Pathspec
-1.1.1 and a Python 3.13 Ruff compatibility target. Continuous integration
-installs Nixie 1.1.0 and Merman CLI 0.7.0 before validating the changed Markdown
-files with `make nixie`. The target derives those files from
-`origin/main...HEAD`, uses the ignored `.tmp` directory for sandbox-compatible
-temporary files, and validates the full repository when that diff is empty. Set
-`NIXIE_PATHS=.` explicitly when a feature branch needs a full scan.
+1.1.1 and a Python 3.13 Ruff compatibility target.

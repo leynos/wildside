@@ -60,6 +60,7 @@ fn enqueue_path_strategy() -> impl Strategy<Value = EnqueuePath> {
     ]
 }
 
+/// Exercise one enqueue path and return its observations and expected outcome.
 async fn observe_enqueue_path(
     path: EnqueuePath,
 ) -> Result<(Vec<(RouteQueueOutcome, Duration)>, RouteQueueOutcome), String> {
@@ -72,6 +73,7 @@ async fn observe_enqueue_path(
     Ok((metrics.observations()?, expected))
 }
 
+/// Exercise a successful enqueue and return its expected metric outcome.
 async fn enqueue_success(
     metrics: &RecordingRouteQueueMetrics,
 ) -> Result<RouteQueueOutcome, String> {
@@ -83,6 +85,7 @@ async fn enqueue_success(
     Ok(RouteQueueOutcome::Success)
 }
 
+/// Exercise a provider failure and return its expected metric outcome.
 async fn enqueue_provider_failure(
     metrics: &RecordingRouteQueueMetrics,
 ) -> Result<RouteQueueOutcome, String> {
@@ -100,6 +103,7 @@ async fn enqueue_provider_failure(
     Ok(RouteQueueOutcome::Failure)
 }
 
+/// Exercise serialization failure and return its expected metric outcome.
 async fn enqueue_serialization_failure(
     metrics: &RecordingRouteQueueMetrics,
 ) -> Result<RouteQueueOutcome, String> {
@@ -113,6 +117,7 @@ async fn enqueue_serialization_failure(
     Ok(RouteQueueOutcome::Failure)
 }
 
+/// Return metric observations recorded for concurrent successful enqueues.
 async fn observe_concurrent_enqueue_timing(
     job_count: usize,
 ) -> Result<Vec<(RouteQueueOutcome, Duration)>, String> {

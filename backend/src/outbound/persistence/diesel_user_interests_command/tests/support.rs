@@ -53,6 +53,7 @@ impl StubUserPreferencesRepository {
         }
     }
 
+    /// Configure the next repository lookup to return `failure`.
     pub(super) fn set_find_failure(&self, failure: StubFailure) -> Result<(), String> {
         *self
             .find_failure
@@ -61,6 +62,7 @@ impl StubUserPreferencesRepository {
         Ok(())
     }
 
+    /// Configure the next repository save to return `failure`.
     pub(super) fn set_save_failure(&self, failure: StubFailure) -> Result<(), String> {
         *self
             .save_failures
@@ -69,6 +71,7 @@ impl StubUserPreferencesRepository {
         Ok(())
     }
 
+    /// Return the preferences and revision supplied to the latest save.
     pub(super) fn last_save_call(&self) -> Result<Option<(UserPreferences, Option<u32>)>, String> {
         self.last_save
             .lock()
@@ -76,6 +79,7 @@ impl StubUserPreferencesRepository {
             .map_err(|error| format!("failed to lock last save: {error}"))
     }
 
+    /// Return how many saves the stub repository observed.
     pub(super) fn save_call_count(&self) -> Result<usize, String> {
         self.save_call_count
             .lock()
@@ -162,16 +166,19 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
     }
 }
 
+/// Build the stable user identifier shared by command tests.
 pub(super) fn user_id() -> Result<UserId, crate::domain::user::UserValidationError> {
     UserId::new("11111111-1111-1111-1111-111111111111")
 }
 
+/// Build a validated interest-theme identifier for command tests.
 pub(super) fn interest_theme_id(
     value: &str,
 ) -> Result<InterestThemeId, crate::domain::interest_theme::InterestThemeIdValidationError> {
     InterestThemeId::new(value)
 }
 
+/// Parse a UUID used by repository expectations.
 pub(super) fn uuid_id(value: &str) -> Result<Uuid, uuid::Error> {
     Uuid::parse_str(value)
 }

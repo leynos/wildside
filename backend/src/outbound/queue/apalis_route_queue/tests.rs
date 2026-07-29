@@ -44,6 +44,7 @@ fn plan(index: usize) -> TestPlan {
         name: format!("plan-{index}"),
     }
 }
+/// Await concurrent enqueue tasks and report the first unsuccessful outcome.
 async fn ensure_all_enqueues_succeed(handles: Vec<EnqueueHandle>) -> Result<(), String> {
     for result in join_all(handles).await {
         if !matches!(result, Ok(Ok(()))) {
@@ -52,6 +53,7 @@ async fn ensure_all_enqueues_succeed(handles: Vec<EnqueueHandle>) -> Result<(), 
     }
     Ok(())
 }
+/// Verify that enqueueing preserves the serialized plan payload.
 async fn verify_plan_round_trip(plan: TestPlan) -> Result<(), String> {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<TestPlan, _> =
@@ -74,6 +76,7 @@ async fn verify_plan_round_trip(plan: TestPlan) -> Result<(), String> {
     }
     Ok(())
 }
+/// Verify that serialization failure leaves the provider untouched.
 async fn verify_failed_serialization_pushes_no_jobs(message: String) -> Result<(), String> {
     let fake_provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<FailingSerializePlan, _> =
@@ -94,6 +97,7 @@ async fn verify_failed_serialization_pushes_no_jobs(message: String) -> Result<(
     }
     Ok(())
 }
+/// Run an asynchronous property check on an isolated current-thread runtime.
 fn block_on_property<F, T>(future: F) -> Result<T, String>
 where
     F: Future<Output = Result<T, String>>,
