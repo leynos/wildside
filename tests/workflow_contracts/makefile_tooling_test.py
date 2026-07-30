@@ -137,23 +137,34 @@ def test_nixie_stops_before_validation_when_discovery_fails(
     assert not list((REPOSITORY_ROOT / ".tmp").glob("nixie-paths.*"))
 
 
-def test_nixie_validates_repository_when_worklist_is_empty(
+def test_nixie_uses_repository_fallback_when_worklist_is_empty(
     fake_tool_environment: tuple[dict[str, str], Path],
 ) -> None:
-    """Nixie validates the repository once when discovery returns no paths."""
+    """Nixie validates ``.`` with local directories when no paths are found."""
     env, log_path = fake_tool_environment
     env["EMPTY_GIT_OUTPUT"] = "1"
 
     completed = _run_make("nixie", env)
 
     assert completed.returncode == 0, completed.stderr
-    nixie_invocations = [
-        invocation
-        for invocation in _read_invocations(log_path)
-        if invocation.startswith("uv|")
+    invocations = _read_invocations(log_path)
+    repository_tmp = str(REPOSITORY_ROOT / ".tmp")
+    uv_cache = str(REPOSITORY_ROOT / ".uv-cache")
+    uv_tools = str(REPOSITORY_ROOT / ".uv-tools")
+    assert invocations[:2] == [
+        f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|install --frozen-lockfile",
+        f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|"
+        "scripts/install-mermaid-browser.mjs",
     ]
-    assert len(nixie_invocations) == 1
-    assert nixie_invocations[0].endswith("-- .")
+    nixie_invocations = [
+        invocation for invocation in invocations if invocation.startswith("uv|")
+    ]
+    expected_nixie_invocation = (
+        f"uv|{repository_tmp}|{uv_cache}|{uv_tools}|"
+        "tool run --python 3.14 --from nixie-cli@1.1.0 nixie "
+        "--no-sandbox --max-concurrency 1 -- ."
+    )
+    assert nixie_invocations == [expected_nixie_invocation]
 
 
 def test_lint_asyncapi_uses_pnpm_cli_runner(
