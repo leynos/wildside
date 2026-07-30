@@ -94,10 +94,11 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
         &self,
         user_id: &UserId,
     ) -> Result<Option<UserPreferences>, UserPreferencesRepositoryError> {
-        let find_failure = *self
+        let find_failure = self
             .find_failure
             .lock()
-            .map_err(|_| UserPreferencesRepositoryError::query("find failure lock poisoned"))?;
+            .map_err(|_| UserPreferencesRepositoryError::query("find failure lock poisoned"))?
+            .take();
         if let Some(failure) = find_failure {
             return Err(failure.to_error());
         }

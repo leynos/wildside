@@ -816,7 +816,7 @@ Command-level Makefile coverage lives in
 `tests/workflow_contracts/makefile_tooling_test.py` and runs through
 `make test-workflow-contracts`, which is part of `make test`. The tests place
 command doubles on `PATH` while executing the real recipes, so runner choice,
-arguments and environment propagation remain covered without downloading the
+arguments, and environment propagation remain covered without downloading the
 tools under test.
 
 UV-backed Makefile targets export repository-absolute `UV_CACHE_DIR` and

@@ -47,7 +47,7 @@ fn plan(index: usize) -> TestPlan {
 /// Await concurrent enqueue tasks and report the first unsuccessful outcome.
 async fn ensure_all_enqueues_succeed(handles: Vec<EnqueueHandle>) -> Result<(), String> {
     for result in join_all(handles).await {
-        if !matches!(result, Ok(Ok(()))) {
+        if !matches!(result.as_ref(), Ok(Ok(()))) {
             return Err(format!("concurrent enqueue task failed: {result:?}"));
         }
     }

@@ -12,6 +12,9 @@ import pytest
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 FAKE_GIT = """#!/bin/sh
+if [ "${EMPTY_GIT_OUTPUT:-0}" = 1 ]; then
+    exit 0
+fi
 if [ "${FAIL_GIT_CACHED:-0}" = 1 ] && [ "$2" = "--cached" ]; then
     exit 42
 fi
@@ -134,6 +137,25 @@ def test_nixie_stops_before_validation_when_discovery_fails(
     assert not list((REPOSITORY_ROOT / ".tmp").glob("nixie-paths.*"))
 
 
+def test_nixie_validates_repository_when_worklist_is_empty(
+    fake_tool_environment: tuple[dict[str, str], Path],
+) -> None:
+    """Nixie validates the repository once when discovery returns no paths."""
+    env, log_path = fake_tool_environment
+    env["EMPTY_GIT_OUTPUT"] = "1"
+
+    completed = _run_make("nixie", env)
+
+    assert completed.returncode == 0, completed.stderr
+    nixie_invocations = [
+        invocation
+        for invocation in _read_invocations(log_path)
+        if invocation.startswith("uv|")
+    ]
+    assert len(nixie_invocations) == 1
+    assert nixie_invocations[0].endswith("-- .")
+
+
 def test_lint_asyncapi_uses_pnpm_cli_runner(
     fake_tool_environment: tuple[dict[str, str], Path],
 ) -> None:
@@ -143,9 +165,10 @@ def test_lint_asyncapi_uses_pnpm_cli_runner(
     completed = _run_make("lint-asyncapi", env)
 
     assert completed.returncode == 0, completed.stderr
-    assert _read_invocations(log_path) == [
+    expected_invocation = (
         f"pnpm||{REPOSITORY_ROOT / '.uv-cache'}|"
         f"{REPOSITORY_ROOT / '.uv-tools'}|"
         "dlx @asyncapi/cli@3.4.2 validate "
         "spec/asyncapi.yaml --fail-severity=info"
-    ]
+    )
+    assert _read_invocations(log_path) == [expected_invocation]
