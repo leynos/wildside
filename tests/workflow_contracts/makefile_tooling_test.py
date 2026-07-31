@@ -19,13 +19,13 @@ if [ "${FAIL_GIT_CACHED:-0}" = 1 ] && [ "$2" = "--cached" ]; then
     exit 42
 fi
 if [ "$1" = "ls-files" ]; then
-    printf 'docs/untracked.md\\000'
+    printf 'docs/zeta.md\\000docs/A.md\\000'
 elif [ "$2" = "--cached" ]; then
-    printf 'docs/staged.md\\000'
+    printf 'docs/semi;colon & brackets[1].md\\000docs/zeta.md\\000'
 elif [ "$5" = "origin/main...HEAD" ]; then
-    printf 'docs/committed.md\\000'
+    printf 'docs/a space.md\\000docs/zeta.md\\000'
 else
-    printf 'docs/unstaged.md\\000'
+    printf 'docs/A.md\\000docs/semi;colon & brackets[1].md\\000'
 fi
 """
 
@@ -62,7 +62,12 @@ def fake_tool_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
     return env, log_path
 
 
-def _run_make(target: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _run_make(
+    target: str,
+    env: dict[str, str],
+    *,
+    cwd: Path = REPOSITORY_ROOT,
+) -> subprocess.CompletedProcess[str]:
     """Run a Makefile tooling target with command doubles on ``PATH``."""
     make = which("make")
     assert make is not None, "make must be available for workflow contract tests"
@@ -71,11 +76,13 @@ def _run_make(target: str, env: dict[str, str]) -> subprocess.CompletedProcess[s
         [
             make,
             "--no-print-directory",
+            "-f",
+            str(REPOSITORY_ROOT / "Makefile"),
             f"PATH={env['PATH']}",
             f"UV={fake_uv}",
             target,
         ],
-        cwd=REPOSITORY_ROOT,
+        cwd=cwd,
         env=env,
         text=True,
         capture_output=True,
@@ -111,14 +118,13 @@ def test_nixie_discovers_all_markdown_sources_and_sets_tempdirs(
         f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|"
         "scripts/install-mermaid-browser.mjs"
     )
-    assert invocations[2].startswith(f"uv|{repository_tmp}|{uv_cache}|{uv_tools}|")
-    for markdown_path in (
-        "docs/committed.md",
-        "docs/staged.md",
-        "docs/unstaged.md",
-        "docs/untracked.md",
-    ):
-        assert markdown_path in invocations[2]
+    expected_nixie_invocation = (
+        f"uv|{repository_tmp}|{uv_cache}|{uv_tools}|"
+        "tool run --python 3.14 --from nixie-cli@1.1.0 nixie "
+        "--no-sandbox --max-concurrency 1 -- docs/A.md docs/a space.md "
+        "docs/semi;colon & brackets[1].md docs/zeta.md"
+    )
+    assert invocations == [invocations[0], invocations[1], expected_nixie_invocation]
 
 
 def test_nixie_stops_before_validation_when_discovery_fails(
@@ -134,7 +140,7 @@ def test_nixie_stops_before_validation_when_discovery_fails(
     assert not any(
         invocation.startswith("uv|") for invocation in _read_invocations(log_path)
     )
-    assert not list((REPOSITORY_ROOT / ".tmp").glob("nixie-paths.*"))
+    assert not list((REPOSITORY_ROOT / ".tmp").glob("nixie-*"))
 
 
 def test_nixie_uses_repository_fallback_when_worklist_is_empty(
@@ -165,6 +171,34 @@ def test_nixie_uses_repository_fallback_when_worklist_is_empty(
         "--no-sandbox --max-concurrency 1 -- ."
     )
     assert nixie_invocations == [expected_nixie_invocation]
+
+
+def test_nixie_preserves_hostile_worktree_directory_literals(
+    fake_tool_environment: tuple[dict[str, str], Path],
+    tmp_path: Path,
+) -> None:
+    """Shell metacharacters in the worktree path remain literal environment data."""
+    env, log_path = fake_tool_environment
+    hostile_worktree = tmp_path / "worktree [safe]; literal path"
+    hostile_worktree.mkdir()
+
+    completed = _run_make("nixie", env, cwd=hostile_worktree)
+
+    assert completed.returncode == 0, completed.stderr
+    repository_tmp = hostile_worktree / ".tmp"
+    uv_cache = hostile_worktree / ".uv-cache"
+    uv_tools = hostile_worktree / ".uv-tools"
+    expected_environment = f"{repository_tmp}|{uv_cache}|{uv_tools}|"
+    expected_nixie_arguments = (
+        "tool run --python 3.14 --from nixie-cli@1.1.0 nixie "
+        "--no-sandbox --max-concurrency 1 -- docs/A.md docs/a space.md "
+        "docs/semi;colon & brackets[1].md docs/zeta.md"
+    )
+    assert _read_invocations(log_path) == [
+        f"bun|{expected_environment}install --frozen-lockfile",
+        f"bun|{expected_environment}scripts/install-mermaid-browser.mjs",
+        f"uv|{expected_environment}{expected_nixie_arguments}",
+    ]
 
 
 def test_lint_asyncapi_uses_pnpm_cli_runner(

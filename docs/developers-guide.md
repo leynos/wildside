@@ -199,6 +199,10 @@ Makefile targets are the canonical local and Continuous Integration (CI) entry
 points. Package-local Bun commands are allowed for focused iteration, but a
 change is not ready to commit until the relevant Makefile gates pass.
 
+The repository's `rust-toolchain.toml` pins the dated nightly used by local and
+CI builds. Its minimal profile installs `rustfmt`, Clippy, and `rust-analyzer`,
+so editor analysis uses the same compiler toolchain as the repository gates.
+
 ### Architectural patterns
 
 Front-end implementation follows the roadmap phase order:
@@ -822,14 +826,28 @@ tools under test.
 UV-backed Makefile targets export repository-absolute `UV_CACHE_DIR` and
 `UV_TOOL_DIR` values that point to the ignored `.uv-cache` and `.uv-tools`
 directories. This keeps UV writes inside the worktree when a sandbox does not
-permit writes to the user cache.
+permit writes to the user cache. Recipes rely on Make's exported environment
+rather than expanding directory values as shell assignment text, preserving
+literal worktree paths that contain spaces or shell metacharacters.
 
 The `nixie` target also sets `TMPDIR` to the ignored `.tmp` directory for its
 frozen Bun install, browser setup and diagram validation. It collects committed,
 staged, unstaged and untracked Markdown paths as NUL-delimited records, checks
-each discovery command, deduplicates the records, and only then invokes Nixie.
-This preserves unusual filenames and prevents a discovery failure from
+each discovery command, then sorts and deduplicates the records before invoking
+Nixie. The committed-path discovery evaluates `origin/main...HEAD`; therefore,
+the checkout must contain full history and the `origin/main` remote-tracking
+reference. The CI `build` checkout uses `fetch-depth: 0` to provide both. The
+regression contract is
+`tests/workflow_contracts/ci_workflow_test.py::test_build_checkout_fetches_origin_main_history`.
+These rules preserve unusual filenames and prevent a discovery failure from
 producing a false-green validation result.
+
+The deterministic merge lives in `scripts/nixie_worklist.py`. Property tests
+exercise its bytewise sorted unique-union invariant, while command-level tests
+protect repository-local temporary directories and the empty-worklist `.`
+fallback. `make docstring-coverage` applies the repository's 80% Python
+docstring threshold to this helper and the workflow-contract suite;
+`make test-workflow-contracts` runs that gate in CI before executing pytest.
 
 The `lint-asyncapi` target invokes AsyncAPI CLI 3.4.2 through `pnpm dlx` and
 validates `spec/asyncapi.yaml` with `--fail-severity=info`. Keep this runner form

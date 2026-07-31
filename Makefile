@@ -46,21 +46,27 @@ TYPOS_VERSION ?= 1.48.0
 UV ?= uv
 export UV_CACHE_DIR := $(CURDIR)/.uv-cache
 export UV_TOOL_DIR := $(CURDIR)/.uv-tools
-UV_ENV = UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR)
-NIXIE = $(UV_ENV) $(UV) tool run --python 3.14 \
+NIXIE = $(UV) tool run --python 3.14 \
 	--from nixie-cli@$(NIXIE_VERSION) nixie
+NIXIE_WORKLIST_HELPER := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))scripts/nixie_worklist.py
 define NIXIE_CMD
 @paths_file=$$(mktemp "$(CURDIR)/.tmp/nixie-paths.XXXXXX") || exit 1; \
-	trap 'rm -f "$$paths_file"' EXIT HUP INT TERM; \
+	committed_file=$$(mktemp "$(CURDIR)/.tmp/nixie-committed.XXXXXX") || exit 1; \
+	staged_file=$$(mktemp "$(CURDIR)/.tmp/nixie-staged.XXXXXX") || exit 1; \
+	unstaged_file=$$(mktemp "$(CURDIR)/.tmp/nixie-unstaged.XXXXXX") || exit 1; \
+	untracked_file=$$(mktemp "$(CURDIR)/.tmp/nixie-untracked.XXXXXX") || exit 1; \
+	trap 'rm -f "$$paths_file" "$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file"' EXIT HUP INT TERM; \
 	git diff --name-only -z --diff-filter=ACMR \
-		origin/main...HEAD -- '*.md' > "$$paths_file" || exit 1; \
+		origin/main...HEAD -- '*.md' > "$$committed_file" || exit 1; \
 	git diff --cached --name-only -z --diff-filter=ACMR \
-		-- '*.md' >> "$$paths_file" || exit 1; \
+		-- '*.md' > "$$staged_file" || exit 1; \
 	git diff --name-only -z --diff-filter=ACMR \
-		-- '*.md' >> "$$paths_file" || exit 1; \
+		-- '*.md' > "$$unstaged_file" || exit 1; \
 	git ls-files --others --exclude-standard -z \
-		-- '*.md' >> "$$paths_file" || exit 1; \
-	sort -zu -o "$$paths_file" "$$paths_file" || exit 1; \
+		-- '*.md' > "$$untracked_file" || exit 1; \
+	python3 "$(NIXIE_WORKLIST_HELPER)" \
+		"$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file" \
+		> "$$paths_file" || exit 1; \
 	if [ -s "$$paths_file" ]; then \
 	  xargs -0 -r env TMPDIR="$(CURDIR)/.tmp" $(NIXIE) \
 	    --no-sandbox --max-concurrency 1 -- < "$$paths_file" || exit 1; \
@@ -71,7 +77,7 @@ define NIXIE_CMD
 endef
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
 TYPOS_CONFIG_BUILDER_SOURCE := git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_COMMIT)
-TYPOS_CONFIG_BUILDER := $(UV_ENV) $(UV) tool run --python 3.14 \
+TYPOS_CONFIG_BUILDER := $(UV) tool run --python 3.14 \
 	--from "$(TYPOS_CONFIG_BUILDER_SOURCE)" typos-config-builder
 SPELLING_PY_SRCS := \
 	scripts/typos_rollout_check.py scripts/tests/test_typos_rollout_check.py
@@ -80,7 +86,7 @@ SPELLING_COVERAGE_ARGS := --cov=typos_rollout_check --cov-fail-under=90
 PYTHON_NO_BYTECODE_ENV := PYTHONDONTWRITEBYTECODE=1
 SPELLING_COVERAGE_FILE ?= /tmp/$(APP)-spelling-helper.coverage
 SPELLING_HELPER_PYTEST = PYTHONPATH=scripts $(PYTHON_NO_BYTECODE_ENV) \
-	COVERAGE_FILE=$(SPELLING_COVERAGE_FILE) $(UV_ENV) $(UV) run --no-project \
+	COVERAGE_FILE=$(SPELLING_COVERAGE_FILE) $(UV) run --no-project \
 	--python 3.14 --with pathspec==$(PATHSPEC_VERSION) --with pytest==9.0.2 \
 	--with pytest-cov==7.0.0 python -m pytest
 OPENAPI_SPEC ?= spec/openapi.json
@@ -88,7 +94,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile
+.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile docstring-coverage
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: spelling spelling-phrase-check spelling-config spelling-config-write spelling-helper-test
@@ -251,8 +257,13 @@ test-frontend: deps typecheck
 	pnpm run test:workspaces
 
 # Validate the mutation-testing caller workflow contract
-test-workflow-contracts:
-	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' pytest tests/workflow_contracts -q
+test-workflow-contracts: docstring-coverage
+	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' \
+		--with 'hypothesis>=6' pytest tests/workflow_contracts -q
+
+docstring-coverage:
+	$(UV) run --no-project --with 'interrogate==1.7.0' interrogate \
+		scripts/nixie_worklist.py tests/workflow_contracts
 
 # Python unit tests for the local Kubernetes preview helper
 # (scripts/local_k8s). Run from the repository root so the make-target smoke
@@ -350,11 +361,11 @@ nixie:
 	$(NIXIE_CMD)
 
 spelling: spelling-phrase-check
-	@git ls-files -z | xargs -0 -r env $(UV_ENV) \
+	@git ls-files -z | xargs -0 -r env \
 		$(UV) tool run typos@$(TYPOS_VERSION) --config typos.toml --force-exclude --hidden
 
 spelling-phrase-check: spelling-config
-	@PYTHONPATH=scripts $(PYTHON_NO_BYTECODE_ENV) $(UV_ENV) $(UV) run --no-project --python 3.14 \
+	@PYTHONPATH=scripts $(PYTHON_NO_BYTECODE_ENV) $(UV) run --no-project --python 3.14 \
 		scripts/typos_rollout_check.py --repository .
 
 spelling-config: spelling-helper-test
@@ -365,8 +376,8 @@ spelling-config-write: spelling-helper-test
 	@$(TYPOS_CONFIG_BUILDER) --repository .
 
 spelling-helper-test:
-	@$(UV_ENV) $(UV) tool run ruff@$(RUFF_VERSION) format --isolated --target-version py313 --check $(SPELLING_PY_SRCS)
-	@$(UV_ENV) $(UV) tool run ruff@$(RUFF_VERSION) check --isolated --target-version py313 $(SPELLING_PY_SRCS)
+	@$(UV) tool run ruff@$(RUFF_VERSION) format --isolated --target-version py313 --check $(SPELLING_PY_SRCS)
+	@$(UV) tool run ruff@$(RUFF_VERSION) check --isolated --target-version py313 $(SPELLING_PY_SRCS)
 	@$(SPELLING_HELPER_PYTEST) $(SPELLING_PY_TESTS) -c /dev/null --rootdir=. -p no:cacheprovider $(SPELLING_COVERAGE_ARGS)
 
 yamllint:
