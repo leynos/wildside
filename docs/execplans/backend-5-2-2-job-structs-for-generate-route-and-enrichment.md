@@ -1262,3 +1262,8 @@ documentation changes.
   real Apalis/PostgreSQL persistence-and-decode scenario, documenting
   `decode_job` and test dependencies, and closing the completed Logisphere
   planning gate.
+- 2026-07-31: Rebased onto the `bump-nixie` tooling baseline. The plan's
+  `make nixie` commands remain canonical, but now rely on the pinned `nixie`
+  and `merman-cli` tools installed as documented in the developers' guide.
+  This changes validation prerequisites only; the implementation scope and
+  acceptance criteria are unchanged.
