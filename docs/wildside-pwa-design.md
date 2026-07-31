@@ -1,6 +1,6 @@
 # Wildside Progressive Web App (PWA) design (mockup-derived)
 
-Last updated: 14 December 2025
+Last updated: 31 July 2026
 
 ## Purpose
 
@@ -77,6 +77,9 @@ review checklist.
    - End-to-end checks (Playwright) for keyboard flows and accessibility tree
      stability.
    - Localization regression tests for at least one non-default locale.
+   - TypeDoc validation rejects undocumented public declarations in the PWA
+     and its shared type and token packages without generating documentation
+     artefacts.
 
 ## Architectural overview
 
@@ -413,6 +416,9 @@ In practice, this means:
   scoped exceptions when semantics are genuinely absent.
 - Ensure at least one locale-switching regression test exists for each major
   registry-driven surface (for example, Discover, Customize, Wizard).
+- Keep the PWA, shared types, and token tooling under the zero-tolerance
+  TypeDoc gate. Generated Orval clients, declaration output, tests, and fixtures
+  stay outside this authored-documentation boundary.
 
 For concrete patterns and harness guidance, use:
 
