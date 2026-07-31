@@ -15,7 +15,9 @@ async fn concurrent_enqueue_with_metrics_records_correct_count() {
         .expect("route queue metrics should register with isolated registry");
     let queue = Arc::new(TestQueue::new(FakeQueueProvider::new(), Arc::new(metrics)));
 
-    assert_all_enqueues_succeed(spawn_enqueues(queue, 4)).await;
+    all_enqueues_succeed(spawn_enqueues(queue, 4))
+        .await
+        .expect("all concurrent enqueues should succeed");
 
     assert_snapshot!(
         normalize_route_queue_metrics(&encode_route_queue_metrics(&registry)),
@@ -98,13 +100,16 @@ fn normalize_route_queue_metrics(text: &str) -> String {
 
 fn normalize_timing_sample(line: &str) -> String {
     if line.starts_with("route_queue_enqueue_latency_seconds_bucket") {
-        return format!(
-            "{} <bucket_count>",
-            line.rsplit_once(' ').expect("sample").0
-        );
+        let metric = line
+            .rsplit_once(' ')
+            .map_or(line, |(metric, _value)| metric);
+        return format!("{metric} <bucket_count>");
     }
     if line.starts_with("route_queue_enqueue_latency_seconds_sum") {
-        return format!("{} <latency_sum>", line.rsplit_once(' ').expect("sample").0);
+        let metric = line
+            .rsplit_once(' ')
+            .map_or(line, |(metric, _value)| metric);
+        return format!("{metric} <latency_sum>");
     }
     line.to_string()
 }

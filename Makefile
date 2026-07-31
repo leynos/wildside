@@ -46,6 +46,14 @@ UV ?= uv
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 NIXIE = $(UV_ENV) $(UV) tool run --python 3.14 \
 	--from nixie-cli@$(NIXIE_VERSION) nixie
+define NIXIE_CMD
+@output=$$(mktemp /tmp/wildside-nixie.XXXXXX) || exit 1; \
+	trap 'rm -f "$$output"' EXIT HUP INT TERM; \
+	status=0; \
+	$(NIXIE) --no-sandbox --max-concurrency 1 > "$$output" 2>&1 || status=$$?; \
+	if [ $$status -eq 0 ]; then tail -n 1 "$$output"; else cat "$$output"; fi; \
+	exit $$status
+endef
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
 TYPOS_CONFIG_BUILDER_SOURCE := git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_COMMIT)
 TYPOS_CONFIG_BUILDER := $(UV_ENV) $(UV) tool run --python 3.14 \
@@ -107,16 +115,16 @@ docker-down:
 	cd deploy && docker compose down
 
 local-k8s-up:
-	uv run scripts/local_k8s.py up
+	$(UV) run scripts/local_k8s.py up
 
 local-k8s-down:
-	uv run scripts/local_k8s.py down
+	$(UV) run scripts/local_k8s.py down
 
 local-k8s-status:
-	uv run scripts/local_k8s.py status
+	$(UV) run scripts/local_k8s.py status
 
 local-k8s-logs:
-	uv run scripts/local_k8s.py logs
+	$(UV) run scripts/local_k8s.py logs
 
 fmt: workspace-sync
 	cargo fmt --all
@@ -162,7 +170,7 @@ lint-architecture:
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
 	if [ -f spec/asyncapi.yaml ]; then \
-	  bun x --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) asyncapi validate spec/asyncapi.yaml --fail-severity=info; \
+	  pnpm dlx @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml --fail-severity=info; \
 	fi
 
 # Lint OpenAPI spec with Redocly CLI
@@ -326,9 +334,9 @@ markdownlint: spelling
 nixie:
 	bun install
 	bun scripts/install-mermaid-browser.mjs
-	# CI needs --no-sandbox; serial runs (--max-concurrency 1) avoid browser
-	# EAGAIN writes. Remove --no-sandbox once nixie supports env-var control.
-	$(NIXIE) --no-sandbox --max-concurrency 1
+	# CI needs --no-sandbox. A regular output file prevents Nixie's asynchronous
+	# progress writes from hitting EAGAIN on non-blocking CI output streams.
+	$(NIXIE_CMD)
 
 spelling: spelling-phrase-check
 	@git ls-files -z | xargs -0 -r env $(UV_ENV) \

@@ -8,6 +8,8 @@
 //! cargo test -- --ignored
 //! ```
 
+use std::error::Error;
+
 use bb8_redis::{RedisConnectionManager, bb8::Pool, redis::cmd};
 
 use crate::domain::ports::{RouteCache, RouteCacheError, RouteCacheKey};
@@ -16,16 +18,17 @@ use crate::outbound::cache::test_helpers::{TestPlan, assert_put_get_round_trips_
 use crate::test_support::redis::{RedisTestServer, unused_redis_url};
 
 /// Starts a test Redis server and returns a connection pool.
-async fn start_test_redis() -> (RedisTestServer, Pool<RedisConnectionManager>) {
-    let server = RedisTestServer::start().await.expect("start redis-server");
-    let pool = server.pool().await.expect("create redis pool");
-    (server, pool)
+async fn start_test_redis()
+-> Result<(RedisTestServer, Pool<RedisConnectionManager>), Box<dyn Error>> {
+    let server = RedisTestServer::start().await?;
+    let pool = server.pool().await?;
+    Ok((server, pool))
 }
 
 #[tokio::test]
 #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
 async fn live_get_returns_none_for_missing_key() {
-    let (_server, pool) = start_test_redis().await;
+    let (_server, pool) = start_test_redis().await.expect("start test Redis");
     let cache = RedisRouteCache::<TestPlan>::new(pool);
     let key = RouteCacheKey::new("route:missing").expect("valid key");
 
@@ -37,7 +40,7 @@ async fn live_get_returns_none_for_missing_key() {
 #[tokio::test]
 #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
 async fn live_put_followed_by_get_round_trips_the_typed_plan() {
-    let (_server, pool) = start_test_redis().await;
+    let (_server, pool) = start_test_redis().await.expect("start test Redis");
     let cache = RedisRouteCache::<TestPlan>::new(pool);
     let plan = TestPlan::new("req-1", 42);
 
@@ -49,7 +52,7 @@ async fn live_put_followed_by_get_round_trips_the_typed_plan() {
 #[tokio::test]
 #[ignore = "requires redis-server binary; run with `cargo test -- --ignored`"]
 async fn live_corrupted_cached_bytes_map_to_serialization_errors() {
-    let (_server, pool) = start_test_redis().await;
+    let (_server, pool) = start_test_redis().await.expect("start test Redis");
     let cache = RedisRouteCache::<TestPlan>::new(pool.clone());
     let key = RouteCacheKey::new("route:corrupt").expect("valid key");
     let mut connection = pool.get().await.expect("redis connection");

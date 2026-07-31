@@ -1,13 +1,23 @@
 //! Shared test support for interests command regression coverage.
 
-use std::sync::Mutex;
-
-use async_trait::async_trait;
-use uuid::Uuid;
+use std::sync::{Mutex, MutexGuard};
 
 use super::super::*;
 use crate::domain::UserId;
 use crate::domain::ports::UpdateUserInterestsRequest;
+use async_trait::async_trait;
+
+/// Locks state owned by one test-local repository stub.
+///
+/// A panic ends the owning test, so no later operation can observe a partially
+/// updated stub. Recovering a poisoned guard keeps any secondary failure from
+/// obscuring the assertion that caused the original panic.
+fn lock_test_state<T>(state: &Mutex<T>) -> MutexGuard<'_, T> {
+    match state.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(super) enum StubFailure {
@@ -54,19 +64,19 @@ impl StubUserPreferencesRepository {
     }
 
     pub(super) fn set_find_failure(&self, failure: StubFailure) {
-        *self.find_failure.lock().expect("find failure lock") = Some(failure);
+        *lock_test_state(&self.find_failure) = Some(failure);
     }
 
     pub(super) fn set_save_failure(&self, failure: StubFailure) {
-        *self.save_failures.lock().expect("save failure lock") = vec![failure];
+        *lock_test_state(&self.save_failures) = vec![failure];
     }
 
     pub(super) fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
-        self.last_save.lock().expect("last save lock").clone()
+        lock_test_state(&self.last_save).clone()
     }
 
     pub(super) fn save_call_count(&self) -> usize {
-        *self.save_call_count.lock().expect("save call count lock")
+        *lock_test_state(&self.save_call_count)
     }
 }
 
@@ -76,14 +86,11 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
         &self,
         user_id: &UserId,
     ) -> Result<Option<UserPreferences>, UserPreferencesRepositoryError> {
-        if let Some(failure) = *self.find_failure.lock().expect("find failure lock") {
+        if let Some(failure) = *lock_test_state(&self.find_failure) {
             return Err(failure.to_error());
         }
 
-        Ok(self
-            .stored_preferences
-            .lock()
-            .expect("stored preferences lock")
+        Ok(lock_test_state(&self.stored_preferences)
             .as_ref()
             .filter(|preferences| preferences.user_id == *user_id)
             .cloned())
@@ -94,10 +101,10 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
         preferences: &UserPreferences,
         expected_revision: Option<u32>,
     ) -> Result<(), UserPreferencesRepositoryError> {
-        *self.save_call_count.lock().expect("save call count lock") += 1;
+        *lock_test_state(&self.save_call_count) += 1;
 
         let failure = {
-            let mut failures = self.save_failures.lock().expect("save failure lock");
+            let mut failures = lock_test_state(&self.save_failures);
             if failures.is_empty() {
                 None
             } else {
@@ -109,10 +116,7 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
             return Err(failure.to_error());
         }
 
-        let stored_revision = self
-            .stored_preferences
-            .lock()
-            .expect("stored preferences lock")
+        let stored_revision = lock_test_state(&self.stored_preferences)
             .as_ref()
             .map(|stored_preferences| stored_preferences.revision);
 
@@ -128,27 +132,33 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
             }
         }
 
-        *self
-            .stored_preferences
-            .lock()
-            .expect("stored preferences lock") = Some(preferences.clone());
-        *self.last_save.lock().expect("last save lock") =
-            Some((preferences.clone(), expected_revision));
+        *lock_test_state(&self.stored_preferences) = Some(preferences.clone());
+        *lock_test_state(&self.last_save) = Some((preferences.clone(), expected_revision));
         Ok(())
     }
 }
 
-pub(super) fn user_id() -> UserId {
-    UserId::new("11111111-1111-1111-1111-111111111111").expect("valid user id")
+macro_rules! user_id {
+    () => {
+        $crate::domain::UserId::new("11111111-1111-1111-1111-111111111111").expect("valid user id")
+    };
 }
 
-pub(super) fn interest_theme_id(value: &str) -> InterestThemeId {
-    InterestThemeId::new(value).expect("valid interest theme id")
+macro_rules! interest_theme_id {
+    ($value:expr) => {
+        $crate::domain::InterestThemeId::new($value).expect("valid interest theme id")
+    };
 }
 
-pub(super) fn uuid_id(value: &str) -> Uuid {
-    Uuid::parse_str(value).expect("valid uuid")
+macro_rules! uuid_id {
+    ($value:expr) => {
+        ::uuid::Uuid::parse_str($value).expect("valid uuid")
+    };
 }
+
+pub(super) use interest_theme_id;
+pub(super) use user_id;
+pub(super) use uuid_id;
 
 pub(super) fn request(
     user_id: UserId,

@@ -44,13 +44,15 @@ fn plan(index: usize) -> TestPlan {
         name: format!("plan-{index}"),
     }
 }
-async fn assert_all_enqueues_succeed(handles: Vec<EnqueueHandle>) {
+async fn all_enqueues_succeed(handles: Vec<EnqueueHandle>) -> Result<(), String> {
     for result in join_all(handles).await {
-        assert!(
-            matches!(result, Ok(Ok(()))),
-            "concurrent enqueue task should succeed: {result:?}"
-        );
+        if !matches!(result, Ok(Ok(()))) {
+            return Err(format!(
+                "concurrent enqueue task should succeed: {result:?}"
+            ));
+        }
     }
+    Ok(())
 }
 async fn assert_plan_round_trips(plan: TestPlan) {
     let fake_provider = FakeQueueProvider::new();
@@ -95,9 +97,9 @@ async fn assert_failed_serialization_pushes_no_jobs(message: String) {
         "no jobs should be pushed when serialization fails"
     );
 }
-fn block_on_property<F>(future: F)
+fn block_on_property<F>(future: F) -> F::Output
 where
-    F: Future<Output = ()>,
+    F: Future,
 {
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -106,7 +108,7 @@ where
         Ok(runtime) => runtime,
         Err(error) => panic!("test runtime should start: {error}"),
     };
-    runtime.block_on(future);
+    runtime.block_on(future)
 }
 proptest! {
     #[test]
@@ -213,7 +215,9 @@ async fn concurrent_enqueue_pushes_all_jobs() {
         fake_provider.as_ref().clone(),
         Arc::new(metrics.clone()),
     ));
-    assert_all_enqueues_succeed(spawn_enqueues(queue, 8)).await;
+    all_enqueues_succeed(spawn_enqueues(queue, 8))
+        .await
+        .expect("all concurrent enqueues should succeed");
     let pushed_jobs = fake_provider.pushed_jobs().expect("pushed jobs");
     assert_eq!(pushed_jobs.len(), 8, "all concurrent jobs should be pushed");
     let observations = metrics.observations().expect("metrics observations");
