@@ -237,6 +237,10 @@ def test_local_k8s_make_targets_smoke_successful_flow(
     assert state_path.exists(), (
         "local-k8s-up must create the preview cluster through the CLI boundary"
     )
+    assert state_path.read_text(encoding="utf8") == "created", (
+        "local-k8s-up must record the created-cluster marker the fake tool's "
+        "has_cluster() check reads"
+    )
 
     _run_make_targets(env, ("local-k8s-status", "local-k8s-logs"))
 

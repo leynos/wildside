@@ -370,7 +370,7 @@ The minimum bar:
 
 1. Define the versioning envelope and V1 payload using the signatures in
    "Interfaces and dependencies" below. Derive
-   `Clone, Debug, PartialEq, Eq, Serialize, Deserialize`. Use
+   `Clone, Debug, PartialEq, Serialize, Deserialize`. Use
    `#[serde(deny_unknown_fields)]` on V1 to reject unknown keys and
    `#[serde(rename_all = "camelCase")]` to match the rest of the public
    contract.
