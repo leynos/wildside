@@ -1,10 +1,9 @@
-"""Contract tests for pull-request coverage enforcement in CI."""
-
+"""Contract tests for pull-request quality enforcement in CI."""
 from __future__ import annotations
 
+from pathlib import Path
 import re
 import typing as typ
-from pathlib import Path
 
 import pytest
 import yaml
@@ -134,7 +133,13 @@ def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
     assert len(matches) == 1, f"expected one {name!r} step, found {len(matches)}"
     return matches[0]
 
-
+def test_build_runs_the_typedoc_documentation_gate() -> None:
+    """Pull requests must reject undocumented JavaScript and TypeScript APIs."""
+    documentation = _find_step(
+        _load_steps("build"),
+        "TypeDoc documentation gate",
+    )
+    assert documentation.get("run") == "make docs-check"
 def test_codescene_check_immediately_follows_coverage_generation() -> None:
     """The changed-line gate consumes the LCOV report produced just before it."""
     steps = _load_steps()
