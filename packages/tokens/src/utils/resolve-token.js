@@ -182,6 +182,14 @@ function isValidTokenValue(value) {
  * @param {string} ref - Token reference or literal string.
  * @param {object} tokens - Token tree supplying `{path: {value}}` leaves.
  * @returns {string} The resolved literal token value.
+ * @example
+ * const tokens = {
+ *   palette: {
+ *     brand: { value: '{palette.blue}' },
+ *     blue: { value: '#0067c0' },
+ *   },
+ * };
+ * resolveToken('{palette.brand}', tokens); // '#0067c0'
  */
 export function resolveToken(ref, tokens) {
   if (typeof ref !== 'string') {

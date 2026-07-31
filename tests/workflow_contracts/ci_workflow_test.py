@@ -1,4 +1,4 @@
-"""Contract tests for pull-request coverage enforcement in CI."""
+"""Contract tests for pull-request quality enforcement in CI."""
 
 from __future__ import annotations
 
@@ -10,17 +10,17 @@ import yaml
 WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 
 
-def _load_steps() -> list[dict[str, object]]:
-    """Parse and return the CI coverage steps."""
+def _load_steps(job_name: str = "coverage") -> list[dict[str, object]]:
+    """Parse and return the steps for a named CI job."""
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     jobs = workflow.get("jobs")
     assert isinstance(jobs, dict), "the CI workflow must declare jobs"
-    coverage = jobs.get("coverage")
-    assert isinstance(coverage, dict), "the CI workflow must declare coverage"
-    steps = coverage.get("steps")
-    assert isinstance(steps, list), "the coverage job must declare steps"
+    job = jobs.get(job_name)
+    assert isinstance(job, dict), f"the CI workflow must declare {job_name}"
+    steps = job.get("steps")
+    assert isinstance(steps, list), f"the {job_name} job must declare steps"
     assert all(isinstance(step, dict) for step in steps), (
-        "every coverage step must be a mapping"
+        "every CI step must be a mapping"
     )
     return cast("list[dict[str, object]]", steps)
 
@@ -30,6 +30,15 @@ def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
     matches = [step for step in steps if step.get("name") == name]
     assert len(matches) == 1, f"expected one {name!r} step, found {len(matches)}"
     return matches[0]
+
+
+def test_build_runs_the_typedoc_documentation_gate() -> None:
+    """Pull requests must reject undocumented JavaScript and TypeScript APIs."""
+    documentation = _find_step(
+        _load_steps("build"),
+        "TypeDoc documentation gate",
+    )
+    assert documentation.get("run") == "make docs-check"
 
 
 def test_codescene_check_immediately_follows_coverage_generation() -> None:

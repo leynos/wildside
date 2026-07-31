@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "tsconfig": "tsconfig.json",
+  "entryPoints": ["undocumented.ts"],
+  "emit": "none",
+  "validation": {
+    "notDocumented": true,
+    "notExported": false,
+    "invalidLink": false,
+    "invalidPath": false,
+    "rewrittenLink": false,
+    "unusedMergeModuleWith": false
+  },
+  "requiredToBeDocumented": ["Function"],
+  "treatValidationWarningsAsErrors": true
+}
