@@ -1098,6 +1098,7 @@ The hexagonal boundary is enforced via visibility:
 | `ApalisRouteQueue<P>`                | `pub`                    | Public adapter for domain use              |
 | `ApalisPostgresProvider`             | `pub`                    | Production `QueueProvider` implementation  |
 | `GenericApalisRouteQueue<P, Q>`      | `pub`                    | Generic adapter and BDD harness seam       |
+| `decode_job<J>`                      | `pub`                    | Validated persisted-payload decoder        |
 | `QueueProvider`                      | `pub(crate)`             | Test seam for provider abstraction         |
 | `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only) | In-memory test double                      |
 | `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only) | Always-failing test double                 |
@@ -1116,6 +1117,10 @@ Public production API:
 - `ApalisPostgresProvider` – The production `QueueProvider` implementation.
   Wraps `apalis_postgres::PostgresStorage<serde_json::Value>` and provisions
   the Apalis schema via `PostgresStorage::<(), (), ()>::setup`.
+- `decode_job<J>` – The worker-side decode boundary for JSON loaded from
+  `apalis.jobs`. It returns a validated versioned envelope or
+  `JobDispatchError::Rejected`; malformed and unknown versions never reach a
+  handler.
 
 Implementation details within `outbound::queue`:
 
@@ -1154,6 +1159,13 @@ Both job families use a serde envelope with `#[serde(tag = "v")]`, currently
 Any additive schema change requires a new variant such as V2. A changed `insta`
 snapshot for a V1 job is a signal to stop and cut a new variant, not to edit V1
 in place.
+
+Workers must pass persisted `serde_json::Value` payloads through
+`outbound::queue::decode_job` before invoking a handler. The decoder applies
+the envelope's Serde validation, reports malformed or unsupported versions as
+`JobDispatchError::Rejected`, limits the version copied into diagnostics to 64
+UTF-8 bytes, and never logs the raw payload. Retry and dead-letter policy
+remain owned by roadmap item 5.2.3.
 
 The payloads carry `idempotency_key` because the current Apalis pins predate
 framework-native idempotency support. Trace IDs are intentionally absent from
@@ -1208,6 +1220,8 @@ The queue adapter requires:
 #### Test infrastructure
 
 - `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
+- `pretty_assertions` – Readable structural equality failures for job payloads
+- `googletest` – Matcher assertions used by job-struct unit tests
 - No feature flags required; BDD tests are in the `tests/` integration
   harness and run unconditionally with `cargo test`
 
@@ -1216,6 +1230,9 @@ To run BDD tests locally:
 ```bash
 # Run the Apalis BDD suite
 cargo test -p backend --test route_queue_apalis_bdd
+
+# Exercise typed payload persistence and decode
+cargo test -p backend --test job_structs_postgres_bdd
 ```
 
 ### Queue test infrastructure
