@@ -130,3 +130,24 @@ fn decode_malformed_payload_is_rejected_without_panic() {
         "malformed payload should be rejected, got {error:?}"
     );
 }
+
+#[test]
+fn decode_caps_untrusted_version_diagnostics() {
+    const EXPECTED_DIAGNOSTIC_LENGTH: usize = 64;
+    let mut payload = valid_generate_route_v1();
+    payload["v"] = json!("v".repeat(EXPECTED_DIAGNOSTIC_LENGTH * 100));
+
+    let error = decode_job::<GenerateRouteJob>(&payload)
+        .expect_err("an oversized unknown version must be rejected");
+
+    let JobDispatchError::Rejected { message } = error else {
+        panic!("expected JobDispatchError::Rejected, got {error:?}");
+    };
+    assert_eq!(
+        message,
+        format!(
+            "unrecognized or malformed job envelope version: {}",
+            "v".repeat(EXPECTED_DIAGNOSTIC_LENGTH)
+        )
+    );
+}

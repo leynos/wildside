@@ -19,6 +19,8 @@ use crate::domain::ports::JobDispatchError;
 
 /// Diagnostic placeholder used when a payload carries no readable `"v"` field.
 const UNKNOWN_VERSION: &str = "<unknown>";
+/// Maximum number of UTF-8 bytes copied into logs and rejection diagnostics.
+const MAX_VERSION_DIAGNOSTIC_BYTES: usize = 64;
 
 /// Decode a persisted job payload into its versioned envelope type `J`.
 ///
@@ -38,10 +40,9 @@ where
     J: DeserializeOwned,
 {
     let version = envelope_version(payload);
-    J::deserialize(payload).map_err(|error| {
+    J::deserialize(payload).map_err(|_error| {
         warn!(
             envelope_version = version,
-            error = %error,
             "rejecting queue job: unrecognized or malformed envelope version",
         );
         JobDispatchError::rejected(format!(
@@ -58,7 +59,20 @@ fn envelope_version(payload: &Value) -> &str {
     payload
         .get("v")
         .and_then(Value::as_str)
+        .map(truncate_version_diagnostic)
         .unwrap_or(UNKNOWN_VERSION)
+}
+
+fn truncate_version_diagnostic(version: &str) -> &str {
+    if version.len() <= MAX_VERSION_DIAGNOSTIC_BYTES {
+        return version;
+    }
+
+    let mut end = MAX_VERSION_DIAGNOSTIC_BYTES;
+    while !version.is_char_boundary(end) {
+        end -= 1;
+    }
+    &version[..end]
 }
 
 #[cfg(test)]

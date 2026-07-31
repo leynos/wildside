@@ -198,6 +198,69 @@ fn serde_rejects_invalid_tags(
 }
 
 #[rstest]
+fn serde_rejects_the_first_excess_tag_before_parsing_later_input(
+    job_id: Uuid,
+    enqueued_at: DateTime<Utc>,
+) {
+    let accepted_tags = (0..ENRICHMENT_JOB_V1_MAX_TAGS)
+        .map(|index| format!(r#""tag-{index}""#))
+        .collect::<Vec<_>>()
+        .join(",");
+    let payload = format!(
+        r#"{{
+            "v":"v1",
+            "jobId":"{job_id}",
+            "idempotencyKey":"{}",
+            "boundingBox":[-0.2,51.4,0.1,51.6],
+            "tags":[{accepted_tags},"excess",invalid-later-input],
+            "enqueuedAt":"{}"
+        }}"#,
+        fixture_idempotency_key(),
+        enqueued_at.to_rfc3339(),
+    );
+
+    let error = serde_json::from_str::<EnrichmentJob>(&payload)
+        .expect_err("the first excess tag should stop deserialization");
+
+    assert!(
+        error
+            .to_string()
+            .contains("enrichment job has too many tags: 65 > 64"),
+        "expected the bounded visitor error before later malformed input, got {error}",
+    );
+}
+
+#[rstest]
+fn serde_rejects_an_overlong_tag_before_parsing_later_input(
+    job_id: Uuid,
+    enqueued_at: DateTime<Utc>,
+) {
+    let overlong_tag = "x".repeat(ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1);
+    let payload = format!(
+        r#"{{
+            "v":"v1",
+            "jobId":"{job_id}",
+            "idempotencyKey":"{}",
+            "boundingBox":[-0.2,51.4,0.1,51.6],
+            "tags":["{overlong_tag}",invalid-later-input],
+            "enqueuedAt":"{}"
+        }}"#,
+        fixture_idempotency_key(),
+        enqueued_at.to_rfc3339(),
+    );
+
+    let error = serde_json::from_str::<EnrichmentJob>(&payload)
+        .expect_err("an overlong tag should stop deserialization");
+
+    assert!(
+        error
+            .to_string()
+            .contains("enrichment job tag is too long: 65 > 64"),
+        "expected the bounded string visitor error before later malformed input, got {error}",
+    );
+}
+
+#[rstest]
 fn converts_to_overpass_request(job_id: Uuid, enqueued_at: DateTime<Utc>) {
     let job = fixture_job(job_id, enqueued_at);
 
