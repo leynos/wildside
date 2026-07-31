@@ -24,7 +24,9 @@ Object.freeze(usersQueryKey);
  *
  */
 export const usersQueryKeys = {
+  /** Key for the whole user collection; alias of {@link usersQueryKey}. */
   all: usersQueryKey,
+  /** Key for a single user, scoped under the collection key. */
   byId: (id: User['id']): readonly [...typeof usersQueryKey, User['id']] => {
     const key = [...usersQueryKey, id] as const;
 

@@ -13,14 +13,13 @@
 //! exported via `cargo run --bin openapi-dump` for external tooling.
 
 use crate::inbound::http::admin_enrichment::{
-    EnrichmentProvenanceRecordBody, ListEnrichmentProvenanceQuery,
-    ListEnrichmentProvenanceResponseBody, ProvenanceBoundsBody,
+    EnrichmentProvenanceRecordBody, ListEnrichmentProvenanceResponseBody, ProvenanceBoundsBody,
 };
 use crate::inbound::http::catalogue::{DescriptorsResponse, ExploreCatalogueResponse};
 use crate::inbound::http::offline::{
-    BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesQuery,
-    ListOfflineBundlesResponseBody, OfflineBundleResponse, UpsertOfflineBundleRequestBody,
-    UpsertOfflineBundleResponseBody, ZoomRangeBody,
+    BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesResponseBody,
+    OfflineBundleResponse, UpsertOfflineBundleRequestBody, UpsertOfflineBundleResponseBody,
+    ZoomRangeBody,
 };
 use crate::inbound::http::schemas::{
     ErrorCodeSchema, ErrorSchema, InterestThemeIdSchema, UserInterestsSchema, UserSchema,
@@ -99,11 +98,9 @@ impl Modify for SecurityAddon {
         ErrorCodeSchema,
         ExploreCatalogueResponse,
         DescriptorsResponse,
-        ListEnrichmentProvenanceQuery,
         ProvenanceBoundsBody,
         EnrichmentProvenanceRecordBody,
         ListEnrichmentProvenanceResponseBody,
-        ListOfflineBundlesQuery,
         BoundsBody,
         ZoomRangeBody,
         OfflineBundleResponse,

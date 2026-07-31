@@ -7,6 +7,8 @@
     "fast-check": "^4.8.0",
     "markdownlint-cli": "^0.48.0",
     "puppeteer": "^23.11.1",
+    "typedoc": "^0.28.20",
+    "typescript": "5.9.2",
     "validator": "^13.15.23",
     "vite": "^7.3.5",
     "vitest": "^4.1.8"
@@ -29,7 +31,8 @@
     "test": "vitest run --config vitest.config.mjs",
     "test:workspaces": "node ./scripts/run-workspace-script.mjs test",
     "audit": "node ./scripts/run-workspace-script.mjs audit",
-    "audit:validate": "node security/validate-audit.js"
+    "audit:validate": "node security/validate-audit.js",
+    "docs:check": "typedoc --options frontend-pwa/typedoc.json && typedoc --options packages/types/typedoc.json && typedoc --options packages/tokens/typedoc.json"
   },
   "engines": {
     "node": ">=22.18.0"

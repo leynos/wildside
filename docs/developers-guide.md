@@ -22,6 +22,7 @@ All suites run through the same quality gateways:
 
 - `make check-fmt`
 - `make lint`
+- `make docs-check`
 - `make audit`
 - `make test`
 
@@ -154,6 +155,7 @@ TypeScript, tokens, and documentation gates aligned:
 make deps
 make fmt
 make lint
+make docs-check
 make audit
 make test
 ```
@@ -199,6 +201,31 @@ Makefile targets are the canonical local and Continuous Integration (CI) entry
 points. Package-local Bun commands are allowed for focused iteration, but a
 change is not ready to commit until the relevant Makefile gates pass.
 
+### TypeDoc documentation gate
+
+`make docs-check` is the zero-tolerance documentation gate for the repository's
+JavaScript and TypeScript surfaces. It runs the root `docs:check` package script
+and checks these workspaces in order:
+
+- `frontend-pwa/src`, excluding generated Orval clients, declaration files,
+  tests, and fixtures;
+- `packages/types/src`, excluding declaration files and generated `dist`
+  output; and
+- the JavaScript under `packages/tokens/build`, `build-utils`, and `src/utils`,
+  using `tsconfig.typedoc.json` with `allowJs` enabled and JavaScript type
+  checking disabled.
+
+Each workspace keeps its TypeDoc configuration beside its TypeScript
+configuration. The gate requires every selected public declaration to be
+documented, reports qualified declaration names, treats validation warnings as
+errors, and uses `emit: "none"` so it never writes documentation artefacts.
+Generated files must remain excluded rather than receiving handwritten
+comments that would be overwritten.
+
+Run `make docs-check` while iterating. The gate also runs through `make all` and
+as an explicit pull-request CI step, so undocumented declarations cannot bypass
+the contributor workflow.
+
 ### Architectural patterns
 
 Front-end implementation follows the roadmap phase order:
@@ -242,6 +269,7 @@ front-end gates plus the repository-wide commit gates:
 ```bash
 make check-fmt
 make lint
+make docs-check
 make audit
 make test
 ```

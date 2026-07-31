@@ -4,6 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { listUsers, usersQueryKey } from '../api/client';
 
+/** Root application component: fetches the user list and renders the demo shell. */
 export function App() {
   const { data, isLoading, isError } = useQuery({
     queryKey: usersQueryKey,

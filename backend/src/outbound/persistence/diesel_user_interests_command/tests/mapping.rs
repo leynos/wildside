@@ -12,10 +12,10 @@ use crate::domain::ErrorCode;
 async fn set_interests_inserts_defaults_when_preferences_are_missing() {
     let repository = Arc::new(StubUserPreferencesRepository::default());
     let command = DieselUserInterestsCommand::new(repository.clone());
-    let user_id = user_id();
+    let user_id = user_id!();
     let interest_theme_ids = vec![
-        interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6"),
-        interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
+        interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa6"),
+        interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
     ];
 
     let interests = command
@@ -38,8 +38,8 @@ async fn set_interests_inserts_defaults_when_preferences_are_missing() {
     assert_eq!(
         saved_preferences.interest_theme_ids,
         vec![
-            uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6"),
-            uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
+            uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa6"),
+            uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
         ]
     );
     assert!(saved_preferences.safety_toggle_ids.is_empty());
@@ -49,10 +49,10 @@ async fn set_interests_inserts_defaults_when_preferences_are_missing() {
 
 #[tokio::test]
 async fn set_interests_updates_existing_preferences_with_revision_bump() {
-    let user_id = user_id();
+    let user_id = user_id!();
     let existing_preferences = UserPreferences::builder(user_id.clone())
-        .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
-        .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+        .interest_theme_ids(vec![uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
+        .safety_toggle_ids(vec![uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
         .unit_system(UnitSystem::Imperial)
         .revision(7)
         .build();
@@ -61,8 +61,8 @@ async fn set_interests_updates_existing_preferences_with_revision_bump() {
     ));
     let command = DieselUserInterestsCommand::new(repository.clone());
     let next_interest_ids = vec![
-        interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
-        interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa9"),
+        interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
+        interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa9"),
     ];
 
     let interests = command
@@ -81,13 +81,13 @@ async fn set_interests_updates_existing_preferences_with_revision_bump() {
     assert_eq!(
         saved_preferences.interest_theme_ids,
         vec![
-            uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
-            uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa9"),
+            uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa7"),
+            uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa9"),
         ]
     );
     assert_eq!(
         saved_preferences.safety_toggle_ids,
-        vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")]
+        vec![uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa8")]
     );
     assert_eq!(saved_preferences.unit_system, UnitSystem::Imperial);
     assert_eq!(saved_preferences.revision, 8);
@@ -107,8 +107,8 @@ async fn set_interests_maps_find_failures(
 
     let err = command
         .set_interests(request(
-            user_id(),
-            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
+            user_id!(),
+            vec![interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
             None,
         ))
         .await
@@ -140,8 +140,8 @@ async fn set_interests_maps_save_failures(
 
     let err = command
         .set_interests(request(
-            user_id(),
-            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
+            user_id!(),
+            vec![interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
             None,
         ))
         .await
@@ -152,11 +152,11 @@ async fn set_interests_maps_save_failures(
 
 #[tokio::test]
 async fn set_interests_rejects_missing_expected_revision_when_preferences_exist() {
-    let user_id = user_id();
+    let user_id = user_id!();
     let repository = Arc::new(StubUserPreferencesRepository::with_preferences(
         UserPreferences::builder(user_id.clone())
-            .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
-            .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+            .interest_theme_ids(vec![uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
+            .safety_toggle_ids(vec![uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
             .unit_system(UnitSystem::Metric)
             .revision(3)
             .build(),
@@ -166,7 +166,7 @@ async fn set_interests_rejects_missing_expected_revision_when_preferences_exist(
     let err = command
         .set_interests(request(
             user_id,
-            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+            vec![interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
             None,
         ))
         .await
@@ -191,11 +191,11 @@ async fn set_interests_rejects_missing_expected_revision_when_preferences_exist(
 
 #[tokio::test]
 async fn set_interests_rejects_stale_expected_revision_before_save() {
-    let user_id = user_id();
+    let user_id = user_id!();
     let repository = Arc::new(StubUserPreferencesRepository::with_preferences(
         UserPreferences::builder(user_id.clone())
-            .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
-            .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+            .interest_theme_ids(vec![uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
+            .safety_toggle_ids(vec![uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
             .unit_system(UnitSystem::Metric)
             .revision(4)
             .build(),
@@ -205,7 +205,7 @@ async fn set_interests_rejects_stale_expected_revision_before_save() {
     let err = command
         .set_interests(request(
             user_id,
-            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+            vec![interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
             Some(2),
         ))
         .await
@@ -235,8 +235,8 @@ async fn set_interests_rejects_missing_preferences_for_expected_revision() {
 
     let err = command
         .set_interests(request(
-            user_id(),
-            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
+            user_id!(),
+            vec![interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa6")],
             Some(9),
         ))
         .await
@@ -254,11 +254,11 @@ async fn set_interests_rejects_missing_preferences_for_expected_revision() {
 
 #[tokio::test]
 async fn set_interests_returns_internal_error_when_revision_bump_overflows() {
-    let user_id = user_id();
+    let user_id = user_id!();
     let repository = Arc::new(StubUserPreferencesRepository::with_preferences(
         UserPreferences::builder(user_id.clone())
-            .interest_theme_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
-            .safety_toggle_ids(vec![uuid_id("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
+            .interest_theme_ids(vec![uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa6")])
+            .safety_toggle_ids(vec![uuid_id!("3fa85f64-5717-4562-b3fc-2c963f66afa8")])
             .unit_system(UnitSystem::Metric)
             .revision(u32::MAX)
             .build(),
@@ -268,7 +268,7 @@ async fn set_interests_returns_internal_error_when_revision_bump_overflows() {
     let err = command
         .set_interests(request(
             user_id,
-            vec![interest_theme_id("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
+            vec![interest_theme_id!("3fa85f64-5717-4562-b3fc-2c963f66afa7")],
             Some(u32::MAX),
         ))
         .await

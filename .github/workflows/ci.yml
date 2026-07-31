@@ -161,6 +161,9 @@ jobs:
       - name: Workflow contract tests
         run: make test-workflow-contracts
 
+      - name: TypeDoc documentation gate
+        run: make docs-check
+
       - name: Type check
         run: make typecheck
 

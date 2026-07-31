@@ -12,7 +12,10 @@ import { resolveToken } from '../src/utils/tokens.js';
 
 // Load package settings for defaults.
 /**
- * @typedef {{name: string, version: string, contrastThreshold?: number}} PackageJson
+ * @typedef {object} PackageJson Package manifest fields the contrast validator reads.
+ * @property {string} name Package name, echoed in validation reports.
+ * @property {string} version Package version, echoed in validation reports.
+ * @property {number} [contrastThreshold] Optional override for the minimum contrast ratio.
  */
 /** @type {PackageJson} */
 const pkgJson = readJson(new URL('../package.json', import.meta.url));

@@ -255,27 +255,6 @@
         ],
         "type": "object"
       },
-      "ListEnrichmentProvenanceQuery": {
-        "description": "Query parameters for enrichment provenance reporting.",
-        "properties": {
-          "before": {
-            "description": "Optional exclusive cursor.\n\nAccepts either bare `RFC3339` or `RFC3339|UUID` for `(importedAt,id)`.\nBare timestamps are interpreted as `(timestamp, Uuid::max())`.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "limit": {
-            "description": "Maximum number of rows to return. Defaults to 50, maximum 200.",
-            "minimum": 0,
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
       "ListEnrichmentProvenanceResponseBody": {
         "description": "Response payload for enrichment provenance reporting.",
         "properties": {
@@ -296,18 +275,6 @@
         "required": [
           "records"
         ],
-        "type": "object"
-      },
-      "ListOfflineBundlesQuery": {
-        "description": "Query parameters for listing offline bundles.",
-        "properties": {
-          "deviceId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
         "type": "object"
       },
       "ListOfflineBundlesResponseBody": {

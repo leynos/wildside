@@ -24,7 +24,7 @@ use crate::inbound::http::validation::{
 };
 
 /// Query parameters for listing offline bundles.
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListOfflineBundlesQuery {
     pub device_id: Option<String>,

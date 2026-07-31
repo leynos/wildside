@@ -5,11 +5,9 @@ use rstest::rstest;
 
 use super::super::calculate_age_bucket;
 
-/// Fixed reference time for deterministic tests.
-fn fixed_now() -> chrono::DateTime<Utc> {
-    Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0)
-        .single()
-        .expect("failed to construct fixed timestamp for tests")
+/// Returns the fixed reference time used by deterministic tests.
+fn fixed_now() -> Option<chrono::DateTime<Utc>> {
+    Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).single()
 }
 
 /// Parameterized test for age bucket boundary values.
@@ -40,7 +38,7 @@ fn fixed_now() -> chrono::DateTime<Utc> {
 #[case::forty_eight_hours(48 * 60 * 60, ">24h")]
 #[case::future_timestamp_clamps(-5 * 60, "0-1m")]
 fn age_bucket_boundaries(#[case] offset_seconds: i64, #[case] expected: &str) {
-    let now = fixed_now();
+    let now = fixed_now().expect("failed to construct fixed timestamp for tests");
     let created = now - Duration::seconds(offset_seconds);
     assert_eq!(calculate_age_bucket(created, now), expected);
 }
