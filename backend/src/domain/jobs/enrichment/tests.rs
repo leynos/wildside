@@ -304,7 +304,7 @@ fn enrichment_job_json(
         "v": "v1",
         "jobId": job_id,
         "idempotencyKey": fixture_idempotency_key(),
-        "boundingBox": fixture_bounding_box(),
+        "boundingBox": fixture_bounding_box().as_array(),
         "tags": tags,
         "enqueuedAt": enqueued_at,
     })

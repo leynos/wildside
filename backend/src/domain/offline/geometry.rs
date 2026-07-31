@@ -1,75 +1,8 @@
-//! Offline bundle geometric value objects.
+//! Offline bundle zoom-range value object.
 
 use serde::{Deserialize, Serialize};
 
 use super::OfflineValidationError;
-
-/// Geographic bounds for an offline bundle.
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// let bounds = backend::domain::BoundingBox::new(-3.25, 55.92, -3.10, 56.01)?;
-/// assert_eq!(bounds.as_array(), [-3.25, 55.92, -3.10, 56.01]);
-/// Ok::<(), backend::domain::OfflineValidationError>(())
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BoundingBox {
-    min_lng: f64,
-    min_lat: f64,
-    max_lng: f64,
-    max_lat: f64,
-}
-
-impl BoundingBox {
-    /// Creates a validated bounding box.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// let ok = backend::domain::BoundingBox::new(-3.25, 55.92, -3.10, 56.01)?;
-    /// assert_eq!(ok.as_array()[0], -3.25);
-    /// let err = backend::domain::BoundingBox::new(-181.0, 55.92, -3.10, 56.01);
-    /// assert!(err.is_err());
-    /// Ok::<(), backend::domain::OfflineValidationError>(())
-    /// ```
-    pub fn new(
-        min_lng: f64,
-        min_lat: f64,
-        max_lng: f64,
-        max_lat: f64,
-    ) -> Result<Self, OfflineValidationError> {
-        validate_longitude(min_lng, "min_lng")?;
-        validate_latitude(min_lat, "min_lat")?;
-        validate_longitude(max_lng, "max_lng")?;
-        validate_latitude(max_lat, "max_lat")?;
-
-        if min_lng > max_lng || min_lat > max_lat {
-            return Err(OfflineValidationError::InvalidBoundsOrder);
-        }
-
-        Ok(Self {
-            min_lng,
-            min_lat,
-            max_lng,
-            max_lat,
-        })
-    }
-
-    /// Returns bounds as `[min_lng, min_lat, max_lng, max_lat]`.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// let bounds = backend::domain::BoundingBox::new(-3.25, 55.92, -3.10, 56.01)?;
-    /// assert_eq!(bounds.as_array(), [-3.25, 55.92, -3.10, 56.01]);
-    /// Ok::<(), backend::domain::OfflineValidationError>(())
-    /// ```
-    pub fn as_array(self) -> [f64; 4] {
-        [self.min_lng, self.min_lat, self.max_lng, self.max_lat]
-    }
-}
 
 /// Inclusive zoom range for bundle tiles.
 ///
@@ -133,18 +66,4 @@ impl ZoomRange {
     pub fn max_zoom(&self) -> u8 {
         self.max_zoom
     }
-}
-
-fn validate_longitude(value: f64, field: &'static str) -> Result<(), OfflineValidationError> {
-    if !value.is_finite() || !(-180.0..=180.0).contains(&value) {
-        return Err(OfflineValidationError::InvalidBounds { field, value });
-    }
-    Ok(())
-}
-
-fn validate_latitude(value: f64, field: &'static str) -> Result<(), OfflineValidationError> {
-    if !value.is_finite() || !(-90.0..=90.0).contains(&value) {
-        return Err(OfflineValidationError::InvalidBounds { field, value });
-    }
-    Ok(())
 }

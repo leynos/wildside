@@ -416,9 +416,9 @@ Commit when green.
 
 Implement `EnrichmentJob` in `backend/src/domain/jobs/enrichment.rs`:
 
-1. Introduce a `BoundingBox` newtype next to the job struct
-   (or in `backend/src/domain/jobs/bounding_box.rs` if it grows beyond ~100
-   lines). The newtype wraps `[f64; 4]` in
+1. Reuse the shared `BoundingBox` newtype in
+   `backend/src/domain/bounding_box.rs`. The newtype represents
+   `[f64; 4]` in
    `[min_lng, min_lat, max_lng, max_lat]` order and validates at construction
    time:
    - `-180.0 <= min_lng < max_lng <= 180.0`,
@@ -683,7 +683,7 @@ payload transitively contains `serde_json::Value`, which only implements
 `PartialEq`. Implement `Display` and `std::error::Error` for the error using
 the existing macro patterns; the snippet above shows the variants only.
 
-In `backend/src/domain/jobs/bounding_box.rs`:
+In `backend/src/domain/bounding_box.rs`:
 
 ```rust
 use serde::{Deserialize, Serialize};
