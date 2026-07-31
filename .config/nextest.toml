@@ -44,6 +44,7 @@ filter = """
   | binary(ports_behaviour)
   | binary(pg_embed_isolation)
   | binary(route_queue_apalis_bdd)
+  | binary(job_structs_postgres_bdd)
   | binary(schema_baseline_bdd)
   | binary(startup_mode_composition_bdd)
   | binary(user_interests_revision_conflicts_bdd)

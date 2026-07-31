@@ -165,22 +165,20 @@ contained within this plan.
   key, the existing field becomes the source of truth that maps into
   `TaskBuilder::id(...)`.
 
-- Risk: the `EnrichmentJob` bounding box is a primitive `[f64; 4]` and
-  accepts geometrically invalid inputs (out-of-range coordinates, inverted
-  ordering, antimeridian wrap). Severity: medium. Likelihood: medium.
-  Mitigation: introduce a `BoundingBox` newtype in the same module, with
-  validating constructors, `serde` round-trip, and a `proptest` strategy.
-  Reject inversions and out-of-range coordinates at construction time. The V1
-  contract explicitly does not support antimeridian-wrapped boxes (see Decision
-  Log); wrapping callers must split the box client-side, and the rejection
-  error names the policy so the failure is self-describing.
+- Risk: parallel job and offline bounding-box types drift into different WGS84
+  policies. Severity: medium. Likelihood: medium. Mitigation: use the one
+  domain-owned `BoundingBox` value object for both features, validate every
+  decode, and preserve their different published JSON shapes through explicit
+  Serde adapters. The V1 contract explicitly does not support
+  antimeridian-wrapped boxes (see Decision Log); wrapping callers must split
+  the box client-side.
 
-- Risk: `EnrichmentJobV1::tags` is an unbounded `Vec<String>`. A misuse
-  could push tens of thousands of strings into the queue table and bloat
-  `apalis.jobs` rows. Severity: medium. Likelihood: low. Mitigation: bound the
-  vector at construction time (`max_tags = 64`, `max_tag_length = 64`) with a
-  dedicated error variant, and add a `proptest` case that rejects oversized
-  inputs.
+- Risk: decoding `EnrichmentJobV1::tags` into an unrestricted `Vec<String>`
+  allocates the whole persisted sequence before validation. A malformed row
+  could therefore consume arbitrary memory even when it is rejected later.
+  Severity: high. Likelihood: low. Mitigation: use a streaming Serde visitor
+  that rejects item 65 and overlong strings while decoding, before allocating
+  the rest of the sequence, and cover early rejection with adversarial tests.
 
 - Risk: future agents add a new optional field to V1 without cutting V2,
   silently breaking older workers running with `deny_unknown_fields`. Severity:
@@ -417,8 +415,7 @@ Commit when green.
 Implement `EnrichmentJob` in `backend/src/domain/jobs/enrichment.rs`:
 
 1. Reuse the shared `BoundingBox` newtype in
-   `backend/src/domain/bounding_box.rs`. The newtype represents
-   `[f64; 4]` in
+   `backend/src/domain/bounding_box.rs`. The newtype represents `[f64; 4]` in
    `[min_lng, min_lat, max_lng, max_lat]` order and validates at construction
    time:
    - `-180.0 <= min_lng < max_lng <= 180.0`,
@@ -693,10 +690,13 @@ use serde::{Deserialize, Serialize};
 /// Antimeridian-wrapped boxes are not supported in V1 (`min_lng` must be
 /// strictly less than `max_lng`). Callers spanning the dateline must
 /// split the box into two pieces client-side.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(try_from = "[f64; 4]", into = "[f64; 4]")]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BoundingBox {
-    coords: [f64; 4],
+    min_lng: f64,
+    min_lat: f64,
+    max_lng: f64,
+    max_lat: f64,
 }
 
 impl BoundingBox {
@@ -707,8 +707,12 @@ impl BoundingBox {
         max_lat: f64,
     ) -> Result<Self, BoundingBoxError> { /* validate then store */ }
 
-    pub fn coords(&self) -> [f64; 4] { self.coords }
+    pub fn as_array(self) -> [f64; 4] { /* canonical array order */ }
 }
+
+// The ordinary `Deserialize` implementation validates the offline object
+// representation. `bounding_box::array_wire` validates the durable-job array
+// representation without creating a second geographic type.
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BoundingBoxError {
@@ -751,7 +755,7 @@ pub struct EnrichmentJobParams {
     pub enqueued_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "v")]
 pub enum EnrichmentJob {
     #[serde(rename = "v1")]
@@ -759,8 +763,8 @@ pub enum EnrichmentJob {
 }
 
 /// Version 1 payload for `EnrichmentJob`. Fields are private so the only
-/// construction paths are `EnrichmentJob::v1` and the validating
-/// `Deserialize` impl below; both funnel tags through `canonicalize_tags`.
+/// construction paths are `EnrichmentJob::v1` and the validating envelope
+/// `Deserialize` impl below.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnrichmentJobV1 {
@@ -770,7 +774,7 @@ pub struct EnrichmentJobV1 {
     /// Sorted, deduplicated tag list. Bounded by
     /// `ENRICHMENT_JOB_V1_MAX_TAGS` and per-tag
     /// `ENRICHMENT_JOB_V1_MAX_TAG_LENGTH` at construction time.
-    tags: Vec<String>,
+    tags: EnrichmentTags,
     enqueued_at: DateTime<Utc>,
 }
 
@@ -788,11 +792,11 @@ impl EnrichmentJob {
     pub fn to_overpass_request(&self) -> OverpassEnrichmentRequest { /* ... */ }
 }
 
-// `EnrichmentJobV1` implements `Deserialize` by hand: it decodes a private
-// `EnrichmentJobV1Raw` mirror (with `deny_unknown_fields`) and then runs the
-// same `canonicalize_tags` validation as `EnrichmentJob::v1`, so a wire
-// payload cannot smuggle in empty, oversized, or unbounded tag vectors.
-impl<'de> Deserialize<'de> for EnrichmentJobV1 { /* validate then construct */ }
+// `EnrichmentJob` implements `Deserialize` through a private raw envelope.
+// `EnrichmentTags` uses a streaming sequence visitor that rejects item 65 and
+// overlong strings before reading the remaining input, then canonicalizes the
+// bounded collection.
+impl<'de> Deserialize<'de> for EnrichmentJob { /* validate then construct */ }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EnrichmentJobBuildError {
@@ -925,7 +929,8 @@ The plan ships in two PRs:
 - [x] (2026-06-06 01:50Z) Drafted this ExecPlan.
 - [x] (2026-06-14 23:37Z) Approval received from the user; implementation
   started under this ExecPlan.
-- [ ] Logisphere expert review run before delivery (planning gate).
+- [x] (2026-06-06 01:55Z) Logisphere expert review completed; all findings
+  were recorded below and folded into the implementation plan.
 - [x] (2026-06-14 23:37Z) Milestone 0 baseline audit confirmed the branch
   name, empty working tree, and absence of existing `GenerateRouteJob` /
   `EnrichmentJob` symbols.
@@ -969,6 +974,19 @@ The plan ships in two PRs:
   deserialization boundary; and replaced the stale positional-constructor /
   `too_many_arguments` decision records (no such clippy expectation exists in
   the shipped code).
+- [x] (2026-07-31) Replaced post-allocation enrichment tag validation with a
+  bounded streaming Serde visitor, capped version diagnostics, and added
+  adversarial early-rejection tests.
+- [x] (2026-07-31) Consolidated job and offline bounding boxes into one
+  domain-owned validated value object while preserving both published wire
+  shapes through explicit adapters.
+- [x] (2026-07-31) Added an embedded PostgreSQL behavioural scenario that
+  enqueues both job types, reads `apalis.jobs`, and exercises `decode_job` at
+  the persisted queue boundary.
+- [x] (2026-07-31) Review closure gates passed: `make check-fmt`,
+  `make markdownlint`, `make nixie`, `make test`, `make typecheck`, and
+  `make lint`. The Rust suite ran 1410 tests with 1410 passed and 4 skipped;
+  frontend, workflow-contract, and local Kubernetes suites also passed.
 
 ## Surprises & discoveries
 
@@ -1033,6 +1051,15 @@ The plan ships in two PRs:
   `GenericApalisRouteQueue<EnrichmentJob, FakeQueueProvider>` exercises the
   typed plan serialization and queue-provider seam without changing the
   `PostgresStorage<serde_json::Value>` storage shape reserved for 5.3.1.
+
+- (2026-07-31) Review demonstrated that constructor-only tag validation did
+  not bound allocations while replaying persisted JSON. A streaming visitor is
+  required even though `EnrichmentJobV1` fields are private.
+
+- (2026-07-31) The existing `rstest-bdd` 0.5 synchronous-step harness and
+  `pg-embed-setup-unpriv` template fixture support the persisted queue scenario
+  directly. A 0.6.0-beta3 custom harness would add prerelease churn without
+  solving a missing runtime or isolation requirement.
 
 - (2026-06-15 02:05Z) Milestone 5 documentation gates exposed a pre-existing
   Mermaid parse failure in `docs/rstest-bdd-v0-5-0-migration-guide.md`.
@@ -1102,18 +1129,24 @@ The plan ships in two PRs:
   code. Date/Author: 2026-06-15 / implementation agent (revised 2026-07-26 to
   match implementation).
 
-- Decision: Make `EnrichmentJobV1` fields private and hand-write its
-  `Deserialize` impl. `EnrichmentJob::v1` and the `Deserialize` impl (via a
-  private `EnrichmentJobV1Raw` mirror) are the only construction paths, and
-  both run `canonicalize_tags`. Rationale: private fields plus a validating
-  deserializer guarantee that no payload — constructed in-process or decoded
-  off the wire — can carry empty, oversized, or unbounded tag vectors.
+- Decision: Make `EnrichmentJobV1` fields private and hand-write the envelope
+  `Deserialize` implementation. Persisted tags decode through a bounded
+  sequence visitor that rejects item 65 and overlong strings before reading
+  later input, then canonicalizes the bounded collection. Rationale: private
+  fields prevent unchecked in-process construction, while streaming validation
+  prevents malformed queue rows from allocating an unrestricted vector.
   `GenerateRouteJobV1` keeps `pub` fields because it has no equivalent
   construction-time invariant to enforce. Date/Author: 2026-07-26 /
-  implementation agent.
+  implementation agent (revised 2026-07-31 after review).
+
+- Decision: Own `BoundingBox` once at `domain::bounding_box` and adapt its wire
+  representation at each serialization boundary. Rationale: jobs need the
+  published four-element array while offline APIs already publish a camel-case
+  object; explicit validated Serde adapters preserve both contracts without
+  duplicating WGS84 validation. Date/Author: 2026-07-31 / implementation agent.
 
 - Decision: Derive only `PartialEq` (not `Eq`) on the job envelopes and
-  on `BoundingBox`. Rationale: `BoundingBox` wraps `[f64; 4]`, and
+  on `BoundingBox`. Rationale: `BoundingBox` stores `f64` coordinates, and
   `GenerateRouteJobV1` embeds `serde_json::Value` for `origin`, `destination`,
   and `preferences`. Neither `f64` nor `serde_json::Value` implements `Eq`. An
   "i32 microdegrees" workaround for `BoundingBox` would still leave the route
@@ -1138,12 +1171,14 @@ The plan ships in two PRs:
   V2 can lift the restriction cleanly under its own snapshot. Date/Author:
   2026-06-06 / planning agent (post-Logisphere review).
 
-- Decision: Bound `EnrichmentJobV1::tags` at construction time.
+- Decision: Bound `EnrichmentJobV1::tags` at construction and decode time.
   Rationale: `apalis.jobs` rows are persisted JSON; an unbounded tag vector
   turns a bug into a queue-table footprint problem. The bounds (`64` tags, `64`
   UTF-8 bytes each) are generous compared to known Overpass tag-set sizes
-  (single-digit count is typical) and the error surface is one extra variant.
-  Date/Author: 2026-06-06 / planning agent (post-Logisphere review).
+  (single-digit count is typical). The persisted decoder enforces the same
+  limits while streaming so rejection cannot first allocate an arbitrary
+  vector. Date/Author: 2026-06-06 / planning agent (revised 2026-07-31 after
+  review).
 
 - Decision: Place `to_overpass_request` on the `EnrichmentJob` envelope,
   not on `EnrichmentJobV1`. Rationale: workers should not match the envelope a
@@ -1174,22 +1209,21 @@ The plan ships in two PRs:
   `TaskBuilder::id` to avoid the duplicate source-of-truth failure mode
   recorded in Risks.
 
-- Decision: Keep PostgreSQL-backed behavioural scenarios optional in
-  milestone M4. Rationale: 5.2.2 introduces serializable types only. Most
-  behaviour is observable through `StubRouteQueue` and `FakeQueueProvider`
-  already. Spending embedded PostgreSQL minutes here only pays off when 5.2.3
-  and 5.3.1 add worker consumption. The decision is revisited only if a
-  serialization quirk surfaces during the Apalis adapter integration smoke
-  test. Date/Author: 2026-06-06 / planning agent.
+- Decision: Add a PostgreSQL-backed persisted-boundary scenario using the
+  existing `rstest-bdd` 0.5 and `pg-embed-setup-unpriv` fixture. This
+  supersedes the earlier decision to keep that coverage optional: `decode_job`
+  and the typed envelopes now form a concrete contract at `apalis.jobs`, and
+  the test proves both real enqueue encoding and worker-side validation.
+  Date/Author: 2026-07-31 / implementation agent.
 
 ## Outcomes & retrospective
 
 Roadmap item 5.2.2 is complete. The backend now has domain-owned, versioned job
 payloads for generate-route and enrichment work, pinned by unit, property,
-snapshot, and behavioural coverage. The `RouteQueue` port shape and
-`RouteSubmissionRequest` public contract were left unchanged, and the Apalis
-storage shape remains `serde_json::Value` for the later worker/storage
-milestones.
+snapshot, in-memory behavioural, and PostgreSQL persisted-boundary coverage. The
+`RouteQueue` port shape and `RouteSubmissionRequest` public contract were left
+unchanged, and the Apalis storage shape remains `serde_json::Value` for the
+later worker/storage milestones.
 
 The main future-facing decisions are now explicit in the code and docs: trace
 metadata stays deferred to 5.2.4, retry/dead-letter behaviour stays deferred to
@@ -1223,3 +1257,8 @@ documentation changes.
   struct-argument `v1` constructors, private `EnrichmentJobV1` fields, and the
   validating `Deserialize` impl); made the V1-schema risk wording impersonal.
   No scope, tolerances, or milestones changed.
+- 2026-07-31: Addressed review findings by streaming bounded tag decoding,
+  capping version diagnostics, sharing one domain bounding-box type, adding a
+  real Apalis/PostgreSQL persistence-and-decode scenario, documenting
+  `decode_job` and test dependencies, and closing the completed Logisphere
+  planning gate.
