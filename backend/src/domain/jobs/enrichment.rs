@@ -51,6 +51,7 @@ pub struct EnrichmentJobV1 {
     /// Optional idempotency key supplied by the client.
     idempotency_key: Option<IdempotencyKey>,
     /// Validated WGS84 bounding box for enrichment.
+    #[serde(with = "crate::domain::bounding_box::array_wire")]
     bounding_box: BoundingBox,
     /// Sorted, deduplicated tag list.
     tags: EnrichmentTags,
@@ -65,6 +66,7 @@ struct EnrichmentJobV1EnvelopeRaw {
     version: EnrichmentJobV1Version,
     job_id: Uuid,
     idempotency_key: Option<IdempotencyKey>,
+    #[serde(with = "crate::domain::bounding_box::array_wire")]
     bounding_box: BoundingBox,
     tags: EnrichmentTags,
     enqueued_at: DateTime<Utc>,

@@ -1064,10 +1064,13 @@ only supported contract for values passed into `RouteQueue::enqueue`:
   it through `EnrichmentJob::v1`, which validates tag count, tag length, and
   canonical tag ordering. Deserializing a persisted V1 job applies the same
   validation, so workers never receive unchecked tag vectors from `apalis.jobs`.
-- `BoundingBox` is defined in `backend/src/domain/jobs/bounding_box.rs`. It
-  serializes as `[min_lng, min_lat, max_lng, max_lat]` and rejects
-  antimeridian-wrapped boxes in V1. Split dateline-spanning inputs before
-  building an `EnrichmentJob`.
+- `BoundingBox` is the shared geographic value object in
+  `backend/src/domain/bounding_box.rs`; job and offline modules re-export this
+  one type rather than defining parallel validators. Its ordinary Serde shape
+  is the offline API object (`minLng`, `minLat`, `maxLng`, `maxLat`). Durable
+  enrichment payloads opt into `bounding_box::array_wire` explicitly to retain
+  `[min_lng, min_lat, max_lng, max_lat]`. Split dateline-spanning inputs before
+  building either domain value.
 
 Both job families use a serde envelope with `#[serde(tag = "v")]`, currently
 `"v1"`. V1 structs use `deny_unknown_fields`; do not remove that restriction.

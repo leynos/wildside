@@ -61,6 +61,7 @@
 
 pub mod annotations;
 pub mod auth;
+pub mod bounding_box;
 pub mod catalogue;
 pub mod descriptors;
 pub(crate) mod enrichment_provenance_error_mapping;
@@ -105,6 +106,7 @@ pub use self::annotations::{
     RouteProgressBuilder,
 };
 pub use self::auth::{LoginCredentials, LoginValidationError};
+pub use self::bounding_box::{BoundingBox, BoundingBoxError};
 pub use self::catalogue::{
     CatalogueValidationError, CommunityPick, CommunityPickDraft, ImageAsset, RouteCategory,
     RouteCategoryDraft, RouteCollection, RouteCollectionDraft, RouteSummary, RouteSummaryDraft,
@@ -132,7 +134,7 @@ pub use self::localization::{
 };
 pub use self::offline::normalize_device_id as normalize_offline_device_id;
 pub use self::offline::{
-    BoundingBox, OfflineBundle, OfflineBundleDraft, OfflineBundleKind, OfflineBundleStatus,
+    OfflineBundle, OfflineBundleDraft, OfflineBundleKind, OfflineBundleStatus,
     OfflineValidationError, ParseOfflineBundleKindError, ParseOfflineBundleStatusError, ZoomRange,
 };
 pub use self::offline_bundle_service::{OfflineBundleCommandService, OfflineBundleQueryService};

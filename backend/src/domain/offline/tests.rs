@@ -10,6 +10,7 @@ use super::{
     BoundingBox, OfflineBundle, OfflineBundleDraft, OfflineBundleKind, OfflineBundleStatus,
     OfflineValidationError, ZoomRange,
 };
+use crate::domain::BoundingBoxError;
 use crate::domain::UserId;
 
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
@@ -179,22 +180,39 @@ fn updated_at_must_not_precede_created_at() -> TestResult {
 #[rstest]
 fn bounding_box_rejects_invalid_coordinates() {
     let result = BoundingBox::new(-190.0, 40.0, -3.0, 50.0);
-    assert!(matches!(
-        result,
-        Err(OfflineValidationError::InvalidBounds {
-            field: "min_lng",
-            ..
-        })
-    ));
+    assert!(matches!(result, Err(BoundingBoxError::LongitudeOutOfRange)));
 }
 
 #[rstest]
 fn bounding_box_rejects_min_greater_than_max() {
     let result = BoundingBox::new(-3.0, 56.0, -3.2, 55.9);
-    assert!(matches!(
-        result,
-        Err(OfflineValidationError::InvalidBoundsOrder)
-    ));
+    assert!(matches!(result, Err(BoundingBoxError::AntimeridianWrap)));
+}
+
+#[rstest]
+fn bounding_box_serde_preserves_validated_offline_object_shape() {
+    let bounds = BoundingBox::new(-3.25, 55.92, -3.10, 56.01).expect("valid bounds");
+
+    let value = serde_json::to_value(bounds).expect("bounds should serialize");
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "minLng": -3.25,
+            "minLat": 55.92,
+            "maxLng": -3.10,
+            "maxLat": 56.01,
+        })
+    );
+
+    let invalid = serde_json::json!({
+        "minLng": -3.25,
+        "minLat": 56.01,
+        "maxLng": -3.10,
+        "maxLat": 55.92,
+    });
+    let error = serde_json::from_value::<BoundingBox>(invalid)
+        .expect_err("deserialization should enforce ordering");
+    assert!(error.to_string().contains("min_lat < max_lat"));
 }
 
 #[rstest]

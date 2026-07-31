@@ -2234,9 +2234,12 @@ variant such as V2 and a reviewed snapshot update.
   `[min_lng, min_lat, max_lng, max_lat]`, matching `OverpassEnrichmentRequest`.
   Antimeridian-wrapped boxes are not supported in V1; callers spanning the
   dateline must split the request into two boxes.
-- `BoundingBox` lives in `backend/src/domain/jobs/bounding_box.rs` and rejects
-  non-finite coordinates, out-of-range WGS84 coordinates, inverted latitude
-  ordering, and longitude ordering that would imply an antimeridian wrap.
+- `BoundingBox` lives in `backend/src/domain/bounding_box.rs` and is shared by
+  jobs and offline bundles. It rejects non-finite coordinates, out-of-range
+  WGS84 coordinates, inverted latitude ordering, and longitude ordering that
+  would imply an antimeridian wrap. Its default object-shaped Serde contract is
+  retained for offline APIs; enrichment jobs use an explicit array-wire adapter
+  to preserve their published queue representation.
 
 The idempotency key remains in the job payload as the durable wire-level source
 of truth. Although the resolved dependency graph now includes an `apalis-core`
