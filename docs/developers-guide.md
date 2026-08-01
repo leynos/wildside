@@ -240,6 +240,18 @@ Changes that touch Mermaid diagrams must also pass:
 make nixie
 ```
 
+Nixie and its Merman rendering backend are required work-system tools. Install
+the pinned versions before running the Mermaid gate:
+
+```bash
+uv tool install --python 3.14 "nixie-cli==1.1.0"
+cargo binstall --locked merman-cli@0.7.0
+```
+
+The Nixie package provides the `nixie` command, while the Merman package
+provides `merman-cli`. Continuous integration installs both tools before its
+first call to `make nixie`.
+
 Code changes under `frontend-pwa/` or `packages/tokens/` must pass the relevant
 front-end gates plus the repository-wide commit gates:
 
@@ -830,24 +842,10 @@ permit writes to the user cache. Recipes rely on Make's exported environment
 rather than expanding directory values as shell assignment text, preserving
 literal worktree paths that contain spaces or shell metacharacters.
 
-The `nixie` target also sets `TMPDIR` to the ignored `.tmp` directory for its
-frozen Bun install, browser setup and diagram validation. It collects committed,
-staged, unstaged and untracked Markdown paths as NUL-delimited records, checks
-each discovery command, then sorts and deduplicates the records before invoking
-Nixie. The committed-path discovery evaluates `origin/main...HEAD`; therefore,
-the checkout must contain full history and the `origin/main` remote-tracking
-reference. The CI `build` checkout uses `fetch-depth: 0` to provide both. The
-regression contract is
-`tests/workflow_contracts/ci_workflow_test.py::test_build_checkout_fetches_origin_main_history`.
-These rules preserve unusual filenames and prevent a discovery failure from
-producing a false-green validation result.
-
-The deterministic merge lives in `scripts/nixie_worklist.py`. Property tests
-exercise its bytewise sorted unique-union invariant, while command-level tests
-protect repository-local temporary directories and the empty-worklist `.`
-fallback. `make docstring-coverage` applies the repository's 80% Python
-docstring threshold to this helper and the workflow-contract suite;
-`make test-workflow-contracts` runs that gate in CI before executing pytest.
+The `nixie` target checks for the installed `nixie` and `merman-cli` commands,
+then validates the repository with Merman as its renderer. It does not perform
+a Bun install, browser setup, or Git worklist discovery. Command-level
+contracts verify the required tools and the exact renderer selection.
 
 The `lint-asyncapi` target invokes AsyncAPI CLI 3.4.2 through `pnpm dlx` and
 validates `spec/asyncapi.yaml` with `--fail-severity=info`. Keep this runner form
@@ -891,18 +889,16 @@ sitemap.
 ### Running locally
 
 ```sh
-bun run scripts/audit-ux-state-graph.mjs \
-  --graph docs/wildside-ux-state-graph-v0.1.json \
-  --sitemap docs/sitemap.md
+node ./scripts/check-overrides-policy.mjs
 ```
 
-A run prints one line per state:
+A passing run prints:
 
 ```text
-<state-id> in=<count> out=<count> route=<route-or-NONE> [ORPHAN]
+pnpm override policy verified for basic-ftp, dompurify, ip-address, uuid.
 ```
 
-Input or parsing errors are printed to stderr and exit with code `1`.
+A failing run prints a policy diagnostic to stderr and exits with code `1`.
 
 ## Override policy check
 
@@ -1166,5 +1162,7 @@ directly. Keep repository exceptions narrow: preserve external APIs, formal
 names, wire values and immutable fixtures without adding ordinary bare-word
 exceptions.
 
-The standalone phrase helper and its tests use Python 3.14 at runtime, Pathspec
-1.1.1 and a Python 3.13 Ruff compatibility target.
+The standalone phrase helper and its tests run with Python 3.14. They depend
+on Pathspec 1.1.1. Ruff has a Python 3.13 compatibility target.
+Continuous integration installs Nixie 1.1.0 and Merman CLI 0.7.0 before
+validating the repository's Mermaid diagrams with `make nixie`.

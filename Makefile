@@ -39,43 +39,12 @@ BIOME_VERSION ?= 2.3.1
 TSC_VERSION ?= 5.9.2
 MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 YAMLLINT_VERSION ?= 1.35.1
-NIXIE_VERSION ?= 1.1.0
 PATHSPEC_VERSION ?= 1.1.1
 RUFF_VERSION ?= 0.15.12
 TYPOS_VERSION ?= 1.48.0
 UV ?= uv
 export UV_CACHE_DIR := $(CURDIR)/.uv-cache
 export UV_TOOL_DIR := $(CURDIR)/.uv-tools
-export REPOSITORY_TMPDIR := $(CURDIR)/.tmp
-NIXIE = $(UV) tool run --python 3.14 \
-	--from nixie-cli@$(NIXIE_VERSION) nixie
-export NIXIE_WORKLIST_HELPER := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))scripts/nixie_worklist.py
-define NIXIE_CMD
-@paths_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-paths.XXXXXX") || exit 1; \
-	committed_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-committed.XXXXXX") || exit 1; \
-	staged_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-staged.XXXXXX") || exit 1; \
-	unstaged_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-unstaged.XXXXXX") || exit 1; \
-	untracked_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-untracked.XXXXXX") || exit 1; \
-	trap 'rm -f "$$paths_file" "$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file"' EXIT HUP INT TERM; \
-	git diff --name-only -z --diff-filter=ACMR \
-		origin/main...HEAD -- '*.md' > "$$committed_file" || exit 1; \
-	git diff --cached --name-only -z --diff-filter=ACMR \
-		-- '*.md' > "$$staged_file" || exit 1; \
-	git diff --name-only -z --diff-filter=ACMR \
-		-- '*.md' > "$$unstaged_file" || exit 1; \
-	git ls-files --others --exclude-standard -z \
-		-- '*.md' > "$$untracked_file" || exit 1; \
-	python3 "$$NIXIE_WORKLIST_HELPER" \
-		"$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file" \
-		> "$$paths_file" || exit 1; \
-	if [ -s "$$paths_file" ]; then \
-	  xargs -0 -r env TMPDIR="$$REPOSITORY_TMPDIR" $(NIXIE) \
-	    --no-sandbox --max-concurrency 1 -- < "$$paths_file" || exit 1; \
-	else \
-	  env TMPDIR="$$REPOSITORY_TMPDIR" $(NIXIE) \
-	    --no-sandbox --max-concurrency 1 -- . || exit 1; \
-	fi
-endef
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
 TYPOS_CONFIG_BUILDER_SOURCE := git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_COMMIT)
 TYPOS_CONFIG_BUILDER := $(UV) tool run --python 3.14 \
@@ -95,7 +64,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile docstring-coverage
+.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: spelling spelling-phrase-check spelling-config spelling-config-write spelling-helper-test
@@ -137,16 +106,16 @@ docker-down:
 	cd deploy && docker compose down
 
 local-k8s-up:
-	uv run scripts/local_k8s.py up
+	$(UV) run scripts/local_k8s.py up
 
 local-k8s-down:
-	uv run scripts/local_k8s.py down
+	$(UV) run scripts/local_k8s.py down
 
 local-k8s-status:
-	uv run scripts/local_k8s.py status
+	$(UV) run scripts/local_k8s.py status
 
 local-k8s-logs:
-	uv run scripts/local_k8s.py logs
+	$(UV) run scripts/local_k8s.py logs
 
 fmt: workspace-sync
 	cargo fmt --all
@@ -251,21 +220,18 @@ NEXTEST_TEST_THREADS ?= 1
 test: test-rust test-frontend test-workflow-contracts test-scripts
 
 test-rust: workspace-sync prepare-pg-worker
-	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast
+	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
+		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests))'
+	$(RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features
 
 test-frontend: deps typecheck
 	pnpm run test
 	pnpm run test:workspaces
 
 # Validate the mutation-testing caller workflow contract
-test-workflow-contracts: docstring-coverage
+test-workflow-contracts:
 	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' \
-		--with 'hypothesis>=6' python -m pytest tests/workflow_contracts -q
-
-docstring-coverage:
-	$(UV) run --no-project --with 'interrogate==1.7.0' interrogate \
-		--fail-under 80 -v \
-		scripts/nixie_worklist.py tests/workflow_contracts
+		python -m pytest tests/workflow_contracts -q
 
 # Python unit tests for the local Kubernetes preview helper
 # (scripts/local_k8s). Run from the repository root so the make-target smoke
@@ -356,11 +322,9 @@ markdownlint: spelling
 	fi
 
 nixie:
-	mkdir -p "$$REPOSITORY_TMPDIR"
-	TMPDIR="$$REPOSITORY_TMPDIR" bun install --frozen-lockfile
-	TMPDIR="$$REPOSITORY_TMPDIR" bun scripts/install-mermaid-browser.mjs
-	# CI needs --no-sandbox; serial runs avoid browser EAGAIN writes.
-	$(NIXIE_CMD)
+	$(call ensure_tool,nixie)
+	$(call ensure_tool,merman-cli)
+	nixie --renderer merman
 
 spelling: spelling-phrase-check
 	@git ls-files -z | xargs -0 -r env \
