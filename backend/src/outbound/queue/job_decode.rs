@@ -5,15 +5,14 @@
 //! [`crate::domain::jobs`]). A payload written by a newer producer — for
 //! example `{"v": "v2", ...}` — therefore fails to deserialize against a
 //! consumer that only knows `v1`. This boundary is where that failure is
-//! caught: it converts the rejection into [`JobDispatchError::Rejected`] and
-//! logs the received version loudly so the retry/dead-letter policy (roadmap
-//! 5.2.3) can act on it. Job handlers only ever receive a successfully decoded,
-//! known variant; they never observe a malformed or unsupported-version
-//! payload, and the boundary never panics or silently discards a job.
+//! caught: it converts the rejection into [`JobDispatchError::Rejected`] so the
+//! retry/dead-letter policy (roadmap 5.2.3) can act on it. Job handlers only
+//! ever receive a successfully decoded, known variant; they never observe a
+//! malformed or unsupported-version payload, and the boundary never panics or
+//! silently discards a job.
 
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use tracing::warn;
 
 use crate::domain::ports::JobDispatchError;
 
@@ -26,9 +25,9 @@ const MAX_VERSION_DIAGNOSTIC_BYTES: usize = 64;
 ///
 /// The `"v"` discriminant is read for diagnostics before the typed decode, so
 /// an unknown or malformed version can be reported without re-parsing. On
-/// failure the job is rejected — never panicked on, never silently dropped —
-/// and a structured warning records the received version. The raw payload is
-/// deliberately never logged, because it can contain user data.
+/// failure the job is rejected — never panicked on and never silently dropped.
+/// The bounded diagnostic includes only the received version, never the raw
+/// payload, because the payload can contain user data.
 ///
 /// # Errors
 ///
@@ -41,10 +40,6 @@ where
 {
     let version = envelope_version(payload);
     J::deserialize(payload).map_err(|_error| {
-        warn!(
-            envelope_version = version,
-            "rejecting queue job: unrecognized or malformed envelope version",
-        );
         JobDispatchError::rejected(format!(
             "unrecognized or malformed job envelope version: {version}"
         ))
