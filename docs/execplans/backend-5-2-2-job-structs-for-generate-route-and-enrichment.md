@@ -423,9 +423,12 @@ Implement `EnrichmentJob` in `backend/src/domain/jobs/enrichment.rs`:
    - all four components are finite.
    Provide a fallible constructor
    `BoundingBox::new(min_lng, min_lat, max_lng, max_lat)` returning
-   `Result<Self, BoundingBoxError>`, together with `serde` derives that
-   delegate to a `[f64; 4]` array representation so the wire format stays
-   compatible with `OverpassEnrichmentRequest::bounding_box`.
+   `Result<Self, BoundingBoxError>`. Serde uses a camel-case object for the
+   value object, and its custom `Deserialize` implementation validates it.
+   Apply the durable enrichment-job adapter
+   `#[serde(with = "crate::domain::bounding_box::array_wire")]` to the job's
+   `bounding_box` field so persisted payloads retain the `[f64; 4]`
+   representation expected by `OverpassEnrichmentRequest::bounding_box`.
 2. Define the V1 envelope and payload using the signatures in
    "Interfaces and dependencies" below. Include `job_id: Uuid`,
    `idempotency_key: Option<IdempotencyKey>`, `bounding_box: BoundingBox`,
@@ -602,20 +605,24 @@ Commit when green.
 Be prescriptive. At the end of milestone M3 the following symbols must exist
 with these signatures.
 
-In `backend/src/domain/jobs/mod.rs`:
+`BoundingBox` is defined in `backend/src/domain/bounding_box.rs`, declared and
+re-exported from `backend/src/domain/mod.rs`, and re-exported for job
+consumers from `backend/src/domain/jobs/mod.rs`:
 
 ```rust
-//! Domain job payloads dispatched through `RouteQueue`.
-//!
-//! Each job type uses a `#[serde(tag = "v")]` envelope so new versions can
-//! be added without breaking older consumers. Worker handlers match on the
-//! envelope and dispatch to the right schema.
-
+// backend/src/domain/mod.rs
 pub mod bounding_box;
+pub mod jobs;
+
+pub use self::bounding_box::{BoundingBox, BoundingBoxError};
+```
+
+```rust
+// backend/src/domain/jobs/mod.rs
 pub mod enrichment;
 pub mod generate_route;
 
-pub use bounding_box::{BoundingBox, BoundingBoxError};
+pub use crate::domain::bounding_box::{BoundingBox, BoundingBoxError};
 pub use enrichment::{
     EnrichmentJob, EnrichmentJobBuildError, EnrichmentJobParams, EnrichmentJobV1,
 };
@@ -1047,10 +1054,12 @@ The plan ships in two PRs:
   when `EnrichmentJob::v1` was reshaped to take an `EnrichmentJobParams`
   struct; see the Decision Log.)
 
-- (2026-06-15 01:40Z) Milestone 4 did not add a PostgreSQL-backed scenario.
-  `GenericApalisRouteQueue<EnrichmentJob, FakeQueueProvider>` exercises the
-  typed plan serialization and queue-provider seam without changing the
-  `PostgresStorage<serde_json::Value>` storage shape reserved for 5.3.1.
+- (2026-07-31) Milestone 4 added a PostgreSQL-backed persisted-boundary
+  scenario. It enqueues both typed job envelopes through
+  `GenericApalisRouteQueue` and `ApalisPostgresProvider`, reads their JSON
+  payloads from `apalis.jobs`, and restores them with `decode_job`. The
+  provider still uses `PostgresStorage<serde_json::Value>`; changing that
+  storage shape remains reserved for 5.3.1.
 
 - (2026-07-31) Review demonstrated that constructor-only tag validation did
   not bound allocations while replaying persisted JSON. A streaming visitor is
