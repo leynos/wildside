@@ -1,4 +1,11 @@
-//! Versioned route-generation job payloads.
+//! Versioned route-generation job payloads dispatched through the
+//! [`RouteQueue`](crate::domain::ports::RouteQueue) port.
+//!
+//! This module provides strict V1 envelope serialization and deserialization,
+//! validates the required top-level `origin` and `destination` fields in a
+//! [`RouteSubmissionRequest`]
+//! payload, and deliberately keeps `origin`, `destination`, and `preferences`
+//! as opaque JSON V1 fields.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

@@ -1,4 +1,12 @@
-//! Versioned enrichment job payloads.
+//! Versioned enrichment job payloads dispatched through the
+//! [`RouteQueue`](crate::domain::ports::RouteQueue) port.
+//!
+//! This module provides strict V1 envelope serialization and deserialization,
+//! validates the durable [`BoundingBox`] array
+//! shape through `crate::domain::bounding_box::array_wire`, and bounds tag
+//! decoding before canonicalization. [`EnrichmentJob`] converts to the
+//! [`OverpassEnrichmentRequest`]
+//! consumed by the Overpass enrichment port.
 
 use std::fmt;
 

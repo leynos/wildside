@@ -15,7 +15,7 @@ use crate::domain::IdempotencyKey;
 use crate::domain::jobs::BoundingBox;
 
 mod bounding_box;
-
+mod tag_boundaries;
 #[fixture]
 fn job_id() -> Uuid {
     Uuid::from_bytes([0x44; 16])

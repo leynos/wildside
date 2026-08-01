@@ -2256,22 +2256,25 @@ trace-propagation mechanism.
 The `#[serde(tag = "v")]` envelope is V1-only today, so an unknown future
 version (for example `"v": "v2"`) fails at deserialization rather than
 producing a variant a handler could match. The queue dispatch boundary must
-catch that deserialization failure, convert it into
-`JobDispatchError::Rejected`, and log the received payload version loudly, so
-the retry/dead-letter policy from 5.2.3 can act on it when that policy lands.
-Worker handlers then operate only on successfully deserialized envelope
-variants. Neither the dispatch boundary nor the handlers may panic or silently
-drop a job on an unknown version.
+catch that deserialization failure and convert it into
+`JobDispatchError::Rejected` with a bounded version diagnostic. `decode_job` is
+pure: it never logs payloads, emits warnings, or records decode metrics.
+Roadmap item 5.2.2 defines no decode metric; the future 5.3.1 worker/consumer
+boundary owns safe warning and rejection metrics, 5.2.3 owns retry/dead-letter
+handling, and 5.2.4 owns trace propagation. Worker handlers then operate only
+on successfully deserialized envelope variants. Neither the dispatch boundary
+nor the handlers may panic or silently drop a job on an unknown version.
 
 This boundary is implemented by `decode_job` in
 `backend/src/outbound/queue/job_decode.rs`. It reads the raw persisted
 `serde_json::Value`, extracts the `"v"` discriminant for diagnostics, and
 decodes into the requested versioned job type. On any failure — an unknown
 version, a missing or non-string `"v"`, or an otherwise malformed body — it
-returns `JobDispatchError::Rejected` and emits a structured warning carrying
-only the received version, never the full payload (which can contain user
-data). The consumer added in 5.3.1 routes that rejection through the ordinary
-queue-processing error path so the retry/dead-letter policy applies.
+returns `JobDispatchError::Rejected` with a bounded diagnostic carrying only
+the received version, never the full payload (which can contain user data).
+The consumer added in 5.3.1 owns the safe warning and rejection metrics for
+that result; the decoder itself remains pure. The queue-processing error path
+then applies the retry/dead-letter policy owned by 5.2.3.
 
 **Communication between workers and API:** The workers operate asynchronously
 from the API, so how does the API know to send WebSocket updates to the right

@@ -192,9 +192,11 @@ contained within this plan.
   after a future schema bump and panics or silently drops the job. Severity:
   high. Likelihood: medium. Mitigation: document the worker-side policy in this
   plan and in `docs/wildside-backend-architecture.md`: an unknown envelope
-  variant is a `JobDispatchError::Rejected` outcome — fail the job, log loudly,
-  and route to dead-letter when retry policy (5.2.3) lands. The implementation
-  of that policy is out of scope; the contract for it is in scope here.
+  variant is a `JobDispatchError::Rejected` outcome with a bounded diagnostic;
+  the pure decoder does not log or record metrics. The future 5.3.1
+  worker/consumer boundary owns safe warning/rejection metrics, and retry
+  policy (5.2.3) owns dead-letter routing. The implementation of those later
+  policies is out of scope; the contract for them is in scope here.
 
 - Risk: the existing Overpass enrichment worker uses
   `OverpassEnrichmentRequest`
@@ -1225,6 +1227,19 @@ The plan ships in two PRs:
   the test proves both real enqueue encoding and worker-side validation.
   Date/Author: 2026-07-31 / implementation agent.
 
+- Decision: Use `pretty_assertions::assert_eq!` for structural equality in the
+  job-struct tests and remove the backend `googletest` dev-dependency. Rationale:
+  review found that the matcher dependency served only one assertion, so the
+  existing readable equality assertion covers the same test contract with less
+  test-only dependency surface. Date/Author: 2026-08-01 / implementation agent.
+
+- Decision: Keep `decode_job` pure and diagnostic-only. Rationale: the decoder
+  returns a bounded `JobDispatchError::Rejected` diagnostic and never logs the
+  payload or records a decode metric. Roadmap item 5.2.2 defines no decode
+  metric; the future 5.3.1 worker/consumer boundary owns safe warning and
+  rejection metrics, 5.2.3 owns retry/dead-letter handling, and 5.2.4 owns
+  trace propagation. Date/Author: 2026-08-01 / review follow-up.
+
 ## Outcomes & retrospective
 
 Roadmap item 5.2.2 is complete. The backend now has domain-owned, versioned job
@@ -1238,7 +1253,9 @@ The main future-facing decisions are now explicit in the code and docs: trace
 metadata stays deferred to 5.2.4, retry/dead-letter behaviour stays deferred to
 5.2.3, and worker deployment/storage shape stays deferred to 5.3.1.
 `BoundingBox` deliberately rejects antimeridian-wrapping boxes, so callers must
-split those boxes before building enrichment jobs.
+split those boxes before building enrichment jobs. `decode_job` remains pure
+and returns bounded rejection diagnostics only; 5.2.2 defines no decode metric,
+while the 5.3.1 worker/consumer boundary owns safe warning/rejection metrics.
 
 Tooling observations: CodeRabbit was slow but returned `findings: 0` at each
 milestone. Repository-wide documentation validation also caught a pre-existing
@@ -1276,3 +1293,10 @@ documentation changes.
   and `merman-cli` tools installed as documented in the developers' guide.
   This changes validation prerequisites only; the implementation scope and
   acceptance criteria are unchanged.
+- 2026-08-01: Simplified the job-struct test dependency surface after review by
+  removing backend `googletest` and replacing its sole matcher assertion with
+  `pretty_assertions::assert_eq!`; updated current-state dependency guidance.
+- 2026-08-01: Review follow-up clarified that `decode_job` is pure and returns
+  bounded rejection diagnostics without logging or metrics. Assigned safe
+  warning/rejection metrics to 5.3.1, retry/dead-letter handling to 5.2.3, and
+  trace propagation to 5.2.4. No scope, tolerance, or milestone changed.

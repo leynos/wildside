@@ -1,15 +1,14 @@
 //! Tests for the version-aware queue decode boundary.
 //!
-//! These exercise the four boundary behaviours the roadmap requires: a valid
-//! `v1` payload reaching a handler, an unknown `v2` payload being rejected, the
-//! rejection warning naming the received version, and malformed or missing
-//! version discriminants being rejected without panicking.
+//! These exercise the boundary behaviours the roadmap requires: a valid `v1`
+//! payload reaching a handler, an unknown `v2` payload being rejected, and
+//! malformed or missing version discriminants being rejected without
+//! panicking.
 
 use super::*;
 use crate::domain::jobs::{EnrichmentJob, GenerateRouteJob};
 use crate::domain::ports::JobDispatchError;
 use serde_json::{Value, json};
-use tracing_test::traced_test;
 
 /// A canonical `v1` route-generation payload matching the wire snapshot.
 fn valid_generate_route_v1() -> Value {
@@ -73,25 +72,6 @@ fn decode_unknown_version_is_rejected() {
         "rejection message should name the received version: {message}"
     );
 }
-
-#[traced_test]
-#[test]
-fn decode_rejection_warns_with_received_version() {
-    let mut payload = valid_generate_route_v1();
-    payload["v"] = json!("v2");
-
-    let _ = decode_job::<GenerateRouteJob>(&payload);
-
-    assert!(
-        logs_contain("WARN"),
-        "an unknown version should emit a loud warning"
-    );
-    assert!(
-        logs_contain("envelope_version") && logs_contain("v2"),
-        "the warning should record the received version"
-    );
-}
-
 #[test]
 fn decode_unreadable_version_is_rejected_without_panic() {
     let mut missing_version = valid_generate_route_v1();

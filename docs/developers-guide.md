@@ -1093,16 +1093,16 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
 The hexagonal boundary is enforced via visibility:
 
-| Component                            | Visibility               | Purpose                                    |
-| ------------------------------------ | ------------------------ | ------------------------------------------ |
-| `ApalisRouteQueue<P>`                | `pub`                    | Public adapter for domain use              |
-| `ApalisPostgresProvider`             | `pub`                    | Production `QueueProvider` implementation  |
-| `GenericApalisRouteQueue<P, Q>`      | `pub`                    | Generic adapter and BDD harness seam       |
-| `decode_job<J>`                      | `pub`                    | Validated persisted-payload decoder        |
-| `QueueProvider`                      | `pub(crate)`             | Test seam for provider abstraction         |
-| `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only) | In-memory test double                      |
-| `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only) | Always-failing test double                 |
-| `setup_apalis_storage`               | `pub` (test support)     | BDD harness for Apalis schema provisioning |
+| Component                            | Visibility               | Purpose                                         |
+| ------------------------------------ | ------------------------ | ----------------------------------------------- |
+| `ApalisRouteQueue<P>`                | `pub`                    | Public adapter for domain use                   |
+| `ApalisPostgresProvider`             | `pub`                    | Production `QueueProvider` implementation       |
+| `GenericApalisRouteQueue<P, Q>`      | `pub`                    | Generic adapter and BDD harness seam            |
+| `decode_job<J>`                      | `pub`                    | Pure decoder with bounded rejection diagnostics |
+| `QueueProvider`                      | `pub(crate)`             | Test seam for provider abstraction              |
+| `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only) | In-memory test double                           |
+| `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only) | Always-failing test double                      |
+| `setup_apalis_storage`               | `pub` (test support)     | BDD harness for Apalis schema provisioning      |
 
 Domain code depends only on the `RouteQueue` port trait. The Apalis adapter
 implements this port without exposing `apalis-postgres` or `sqlx` types in the
@@ -1118,9 +1118,9 @@ Public production API:
   Wraps `apalis_postgres::PostgresStorage<serde_json::Value>` and provisions
   the Apalis schema via `PostgresStorage::<(), (), ()>::setup`.
 - `decode_job<J>` – The worker-side decode boundary for JSON loaded from
-  `apalis.jobs`. It returns a validated versioned envelope or
-  `JobDispatchError::Rejected`; malformed and unknown versions never reach a
-  handler.
+  `apalis.jobs`. It is pure: it returns a validated versioned envelope or a
+  bounded `JobDispatchError::Rejected` diagnostic; malformed and unknown
+  versions never reach a handler.
 
 Implementation details within `outbound::queue`:
 
@@ -1164,8 +1164,10 @@ Workers must pass persisted `serde_json::Value` payloads through
 `outbound::queue::decode_job` before invoking a handler. The decoder applies
 the envelope's Serde validation, reports malformed or unsupported versions as
 `JobDispatchError::Rejected`, limits the version copied into diagnostics to 64
-UTF-8 bytes, and never logs the raw payload. Retry and dead-letter policy
-remain owned by roadmap item 5.2.3.
+UTF-8 bytes, and never logs the raw payload. `decode_job` emits no warnings or
+metrics: roadmap item 5.2.2 defines no decode metric. The future 5.3.1
+worker/consumer boundary owns safe warning and rejection metrics. Retry and
+dead-letter policy remain owned by roadmap item 5.2.3.
 
 The payloads carry `idempotency_key` because the current Apalis pins predate
 framework-native idempotency support. Trace IDs are intentionally absent from
