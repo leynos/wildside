@@ -73,6 +73,42 @@ fn bounding_box_rejects_invalid_coordinates(#[case] case: InvalidBoundingBoxCase
     assert_eq!(error, case.expected);
 }
 
+#[rstest]
+#[case::non_finite_precedes_longitude_range(InvalidBoundingBoxCase {
+    min_lng: f64::NAN,
+    min_lat: 0.0,
+    max_lng: 181.0,
+    max_lat: 1.0,
+    expected: BoundingBoxError::NonFinite,
+})]
+#[case::longitude_range_precedes_latitude_range(InvalidBoundingBoxCase {
+    min_lng: -181.0,
+    min_lat: -91.0,
+    max_lng: 1.0,
+    max_lat: 1.0,
+    expected: BoundingBoxError::LongitudeOutOfRange,
+})]
+#[case::latitude_range_precedes_longitude_ordering(InvalidBoundingBoxCase {
+    min_lng: 1.0,
+    min_lat: -91.0,
+    max_lng: 0.0,
+    max_lat: 1.0,
+    expected: BoundingBoxError::LatitudeOutOfRange,
+})]
+#[case::longitude_ordering_precedes_latitude_ordering(InvalidBoundingBoxCase {
+    min_lng: 1.0,
+    min_lat: 1.0,
+    max_lng: 0.0,
+    max_lat: 1.0,
+    expected: BoundingBoxError::AntimeridianWrap,
+})]
+fn bounding_box_validation_preserves_error_precedence(#[case] case: InvalidBoundingBoxCase) {
+    let error = BoundingBox::new(case.min_lng, case.min_lat, case.max_lng, case.max_lat)
+        .expect_err("multi-invalid bounding box should be rejected");
+
+    assert_eq!(error, case.expected);
+}
+
 proptest! {
     #[test]
     fn non_finite_bounding_box_coordinates_are_rejected(

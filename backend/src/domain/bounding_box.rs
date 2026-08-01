@@ -59,22 +59,10 @@ impl BoundingBox {
         max_lng: f64,
         max_lat: f64,
     ) -> Result<Self, BoundingBoxError> {
-        let coords = [min_lng, min_lat, max_lng, max_lat];
-        if coords.iter().any(|coordinate| !coordinate.is_finite()) {
-            return Err(BoundingBoxError::NonFinite);
-        }
-        if !(-180.0..=180.0).contains(&min_lng) || !(-180.0..=180.0).contains(&max_lng) {
-            return Err(BoundingBoxError::LongitudeOutOfRange);
-        }
-        if !(-90.0..=90.0).contains(&min_lat) || !(-90.0..=90.0).contains(&max_lat) {
-            return Err(BoundingBoxError::LatitudeOutOfRange);
-        }
-        if min_lng > max_lng {
-            return Err(BoundingBoxError::AntimeridianWrap);
-        }
-        if min_lng == max_lng || min_lat >= max_lat {
-            return Err(BoundingBoxError::InvertedOrdering);
-        }
+        validate_finite([min_lng, min_lat, max_lng, max_lat])?;
+        validate_longitudes(min_lng, max_lng)?;
+        validate_latitudes(min_lat, max_lat)?;
+        validate_ordering(min_lng, min_lat, max_lng, max_lat)?;
 
         Ok(Self {
             min_lng,
@@ -88,6 +76,42 @@ impl BoundingBox {
     pub fn as_array(self) -> [f64; 4] {
         [self.min_lng, self.min_lat, self.max_lng, self.max_lat]
     }
+}
+
+fn validate_finite(coords: [f64; 4]) -> Result<(), BoundingBoxError> {
+    if coords.iter().any(|coordinate| !coordinate.is_finite()) {
+        return Err(BoundingBoxError::NonFinite);
+    }
+    Ok(())
+}
+
+fn validate_longitudes(min_lng: f64, max_lng: f64) -> Result<(), BoundingBoxError> {
+    if !(-180.0..=180.0).contains(&min_lng) || !(-180.0..=180.0).contains(&max_lng) {
+        return Err(BoundingBoxError::LongitudeOutOfRange);
+    }
+    Ok(())
+}
+
+fn validate_latitudes(min_lat: f64, max_lat: f64) -> Result<(), BoundingBoxError> {
+    if !(-90.0..=90.0).contains(&min_lat) || !(-90.0..=90.0).contains(&max_lat) {
+        return Err(BoundingBoxError::LatitudeOutOfRange);
+    }
+    Ok(())
+}
+
+fn validate_ordering(
+    min_lng: f64,
+    min_lat: f64,
+    max_lng: f64,
+    max_lat: f64,
+) -> Result<(), BoundingBoxError> {
+    if min_lng > max_lng {
+        return Err(BoundingBoxError::AntimeridianWrap);
+    }
+    if min_lng == max_lng || min_lat >= max_lat {
+        return Err(BoundingBoxError::InvertedOrdering);
+    }
+    Ok(())
 }
 
 impl TryFrom<[f64; 4]> for BoundingBox {
