@@ -842,24 +842,10 @@ permit writes to the user cache. Recipes rely on Make's exported environment
 rather than expanding directory values as shell assignment text, preserving
 literal worktree paths that contain spaces or shell metacharacters.
 
-The `nixie` target also sets `TMPDIR` to the ignored `.tmp` directory for its
-frozen Bun install, browser setup and diagram validation. It collects committed,
-staged, unstaged and untracked Markdown paths as NUL-delimited records, checks
-each discovery command, then sorts and deduplicates the records before invoking
-Nixie. The committed-path discovery evaluates `origin/main...HEAD`; therefore,
-the checkout must contain full history and the `origin/main` remote-tracking
-reference. The CI `build` checkout uses `fetch-depth: 0` to provide both. The
-regression contract is
-`tests/workflow_contracts/ci_workflow_test.py::test_build_checkout_fetches_origin_main_history`.
-These rules preserve unusual filenames and prevent a discovery failure from
-producing a false-green validation result.
-
-The deterministic merge lives in `scripts/nixie_worklist.py`. Property tests
-exercise its bytewise sorted unique-union invariant, while command-level tests
-protect repository-local temporary directories and the empty-worklist `.`
-fallback. `make docstring-coverage` applies the repository's 80% Python
-docstring threshold to this helper and the workflow-contract suite;
-`make test-workflow-contracts` runs that gate in CI before executing pytest.
+The `nixie` target checks for the installed `nixie` and `merman-cli` commands,
+then validates the repository with Merman as its renderer. It does not perform
+a Bun install, browser setup, or Git worklist discovery. Command-level
+contracts verify the required tools and the exact renderer selection.
 
 The `lint-asyncapi` target invokes AsyncAPI CLI 3.4.2 through `pnpm dlx` and
 validates `spec/asyncapi.yaml` with `--fail-severity=info`. Keep this runner form

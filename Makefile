@@ -64,7 +64,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile docstring-coverage
+.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: spelling spelling-phrase-check spelling-config spelling-config-write spelling-helper-test
@@ -221,7 +221,7 @@ test: test-rust test-frontend test-workflow-contracts test-scripts
 
 test-rust: workspace-sync prepare-pg-worker
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
-		-E 'not binary(declare_test_support_compile_fail)'
+		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests))'
 	$(RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features
 
 test-frontend: deps typecheck
@@ -229,14 +229,9 @@ test-frontend: deps typecheck
 	pnpm run test:workspaces
 
 # Validate the mutation-testing caller workflow contract
-test-workflow-contracts: docstring-coverage
+test-workflow-contracts:
 	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' \
-		--with 'hypothesis>=6' python -m pytest tests/workflow_contracts -q
-
-docstring-coverage:
-	$(UV) run --no-project --with 'interrogate==1.7.0' interrogate \
-		--fail-under 80 -v \
-		scripts/nixie_worklist.py tests/workflow_contracts
+		python -m pytest tests/workflow_contracts -q
 
 # Python unit tests for the local Kubernetes preview helper
 # (scripts/local_k8s). Run from the repository root so the make-target smoke

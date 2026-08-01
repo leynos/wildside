@@ -250,7 +250,7 @@ jobs:
           RUSTFLAGS="-D warnings" cargo nextest run --locked \
             --manifest-path backend/Cargo.toml \
             --all-targets --all-features \
-            -E 'not binary(declare_test_support_compile_fail)'
+            -E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests))'
 
       - name: Compile-fail tests
         run: |

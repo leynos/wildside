@@ -87,3 +87,27 @@ def test_codescene_check_uses_the_guarded_project_contract() -> None:
         "access-token": "${{ env.CS_ACCESS_TOKEN }}",
         "installer-checksum": "${{ vars.CODESCENE_CLI_SHA256 }}",
     }, "the CodeScene check must pass the canonical project and check-mode inputs"
+
+
+def test_compile_fail_binaries_bypass_nextest() -> None:
+    """Compile-fail suites run directly, outside Nextest's test timeout."""
+    steps = _load_steps("build")
+    rust_tests = _find_step(steps, "Rust tests")
+    compile_fail_tests = _find_step(steps, "Compile-fail tests")
+
+    assert rust_tests.get("run") == (
+        "# Clean stale pg-embed directories that may conflict with new runs.\n"
+        "find target/ -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} + "
+        "2>/dev/null || true\n"
+        'RUSTFLAGS="-D warnings" cargo nextest run --locked \\\n'
+        "  --manifest-path backend/Cargo.toml \\\n"
+        "  --all-targets --all-features \\\n"
+        "  -E 'not (binary(declare_test_support_compile_fail) | "
+        "binary(compile_fail_tests))'\n"
+    ), "Nextest must exclude every compile-fail test binary"
+    assert compile_fail_tests.get("run") == (
+        "cargo test --locked --all-features -p backend --test "
+        "declare_test_support_compile_fail\n"
+        "cargo test --locked --features trybuild-tests -p pagination "
+        "cursor_trait_bound_compile_fail_tests\n"
+    ), "compile-fail suites must remain direct Cargo tests"
