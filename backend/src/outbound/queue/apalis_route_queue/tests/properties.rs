@@ -33,6 +33,12 @@ macro_rules! assert_successful_enqueue_observations {
             "every enqueue should report success: {:?}",
             $observations
         );
+        for (outcome, latency) in &$observations {
+            assert!(
+                *latency >= Duration::ZERO,
+                "negative latency observation: outcome={outcome:?}, latency={latency:?}"
+            );
+        }
     }};
 }
 
