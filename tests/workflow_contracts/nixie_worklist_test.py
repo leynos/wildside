@@ -6,7 +6,7 @@ from itertools import chain
 
 from hypothesis import given, strategies as st
 
-from scripts.nixie_worklist import merge_path_streams, select_nixie_paths
+from scripts.nixie_worklist import main, merge_path_streams, select_nixie_paths
 
 PATH_CHARACTER = st.characters(
     blacklist_categories=("Cs",),
@@ -31,14 +31,23 @@ def test_merge_emits_bytewise_sorted_unique_union(
     streams = tuple(encode_records(records) for records in record_streams)
     expected = encode_records(sorted(set(chain.from_iterable(record_streams))))
 
-    assert merge_path_streams(streams) == expected
+    assert merge_path_streams(streams) == expected, (
+        "the merge must produce the canonical bytewise sorted unique union"
+    )
 
 
 def test_empty_union_selects_repository_fallback() -> None:
     """An empty worklist selects the repository rather than an empty argv."""
     worklist = merge_path_streams((b"", b"", b"", b""))
 
-    assert select_nixie_paths(worklist) == (b".",)
+    assert select_nixie_paths(worklist) == (b".",), (
+        "an empty worklist must select the dot fallback"
+    )
+
+
+def test_explicit_empty_arguments_are_not_replaced_by_process_arguments() -> None:
+    """An explicitly empty argument sequence reports invalid usage."""
+    assert main(()) == 2, "explicitly empty arguments must produce the usage exit code"
 
 
 def test_unusual_filenames_remain_literal_records() -> None:
@@ -52,4 +61,6 @@ def test_unusual_filenames_remain_literal_records() -> None:
 
     worklist = merge_path_streams((encode_records(records), b"", b"", b""))
 
-    assert select_nixie_paths(worklist) == tuple(sorted(set(records)))
+    assert select_nixie_paths(worklist) == tuple(sorted(set(records))), (
+        "unusual filenames must remain literal records"
+    )

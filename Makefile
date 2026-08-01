@@ -46,15 +46,16 @@ TYPOS_VERSION ?= 1.48.0
 UV ?= uv
 export UV_CACHE_DIR := $(CURDIR)/.uv-cache
 export UV_TOOL_DIR := $(CURDIR)/.uv-tools
+export REPOSITORY_TMPDIR := $(CURDIR)/.tmp
 NIXIE = $(UV) tool run --python 3.14 \
 	--from nixie-cli@$(NIXIE_VERSION) nixie
-NIXIE_WORKLIST_HELPER := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))scripts/nixie_worklist.py
+export NIXIE_WORKLIST_HELPER := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))scripts/nixie_worklist.py
 define NIXIE_CMD
-@paths_file=$$(mktemp "$(CURDIR)/.tmp/nixie-paths.XXXXXX") || exit 1; \
-	committed_file=$$(mktemp "$(CURDIR)/.tmp/nixie-committed.XXXXXX") || exit 1; \
-	staged_file=$$(mktemp "$(CURDIR)/.tmp/nixie-staged.XXXXXX") || exit 1; \
-	unstaged_file=$$(mktemp "$(CURDIR)/.tmp/nixie-unstaged.XXXXXX") || exit 1; \
-	untracked_file=$$(mktemp "$(CURDIR)/.tmp/nixie-untracked.XXXXXX") || exit 1; \
+@paths_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-paths.XXXXXX") || exit 1; \
+	committed_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-committed.XXXXXX") || exit 1; \
+	staged_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-staged.XXXXXX") || exit 1; \
+	unstaged_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-unstaged.XXXXXX") || exit 1; \
+	untracked_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-untracked.XXXXXX") || exit 1; \
 	trap 'rm -f "$$paths_file" "$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file"' EXIT HUP INT TERM; \
 	git diff --name-only -z --diff-filter=ACMR \
 		origin/main...HEAD -- '*.md' > "$$committed_file" || exit 1; \
@@ -64,14 +65,14 @@ define NIXIE_CMD
 		-- '*.md' > "$$unstaged_file" || exit 1; \
 	git ls-files --others --exclude-standard -z \
 		-- '*.md' > "$$untracked_file" || exit 1; \
-	python3 "$(NIXIE_WORKLIST_HELPER)" \
+	python3 "$$NIXIE_WORKLIST_HELPER" \
 		"$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file" \
 		> "$$paths_file" || exit 1; \
 	if [ -s "$$paths_file" ]; then \
-	  xargs -0 -r env TMPDIR="$(CURDIR)/.tmp" $(NIXIE) \
+	  xargs -0 -r env TMPDIR="$$REPOSITORY_TMPDIR" $(NIXIE) \
 	    --no-sandbox --max-concurrency 1 -- < "$$paths_file" || exit 1; \
 	else \
-	  env TMPDIR="$(CURDIR)/.tmp" $(NIXIE) \
+	  env TMPDIR="$$REPOSITORY_TMPDIR" $(NIXIE) \
 	    --no-sandbox --max-concurrency 1 -- . || exit 1; \
 	fi
 endef
@@ -263,6 +264,7 @@ test-workflow-contracts: docstring-coverage
 
 docstring-coverage:
 	$(UV) run --no-project --with 'interrogate==1.7.0' interrogate \
+		--fail-under 80 -v \
 		scripts/nixie_worklist.py tests/workflow_contracts
 
 # Python unit tests for the local Kubernetes preview helper
@@ -354,9 +356,9 @@ markdownlint: spelling
 	fi
 
 nixie:
-	mkdir -p "$(CURDIR)/.tmp"
-	TMPDIR="$(CURDIR)/.tmp" bun install --frozen-lockfile
-	TMPDIR="$(CURDIR)/.tmp" bun scripts/install-mermaid-browser.mjs
+	mkdir -p "$$REPOSITORY_TMPDIR"
+	TMPDIR="$$REPOSITORY_TMPDIR" bun install --frozen-lockfile
+	TMPDIR="$$REPOSITORY_TMPDIR" bun scripts/install-mermaid-browser.mjs
 	# CI needs --no-sandbox; serial runs avoid browser EAGAIN writes.
 	$(NIXIE_CMD)
 

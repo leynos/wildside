@@ -30,7 +30,7 @@ fi
 """
 
 FAKE_TOOL = """#!/bin/sh
-printf '%s|%s|%s|%s|%s\\n' \\
+printf '%s\\0%s\\0%s\\0%s\\0%s\\0' \\
     "$(basename "$0")" \\
     "${TMPDIR:-}" \\
     "${UV_CACHE_DIR:-}" \\
@@ -95,7 +95,11 @@ def _read_invocations(log_path: Path) -> list[str]:
     """Return logged command invocations, or an empty list when none ran."""
     if not log_path.exists():
         return []
-    return log_path.read_text(encoding="utf8").splitlines()
+    fields = log_path.read_bytes().removesuffix(b"\0").split(b"\0")
+    return [
+        "|".join(field.decode() for field in fields[offset : offset + 5])
+        for offset in range(0, len(fields), 5)
+    ]
 
 
 def test_nixie_discovers_all_markdown_sources_and_sets_tempdirs(
@@ -113,18 +117,20 @@ def test_nixie_discovers_all_markdown_sources_and_sets_tempdirs(
     uv_tools = str(REPOSITORY_ROOT / ".uv-tools")
     assert invocations[0] == (
         f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|install --frozen-lockfile"
-    )
+    ), "Bun install must receive the repository-local temporary directories"
     assert invocations[1] == (
         f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|"
         "scripts/install-mermaid-browser.mjs"
-    )
+    ), "Mermaid setup must receive the repository-local temporary directories"
     expected_nixie_invocation = (
         f"uv|{repository_tmp}|{uv_cache}|{uv_tools}|"
         "tool run --python 3.14 --from nixie-cli@1.1.0 nixie "
         "--no-sandbox --max-concurrency 1 -- docs/A.md docs/a space.md "
         "docs/semi;colon & brackets[1].md docs/zeta.md"
     )
-    assert invocations == [invocations[0], invocations[1], expected_nixie_invocation]
+    assert invocations == [invocations[0], invocations[1], expected_nixie_invocation], (
+        "Nixie must receive one bytewise ordered, duplicate-free worklist"
+    )
 
 
 def test_nixie_stops_before_validation_when_discovery_fails(
@@ -140,7 +146,9 @@ def test_nixie_stops_before_validation_when_discovery_fails(
     assert not any(
         invocation.startswith("uv|") for invocation in _read_invocations(log_path)
     )
-    assert not list((REPOSITORY_ROOT / ".tmp").glob("nixie-*"))
+    assert not list((REPOSITORY_ROOT / ".tmp").glob("nixie-*")), (
+        "temporary Nixie worklists must be cleaned after discovery failure"
+    )
 
 
 def test_nixie_uses_repository_fallback_when_worklist_is_empty(
@@ -159,9 +167,11 @@ def test_nixie_uses_repository_fallback_when_worklist_is_empty(
     uv_tools = str(REPOSITORY_ROOT / ".uv-tools")
     assert invocations[:2] == [
         f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|install --frozen-lockfile",
-        f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|"
-        "scripts/install-mermaid-browser.mjs",
-    ]
+        (
+            f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|"
+            "scripts/install-mermaid-browser.mjs"
+        ),
+    ], "empty discovery must retain both Nixie setup invocations"
     nixie_invocations = [
         invocation for invocation in invocations if invocation.startswith("uv|")
     ]
@@ -170,7 +180,9 @@ def test_nixie_uses_repository_fallback_when_worklist_is_empty(
         "tool run --python 3.14 --from nixie-cli@1.1.0 nixie "
         "--no-sandbox --max-concurrency 1 -- ."
     )
-    assert nixie_invocations == [expected_nixie_invocation]
+    assert nixie_invocations == [expected_nixie_invocation], (
+        "an empty worklist must invoke Nixie exactly once with the dot fallback"
+    )
 
 
 def test_nixie_preserves_hostile_worktree_directory_literals(
@@ -179,7 +191,7 @@ def test_nixie_preserves_hostile_worktree_directory_literals(
 ) -> None:
     """Shell metacharacters in the worktree path remain literal environment data."""
     env, log_path = fake_tool_environment
-    hostile_worktree = tmp_path / "worktree [safe]; literal path"
+    hostile_worktree = tmp_path / 'worktree "quoted" $(safe)\nnewline [literal]; path'
     hostile_worktree.mkdir()
 
     completed = _run_make("nixie", env, cwd=hostile_worktree)
@@ -198,7 +210,7 @@ def test_nixie_preserves_hostile_worktree_directory_literals(
         f"bun|{expected_environment}install --frozen-lockfile",
         f"bun|{expected_environment}scripts/install-mermaid-browser.mjs",
         f"uv|{expected_environment}{expected_nixie_arguments}",
-    ]
+    ], "hostile worktree characters must remain literal in exactly three invocations"
 
 
 def test_lint_asyncapi_uses_pnpm_cli_runner(
