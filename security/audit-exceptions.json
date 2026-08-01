@@ -8,14 +8,6 @@
     "expiresAt": "2026-08-28"
   },
   {
-    "id": "BUN_MARKDOWN_IT_SMARTQUOTES_DOS_2026_06",
-    "package": "markdown-it",
-    "advisory": "GHSA-6v5v-wf23-fmfq",
-    "reason": "Bun reports transitive frontend-tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
-    "addedAt": "2026-06-28",
-    "expiresAt": "2026-07-30"
-  },
-  {
     "id": "BUN_ESBUILD_DEV_SERVER_FILE_READ_2026_06",
     "package": "esbuild",
     "advisory": "GHSA-g7r4-m6w7-qqqr",

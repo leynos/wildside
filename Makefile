@@ -260,7 +260,7 @@ test-frontend: deps typecheck
 # Validate the mutation-testing caller workflow contract
 test-workflow-contracts: docstring-coverage
 	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' \
-		--with 'hypothesis>=6' pytest tests/workflow_contracts -q
+		--with 'hypothesis>=6' python -m pytest tests/workflow_contracts -q
 
 docstring-coverage:
 	$(UV) run --no-project --with 'interrogate==1.7.0' interrogate \

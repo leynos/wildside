@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from itertools import chain
+from pathlib import Path
 
+import pytest
 from hypothesis import given, strategies as st
 
 from scripts.nixie_worklist import main, merge_path_streams, select_nixie_paths
@@ -42,6 +46,38 @@ def test_empty_union_selects_repository_fallback() -> None:
 
     assert select_nixie_paths(worklist) == (b".",), (
         "an empty worklist must select the dot fallback"
+    )
+
+
+def test_merge_rejects_truncated_git_stream() -> None:
+    """A non-empty Git stream must retain its final NUL delimiter."""
+    with pytest.raises(
+        ValueError,
+        match="Nixie path stream must end with a NUL delimiter",
+    ):
+        merge_path_streams((b"docs/raw-\xff.md", b"", b"", b""))
+
+
+def test_cli_rejects_truncated_raw_path_stream(tmp_path: Path) -> None:
+    """The command-line helper fails when a raw path record is truncated."""
+    stream_paths = [tmp_path / f"stream-{index}" for index in range(4)]
+    stream_paths[0].write_bytes(b"docs/raw-\xff.md")
+    for stream_path in stream_paths[1:]:
+        stream_path.write_bytes(b"")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/nixie_worklist.py",
+            *(str(stream_path) for stream_path in stream_paths),
+        ],
+        check=False,
+        capture_output=True,
+    )
+
+    assert completed.returncode != 0, "a truncated raw path stream must fail the CLI"
+    assert b"Nixie path stream must end with a NUL delimiter" in completed.stderr, (
+        "the CLI failure must identify the missing NUL delimiter"
     )
 
 

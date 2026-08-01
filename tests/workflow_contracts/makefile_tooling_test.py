@@ -35,8 +35,13 @@ printf '%s\\0%s\\0%s\\0%s\\0%s\\0' \\
     "${TMPDIR:-}" \\
     "${UV_CACHE_DIR:-}" \\
     "${UV_TOOL_DIR:-}" \\
-    "$*" >> "$TOOL_LOG"
+    "$#" >> "$TOOL_LOG"
+for argument in "$@"; do
+    printf '%s\\0' "$argument" >> "$TOOL_LOG"
+done
 """
+
+type ToolInvocation = tuple[str, str, str, str, tuple[str, ...]]
 
 
 def _write_executable(path: Path, source: str) -> None:
@@ -91,15 +96,22 @@ def _run_make(
     )
 
 
-def _read_invocations(log_path: Path) -> list[str]:
+def _read_invocations(log_path: Path) -> list[ToolInvocation]:
     """Return logged command invocations, or an empty list when none ran."""
     if not log_path.exists():
         return []
-    fields = log_path.read_bytes().removesuffix(b"\0").split(b"\0")
-    return [
-        "|".join(field.decode() for field in fields[offset : offset + 5])
-        for offset in range(0, len(fields), 5)
-    ]
+    fields = iter(log_path.read_bytes().removesuffix(b"\0").split(b"\0"))
+    invocations = []
+    while tool := next(fields, None):
+        tmpdir = next(fields).decode()
+        uv_cache_dir = next(fields).decode()
+        uv_tool_dir = next(fields).decode()
+        argument_count = int(next(fields))
+        arguments = tuple(next(fields).decode() for _ in range(argument_count))
+        invocations.append(
+            (tool.decode(), tmpdir, uv_cache_dir, uv_tool_dir, arguments)
+        )
+    return invocations
 
 
 def test_nixie_discovers_all_markdown_sources_and_sets_tempdirs(
@@ -115,22 +127,48 @@ def test_nixie_discovers_all_markdown_sources_and_sets_tempdirs(
     repository_tmp = str(REPOSITORY_ROOT / ".tmp")
     uv_cache = str(REPOSITORY_ROOT / ".uv-cache")
     uv_tools = str(REPOSITORY_ROOT / ".uv-tools")
-    assert invocations[0] == (
-        f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|install --frozen-lockfile"
-    ), "Bun install must receive the repository-local temporary directories"
-    assert invocations[1] == (
-        f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|"
-        "scripts/install-mermaid-browser.mjs"
-    ), "Mermaid setup must receive the repository-local temporary directories"
+    expected_bun_install = (
+        "bun",
+        repository_tmp,
+        uv_cache,
+        uv_tools,
+        ("install", "--frozen-lockfile"),
+    )
+    expected_mermaid_setup = (
+        "bun",
+        repository_tmp,
+        uv_cache,
+        uv_tools,
+        ("scripts/install-mermaid-browser.mjs",),
+    )
     expected_nixie_invocation = (
-        f"uv|{repository_tmp}|{uv_cache}|{uv_tools}|"
-        "tool run --python 3.14 --from nixie-cli@1.1.0 nixie "
-        "--no-sandbox --max-concurrency 1 -- docs/A.md docs/a space.md "
-        "docs/semi;colon & brackets[1].md docs/zeta.md"
+        "uv",
+        repository_tmp,
+        uv_cache,
+        uv_tools,
+        (
+            "tool",
+            "run",
+            "--python",
+            "3.14",
+            "--from",
+            "nixie-cli@1.1.0",
+            "nixie",
+            "--no-sandbox",
+            "--max-concurrency",
+            "1",
+            "--",
+            "docs/A.md",
+            "docs/a space.md",
+            "docs/semi;colon & brackets[1].md",
+            "docs/zeta.md",
+        ),
     )
-    assert invocations == [invocations[0], invocations[1], expected_nixie_invocation], (
-        "Nixie must receive one bytewise ordered, duplicate-free worklist"
-    )
+    assert invocations == [
+        expected_bun_install,
+        expected_mermaid_setup,
+        expected_nixie_invocation,
+    ], "Nixie must receive one bytewise ordered, duplicate-free worklist"
 
 
 def test_nixie_stops_before_validation_when_discovery_fails(
@@ -143,9 +181,7 @@ def test_nixie_stops_before_validation_when_discovery_fails(
     completed = _run_make("nixie", env)
 
     assert completed.returncode != 0
-    assert not any(
-        invocation.startswith("uv|") for invocation in _read_invocations(log_path)
-    )
+    assert not any(invocation[0] == "uv" for invocation in _read_invocations(log_path))
     assert not list((REPOSITORY_ROOT / ".tmp").glob("nixie-*")), (
         "temporary Nixie worklists must be cleaned after discovery failure"
     )
@@ -166,19 +202,37 @@ def test_nixie_uses_repository_fallback_when_worklist_is_empty(
     uv_cache = str(REPOSITORY_ROOT / ".uv-cache")
     uv_tools = str(REPOSITORY_ROOT / ".uv-tools")
     assert invocations[:2] == [
-        f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|install --frozen-lockfile",
+        ("bun", repository_tmp, uv_cache, uv_tools, ("install", "--frozen-lockfile")),
         (
-            f"bun|{repository_tmp}|{uv_cache}|{uv_tools}|"
-            "scripts/install-mermaid-browser.mjs"
+            "bun",
+            repository_tmp,
+            uv_cache,
+            uv_tools,
+            ("scripts/install-mermaid-browser.mjs",),
         ),
     ], "empty discovery must retain both Nixie setup invocations"
     nixie_invocations = [
-        invocation for invocation in invocations if invocation.startswith("uv|")
+        invocation for invocation in invocations if invocation[0] == "uv"
     ]
     expected_nixie_invocation = (
-        f"uv|{repository_tmp}|{uv_cache}|{uv_tools}|"
-        "tool run --python 3.14 --from nixie-cli@1.1.0 nixie "
-        "--no-sandbox --max-concurrency 1 -- ."
+        "uv",
+        repository_tmp,
+        uv_cache,
+        uv_tools,
+        (
+            "tool",
+            "run",
+            "--python",
+            "3.14",
+            "--from",
+            "nixie-cli@1.1.0",
+            "nixie",
+            "--no-sandbox",
+            "--max-concurrency",
+            "1",
+            "--",
+            ".",
+        ),
     )
     assert nixie_invocations == [expected_nixie_invocation], (
         "an empty worklist must invoke Nixie exactly once with the dot fallback"
@@ -200,16 +254,44 @@ def test_nixie_preserves_hostile_worktree_directory_literals(
     repository_tmp = hostile_worktree / ".tmp"
     uv_cache = hostile_worktree / ".uv-cache"
     uv_tools = hostile_worktree / ".uv-tools"
-    expected_environment = f"{repository_tmp}|{uv_cache}|{uv_tools}|"
-    expected_nixie_arguments = (
-        "tool run --python 3.14 --from nixie-cli@1.1.0 nixie "
-        "--no-sandbox --max-concurrency 1 -- docs/A.md docs/a space.md "
-        "docs/semi;colon & brackets[1].md docs/zeta.md"
-    )
     assert _read_invocations(log_path) == [
-        f"bun|{expected_environment}install --frozen-lockfile",
-        f"bun|{expected_environment}scripts/install-mermaid-browser.mjs",
-        f"uv|{expected_environment}{expected_nixie_arguments}",
+        (
+            "bun",
+            str(repository_tmp),
+            str(uv_cache),
+            str(uv_tools),
+            ("install", "--frozen-lockfile"),
+        ),
+        (
+            "bun",
+            str(repository_tmp),
+            str(uv_cache),
+            str(uv_tools),
+            ("scripts/install-mermaid-browser.mjs",),
+        ),
+        (
+            "uv",
+            str(repository_tmp),
+            str(uv_cache),
+            str(uv_tools),
+            (
+                "tool",
+                "run",
+                "--python",
+                "3.14",
+                "--from",
+                "nixie-cli@1.1.0",
+                "nixie",
+                "--no-sandbox",
+                "--max-concurrency",
+                "1",
+                "--",
+                "docs/A.md",
+                "docs/a space.md",
+                "docs/semi;colon & brackets[1].md",
+                "docs/zeta.md",
+            ),
+        ),
     ], "hostile worktree characters must remain literal in exactly three invocations"
 
 
@@ -223,9 +305,16 @@ def test_lint_asyncapi_uses_pnpm_cli_runner(
 
     assert completed.returncode == 0, completed.stderr
     expected_invocation = (
-        f"pnpm||{REPOSITORY_ROOT / '.uv-cache'}|"
-        f"{REPOSITORY_ROOT / '.uv-tools'}|"
-        "dlx @asyncapi/cli@3.4.2 validate "
-        "spec/asyncapi.yaml --fail-severity=info"
+        "pnpm",
+        "",
+        str(REPOSITORY_ROOT / ".uv-cache"),
+        str(REPOSITORY_ROOT / ".uv-tools"),
+        (
+            "dlx",
+            "@asyncapi/cli@3.4.2",
+            "validate",
+            "spec/asyncapi.yaml",
+            "--fail-severity=info",
+        ),
     )
     assert _read_invocations(log_path) == [expected_invocation]
