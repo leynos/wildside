@@ -1,7 +1,6 @@
 //! Tests for route-generation job payloads.
 
 use chrono::{DateTime, Utc};
-use googletest::prelude::*;
 use insta::assert_json_snapshot;
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
@@ -55,9 +54,9 @@ fn constructor_accepts_well_formed_submission(request_id: Uuid, enqueued_at: Dat
     let job = GenerateRouteJob::try_from_submission(&valid_submission(), request_id, enqueued_at)
         .expect("valid submission should build a route-generation job");
 
-    assert_that!(
+    assert_eq!(
         job,
-        eq(&GenerateRouteJob::V1(GenerateRouteJobV1 {
+        GenerateRouteJob::V1(GenerateRouteJobV1 {
             request_id,
             idempotency_key: Some(fixture_idempotency_key()),
             user_id: fixture_user_id(),
@@ -65,7 +64,7 @@ fn constructor_accepts_well_formed_submission(request_id: Uuid, enqueued_at: Dat
             destination: json!({ "lat": 51.5014, "lng": -0.1419 }),
             preferences: Some(json!({ "mode": "walking" })),
             enqueued_at,
-        }))
+        })
     );
 }
 
@@ -83,18 +82,25 @@ fn constructor_rejects_payloads_that_are_not_objects(request_id: Uuid, enqueued_
 }
 
 #[rstest]
-#[case("origin")]
-#[case("destination")]
+#[case::missing_origin("origin", false)]
+#[case::missing_destination("destination", false)]
+#[case::null_origin("origin", true)]
+#[case::null_destination("destination", true)]
 fn constructor_rejects_missing_required_fields(
     #[case] missing_field: &'static str,
+    #[case] should_set_null: bool,
     request_id: Uuid,
     enqueued_at: DateTime<Utc>,
 ) {
     let mut payload = valid_submission().payload;
-    payload
+    let payload_object = payload
         .as_object_mut()
-        .expect("fixture payload must be an object")
-        .remove(missing_field);
+        .expect("fixture payload must be an object");
+    if should_set_null {
+        payload_object.insert(missing_field.to_owned(), Value::Null);
+    } else {
+        payload_object.remove(missing_field);
+    }
     let submission = RouteSubmissionRequest {
         payload,
         ..valid_submission()
@@ -109,6 +115,18 @@ fn constructor_rejects_missing_required_fields(
             field: missing_field
         }
     );
+}
+
+#[rstest]
+fn constructor_normalizes_null_preferences(request_id: Uuid, enqueued_at: DateTime<Utc>) {
+    let mut submission = valid_submission();
+    submission.payload["preferences"] = Value::Null;
+
+    let job = GenerateRouteJob::try_from_submission(&submission, request_id, enqueued_at)
+        .expect("null preferences should be accepted");
+
+    let GenerateRouteJob::V1(payload) = job;
+    assert_eq!(payload.preferences, None);
 }
 
 #[rstest]

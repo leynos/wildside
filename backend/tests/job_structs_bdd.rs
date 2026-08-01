@@ -295,7 +295,7 @@ fn the_overpass_request_preserves_the_job_fields(world: &JobStructWorld) {
         .expect("Overpass conversion should have run");
 
     assert_eq!(request.job_id, job_id());
-    assert_eq!(request.bounding_box, valid_bounding_box().coords());
+    assert_eq!(request.bounding_box, valid_bounding_box().as_array());
     assert_eq!(
         request.tags,
         vec!["amenity".to_owned(), "tourism".to_owned()]

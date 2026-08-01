@@ -14,8 +14,8 @@ pub enum BoundingBoxError {
     /// At least one latitude was outside `[-90.0, 90.0]`.
     #[error("bounding box latitude must be within [-90.0, 90.0]")]
     LatitudeOutOfRange,
-    /// Latitude ordering was inverted or empty.
-    #[error("bounding box latitude ordering must satisfy min_lat < max_lat")]
+    /// Coordinate ordering was inverted or empty.
+    #[error("bounding box ordering must satisfy min_lng < max_lng and min_lat < max_lat")]
     InvertedOrdering,
     /// Longitude ordering indicates an antimeridian-wrapped box.
     #[error("antimeridian-wrapped bounding boxes are not supported")]
@@ -69,10 +69,10 @@ impl BoundingBox {
         if !(-90.0..=90.0).contains(&min_lat) || !(-90.0..=90.0).contains(&max_lat) {
             return Err(BoundingBoxError::LatitudeOutOfRange);
         }
-        if min_lng >= max_lng {
+        if min_lng > max_lng {
             return Err(BoundingBoxError::AntimeridianWrap);
         }
-        if min_lat >= max_lat {
+        if min_lng == max_lng || min_lat >= max_lat {
             return Err(BoundingBoxError::InvertedOrdering);
         }
 
@@ -87,11 +87,6 @@ impl BoundingBox {
     /// Return the coordinates in canonical array order.
     pub fn as_array(self) -> [f64; 4] {
         [self.min_lng, self.min_lat, self.max_lng, self.max_lat]
-    }
-
-    /// Return the coordinates in canonical array order.
-    pub fn coords(&self) -> [f64; 4] {
-        self.as_array()
     }
 }
 

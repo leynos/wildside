@@ -84,6 +84,10 @@ struct TagRejectionCase {
 
 #[rstest]
 #[case(TagRejectionCase {
+    tags: vec![String::new()],
+    expected: EnrichmentJobBuildError::EmptyTags,
+})]
+#[case(TagRejectionCase {
     tags: (0..=ENRICHMENT_JOB_V1_MAX_TAGS)
         .map(|index| format!("tag-{index}"))
         .collect(),
@@ -166,6 +170,10 @@ struct InvalidSerdeTagsCase {
 #[rstest]
 #[case(InvalidSerdeTagsCase {
     tags: serde_json::json!([]),
+    expected_message: "enrichment job requires at least one tag",
+})]
+#[case(InvalidSerdeTagsCase {
+    tags: serde_json::json!([""]),
     expected_message: "enrichment job requires at least one tag",
 })]
 #[case(InvalidSerdeTagsCase {
@@ -267,7 +275,7 @@ fn converts_to_overpass_request(job_id: Uuid, enqueued_at: DateTime<Utc>) {
     let request = job.to_overpass_request();
 
     assert_eq!(request.job_id, job_id);
-    assert_eq!(request.bounding_box, fixture_bounding_box().coords());
+    assert_eq!(request.bounding_box, fixture_bounding_box().as_array());
     assert_eq!(
         request.tags,
         vec!["amenity".to_owned(), "tourism".to_owned()]
@@ -360,7 +368,7 @@ proptest! {
     fn generated_jobs_preserve_overpass_request(job in enrichment_job_strategy()) {
         let request = job.to_overpass_request();
 
-        prop_assert_eq!(request.bounding_box, job.bounding_box().coords());
+        prop_assert_eq!(request.bounding_box, job.bounding_box().as_array());
         prop_assert_eq!(request.tags, job.tags().to_vec());
     }
 }

@@ -1144,7 +1144,6 @@ The queue adapter requires:
 
 - `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
 - `pretty_assertions` – Readable structural equality failures for job payloads
-- `googletest` – Matcher assertions used by job-struct unit tests
 - No feature flags required; BDD tests are in the `tests/` integration
   harness and run unconditionally with `cargo test`
 

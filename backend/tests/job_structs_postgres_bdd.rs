@@ -9,7 +9,7 @@ use backend::outbound::queue::{ApalisPostgresProvider, GenericApalisRouteQueue, 
 use chrono::{DateTime, Utc};
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use pretty_assertions::assert_eq;
-use rstest::{fixture, rstest};
+use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -223,7 +223,6 @@ fn decode_job_restores_both_typed_job_envelopes(world: &SharedContext) {
 }
 
 #[scenario(path = "tests/features/job_structs_postgres.feature")]
-#[rstest]
 fn enqueue_and_decode_typed_jobs_at_the_postgresql_boundary(world: SharedContext) {
     assert!(
         world.lock().expect("context lock").persisted.is_some(),

@@ -184,9 +184,22 @@ fn bounding_box_rejects_invalid_coordinates() {
 }
 
 #[rstest]
-fn bounding_box_rejects_min_greater_than_max() {
+fn bounding_box_rejects_antimeridian_wrap() {
     let result = BoundingBox::new(-3.0, 56.0, -3.2, 55.9);
     assert!(matches!(result, Err(BoundingBoxError::AntimeridianWrap)));
+}
+
+#[rstest]
+fn offline_validation_error_exposes_bounding_box_source() {
+    let error = OfflineValidationError::BoundingBox(BoundingBoxError::NonFinite);
+    let source = StdError::source(&error)
+        .expect("bounding-box validation errors should expose their source");
+
+    assert_eq!(
+        source.downcast_ref::<BoundingBoxError>(),
+        Some(&BoundingBoxError::NonFinite)
+    );
+    assert!(StdError::source(&OfflineValidationError::EmptyDeviceId).is_none());
 }
 
 #[rstest]

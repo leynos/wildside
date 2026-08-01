@@ -85,7 +85,14 @@ impl fmt::Display for OfflineValidationError {
     }
 }
 
-impl std::error::Error for OfflineValidationError {}
+impl std::error::Error for OfflineValidationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::BoundingBox(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 impl From<crate::domain::BoundingBoxError> for OfflineValidationError {
     fn from(error: crate::domain::BoundingBoxError) -> Self {

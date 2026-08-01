@@ -54,7 +54,7 @@ impl GenerateRouteJob {
     /// Returns [`GenerateRouteJobBuildError::PayloadNotObject`] when the
     /// submission payload is not a JSON object. Returns
     /// [`GenerateRouteJobBuildError::PayloadMissingField`] when the payload
-    /// omits `origin` or `destination`.
+    /// omits `origin` or `destination`, or sets either field to JSON `null`.
     pub fn try_from_submission(
         submission: &RouteSubmissionRequest,
         request_id: Uuid,
@@ -66,13 +66,18 @@ impl GenerateRouteJob {
             .ok_or_else(GenerateRouteJobBuildError::payload_not_object)?;
         let origin = payload
             .get("origin")
+            .filter(|value| !value.is_null())
             .cloned()
             .ok_or_else(|| GenerateRouteJobBuildError::payload_missing_field("origin"))?;
         let destination = payload
             .get("destination")
+            .filter(|value| !value.is_null())
             .cloned()
             .ok_or_else(|| GenerateRouteJobBuildError::payload_missing_field("destination"))?;
-        let preferences = payload.get("preferences").cloned();
+        let preferences = payload
+            .get("preferences")
+            .filter(|value| !value.is_null())
+            .cloned();
 
         Ok(Self::v1(GenerateRouteJobV1 {
             request_id,

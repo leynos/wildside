@@ -59,6 +59,8 @@ pub struct EnrichmentJobV1 {
     enqueued_at: DateTime<Utc>,
 }
 
+/// Raw V1 envelope whose `deny_unknown_fields` attribute provides the
+/// effective strictness guarantee for the handwritten job deserializer.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct EnrichmentJobV1EnvelopeRaw {
@@ -110,7 +112,7 @@ pub enum EnrichmentJobBuildError {
     /// Bounding-box validation failed.
     #[error(transparent)]
     BoundingBox(#[from] BoundingBoxError),
-    /// At least one tag is required.
+    /// At least one non-empty tag is required.
     #[error("enrichment job requires at least one tag")]
     EmptyTags,
     /// The tag vector exceeds the V1 limit.
@@ -123,6 +125,15 @@ pub enum EnrichmentJobBuildError {
 
 impl EnrichmentJob {
     /// Build a V1 enrichment job from validated pieces.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EnrichmentJobBuildError::EmptyTags`] when the tag list is
+    /// empty or contains an empty tag,
+    /// [`EnrichmentJobBuildError::TooManyTags`] when it exceeds
+    /// [`ENRICHMENT_JOB_V1_MAX_TAGS`] entries, and
+    /// [`EnrichmentJobBuildError::TagTooLong`] when a tag exceeds
+    /// [`ENRICHMENT_JOB_V1_MAX_TAG_LENGTH`] UTF-8 bytes.
     pub fn v1(params: EnrichmentJobParams) -> Result<Self, EnrichmentJobBuildError> {
         let tags = EnrichmentTags::try_from(params.tags)?;
         Ok(Self::V1(EnrichmentJobV1 {
@@ -139,7 +150,7 @@ impl EnrichmentJob {
         match self {
             Self::V1(payload) => OverpassEnrichmentRequest {
                 job_id: payload.job_id,
-                bounding_box: payload.bounding_box.coords(),
+                bounding_box: payload.bounding_box.as_array(),
                 tags: payload.tags.0.clone(),
             },
         }
@@ -273,7 +284,8 @@ impl<'de> Visitor<'de> for BoundedTagVisitor {
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
-            "an enrichment tag no longer than {ENRICHMENT_JOB_V1_MAX_TAG_LENGTH} UTF-8 bytes"
+            "a non-empty enrichment tag no longer than \
+             {ENRICHMENT_JOB_V1_MAX_TAG_LENGTH} UTF-8 bytes"
         )
     }
 
@@ -295,6 +307,9 @@ impl<'de> Visitor<'de> for BoundedTagVisitor {
 }
 
 fn validate_tag_length(tag: &str) -> Result<(), EnrichmentJobBuildError> {
+    if tag.is_empty() {
+        return Err(EnrichmentJobBuildError::EmptyTags);
+    }
     if tag.len() > ENRICHMENT_JOB_V1_MAX_TAG_LENGTH {
         return Err(EnrichmentJobBuildError::TagTooLong {
             limit: ENRICHMENT_JOB_V1_MAX_TAG_LENGTH,

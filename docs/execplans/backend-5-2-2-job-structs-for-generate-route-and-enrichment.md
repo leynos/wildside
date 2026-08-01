@@ -110,10 +110,10 @@ Hard invariants. Violation requires escalation, not workarounds.
 - Queue adapter: stop and escalate before touching
   `ApalisPostgresProvider`, `PostgresStorage`, or `QueueProvider`.
 - Dependencies: stop and escalate before adding any production dependency
-  not already in `backend/Cargo.toml`. The plan expects only dev-dependency
-  additions of `pretty_assertions` and `googletest` (both are currently absent
-  from the workspace; see Surprises & Discoveries) plus continued use of the
-  existing `rstest`, `rstest-bdd`, `proptest`, and `insta` crates.
+  not already in `backend/Cargo.toml`. Use the existing `pretty_assertions`
+  dev-dependency for structural equality assertions; no matcher dependency is
+  required. Continue using the existing `rstest`, `rstest-bdd`, `proptest`, and
+  `insta` crates.
 - Iterations: stop and document logs if any gate (`make check-fmt`,
   `make lint`, `make test`, or the focused queue/job suites) still fails after
   three focused repair loops.
@@ -211,13 +211,6 @@ contained within this plan.
   Severity: low. Likelihood: medium. Mitigation: state the omission explicitly
   in the architecture doc, cross-reference roadmap 5.2.4, and add a Decision
   Log entry.
-
-- Risk: `googletest` and `pretty_assertions` are absent from the workspace
-  today, yet the task instructions require their assertions. Severity: low.
-  Likelihood: high. Mitigation: add both as workspace `dev-dependencies` in
-  milestone M1, scoped to job-struct test modules, and confirm the addition
-  with the user during the approval pass. If approval requires keeping them
-  out, fall back to `assert_eq!` plus structured failure messages.
 
 ## Skills and reference documents
 
@@ -338,10 +331,9 @@ Add a new domain submodule and prepare the test surface:
    "Interfaces and dependencies" below. The module starts empty apart from the
    documentation header and `pub mod generate_route;` / `pub mod enrichment;`
    declarations.
-2. Add `pretty_assertions = "1"` and `googletest = "0.13"` (or the latest
-   1.x line that compiles with edition 2024) to `backend/Cargo.toml`'s
-   `[dev-dependencies]`. If either crate fails to compile, stop and escalate;
-   do not silently downgrade test rigour.
+2. Ensure `pretty_assertions = "1"` is present in `backend/Cargo.toml`'s
+   `[dev-dependencies]`. Use `pretty_assertions::assert_eq!` for structural
+   equality assertions; do not add a matcher dependency.
 3. Create empty test module files
    `backend/src/domain/jobs/generate_route.rs` and
    `backend/src/domain/jobs/enrichment.rs`, each with a
@@ -499,12 +491,11 @@ adapter contract.
      Given an `EnrichmentJob::V1`, when `to_overpass_request` is called,
      then the resulting `OverpassEnrichmentRequest` carries the same
      bounding box, tag list, and `job_id`.
-3. Where a PostgreSQL-backed scenario is justified, reuse the embedded
-   PostgreSQL harness described in `docs/pg-embed-setup-unpriv-users-guide.md`
-   and follow the precedent in `backend/tests/route_queue_apalis_bdd.rs`. Keep
-   these scenarios behind a tag so they remain skippable when embedded
-   PostgreSQL is not available. If no scenario benefits from a live database,
-   omit the PostgreSQL-backed path and record that in `Decision Log`.
+3. Use the embedded PostgreSQL harness described in
+   `docs/pg-embed-setup-unpriv-users-guide.md` for the persisted-boundary
+   scenario, following the precedent in `backend/tests/route_queue_apalis_bdd.rs`.
+   This scenario is not behind a tag or `cluster_skip`: embedded PostgreSQL
+   setup failure fails the test rather than skipping it.
 4. Run the behavioural suite:
 
    ```bash
@@ -777,6 +768,7 @@ pub enum EnrichmentJob {
 pub struct EnrichmentJobV1 {
     job_id: Uuid,
     idempotency_key: Option<IdempotencyKey>,
+    #[serde(with = "crate::domain::bounding_box::array_wire")]
     bounding_box: BoundingBox,
     /// Sorted, deduplicated tag list. Bounded by
     /// `ENRICHMENT_JOB_V1_MAX_TAGS` and per-tag
@@ -799,7 +791,8 @@ impl EnrichmentJob {
     pub fn to_overpass_request(&self) -> OverpassEnrichmentRequest { /* ... */ }
 }
 
-// `EnrichmentJob` implements `Deserialize` through a private raw envelope.
+// `EnrichmentJob` implements `Deserialize` through a private raw envelope,
+// which applies the same `array_wire` adapter to `bounding_box`.
 // `EnrichmentTags` uses a streaming sequence visitor that rejects item 65 and
 // overlong strings before reading the remaining input, then canonicalizes the
 // bounded collection.
@@ -824,14 +817,13 @@ constructs only through `EnrichmentJob::v1` or the validating `Deserialize`
 impl, so every payload — built in-process or decoded off the wire — carries
 canonicalized, bounded tags.
 
-In `backend/Cargo.toml`'s `[dev-dependencies]` (new entries only):
+In `backend/Cargo.toml`'s `[dev-dependencies]`:
 
 ```toml
 pretty_assertions = "1"
-googletest = "0.13"
 ```
 
-If neither crate compiles cleanly on edition 2024, stop and escalate.
+Use `pretty_assertions::assert_eq!` for structural equality assertions.
 
 ## Validation and acceptance
 
@@ -994,6 +986,9 @@ The plan ships in two PRs:
   `make markdownlint`, `make nixie`, `make test`, `make typecheck`, and
   `make lint`. The Rust suite ran 1410 tests with 1410 passed and 4 skipped;
   frontend, workflow-contract, and local Kubernetes suites also passed.
+- [x] (2026-08-01) Review-driven test simplification removed the backend
+  `googletest` dev-dependency and replaced its sole matcher assertion with
+  `pretty_assertions::assert_eq!`; no production behaviour changed.
 
 ## Surprises & discoveries
 
@@ -1225,6 +1220,12 @@ The plan ships in two PRs:
   the test proves both real enqueue encoding and worker-side validation.
   Date/Author: 2026-07-31 / implementation agent.
 
+- Decision: Use `pretty_assertions::assert_eq!` for structural equality in the
+  job-struct tests and remove the backend `googletest` dev-dependency. Rationale:
+  review found that the matcher dependency served only one assertion, so the
+  existing readable equality assertion covers the same test contract with less
+  test-only dependency surface. Date/Author: 2026-08-01 / implementation agent.
+
 ## Outcomes & retrospective
 
 Roadmap item 5.2.2 is complete. The backend now has domain-owned, versioned job
@@ -1276,3 +1277,6 @@ documentation changes.
   and `merman-cli` tools installed as documented in the developers' guide.
   This changes validation prerequisites only; the implementation scope and
   acceptance criteria are unchanged.
+- 2026-08-01: Simplified the job-struct test dependency surface after review by
+  removing backend `googletest` and replacing its sole matcher assertion with
+  `pretty_assertions::assert_eq!`; updated current-state dependency guidance.
