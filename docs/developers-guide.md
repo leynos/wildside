@@ -199,6 +199,10 @@ Makefile targets are the canonical local and Continuous Integration (CI) entry
 points. Package-local Bun commands are allowed for focused iteration, but a
 change is not ready to commit until the relevant Makefile gates pass.
 
+The repository's `rust-toolchain.toml` pins the dated nightly used by local and
+CI builds. Its minimal profile installs `rustfmt`, Clippy, and `rust-analyzer`,
+so editor analysis uses the same compiler toolchain as the repository gates.
+
 ### Architectural patterns
 
 Front-end implementation follows the roadmap phase order:
@@ -810,6 +814,45 @@ dependency declarations (PEP 723 inline metadata), and style guidance.
    guard (see "Programmatic API" under "Override policy check") so the module
    can be imported cleanly in tests.
 
+### Makefile tooling contracts
+
+Command-level Makefile coverage lives in
+`tests/workflow_contracts/makefile_tooling_test.py` and runs through
+`make test-workflow-contracts`, which is part of `make test`. The tests place
+command doubles on `PATH` while executing the real recipes, so runner choice,
+arguments, and environment propagation remain covered without downloading the
+tools under test.
+
+UV-backed Makefile targets export repository-absolute `UV_CACHE_DIR` and
+`UV_TOOL_DIR` values that point to the ignored `.uv-cache` and `.uv-tools`
+directories. This keeps UV writes inside the worktree when a sandbox does not
+permit writes to the user cache. Recipes rely on Make's exported environment
+rather than expanding directory values as shell assignment text, preserving
+literal worktree paths that contain spaces or shell metacharacters.
+
+The `nixie` target also sets `TMPDIR` to the ignored `.tmp` directory for its
+frozen Bun install, browser setup and diagram validation. It collects committed,
+staged, unstaged and untracked Markdown paths as NUL-delimited records, checks
+each discovery command, then sorts and deduplicates the records before invoking
+Nixie. The committed-path discovery evaluates `origin/main...HEAD`; therefore,
+the checkout must contain full history and the `origin/main` remote-tracking
+reference. The CI `build` checkout uses `fetch-depth: 0` to provide both. The
+regression contract is
+`tests/workflow_contracts/ci_workflow_test.py::test_build_checkout_fetches_origin_main_history`.
+These rules preserve unusual filenames and prevent a discovery failure from
+producing a false-green validation result.
+
+The deterministic merge lives in `scripts/nixie_worklist.py`. Property tests
+exercise its bytewise sorted unique-union invariant, while command-level tests
+protect repository-local temporary directories and the empty-worklist `.`
+fallback. `make docstring-coverage` applies the repository's 80% Python
+docstring threshold to this helper and the workflow-contract suite;
+`make test-workflow-contracts` runs that gate in CI before executing pytest.
+
+The `lint-asyncapi` target invokes AsyncAPI CLI 3.4.2 through `pnpm dlx` and
+validates `spec/asyncapi.yaml` with `--fail-severity=info`. Keep this runner form
+because it resolves the package's `asyncapi` binary reliably in the workspace.
+
 ## UX audit helpers
 
 `scripts/audit-ux-state-graph.mjs` supports front-end source catalogue work by
@@ -869,10 +912,16 @@ not add a top-level `overrides` block: npm consumes that block for ordinary
 commands such as `npx`, and rejects overrides that conflict with direct
 dependency ranges.
 
+Bun does not consume `pnpm.overrides`. Mirror security fixes that Bun must
+resolve in the top-level `resolutions` block, which Bun consumes without
+exposing the fixes to npm's override handling. Regenerate both `pnpm-lock.yaml`
+and `bun.lock` after changing a shared security pin.
+
 Bun audit exceptions are handled by `security/run-bun-audit.js`, which turns
 non-expired entries in `security/audit-exceptions.json` into explicit
 `bun audit --ignore=<GHSA>` flags. This keeps Bun audit policy visible without
-changing npm's dependency resolution surface.
+changing npm's dependency resolution surface. Prefer a patched Bun resolution;
+use an exception only when no compatible patched release can be resolved.
 
 The script `scripts/check-overrides-policy.mjs` verifies that `pnpm.overrides`
 is present and that top-level overrides are absent. It is run automatically in
@@ -896,8 +945,9 @@ A failing run prints a policy diagnostic to stderr and exits with code `1`.
 ### Resolving failures
 
 When the check fails, open `package.json` and remove any top-level `overrides`
-entries. Keep dependency patches under `pnpm.overrides`; for Bun audit output,
-add a time-bound entry to `security/audit-exceptions.json` and let
+entries. Keep pnpm dependency patches under `pnpm.overrides` and put matching
+Bun patches under `resolutions`. If Bun cannot resolve a compatible patched
+release, add a time-bound entry to `security/audit-exceptions.json` and let
 `pnpm run audit:bun` pass the corresponding advisory ID to Bun.
 
 ### CI integration
@@ -1117,6 +1167,4 @@ names, wire values and immutable fixtures without adding ordinary bare-word
 exceptions.
 
 The standalone phrase helper and its tests use Python 3.14 at runtime, Pathspec
-1.1.1 and a Python 3.13 Ruff compatibility target. Continuous integration
-installs Nixie 1.1.0 and Merman CLI 0.7.0 before validating the repository's
-Mermaid diagrams with `make nixie`.
+1.1.1 and a Python 3.13 Ruff compatibility target.

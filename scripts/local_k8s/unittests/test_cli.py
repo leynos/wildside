@@ -156,7 +156,7 @@ def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
     assert make is not None, "make must be available to execute preview targets"
     for target in targets:
         completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
-            [make, "--no-print-directory", target],
+            [make, "--no-print-directory", f"PATH={env['PATH']}", target],
             text=True,
             capture_output=True,
             check=False,

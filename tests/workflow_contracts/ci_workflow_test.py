@@ -10,19 +10,37 @@ import yaml
 WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 
 
-def _load_steps() -> list[dict[str, object]]:
-    """Parse and return the CI coverage steps."""
+def _load_steps(job_name: str = "coverage") -> list[dict[str, object]]:
+    """Parse and return the steps for one CI job."""
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     jobs = workflow.get("jobs")
     assert isinstance(jobs, dict), "the CI workflow must declare jobs"
-    coverage = jobs.get("coverage")
-    assert isinstance(coverage, dict), "the CI workflow must declare coverage"
-    steps = coverage.get("steps")
-    assert isinstance(steps, list), "the coverage job must declare steps"
+    job = jobs.get(job_name)
+    assert isinstance(job, dict), f"the CI workflow must declare {job_name}"
+    steps = job.get("steps")
+    assert isinstance(steps, list), f"the {job_name} job must declare steps"
     assert all(isinstance(step, dict) for step in steps), (
         "every coverage step must be a mapping"
     )
     return cast("list[dict[str, object]]", steps)
+
+
+def test_build_checkout_fetches_origin_main_history() -> None:
+    """The build checkout fetches branches required by Nixie discovery."""
+    checkouts = [
+        step
+        for step in _load_steps("build")
+        if str(step.get("uses", "")).startswith("actions/checkout@")
+    ]
+    assert len(checkouts) == 1, "the build job must have one checkout step"
+    checkout = checkouts[0]
+    assert checkout.get("uses") == (
+        "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+    ), "the build checkout must preserve the reviewed action pin"
+    checkout_options = checkout.get("with")
+    assert isinstance(checkout_options, dict), "the build checkout needs options"
+    assert checkout_options.get("persist-credentials") is False
+    assert checkout_options.get("fetch-depth") == 0
 
 
 def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:

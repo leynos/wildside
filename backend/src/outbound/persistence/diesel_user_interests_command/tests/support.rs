@@ -53,20 +53,38 @@ impl StubUserPreferencesRepository {
         }
     }
 
-    pub(super) fn set_find_failure(&self, failure: StubFailure) {
-        *self.find_failure.lock().expect("find failure lock") = Some(failure);
+    /// Configure the next repository lookup to return `failure`.
+    pub(super) fn set_find_failure(&self, failure: StubFailure) -> Result<(), String> {
+        *self
+            .find_failure
+            .lock()
+            .map_err(|error| format!("failed to lock find failure: {error}"))? = Some(failure);
+        Ok(())
     }
 
-    pub(super) fn set_save_failure(&self, failure: StubFailure) {
-        *self.save_failures.lock().expect("save failure lock") = vec![failure];
+    /// Configure the next repository save to return `failure`.
+    pub(super) fn set_save_failure(&self, failure: StubFailure) -> Result<(), String> {
+        *self
+            .save_failures
+            .lock()
+            .map_err(|error| format!("failed to lock save failures: {error}"))? = vec![failure];
+        Ok(())
     }
 
-    pub(super) fn last_save_call(&self) -> Option<(UserPreferences, Option<u32>)> {
-        self.last_save.lock().expect("last save lock").clone()
+    /// Return the preferences and revision supplied to the latest save.
+    pub(super) fn last_save_call(&self) -> Result<Option<(UserPreferences, Option<u32>)>, String> {
+        self.last_save
+            .lock()
+            .map(|last_save| last_save.clone())
+            .map_err(|error| format!("failed to lock last save: {error}"))
     }
 
-    pub(super) fn save_call_count(&self) -> usize {
-        *self.save_call_count.lock().expect("save call count lock")
+    /// Return how many saves the stub repository observed.
+    pub(super) fn save_call_count(&self) -> Result<usize, String> {
+        self.save_call_count
+            .lock()
+            .map(|count| *count)
+            .map_err(|error| format!("failed to lock save call count: {error}"))
     }
 }
 
@@ -76,14 +94,19 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
         &self,
         user_id: &UserId,
     ) -> Result<Option<UserPreferences>, UserPreferencesRepositoryError> {
-        if let Some(failure) = *self.find_failure.lock().expect("find failure lock") {
+        let find_failure = self
+            .find_failure
+            .lock()
+            .map_err(|_| UserPreferencesRepositoryError::query("find failure lock poisoned"))?
+            .take();
+        if let Some(failure) = find_failure {
             return Err(failure.to_error());
         }
 
         Ok(self
             .stored_preferences
             .lock()
-            .expect("stored preferences lock")
+            .map_err(|_| UserPreferencesRepositoryError::query("stored preferences lock poisoned"))?
             .as_ref()
             .filter(|preferences| preferences.user_id == *user_id)
             .cloned())
@@ -94,10 +117,14 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
         preferences: &UserPreferences,
         expected_revision: Option<u32>,
     ) -> Result<(), UserPreferencesRepositoryError> {
-        *self.save_call_count.lock().expect("save call count lock") += 1;
+        *self.save_call_count.lock().map_err(|_| {
+            UserPreferencesRepositoryError::query("save call count lock poisoned")
+        })? += 1;
 
         let failure = {
-            let mut failures = self.save_failures.lock().expect("save failure lock");
+            let mut failures = self.save_failures.lock().map_err(|_| {
+                UserPreferencesRepositoryError::query("save failures lock poisoned")
+            })?;
             if failures.is_empty() {
                 None
             } else {
@@ -112,7 +139,7 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
         let stored_revision = self
             .stored_preferences
             .lock()
-            .expect("stored preferences lock")
+            .map_err(|_| UserPreferencesRepositoryError::query("stored preferences lock poisoned"))?
             .as_ref()
             .map(|stored_preferences| stored_preferences.revision);
 
@@ -128,26 +155,33 @@ impl UserPreferencesRepository for StubUserPreferencesRepository {
             }
         }
 
+        *self.stored_preferences.lock().map_err(|_| {
+            UserPreferencesRepositoryError::query("stored preferences lock poisoned")
+        })? = Some(preferences.clone());
         *self
-            .stored_preferences
+            .last_save
             .lock()
-            .expect("stored preferences lock") = Some(preferences.clone());
-        *self.last_save.lock().expect("last save lock") =
+            .map_err(|_| UserPreferencesRepositoryError::query("last save lock poisoned"))? =
             Some((preferences.clone(), expected_revision));
         Ok(())
     }
 }
 
-pub(super) fn user_id() -> UserId {
-    UserId::new("11111111-1111-1111-1111-111111111111").expect("valid user id")
+/// Build the stable user identifier shared by command tests.
+pub(super) fn user_id() -> Result<UserId, crate::domain::user::UserValidationError> {
+    UserId::new("11111111-1111-1111-1111-111111111111")
 }
 
-pub(super) fn interest_theme_id(value: &str) -> InterestThemeId {
-    InterestThemeId::new(value).expect("valid interest theme id")
+/// Build a validated interest-theme identifier for command tests.
+pub(super) fn interest_theme_id(
+    value: &str,
+) -> Result<InterestThemeId, crate::domain::interest_theme::InterestThemeIdValidationError> {
+    InterestThemeId::new(value)
 }
 
-pub(super) fn uuid_id(value: &str) -> Uuid {
-    Uuid::parse_str(value).expect("valid uuid")
+/// Parse a UUID used by repository expectations.
+pub(super) fn uuid_id(value: &str) -> Result<Uuid, uuid::Error> {
+    Uuid::parse_str(value)
 }
 
 pub(super) fn request(

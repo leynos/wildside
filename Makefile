@@ -44,12 +44,41 @@ PATHSPEC_VERSION ?= 1.1.1
 RUFF_VERSION ?= 0.15.12
 TYPOS_VERSION ?= 1.48.0
 UV ?= uv
-UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
-NIXIE = $(UV_ENV) $(UV) tool run --python 3.14 \
+export UV_CACHE_DIR := $(CURDIR)/.uv-cache
+export UV_TOOL_DIR := $(CURDIR)/.uv-tools
+export REPOSITORY_TMPDIR := $(CURDIR)/.tmp
+NIXIE = $(UV) tool run --python 3.14 \
 	--from nixie-cli@$(NIXIE_VERSION) nixie
+export NIXIE_WORKLIST_HELPER := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))scripts/nixie_worklist.py
+define NIXIE_CMD
+@paths_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-paths.XXXXXX") || exit 1; \
+	committed_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-committed.XXXXXX") || exit 1; \
+	staged_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-staged.XXXXXX") || exit 1; \
+	unstaged_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-unstaged.XXXXXX") || exit 1; \
+	untracked_file=$$(mktemp "$$REPOSITORY_TMPDIR/nixie-untracked.XXXXXX") || exit 1; \
+	trap 'rm -f "$$paths_file" "$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file"' EXIT HUP INT TERM; \
+	git diff --name-only -z --diff-filter=ACMR \
+		origin/main...HEAD -- '*.md' > "$$committed_file" || exit 1; \
+	git diff --cached --name-only -z --diff-filter=ACMR \
+		-- '*.md' > "$$staged_file" || exit 1; \
+	git diff --name-only -z --diff-filter=ACMR \
+		-- '*.md' > "$$unstaged_file" || exit 1; \
+	git ls-files --others --exclude-standard -z \
+		-- '*.md' > "$$untracked_file" || exit 1; \
+	python3 "$$NIXIE_WORKLIST_HELPER" \
+		"$$committed_file" "$$staged_file" "$$unstaged_file" "$$untracked_file" \
+		> "$$paths_file" || exit 1; \
+	if [ -s "$$paths_file" ]; then \
+	  xargs -0 -r env TMPDIR="$$REPOSITORY_TMPDIR" $(NIXIE) \
+	    --no-sandbox --max-concurrency 1 -- < "$$paths_file" || exit 1; \
+	else \
+	  env TMPDIR="$$REPOSITORY_TMPDIR" $(NIXIE) \
+	    --no-sandbox --max-concurrency 1 -- . || exit 1; \
+	fi
+endef
 TYPOS_CONFIG_BUILDER_COMMIT := b604f198797fdd36a567dd0f8f07b13f9539b241
 TYPOS_CONFIG_BUILDER_SOURCE := git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_COMMIT)
-TYPOS_CONFIG_BUILDER := $(UV_ENV) $(UV) tool run --python 3.14 \
+TYPOS_CONFIG_BUILDER := $(UV) tool run --python 3.14 \
 	--from "$(TYPOS_CONFIG_BUILDER_SOURCE)" typos-config-builder
 SPELLING_PY_SRCS := \
 	scripts/typos_rollout_check.py scripts/tests/test_typos_rollout_check.py
@@ -58,7 +87,7 @@ SPELLING_COVERAGE_ARGS := --cov=typos_rollout_check --cov-fail-under=90
 PYTHON_NO_BYTECODE_ENV := PYTHONDONTWRITEBYTECODE=1
 SPELLING_COVERAGE_FILE ?= /tmp/$(APP)-spelling-helper.coverage
 SPELLING_HELPER_PYTEST = PYTHONPATH=scripts $(PYTHON_NO_BYTECODE_ENV) \
-	COVERAGE_FILE=$(SPELLING_COVERAGE_FILE) $(UV_ENV) $(UV) run --no-project \
+	COVERAGE_FILE=$(SPELLING_COVERAGE_FILE) $(UV) run --no-project \
 	--python 3.14 --with pathspec==$(PATHSPEC_VERSION) --with pytest==9.0.2 \
 	--with pytest-cov==7.0.0 python -m pytest
 OPENAPI_SPEC ?= spec/openapi.json
@@ -66,7 +95,7 @@ OPENAPI_SPEC ?= spec/openapi.json
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile
+.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile docstring-coverage
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: spelling spelling-phrase-check spelling-config spelling-config-write spelling-helper-test
@@ -165,7 +194,7 @@ lint-architecture:
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
 	if [ -f spec/asyncapi.yaml ]; then \
-	  bun x --package=@asyncapi/cli@$(ASYNCAPI_CLI_VERSION) asyncapi validate spec/asyncapi.yaml --fail-severity=info; \
+	  pnpm dlx @asyncapi/cli@$(ASYNCAPI_CLI_VERSION) validate spec/asyncapi.yaml --fail-severity=info; \
 	fi
 
 # Lint OpenAPI spec with Redocly CLI
@@ -219,7 +248,7 @@ PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.1
 NEXTEST_TEST_THREADS ?= 1
 
 
-test: test-rust test-frontend test-scripts
+test: test-rust test-frontend test-workflow-contracts test-scripts
 
 test-rust: workspace-sync prepare-pg-worker
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast
@@ -229,8 +258,14 @@ test-frontend: deps typecheck
 	pnpm run test:workspaces
 
 # Validate the mutation-testing caller workflow contract
-test-workflow-contracts:
-	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' pytest tests/workflow_contracts -q
+test-workflow-contracts: docstring-coverage
+	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' \
+		--with 'hypothesis>=6' python -m pytest tests/workflow_contracts -q
+
+docstring-coverage:
+	$(UV) run --no-project --with 'interrogate==1.7.0' interrogate \
+		--fail-under 80 -v \
+		scripts/nixie_worklist.py tests/workflow_contracts
 
 # Python unit tests for the local Kubernetes preview helper
 # (scripts/local_k8s). Run from the repository root so the make-target smoke
@@ -321,18 +356,18 @@ markdownlint: spelling
 	fi
 
 nixie:
-	bun install
-	bun scripts/install-mermaid-browser.mjs
-	# CI needs --no-sandbox; serial runs (--max-concurrency 1) avoid browser
-	# EAGAIN writes. Remove --no-sandbox once nixie supports env-var control.
-	$(NIXIE) --no-sandbox --max-concurrency 1
+	mkdir -p "$$REPOSITORY_TMPDIR"
+	TMPDIR="$$REPOSITORY_TMPDIR" bun install --frozen-lockfile
+	TMPDIR="$$REPOSITORY_TMPDIR" bun scripts/install-mermaid-browser.mjs
+	# CI needs --no-sandbox; serial runs avoid browser EAGAIN writes.
+	$(NIXIE_CMD)
 
 spelling: spelling-phrase-check
-	@git ls-files -z | xargs -0 -r env $(UV_ENV) \
+	@git ls-files -z | xargs -0 -r env \
 		$(UV) tool run typos@$(TYPOS_VERSION) --config typos.toml --force-exclude --hidden
 
 spelling-phrase-check: spelling-config
-	@PYTHONPATH=scripts $(PYTHON_NO_BYTECODE_ENV) $(UV_ENV) $(UV) run --no-project --python 3.14 \
+	@PYTHONPATH=scripts $(PYTHON_NO_BYTECODE_ENV) $(UV) run --no-project --python 3.14 \
 		scripts/typos_rollout_check.py --repository .
 
 spelling-config: spelling-helper-test
@@ -343,8 +378,8 @@ spelling-config-write: spelling-helper-test
 	@$(TYPOS_CONFIG_BUILDER) --repository .
 
 spelling-helper-test:
-	@$(UV_ENV) $(UV) tool run ruff@$(RUFF_VERSION) format --isolated --target-version py313 --check $(SPELLING_PY_SRCS)
-	@$(UV_ENV) $(UV) tool run ruff@$(RUFF_VERSION) check --isolated --target-version py313 $(SPELLING_PY_SRCS)
+	@$(UV) tool run ruff@$(RUFF_VERSION) format --isolated --target-version py313 --check $(SPELLING_PY_SRCS)
+	@$(UV) tool run ruff@$(RUFF_VERSION) check --isolated --target-version py313 $(SPELLING_PY_SRCS)
 	@$(SPELLING_HELPER_PYTEST) $(SPELLING_PY_TESTS) -c /dev/null --rootdir=. -p no:cacheprovider $(SPELLING_COVERAGE_ARGS)
 
 yamllint:
