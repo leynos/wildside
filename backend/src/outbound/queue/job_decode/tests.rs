@@ -8,6 +8,7 @@
 use super::*;
 use crate::domain::jobs::{EnrichmentJob, GenerateRouteJob};
 use crate::domain::ports::JobDispatchError;
+use rstest::rstest;
 use serde_json::{Value, json};
 
 /// A canonical `v1` route-generation payload matching the wire snapshot.
@@ -64,37 +65,24 @@ fn decode_unknown_version_is_rejected() {
     let error = decode_job::<GenerateRouteJob>(&payload)
         .expect_err("an unknown envelope version must be rejected");
 
-    let JobDispatchError::Rejected { message } = error else {
-        panic!("expected JobDispatchError::Rejected, got {error:?}");
-    };
-    assert!(
-        message.contains("v2"),
-        "rejection message should name the received version: {message}"
+    assert_eq!(
+        rejection_message(error),
+        "unsupported job envelope version: v2"
     );
 }
-#[test]
-fn decode_unreadable_version_is_rejected_without_panic() {
-    let mut missing_version = valid_generate_route_v1();
-    missing_version
-        .as_object_mut()
-        .expect("payload is a JSON object")
-        .remove("v");
 
-    let mut non_string_version = valid_generate_route_v1();
-    non_string_version["v"] = json!(2);
+#[rstest]
+#[case::missing_version("missing version", json!({}))]
+#[case::non_string_version("non-string version", json!({ "v": 2 }))]
+fn decode_unreadable_version_is_rejected_without_panic(#[case] case: &str, #[case] payload: Value) {
+    let error = decode_job::<GenerateRouteJob>(&payload)
+        .expect_err("an unreadable envelope version must be rejected");
 
-    for (case, payload) in [
-        ("missing version", missing_version),
-        ("non-string version", non_string_version),
-    ] {
-        let error = decode_job::<GenerateRouteJob>(&payload)
-            .expect_err("an unreadable envelope version must be rejected");
-
-        assert!(
-            matches!(error, JobDispatchError::Rejected { .. }),
-            "{case} should be rejected, got {error:?}"
-        );
-    }
+    assert_eq!(
+        rejection_message(error),
+        "malformed job payload",
+        "{case} should use the fixed malformed-payload diagnostic"
+    );
 }
 
 #[test]
@@ -105,10 +93,7 @@ fn decode_malformed_payload_is_rejected_without_panic() {
 
     let error =
         decode_job::<EnrichmentJob>(&payload).expect_err("a malformed v1 body must be rejected");
-    assert!(
-        matches!(error, JobDispatchError::Rejected { .. }),
-        "malformed payload should be rejected, got {error:?}"
-    );
+    assert_eq!(rejection_message(error), "malformed job payload");
 }
 
 #[test]
@@ -120,14 +105,81 @@ fn decode_caps_untrusted_version_diagnostics() {
     let error = decode_job::<GenerateRouteJob>(&payload)
         .expect_err("an oversized unknown version must be rejected");
 
-    let JobDispatchError::Rejected { message } = error else {
-        panic!("expected JobDispatchError::Rejected, got {error:?}");
-    };
+    let message = rejection_message(error);
     assert_eq!(
         message,
         format!(
-            "unrecognized or malformed job envelope version: {}",
+            "unsupported job envelope version: {}",
             "v".repeat(EXPECTED_DIAGNOSTIC_LENGTH)
         )
     );
+
+    let expected_utf8_prefix = "v".repeat(EXPECTED_DIAGNOSTIC_LENGTH - 1);
+    payload["v"] = json!(format!("{expected_utf8_prefix}é"));
+
+    let error = decode_job::<GenerateRouteJob>(&payload)
+        .expect_err("an unknown version crossing the byte limit must be rejected");
+    let message = rejection_message(error);
+    assert_eq!(
+        message,
+        format!("unsupported job envelope version: {expected_utf8_prefix}")
+    );
+}
+
+#[rstest]
+#[case::newline("v2\n", r"v2\n")]
+#[case::carriage_return("v2\r", r"v2\r")]
+#[case::tab("v2\t", r"v2\t")]
+#[case::backslash(r"v2\", r"v2\\")]
+#[case::terminal_escape("v2\u{1b}", r"v2\u{1b}")]
+#[case::line_separator("v2\u{2028}", r"v2\u{2028}")]
+#[case::paragraph_separator("v2\u{2029}", r"v2\u{2029}")]
+#[case::right_to_left_override("v2\u{202e}", r"v2\u{202e}")]
+#[case::left_to_right_mark("v2\u{200e}", r"v2\u{200e}")]
+#[case::non_ascii_letter("v2é", r"v2\u{e9}")]
+#[case::space("v2 ", r"v2\u{20}")]
+fn decode_escapes_unsupported_characters_in_version_diagnostics(
+    #[case] version: &str,
+    #[case] expected_diagnostic: &str,
+) {
+    let mut payload = valid_generate_route_v1();
+    payload["v"] = json!(version);
+
+    let error = decode_job::<GenerateRouteJob>(&payload)
+        .expect_err("an unsupported version must be rejected");
+    let message = rejection_message(error);
+
+    assert_eq!(
+        message,
+        format!("unsupported job envelope version: {expected_diagnostic}")
+    );
+    assert!(
+        message.chars().all(|character| {
+            character.is_ascii_graphic() || character == ' ' || character == ':'
+        }),
+        "rejection diagnostics must contain only printable ASCII: {message:?}"
+    );
+}
+
+#[test]
+fn decode_caps_escaped_control_heavy_version_diagnostics() {
+    let mut payload = valid_generate_route_v1();
+    payload["v"] = json!("v2\n".repeat(100));
+
+    let error = decode_job::<GenerateRouteJob>(&payload)
+        .expect_err("an oversized control-bearing version must be rejected");
+    let message = rejection_message(error);
+    let diagnostic = message
+        .strip_prefix("unsupported job envelope version: ")
+        .expect("rejection should use the unsupported-version prefix");
+
+    assert!(diagnostic.len() <= MAX_VERSION_DIAGNOSTIC_BYTES);
+    assert!(!diagnostic.chars().any(char::is_control));
+}
+
+fn rejection_message(error: JobDispatchError) -> String {
+    let JobDispatchError::Rejected { message } = error else {
+        panic!("expected JobDispatchError::Rejected, got {error:?}");
+    };
+    message
 }

@@ -5,8 +5,8 @@
 //! validates the durable [`BoundingBox`] array
 //! shape through `crate::domain::bounding_box::array_wire`, and bounds tag
 //! decoding before canonicalization. [`EnrichmentJob`] converts to the
-//! [`OverpassEnrichmentRequest`]
-//! consumed by the Overpass enrichment port.
+//! vendor-neutral [`EnrichmentRequest`] consumed by the enrichment source
+//! port; naming a concrete provider is the adapter's job, not the domain's.
 
 use std::fmt;
 
@@ -16,8 +16,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
 use crate::domain::IdempotencyKey;
-use crate::domain::jobs::{BoundingBox, BoundingBoxError};
-use crate::domain::ports::OverpassEnrichmentRequest;
+use crate::domain::jobs::BoundingBox;
+use crate::domain::ports::EnrichmentRequest;
 
 /// Maximum number of tags carried on a V1 enrichment job.
 pub const ENRICHMENT_JOB_V1_MAX_TAGS: usize = 64;
@@ -67,6 +67,8 @@ pub struct EnrichmentJobV1 {
     enqueued_at: DateTime<Utc>,
 }
 
+/// Raw V1 envelope whose `deny_unknown_fields` attribute provides the
+/// effective strictness guarantee for the handwritten job deserializer.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct EnrichmentJobV1EnvelopeRaw {
@@ -115,12 +117,12 @@ impl Visitor<'_> for EnrichmentJobV1VersionVisitor {
 /// Errors raised while building enrichment jobs.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EnrichmentJobBuildError {
-    /// Bounding-box validation failed.
-    #[error(transparent)]
-    BoundingBox(#[from] BoundingBoxError),
-    /// At least one tag is required.
+    /// The tag list carried no entries at all.
     #[error("enrichment job requires at least one tag")]
     EmptyTags,
+    /// A tag in the list was the empty string.
+    #[error("enrichment job tag must not be empty")]
+    EmptyTag,
     /// The tag vector exceeds the V1 limit.
     #[error("enrichment job has too many tags: {observed} > {limit}")]
     TooManyTags { limit: usize, observed: usize },
@@ -131,6 +133,15 @@ pub enum EnrichmentJobBuildError {
 
 impl EnrichmentJob {
     /// Build a V1 enrichment job from validated pieces.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EnrichmentJobBuildError::EmptyTags`] when the tag list is
+    /// empty, [`EnrichmentJobBuildError::EmptyTag`] when it contains a blank
+    /// tag, [`EnrichmentJobBuildError::TooManyTags`] when it exceeds
+    /// [`ENRICHMENT_JOB_V1_MAX_TAGS`] entries, and
+    /// [`EnrichmentJobBuildError::TagTooLong`] when a tag exceeds
+    /// [`ENRICHMENT_JOB_V1_MAX_TAG_LENGTH`] UTF-8 bytes.
     pub fn v1(params: EnrichmentJobParams) -> Result<Self, EnrichmentJobBuildError> {
         let tags = EnrichmentTags::try_from(params.tags)?;
         Ok(Self::V1(EnrichmentJobV1 {
@@ -142,12 +153,12 @@ impl EnrichmentJob {
         }))
     }
 
-    /// Convert any envelope variant into the existing Overpass port request.
-    pub fn to_overpass_request(&self) -> OverpassEnrichmentRequest {
+    /// Convert any envelope variant into the vendor-neutral port request.
+    pub fn to_enrichment_request(&self) -> EnrichmentRequest {
         match self {
-            Self::V1(payload) => OverpassEnrichmentRequest {
+            Self::V1(payload) => EnrichmentRequest {
                 job_id: payload.job_id,
-                bounding_box: payload.bounding_box.coords(),
+                bounding_box: payload.bounding_box,
                 tags: payload.tags.0.clone(),
             },
         }
@@ -281,7 +292,8 @@ impl<'de> Visitor<'de> for BoundedTagVisitor {
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
-            "an enrichment tag no longer than {ENRICHMENT_JOB_V1_MAX_TAG_LENGTH} UTF-8 bytes"
+            "a non-empty enrichment tag no longer than \
+             {ENRICHMENT_JOB_V1_MAX_TAG_LENGTH} UTF-8 bytes"
         )
     }
 
@@ -289,7 +301,7 @@ impl<'de> Visitor<'de> for BoundedTagVisitor {
     where
         E: serde::de::Error,
     {
-        validate_tag_length(value).map_err(E::custom)?;
+        validate_tag(value).map_err(E::custom)?;
         Ok(BoundedTag(value.to_owned()))
     }
 
@@ -297,12 +309,15 @@ impl<'de> Visitor<'de> for BoundedTagVisitor {
     where
         E: serde::de::Error,
     {
-        validate_tag_length(&value).map_err(E::custom)?;
+        validate_tag(&value).map_err(E::custom)?;
         Ok(BoundedTag(value))
     }
 }
 
-fn validate_tag_length(tag: &str) -> Result<(), EnrichmentJobBuildError> {
+fn validate_tag(tag: &str) -> Result<(), EnrichmentJobBuildError> {
+    if tag.is_empty() {
+        return Err(EnrichmentJobBuildError::EmptyTag);
+    }
     if tag.len() > ENRICHMENT_JOB_V1_MAX_TAG_LENGTH {
         return Err(EnrichmentJobBuildError::TagTooLong {
             limit: ENRICHMENT_JOB_V1_MAX_TAG_LENGTH,
@@ -324,7 +339,7 @@ fn canonicalize_tags(mut tags: Vec<String>) -> Result<Vec<String>, EnrichmentJob
     }
 
     for tag in &tags {
-        validate_tag_length(tag)?;
+        validate_tag(tag)?;
     }
 
     tags.sort();

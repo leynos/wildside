@@ -10,10 +10,11 @@ This plan covers roadmap item 5.2.2 only:
 
 > Define job structs for `GenerateRouteJob` and `EnrichmentJob`.
 
-No implementation work may begin until this plan is explicitly approved.
-Approval authorizes only the milestones below; it does not authorize wiring the
-new structs into request-path dispatch, worker bootstrap, retry policy, trace
-propagation, queue partitioning, or any later roadmap item.
+The original approval gate applied before implementation began and authorized
+only the milestones below; it did not authorize wiring the new structs into
+request-path dispatch, worker bootstrap, retry policy, trace propagation, queue
+partitioning, or any later roadmap item. Those historical scope boundaries
+remain in force for future work.
 
 ## Purpose / big picture
 
@@ -39,6 +40,8 @@ The observable outcome of this plan is:
   round-trip tests (`proptest`), and behavioural tests (`rstest-bdd`)
   exercising enqueue via the existing `StubRouteQueue` and (where embedded
   PostgreSQL is available) `ApalisRouteQueue`.
+- V1-only consumers reject unsupported envelope versions, and producer/consumer
+  rollouts keep their emitted and understood versions compatible.
 - `make check-fmt`, `make lint`, and `make test` pass after each major
   milestone.
 - `coderabbit review --agent` has no unresolved in-scope concerns at the end
@@ -62,6 +65,9 @@ Hard invariants. Violation requires escalation, not workarounds.
   Diesel, Actix, or any outbound adapter type.
 - Do not change the `RouteQueue` trait signature or the `JobDispatchError`
   variants defined in `backend/src/domain/ports/route_queue.rs`.
+- Keep producer and consumer rollouts compatible: a producer must continue to
+  emit V1 while any deployed consumer is V1-only, and consumers that understand
+  a newer version must be deployed before producers emit that version.
 - Keep the public `RouteSubmissionRequest::payload: serde_json::Value`
   contract unchanged (`backend/src/domain/ports/route_submission.rs:17`).
   Adding a typed conversion from a submission to a `GenerateRouteJob` is
@@ -188,15 +194,16 @@ contained within this plan.
   during milestone M5. Snapshot regeneration etiquette in the developers guide
   explicitly calls out that a snapshot diff implies a V2 cut, not a V1 edit.
 
-- Risk: a worker pod loaded with V1 code receives a `v: "2"` envelope
+- Risk: a worker pod loaded with V1 code receives a `v: "v2"` envelope
   after a future schema bump and panics or silently drops the job. Severity:
-  high. Likelihood: medium. Mitigation: document the worker-side policy in this
-  plan and in `docs/wildside-backend-architecture.md`: an unknown envelope
-  variant is a `JobDispatchError::Rejected` outcome with a bounded diagnostic;
-  the pure decoder does not log or record metrics. The future 5.3.1
-  worker/consumer boundary owns safe warning/rejection metrics, and retry
-  policy (5.2.3) owns dead-letter routing. The implementation of those later
-  policies is out of scope; the contract for them is in scope here.
+  high. Likelihood: medium. Mitigation: V1-only consumers reject unsupported
+  versions as `JobDispatchError::Rejected`; malformed payloads use the fixed
+  `malformed job payload` diagnostic, while readable unsupported string
+  versions receive only a bounded, control-escaped version diagnostic. Roll
+  out consumers before producers emit a newer version. The pure decoder does
+  not log or record metrics; the future 5.3.1 worker/consumer boundary owns
+  safe warning/rejection metrics, and retry policy (5.2.3) owns dead-letter
+  routing.
 
 - Risk: the existing Overpass enrichment worker uses
   `OverpassEnrichmentRequest`
@@ -268,9 +275,9 @@ External references confirmed during planning:
 
 ## Current repository orientation
 
-The branch is `backend-5-2-2-job-structs-for-generate-route-and-enrichment`,
-tracking `origin/backend-5-2-2-job-structs-for-generate-route-and-enrichment`
-(to be pushed during milestone M5). The relevant files today are:
+The branch is `backend-5-2-2-job-structs-for-generate-route-and-enrichment`.
+The implementation is complete; the milestone entries below retain the
+historical delivery record. The relevant files today are:
 
 - `backend/src/domain/ports/route_queue.rs:17` defines `RouteQueue` with a
   generic associated type `Plan: Send + Sync` and the
@@ -295,8 +302,8 @@ tracking `origin/backend-5-2-2-job-structs-for-generate-route-and-enrichment`
 - `backend/src/domain/user.rs:74` defines `UserId` (serde-derived).
 - `backend/src/domain/trace_id.rs:34` defines `TraceId` without serde
   derives. Roadmap 5.2.4 owns adding those derives.
-- `backend/src/domain/mod.rs` re-exports the domain primitives. The plan
-  adds a new `pub mod jobs;` declaration here.
+- `backend/src/domain/mod.rs` re-exports the domain primitives, including the
+  completed `jobs` module.
 
 Key terms used in this plan:
 
@@ -378,8 +385,9 @@ The minimum bar:
    `GenerateRouteJob::try_from_submission(&RouteSubmissionRequest,
    request_id, enqueued_at)`
    that returns `Result<Self, GenerateRouteJobBuildError>`. The helper
-   validates that `payload` is a JSON object containing `origin` and
-   `destination`, and copies the optional `preferences` field if present.
+   validates that `payload` is a JSON object containing non-null `origin` and
+   `destination` values, rejects an explicitly null `preferences` value, and
+   preserves string or object locations as opaque JSON.
    Failure cases map to `GenerateRouteJobBuildError` variants (use the existing
    `define_port_error!` macro pattern; see
    `backend/src/domain/ports/route_queue.rs:6` and
@@ -528,8 +536,11 @@ Commit when green.
      `OverpassEnrichmentRequest`, the antimeridian-wrap policy, and
      the worker-side rule that unknown envelope variants must be
      surfaced as `JobDispatchError::Rejected` (no panics, no silent
-     drops; dead-letter routing lands with 5.2.3). Reference the new
-     files by full path.
+     drops; malformed payloads use a fixed diagnostic and only readable
+     unsupported string versions receive a bounded escaped diagnostic;
+     dead-letter routing lands with 5.2.3). Producers must not emit a newer
+     version until compatible consumers are deployed. Reference the new files
+     by full path.
    - `docs/developers-guide.md` — add a "Background job payloads"
      section describing the envelope, the `try_from_submission` helper,
      snapshot review etiquette ("a snapshot diff implies a new
@@ -540,8 +551,8 @@ Commit when green.
      changed and that idempotency, request IDs, and payload validation
      continue to work as before. No new endpoint or response shape is
      introduced.
-   - `docs/backend-roadmap.md` — do not mark 5.2.2 done yet; it is marked
-     only after the full gates pass.
+   - `docs/backend-roadmap.md` — the historical closure step marked 5.2.2 done
+     only after the full gates passed.
 
 2. Run documentation gates:
 
@@ -604,8 +615,7 @@ Commit when green.
 
 ## Interfaces and dependencies
 
-Be prescriptive. At the end of milestone M3 the following symbols must exist
-with these signatures.
+The completed implementation exposes the following symbols and interfaces.
 
 `BoundingBox` is defined in `backend/src/domain/bounding_box.rs`, declared and
 re-exported from `backend/src/domain/mod.rs`, and re-exported for job
@@ -677,17 +687,32 @@ pub struct GenerateRouteJobV1 {
     pub enqueued_at: DateTime<Utc>,
 }
 
+impl GenerateRouteJob {
+    pub fn v1(payload: GenerateRouteJobV1)
+        -> Result<Self, GenerateRouteJobBuildError>;
+
+    pub fn try_from_submission(
+        submission: &RouteSubmissionRequest,
+        request_id: Uuid,
+        enqueued_at: DateTime<Utc>,
+    ) -> Result<Self, GenerateRouteJobBuildError>;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerateRouteJobBuildError {
     PayloadNotObject,
     PayloadMissingField { field: &'static str },
+    PayloadNullField { field: &'static str },
 }
 ```
 
 `PartialEq` is intentional and `Eq` is intentionally not derived because the
 payload transitively contains `serde_json::Value`, which only implements
 `PartialEq`. Implement `Display` and `std::error::Error` for the error using
-the existing macro patterns; the snippet above shows the variants only.
+the existing macro patterns; the fallible constructor rejects null `origin` and
+`destination` values and an explicitly null `preferences` value. The location
+fields remain opaque `serde_json::Value`, so both string and object locations
+are preserved.
 
 In `backend/src/domain/bounding_box.rs`:
 
@@ -758,6 +783,7 @@ pub const ENRICHMENT_JOB_V1_MAX_TAG_LENGTH: usize = 64;
 pub struct EnrichmentJobParams {
     pub job_id: Uuid,
     pub idempotency_key: Option<IdempotencyKey>,
+    /// Already validated by `BoundingBox::new` or deserialization.
     pub bounding_box: BoundingBox,
     /// Raw tag list to canonicalize into sorted, deduplicated form.
     pub tags: Vec<String>,
@@ -782,7 +808,7 @@ pub struct EnrichmentJobV1 {
     bounding_box: BoundingBox,
     /// Sorted, deduplicated tag list. Bounded by
     /// `ENRICHMENT_JOB_V1_MAX_TAGS` and per-tag
-    /// `ENRICHMENT_JOB_V1_MAX_TAG_LENGTH` at construction time.
+    /// `ENRICHMENT_JOB_V1_MAX_TAG_LENGTH` at construction and decode time.
     tags: EnrichmentTags,
     enqueued_at: DateTime<Utc>,
 }
@@ -809,8 +835,6 @@ impl<'de> Deserialize<'de> for EnrichmentJob { /* validate then construct */ }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EnrichmentJobBuildError {
-    #[error(transparent)]
-    BoundingBox(#[from] BoundingBoxError),
     #[error("enrichment job requires at least one tag")]
     EmptyTags,
     #[error("enrichment job has too many tags: {observed} > {limit}")]
@@ -824,7 +848,10 @@ pub enum EnrichmentJobBuildError {
 through the version-aware seam. `EnrichmentJobV1` keeps its fields private and
 constructs only through `EnrichmentJob::v1` or the validating `Deserialize`
 impl, so every payload — built in-process or decoded off the wire — carries
-canonicalized, bounded tags.
+canonicalized, bounded tags. `EnrichmentJobParams::bounding_box` is already a
+validated `BoundingBox`; consequently `EnrichmentJobBuildError` contains only
+the retained tag-validation errors (`EmptyTags`, `TooManyTags`, and
+`TagTooLong`).
 
 In `backend/Cargo.toml`'s `[dev-dependencies]` (new entries only):
 
@@ -846,7 +873,9 @@ Functional acceptance:
   V1 payload shapes.
 - `GenerateRouteJob::try_from_submission` accepts well-formed
   `RouteSubmissionRequest` payloads and returns the documented
-  `GenerateRouteJobBuildError` variants on ill-formed input.
+  `GenerateRouteJobBuildError` variants on ill-formed input. The V1 constructor
+  rejects null `origin`, `destination`, and `preferences` values while
+  preserving string and object locations.
 - `EnrichmentJob::to_overpass_request` returns a value-equal
   `OverpassEnrichmentRequest`.
 - `BoundingBox::new` rejects non-finite inputs, longitudes outside
@@ -856,6 +885,12 @@ Functional acceptance:
   `ENRICHMENT_JOB_V1_MAX_TAGS` and individual tags whose UTF-8 byte length
   exceeds `ENRICHMENT_JOB_V1_MAX_TAG_LENGTH`, with the named error variants
   documented above.
+- `decode_job` returns the fixed `malformed job payload` diagnostic for missing
+  or non-string versions and unreadable or structurally invalid payloads. It
+  returns a bounded, control-escaped diagnostic only for a readable unsupported
+  string version, and V1-only consumers reject that version.
+- Producer rollouts keep emitting V1 until all deployed consumers understand a
+  newer version; compatible consumers are deployed before those producers.
 - The V1 JSON shape is locked under at least one `insta` snapshot per job
   type. Updating a snapshot requires explicit human review.
 - The new structs can be enqueued through `StubRouteQueue<P>` and through
@@ -1129,16 +1164,19 @@ The plan ships in two PRs:
 
 - Decision: Build each V1 payload from a single struct argument rather than
   a positional constructor. `GenerateRouteJob::v1` takes the whole
-  `GenerateRouteJobV1` (its fields are `pub`), and `EnrichmentJob::v1` takes an
-  `EnrichmentJobParams` struct and returns
-  `Result<Self, EnrichmentJobBuildError>` after canonicalizing tags. Rationale:
+  `GenerateRouteJobV1` (its fields are `pub`) and returns a result after
+  rejecting null required locations or an explicitly null preferences value.
+  `EnrichmentJob::v1` takes an `EnrichmentJobParams` struct whose
+  `bounding_box` is already validated and returns
+  `Result<Self, EnrichmentJobBuildError>` for tag validation. Rationale:
   passing a struct sidesteps the `too_many_arguments` lint without a scoped
   clippy expectation, keeps call sites self-documenting through named fields,
-  and — for enrichment — lets the constructor own tag validation. This
-  supersedes the earlier plan to keep positional constructors under a scoped
-  `too_many_arguments` expectation; no such expectation exists in the shipped
-  code. Date/Author: 2026-06-15 / implementation agent (revised 2026-07-26 to
-  match implementation).
+  and — for enrichment — lets the constructor own tag validation without
+  duplicating bounding-box validation. This supersedes the earlier plan to keep
+  positional constructors under a scoped `too_many_arguments` expectation; no
+  such expectation exists in the shipped code. Date/Author: 2026-06-15 /
+  implementation agent (revised 2026-07-26 and 2026-08-02 to match
+  implementation).
 
 - Decision: Make `EnrichmentJobV1` fields private and hand-write the envelope
   `Deserialize` implementation. Persisted tags decode through a bounded
@@ -1234,11 +1272,20 @@ The plan ships in two PRs:
   test-only dependency surface. Date/Author: 2026-08-01 / implementation agent.
 
 - Decision: Keep `decode_job` pure and diagnostic-only. Rationale: the decoder
-  returns a bounded `JobDispatchError::Rejected` diagnostic and never logs the
-  payload or records a decode metric. Roadmap item 5.2.2 defines no decode
-  metric; the future 5.3.1 worker/consumer boundary owns safe warning and
-  rejection metrics, 5.2.3 owns retry/dead-letter handling, and 5.2.4 owns
-  trace propagation. Date/Author: 2026-08-01 / review follow-up.
+  returns a fixed `malformed job payload` diagnostic for unreadable or
+  structurally invalid payloads, and a bounded, control-escaped diagnostic
+  only for readable unsupported string versions. It never logs the payload or
+  records a decode metric. Roadmap item 5.2.2 defines no decode metric; the
+  future 5.3.1 worker/consumer boundary owns safe warning and rejection
+  metrics, 5.2.3 owns retry/dead-letter handling, and 5.2.4 owns trace
+  propagation. Date/Author: 2026-08-01 / review follow-up (revised 2026-08-02).
+
+- Decision: Treat V1-only consumers as rejecting unsupported versions and make
+  producer/consumer rollout order part of the queue contract. Rationale: a
+  consumer that only understands V1 cannot safely process a V2 payload, so
+  producers must keep emitting V1 until compatible consumers are deployed;
+  newer consumers must precede producers that emit the newer version. Date/
+  Author: 2026-08-02 / implementation follow-up.
 
 ## Outcomes & retrospective
 
@@ -1254,8 +1301,9 @@ metadata stays deferred to 5.2.4, retry/dead-letter behaviour stays deferred to
 5.2.3, and worker deployment/storage shape stays deferred to 5.3.1.
 `BoundingBox` deliberately rejects antimeridian-wrapping boxes, so callers must
 split those boxes before building enrichment jobs. `decode_job` remains pure
-and returns bounded rejection diagnostics only; 5.2.2 defines no decode metric,
-while the 5.3.1 worker/consumer boundary owns safe warning/rejection metrics.
+and returns the fixed malformed-payload diagnostic or a bounded escaped
+unsupported-version diagnostic; 5.2.2 defines no decode metric, while the
+5.3.1 worker/consumer boundary owns safe warning/rejection metrics.
 
 Tooling observations: CodeRabbit was slow but returned `findings: 0` at each
 milestone. Repository-wide documentation validation also caught a pre-existing
@@ -1300,3 +1348,10 @@ documentation changes.
   bounded rejection diagnostics without logging or metrics. Assigned safe
   warning/rejection metrics to 5.3.1, retry/dead-letter handling to 5.2.3, and
   trace propagation to 5.2.4. No scope, tolerance, or milestone changed.
+- 2026-08-02: Updated the completed plan's current interface and decision
+  language to match the shipped constructors and decoder. Documented null-field
+  rejection and string-or-object location preservation for `GenerateRouteJob`,
+  the validated-box input and tag-only errors for `EnrichmentJob`, fixed
+  malformed-job diagnostics, bounded escaped diagnostics for unsupported string
+  versions, and compatible producer/consumer rollout order. Historical
+  milestone and decision entries remain unchanged.

@@ -16,58 +16,73 @@ use serde_json::Value;
 
 use crate::domain::ports::JobDispatchError;
 
-/// Diagnostic placeholder used when a payload carries no readable `"v"` field.
-const UNKNOWN_VERSION: &str = "<unknown>";
+/// Envelope version understood by the current job consumers.
+const SUPPORTED_ENVELOPE_VERSION: &str = "v1";
 /// Maximum number of UTF-8 bytes copied into logs and rejection diagnostics.
 const MAX_VERSION_DIAGNOSTIC_BYTES: usize = 64;
+const MALFORMED_PAYLOAD_MESSAGE: &str = "malformed job payload";
 
 /// Decode a persisted job payload into its versioned envelope type `J`.
 ///
-/// The `"v"` discriminant is read for diagnostics before the typed decode, so
-/// an unknown or malformed version can be reported without re-parsing. On
-/// failure the job is rejected — never panicked on and never silently dropped.
-/// The bounded diagnostic includes only the received version, never the raw
-/// payload, because the payload can contain user data.
+/// The `"v"` discriminant is checked before typed decoding so unsupported
+/// versions remain distinct from malformed payloads. Unsupported-version
+/// diagnostics escape control characters and contain at most 64 UTF-8 bytes.
+/// The raw payload is never included because it can contain user data.
 ///
 /// # Errors
 ///
-/// Returns [`JobDispatchError::Rejected`] when `payload` does not deserialize
-/// into `J`. This covers unknown envelope versions (`{"v": "v2"}`), a missing
-/// or non-string `"v"`, and otherwise malformed payloads.
+/// Returns [`JobDispatchError::Rejected`] with an unsupported-version
+/// diagnostic for a readable version other than `v1`. Missing or non-string
+/// versions and otherwise malformed payloads return a fixed malformed-payload
+/// diagnostic.
 pub fn decode_job<J>(payload: &Value) -> Result<J, JobDispatchError>
 where
     J: DeserializeOwned,
 {
-    let version = envelope_version(payload);
-    J::deserialize(payload).map_err(|_error| {
-        JobDispatchError::rejected(format!(
-            "unrecognized or malformed job envelope version: {version}"
-        ))
-    })
+    let Some(version) = envelope_version(payload) else {
+        return Err(malformed_payload_error());
+    };
+    if version != SUPPORTED_ENVELOPE_VERSION {
+        return Err(JobDispatchError::rejected(format!(
+            "unsupported job envelope version: {}",
+            version_diagnostic(version)
+        )));
+    }
+
+    J::deserialize(payload).map_err(|_error| malformed_payload_error())
 }
 
 /// Read the `"v"` discriminant as a string slice for diagnostics.
-///
-/// Returns [`UNKNOWN_VERSION`] when `"v"` is absent or is not a JSON string, so
-/// callers always have a safe, non-panicking value to log and report.
-fn envelope_version(payload: &Value) -> &str {
-    payload
-        .get("v")
-        .and_then(Value::as_str)
-        .map(truncate_version_diagnostic)
-        .unwrap_or(UNKNOWN_VERSION)
+fn envelope_version(payload: &Value) -> Option<&str> {
+    payload.get("v").and_then(Value::as_str)
 }
 
-fn truncate_version_diagnostic(version: &str) -> &str {
-    if version.len() <= MAX_VERSION_DIAGNOSTIC_BYTES {
-        return version;
-    }
+fn malformed_payload_error() -> JobDispatchError {
+    JobDispatchError::rejected(MALFORMED_PAYLOAD_MESSAGE)
+}
 
-    let mut end = MAX_VERSION_DIAGNOSTIC_BYTES;
-    while !version.is_char_boundary(end) {
-        end -= 1;
+fn version_diagnostic(version: &str) -> String {
+    let mut diagnostic = String::new();
+    for character in version.chars() {
+        let fragment = escaped_version_character(character);
+        if diagnostic.len() + fragment.len() > MAX_VERSION_DIAGNOSTIC_BYTES {
+            break;
+        }
+        diagnostic.push_str(&fragment);
     }
-    &version[..end]
+    diagnostic
+}
+
+fn escaped_version_character(character: char) -> String {
+    match character {
+        '\n' => "\\n".to_owned(),
+        '\r' => "\\r".to_owned(),
+        '\t' => "\\t".to_owned(),
+        '\u{1b}' => "\\x1b".to_owned(),
+        '\\' => "\\\\".to_owned(),
+        control if control.is_control() => format!("\\u{{{:x}}}", control as u32),
+        printable => printable.to_string(),
+    }
 }
 
 #[cfg(test)]

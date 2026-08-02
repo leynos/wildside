@@ -2211,9 +2211,10 @@ connect to the same PostgreSQL instance. The Apalis job tables are managed by
 Importantly, 5.2.1 delivers the driven adapter itself but does not yet enable
 request-path queue dispatch or worker consumption. The `TODO(#276)` markers in
 `backend/src/domain/route_submission/mod.rs` (lines 241 and 295) remain
-unchanged, awaiting later roadmap items covering job struct definitions
-(5.2.2), retry policies (5.2.3), and trace propagation (5.2.4). The stub adapter
-(`StubRouteQueue`) is retained for tests that do not require PostgreSQL.
+unchanged. Roadmap item 5.2.2 now supplies the job struct definitions;
+request-path dispatch and worker consumption remain deferred with retry policies
+(5.2.3) and trace propagation (5.2.4). The stub adapter (`StubRouteQueue`) is
+retained for tests that do not require PostgreSQL.
 
 **Job definitions:** Roadmap item 5.2.2 defines the durable domain payloads in
 `backend/src/domain/jobs`. Both job families use a `#[serde(tag = "v")]`
@@ -2227,13 +2228,20 @@ variant such as V2 and a reviewed snapshot update.
   `preferences`, and `enqueued_at`. The helper
   `GenerateRouteJob::try_from_submission` converts the existing
   `RouteSubmissionRequest` shape into the queued payload while keeping
-  `RouteSubmissionRequest::payload` as `serde_json::Value`.
+  `RouteSubmissionRequest::payload` as `serde_json::Value`. The fallible
+  `GenerateRouteJob::v1` constructor rejects null `origin` and `destination`
+  values and rejects `preferences: Some(Value::Null)`, while preserving string
+  and object location values as opaque JSON.
 - `EnrichmentJob` lives in `backend/src/domain/jobs/enrichment.rs`. V1 carries
   `job_id`, optional `idempotency_key`, a validated `BoundingBox`, sorted and
   deduplicated tags, and `enqueued_at`. The bounding box is serialized as
   `[min_lng, min_lat, max_lng, max_lat]`, matching `OverpassEnrichmentRequest`.
   Antimeridian-wrapped boxes are not supported in V1; callers spanning the
-  dateline must split the request into two boxes.
+  dateline must split the request into two boxes. `EnrichmentJob::v1` accepts
+  `EnrichmentJobParams` whose `bounding_box` is already validated and returns
+  tag-validation errors only (`EmptyTags`, `TooManyTags`, and `TagTooLong`): at
+  least one non-empty tag is required, at most 64 tags are allowed, and each
+  tag is limited to 64 UTF-8 bytes.
 - `BoundingBox` lives in `backend/src/domain/bounding_box.rs` and is shared by
   jobs and offline bundles. It rejects non-finite coordinates, out-of-range
   WGS84 coordinates, inverted latitude ordering, and longitude ordering that
@@ -2253,28 +2261,32 @@ job payload, Apalis task metadata, or OpenTelemetry context. Until that work
 lands, `request_id`/`job_id` provide stable identifiers but are not a complete
 trace-propagation mechanism.
 
-The `#[serde(tag = "v")]` envelope is V1-only today, so an unknown future
-version (for example `"v": "v2"`) fails at deserialization rather than
-producing a variant a handler could match. The queue dispatch boundary must
-catch that deserialization failure and convert it into
-`JobDispatchError::Rejected` with a bounded version diagnostic. `decode_job` is
-pure: it never logs payloads, emits warnings, or records decode metrics.
-Roadmap item 5.2.2 defines no decode metric; the future 5.3.1 worker/consumer
-boundary owns safe warning and rejection metrics, 5.2.3 owns retry/dead-letter
-handling, and 5.2.4 owns trace propagation. Worker handlers then operate only
-on successfully deserialized envelope variants. Neither the dispatch boundary
-nor the handlers may panic or silently drop a job on an unknown version.
+The `#[serde(tag = "v")]` envelope is V1-only today. V1-only consumers reject
+unsupported versions (for example `"v": "v2"`) at the queue boundary rather
+than producing a variant a handler could match. Producer and consumer rollout
+must therefore be compatible: producers continue emitting V1 until every
+consumer in the rollout understands the newer version, and consumers that
+understand a newer version are deployed before producers begin emitting it.
+`decode_job` is pure: it never logs payloads, emits warnings, or records decode
+metrics. Roadmap item 5.2.2 defines no decode metric; the future 5.3.1
+worker/consumer boundary owns safe warning and rejection metrics, 5.2.3 owns
+retry/dead-letter handling, and 5.2.4 owns trace propagation. Worker handlers
+then operate only on successfully deserialized envelope variants. Neither the
+dispatch boundary nor the handlers may panic or silently drop a job on an
+unsupported version.
 
 This boundary is implemented by `decode_job` in
 `backend/src/outbound/queue/job_decode.rs`. It reads the raw persisted
-`serde_json::Value`, extracts the `"v"` discriminant for diagnostics, and
-decodes into the requested versioned job type. On any failure — an unknown
-version, a missing or non-string `"v"`, or an otherwise malformed body — it
-returns `JobDispatchError::Rejected` with a bounded diagnostic carrying only
-the received version, never the full payload (which can contain user data).
-The consumer added in 5.3.1 owns the safe warning and rejection metrics for
-that result; the decoder itself remains pure. The queue-processing error path
-then applies the retry/dead-letter policy owned by 5.2.3.
+`serde_json::Value`, checks the `"v"` discriminant, and decodes into the
+requested versioned job type. A missing or non-string version, or any
+unreadable or structurally invalid payload, returns
+`JobDispatchError::Rejected` with the fixed diagnostic `malformed job payload`.
+Only a readable unsupported string version receives a diagnostic containing the
+version; that value is control-escaped and capped at 64 UTF-8 bytes. The raw
+payload is never included because it can contain user data. The consumer added
+in 5.3.1 owns safe warning and rejection metrics for these results; the decoder
+itself remains pure. The queue-processing error path then applies the
+retry/dead-letter policy owned by 5.2.3.
 
 **Communication between workers and API:** The workers operate asynchronously
 from the API, so how does the API know to send WebSocket updates to the right
@@ -2810,8 +2822,10 @@ pub enum RouteCacheError {
 
 #[derive(Debug, Error)]
 pub enum JobDispatchError {
-    #[error("queue unavailable: {0}")]
-    Unavailable(String),
+    #[error("route queue is unavailable: {message}")]
+    Unavailable { message: String },
+    #[error("route job was rejected: {message}")]
+    Rejected { message: String },
 }
 
 #[derive(Debug, Error)]
@@ -2843,7 +2857,9 @@ pub trait RouteCache: Send + Sync {
 
 #[async_trait]
 pub trait RouteQueue: Send + Sync {
-    async fn enqueue(&self, plan: &RoutePlan) -> Result<(), JobDispatchError>;
+    type Plan: Send + Sync;
+
+    async fn enqueue(&self, plan: &Self::Plan) -> Result<(), JobDispatchError>;
 }
 
 #[async_trait]
