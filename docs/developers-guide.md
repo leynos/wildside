@@ -1042,7 +1042,7 @@ Public production API:
   the Apalis schema via `PostgresStorage::<(), (), ()>::setup`.
 - `decode_job<J>` – The worker-side decode boundary for JSON loaded from
   `apalis.jobs`. It is pure: it returns a validated versioned envelope or a
-  bounded `JobDispatchError::Rejected` diagnostic; malformed and unknown
+  bounded `JobDispatchError::Rejected` diagnostic; malformed and unsupported
   versions never reach a handler.
 
 Implementation details within `outbound::queue`:
@@ -1062,20 +1062,36 @@ Domain-owned job payloads live under `backend/src/domain/jobs`. They are the
 only supported contract for values passed into `RouteQueue::enqueue`:
 
 - `GenerateRouteJob` is defined in
-  `backend/src/domain/jobs/generate_route.rs`. Build it from the existing route
-  submission port with `GenerateRouteJob::try_from_submission`, passing the
-  generated `request_id` and enqueue timestamp explicitly.
+  `backend/src/domain/jobs/generate_route.rs`. Its fallible
+  `GenerateRouteJob::v1(GenerateRouteJobV1)` constructor validates an already
+  assembled payload; `GenerateRouteJob::try_from_submission` builds one from
+  the route-submission port, taking the generated `request_id` and enqueue
+  timestamp explicitly. A non-object submission returns `PayloadNotObject`.
+  Missing or JSON-null `origin` or `destination` returns
+  `PayloadMissingField`; explicitly JSON-null `preferences` returns
+  `PayloadNullField`. Origin and destination are opaque JSON values, currently
+  supplied as either string identifiers or coordinate objects.
 - `EnrichmentJob` is defined in `backend/src/domain/jobs/enrichment.rs`. Build
-  it through `EnrichmentJob::v1`, which validates tag count, tag length, and
-  canonical tag ordering. Deserializing a persisted V1 job applies the same
-  validation, so workers never receive unchecked tag vectors from `apalis.jobs`.
+  it through the fallible `EnrichmentJob::v1(EnrichmentJobParams)` constructor,
+  which rejects `EmptyTags`, `TooManyTags`, and `TagTooLong`, then canonicalizes
+  the tags. V1 permits at most 64 tags, with each tag no longer than 64 UTF-8
+  bytes. Deserializing a persisted V1 job applies the same validation, so
+  workers never receive unchecked tag vectors from `apalis.jobs`.
 - `BoundingBox` is the shared geographic value object in
   `backend/src/domain/bounding_box.rs`; job and offline modules re-export this
   one type rather than defining parallel validators. Its ordinary Serde shape
   is the offline API object (`minLng`, `minLat`, `maxLng`, `maxLat`). Durable
   enrichment payloads opt into `bounding_box::array_wire` explicitly to retain
-  `[min_lng, min_lat, max_lng, max_lat]`. Split dateline-spanning inputs before
-  building either domain value.
+  `[min_lng, min_lat, max_lng, max_lat]`. Construct it with
+  `BoundingBox::new(min_lng, min_lat, max_lng, max_lat)`, which returns
+  `Result<Self, BoundingBoxError>` and rejects `NonFinite`,
+  `LongitudeOutOfRange`, `LatitudeOutOfRange`, `InvertedOrdering`, and
+  `AntimeridianWrap`. Split dateline-spanning inputs before building either
+  domain value.
+
+The job constructors return their domain-specific build errors, and bounding
+box construction returns `BoundingBoxError`. These are distinct from
+`JobDispatchError`, which reports queue or worker-boundary failures.
 
 Both job families use a serde envelope with `#[serde(tag = "v")]`, currently
 `"v1"`. V1 structs use `deny_unknown_fields`; do not remove that restriction.
@@ -1085,12 +1101,16 @@ in place.
 
 Workers must pass persisted `serde_json::Value` payloads through
 `outbound::queue::decode_job` before invoking a handler. The decoder applies
-the envelope's Serde validation, reports malformed or unsupported versions as
-`JobDispatchError::Rejected`, limits the version copied into diagnostics to 64
-UTF-8 bytes, and never logs the raw payload. `decode_job` emits no warnings or
-metrics: roadmap item 5.2.2 defines no decode metric. The future 5.3.1
-worker/consumer boundary owns safe warning and rejection metrics. Retry and
-dead-letter policy remain owned by roadmap item 5.2.3.
+the envelope's Serde validation and reports malformed or unsupported versions
+as `JobDispatchError::Rejected`. Missing or non-string versions, and otherwise
+malformed payloads, use the fixed `malformed job payload` diagnostic. A
+readable unsupported version gets an escaped diagnostic containing at most 64
+UTF-8 bytes of the version; this diagnostic limit is unrelated to the V1
+enrichment limits of 64 tags and 64 UTF-8 bytes per tag. The raw payload is
+never logged. `decode_job` emits no warnings or metrics: roadmap item 5.2.2
+defines no decode metric. The future 5.3.1 worker/consumer boundary owns safe
+warning and rejection metrics. Retry and dead-letter policy remain owned by
+roadmap item 5.2.3.
 
 The payloads carry `idempotency_key` because the current Apalis pins predate
 framework-native idempotency support. Trace IDs are intentionally absent from

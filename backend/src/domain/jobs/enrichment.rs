@@ -16,7 +16,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
 use crate::domain::IdempotencyKey;
-use crate::domain::jobs::{BoundingBox, BoundingBoxError};
+use crate::domain::jobs::BoundingBox;
 use crate::domain::ports::OverpassEnrichmentRequest;
 
 /// Maximum number of tags carried on a V1 enrichment job.
@@ -117,9 +117,6 @@ impl Visitor<'_> for EnrichmentJobV1VersionVisitor {
 /// Errors raised while building enrichment jobs.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EnrichmentJobBuildError {
-    /// Bounding-box validation failed.
-    #[error(transparent)]
-    BoundingBox(#[from] BoundingBoxError),
     /// At least one non-empty tag is required.
     #[error("enrichment job requires at least one tag")]
     EmptyTags,

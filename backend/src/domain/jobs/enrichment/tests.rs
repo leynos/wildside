@@ -164,108 +164,64 @@ fn serde_canonicalizes_duplicate_tags(job_id: Uuid, enqueued_at: DateTime<Utc>) 
 
 #[derive(Clone)]
 struct InvalidSerdeTagsCase {
-    tags: serde_json::Value,
+    tags_json: String,
     expected_message: &'static str,
 }
 
 #[rstest]
 #[case(InvalidSerdeTagsCase {
-    tags: serde_json::json!([]),
+    tags_json: serde_json::json!([]).to_string(),
     expected_message: "enrichment job requires at least one tag",
 })]
 #[case(InvalidSerdeTagsCase {
-    tags: serde_json::json!([""]),
+    tags_json: serde_json::json!([""]).to_string(),
     expected_message: "enrichment job requires at least one tag",
 })]
 #[case(InvalidSerdeTagsCase {
-    tags: serde_json::json!(
+    tags_json: serde_json::json!(
         (0..=ENRICHMENT_JOB_V1_MAX_TAGS)
             .map(|index| format!("tag-{index}"))
             .collect::<Vec<_>>()
-    ),
+    ).to_string(),
     expected_message: "enrichment job has too many tags",
 })]
 #[case(InvalidSerdeTagsCase {
-    tags: serde_json::json!(["x".repeat(ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1)]),
+    tags_json: serde_json::json!([
+        "x".repeat(ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1)
+    ]).to_string(),
     expected_message: "enrichment job tag is too long",
+})]
+#[case(InvalidSerdeTagsCase {
+    tags_json: format!(
+        "[{},\"excess\",invalid-later-input]",
+        (0..ENRICHMENT_JOB_V1_MAX_TAGS)
+            .map(|index| format!(r#""tag-{index}""#))
+            .collect::<Vec<_>>()
+            .join(",")
+    ),
+    expected_message: "enrichment job has too many tags: 65 > 64",
+})]
+#[case(InvalidSerdeTagsCase {
+    tags_json: format!(
+        "[\"{}\",invalid-later-input]",
+        "x".repeat(ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1)
+    ),
+    expected_message: "enrichment job tag is too long: 65 > 64",
 })]
 fn serde_rejects_invalid_tags(
     job_id: Uuid,
     enqueued_at: DateTime<Utc>,
     #[case] case: InvalidSerdeTagsCase,
 ) {
-    let value = enrichment_job_json(job_id, enqueued_at, case.tags);
+    let payload = enrichment_job_json_raw(job_id, enqueued_at, &case.tags_json);
 
-    let error = serde_json::from_value::<EnrichmentJob>(value)
+    let error = serde_json::from_str::<EnrichmentJob>(&payload)
         .expect_err("invalid persisted tags should be rejected");
 
     assert!(
         error.to_string().contains(case.expected_message),
         "expected error to contain {:?}, got {error}",
         case.expected_message,
-    );
-}
-
-#[rstest]
-fn serde_rejects_the_first_excess_tag_before_parsing_later_input(
-    job_id: Uuid,
-    enqueued_at: DateTime<Utc>,
-) {
-    let accepted_tags = (0..ENRICHMENT_JOB_V1_MAX_TAGS)
-        .map(|index| format!(r#""tag-{index}""#))
-        .collect::<Vec<_>>()
-        .join(",");
-    let payload = format!(
-        r#"{{
-            "v":"v1",
-            "jobId":"{job_id}",
-            "idempotencyKey":"{}",
-            "boundingBox":[-0.2,51.4,0.1,51.6],
-            "tags":[{accepted_tags},"excess",invalid-later-input],
-            "enqueuedAt":"{}"
-        }}"#,
-        fixture_idempotency_key(),
-        enqueued_at.to_rfc3339(),
-    );
-
-    let error = serde_json::from_str::<EnrichmentJob>(&payload)
-        .expect_err("the first excess tag should stop deserialization");
-
-    assert!(
-        error
-            .to_string()
-            .contains("enrichment job has too many tags: 65 > 64"),
-        "expected the bounded visitor error before later malformed input, got {error}",
-    );
-}
-
-#[rstest]
-fn serde_rejects_an_overlong_tag_before_parsing_later_input(
-    job_id: Uuid,
-    enqueued_at: DateTime<Utc>,
-) {
-    let overlong_tag = "x".repeat(ENRICHMENT_JOB_V1_MAX_TAG_LENGTH + 1);
-    let payload = format!(
-        r#"{{
-            "v":"v1",
-            "jobId":"{job_id}",
-            "idempotencyKey":"{}",
-            "boundingBox":[-0.2,51.4,0.1,51.6],
-            "tags":["{overlong_tag}",invalid-later-input],
-            "enqueuedAt":"{}"
-        }}"#,
-        fixture_idempotency_key(),
-        enqueued_at.to_rfc3339(),
-    );
-
-    let error = serde_json::from_str::<EnrichmentJob>(&payload)
-        .expect_err("an overlong tag should stop deserialization");
-
-    assert!(
-        error
-            .to_string()
-            .contains("enrichment job tag is too long: 65 > 64"),
-        "expected the bounded string visitor error before later malformed input, got {error}",
     );
 }
 
@@ -317,6 +273,21 @@ fn enrichment_job_json(
         "tags": tags,
         "enqueuedAt": enqueued_at,
     })
+}
+
+fn enrichment_job_json_raw(job_id: Uuid, enqueued_at: DateTime<Utc>, tags_json: &str) -> String {
+    format!(
+        r#"{{
+            "v":"v1",
+            "jobId":"{job_id}",
+            "idempotencyKey":"{}",
+            "boundingBox":[-0.2,51.4,0.1,51.6],
+            "tags":{tags_json},
+            "enqueuedAt":"{}"
+        }}"#,
+        fixture_idempotency_key(),
+        enqueued_at.to_rfc3339(),
+    )
 }
 
 fn valid_bounding_box_strategy() -> impl Strategy<Value = BoundingBox> {

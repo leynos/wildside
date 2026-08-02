@@ -8,7 +8,9 @@
 //! as opaque JSON V1 fields.
 
 use chrono::{DateTime, Utc};
+use serde::de::Error as _;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::domain::ports::RouteSubmissionRequest;
@@ -38,20 +40,36 @@ pub struct GenerateRouteJobV1 {
     /// Authenticated user owning the request.
     pub user_id: UserId,
     /// Origin location identifier or coordinates, as supplied by the API.
-    pub origin: serde_json::Value,
+    #[serde(deserialize_with = "deserialize_origin")]
+    pub origin: Value,
     /// Destination location identifier or coordinates.
-    pub destination: serde_json::Value,
+    #[serde(deserialize_with = "deserialize_destination")]
+    pub destination: Value,
     /// Optional preference payload.
-    #[serde(default)]
-    pub preferences: Option<serde_json::Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_preferences"
+    )]
+    pub preferences: Option<Value>,
     /// Wall-clock time at which the job was built and enqueued.
     pub enqueued_at: DateTime<Utc>,
 }
 
 impl GenerateRouteJob {
     /// Build a V1 route-generation job from validated pieces.
-    pub fn v1(payload: GenerateRouteJobV1) -> Self {
-        Self::V1(payload)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GenerateRouteJobBuildError::PayloadMissingField`] when
+    /// `origin` or `destination` is JSON `null`, and
+    /// [`GenerateRouteJobBuildError::PayloadNullField`] when `preferences` is
+    /// present as [`Value::Null`].
+    pub fn v1(payload: GenerateRouteJobV1) -> Result<Self, GenerateRouteJobBuildError> {
+        validate_required_payload(&payload.origin, "origin")?;
+        validate_required_payload(&payload.destination, "destination")?;
+        validate_preferences(&payload.preferences)?;
+        Ok(Self::V1(payload))
     }
 
     /// Build a route-generation job from the route-submission port request.
@@ -81,12 +99,9 @@ impl GenerateRouteJob {
             .filter(|value| !value.is_null())
             .cloned()
             .ok_or_else(|| GenerateRouteJobBuildError::payload_missing_field("destination"))?;
-        let preferences = payload
-            .get("preferences")
-            .filter(|value| !value.is_null())
-            .cloned();
+        let preferences = payload.get("preferences").cloned();
 
-        Ok(Self::v1(GenerateRouteJobV1 {
+        Self::v1(GenerateRouteJobV1 {
             request_id,
             idempotency_key: submission.idempotency_key.clone(),
             user_id: submission.user_id.clone(),
@@ -94,8 +109,63 @@ impl GenerateRouteJob {
             destination,
             preferences,
             enqueued_at,
-        }))
+        })
     }
+}
+
+fn validate_required_payload(
+    value: &Value,
+    field: &'static str,
+) -> Result<(), GenerateRouteJobBuildError> {
+    if value.is_null() {
+        return Err(GenerateRouteJobBuildError::payload_missing_field(field));
+    }
+    Ok(())
+}
+
+fn validate_preferences(preferences: &Option<Value>) -> Result<(), GenerateRouteJobBuildError> {
+    if preferences.as_ref().is_some_and(Value::is_null) {
+        return Err(GenerateRouteJobBuildError::payload_null_field(
+            "preferences",
+        ));
+    }
+    Ok(())
+}
+
+fn deserialize_origin<'de, D>(deserializer: D) -> Result<Value, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_required_payload(deserializer, "origin")
+}
+
+fn deserialize_destination<'de, D>(deserializer: D) -> Result<Value, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_required_payload(deserializer, "destination")
+}
+
+fn deserialize_required_payload<'de, D>(
+    deserializer: D,
+    field: &'static str,
+) -> Result<Value, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    validate_required_payload(&value, field).map_err(D::Error::custom)?;
+    Ok(value)
+}
+
+fn deserialize_preferences<'de, D>(deserializer: D) -> Result<Option<Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    let preferences = Some(value);
+    validate_preferences(&preferences).map_err(D::Error::custom)?;
+    Ok(preferences)
 }
 
 define_port_error! {
@@ -106,6 +176,9 @@ define_port_error! {
         /// Submission payload missed a required field.
         PayloadMissingField { field: &'static str } =>
             "route job payload is missing required field: {field}",
+        /// An optional payload field was explicitly JSON null.
+        PayloadNullField { field: &'static str } =>
+            "route job payload field must not be null: {field}",
     }
 }
 
