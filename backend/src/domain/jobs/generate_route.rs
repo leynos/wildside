@@ -2,26 +2,28 @@
 //! [`RouteQueue`](crate::domain::ports::RouteQueue) port.
 //!
 //! This module provides strict V1 envelope serialization and deserialization,
-//! validates the required top-level `origin` and `destination` fields in a
-//! [`RouteSubmissionRequest`]
-//! payload, and deliberately keeps `origin`, `destination`, and `preferences`
-//! as opaque JSON V1 fields.
+//! accepts the typed route locations and preferences carried by
+//! [`RouteSubmissionRequest`], and preserves their public JSON shape in the
+//! durable queue payload.
+
+use std::fmt;
 
 use chrono::{DateTime, Utc};
-use serde::de::Error as _;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::de::Visitor;
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
-use crate::domain::ports::RouteSubmissionRequest;
 use crate::domain::ports::define_port_error;
+use crate::domain::ports::{
+    RouteLocation, RoutePreferences, RouteSubmissionRequest, deserialize_non_null,
+};
 use crate::domain::{IdempotencyKey, UserId};
 
 /// Versioned envelope for route-generation jobs.
 ///
 /// Adding a field to an existing variant requires cutting a new `V2` variant.
 /// Do not relax `deny_unknown_fields` on an existing variant.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "v")]
 pub enum GenerateRouteJob {
     /// Version 1 route-generation payload.
@@ -41,19 +43,99 @@ pub struct GenerateRouteJobV1 {
     pub user_id: UserId,
     /// Origin location identifier or coordinates, as supplied by the API.
     #[serde(deserialize_with = "deserialize_origin")]
-    pub origin: Value,
+    pub origin: RouteLocation,
     /// Destination location identifier or coordinates.
     #[serde(deserialize_with = "deserialize_destination")]
-    pub destination: Value,
+    pub destination: RouteLocation,
     /// Optional preference payload.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_preferences"
     )]
-    pub preferences: Option<Value>,
+    pub preferences: Option<RoutePreferences>,
     /// Wall-clock time at which the job was built and enqueued.
     pub enqueued_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GenerateRouteJobV1EnvelopeRaw {
+    #[serde(rename = "v")]
+    version: GenerateRouteJobV1Version,
+    request_id: Uuid,
+    idempotency_key: Option<IdempotencyKey>,
+    user_id: UserId,
+    #[serde(deserialize_with = "deserialize_origin")]
+    origin: RouteLocation,
+    #[serde(deserialize_with = "deserialize_destination")]
+    destination: RouteLocation,
+    #[serde(default, deserialize_with = "deserialize_preferences")]
+    preferences: Option<RoutePreferences>,
+    enqueued_at: DateTime<Utc>,
+}
+
+struct GenerateRouteJobV1Version;
+
+impl<'de> Deserialize<'de> for GenerateRouteJobV1Version {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(GenerateRouteJobV1VersionVisitor)
+    }
+}
+
+struct GenerateRouteJobV1VersionVisitor;
+
+impl Visitor<'_> for GenerateRouteJobV1VersionVisitor {
+    type Value = GenerateRouteJobV1Version;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("the supported route-generation job version v1")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        if value == "v1" {
+            Ok(GenerateRouteJobV1Version)
+        } else {
+            Err(E::custom(
+                "unsupported route-generation job envelope version",
+            ))
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for GenerateRouteJob {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = GenerateRouteJobV1EnvelopeRaw::deserialize(deserializer)?;
+        let GenerateRouteJobV1EnvelopeRaw {
+            version: GenerateRouteJobV1Version,
+            request_id,
+            idempotency_key,
+            user_id,
+            origin,
+            destination,
+            preferences,
+            enqueued_at,
+        } = raw;
+
+        Ok(Self::V1(GenerateRouteJobV1 {
+            request_id,
+            idempotency_key,
+            user_id,
+            origin,
+            destination,
+            preferences,
+            enqueued_at,
+        }))
+    }
 }
 
 impl GenerateRouteJob {
@@ -61,14 +143,9 @@ impl GenerateRouteJob {
     ///
     /// # Errors
     ///
-    /// Returns [`GenerateRouteJobBuildError::PayloadMissingField`] when
-    /// `origin` or `destination` is JSON `null`, and
-    /// [`GenerateRouteJobBuildError::PayloadNullField`] when `preferences` is
-    /// present as [`Value::Null`].
+    /// The typed payload is already validated by the inbound adapter. The
+    /// result remains fallible to preserve the published constructor API.
     pub fn v1(payload: GenerateRouteJobV1) -> Result<Self, GenerateRouteJobBuildError> {
-        validate_required_payload(&payload.origin, "origin")?;
-        validate_required_payload(&payload.destination, "destination")?;
-        validate_preferences(&payload.preferences)?;
         Ok(Self::V1(payload))
     }
 
@@ -76,98 +153,61 @@ impl GenerateRouteJob {
     ///
     /// # Errors
     ///
-    /// Returns [`GenerateRouteJobBuildError::PayloadNotObject`] when the
-    /// submission payload is not a JSON object. Returns
-    /// [`GenerateRouteJobBuildError::PayloadMissingField`] when the payload
-    /// omits `origin` or `destination`.
+    /// The route-submission port carries typed, validated values. The result
+    /// remains fallible to preserve the published constructor API.
     pub fn try_from_submission(
         submission: &RouteSubmissionRequest,
         request_id: Uuid,
         enqueued_at: DateTime<Utc>,
     ) -> Result<Self, GenerateRouteJobBuildError> {
-        let payload = submission
-            .payload
-            .as_object()
-            .ok_or_else(GenerateRouteJobBuildError::payload_not_object)?;
-        let origin = payload
-            .get("origin")
-            .cloned()
-            .ok_or_else(|| GenerateRouteJobBuildError::payload_missing_field("origin"))?;
-        let destination = payload
-            .get("destination")
-            .cloned()
-            .ok_or_else(|| GenerateRouteJobBuildError::payload_missing_field("destination"))?;
-        let preferences = payload.get("preferences").cloned();
-
         Self::v1(GenerateRouteJobV1 {
             request_id,
             idempotency_key: submission.idempotency_key.clone(),
             user_id: submission.user_id.clone(),
-            origin,
-            destination,
-            preferences,
+            origin: submission.payload.origin.clone(),
+            destination: submission.payload.destination.clone(),
+            preferences: submission.payload.preferences.clone(),
             enqueued_at,
         })
     }
 }
 
-fn validate_required_payload(
-    value: &Value,
-    field: &'static str,
-) -> Result<(), GenerateRouteJobBuildError> {
-    if value.is_null() {
-        return Err(GenerateRouteJobBuildError::payload_missing_field(field));
-    }
-    Ok(())
-}
-
-fn validate_preferences(preferences: &Option<Value>) -> Result<(), GenerateRouteJobBuildError> {
-    if preferences.as_ref().is_some_and(Value::is_null) {
-        return Err(GenerateRouteJobBuildError::payload_null_field(
-            "preferences",
-        ));
-    }
-    Ok(())
-}
-
-fn deserialize_origin<'de, D>(deserializer: D) -> Result<Value, D::Error>
+fn deserialize_origin<'de, D>(deserializer: D) -> Result<RouteLocation, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    deserialize_required_payload(deserializer, "origin")
+    deserialize_required_location(deserializer, "origin")
 }
 
-fn deserialize_destination<'de, D>(deserializer: D) -> Result<Value, D::Error>
+fn deserialize_destination<'de, D>(deserializer: D) -> Result<RouteLocation, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    deserialize_required_payload(deserializer, "destination")
+    deserialize_required_location(deserializer, "destination")
 }
 
-fn deserialize_required_payload<'de, D>(
+fn deserialize_required_location<'de, D>(
     deserializer: D,
     field: &'static str,
-) -> Result<Value, D::Error>
+) -> Result<RouteLocation, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let value = Value::deserialize(deserializer)?;
-    validate_required_payload(&value, field).map_err(D::Error::custom)?;
-    Ok(value)
+    deserialize_non_null(deserializer, field)
 }
 
-fn deserialize_preferences<'de, D>(deserializer: D) -> Result<Option<Value>, D::Error>
+fn deserialize_preferences<'de, D>(deserializer: D) -> Result<Option<RoutePreferences>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let value = Value::deserialize(deserializer)?;
-    let preferences = Some(value);
-    validate_preferences(&preferences).map_err(D::Error::custom)?;
-    Ok(preferences)
+    deserialize_non_null(deserializer, "preferences").map(Some)
 }
 
 define_port_error! {
-    /// Errors raised while building route-generation jobs from submissions.
+    /// Compatibility errors retained by the published V1 constructor surface.
+    ///
+    /// Typed submission values are validated before construction, so current
+    /// constructors do not emit these variants.
     pub enum GenerateRouteJobBuildError {
         /// Submission payload was not a JSON object.
         PayloadNotObject => "route job payload must be a JSON object",
