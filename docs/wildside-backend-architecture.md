@@ -2880,7 +2880,7 @@ pub struct RouteServiceImpl<R, C, Q, M>
 where
     R: RouteRepository,
     C: RouteCache,
-    Q: RouteQueue,
+    Q: RouteQueue<Plan = RoutePlan>,
     M: RouteMetrics,
 {
     repo: Arc<R>,
@@ -2893,7 +2893,7 @@ impl<R, C, Q, M> RouteServiceImpl<R, C, Q, M>
 where
     R: RouteRepository,
     C: RouteCache,
-    Q: RouteQueue,
+    Q: RouteQueue<Plan = RoutePlan>,
     M: RouteMetrics,
 {
     pub fn new(repo: Arc<R>, cache: Arc<C>, queue: Arc<Q>, metrics: Arc<M>) -> Self {
@@ -2906,7 +2906,7 @@ impl<R, C, Q, M> RouteService for RouteServiceImpl<R, C, Q, M>
 where
     R: RouteRepository,
     C: RouteCache,
-    Q: RouteQueue,
+    Q: RouteQueue<Plan = RoutePlan>,
     M: RouteMetrics,
 {
     async fn request_route(

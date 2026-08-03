@@ -80,6 +80,9 @@ impl GenerateRouteJob {
     /// submission payload is not a JSON object. Returns
     /// [`GenerateRouteJobBuildError::PayloadMissingField`] when the payload
     /// omits `origin` or `destination`, or sets either field to JSON `null`.
+    /// Returns [`GenerateRouteJobBuildError::PayloadNullField`] when the
+    /// payload sets `preferences` to JSON `null`, which [`Self::v1`]
+    /// validation rejects.
     pub fn try_from_submission(
         submission: &RouteSubmissionRequest,
         request_id: Uuid,
