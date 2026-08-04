@@ -8,22 +8,6 @@
     "expiresAt": "2026-08-28"
   },
   {
-    "id": "BUN_ESBUILD_DEV_SERVER_FILE_READ_2026_06",
-    "package": "esbuild",
-    "advisory": "GHSA-g7r4-m6w7-qqqr",
-    "reason": "Bun reports transitive Vite tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
-    "addedAt": "2026-06-28",
-    "expiresAt": "2026-08-01"
-  },
-  {
-    "id": "BUN_JS_YAML_ALIAS_DOS_2026_06",
-    "package": "js-yaml",
-    "advisory": "GHSA-h67p-54hq-rp68",
-    "reason": "Bun reports transitive frontend-tooling versions when npm-visible overrides are absent; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
-    "addedAt": "2026-06-28",
-    "expiresAt": "2026-08-03"
-  },
-  {
     "id": "BUN_POSTCSS_STRINGIFY_XSS_2026_06",
     "package": "postcss",
     "advisory": "GHSA-qx2v-qp2m-jg93",
