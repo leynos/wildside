@@ -13,6 +13,19 @@ Both endpoints send `Cache-Control: no-store` and a JSON body with a top-level
 `status` field (`pass` or `fail`) plus a `checks` object keyed by `liveness` or
 `readiness`.
 
+## Route job payloads
+
+The backend now has internal typed payloads for route-generation and enrichment
+background jobs. This is an implementation detail for queue workers and does
+not change the public application programming interface (API).
+
+Clients should continue to call the same route endpoints with the same
+idempotency headers, request identifiers, and JSON body shapes as before.
+Payload validation at the HTTP boundary, idempotency conflict handling, and
+trace identifiers in user-visible error responses keep their existing
+behaviour. No new endpoint, response field, or polling contract is introduced
+by the job-payload work.
+
 ## Local Kubernetes preview
 
 Developers can run a local Kubernetes preview when a supported container

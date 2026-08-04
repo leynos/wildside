@@ -24,6 +24,8 @@
 //! - IdempotencyRecord — stored record for idempotency tracking.
 //! - IdempotencyLookupResult — outcome of idempotency key lookup.
 //! - MutationType — discriminator for idempotency scopes (routes, notes, etc.).
+//! - Background job payloads (`GenerateRouteJob`, `EnrichmentJob`) dispatched
+//!   through the route queue port.
 //! - IdempotencyConfig — configurable TTL for idempotency records.
 //! - UserPreferences — user preferences for interests, safety, and display.
 //! - UnitSystem — metric or imperial unit display preference.
@@ -59,6 +61,7 @@
 
 pub mod annotations;
 pub mod auth;
+pub mod bounding_box;
 pub mod catalogue;
 pub mod descriptors;
 pub(crate) mod enrichment_provenance_error_mapping;
@@ -69,6 +72,7 @@ pub mod example_data;
 pub mod health;
 pub mod idempotency;
 pub mod interest_theme;
+pub mod jobs;
 pub mod localization;
 pub mod offline;
 pub mod offline_bundle_service;
@@ -102,6 +106,7 @@ pub use self::annotations::{
     RouteProgressBuilder,
 };
 pub use self::auth::{LoginCredentials, LoginValidationError};
+pub use self::bounding_box::{BoundingBox, BoundingBoxError};
 pub use self::catalogue::{
     CatalogueValidationError, CommunityPick, CommunityPickDraft, ImageAsset, RouteCategory,
     RouteCategoryDraft, RouteCollection, RouteCollectionDraft, RouteSummary, RouteSummaryDraft,
@@ -129,7 +134,7 @@ pub use self::localization::{
 };
 pub use self::offline::normalize_device_id as normalize_offline_device_id;
 pub use self::offline::{
-    BoundingBox, OfflineBundle, OfflineBundleDraft, OfflineBundleKind, OfflineBundleStatus,
+    OfflineBundle, OfflineBundleDraft, OfflineBundleKind, OfflineBundleStatus,
     OfflineValidationError, ParseOfflineBundleKindError, ParseOfflineBundleStatusError, ZoomRange,
 };
 pub use self::offline_bundle_service::{OfflineBundleCommandService, OfflineBundleQueryService};

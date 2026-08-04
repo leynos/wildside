@@ -889,16 +889,22 @@ sitemap.
 ### Running locally
 
 ```sh
-node ./scripts/check-overrides-policy.mjs
+bun run scripts/audit-ux-state-graph.mjs \
+  --graph docs/wildside-ux-state-graph-v0.1.json \
+  --sitemap docs/sitemap.md
 ```
 
-A passing run prints:
+A passing run prints one deterministic line per state on stdout and exits with
+code `0`:
 
 ```text
-pnpm override policy verified for basic-ftp, dompurify, ip-address, uuid.
+home in=0 out=2 route=/
+cards in=1 out=1 route=/cards
+detail in=1 out=0 route=/cards/:id [ORPHAN]
 ```
 
-A failing run prints a policy diagnostic to stderr and exits with code `1`.
+A failing run — missing `--graph`/`--sitemap` or an invalid input file — prints
+a diagnostic to stderr and exits with code `1`.
 
 ## Override policy check
 
@@ -1010,15 +1016,16 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
 The hexagonal boundary is enforced via visibility:
 
-| Component                            | Visibility               | Purpose                                    |
-| ------------------------------------ | ------------------------ | ------------------------------------------ |
-| `ApalisRouteQueue<P>`                | `pub`                    | Public adapter for domain use              |
-| `ApalisPostgresProvider`             | `pub`                    | Production `QueueProvider` implementation  |
-| `GenericApalisRouteQueue<P, Q>`      | `pub`                    | Generic adapter and BDD harness seam       |
-| `QueueProvider`                      | `pub(crate)`             | Test seam for provider abstraction         |
-| `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only) | In-memory test double                      |
-| `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only) | Always-failing test double                 |
-| `setup_apalis_storage`               | `pub` (test support)     | BDD harness for Apalis schema provisioning |
+| Component                            | Visibility               | Purpose                                         |
+| ------------------------------------ | ------------------------ | ----------------------------------------------- |
+| `ApalisRouteQueue<P>`                | `pub`                    | Public adapter for domain use                   |
+| `ApalisPostgresProvider`             | `pub`                    | Production `QueueProvider` implementation       |
+| `GenericApalisRouteQueue<P, Q>`      | `pub`                    | Generic adapter and BDD harness seam            |
+| `decode_job<J>`                      | `pub`                    | Pure decoder with bounded rejection diagnostics |
+| `QueueProvider`                      | `pub(crate)`             | Test seam for provider abstraction              |
+| `test_helpers::FakeQueueProvider`    | `pub(crate)` (test-only) | In-memory test double                           |
+| `test_helpers::FailingQueueProvider` | `pub(crate)` (test-only) | Always-failing test double                      |
+| `setup_apalis_storage`               | `pub` (test support)     | BDD harness for Apalis schema provisioning      |
 
 Domain code depends only on the `RouteQueue` port trait. The Apalis adapter
 implements this port without exposing `apalis-postgres` or `sqlx` types in the
@@ -1033,6 +1040,10 @@ Public production API:
 - `ApalisPostgresProvider` – The production `QueueProvider` implementation.
   Wraps `apalis_postgres::PostgresStorage<serde_json::Value>` and provisions
   the Apalis schema via `PostgresStorage::<(), (), ()>::setup`.
+- `decode_job<J>` – The worker-side decode boundary for JSON loaded from
+  `apalis.jobs`. It is pure: it returns a validated versioned envelope or a
+  bounded `JobDispatchError::Rejected` diagnostic; malformed and unsupported
+  versions never reach a handler.
 
 Implementation details within `outbound::queue`:
 
@@ -1044,6 +1055,71 @@ Implementation details within `outbound::queue`:
   `apalis_route_queue` module. Defines
   `async fn push_job(&self, payload: serde_json::Value) -> Result<(), JobDispatchError>`
   as the test seam; not part of the crate's supported public API.
+
+### Background job payloads
+
+Domain-owned job payloads live under `backend/src/domain/jobs`. They are the
+only supported contract for values passed into `RouteQueue::enqueue`:
+
+- `GenerateRouteJob` is defined in
+  `backend/src/domain/jobs/generate_route.rs`. Its fallible
+  `GenerateRouteJob::v1(GenerateRouteJobV1)` constructor validates an already
+  assembled payload; `GenerateRouteJob::try_from_submission` builds one from
+  the route-submission port, taking the generated `request_id` and enqueue
+  timestamp explicitly. A non-object submission returns `PayloadNotObject`.
+  Missing or JSON-null `origin` or `destination` returns
+  `PayloadMissingField`; explicitly JSON-null `preferences` returns
+  `PayloadNullField`. Origin and destination are opaque JSON values, currently
+  supplied as either string identifiers or coordinate objects.
+- `EnrichmentJob` is defined in `backend/src/domain/jobs/enrichment.rs`. Build
+  it through the fallible `EnrichmentJob::v1(EnrichmentJobParams)` constructor,
+  which rejects `EmptyTags`, `TooManyTags`, and `TagTooLong`, then canonicalizes
+  the tags. V1 permits at most 64 tags, with each tag no longer than 64 UTF-8
+  bytes. Deserializing a persisted V1 job applies the same validation, so
+  workers never receive unchecked tag vectors from `apalis.jobs`.
+- `BoundingBox` is the shared geographic value object in
+  `backend/src/domain/bounding_box.rs`; job and offline modules re-export this
+  one type rather than defining parallel validators. Its ordinary Serde shape
+  is the offline API object (`minLng`, `minLat`, `maxLng`, `maxLat`). Durable
+  enrichment payloads opt into `bounding_box::array_wire` explicitly to retain
+  `[min_lng, min_lat, max_lng, max_lat]`. Construct it with
+  `BoundingBox::new(min_lng, min_lat, max_lng, max_lat)`, which returns
+  `Result<Self, BoundingBoxError>` and rejects `NonFinite`,
+  `LongitudeOutOfRange`, `LatitudeOutOfRange`, `InvertedOrdering`, and
+  `AntimeridianWrap`. Split dateline-spanning inputs before building either
+  domain value.
+
+The job constructors return their domain-specific build errors, and bounding
+box construction returns `BoundingBoxError`. These are distinct from
+`JobDispatchError`, which reports queue or worker-boundary failures.
+
+Both job families use a serde envelope with `#[serde(tag = "v")]`, currently
+`"v1"`. V1 structs use `deny_unknown_fields`; do not remove that restriction.
+Any additive schema change requires a new variant such as V2. A changed `insta`
+snapshot for a V1 job is a signal to stop and cut a new variant, not to edit V1
+in place.
+
+Workers must pass persisted `serde_json::Value` payloads through
+`outbound::queue::decode_job` before invoking a handler. The decoder applies
+the envelope's Serde validation and reports malformed or unsupported versions
+as `JobDispatchError::Rejected`. Missing or non-string versions, and otherwise
+malformed payloads, use the fixed `malformed job payload` diagnostic. A
+readable unsupported version gets an escaped diagnostic containing at most 64
+UTF-8 bytes of the version; this diagnostic limit is unrelated to the V1
+enrichment limits of 64 tags and 64 UTF-8 bytes per tag. The raw payload is
+never logged. `decode_job` emits no warnings or metrics: roadmap item 5.2.2
+defines no decode metric. The future 5.3.1 worker/consumer boundary owns safe
+warning and rejection metrics. Retry and dead-letter policy remain owned by
+roadmap item 5.2.3.
+
+The payloads carry `idempotency_key` because the current Apalis pins predate
+framework-native idempotency support. Trace IDs are intentionally absent from
+V1; roadmap item 5.2.4 owns trace propagation and must choose the trace carrier
+before adding any trace field.
+
+Domain job modules must not import Apalis, SQLx, Diesel, Actix, or outbound
+adapter types. Adapter code serializes domain payloads at the boundary; domain
+code defines the contract and validation rules.
 
 Queue observability:
 
@@ -1089,6 +1165,7 @@ The queue adapter requires:
 #### Test infrastructure
 
 - `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
+- `pretty_assertions` – Readable structural equality failures for job payloads
 - No feature flags required; BDD tests are in the `tests/` integration
   harness and run unconditionally with `cargo test`
 
@@ -1097,6 +1174,9 @@ To run BDD tests locally:
 ```bash
 # Run the Apalis BDD suite
 cargo test -p backend --test route_queue_apalis_bdd
+
+# Exercise typed payload persistence and decode
+cargo test -p backend --test job_structs_postgres_bdd
 ```
 
 ### Queue test infrastructure

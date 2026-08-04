@@ -2211,53 +2211,84 @@ connect to the same PostgreSQL instance. The Apalis job tables are managed by
 Importantly, 5.2.1 delivers the driven adapter itself but does not yet enable
 request-path queue dispatch or worker consumption. The `TODO(#276)` markers in
 `backend/src/domain/route_submission/mod.rs` (lines 241 and 295) remain
-unchanged, awaiting later roadmap items covering job struct definitions
-(5.2.2), retry policies (5.2.3), and trace propagation (5.2.4). The stub adapter
-(`StubRouteQueue`) is retained for tests that do not require PostgreSQL.
+unchanged. Roadmap item 5.2.2 now supplies the job struct definitions;
+request-path dispatch remains deferred. Item 5.2.3 adds retry and dead-letter
+handling, item 5.2.4 adds trace propagation, and item 5.3.1 adds worker
+consumption and deployment. The roadmap's reference to replacing the stub
+applies to the production queue implementation; the stub adapter
+(`StubRouteQueue`) remains available for tests that do not require PostgreSQL.
 
-**Job definitions:** We have two primary job types in the system (with the
-possibility of more as the project grows):
+**Job definitions:** Roadmap item 5.2.2 defines the durable domain payloads in
+`backend/src/domain/jobs`. Both job families use a `#[serde(tag = "v")]`
+versioning envelope with a current `"v1"` variant. Existing V1 variants use
+`deny_unknown_fields`: adding any field, even an optional field, requires a new
+variant such as V2 and a reviewed snapshot update.
 
-- **GenerateRouteJob:** Contains the parameters needed to generate a route
-  (user id or context, start location, duration, interest tags, and the
-  request_id to correlate). Its handler will load necessary data (using the
-  domain logic and repositories), call the route engine to compute the path,
-  and then handle the result. On success, it will store the resulting route in
-  the database (so it can be retrieved via API) and trigger a WebSocket
-  notification to the
-  user([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L67-L74)
-  )(
-  [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L76-L78)).
-  On failure or timeout, it will similarly notify (via WS or mark the status
-  in DB) that the route failed. As part of its logic, if it detects not enough
-  POIs (data sparse), it will enqueue an **EnrichmentJob** before
-  finishing([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L632-L640)
-  )(
-  [3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L664-L671))
-  (this can be done by pushing a new job to the enrichment queue).
+- `GenerateRouteJob` lives in
+  `backend/src/domain/jobs/generate_route.rs`. V1 carries `request_id`, optional
+  `idempotency_key`, `user_id`, `origin`, `destination`, optional
+  `preferences`, and `enqueued_at`. The helper
+  `GenerateRouteJob::try_from_submission` converts the existing
+  `RouteSubmissionRequest` shape into the queued payload while keeping
+  `RouteSubmissionRequest::payload` as `serde_json::Value`. The fallible
+  `GenerateRouteJob::v1` constructor rejects null `origin` and `destination`
+  values and rejects `preferences: Some(Value::Null)`, while preserving string
+  and object location values as opaque JSON.
+- `EnrichmentJob` lives in `backend/src/domain/jobs/enrichment.rs`. V1 carries
+  `job_id`, optional `idempotency_key`, a validated `BoundingBox`, sorted and
+  deduplicated tags, and `enqueued_at`. The bounding box is serialized as
+  `[min_lng, min_lat, max_lng, max_lat]`, matching `OverpassEnrichmentRequest`.
+  Antimeridian-wrapped boxes are not supported in V1; callers spanning the
+  dateline must split the request into two boxes. `EnrichmentJob::v1` accepts
+  `EnrichmentJobParams` whose `bounding_box` is already validated and returns
+  tag-validation errors only (`EmptyTags`, `TooManyTags`, and `TagTooLong`): at
+  least one non-empty tag is required, at most 64 tags are allowed, and each
+  tag is limited to 64 UTF-8 bytes.
+- `BoundingBox` lives in `backend/src/domain/bounding_box.rs` and is shared by
+  jobs and offline bundles. It rejects non-finite coordinates, out-of-range
+  WGS84 coordinates, inverted latitude ordering, and longitude ordering that
+  would imply an antimeridian wrap. Its default object-shaped Serde contract is
+  retained for offline APIs; enrichment jobs use an explicit array-wire adapter
+  to preserve their published queue representation.
 
-- **EnrichmentJob:** Contains parameters like a geographical bounding box or
-  area ID and perhaps a category of POIs to fetch. Its handler will call the
-  Overpass API (via HTTP) to get additional POIs in that
-  area([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L666-L674)).
-  It parses the Overpass response, and for each new POI, inserts or updates the
-  `pois` table in our
-  database([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L668-L670)).
-  This job essentially expands our local dataset. It might not directly notify
-  the user (the user’s original request is handled by the GenerateRouteJob
-  which will re-run the route or was waiting), but it will emit metrics (like
-  count of POIs added) and possibly log an event for
-  monitoring([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L371-L378)).
-  If a route job was waiting on enrichment (depending on implementation, we
-  might either have the original job block pending enrichment or more likely
-  the first job returns what it can and enrichment will affect future
-  requests), in a future iteration we could have the GenerateRouteJob await the
-  completion of the spawned EnrichmentJob (with some overall timeout).
+The idempotency key remains in the job payload as the durable wire-level source
+of truth. Although the resolved dependency graph now includes an `apalis-core`
+release with framework-native task identity, queue dispatch does not yet map
+the payload field into that metadata. A later integration can add that mapping
+without changing the V1 wire shape.
 
-We omit detailed implementation of these jobs in this design document (see code
-for specifics), but the key point is the separation: the **API enqueues a
-GenerateRouteJob** and returns immediately, the **worker processes it and may
-enqueue further jobs or produce output**.
+Trace identifiers are deliberately absent from the V1 payloads. Roadmap item
+5.2.4 owns trace propagation and will decide whether trace data travels in the
+job payload, Apalis task metadata, or OpenTelemetry context. Until that work
+lands, `request_id`/`job_id` provide stable identifiers but are not a complete
+trace-propagation mechanism.
+
+The `#[serde(tag = "v")]` envelope is V1-only today. V1-only consumers reject
+unsupported versions (for example `"v": "v2"`) at the queue boundary rather
+than producing a variant a handler could match. Producer and consumer rollout
+must therefore be compatible: producers continue emitting V1 until every
+consumer in the rollout understands the newer version, and consumers that
+understand a newer version are deployed before producers begin emitting it.
+`decode_job` is pure: it never logs payloads, emits warnings, or records decode
+metrics. Roadmap item 5.2.2 defines no decode metric; the future 5.3.1
+worker/consumer boundary owns safe warning and rejection metrics, 5.2.3 owns
+retry/dead-letter handling, and 5.2.4 owns trace propagation. Worker handlers
+then operate only on successfully deserialized envelope variants. Neither the
+dispatch boundary nor the handlers may panic or silently drop a job on an
+unsupported version.
+
+This boundary is implemented by `decode_job` in
+`backend/src/outbound/queue/job_decode.rs`. It reads the raw persisted
+`serde_json::Value`, checks the `"v"` discriminant, and decodes into the
+requested versioned job type. A missing or non-string version, or any
+unreadable or structurally invalid payload, returns
+`JobDispatchError::Rejected` with the fixed diagnostic `malformed job payload`.
+Only a readable unsupported string version receives a diagnostic containing the
+version; that value is control-escaped and capped at 64 UTF-8 bytes. The raw
+payload is never included because it can contain user data. The consumer added
+in 5.3.1 owns safe warning and rejection metrics for these results; the decoder
+itself remains pure. The queue-processing error path then applies the
+retry/dead-letter policy owned by 5.2.3.
 
 **Communication between workers and API:** The workers operate asynchronously
 from the API, so how does the API know to send WebSocket updates to the right
@@ -2317,10 +2348,10 @@ for active jobs could be maintained (though Apalis can likely report if workers
 are busy).
 
 Apalis integrates with the `tracing` crate, so each job run can emit tracing
-spans. We make sure to propagate the trace ID from the enqueuing context: one
-method is to include the originating trace ID in the job payload (or in
-metadata) so that when the worker picks it up, it can attach that ID to its
-logging
+spans. Roadmap item 5.2.4 will choose the trace carrier for queued work: the
+originating trace ID may travel in Apalis task metadata or tracing context, and
+only a future payload variant should add it to the job body. When the worker
+picks up a job, it attaches that ID to its logging
 context([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L712-L720)).
 In practice, we might log an event like “GenerateRouteJob started
 (request_id=…, trace=X)” and use `tracing::info_span!(..., trace_id = X)`
@@ -2793,8 +2824,10 @@ pub enum RouteCacheError {
 
 #[derive(Debug, Error)]
 pub enum JobDispatchError {
-    #[error("queue unavailable: {0}")]
-    Unavailable(String),
+    #[error("route queue is unavailable: {message}")]
+    Unavailable { message: String },
+    #[error("route job was rejected: {message}")]
+    Rejected { message: String },
 }
 
 #[derive(Debug, Error)]
@@ -2826,7 +2859,9 @@ pub trait RouteCache: Send + Sync {
 
 #[async_trait]
 pub trait RouteQueue: Send + Sync {
-    async fn enqueue(&self, plan: &RoutePlan) -> Result<(), JobDispatchError>;
+    type Plan: Send + Sync;
+
+    async fn enqueue(&self, plan: &Self::Plan) -> Result<(), JobDispatchError>;
 }
 
 #[async_trait]
@@ -2847,7 +2882,7 @@ pub struct RouteServiceImpl<R, C, Q, M>
 where
     R: RouteRepository,
     C: RouteCache,
-    Q: RouteQueue,
+    Q: RouteQueue<Plan = RoutePlan>,
     M: RouteMetrics,
 {
     repo: Arc<R>,
@@ -2860,7 +2895,7 @@ impl<R, C, Q, M> RouteServiceImpl<R, C, Q, M>
 where
     R: RouteRepository,
     C: RouteCache,
-    Q: RouteQueue,
+    Q: RouteQueue<Plan = RoutePlan>,
     M: RouteMetrics,
 {
     pub fn new(repo: Arc<R>, cache: Arc<C>, queue: Arc<Q>, metrics: Arc<M>) -> Self {
@@ -2873,7 +2908,7 @@ impl<R, C, Q, M> RouteService for RouteServiceImpl<R, C, Q, M>
 where
     R: RouteRepository,
     C: RouteCache,
-    Q: RouteQueue,
+    Q: RouteQueue<Plan = RoutePlan>,
     M: RouteMetrics,
 {
     async fn request_route(

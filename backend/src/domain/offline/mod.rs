@@ -13,23 +13,20 @@ mod geometry;
 mod tests;
 mod validation;
 
+pub use crate::domain::BoundingBox;
 pub use bundle::{OfflineBundle, OfflineBundleDraft};
 pub use enums::{
     OfflineBundleKind, OfflineBundleStatus, ParseOfflineBundleKindError,
     ParseOfflineBundleStatusError,
 };
-pub use geometry::{BoundingBox, ZoomRange};
+pub use geometry::ZoomRange;
 pub use validation::normalize_device_id;
 
 /// Validation errors raised by offline bundle constructors.
 #[derive(Debug, Clone, PartialEq)]
 pub enum OfflineValidationError {
     EmptyDeviceId,
-    InvalidBounds {
-        field: &'static str,
-        value: f64,
-    },
-    InvalidBoundsOrder,
+    BoundingBox(crate::domain::BoundingBoxError),
     InvalidZoomRange {
         min_zoom: u8,
         max_zoom: u8,
@@ -52,15 +49,7 @@ impl fmt::Display for OfflineValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyDeviceId => write!(f, "offline bundle device_id must not be empty"),
-            Self::InvalidBounds { field, value } => {
-                write!(
-                    f,
-                    "offline bundle bounds field {field} is out of range: {value}"
-                )
-            }
-            Self::InvalidBoundsOrder => {
-                write!(f, "offline bundle bounds must satisfy min <= max")
-            }
+            Self::BoundingBox(error) => write!(f, "offline bundle bounds are invalid: {error}"),
             Self::InvalidZoomRange { min_zoom, max_zoom } => {
                 write!(
                     f,
@@ -96,4 +85,17 @@ impl fmt::Display for OfflineValidationError {
     }
 }
 
-impl std::error::Error for OfflineValidationError {}
+impl std::error::Error for OfflineValidationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::BoundingBox(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl From<crate::domain::BoundingBoxError> for OfflineValidationError {
+    fn from(error: crate::domain::BoundingBoxError) -> Self {
+        Self::BoundingBox(error)
+    }
+}

@@ -15,11 +15,14 @@
 //! to enable unit testing without PostgreSQL, following the same pattern as
 //! [`RedisRouteCache`](crate::outbound::cache::RedisRouteCache).
 //!
+//! Persisted payloads must pass through [`decode_job`] before a worker handler
+//! receives them. This keeps version rejection and domain validation at the
+//! queue boundary rather than duplicating it in each handler.
+//!
 //! # Future Implementation
 //!
 //! The full queue system will include:
 //! - Worker consumption of enqueued jobs
-//! - Job struct definitions (`GenerateRouteJob`, `EnrichmentJob`)
 //! - Retry policies with exponential backoff
 //! - Dead-letter handling for failed jobs
 //! - Trace ID propagation through job metadata
@@ -31,6 +34,9 @@ pub use stub_route_queue::StubRouteQueue;
 
 mod apalis_route_queue;
 pub use apalis_route_queue::{ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue};
+
+mod job_decode;
+pub use job_decode::decode_job;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_helpers;
