@@ -18,33 +18,24 @@ FAKE_TOOL_SOURCE = textwrap.dedent(
     """\
     #!/usr/bin/env python3
     from __future__ import annotations
-
     import json
     import os
     import sys
     from pathlib import Path
-
     name = Path(sys.argv[0]).name
     args = sys.argv[1:]
     state_path = Path(os.environ["WILDSIDE_FAKE_TOOL_STATE"])
     log_path = Path(os.environ["WILDSIDE_FAKE_TOOL_LOG"])
     stdin_text = sys.stdin.read()
-    log_path.write_text(
-        log_path.read_text() + json.dumps([name, args, bool(stdin_text)]) + "\\n"
-        if log_path.exists()
-        else json.dumps([name, args, bool(stdin_text)]) + "\\n"
-    )
-
-
+    with log_path.open("a", encoding="utf8") as log_file:
+        print(json.dumps([name, args, bool(stdin_text)]), file=log_file)
     def _unwrap(name: str, args: list[str]) -> tuple[str, list[str]]:
         # Emulate `systemd-run --scope --user -p KEY=VAL env VAR=x kind ...`
         # and `env VAR=x kind ...` by stripping scope flags and leading
         # `VAR=value` assignments, then re-dispatching to the wrapped tool.
         while name in ("env", "systemd-run"):
             rest = list(args)
-            while rest and (
-                rest[0].startswith("-") or "=" in rest[0] or rest[0] == "env"
-            ):
+            while rest and (rest[0].startswith("-") or "=" in rest[0] or rest[0] == "env"):
                 if rest[0] == "-p":
                     rest = rest[2:]
                 else:
@@ -53,56 +44,110 @@ FAKE_TOOL_SOURCE = textwrap.dedent(
                 return name, args
             name, args = rest[0], rest[1:]
         return name, args
-
-
     name, args = _unwrap(name, args)
-
-
-    if name == "uv" and args[:1] == ["run"]:
+    if name == "uv" and args[:2] == ["run", "scripts/local_k8s.py"] and args[2:] in (
+        ["up"], ["status"], ["logs"], ["down"],
+    ):
         python = os.environ["WILDSIDE_FAKE_PYTHON"]
         os.execv(python, [str(python), *args[1:]])
-
-
     def has_cluster() -> bool:
         return state_path.exists() and state_path.read_text() == "created"
-
-    if name == "k3d" and args[:3] == ["cluster", "list", "--output"]:
+    cluster_name = "wildside-preview"
+    contexts = ("k3d-wildside-preview", "kind-wildside-preview")
+    def contextual(flag: str, suffix: list[str]) -> bool:
+        return len(args) >= 2 and args[0] == flag and args[1] in contexts and args[2:] == suffix
+    is_build = (
+        name == os.environ["WILDSIDE_CONTAINER_ENGINE"]
+        and len(args) == 6 and args[:2] == ["build", "-f"]
+        and args[3:5] == ["-t", "wildside-backend:local"]
+    )
+    is_podman_save = (
+        name == "podman" and len(args) == 4 and args[:2] == ["save", "--output"]
+        and args[3] == "docker.io/library/wildside-backend:local"
+    )
+    is_kind_load = (
+        name == "kind" and len(args) == 5 and args[:2] == ["load", "image-archive"]
+        and args[3:] == ["--name", cluster_name]
+    )
+    is_helm_upgrade = (
+        name == "helm" and len(args) == 17
+        and args[:1] == ["--kube-context"] and args[1] in contexts
+        and args[2:5] == ["upgrade", "--install", "wildside"]
+        and args[6:8] == ["--namespace", "wildside"] and args[8] == "--values"
+        and args[10:] == [
+            "--set-string", "image.repository=wildside-backend",
+            "--set-string", "image.tag=local",
+            "--wait", "--timeout", "5m",
+        ]
+    )
+    is_session_secret_get = name == "kubectl" and contextual(
+        "--context", ["-n", "wildside", "get", "secret", "wildside-session-key", "--ignore-not-found",
+        "-o=jsonpath={.data.session_key}"],
+    )
+    is_session_secret_create = (
+        name == "kubectl" and contextual("--context", ["create", "-f", "-"]) and bool(stdin_text)
+    )
+    is_no_output_command = any((
+        is_build,
+        name == "k3d" and args == ["image", "import", "wildside-backend:local", "--cluster", cluster_name],
+        name == "podman" and args == [
+            "tag", "wildside-backend:local", "docker.io/library/wildside-backend:local",
+        ],
+        is_podman_save,
+        is_kind_load,
+        is_helm_upgrade,
+        name == "kubectl" and contextual(
+            "--context", ["get", "namespace", "wildside", "--ignore-not-found"],
+        ),
+        name == "kubectl" and contextual("--context", ["create", "namespace", "wildside"]),
+        is_session_secret_get,
+        is_session_secret_create,
+    ))
+    if name == "k3d" and args == ["cluster", "list", "--output", "json"]:
         print('[{"name":"wildside-preview"}]' if has_cluster() else "[]")
-    elif name == "k3d" and args[:2] == ["cluster", "create"]:
+    elif name == "k3d" and args == [
+        "cluster", "create", cluster_name, "--servers", "1", "--agents", "1",
+        "--port", "127.0.0.1:8088:80@loadbalancer", "--wait",
+    ]:
         state_path.write_text("created")
-    elif name == "k3d" and args[:2] == ["cluster", "delete"]:
+    elif name == "k3d" and args == ["cluster", "delete", cluster_name]:
         state_path.unlink(missing_ok=True)
-    elif name == "kind" and args[:2] == ["get", "clusters"]:
+    elif name == "kind" and args == ["get", "clusters"]:
         print("wildside-preview" if has_cluster() else "other")
-    elif name == "kind" and args[:2] == ["create", "cluster"]:
+    elif name == "kind" and args == [
+        "create", "cluster", "--name", cluster_name, "--config", "-", "--wait", "180s",
+    ] and stdin_text:
         state_path.write_text("created")
-    elif name == "kind" and args[:2] == ["delete", "cluster"]:
+    elif name == "kind" and args == ["delete", "cluster", "--name", cluster_name]:
         state_path.unlink(missing_ok=True)
-    elif name == "helm" and args[:2] in (
-        ["--kube-context", "k3d-wildside-preview"],
-        ["--kube-context", "kind-wildside-preview"],
+    elif is_no_output_command:
+        pass
+    elif name == "helm" and args in (
+        ["--kube-context", contexts[0], "-n", "wildside", "status", "wildside"],
+        ["--kube-context", contexts[1], "-n", "wildside", "status", "wildside"],
     ):
         print("helm status")
-    elif name == "kubectl" and "logs" in args:
+    elif name == "kubectl" and contextual(
+        "--context", ["-n", "wildside", "logs", "-l",
+        "app.kubernetes.io/instance=wildside", "-c", "app", "--tail", "200"],
+    ):
         print("backend log")
-    elif name == "kubectl" and "get" in args and "pods" in args:
+    elif name == "kubectl" and contextual(
+        "--context", ["-n", "wildside", "get", "pods", "-l",
+        "app.kubernetes.io/instance=wildside", "-o", "wide"],
+    ):
         print("pod/wildside-backend Running")
-    elif name == "kubectl" and "get" in args and "service" in args:
+    elif name == "kubectl" and contextual(
+        "--context", ["-n", "wildside", "get", "service", "wildside", "--ignore-not-found"],
+    ):
         print("service/wildside")
+    else:
+        print(f"unexpected fake command: {name} {args!r}", file=sys.stderr)
+        raise SystemExit(1)
     """
 )
 
-FAKE_TOOL_NAMES = (
-    "docker",
-    "podman",
-    "helm",
-    "k3d",
-    "kind",
-    "kubectl",
-    "uv",
-    "env",
-    "systemd-run",
-)
+FAKE_TOOL_NAMES = "docker podman helm k3d kind kubectl uv env systemd-run".split()
 
 
 def test_local_k8s_cli_help_smoke(uv_executable: str, local_k8s_script: Path) -> None:
@@ -178,9 +223,53 @@ def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
 
 def _load_log_entries(log_path: Path) -> list[list[object]]:
     """Load fake tool command records from the JSON-lines log."""
-    return [
-        json.loads(line) for line in log_path.read_text(encoding="utf8").splitlines()
-    ]
+    entries: list[list[object]] = []
+    for line_number, line in enumerate(
+        log_path.read_text(encoding="utf8").splitlines(), start=1
+    ):
+        decoded = json.loads(line)
+        assert isinstance(decoded, list), (
+            f"fake tool log line {line_number} must decode to a list, "
+            f"got {type(decoded).__name__}"
+        )
+        entries.append(decoded)
+    return entries
+
+
+@pytest.mark.parametrize(
+    ("source", "expected", "expected_error", "message"),
+    [
+        pytest.param("[]\n", [[]], None, None, id="empty-list"),
+        pytest.param(
+            '["docker", ["build"], false]\n[1, 2]\n',
+            [["docker", ["build"], False], [1, 2]],
+            None,
+            None,
+            id="multiple-lists",
+        ),
+        pytest.param(
+            '{"tool": "docker"}\n', None, AssertionError, "line 1.*dict", id="object"
+        ),
+        pytest.param("42\n", None, AssertionError, "line 1.*int", id="scalar"),
+        pytest.param("{invalid\n", None, json.JSONDecodeError, None, id="invalid-json"),
+    ],
+)
+def test_load_log_entries_validates_each_json_line(
+    tmp_path: Path,
+    source: str,
+    expected: list[list[object]] | None,
+    expected_error: type[Exception] | None,
+    message: str | None,
+) -> None:
+    """Return list entries and reject other decoded JSON shapes."""
+    log_path = tmp_path / "commands.jsonl"
+    log_path.write_text(source, encoding="utf8")
+
+    if expected_error is None:
+        assert _load_log_entries(log_path) == expected
+    else:
+        with pytest.raises(expected_error, match=message):
+            _load_log_entries(log_path)
 
 
 def _assert_command_logged(
@@ -244,6 +333,44 @@ def test_local_k8s_make_targets_smoke_successful_flow(
         lambda args: args[0] == "build",
         "local-k8s-up must build the backend image through the CLI boundary",
     )
+    if k8s_provider == "k3d":
+        _assert_command_logged(
+            log_entries,
+            "k3d",
+            lambda args: (
+                args[:2] == ["image", "import"]
+                and args[-2:] == ["--cluster", "wildside-preview"]
+            ),
+            "local-k8s-up must import the image into the k3d cluster",
+        )
+    elif container_engine == "podman":
+        _assert_command_logged(
+            log_entries,
+            "podman",
+            lambda args: args[:2] == ["save", "--output"],
+            "local-k8s-up must save the Podman image for kind",
+        )
+        _assert_command_logged(
+            log_entries,
+            "env",
+            lambda args: (
+                args[:4]
+                == [
+                    "KIND_EXPERIMENTAL_PROVIDER=podman",
+                    "kind",
+                    "load",
+                    "image-archive",
+                ]
+                and args[-2:] == ["--name", "wildside-preview"]
+            ),
+            "local-k8s-up must load the Podman image archive into kind",
+        )
+    _assert_command_logged(
+        log_entries,
+        "helm",
+        lambda args: "upgrade" in args and "--install" in args,
+        "local-k8s-up must install or upgrade the Helm release",
+    )
     _assert_command_logged(
         log_entries,
         "helm",
@@ -261,3 +388,12 @@ def test_local_k8s_make_targets_smoke_successful_flow(
     assert not state_path.exists(), (
         "local-k8s-down must delete the preview cluster through the CLI boundary"
     )
+    unexpected = subprocess.run(  # noqa: S603 - executable is the test fake.
+        [fake_bin / container_engine, "push", "wildside-backend:local"],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+    assert unexpected.returncode != 0
+    assert f"unexpected fake command: {container_engine}" in unexpected.stderr
