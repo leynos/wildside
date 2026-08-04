@@ -482,8 +482,11 @@ Wire the new structs through the existing queue port without changing the
 adapter contract.
 
 1. Add an integration test file `backend/tests/job_structs_bdd.rs` and a
-   feature file `backend/tests/features/job_structs.feature`. Follow the
-   patterns in `docs/rstest-bdd-users-guide.md`.
+   feature file `backend/tests/features/job_structs.feature`. Add the
+   PostgreSQL persisted-boundary test in
+   `backend/tests/job_structs_postgres_bdd.rs` with
+   `backend/tests/features/job_structs_postgres.feature`. Follow the patterns
+   in `docs/rstest-bdd-users-guide.md`.
 2. Scenarios to cover:
    - "Build a generate-route job from a submission and enqueue via stub".
      Given a `RouteSubmissionRequest` with origin and destination, when the
@@ -519,7 +522,8 @@ adapter contract.
 
    ```bash
    set -o pipefail
-   cargo test -p backend --test job_structs_bdd 2>&1 \
+   cargo test -p backend --test job_structs_bdd \
+     --test job_structs_postgres_bdd 2>&1 \
      | tee /tmp/test-wildside-backend-5-2-2-bdd.out
    ```
 
