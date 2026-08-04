@@ -462,12 +462,17 @@ Three pieces cooperate here:
   compiles only the support code it lists. Referencing an unregistered module
   name fails during macro expansion rather than expanding to nothing.
 
-- **`trybuild-tests` feature** (`backend/Cargo.toml`) gates the compile-fail
-  coverage for that macro
-  (`backend/tests/declare_test_support_compile_fail.rs`), which asserts an
-  unknown `@module` name produces a clear diagnostic. It is off by default, so
-  ordinary `cargo test` stays fast; `make test` and CI enable it via
-  `--all-features`.
+- **`trybuild-tests` feature** (`backend/Cargo.toml`) gates the crate's
+  compile-fail coverage: `backend/tests/declare_test_support_compile_fail.rs`
+  asserts an unknown `@module` name produces a clear diagnostic, and
+  `backend/tests/sha2_digest_formatting_compile_fail.rs` pins the `sha2` 0.11
+  API break (see
+  [cryptographic digest formatting](#cryptographic-digest-formatting)). The
+  feature is off by default, so ordinary `cargo test` stays fast; `make test`
+  and CI enable it via `--all-features`. Fixture `.stderr` files are blessed
+  against the pinned toolchain in `rust-toolchain.toml`; re-bless with
+  `TRYBUILD=overwrite cargo test -p backend --features trybuild-tests` after a
+  deliberate toolchain bump.
 
 - **Shared embedded-cluster environment repair** lives in
   `backend/tests/support/stable_cluster_env.rs`
@@ -1142,6 +1147,34 @@ The helper:
 - Calls `PostgresStorage::<(), (), ()>::setup(&pool)` to run Apalis
   schema migrations idempotently
 - Returns the pool for use in subsequent BDD steps
+
+## Cryptographic digest formatting
+
+The backend hashes with `sha2` 0.11. That release finalizes to
+`hybrid_array::Array<u8, _>`, which derefs to `[u8]` but implements neither
+`core::fmt::LowerHex` nor `std::io::Write`. Two pre-0.11 idioms therefore no
+longer compile, and both have a settled replacement in this repository:
+
+- **Rendering a digest.** Encode it with `hex::encode` (already a direct
+  dependency) rather than `format!("{:x}", …)`. Every call site follows this
+  convention: `backend/src/bin/ingest_osm.rs`,
+  `backend/src/domain/idempotency/payload.rs`,
+  `backend/src/domain/route_submission/mod.rs`, and
+  `backend/src/inbound/http/session_config/fingerprint.rs`. Do not add a
+  bespoke hex encoder; `hex::encode` already renders fixed-width lowercase
+  digits, including leading zeroes.
+- **Feeding a hasher from a reader.** Read into a fixed-size buffer and call
+  `Digest::update` per chunk rather than `io::copy(&mut reader, &mut hasher)`.
+  `sha256_file` in `backend/src/bin/ingest_osm.rs` is the reference
+  implementation, using an 8 KiB buffer over a `cap_std` directory capability.
+
+Both breaks are pinned by compile-fail fixtures in `backend/tests/support/ui/`
+(`sha2_digest_lowerhex.rs` and `sha2_hasher_io_write.rs`), driven by
+`backend/tests/sha2_digest_formatting_compile_fail.rs`. If a future change
+reintroduces either idiom — most plausibly by downgrading `sha2` to 0.10 — the
+fixtures start compiling and that test fails. The sibling RustCrypto crates
+move in lockstep with the same break: `sha1`, `sha3`, and `md-5` at 0.11, and
+`hmac`, `hkdf`, and `pbkdf2` at 0.13.
 
 ## Spelling policy
 
