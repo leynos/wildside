@@ -130,6 +130,8 @@ fn decode_caps_untrusted_version_diagnostics() {
 #[case::newline("v2\n", r"v2\n")]
 #[case::carriage_return("v2\r", r"v2\r")]
 #[case::terminal_escape("v2\u{1b}", r"v2\x1b")]
+#[case::line_separator("v2\u{2028}", r"v2\u{2028}")]
+#[case::paragraph_separator("v2\u{2029}", r"v2\u{2029}")]
 fn decode_escapes_control_characters_in_version_diagnostics(
     #[case] version: &str,
     #[case] expected_diagnostic: &str,

@@ -63,20 +63,6 @@ fn constructor_sorts_and_deduplicates_tags(job_id: Uuid, enqueued_at: DateTime<U
     assert_eq!(job.tags(), &["amenity".to_owned(), "tourism".to_owned()]);
 }
 
-#[rstest]
-fn constructor_rejects_empty_tags(job_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let error = EnrichmentJob::v1(EnrichmentJobParams {
-        job_id,
-        idempotency_key: Some(fixture_idempotency_key()),
-        bounding_box: fixture_bounding_box(),
-        tags: Vec::new(),
-        enqueued_at,
-    })
-    .expect_err("empty tags should be rejected");
-
-    assert_eq!(error, EnrichmentJobBuildError::EmptyTags);
-}
-
 #[derive(Clone)]
 struct TagRejectionCase {
     tags: Vec<String>,
@@ -84,6 +70,10 @@ struct TagRejectionCase {
 }
 
 #[rstest]
+#[case(TagRejectionCase {
+    tags: Vec::new(),
+    expected: EnrichmentJobBuildError::EmptyTags,
+})]
 #[case(TagRejectionCase {
     tags: vec![String::new()],
     expected: EnrichmentJobBuildError::EmptyTags,

@@ -2212,9 +2212,10 @@ Importantly, 5.2.1 delivers the driven adapter itself but does not yet enable
 request-path queue dispatch or worker consumption. The `TODO(#276)` markers in
 `backend/src/domain/route_submission/mod.rs` (lines 241 and 295) remain
 unchanged. Roadmap item 5.2.2 now supplies the job struct definitions;
-request-path dispatch and worker consumption remain deferred with retry policies
-(5.2.3) and trace propagation (5.2.4). The roadmap's reference to replacing
-the stub applies to the production queue implementation; the stub adapter
+request-path dispatch remains deferred. Item 5.2.3 adds retry and dead-letter
+handling, item 5.2.4 adds trace propagation, and item 5.3.1 adds worker
+consumption and deployment. The roadmap's reference to replacing the stub
+applies to the production queue implementation; the stub adapter
 (`StubRouteQueue`) remains available for tests that do not require PostgreSQL.
 
 **Job definitions:** Roadmap item 5.2.2 defines the durable domain payloads in

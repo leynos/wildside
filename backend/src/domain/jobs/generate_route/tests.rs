@@ -309,7 +309,7 @@ fn generate_route_job_strategy() -> impl Strategy<Value = GenerateRouteJob> {
         prop::option::of(json_object_strategy()),
     )
         .prop_map(|(origin, destination, preferences)| {
-            GenerateRouteJob::v1(GenerateRouteJobV1 {
+            let job = GenerateRouteJob::v1(GenerateRouteJobV1 {
                 request_id: Uuid::nil(),
                 idempotency_key: Some(fixture_idempotency_key()),
                 user_id: fixture_user_id(),
@@ -317,8 +317,13 @@ fn generate_route_job_strategy() -> impl Strategy<Value = GenerateRouteJob> {
                 destination,
                 preferences,
                 enqueued_at: fixture_enqueued_at(),
-            })
-            .expect("strategy should generate valid route job payloads")
+            });
+            match job {
+                Ok(job) => job,
+                Err(error) => {
+                    panic!("strategy should generate valid route job payloads: {error}")
+                }
+            }
         })
 }
 
