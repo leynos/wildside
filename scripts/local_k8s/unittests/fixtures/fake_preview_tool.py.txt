@@ -23,11 +23,13 @@ def _unwrap(name: str, args: list[str]) -> tuple[str, list[str]]:
         return "kind", args[7:]
     return name, args
 name, args = _unwrap(name, args)
-if name == "uv" and args[:2] == ["run", "scripts/local_k8s.py"] and args[2:] in (
-    ["up"], ["status"], ["logs"], ["down"],
-):
+# Mirror the Makefile's `uv run --no-project scripts/local_k8s.py <command>`;
+# --no-project keeps the root pyproject.toml from altering resolution.
+if name == "uv" and args[:3] == [
+    "run", "--no-project", "scripts/local_k8s.py",
+] and args[3:] in (["up"], ["status"], ["logs"], ["down"]):
     python = os.environ["WILDSIDE_FAKE_PYTHON"]
-    os.execv(python, [str(python), *args[1:]])
+    os.execv(python, [str(python), *args[2:]])
 def has_cluster() -> bool:
     return state_path.exists() and state_path.read_text() == "created"
 cluster_name = "wildside-preview"
