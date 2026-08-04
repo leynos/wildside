@@ -61,8 +61,13 @@ FAKE_TOOL_SOURCE = textwrap.dedent(
 
 
     if name == "uv" and args[:1] == ["run"]:
+        # Skip `uv run` options (such as the --no-project the Makefile passes)
+        # so the interpreter receives the script path, not uv's own flags.
+        rest = args[1:]
+        while rest and rest[0].startswith("-"):
+            rest = rest[1:]
         python = os.environ["WILDSIDE_FAKE_PYTHON"]
-        os.execv(python, [str(python), *args[1:]])
+        os.execv(python, [str(python), *rest])
 
 
     def has_cluster() -> bool:
