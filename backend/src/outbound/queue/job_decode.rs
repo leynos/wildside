@@ -79,6 +79,8 @@ fn escaped_version_character(character: char) -> String {
         '\r' => "\\r".to_owned(),
         '\t' => "\\t".to_owned(),
         '\u{1b}' => "\\x1b".to_owned(),
+        '\u{2028}' => "\\u{2028}".to_owned(),
+        '\u{2029}' => "\\u{2029}".to_owned(),
         '\\' => "\\\\".to_owned(),
         control if control.is_control() => format!("\\u{{{:x}}}", control as u32),
         printable => printable.to_string(),

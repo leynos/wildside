@@ -207,10 +207,8 @@ fn i_enqueue_the_enrichment_job_through_the_fake_apalis_queue(world: &JobStructW
     let provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<EnrichmentJob, _> =
         GenericApalisRouteQueue::new(provider.clone(), Arc::new(NoOpRouteQueueMetrics));
-    let result = world.runtime.block_on(async { queue.enqueue(&job).await });
-
-    if let Err(error) = result {
-        *world.queue_error.borrow_mut() = Some(error);
+    if let Err(error) = world.runtime.block_on(async { queue.enqueue(&job).await }) {
+        panic!("enrichment job should enqueue through the fake Apalis queue: {error}");
     }
     let payloads = match provider.pushed_jobs() {
         Ok(payloads) => payloads,
