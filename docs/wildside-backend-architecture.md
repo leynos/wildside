@@ -2213,8 +2213,9 @@ request-path queue dispatch or worker consumption. The `TODO(#276)` markers in
 `backend/src/domain/route_submission/mod.rs` (lines 241 and 295) remain
 unchanged. Roadmap item 5.2.2 now supplies the job struct definitions;
 request-path dispatch and worker consumption remain deferred with retry policies
-(5.2.3) and trace propagation (5.2.4). The stub adapter (`StubRouteQueue`) is
-retained for tests that do not require PostgreSQL.
+(5.2.3) and trace propagation (5.2.4). The roadmap's reference to replacing
+the stub applies to the production queue implementation; the stub adapter
+(`StubRouteQueue`) remains available for tests that do not require PostgreSQL.
 
 **Job definitions:** Roadmap item 5.2.2 defines the durable domain payloads in
 `backend/src/domain/jobs`. Both job families use a `#[serde(tag = "v")]`
