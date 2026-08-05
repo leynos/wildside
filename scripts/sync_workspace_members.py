@@ -22,6 +22,11 @@ def read_patterns() -> list[str]:
     -------
     list of str
         Configured autodiscover globs, or an empty list if none are set.
+
+    Examples
+    --------
+    >>> read_patterns()  # doctest: +SKIP
+    ['crates/*']
     """
     data = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
     workspace = data.get("workspace", {})
@@ -46,6 +51,11 @@ def discover_members(globs: list[str]) -> list[str]:
     list of str
         POSIX-style paths, relative to the repository root, of directories
         matching *globs* that contain a ``Cargo.toml`` file.
+
+    Examples
+    --------
+    >>> discover_members(["crates/*"])  # doctest: +SKIP
+    ['crates/foo', 'crates/bar']
     """
     members: list[str] = []
     for pattern in globs:
@@ -100,6 +110,11 @@ def format_members(members: list[str], indent: str) -> list[str]:
     list of str
         Lines forming a TOML ``members = [...]`` array, single-line when
         there is exactly one member and multi-line otherwise.
+
+    Examples
+    --------
+    >>> format_members(["backend", "crates/foo"], "")
+    ['members = [', '    "backend",', '    "crates/foo",', ']']
     """
     if len(members) == 1:
         return [f'{indent}members = ["{members[0]}"]']
@@ -110,51 +125,17 @@ def format_members(members: list[str], indent: str) -> list[str]:
 
 
 def _calculate_bracket_depth_change(line: str) -> int:
-    """Compute the net bracket depth delta for a line.
-
-    Parameters
-    ----------
-    line : str
-        A single line of text from the manifest.
-
-    Returns
-    -------
-    int
-        Net change in bracket nesting produced by the line.
-
-    Examples
-    --------
-    >>> _calculate_bracket_depth_change('members = [')
-    1
-    >>> _calculate_bracket_depth_change('    ]')
-    -1
-    """
+    """Compute the net bracket depth delta produced by a line of text."""
     return line.count("[") - line.count("]")
 
 
 def _find_members_array_bounds(lines: list[str]) -> tuple[int, int, str]:
-    """Locate the bounds of the workspace members array.
-
-    Parameters
-    ----------
-    lines : list of str
-        Lines from the workspace manifest.
-
-    Returns
-    -------
-    tuple of int and str
-        Start index, end index, and indentation for the members array.
+    """Locate the members array's start index, end index, and indentation.
 
     Raises
     ------
     SystemExit
         If the members array cannot be located in the manifest.
-
-    Examples
-    --------
-    >>> example = ['[workspace]', 'members = [', '    "crate",', ']']
-    >>> _find_members_array_bounds(example)
-    (1, 3, '')
     """
     start = None
     indent = ""
@@ -190,6 +171,11 @@ def update_manifest(members: list[str]) -> bool:
     bool
         ``True`` if the manifest was rewritten, ``False`` if it already
         matched *members*.
+
+    Examples
+    --------
+    >>> update_manifest(["backend", "crates/foo"])  # doctest: +SKIP
+    True
     """
     lines = MANIFEST.read_text(encoding="utf-8").splitlines()
     start, end, indent = _find_members_array_bounds(lines)
@@ -208,7 +194,18 @@ def main() -> int:
     Returns
     -------
     int
-        Process exit code; always ``0``.
+        Process exit code; ``0`` on success.
+
+    Raises
+    ------
+    SystemExit
+        Propagated from ``_find_members_array_bounds`` if the workspace
+        members array cannot be located in Cargo.toml.
+
+    Examples
+    --------
+    >>> main()  # doctest: +SKIP
+    0
     """
     patterns = read_patterns()
     discovered = discover_members(patterns)

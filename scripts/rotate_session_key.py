@@ -236,7 +236,8 @@ def validate_replica_count(config: RotationConfig) -> bool:
 
     print(
         f"WARNING: Deployment has {replicas} replica(s). "
-        "Zero-downtime rotation requires at least 2 replicas.",
+        f"Zero-downtime rotation requires at least "
+        f"{MIN_REPLICAS_FOR_ZERO_DOWNTIME} replicas.",
         file=sys.stderr,
     )
     print("Continue anyway? [y/N] ", end="", file=sys.stderr)
