@@ -198,7 +198,9 @@ def test_load_log_entries_validates_each_json_line(
 def _assert_command_logged(
     log_entries: list[list[object]],
     tool: str,
-    predicate: cabc.Callable[[list[object]], bool],
+    # Sequence, not list: `list` is invariant, so a narrowed `list[Unknown]`
+    # read back out of a log entry does not satisfy `list[object]`.
+    predicate: cabc.Callable[[cabc.Sequence[object]], bool],
     message: str,
 ) -> None:
     """Assert a fake-tool log contains a matching command."""

@@ -47,7 +47,7 @@ if typ.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class _ProviderCommandSpec:
     """Provider-specific command arguments for cluster lifecycle operations."""
 

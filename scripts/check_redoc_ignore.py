@@ -114,7 +114,15 @@ def report_problems(problems: list[str]) -> None:
 
 
 def main() -> None:
-    """Validate review-by annotations and exit non-zero if any have expired."""
+    """Validate review-by annotations and exit non-zero if any have expired.
+
+    Returns ``None`` when no annotations have expired; otherwise reports the
+    problems and calls ``sys.exit(1)``, raising ``SystemExit``.
+
+    Examples
+    --------
+    >>> main()  # doctest: +SKIP
+    """
     today = dt.date.today()  # noqa: DTZ011 -- calendar date; local time intended
     problems = collect_problems(load_ignore_file_lines(), today)
     if not problems:

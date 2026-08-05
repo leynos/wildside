@@ -81,14 +81,26 @@ PYLINT = uv tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pyli
 # Python 3.14 with pathspec and is gated separately by spelling-helper-test.
 PY_SOURCES := $(sort $(filter-out $(SPELLING_PY_SRCS),\
 	$(shell find scripts tests -type f -name '*.py' -print)))
+# Test-dependency pins shared by typecheck-python and test-scripts so both
+# resolve the same interpreter-visible packages; bump them together.
+PYTEST_VERSION ?= 9.1.1
+PYTEST_MOCK_VERSION ?= 3.15.1
+HYPOTHESIS_VERSION ?= 6.157.2
+CRYPTOGRAPHY_VERSION ?= 49.0.0
+TOMLI_VERSION ?= 2.4.1
+CYCLOPTS_VERSION ?= 4.10.1
+PLUMBUM_VERSION ?= 1.9.0
+PY_TEST_DEPS = pytest==$(PYTEST_VERSION) pytest-mock==$(PYTEST_MOCK_VERSION) \
+	hypothesis==$(HYPOTHESIS_VERSION) 'pyyaml>=6' \
+	cyclopts==$(CYCLOPTS_VERSION) plumbum==$(PLUMBUM_VERSION)
 # Runtime and test dependencies the helper scripts import. ty resolves
 # imports from a materialized virtual environment (`uv run --with` builds a
 # layered environment ty cannot discover), so typecheck-python installs these
 # into .venv and points ty at it. Versions mirror the test-scripts target and
 # the inline metadata in scripts/local_k8s.py; tomli and cryptography cover
 # imports in sync_workspace_members.py and rotate_session_key.py.
-PY_TYPECHECK_DEPS = pytest pytest-mock hypothesis 'pyyaml>=6' \
-	cyclopts==4.10.1 plumbum==1.9.0 cryptography tomli
+PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
+	cryptography==$(CRYPTOGRAPHY_VERSION) tomli==$(TOMLI_VERSION)
 
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
@@ -280,8 +292,7 @@ test-workflow-contracts:
 # the inline dependency declaration in scripts/local_k8s.py.
 test-scripts:
 	PYTHONPATH=scripts uv run --no-project \
-		--with pytest --with pytest-mock --with hypothesis --with 'pyyaml>=6' \
-		--with cyclopts==4.10.1 --with plumbum==1.9.0 \
+		$(foreach dep,$(PY_TEST_DEPS),--with $(dep)) \
 		python -m pytest scripts/local_k8s/unittests
 
 .ONESHELL: prepare-pg-worker
