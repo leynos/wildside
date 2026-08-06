@@ -5,6 +5,7 @@ from __future__ import annotations
 import typing as typ
 from pathlib import Path
 
+import pytest
 import yaml
 
 WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
@@ -112,3 +113,23 @@ def test_compile_fail_binaries_bypass_nextest() -> None:
         "cargo test --locked --features trybuild-tests -p pagination "
         "cursor_trait_bound_compile_fail_tests\n"
     ), "compile-fail suites must remain direct Cargo tests"
+
+
+# Each Python gate runs through its Makefile target so local runs and CI
+# exercise one definition; asserting the exact command keeps them in lockstep.
+PYTHON_GATE_STEPS = (
+    ("Python format check", "make check-fmt-python"),
+    ("Python lint", "make lint-python"),
+    ("Type check", "make typecheck"),
+)
+
+
+@pytest.mark.parametrize(("step_name", "command"), PYTHON_GATE_STEPS)
+def test_build_runs_python_quality_gates(step_name: str, command: str) -> None:
+    """CI drives every Python quality gate through its Makefile target."""
+    step = _find_step(_load_steps("build"), step_name)
+
+    assert step.get("run") == command, (
+        f"the {step_name!r} step must run {command!r} so CI and local runs"
+        " share one gate definition"
+    )
