@@ -851,6 +851,62 @@ The `lint-asyncapi` target invokes AsyncAPI CLI 3.4.2 through `pnpm dlx` and
 validates `spec/asyncapi.yaml` with `--fail-severity=info`. Keep this runner form
 because it resolves the package's `asyncapi` binary reliably in the workspace.
 
+
+## Python quality gates
+
+Python under `scripts/` and `tests/` is held to the same standard as the Rust
+and TypeScript tiers. The rule sets live in the root `pyproject.toml` and the
+Makefile owns the pinned tool versions, so bump a version there rather than
+duplicating it elsewhere.
+
+- `make check-fmt-python` verifies Ruff formatting without rewriting files.
+- `make lint-python` runs three tiers: Ruff for style and correctness,
+  interrogate for docstring coverage over `scripts/`, and Pylint over
+  `scripts/` and `tests/`.
+- `make typecheck-python` creates or reuses `.venv`, installs the declared
+  typecheck dependencies into it, then runs ty against the configured Python
+  sources. ty needs a real environment on disk to resolve imports, because
+  the layered environment `uv run --with ...` builds is not discoverable.
+
+`make lint` includes `lint-python` and `make typecheck` includes
+`typecheck-python`, so the aggregate gates cover Python. CI runs the format,
+lint, and typecheck gates as discrete steps.
+
+The vendored spelling-rollout helper is excluded from these gates: `make
+spelling-helper-test` gates it separately against its own pinned Ruff.
+
+
+### Isolated uv execution
+
+The root `pyproject.toml` is tooling configuration only. It declares no
+`[project]` table and sets `[tool.uv] managed = false`, so it is deliberately
+not a managed uv project.
+
+Helper-script and workflow-contract targets therefore invoke `uv run
+--no-project`. Without that flag uv would discover the root `pyproject.toml`,
+adopt the repository as a project, and change how those invocations resolve —
+syncing an empty environment and writing a `uv.lock`. Passing `--no-project`
+keeps each invocation resolving against the dependencies it declares itself,
+whether through `--with` or PEP 723 inline script metadata.
+
+
+### Rust-only coverage selection
+
+Both Rust coverage workflows, `.github/workflows/ci.yml` and
+`.github/workflows/coverage-main.yml`, pass `language: rust` to the shared
+`generate-coverage` action.
+
+That action's automatic detection reads any root `pyproject.toml` as a Python
+project. Because this repository's is tooling-only, detection would classify
+the repository as mixed, and mixed runs support only Cobertura. Selecting
+`language: rust` explicitly keeps coverage Rust-only: it preserves the
+`lcov.info` LCOV report CodeScene consumes and stops a Python coverage run
+that would have no package to measure.
+
+Contract tests in `tests/workflow_contracts/` protect this configuration,
+including the immutable shared-action pins, alongside the Python gate steps
+and the Makefile recipes described above.
+
 ## UX audit helpers
 
 `scripts/audit-ux-state-graph.mjs` supports front-end source catalogue work by
