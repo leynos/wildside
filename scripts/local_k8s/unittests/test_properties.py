@@ -2,21 +2,26 @@
 
 from __future__ import annotations
 
+import dataclasses as dc
 import os
-from dataclasses import replace
+import typing as typ
 from pathlib import Path
 
 import pytest
 
+# These imports must follow the importorskip guards above: hypothesis is an
+# optional test dependency, and importing it unconditionally at module scope
+# would break collection when it is not installed.
 hypothesis = pytest.importorskip("hypothesis")
 st = pytest.importorskip("hypothesis.strategies")
 
-from hypothesis import HealthCheck, given, settings
-from hypothesis.strategies import DrawFn
+from hypothesis import HealthCheck, given, settings  # noqa: E402
+from local_k8s.cluster import import_image  # noqa: E402
+from local_k8s.config import PreviewConfig  # noqa: E402
+from local_k8s.k8s import print_kubernetes_status  # noqa: E402
 
-from local_k8s.cluster import import_image
-from local_k8s.config import PreviewConfig
-from local_k8s.k8s import print_kubernetes_status
+if typ.TYPE_CHECKING:
+    from hypothesis.strategies import DrawFn
 
 _NAME_CHARS = tuple("abcdefghijklmnopqrstuvwxyz0123456789")
 _NAME_REST_CHARS = tuple("abcdefghijklmnopqrstuvwxyz0123456789-")
@@ -68,7 +73,9 @@ def helm_names(draw: DrawFn, *, max_suffix_size: int = 90) -> str:
         ...     assert len(name) <= 53
     """
     first = draw(st.sampled_from(_NAME_CHARS))
-    middle = draw(st.lists(st.sampled_from(_NAME_REST_CHARS), max_size=max_suffix_size)).copy()
+    middle = draw(
+        st.lists(st.sampled_from(_NAME_REST_CHARS), max_size=max_suffix_size)
+    ).copy()
     if middle and middle[-1] == "-":
         middle[-1] = "0"
     return first + "".join(middle)
@@ -94,7 +101,9 @@ def image_tags(draw: DrawFn) -> str:
 @st.composite
 def registry_qualified_image_names(draw: DrawFn) -> str:
     """Generate registry-qualified image names that must remain unchanged."""
-    registry = draw(st.sampled_from(("localhost", "registry.example.test", "localhost:5000")))
+    registry = draw(
+        st.sampled_from(("localhost", "registry.example.test", "localhost:5000"))
+    )
     namespace = draw(repository_components())
     repository = draw(repository_components())
     tag = draw(image_tags())
@@ -143,7 +152,7 @@ def _podman_saved_image_name(
     )
 
     import_image(
-        replace(
+        dc.replace(
             config,
             container_engine="podman",
             k8s_provider="kind",
@@ -151,12 +160,16 @@ def _podman_saved_image_name(
         ),
     )
 
-    save_commands = [args for command, args in commands if command == "podman" and args[0] == "save"]
+    save_commands = [
+        args for command, args in commands if command == "podman" and args[0] == "save"
+    ]
     assert len(save_commands) == 1, "Podman import must issue exactly one save command"
     return save_commands[0][-1]
 
 
-def _printed_service_name(monkeypatch: pytest.MonkeyPatch, config: PreviewConfig) -> str:
+def _printed_service_name(
+    monkeypatch: pytest.MonkeyPatch, config: PreviewConfig
+) -> str:
     """Return the service name requested by ``print_kubernetes_status``."""
     commands: list[tuple[str, list[str]]] = []
 
@@ -242,8 +255,12 @@ def test_helm_fullname_obeys_kubernetes_name_bounds(
         _preview_config(release_name=release_name, chart_name=chart_name),
     )
 
-    assert len(fullname) <= 63, "Helm fullname must fit within the 63-char DNS label limit"
-    assert not fullname.endswith("-"), "Helm fullname must not end with a trailing hyphen"
+    assert len(fullname) <= 63, (
+        "Helm fullname must fit within the 63-char DNS label limit"
+    )
+    assert not fullname.endswith("-"), (
+        "Helm fullname must not end with a trailing hyphen"
+    )
     if release_name == chart_name:
         assert fullname == chart_name, (
             "a matching release and chart name must collapse to the chart name"

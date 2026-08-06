@@ -16,17 +16,19 @@ import json
 import logging
 import shutil
 import tempfile
+import typing as typ
 from pathlib import Path
-from types import TracebackType
 
-from .config import PreviewConfig
+if typ.TYPE_CHECKING:
+    from types import TracebackType
+
+    from .config import PreviewConfig
 
 logger = logging.getLogger(__name__)
 
 
 def _kind_create_args(config: PreviewConfig) -> list[str]:
     """Return kind cluster creation arguments."""
-
     return [
         "create",
         "cluster",
@@ -41,7 +43,6 @@ def _kind_create_args(config: PreviewConfig) -> list[str]:
 
 def _kind_cluster_config(config: PreviewConfig) -> str:
     """Return a minimal kind cluster config with no host-port mapping."""
-
     node_image = json.dumps(config.kind_node_image)
     return f"""\
 kind: Cluster
@@ -64,7 +65,6 @@ def _create_private_archive_dir(
     archive path within it, closing the time-of-check/time-of-use window that a
     bare reserved path would leave open. Returns the created directory.
     """
-
     base_dir = Path(tempfile.gettempdir()) if parent_dir is None else parent_dir
     return Path(tempfile.mkdtemp(prefix=f"{config.cluster_name}-", dir=base_dir))
 
@@ -75,7 +75,6 @@ def _image_archive_path(archive_dir: Path) -> Path:
     Pure path computation with no filesystem side effects. ``archive_dir`` is
     the private directory produced by :func:`_create_private_archive_dir`.
     """
-
     return archive_dir / "image.tar"
 
 
@@ -90,7 +89,6 @@ def _is_registry_host(component: str) -> bool:
 
 def _podman_archive_image_name(image_name: str) -> str:
     """Return an archive tag that matches Kubernetes' unqualified pull name."""
-
     repository, separator, tag = image_name.rpartition(":")
     if not separator:
         return image_name
@@ -115,7 +113,6 @@ def _remove_stale_archive(archive_path: Path) -> None:
     cleanup error must not mask the original ``podman``/``kind`` failure that
     may already be propagating.
     """
-
     archive_dir = archive_path.parent
 
     def _log_cleanup_failure(
@@ -126,6 +123,7 @@ def _remove_stale_archive(archive_path: Path) -> None:
             | tuple[type[BaseException], BaseException, TracebackType | None]
         ),
     ) -> None:
+        """Log a single ``rmtree`` cleanup failure without raising."""
         exc = excinfo[1] if isinstance(excinfo, tuple) else excinfo
         logger.warning(
             "Failed to clean up local preview image archive directory %s (%s on %s)",
@@ -145,7 +143,6 @@ def _kind_command(
     use_scope: bool = False,
 ) -> tuple[str, list[str]]:
     """Return the command and arguments for Docker- or Podman-backed kind."""
-
     match (config.container_engine, use_scope):
         case ("podman", _):
             podman_args = ["KIND_EXPERIMENTAL_PROVIDER=podman", "kind", *kind_args]

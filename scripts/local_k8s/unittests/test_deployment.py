@@ -11,14 +11,12 @@ will build an image locally.
 from __future__ import annotations
 
 import base64
-from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+import dataclasses as dc
+import typing as typ
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
 
 import pytest
-
-from local_k8s.config import PreviewConfig
+from conftest import CommandRecord, install_run_recorder
 from local_k8s.deployment import (
     _deploy_preview_tools,
     build_image,
@@ -29,10 +27,10 @@ from local_k8s.deployment import (
 from local_k8s.session_secret import _apply_session_secret_manifest
 from local_k8s.validation import LocalK8sError
 
-from conftest import CommandRecord, install_run_recorder
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
-if TYPE_CHECKING:
-    from local_k8s.config import K8sProvider
+    from local_k8s.config import K8sProvider, PreviewConfig
 
 
 @pytest.mark.parametrize(
@@ -53,7 +51,7 @@ def test_deploy_preview_docker_requirement_conditional_on_skip_build(
     required_tools: list[tuple[str, ...]] = []
     calls: list[str] = []
 
-    def record_step(name: str) -> Callable[[PreviewConfig], None]:
+    def record_step(name: str) -> cabc.Callable[[PreviewConfig], None]:
         """Return a side-effect replacement that records orchestration order."""
 
         def step(_: PreviewConfig) -> None:
@@ -112,7 +110,7 @@ def test_deploy_preview_tools_follow_configured_kubernetes_provider(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify provider preflight follows the configured local cluster tool."""
-    kind_config = replace(preview_config, k8s_provider="kind")
+    kind_config = dc.replace(preview_config, k8s_provider="kind")
 
     assert _deploy_preview_tools(kind_config, skip_build=True) == (
         "helm",
@@ -125,7 +123,9 @@ def test_deploy_preview_tools_reject_unexpected_kubernetes_provider(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify provider preflight rejects impossible provider values."""
-    invalid_config = replace(preview_config, k8s_provider=cast("K8sProvider", "minikube"))
+    invalid_config = dc.replace(
+        preview_config, k8s_provider=typ.cast("K8sProvider", "minikube")
+    )
 
     with pytest.raises(LocalK8sError, match="Unsupported Kubernetes provider"):
         _deploy_preview_tools(invalid_config, skip_build=True)
@@ -137,7 +137,7 @@ def test_build_image_uses_configured_container_engine(
 ) -> None:
     """Verify local image builds use Docker or Podman from configuration."""
     # Podman is only supported with the kind provider, so pair the engines.
-    podman_config = replace(
+    podman_config = dc.replace(
         preview_config, container_engine="podman", k8s_provider="kind"
     )
     commands = install_run_recorder(monkeypatch)
@@ -165,7 +165,7 @@ def test_helm_upgrade_uses_configured_kube_context(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify Helm upgrades target the selected provider context."""
-    config = replace(preview_config, k8s_provider="kind")
+    config = dc.replace(preview_config, k8s_provider="kind")
     commands = install_run_recorder(monkeypatch)
 
     helm_upgrade(config)
@@ -318,12 +318,12 @@ def _validated_input_text(input_text: object) -> str | None:
     return input_text
 
 
-@dataclass(slots=True)
+@dc.dataclass(slots=True)
 class _ConcurrentSecretResponder:
     """Fake `run` simulating a Secret created concurrently by another process."""
 
     ready_after_get_calls: int
-    commands: list[CommandRecord] = field(default_factory=list)
+    commands: list[CommandRecord] = dc.field(default_factory=list)
 
     def __call__(
         self, command: str, args: list[str], **kwargs: object
@@ -371,9 +371,9 @@ def test_ensure_session_secret_reuses_concurrent_create(
     assert _is_get_session_secret(responder.commands[-1][1]), (
         "reuse must confirm the concurrently created Secret's key material"
     )
-    assert all(
-        cmd[1][2:5] != ["apply", "-f", "-"] for cmd in responder.commands
-    ), "a valid concurrent Secret must be reused without re-applying it"
+    assert all(cmd[1][2:5] != ["apply", "-f", "-"] for cmd in responder.commands), (
+        "a valid concurrent Secret must be reused without re-applying it"
+    )
 
 
 def test_ensure_session_secret_repairs_malformed_concurrent_secret(
@@ -409,12 +409,14 @@ def test_ensure_session_secret_fails_when_secret_stays_malformed(
     monkeypatch.setattr("local_k8s.session_secret.run", responder)
 
     with pytest.raises(LocalK8sError, match="still lacks session_key after repair"):
-        ensure_session_secret(preview_config, key_generator=lambda length: b"a" * length)
+        ensure_session_secret(
+            preview_config, key_generator=lambda length: b"a" * length
+        )
 
 
 def _raise_on_create(
     exc: LocalK8sError,
-) -> Callable[..., SimpleNamespace]:
+) -> cabc.Callable[..., SimpleNamespace]:
     """Return a ``run`` replacement that raises ``exc`` on the create call."""
 
     def _run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
@@ -432,12 +434,8 @@ def test_apply_session_secret_reconciles_genuine_conflict(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify a genuine AlreadyExists conflict triggers reconciliation."""
-    conflict = LocalK8sError(
-        _already_exists_message(), stderr=_already_exists_stderr()
-    )
-    monkeypatch.setattr(
-        "local_k8s.session_secret.run", _raise_on_create(conflict)
-    )
+    conflict = LocalK8sError(_already_exists_message(), stderr=_already_exists_stderr())
+    monkeypatch.setattr("local_k8s.session_secret.run", _raise_on_create(conflict))
     reconciled: list[str] = []
     monkeypatch.setattr(
         "local_k8s.session_secret._reconcile_existing_session_secret",
@@ -460,9 +458,7 @@ def test_apply_session_secret_reraises_non_conflict_error(
         "connection refused",
         stderr="Unable to connect to the server: connection refused",
     )
-    monkeypatch.setattr(
-        "local_k8s.session_secret.run", _raise_on_create(failure)
-    )
+    monkeypatch.setattr("local_k8s.session_secret.run", _raise_on_create(failure))
     reconciled: list[str] = []
     monkeypatch.setattr(
         "local_k8s.session_secret._reconcile_existing_session_secret",
@@ -481,16 +477,19 @@ def test_apply_session_secret_reraises_incidental_already_exists_message(
     monkeypatch: pytest.MonkeyPatch,
     preview_config: PreviewConfig,
 ) -> None:
-    """Verify an incidental "already exists" message without the server reason re-raises."""
+    """Verify an incidental "already exists" message re-raises.
+
+    Only the structured server reason may trigger reconciliation.
+    """
     # The message mentions "already exists" but the stderr lacks the structured
     # ``(AlreadyExists)`` server reason, so it must not be treated as a conflict.
     misleading = LocalK8sError(
         'the namespace "already exists" is terminating',
-        stderr='Error from server (Forbidden): namespace "already exists" is terminating',
+        stderr=(
+            'Error from server (Forbidden): namespace "already exists" is terminating'
+        ),
     )
-    monkeypatch.setattr(
-        "local_k8s.session_secret.run", _raise_on_create(misleading)
-    )
+    monkeypatch.setattr("local_k8s.session_secret.run", _raise_on_create(misleading))
     reconciled: list[str] = []
     monkeypatch.setattr(
         "local_k8s.session_secret._reconcile_existing_session_secret",

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-import subprocess
+import re
+import subprocess  # noqa: S404 - tests deliberately exercise Make via subprocess.
 from pathlib import Path
 from shutil import which
 
@@ -89,9 +90,13 @@ def _read_invocations(log_path: Path) -> list[ToolInvocation]:
         uv_tool_dir = next(fields).decode()
         argument_count = int(next(fields))
         arguments = tuple(next(fields).decode() for _ in range(argument_count))
-        invocations.append(
-            (tool.decode(), tmpdir, uv_cache_dir, uv_tool_dir, arguments)
-        )
+        invocations.append((
+            tool.decode(),
+            tmpdir,
+            uv_cache_dir,
+            uv_tool_dir,
+            arguments,
+        ))
     return invocations
 
 
@@ -149,3 +154,170 @@ def test_lint_asyncapi_uses_pnpm_cli_runner(
         ),
     )
     assert _read_invocations(log_path) == [expected_invocation]
+
+
+# A requirement's leading name, before any `==` pin or `>=` floor.
+_REQUIREMENT_NAME = re.compile(r"[A-Za-z0-9._-]+")
+
+# Gated separately by spelling-helper-test against its own pinned Ruff, so the
+# repository-wide Python gates must leave these sources alone.
+SPELLING_HELPER_SOURCES = (
+    "scripts/typos_rollout_check.py",
+    "scripts/tests/test_typos_rollout_check.py",
+)
+
+TYPECHECK_DEPENDENCIES = frozenset({
+    "pytest",
+    "pytest-mock",
+    "hypothesis",
+    "pyyaml",
+    "cyclopts",
+    "plumbum",
+    "cryptography",
+    "tomli",
+})
+
+
+def _tool_arguments(log_path: Path, tool: str) -> list[tuple[str, ...]]:
+    """Return the argument tuple of each logged invocation of *tool*."""
+    return [
+        invocation[-1]
+        for invocation in _read_invocations(log_path)
+        if invocation[0] == tool
+    ]
+
+
+def _requirement_name(requirement: str) -> str:
+    """Return the distribution name from a requirement specifier."""
+    match = _REQUIREMENT_NAME.match(requirement)
+    assert match is not None, f"unparsable requirement: {requirement!r}"
+    return match.group()
+
+
+def test_check_fmt_python_verifies_formatting_without_rewriting(
+    fake_tool_environment: tuple[dict[str, str], Path],
+) -> None:
+    """The format gate checks Ruff formatting rather than applying it."""
+    env, log_path = fake_tool_environment
+
+    completed = _run_make("check-fmt-python", env)
+
+    assert completed.returncode == 0, completed.stderr
+    (arguments,) = _tool_arguments(log_path, "uv")
+    assert arguments[:3] == ("tool", "run", "--from")
+    assert arguments[3].startswith("ruff=="), "the format gate must run a pinned Ruff"
+    assert arguments[4:] == ("ruff", "format", "--check"), (
+        "check-fmt-python must verify formatting without writing files"
+    )
+
+
+def test_lint_python_runs_ruff_interrogate_and_pylint(
+    fake_tool_environment: tuple[dict[str, str], Path],
+) -> None:
+    """The Python lint gate runs all three configured tiers, in order."""
+    env, log_path = fake_tool_environment
+
+    completed = _run_make("lint-python", env)
+
+    assert completed.returncode == 0, completed.stderr
+    ruff, interrogate, pylint = _tool_arguments(log_path, "uv")
+
+    assert ruff[:3] == ("tool", "run", "--from")
+    assert ruff[3].startswith("ruff==")
+    assert ruff[4:] == ("ruff", "check")
+
+    assert interrogate[:3] == ("tool", "run", "--from")
+    assert interrogate[3].startswith("interrogate==")
+    assert interrogate[4:] == (
+        "interrogate",
+        "--fail-under",
+        "100",
+        "scripts",
+    ), "interrogate must keep demanding total docstring coverage of scripts"
+
+    assert pylint[:3] == ("tool", "run", "--python")
+    assert pylint[4] == "--from"
+    assert pylint[5].startswith(
+        "git+https://github.com/leynos/pylint-pypy-shim.git@"
+    ), "Pylint must run through the pinned PyPy shim"
+    assert pylint[6:] == ("pylint-pypy", "scripts", "tests"), (
+        "Pylint must cover both configured target trees"
+    )
+
+
+def test_typecheck_python_materializes_a_venv_before_running_ty(
+    fake_tool_environment: tuple[dict[str, str], Path],
+) -> None:
+    """The gate materializes an environment before ty resolves imports."""
+    env, log_path = fake_tool_environment
+
+    completed = _run_make("typecheck-python", env)
+
+    assert completed.returncode == 0, completed.stderr
+    venv, install, ty = _tool_arguments(log_path, "uv")
+
+    assert venv == ("venv", "--allow-existing", ".venv"), (
+        "typecheck-python must reuse an existing .venv rather than rebuild it"
+    )
+
+    assert install[:5] == ("pip", "install", "--quiet", "--python", ".venv")
+    requirements = install[5:]
+    assert {_requirement_name(item) for item in requirements} == (
+        TYPECHECK_DEPENDENCIES
+    ), "ty must resolve imports against the declared dependency set"
+    assert all(("==" in item or ">=" in item) for item in requirements), (
+        "every typecheck dependency must carry a version constraint"
+    )
+
+    assert ty[:3] == ("tool", "run", "--from")
+    assert ty[3].startswith("ty==")
+    assert ty[4:10] == (
+        "ty",
+        "check",
+        "--python",
+        ".venv",
+        "--python-version",
+        "3.13",
+    ), "ty must check the materialized environment at the pinned version"
+    sources = ty[10:]
+    assert sources, "ty must receive the configured Python sources"
+    assert all(source.endswith(".py") for source in sources)
+    assert "scripts/local_k8s.py" in sources, (
+        "the preview CLI must stay within the typecheck surface"
+    )
+    assert not set(sources) & set(SPELLING_HELPER_SOURCES), (
+        "the separately gated spelling helper must stay excluded"
+    )
+
+
+# The root pyproject.toml carries tooling configuration only, so every uv
+# invocation opts out of project discovery to keep its resolution isolated.
+NO_PROJECT_TARGETS = (
+    ("local-k8s-up", ("scripts/local_k8s.py", "up")),
+    ("local-k8s-down", ("scripts/local_k8s.py", "down")),
+    ("local-k8s-status", ("scripts/local_k8s.py", "status")),
+    ("local-k8s-logs", ("scripts/local_k8s.py", "logs")),
+    ("test-workflow-contracts", ("tests/workflow_contracts",)),
+    ("test-scripts", ("scripts/local_k8s/unittests",)),
+)
+
+
+@pytest.mark.parametrize(("target", "expected_arguments"), NO_PROJECT_TARGETS)
+def test_targets_run_uv_without_project_discovery(
+    target: str,
+    expected_arguments: tuple[str, ...],
+    fake_tool_environment: tuple[dict[str, str], Path],
+) -> None:
+    """Helper and test targets resolve without the tooling-only project."""
+    env, log_path = fake_tool_environment
+
+    completed = _run_make(target, env)
+
+    assert completed.returncode == 0, completed.stderr
+    (arguments,) = _tool_arguments(log_path, "uv")
+    assert arguments[:2] == ("run", "--no-project"), (
+        f"{target} must run uv with --no-project so the root pyproject.toml"
+        " cannot alter its resolution"
+    )
+    for expected in expected_arguments:
+        assert expected in arguments, f"{target} must pass {expected!r} to uv run"

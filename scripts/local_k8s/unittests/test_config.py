@@ -11,7 +11,6 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from local_k8s.config import PreviewConfig
 from local_k8s.validation import LocalK8sError
 

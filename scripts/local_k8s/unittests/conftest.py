@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import collections.abc as cabc
 import os
 from pathlib import Path
 from shutil import which
 from types import SimpleNamespace
 
 import pytest
-
 from local_k8s.config import ContainerEngine, K8sProvider, PreviewConfig
 
 type CommandRecord = tuple[str, list[str], str | None]
-type RunHook = Callable[[str, list[str], str | None], None]
+type RunHook = cabc.Callable[[str, list[str], str | None], None]
 
 
 @pytest.fixture(autouse=True)
@@ -29,7 +28,9 @@ def clean_wildside_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def uv_executable() -> str:
     """Return the uv executable used for CLI boundary tests."""
     uv = which("uv")
-    assert uv is not None, "uv must be available to execute scripts/local_k8s.py"
+    if uv is None:
+        message = "uv must be available to execute scripts/local_k8s.py"
+        raise AssertionError(message)
     return uv
 
 

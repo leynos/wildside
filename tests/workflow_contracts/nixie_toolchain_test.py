@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import typing as typ
 from pathlib import Path
-from typing import cast
 
+import pytest
 import yaml
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -14,28 +15,28 @@ MAKEFILE_PATH = REPOSITORY_ROOT / "Makefile"
 
 def _build_steps() -> list[dict[str, object]]:
     """Return the steps from the CI build job."""
-    workflow = cast(
+    workflow = typ.cast(
         "object", yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     )
     match workflow:
         case {"jobs": dict() as jobs}:
             pass
         case _:
-            assert False, "the CI workflow must declare jobs"
+            pytest.fail("the CI workflow must declare jobs")
     match jobs:
         case {"build": dict() as build}:
             pass
         case _:
-            assert False, "the CI workflow must declare the build job"
+            pytest.fail("the CI workflow must declare the build job")
     match build:
         case {"steps": list() as steps}:
             pass
         case _:
-            assert False, "the CI build job must declare steps"
+            pytest.fail("the CI build job must declare steps")
     assert all(isinstance(step, dict) for step in steps), (
         "every CI build step must be a mapping"
     )
-    return cast("list[dict[str, object]]", steps)
+    return typ.cast("list[dict[str, object]]", steps)
 
 
 def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
