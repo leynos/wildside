@@ -1,4 +1,45 @@
 #!/usr/bin/env python3
+"""Fake preview tool standing in for the local Kubernetes CLI's subprocesses.
+
+The local preview smoke tests symlink this script as ``docker``, ``podman``,
+``helm``, ``k3d``, ``kind``, ``kubectl``, ``uv``, ``env``, and ``systemd-run``.
+Dispatch is keyed on the invoked name plus the exact argument vector, so only
+the command forms the production CLI actually emits are accepted; anything else
+exits non-zero with ``unexpected fake command: <name>`` on stderr, keeping the
+fake fail-closed rather than silently tolerating a drifted contract.
+
+Supported command forms
+-----------------------
+- ``uv run scripts/local_k8s.py {up,status,logs,down}`` re-executes the real CLI
+  under ``WILDSIDE_FAKE_PYTHON``, so the tests cross the genuine CLI boundary.
+- ``k3d``/``kind`` cluster list, create, and delete, which read and write the
+  cluster-state marker.
+- container-engine ``build``, ``podman tag``/``save``, ``k3d image import``, and
+  the ``kind load image-archive`` form (optionally reached through the ``env``
+  or ``systemd-run`` wrappers the CLI uses to set
+  ``KIND_EXPERIMENTAL_PROVIDER=podman``).
+- ``helm upgrade --install`` and ``helm status``.
+- ``kubectl`` namespace get/create, pod/service/log queries, and the session
+  Secret get/create pair.
+
+Environment variables
+---------------------
+``WILDSIDE_FAKE_TOOL_STATE``
+    Path to the cluster-state marker file. It contains ``created`` while the
+    fake cluster exists and is removed on delete.
+``WILDSIDE_FAKE_TOOL_LOG``
+    Path to a JSON-lines log. Every invocation appends
+    ``[name, args, bool(stdin)]`` before dispatch, so tests can assert the
+    command contract.
+``WILDSIDE_FAKE_PYTHON``
+    Interpreter used to re-execute the real CLI for ``uv run`` invocations.
+``WILDSIDE_CONTAINER_ENGINE``
+    Selects which engine name (``docker`` or ``podman``) accepts ``build``.
+
+The session Secret manifest is persisted alongside the cluster-state marker, so
+a create is observable by later gets: the first ``up`` creates key material and
+a second ``up`` reads it back and reuses it, matching the production reuse path.
+"""
 from __future__ import annotations
 import json
 import os
@@ -8,6 +49,7 @@ name = Path(sys.argv[0]).name
 args = sys.argv[1:]
 state_path = Path(os.environ["WILDSIDE_FAKE_TOOL_STATE"])
 log_path = Path(os.environ["WILDSIDE_FAKE_TOOL_LOG"])
+secret_path = state_path.with_name(f"{state_path.name}-session-secret")
 stdin_text = sys.stdin.read()
 with log_path.open("a", encoding="utf8") as log_file:
     print(json.dumps([name, args, bool(stdin_text)]), file=log_file)
@@ -78,9 +120,20 @@ is_no_output_command = any((
         "--context", ["get", "namespace", "wildside", "--ignore-not-found"],
     ),
     name == "kubectl" and contextual("--context", ["create", "namespace", "wildside"]),
-    is_session_secret_get,
-    is_session_secret_create,
 ))
+def stored_session_key() -> str:
+    # Read the persisted manifest back the way `kubectl get -o=jsonpath` would.
+    if not secret_path.exists():
+        return ""
+    for line in secret_path.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("session_key:"):
+            return stripped.split(":", 1)[1].strip()
+    return ""
+def delete_cluster() -> None:
+    # Deleting the cluster discards its Secrets along with it.
+    state_path.unlink(missing_ok=True)
+    secret_path.unlink(missing_ok=True)
 if name == "k3d" and args == ["cluster", "list", "--output", "json"]:
     print('[{"name":"wildside-preview"}]' if has_cluster() else "[]")
 elif name == "k3d" and args == [
@@ -89,7 +142,7 @@ elif name == "k3d" and args == [
 ]:
     state_path.write_text("created")
 elif name == "k3d" and args == ["cluster", "delete", cluster_name]:
-    state_path.unlink(missing_ok=True)
+    delete_cluster()
 elif name == "kind" and args == ["get", "clusters"]:
     print("wildside-preview" if has_cluster() else "other")
 elif name == "kind" and args == [
@@ -97,7 +150,19 @@ elif name == "kind" and args == [
 ] and stdin_text:
     state_path.write_text("created")
 elif name == "kind" and args == ["delete", "cluster", "--name", cluster_name]:
-    state_path.unlink(missing_ok=True)
+    delete_cluster()
+elif is_session_secret_get:
+    # An absent Secret yields empty stdout, matching `--ignore-not-found`.
+    print(stored_session_key(), end="")
+elif is_session_secret_create:
+    if secret_path.exists():
+        print(
+            'Error from server (AlreadyExists): secrets "wildside-session-key" '
+            "already exists",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    secret_path.write_text(stdin_text)
 elif is_no_output_command:
     pass
 elif name == "helm" and args in (
