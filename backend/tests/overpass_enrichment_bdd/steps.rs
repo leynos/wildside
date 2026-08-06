@@ -32,8 +32,8 @@ fn a_diesel_backed_overpass_enrichment_worker_with_failing_source_responses(
     world: &OverpassEnrichmentWorld,
 ) {
     let source_data = vec![
-        Err(OverpassEnrichmentSourceError::transport("boom-1")),
-        Err(OverpassEnrichmentSourceError::transport("boom-2")),
+        Err(EnrichmentSourceError::transport("boom-1")),
+        Err(EnrichmentSourceError::transport("boom-2")),
     ];
     world.setup_with_config_and_data(
         |config| {
@@ -50,7 +50,7 @@ fn a_diesel_backed_overpass_enrichment_worker_with_recovery_source_responses(
     world: &OverpassEnrichmentWorld,
 ) {
     let source_data = vec![
-        Err(OverpassEnrichmentSourceError::transport("boom-once")),
+        Err(EnrichmentSourceError::transport("boom-once")),
         Ok(world.make_response(1, 256)),
     ];
     world.setup_with_config_and_data(
@@ -68,8 +68,8 @@ fn a_diesel_backed_overpass_enrichment_worker_with_retry_exhaustion_source_respo
     world: &OverpassEnrichmentWorld,
 ) {
     let source_data = vec![
-        Err(OverpassEnrichmentSourceError::timeout("timeout-1")),
-        Err(OverpassEnrichmentSourceError::transport("timeout-2")),
+        Err(EnrichmentSourceError::timeout("timeout-1")),
+        Err(EnrichmentSourceError::transport("timeout-2")),
     ];
     world.setup_with_config_and_data(
         |config| {
@@ -158,9 +158,9 @@ fn two_enrichment_jobs_run_concurrently_for_launch_a_bounds(world: &OverpassEnri
         let first_worker = worker.clone();
         let first = tokio::spawn(async move {
             first_worker
-                .process_job(OverpassEnrichmentRequest {
+                .process_job(EnrichmentRequest {
                     job_id: uuid::Uuid::new_v4(),
-                    bounding_box: LAUNCH_A_BOUNDS,
+                    bounding_box: launch_a_bounding_box(),
                     tags: vec!["amenity".to_owned()],
                 })
                 .await
@@ -175,9 +175,9 @@ fn two_enrichment_jobs_run_concurrently_for_launch_a_bounds(world: &OverpassEnri
         let second_worker = worker.clone();
         let second = tokio::spawn(async move {
             second_worker
-                .process_job(OverpassEnrichmentRequest {
+                .process_job(EnrichmentRequest {
                     job_id: uuid::Uuid::new_v4(),
-                    bounding_box: LAUNCH_A_BOUNDS,
+                    bounding_box: launch_a_bounding_box(),
                     tags: vec!["amenity".to_owned()],
                 })
                 .await

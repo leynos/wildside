@@ -4,11 +4,11 @@ use crate::domain::Error;
 use crate::domain::enrichment_provenance_error_mapping::map_enrichment_provenance_repository_error;
 use crate::domain::overpass_enrichment_worker::policy::QuotaDenyReason;
 use crate::domain::ports::{
-    EnrichmentJobFailureKind, EnrichmentProvenanceRepositoryError, OsmPoiIngestionRecord,
-    OsmPoiRepositoryError, OverpassEnrichmentSourceError, OverpassPoi,
+    EnrichmentJobFailureKind, EnrichmentPoi, EnrichmentProvenanceRepositoryError,
+    EnrichmentSourceError, OsmPoiIngestionRecord, OsmPoiRepositoryError,
 };
 
-pub(super) fn map_overpass_poi(poi: OverpassPoi) -> OsmPoiIngestionRecord {
+pub(super) fn map_overpass_poi(poi: EnrichmentPoi) -> OsmPoiIngestionRecord {
     OsmPoiIngestionRecord {
         element_type: poi.element_type,
         element_id: poi.element_id,
@@ -36,13 +36,13 @@ pub(super) fn map_quota_error(reason: QuotaDenyReason) -> Error {
     }
 }
 
-pub(super) fn map_retry_exhausted_error(error: OverpassEnrichmentSourceError) -> Error {
+pub(super) fn map_retry_exhausted_error(error: EnrichmentSourceError) -> Error {
     Error::service_unavailable(format!("overpass retries exhausted: {error}"))
 }
 
-pub(super) fn map_source_rejected_error(error: OverpassEnrichmentSourceError) -> Error {
+pub(super) fn map_source_rejected_error(error: EnrichmentSourceError) -> Error {
     match error {
-        OverpassEnrichmentSourceError::InvalidRequest { message } => {
+        EnrichmentSourceError::InvalidRequest { message } => {
             Error::invalid_request(format!("overpass request rejected: {message}"))
         }
         other => Error::internal(format!("overpass call failed: {other}")),

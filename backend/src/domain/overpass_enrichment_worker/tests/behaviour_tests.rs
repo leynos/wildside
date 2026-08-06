@@ -14,7 +14,7 @@ use assertions::{
 type ConfigMutator = Box<dyn FnOnce(&mut OverpassEnrichmentWorkerConfig)>;
 type Sleeper = Arc<dyn crate::domain::overpass_enrichment_worker::EnrichmentSleeper>;
 type Jitter = Arc<dyn crate::domain::overpass_enrichment_worker::BackoffJitter>;
-type SourceResponse = Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>;
+type SourceResponse = Result<EnrichmentResponse, EnrichmentSourceError>;
 type RepoResponse = Result<(), OsmPoiRepositoryError>;
 type ProvenanceResponse = Result<(), EnrichmentProvenanceRepositoryError>;
 
@@ -133,7 +133,7 @@ struct WorkerTestFixture {
 impl WorkerTestFixture {
     async fn process_job(
         &self,
-        request: OverpassEnrichmentRequest,
+        request: EnrichmentRequest,
     ) -> Result<crate::domain::OverpassEnrichmentJobOutcome, crate::domain::Error> {
         self.worker.process_job(request).await
     }
@@ -156,7 +156,7 @@ impl WorkerTestFixture {
 #[tokio::test]
 async fn happy_path_persists_and_records_success(
     now: TestResult<DateTime<Utc>>,
-    job: OverpassEnrichmentRequest,
+    job: EnrichmentRequest,
 ) -> TestResult {
     let now = now?;
     let fixture = WorkerTestFixtureBuilder::new(now)
@@ -182,7 +182,7 @@ async fn happy_path_persists_and_records_success(
         fixture.provenance_repo.as_ref(),
         "https://overpass.example/api/interpreter",
         now,
-        job.bounding_box,
+        job.bounding_box.as_array(),
     )?;
     assert_metrics_success(fixture.metrics.as_ref(), 1)?;
     Ok(())
@@ -197,7 +197,7 @@ struct QuotaCase {
 
 async fn assert_quota_denial_short_circuits_source(
     now: TestResult<DateTime<Utc>>,
-    job: OverpassEnrichmentRequest,
+    job: EnrichmentRequest,
     case: QuotaCase,
 ) -> TestResult {
     let now = now?;
@@ -242,7 +242,7 @@ async fn assert_quota_denial_short_circuits_source(
 #[tokio::test]
 async fn quota_limit_denial_short_circuits_source(
     now: TestResult<DateTime<Utc>>,
-    job: OverpassEnrichmentRequest,
+    job: EnrichmentRequest,
     #[case] case: QuotaCase,
 ) -> TestResult {
     assert_quota_denial_short_circuits_source(now, job, case).await
@@ -252,16 +252,14 @@ async fn quota_limit_denial_short_circuits_source(
 #[tokio::test]
 async fn retry_uses_jittered_exponential_backoff(
     now: TestResult<DateTime<Utc>>,
-    job: OverpassEnrichmentRequest,
+    job: EnrichmentRequest,
 ) -> TestResult {
     let now = now?;
     let sleeper = Arc::new(RecordingSleeper::default());
     let fixture = WorkerTestFixtureBuilder::new(now)
         .with_source_responses(vec![
-            Err(OverpassEnrichmentSourceError::transport(
-                "temporary transport",
-            )),
-            Err(OverpassEnrichmentSourceError::timeout("temporary timeout")),
+            Err(EnrichmentSourceError::transport("temporary transport")),
+            Err(EnrichmentSourceError::timeout("temporary timeout")),
             Ok(response(1, 64)),
         ])
         .with_sleeper(sleeper.clone())

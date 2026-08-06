@@ -1,7 +1,10 @@
-//! Driven port for fetching POIs from the Overpass API.
+//! Driven port for fetching POIs from an enrichment source.
 //!
 //! The domain owns the request shape and response contract so worker
-//! orchestration can stay adapter-agnostic.
+//! orchestration can stay adapter-agnostic. Nothing here names a specific
+//! provider: the Overpass adapter in `crate::outbound::overpass` translates
+//! [`EnrichmentRequest`] into a provider query and maps provider failures onto
+//! [`EnrichmentSourceError`].
 
 use std::collections::BTreeMap;
 
@@ -9,21 +12,22 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use super::define_port_error;
+use crate::domain::BoundingBox;
 
-/// Domain-owned enrichment request passed to the Overpass adapter.
+/// Domain-owned enrichment request passed to an enrichment adapter.
 #[derive(Debug, Clone, PartialEq)]
-pub struct OverpassEnrichmentRequest {
+pub struct EnrichmentRequest {
     /// Stable job identifier for trace correlation.
     pub job_id: Uuid,
-    /// Bounding box in `[min_lng, min_lat, max_lng, max_lat]` order.
-    pub bounding_box: [f64; 4],
+    /// Validated WGS84 bounding box to enrich.
+    pub bounding_box: BoundingBox,
     /// Optional OSM tags used to scope the query.
     pub tags: Vec<String>,
 }
 
-/// One POI returned from Overpass.
+/// One POI returned from an enrichment source.
 #[derive(Debug, Clone, PartialEq)]
-pub struct OverpassPoi {
+pub struct EnrichmentPoi {
     /// OSM element type (`node`, `way`, or `relation`).
     pub element_type: String,
     /// Raw OSM element identifier.
@@ -36,11 +40,11 @@ pub struct OverpassPoi {
     pub tags: BTreeMap<String, String>,
 }
 
-/// Enrichment response payload produced by the Overpass adapter.
+/// Enrichment response payload produced by an enrichment adapter.
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct OverpassEnrichmentResponse {
+pub struct EnrichmentResponse {
     /// POIs returned for the request.
-    pub pois: Vec<OverpassPoi>,
+    pub pois: Vec<EnrichmentPoi>,
     /// Estimated transfer size in bytes for quota accounting.
     pub transfer_bytes: u64,
     /// Source URL used by the adapter for this response.
@@ -48,36 +52,36 @@ pub struct OverpassEnrichmentResponse {
 }
 
 define_port_error! {
-    /// Errors surfaced while calling Overpass.
-    pub enum OverpassEnrichmentSourceError {
+    /// Errors surfaced while calling an enrichment source.
+    pub enum EnrichmentSourceError {
         /// Network transport failed before receiving a response.
         Transport { message: String } =>
-            "overpass transport failed: {message}",
-        /// Overpass call exceeded timeout.
+            "enrichment transport failed: {message}",
+        /// The enrichment call exceeded its timeout.
         Timeout { message: String } =>
-            "overpass timeout: {message}",
-        /// Overpass rate-limited the request.
+            "enrichment timeout: {message}",
+        /// The enrichment source rate-limited the request.
         RateLimited { message: String } =>
-            "overpass rate limited request: {message}",
-        /// Overpass response could not be decoded.
+            "enrichment source rate limited request: {message}",
+        /// The enrichment response could not be decoded.
         Decode { message: String } =>
-            "overpass response decode failed: {message}",
+            "enrichment response decode failed: {message}",
         /// Adapter rejected request before execution.
         InvalidRequest { message: String } =>
-            "overpass request invalid: {message}",
+            "enrichment request invalid: {message}",
     }
 }
 
-impl OverpassEnrichmentSourceError {
+impl EnrichmentSourceError {
     /// Return whether retrying this error is expected to help.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use backend::domain::ports::OverpassEnrichmentSourceError;
+    /// use backend::domain::ports::EnrichmentSourceError;
     ///
-    /// assert!(OverpassEnrichmentSourceError::transport("temporary").is_retryable());
-    /// assert!(!OverpassEnrichmentSourceError::invalid_request("bad bbox").is_retryable());
+    /// assert!(EnrichmentSourceError::transport("temporary").is_retryable());
+    /// assert!(!EnrichmentSourceError::invalid_request("bad bbox").is_retryable());
     /// ```
     pub fn is_retryable(&self) -> bool {
         matches!(
@@ -90,7 +94,7 @@ impl OverpassEnrichmentSourceError {
 /// Port for querying Overpass for enrichment POIs.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
-pub trait OverpassEnrichmentSource: Send + Sync {
+pub trait EnrichmentSource: Send + Sync {
     /// Fetch POIs for one enrichment request.
     ///
     /// # Examples
@@ -99,37 +103,37 @@ pub trait OverpassEnrichmentSource: Send + Sync {
     /// use uuid::Uuid;
     ///
     /// use backend::domain::ports::{
-    ///     FixtureOverpassEnrichmentSource, OverpassEnrichmentRequest,
-    ///     OverpassEnrichmentSource,
+    ///     FixtureEnrichmentSource, EnrichmentRequest,
+    ///     EnrichmentSource,
     /// };
     ///
-    /// let source = FixtureOverpassEnrichmentSource;
+    /// let source = FixtureEnrichmentSource;
     /// let response = source
-    ///     .fetch_pois(&OverpassEnrichmentRequest {
+    ///     .fetch_pois(&EnrichmentRequest {
     ///         job_id: Uuid::new_v4(),
     ///         bounding_box: [-3.30, 55.90, -3.10, 56.00],
     ///         tags: vec!["amenity".to_owned()],
     ///     })
     ///     .await?;
     /// assert!(response.pois.is_empty());
-    /// # Ok::<(), backend::domain::ports::OverpassEnrichmentSourceError>(())
+    /// # Ok::<(), backend::domain::ports::EnrichmentSourceError>(())
     /// ```
     async fn fetch_pois(
         &self,
-        request: &OverpassEnrichmentRequest,
-    ) -> Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>;
+        request: &EnrichmentRequest,
+    ) -> Result<EnrichmentResponse, EnrichmentSourceError>;
 }
 
 /// Fixture implementation returning an empty response.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct FixtureOverpassEnrichmentSource;
+pub struct FixtureEnrichmentSource;
 
 #[async_trait]
-impl OverpassEnrichmentSource for FixtureOverpassEnrichmentSource {
+impl EnrichmentSource for FixtureEnrichmentSource {
     async fn fetch_pois(
         &self,
-        _request: &OverpassEnrichmentRequest,
-    ) -> Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError> {
-        Ok(OverpassEnrichmentResponse::default())
+        _request: &EnrichmentRequest,
+    ) -> Result<EnrichmentResponse, EnrichmentSourceError> {
+        Ok(EnrichmentResponse::default())
     }
 }

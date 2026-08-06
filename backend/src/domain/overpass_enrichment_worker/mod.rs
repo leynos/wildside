@@ -14,8 +14,8 @@ use tokio::sync::Semaphore;
 use crate::domain::Error;
 use crate::domain::ports::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics, EnrichmentJobSuccess,
-    EnrichmentProvenanceRecord, EnrichmentProvenanceRepository, OsmPoiRepository,
-    OverpassEnrichmentRequest, OverpassEnrichmentResponse, OverpassEnrichmentSource,
+    EnrichmentProvenanceRecord, EnrichmentProvenanceRepository, EnrichmentRequest,
+    EnrichmentResponse, EnrichmentSource, OsmPoiRepository,
 };
 
 mod attempt_error;
@@ -129,7 +129,7 @@ pub trait BackoffJitter: Send + Sync {
 
 /// Domain-owned Overpass enrichment worker.
 pub struct OverpassEnrichmentWorker {
-    source: Arc<dyn OverpassEnrichmentSource>,
+    source: Arc<dyn EnrichmentSource>,
     poi_repository: Arc<dyn OsmPoiRepository>,
     provenance_repository: Arc<dyn EnrichmentProvenanceRepository>,
     metrics: Arc<dyn EnrichmentJobMetrics>,
@@ -204,7 +204,7 @@ impl OverpassEnrichmentWorker {
     /// ```
     pub async fn process_job(
         &self,
-        request: OverpassEnrichmentRequest,
+        request: EnrichmentRequest,
     ) -> Result<OverpassEnrichmentJobOutcome, Error> {
         let max_attempts = self.config.max_attempts.max(1);
 
@@ -259,8 +259,8 @@ impl OverpassEnrichmentWorker {
 
     async fn run_single_attempt(
         &self,
-        request: &OverpassEnrichmentRequest,
-    ) -> Result<OverpassEnrichmentResponse, AttemptError> {
+        request: &EnrichmentRequest,
+    ) -> Result<EnrichmentResponse, AttemptError> {
         let _permit = self.call_semaphore.acquire().await.map_err(|_| {
             AttemptError::StateUnavailable("enrichment semaphore closed".to_owned())
         })?;
@@ -320,11 +320,11 @@ impl OverpassEnrichmentWorker {
     /// stricter consistency requirements.
     async fn persist_and_record_success(
         &self,
-        request: &OverpassEnrichmentRequest,
-        report: OverpassEnrichmentResponse,
+        request: &EnrichmentRequest,
+        report: EnrichmentResponse,
         attempts: u32,
     ) -> Result<OverpassEnrichmentJobOutcome, Error> {
-        let OverpassEnrichmentResponse {
+        let EnrichmentResponse {
             pois,
             transfer_bytes,
             source_url,
@@ -344,7 +344,7 @@ impl OverpassEnrichmentWorker {
             job_id: request.job_id,
             source_url,
             imported_at: self.clock.utc(),
-            bounding_box: request.bounding_box,
+            bounding_box: request.bounding_box.as_array(),
         };
         if let Err(error) = self.provenance_repository.persist(&provenance_record).await {
             self.record_failure_metric(EnrichmentJobFailureKind::PersistenceFailed, attempts)

@@ -8,8 +8,7 @@ use backend::domain::jobs::{
     BoundingBox, EnrichmentJob, EnrichmentJobParams, GenerateRouteJob, GenerateRouteJobBuildError,
 };
 use backend::domain::ports::{
-    JobDispatchError, NoOpRouteQueueMetrics, OverpassEnrichmentRequest, RouteQueue,
-    RouteSubmissionRequest,
+    EnrichmentRequest, JobDispatchError, NoOpRouteQueueMetrics, RouteQueue, RouteSubmissionRequest,
 };
 use backend::domain::{IdempotencyKey, UserId};
 use backend::outbound::queue::test_helpers::FakeQueueProvider;
@@ -32,7 +31,7 @@ struct JobStructWorld {
     enrichment_job: RefCell<Option<EnrichmentJob>>,
     fake_payloads: RefCell<Vec<Value>>,
     queue_error: RefCell<Option<JobDispatchError>>,
-    overpass_request: RefCell<Option<OverpassEnrichmentRequest>>,
+    enrichment_request: RefCell<Option<EnrichmentRequest>>,
 }
 
 impl JobStructWorld {
@@ -45,7 +44,7 @@ impl JobStructWorld {
             enrichment_job: RefCell::new(None),
             fake_payloads: RefCell::new(Vec::new()),
             queue_error: RefCell::new(None),
-            overpass_request: RefCell::new(None),
+            enrichment_request: RefCell::new(None),
         }
     }
 }
@@ -114,11 +113,12 @@ fn valid_route_submission() -> RouteSubmissionRequest {
     RouteSubmissionRequest {
         idempotency_key: Some(idempotency_key()),
         user_id: user_id(),
-        payload: json!({
+        payload: serde_json::from_value(json!({
             "origin": { "lat": 51.5074, "lng": -0.1278 },
             "destination": { "lat": 51.5014, "lng": -0.1419 },
             "preferences": { "mode": "walking" }
-        }),
+        }))
+        .expect("route submission fixture should be valid"),
     }
 }
 
@@ -147,14 +147,6 @@ fn a_valid_route_submission(world: &JobStructWorld) {
     *world.route_submission.borrow_mut() = Some(valid_route_submission());
 }
 
-#[given("a route submission whose payload is not an object")]
-fn a_route_submission_whose_payload_is_not_an_object(world: &JobStructWorld) {
-    *world.route_submission.borrow_mut() = Some(RouteSubmissionRequest {
-        payload: json!("not an object"),
-        ..valid_route_submission()
-    });
-}
-
 #[given("a valid enrichment job")]
 fn a_valid_enrichment_job(world: &JobStructWorld) {
     *world.enrichment_job.borrow_mut() = Some(valid_enrichment_job());
@@ -167,12 +159,11 @@ fn a_plan_that_fails_serialization(world: &JobStructWorld) {
 
 #[when("I build and enqueue a generate-route job through the stub queue")]
 fn i_build_and_enqueue_a_generate_route_job_through_the_stub_queue(world: &JobStructWorld) {
-    let submission = world
-        .route_submission
-        .borrow()
-        .clone()
+    let submission = world.route_submission.borrow();
+    let submission = submission
+        .as_ref()
         .expect("route submission should be configured");
-    let job = GenerateRouteJob::try_from_submission(&submission, request_id(), route_enqueued_at());
+    let job = GenerateRouteJob::try_from_submission(submission, request_id(), route_enqueued_at());
     let enqueue_result = match &job {
         Ok(job) => {
             let queue: StubRouteQueue<GenerateRouteJob> = StubRouteQueue::new();
@@ -185,31 +176,20 @@ fn i_build_and_enqueue_a_generate_route_job_through_the_stub_queue(world: &JobSt
     *world.stub_enqueue_result.borrow_mut() = Some(enqueue_result);
 }
 
-#[when("I build a generate-route job from the submission")]
-fn i_build_a_generate_route_job_from_the_submission(world: &JobStructWorld) {
-    let submission = world
-        .route_submission
-        .borrow()
-        .clone()
-        .expect("route submission should be configured");
-    let job = GenerateRouteJob::try_from_submission(&submission, request_id(), route_enqueued_at());
-
-    *world.generated_route_job.borrow_mut() = Some(job);
-}
-
 #[when("I enqueue the enrichment job through the fake Apalis queue")]
 fn i_enqueue_the_enrichment_job_through_the_fake_apalis_queue(world: &JobStructWorld) {
-    let job = world
-        .enrichment_job
-        .borrow()
-        .clone()
+    let enrichment_job = world.enrichment_job.borrow();
+    let job = enrichment_job
+        .as_ref()
         .expect("enrichment job should be configured");
     let provider = FakeQueueProvider::new();
     let queue: GenericApalisRouteQueue<EnrichmentJob, _> =
         GenericApalisRouteQueue::new(provider.clone(), Arc::new(NoOpRouteQueueMetrics));
-    if let Err(error) = world.runtime.block_on(async { queue.enqueue(&job).await }) {
+    if let Err(error) = world.runtime.block_on(async { queue.enqueue(job).await }) {
         panic!("enrichment job should enqueue through the fake Apalis queue: {error}");
     }
+    // Release the borrow before writing back into another world cell.
+    drop(enrichment_job);
     let payloads = match provider.pushed_jobs() {
         Ok(payloads) => payloads,
         Err(error) => panic!("fake provider payloads should be readable: {error}"),
@@ -229,15 +209,17 @@ fn i_enqueue_the_failing_plan_through_the_fake_apalis_queue(world: &JobStructWor
     *world.queue_error.borrow_mut() = result.err();
 }
 
-#[when("I convert the enrichment job to an Overpass request")]
-fn i_convert_the_enrichment_job_to_an_overpass_request(world: &JobStructWorld) {
-    let job = world
-        .enrichment_job
-        .borrow()
-        .clone()
-        .expect("enrichment job should be configured");
+#[when("I convert the enrichment job to an enrichment request")]
+fn i_convert_the_enrichment_job_to_an_enrichment_request(world: &JobStructWorld) {
+    let enrichment_job = world.enrichment_job.borrow();
+    let request = enrichment_job
+        .as_ref()
+        .expect("enrichment job should be configured")
+        .to_enrichment_request();
+    // Release the borrow before writing back into another world cell.
+    drop(enrichment_job);
 
-    *world.overpass_request.borrow_mut() = Some(job.to_overpass_request());
+    *world.enrichment_request.borrow_mut() = Some(request);
 }
 
 #[then("the stub enqueue succeeds")]
@@ -246,18 +228,6 @@ fn the_stub_enqueue_succeeds(world: &JobStructWorld) {
     let result = result.as_ref().expect("stub enqueue should have run");
 
     assert!(result.is_ok(), "stub enqueue should succeed: {result:?}");
-}
-
-#[then("the generate-route builder rejects the payload as non-object")]
-fn the_generate_route_builder_rejects_the_payload_as_non_object(world: &JobStructWorld) {
-    let job = world.generated_route_job.borrow();
-    let error = job
-        .as_ref()
-        .expect("generate-route builder should have run")
-        .as_ref()
-        .expect_err("builder should reject non-object payload");
-
-    assert_eq!(error, &GenerateRouteJobBuildError::PayloadNotObject);
 }
 
 #[then("the fake queue records the enrichment JSON payload")]
@@ -285,15 +255,15 @@ fn the_queue_returns_a_rejected_dispatch_error(world: &JobStructWorld) {
     );
 }
 
-#[then("the Overpass request preserves the job fields")]
-fn the_overpass_request_preserves_the_job_fields(world: &JobStructWorld) {
-    let request = world.overpass_request.borrow();
+#[then("the enrichment request preserves the job fields")]
+fn the_enrichment_request_preserves_the_job_fields(world: &JobStructWorld) {
+    let request = world.enrichment_request.borrow();
     let request = request
         .as_ref()
-        .expect("Overpass conversion should have run");
+        .expect("enrichment conversion should have run");
 
     assert_eq!(request.job_id, job_id());
-    assert_eq!(request.bounding_box, valid_bounding_box().coords());
+    assert_eq!(request.bounding_box, valid_bounding_box());
     assert_eq!(
         request.tags,
         vec!["amenity".to_owned(), "tourism".to_owned()]
@@ -309,21 +279,6 @@ fn build_generate_route_job_from_submission_and_enqueue_via_stub(world: JobStruc
     assert!(
         matches!(result.as_ref(), Some(Ok(()))),
         "scenario should end with a successful stub enqueue"
-    );
-}
-
-#[scenario(
-    path = "tests/features/job_structs.feature",
-    name = "Reject an ill-formed submission"
-)]
-fn reject_ill_formed_submission(world: JobStructWorld) {
-    let job = world.generated_route_job.borrow();
-    assert!(
-        matches!(
-            job.as_ref(),
-            Some(Err(GenerateRouteJobBuildError::PayloadNotObject))
-        ),
-        "scenario should end with a payload-not-object error"
     );
 }
 
@@ -353,11 +308,11 @@ fn surface_serialization_rejection(world: JobStructWorld) {
 
 #[scenario(
     path = "tests/features/job_structs.feature",
-    name = "Convert an enrichment job to an Overpass request"
+    name = "Convert an enrichment job to an enrichment request"
 )]
-fn convert_enrichment_job_to_overpass_request(world: JobStructWorld) {
+fn convert_enrichment_job_to_enrichment_request(world: JobStructWorld) {
     assert!(
-        world.overpass_request.borrow().is_some(),
-        "scenario should create an Overpass request"
+        world.enrichment_request.borrow().is_some(),
+        "scenario should create an enrichment request"
     );
 }

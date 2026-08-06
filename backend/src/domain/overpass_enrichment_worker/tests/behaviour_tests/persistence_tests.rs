@@ -11,7 +11,7 @@ struct PersistenceFailureCase {
 
 async fn assert_persistence_failure_records_metrics_and_maps_error(
     now: TestResult<DateTime<Utc>>,
-    job: OverpassEnrichmentRequest,
+    job: EnrichmentRequest,
     case: PersistenceFailureCase,
 ) -> TestResult {
     let now = now?;
@@ -77,7 +77,7 @@ async fn assert_persistence_failure_records_metrics_and_maps_error(
 #[tokio::test]
 async fn persistence_connection_failure_records_metric_and_maps_to_service_unavailable(
     now: TestResult<DateTime<Utc>>,
-    job: OverpassEnrichmentRequest,
+    job: EnrichmentRequest,
 ) -> TestResult {
     assert_persistence_failure_records_metrics_and_maps_error(
         now,
@@ -95,7 +95,7 @@ async fn persistence_connection_failure_records_metric_and_maps_to_service_unava
 #[tokio::test]
 async fn persistence_query_failure_records_metric_and_maps_to_internal(
     now: TestResult<DateTime<Utc>>,
-    job: OverpassEnrichmentRequest,
+    job: EnrichmentRequest,
 ) -> TestResult {
     assert_persistence_failure_records_metrics_and_maps_error(
         now,
