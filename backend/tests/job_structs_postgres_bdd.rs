@@ -126,35 +126,33 @@ fn valid_generate_route_and_enrichment_jobs(world: &SharedContext) {
 
 #[when("I enqueue both jobs through Apalis PostgreSQL")]
 fn enqueue_both_jobs_through_apalis_postgresql(world: &SharedContext) {
-    let (handle, pool, route_job, enrichment_job) = {
+    let results = {
         let context = world.lock().expect("context lock");
-        (
-            context.runtime.handle().clone(),
-            context.pool.clone(),
-            context.route_job.clone(),
-            context.enrichment_job.clone(),
-        )
+        let handle = context.runtime.handle().clone();
+        let pool = context.pool.clone();
+
+        let provider = handle
+            .block_on(ApalisPostgresProvider::new(pool))
+            .map_err(|error| error.to_string());
+        match provider {
+            Ok(provider) => {
+                let route_queue: GenericApalisRouteQueue<GenerateRouteJob, _> =
+                    GenericApalisRouteQueue::new(provider.clone(), Arc::new(NoOpRouteQueueMetrics));
+                let enrichment_queue: GenericApalisRouteQueue<EnrichmentJob, _> =
+                    GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
+                let route_result = handle.block_on(route_queue.enqueue(&context.route_job));
+                let enrichment_result =
+                    handle.block_on(enrichment_queue.enqueue(&context.enrichment_job));
+                vec![
+                    route_result.map_err(|error| error.to_string()),
+                    enrichment_result.map_err(|error| error.to_string()),
+                ]
+            }
+            Err(error) => vec![Err(error)],
+        }
     };
 
-    let results = handle.block_on(async move {
-        let provider = ApalisPostgresProvider::new(pool)
-            .await
-            .map_err(|error| error.to_string())?;
-        let route_queue: GenericApalisRouteQueue<GenerateRouteJob, _> =
-            GenericApalisRouteQueue::new(provider.clone(), Arc::new(NoOpRouteQueueMetrics));
-        let enrichment_queue: GenericApalisRouteQueue<EnrichmentJob, _> =
-            GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
-
-        let route_result = route_queue.enqueue(&route_job).await;
-        let enrichment_result = enrichment_queue.enqueue(&enrichment_job).await;
-        Ok::<_, String>(vec![
-            route_result.map_err(|error| error.to_string()),
-            enrichment_result.map_err(|error| error.to_string()),
-        ])
-    });
-
-    world.lock().expect("context lock").enqueue_results =
-        results.unwrap_or_else(|error| vec![Err(error)]);
+    world.lock().expect("context lock").enqueue_results = results;
 }
 
 async fn fetch_payload(pool: &PgPool, query: &str, value: Uuid) -> Value {

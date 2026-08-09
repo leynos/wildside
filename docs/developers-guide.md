@@ -1189,10 +1189,15 @@ defines no decode metric. The future 5.3.1 worker/consumer boundary owns safe
 warning and rejection metrics. Retry and dead-letter policy remain owned by
 roadmap item 5.2.3.
 
-The payloads carry `idempotency_key` because the current Apalis pins predate
-framework-native idempotency support. Trace IDs are intentionally absent from
-V1; roadmap item 5.2.4 owns trace propagation and must choose the trace carrier
-before adding any trace field.
+The payloads carry `idempotency_key` as part of the domain job contract. The
+current `Cargo.lock` resolves `apalis-core` 1.0.0-rc.9 and
+`apalis-postgres` 1.0.0-rc.8, but the queue adapter currently serializes the
+payload and calls `storage.push`; it does not map the field to
+`TaskBuilder::id(...)` or apply duplicate suppression. If framework task
+identity is wired later, choose one source of truth for idempotency in that
+same change. Trace IDs are intentionally absent from V1; roadmap item 5.2.4
+owns trace propagation and must choose the trace carrier before adding any
+trace field.
 
 Domain job modules must not import Apalis, SQLx, Diesel, Actix, or outbound
 adapter types. Adapter code serializes domain payloads at the boundary; domain

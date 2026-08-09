@@ -163,13 +163,15 @@ contained within this plan.
   (`wildside-engine`), a later plan can tighten this without rewriting the
   queue.
 
-- Risk: `apalis-core` 1.0.0-rc.7 lacks the first-class idempotency feature
-  added in rc.8, so the job struct must carry its own idempotency key.
-  Severity: low. Likelihood: high. Mitigation: include an explicit
-  `idempotency_key: Option<IdempotencyKey>` on each V1 struct. When the
-  workspace later upgrades to rc.8 or newer and adopts the framework-native
-  key, the existing field becomes the source of truth that maps into
-  `TaskBuilder::id(...)`.
+- Risk: the domain payload's idempotency key could be confused with Apalis's
+  task identity. Severity: low. Likelihood: medium. The current `Cargo.lock`
+  resolves `apalis-core` 1.0.0-rc.9 and `apalis-postgres` 1.0.0-rc.8, but the
+  current adapter only serializes the payload and calls `storage.push`; it
+  does not map the field to `TaskBuilder::id(...)` or apply duplicate
+  suppression. Mitigation: retain the explicit
+  `idempotency_key: Option<IdempotencyKey>` as a domain field for now. If the
+  adapter later adopts framework task identity, choose one source of truth and
+  migrate the payload contract in the same change.
 
 - Risk: parallel job and offline bounding-box types drift into different WGS84
   policies. Severity: medium. Likelihood: medium. Mitigation: use the one
@@ -205,14 +207,12 @@ contained within this plan.
   safe warning/rejection metrics, and retry policy (5.2.3) owns dead-letter
   routing.
 
-- Risk: the existing Overpass enrichment worker uses
-  `OverpassEnrichmentRequest`
-  (`backend/src/domain/ports/overpass_enrichment_source.rs:14`), and a second
-  domain type for the same logical input invites drift. Severity: low.
-  Likelihood: medium. Mitigation: provide a deterministic
-  `EnrichmentJob::to_overpass_request` helper plus a property test asserting
-  that the conversion preserves the bounding box and tag list. Document the
-  relationship in the architecture doc so the two types stay coordinated.
+- Risk: the enrichment source port and the durable job payload could drift if
+  they use separate shapes. Severity: low. Likelihood: medium. Mitigation:
+  provide a deterministic `EnrichmentJob::to_enrichment_request` helper plus a
+  property test asserting that the conversion preserves the bounding box and
+  tag list. Keep the job-to-port relationship vendor-neutral; the concrete
+  provider remains an adapter concern.
 
 - Risk: `TraceId` (`backend/src/domain/trace_id.rs:34`) is not
   serde-derived, so anyone reading the architecture doc will expect the V1
@@ -262,16 +262,18 @@ Read these repository documents before implementation:
 
 External references confirmed during planning:
 
-- `https://docs.rs/apalis-core/1.0.0-rc.7/apalis_core/` — confirms there is
+- `https://docs.rs/apalis-core/1.0.0-rc.9/apalis_core/` — confirms there is
   no `Job` trait in 1.0; task identity lives on the `Task<Args, Ctx, Id>`
   envelope and `Args` only needs to satisfy the codec
   (`Serialize + DeserializeOwned` for `JsonCodec`).
 - `https://docs.rs/apalis-postgres/latest/apalis_postgres/` — confirms
   `PostgresStorage<Args>` defaults, and that metadata travels in `Parts`/
   `TaskBuilder` rather than the payload.
-- `https://github.com/apalis-dev/apalis/blob/main/CHANGELOG.md` — confirms
-  rc.8 added task idempotency and rc.9 adds SQL idempotency (#736); we
-  therefore carry our own `idempotency_key` until the workspace upgrades.
+- `https://github.com/apalis-dev/apalis/blob/main/CHANGELOG.md` — records the
+  framework idempotency changes. The current `Cargo.lock` resolves
+  `apalis-core` 1.0.0-rc.9 and `apalis-postgres` 1.0.0-rc.8, but the current
+  adapter still serializes the domain payload and calls `storage.push`; it does
+  not map `idempotency_key` to `TaskBuilder::id(...)`.
 
 ## Current repository orientation
 
@@ -295,8 +297,9 @@ historical delivery record. The relevant files today are:
   `payload: serde_json::Value`.
 - `backend/src/inbound/http/routes.rs:25` defines the inbound HTTP
   `RouteRequest { origin, destination, preferences }` body shape.
-- `backend/src/domain/ports/overpass_enrichment_source.rs:14` defines
-  `OverpassEnrichmentRequest { job_id, bounding_box, tags }`.
+- `backend/src/domain/ports/enrichment_source.rs:19` defines the
+  vendor-neutral `EnrichmentRequest { job_id, bounding_box, tags }` passed to
+  enrichment adapters.
 - `backend/src/domain/idempotency/key.rs:35` defines `IdempotencyKey`
   (UUID-backed, serde-derived).
 - `backend/src/domain/user.rs:74` defines `UserId` (serde-derived).
@@ -391,7 +394,7 @@ The minimum bar:
    Failure cases map to `GenerateRouteJobBuildError` variants (use the existing
    `define_port_error!` macro pattern; see
    `backend/src/domain/ports/route_queue.rs:6` and
-   `backend/src/domain/ports/overpass_enrichment_source.rs:50` for the
+   `backend/src/domain/ports/route_queue.rs:6` for the
    established style).
 3. Add `rstest` unit tests covering:
    - Constructor accepts a well-formed submission.
@@ -438,7 +441,7 @@ Implement `EnrichmentJob` in `backend/src/domain/jobs/enrichment.rs`:
    Apply the durable enrichment-job adapter
    `#[serde(with = "crate::domain::bounding_box::array_wire")]` to the job's
    `bounding_box` field so persisted payloads retain the `[f64; 4]`
-   representation expected by `OverpassEnrichmentRequest::bounding_box`.
+   representation expected by the enrichment source port.
 2. Define the V1 envelope and payload using the signatures in
    "Interfaces and dependencies" below. Include `job_id: Uuid`,
    `idempotency_key: Option<IdempotencyKey>`, `bounding_box: BoundingBox`,
@@ -451,15 +454,16 @@ Implement `EnrichmentJob` in `backend/src/domain/jobs/enrichment.rs`:
    `EnrichmentJobBuildError::TagTooLong` respectively). Place the
    schema-evolution doc-comment on the envelope so future agents see the rule
    before they edit V1.
-3. Add `EnrichmentJob::to_overpass_request(&self) -> OverpassEnrichmentRequest`
-   to give the existing Overpass worker a single conversion seam. Cover it with
-   a unit test asserting the bounding-box ordering and tag list are preserved.
+3. Add `EnrichmentJob::to_enrichment_request(&self) -> EnrichmentRequest` to
+   give enrichment adapters a single vendor-neutral conversion seam. Cover it
+   with a unit test asserting the bounding-box ordering and tag list are
+   preserved.
 4. Add `rstest` unit tests for constructor validation, sort/dedupe of
    tags, serde round-trip, and `deny_unknown_fields`.
 5. Add `proptest` strategies for bounding boxes and for whole jobs. Assert
    that:
    - Any value produced by the strategy round-trips through `serde_json`.
-   - `EnrichmentJob::to_overpass_request` preserves the bounding box and
+   - `EnrichmentJob::to_enrichment_request` preserves the bounding box and
      the deduplicated tag set.
    - `BoundingBox::new` rejects inputs that violate the documented
      invariants.
@@ -508,9 +512,9 @@ adapter contract.
      codec cannot handle, when enqueue runs, then the adapter returns
      `JobDispatchError::Rejected` with the documented message shape. Use
      the existing `FailingQueueProvider` for the unavailable case.
-   - "Convert to Overpass request".
-     Given an `EnrichmentJob::V1`, when `to_overpass_request` is called,
-     then the resulting `OverpassEnrichmentRequest` carries the same
+   - "Convert to enrichment request".
+     Given an `EnrichmentJob::V1`, when `to_enrichment_request` is called,
+     then the resulting `EnrichmentRequest` carries the same
      bounding box, tag list, and `job_id`.
 3. Where a PostgreSQL-backed scenario is justified, reuse the embedded
    PostgreSQL harness described in `docs/pg-embed-setup-unpriv-users-guide.md`
@@ -537,7 +541,7 @@ Commit when green.
    - `docs/wildside-backend-architecture.md` — describe the V1 envelope,
      the `idempotency_key` carrying pattern, why trace propagation is
      deferred to 5.2.4, the conversion from `EnrichmentJob` to
-     `OverpassEnrichmentRequest`, the antimeridian-wrap policy, and
+     `EnrichmentRequest`, the antimeridian-wrap policy, and
      the worker-side rule that unknown envelope variants must be
      surfaced as `JobDispatchError::Rejected` (no panics, no silent
      drops; malformed payloads use a fixed diagnostic and only readable
@@ -776,7 +780,7 @@ use uuid::Uuid;
 
 use crate::domain::IdempotencyKey;
 use crate::domain::jobs::BoundingBox;
-use crate::domain::ports::OverpassEnrichmentRequest;
+use crate::domain::ports::EnrichmentRequest;
 
 /// Maximum number of tags carried on a V1 enrichment job.
 pub const ENRICHMENT_JOB_V1_MAX_TAGS: usize = 64;
@@ -823,12 +827,12 @@ impl EnrichmentJob {
         /* canonicalize_tags(params.tags)?, then wrap in V1 */
     }
 
-    /// Convert any envelope variant into the existing Overpass port
+    /// Convert any envelope variant into the vendor-neutral enrichment port
     /// request shape. V1 is infallible; future variants whose conversion
-    /// can fail must return `Result<OverpassEnrichmentRequest,
+    /// can fail must return `Result<EnrichmentRequest,
     /// EnrichmentJobConversionError>` instead and a Decision Log entry
     /// must capture the change.
-    pub fn to_overpass_request(&self) -> OverpassEnrichmentRequest { /* ... */ }
+    pub fn to_enrichment_request(&self) -> EnrichmentRequest { /* ... */ }
 }
 
 // `EnrichmentJob` implements `Deserialize` through a private raw envelope.
@@ -848,7 +852,7 @@ pub enum EnrichmentJobBuildError {
 }
 ```
 
-`to_overpass_request` lives on the envelope, not on `V1`, so workers always go
+`to_enrichment_request` lives on the envelope, not on `V1`, so workers always go
 through the version-aware seam. `EnrichmentJobV1` keeps its fields private and
 constructs only through `EnrichmentJob::v1` or the validating `Deserialize`
 impl, so every payload — built in-process or decoded off the wire — carries
@@ -880,8 +884,8 @@ Functional acceptance:
   `GenerateRouteJobBuildError` variants on ill-formed input. The V1 constructor
   rejects null `origin`, `destination`, and `preferences` values while
   preserving string and object locations.
-- `EnrichmentJob::to_overpass_request` returns a value-equal
-  `OverpassEnrichmentRequest`.
+- `EnrichmentJob::to_enrichment_request` returns a value-equal
+  `EnrichmentRequest`.
 - `BoundingBox::new` rejects non-finite inputs, longitudes outside
   `[-180.0, 180.0]`, latitudes outside `[-90.0, 90.0]`, inverted ordering, and
   antimeridian-wrapped boxes (`min_lng >= max_lng`).
@@ -966,14 +970,14 @@ The plan ships in two PRs:
 - [x] (2026-06-06 01:31Z) Renamed the local branch to
   `backend-5-2-2-job-structs-for-generate-route-and-enrichment`.
 - [x] (2026-06-06 01:35Z) Surveyed the roadmap, the wildside backend
-  architecture, the queue port, the route submission port, the Overpass
-  enrichment port, the existing Apalis adapter, and the 5.2.1 ExecPlan to set
+  architecture, the queue port, the route submission port, the enrichment
+  source port, the existing Apalis adapter, and the 5.2.1 ExecPlan to set
   the baseline.
 - [x] (2026-06-06 01:40Z) Used a research agent team to gather Apalis 1.0
   idioms (no `Job` trait in 1.0; metadata lives in `Parts`;
   `PostgresStorage<Args>` accepts any `Serialize + DeserializeOwned` type;
-  rc.6/rc.7 lack the rc.8 framework-native idempotency feature) and to confirm
-  the concrete fields the new structs must carry.
+  at planning time, rc.6/rc.7 lacked the rc.8 framework-native idempotency
+  feature) and to confirm the concrete fields the new structs must carry.
 - [x] (2026-06-06 01:50Z) Drafted this ExecPlan.
 - [x] (2026-06-14 23:37Z) Approval received from the user; implementation
   started under this ExecPlan.
@@ -1127,11 +1131,13 @@ The plan ships in two PRs:
   2026-06-06 / planning agent.
 
 - Decision: Carry an explicit `idempotency_key: Option<IdempotencyKey>`
-  on each V1 payload. Rationale: `apalis-core` 1.0.0-rc.7 (the current pin)
-  lacks the framework-native idempotency feature added in rc.8. Carrying the
-  key ourselves keeps the same shape working before and after an Apalis
-  upgrade; the field can later be mapped onto
-  `TaskBuilder::id(idempotency_key.into())` without breaking the wire shape.
+  on each V1 payload. Rationale: the key is part of the domain job contract,
+  while the current queue adapter only serializes the payload and calls
+  `storage.push`; it does not map the field to framework task identity. The
+  current `Cargo.lock` resolves Apalis versions that support framework
+  idempotency, so any future `TaskBuilder::id(idempotency_key.into())`
+  integration must also choose whether the payload field or task identity is
+  authoritative to avoid two sources of truth.
   Date/Author: 2026-06-06 / planning agent.
 
 - Decision: Defer trace-identifier fields to roadmap 5.2.4.
@@ -1143,13 +1149,13 @@ The plan ships in two PRs:
   selects the carrier. Date/Author: 2026-06-06 / planning agent.
 
 - Decision: Wrap the bounding box in a validating newtype rather than
-  exposing `[f64; 4]` directly. Rationale: the current Overpass enrichment port
+  exposing `[f64; 4]` directly. Rationale: the current enrichment source port
   accepts `bounding_box: [f64; 4]` without validation
-  (`backend/src/domain/ports/overpass_enrichment_source.rs:14`). The job
+  (`backend/src/domain/ports/enrichment_source.rs:19`). The job
   payload is durable persisted state; persisting nonsensical coordinates would
   be much harder to recover from than rejecting them at construction. The
   newtype validates once and delegates to `[f64; 4]` on the wire so the
-  Overpass port stays compatible. Date/Author: 2026-06-06 / planning agent.
+  provider adapter stays compatible. Date/Author: 2026-06-06 / planning agent.
 
 - Decision: Keep `RouteQueue::Plan` generic and do not collapse it to a
   concrete enum like `Job::{GenerateRoute(...), Enrichment(...)}`. Rationale:
@@ -1227,13 +1233,13 @@ The plan ships in two PRs:
 - Decision: Bound `EnrichmentJobV1::tags` at construction and decode time.
   Rationale: `apalis.jobs` rows are persisted JSON; an unbounded tag vector
   turns a bug into a queue-table footprint problem. The bounds (`64` tags, `64`
-  UTF-8 bytes each) are generous compared to known Overpass tag-set sizes
+  UTF-8 bytes each) are generous compared to known OSM tag-set sizes
   (single-digit count is typical). The persisted decoder enforces the same
   limits while streaming so rejection cannot first allocate an arbitrary
   vector. Date/Author: 2026-06-06 / planning agent (revised 2026-07-31 after
   review).
 
-- Decision: Place `to_overpass_request` on the `EnrichmentJob` envelope,
+- Decision: Place `to_enrichment_request` on the `EnrichmentJob` envelope,
   not on `EnrichmentJobV1`. Rationale: workers should not match the envelope a
   second time to reach the conversion. Putting the method on the envelope keeps
   every call site version-agnostic, and the doc-comment commits the V1
@@ -1257,10 +1263,10 @@ The plan ships in two PRs:
 - Open question deferred to a future plan: whether `idempotency_key`
   should be tightened from `Option` to required. Today it mirrors the
   `RouteSubmissionRequest::idempotency_key` shape, where the HTTP layer treats
-  it as optional. When the workspace adopts Apalis rc.8+ framework-native
-  idempotency, the payload field must be removed in the same PR that wires
-  `TaskBuilder::id` to avoid the duplicate source-of-truth failure mode
-  recorded in Risks.
+  it as optional. If the queue adapter wires framework task identity, the same
+  change must decide whether to remove the payload field or explicitly define
+  how it relates to `TaskBuilder::id`, avoiding the duplicate source-of-truth
+  failure mode recorded in Risks.
 
 - Decision: Add a PostgreSQL-backed persisted-boundary scenario using the
   existing `rstest-bdd` 0.5 and `pg-embed-setup-unpriv` fixture. This
@@ -1323,7 +1329,7 @@ documentation changes.
   the M3 step list, and the M5 documentation step. Notable changes: dropped
   `Eq` from envelopes and `BoundingBox` (an `f64` and `serde_json::Value`
   reality check); bounded `EnrichmentJobV1::tags`; switched the envelope
-  discriminator to `"v1"`; moved `to_overpass_request` to the envelope;
+  discriminator to `"v1"`; moved `to_enrichment_request` to the envelope;
   documented the antimeridian policy and the schema-evolution rule; captured the
   `enqueued_at`/`Parts::run_at` and `idempotency_key` open questions for 5.2.4
   and the future Apalis upgrade. No tolerances or scope budgets shifted; the

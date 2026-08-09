@@ -73,17 +73,27 @@ fn version_diagnostic(version: &str) -> String {
     diagnostic
 }
 
+/// Return whether a character may appear verbatim in a version diagnostic.
+///
+/// Envelope versions are short ASCII identifiers such as `v1`, so the
+/// diagnostic allows only those characters through. Escaping is decided by an
+/// allowlist rather than a denylist of known-bad characters: a denylist has to
+/// anticipate every hostile code point, and misses ones like U+202E (right-to-
+/// left override) or U+200E (left-to-right mark) that are neither control
+/// characters nor visible, yet can reorder surrounding text in a log or
+/// terminal.
+fn is_supported_version_character(character: char) -> bool {
+    character.is_ascii_alphanumeric() || matches!(character, '-' | '.' | '_')
+}
+
 fn escaped_version_character(character: char) -> String {
     match character {
         '\n' => "\\n".to_owned(),
         '\r' => "\\r".to_owned(),
         '\t' => "\\t".to_owned(),
-        '\u{1b}' => "\\x1b".to_owned(),
-        '\u{2028}' => "\\u{2028}".to_owned(),
-        '\u{2029}' => "\\u{2029}".to_owned(),
         '\\' => "\\\\".to_owned(),
-        control if control.is_control() => format!("\\u{{{:x}}}", control as u32),
-        printable => printable.to_string(),
+        supported if is_supported_version_character(supported) => supported.to_string(),
+        other => format!("\\u{{{:x}}}", other as u32),
     }
 }
 

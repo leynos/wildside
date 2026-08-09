@@ -241,8 +241,10 @@ mod tests {
     use uuid::Uuid;
 
     fn request(tags: Vec<&str>) -> EnrichmentRequest {
-        let bounding_box = BoundingBox::new(-3.30, 55.90, -3.10, 56.00)
-            .expect("fixture bounding box should be valid");
+        let bounding_box = match BoundingBox::new(-3.30, 55.90, -3.10, 56.00) {
+            Ok(bounding_box) => bounding_box,
+            Err(error) => panic!("fixture bounding box should be valid: {error}"),
+        };
         EnrichmentRequest {
             job_id: Uuid::new_v4(),
             bounding_box,

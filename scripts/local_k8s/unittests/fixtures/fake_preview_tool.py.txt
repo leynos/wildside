@@ -14,9 +14,9 @@ Supported command forms
   under ``WILDSIDE_FAKE_PYTHON``, so the tests cross the genuine CLI boundary.
 - ``k3d``/``kind`` cluster list, create, and delete, which read and write the
   cluster-state marker.
-- container-engine ``build``, ``podman tag``/``save``, ``k3d image import``, and
-  the ``kind load image-archive`` form (optionally reached through the ``env``
-  or ``systemd-run`` wrappers the CLI uses to set
+- container-engine ``build``, ``podman tag``/``save``, ``k3d image import``,
+  ``kind load docker-image``, and ``kind load image-archive`` (optionally
+  reached through the ``env`` or ``systemd-run`` wrappers the CLI uses to set
   ``KIND_EXPERIMENTAL_PROVIDER=podman``).
 - ``helm upgrade --install`` and ``helm status``.
 - ``kubectl`` namespace get/create, pod/service/log queries, and the session
@@ -89,6 +89,9 @@ is_kind_load = (
     name == "kind" and len(args) == 5 and args[:2] == ["load", "image-archive"]
     and args[3:] == ["--name", cluster_name]
 )
+is_kind_docker_load = name == "kind" and args == [
+    "load", "docker-image", "wildside-backend:local", "--name", cluster_name,
+]
 is_helm_upgrade = (
     name == "helm" and len(args) == 17
     and args[:1] == ["--kube-context"] and args[1] in contexts
@@ -115,6 +118,7 @@ is_no_output_command = any((
     ],
     is_podman_save,
     is_kind_load,
+    is_kind_docker_load,
     is_helm_upgrade,
     name == "kubectl" and contextual(
         "--context", ["get", "namespace", "wildside", "--ignore-not-found"],
