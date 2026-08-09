@@ -1146,8 +1146,9 @@ only supported contract for values passed into `RouteQueue::enqueue`:
   timestamp explicitly. A non-object submission returns `PayloadNotObject`.
   Missing or JSON-null `origin` or `destination` returns
   `PayloadMissingField`; explicitly JSON-null `preferences` returns
-  `PayloadNullField`. Origin and destination are opaque JSON values, currently
-  supplied as either string identifiers or coordinate objects.
+  `PayloadNullField`. An origin or destination that is neither a string
+  identifier nor an object returns `PayloadInvalidLocation`; accepted location
+  values remain opaque string identifiers or coordinate objects.
 - `EnrichmentJob` is defined in `backend/src/domain/jobs/enrichment.rs`. Build
   it through the fallible `EnrichmentJob::v1(EnrichmentJobParams)` constructor,
   which rejects `EmptyTags`, `TooManyTags`, and `TagTooLong`, then canonicalizes
