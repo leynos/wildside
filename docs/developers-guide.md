@@ -848,8 +848,9 @@ a Bun install, browser setup, or Git worklist discovery. Command-level
 contracts verify the required tools and the exact renderer selection.
 
 The `lint-asyncapi` target invokes AsyncAPI CLI 3.4.2 through `pnpm dlx` and
-validates `spec/asyncapi.yaml` with `--fail-severity=info`. Keep this runner form
-because it resolves the package's `asyncapi` binary reliably in the workspace.
+validates `spec/asyncapi.yaml` with `--fail-severity=info`. Keep this runner
+form because it resolves the package's `asyncapi` binary reliably in the
+workspace.
 
 ## Python quality gates
 
@@ -1138,34 +1139,64 @@ Implementation details within `outbound::queue`:
 Domain-owned job payloads live under `backend/src/domain/jobs`. They are the
 only supported contract for values passed into `RouteQueue::enqueue`:
 
+- The route boundary is typed in
+  `backend/src/domain/ports/route_submission.rs`. `RouteSubmissionPayload`
+  contains `RouteLocation` (`String` identifiers or `{lat, lng}` WGS84
+  coordinate objects), `RouteCoordinates`, and optional `RoutePreferences`. The
+  HTTP `RouteRequest` DTO converts to this payload before constructing the
+  `RouteSubmissionRequest`; route job code does not recover fields from an
+  untyped `serde_json::Value`.
 - `GenerateRouteJob` is defined in
-  `backend/src/domain/jobs/generate_route.rs`. Its fallible
-  `GenerateRouteJob::v1(GenerateRouteJobV1)` constructor validates an already
-  assembled payload; `GenerateRouteJob::try_from_submission` builds one from
-  the route-submission port, taking the generated `request_id` and enqueue
-  timestamp explicitly. A non-object submission returns `PayloadNotObject`.
-  Missing or JSON-null `origin` or `destination` returns
-  `PayloadMissingField`; explicitly JSON-null `preferences` returns
-  `PayloadNullField`. An origin or destination that is neither a string
-  identifier nor an object returns `PayloadInvalidLocation`; accepted location
-  values remain opaque string identifiers or coordinate objects.
+  `backend/src/domain/jobs/generate_route.rs`. Its
+  `try_from_submission(&RouteSubmissionRequest, request_id, enqueued_at)`
+  helper copies the already typed route payload and the request metadata into
+  `GenerateRouteJobV1`. The helper remains fallible for the published
+  constructor API, but it is not an untyped JSON-object validator.
+- `GenerateRouteJobV1` is a stable `#[serde(tag = "v")]` `"v1"` envelope with
+  camel-case fields. Its current JSON shape is:
+
+  ```json
+  {
+    "destination": {"lat": 51.5014, "lng": -0.1419},
+    "enqueuedAt": "2026-06-14T12:00:00Z",
+    "idempotencyKey": "33333333-3333-3333-3333-333333333333",
+    "origin": {"lat": 51.5074, "lng": -0.1278},
+    "preferences": {"mode": "walking"},
+    "requestId": "11111111-1111-1111-1111-111111111111",
+    "userId": "22222222-2222-2222-2222-222222222222",
+    "v": "v1"
+  }
+  ```
+
+  Locations may instead be identifier strings, and absent preferences are
+  omitted. V1 uses `deny_unknown_fields`; additive changes require a new
+  envelope variant and a reviewed snapshot, not an in-place V1 edit.
+- Explicit `null` is rejected at both boundaries. The HTTP DTO rejects null
+  `origin` or `destination` through the typed location deserializer and rejects
+  `preferences: null` explicitly. Persisted V1 deserialization applies the same
+  rule to missing or null required locations and to null preferences;
+  `decode_job` turns malformed persisted payloads into
+  `JobDispatchError::Rejected`.
 - `EnrichmentJob` is defined in `backend/src/domain/jobs/enrichment.rs`. Build
   it through the fallible `EnrichmentJob::v1(EnrichmentJobParams)` constructor,
-  which rejects `EmptyTags`, `TooManyTags`, and `TagTooLong`, then canonicalizes
-  the tags. V1 permits at most 64 tags, with each tag no longer than 64 UTF-8
-  bytes. Deserializing a persisted V1 job applies the same validation, so
-  workers never receive unchecked tag vectors from `apalis.jobs`.
+  which rejects `EmptyTags`, `TooManyTags`, and `TagTooLong`, then
+  canonicalizes the tags. V1 permits at most 64 tags, with each tag no longer
+  than 64 UTF-8 bytes. Deserializing a persisted V1 job applies the same
+  validation, so workers never receive unchecked tag vectors from `apalis.jobs`.
+- `EnrichmentJob::to_enrichment_request` converts the versioned job envelope to
+  the vendor-neutral `EnrichmentRequest { job_id, bounding_box, tags }` port
+  shape. `EnrichmentSource` owns that domain contract; each outbound provider
+  adapter converts it into its vendor-specific query and maps provider errors
+  back to `EnrichmentSourceError`.
 - `BoundingBox` is the shared geographic value object in
-  `backend/src/domain/bounding_box.rs`; job and offline modules re-export this
-  one type rather than defining parallel validators. Its ordinary Serde shape
-  is the offline API object (`minLng`, `minLat`, `maxLng`, `maxLat`). Durable
-  enrichment payloads opt into `bounding_box::array_wire` explicitly to retain
-  `[min_lng, min_lat, max_lng, max_lat]`. Construct it with
-  `BoundingBox::new(min_lng, min_lat, max_lng, max_lat)`, which returns
-  `Result<Self, BoundingBoxError>` and rejects `NonFinite`,
-  `LongitudeOutOfRange`, `LatitudeOutOfRange`, `InvertedOrdering`, and
-  `AntimeridianWrap`. Split dateline-spanning inputs before building either
-  domain value.
+  `backend/src/domain/bounding_box.rs`; it is the sole WGS84 bounding-box
+  validator for jobs and offline ingestion. Its ordinary Serde shape is the
+  offline API object (`minLng`, `minLat`, `maxLng`, `maxLat`), while durable
+  enrichment payloads opt into `bounding_box::array_wire` to retain
+  `[min_lng, min_lat, max_lng, max_lat]`. `GeofenceBounds` wraps this value
+  object and adds only inclusive `contains` and `as_array` compatibility; it
+  does not define a second validation policy. Split dateline-spanning inputs
+  before building either domain value.
 
 The job constructors return their domain-specific build errors, and bounding
 box construction returns `BoundingBoxError`. These are distinct from
@@ -1179,8 +1210,8 @@ in place.
 
 Workers must pass persisted `serde_json::Value` payloads through
 `outbound::queue::decode_job` before invoking a handler. The decoder applies
-the envelope's Serde validation and reports malformed or unsupported versions
-as `JobDispatchError::Rejected`. Missing or non-string versions, and otherwise
+the envelope's Serde validation and reports malformed or unsupported versions as
+`JobDispatchError::Rejected`. Missing or non-string versions, and otherwise
 malformed payloads, use the fixed `malformed job payload` diagnostic. A
 readable unsupported version gets an escaped diagnostic containing at most 64
 UTF-8 bytes of the version; this diagnostic limit is unrelated to the V1
@@ -1191,14 +1222,15 @@ warning and rejection metrics. Retry and dead-letter policy remain owned by
 roadmap item 5.2.3.
 
 The payloads carry `idempotency_key` as part of the domain job contract. The
-current `Cargo.lock` resolves `apalis-core` 1.0.0-rc.9 and
-`apalis-postgres` 1.0.0-rc.8, but the queue adapter currently serializes the
-payload and calls `storage.push`; it does not map the field to
-`TaskBuilder::id(...)` or apply duplicate suppression. If framework task
-identity is wired later, choose one source of truth for idempotency in that
-same change. Trace IDs are intentionally absent from V1; roadmap item 5.2.4
-owns trace propagation and must choose the trace carrier before adding any
-trace field.
+current `Cargo.lock` resolves `apalis-core` 1.0.0-rc.9 and `apalis-postgres`
+1.0.0-rc.8, whose framework-native task identity is available. The adapter
+nevertheless currently serializes the payload and calls
+`storage.push(payload)`; mapping the V1 field to `TaskBuilder::id(...)` is
+deferred. Until that adapter mapping is deliberately introduced, the V1
+`idempotency_key` is authoritative and remains the only documented source of
+truth. Trace IDs are intentionally absent from V1; roadmap item 5.2.4 owns
+trace propagation and must choose the trace carrier before adding any trace
+field.
 
 Domain job modules must not import Apalis, SQLx, Diesel, Actix, or outbound
 adapter types. Adapter code serializes domain payloads at the boundary; domain
@@ -1326,7 +1358,7 @@ directly. Keep repository exceptions narrow: preserve external APIs, formal
 names, wire values and immutable fixtures without adding ordinary bare-word
 exceptions.
 
-The standalone phrase helper and its tests run with Python 3.14. They depend
-on Pathspec 1.1.1. Ruff has a Python 3.13 compatibility target.
-Continuous integration installs Nixie 1.1.0 and Merman CLI 0.7.0 before
-validating the repository's Mermaid diagrams with `make nixie`.
+The standalone phrase helper and its tests run with Python 3.14. They depend on
+Pathspec 1.1.1. Ruff has a Python 3.13 compatibility target. Continuous
+integration installs Nixie 1.1.0 and Merman CLI 0.7.0 before validating the
+repository's Mermaid diagrams with `make nixie`.

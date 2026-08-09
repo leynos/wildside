@@ -6,6 +6,9 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
+Current closure evidence completed on 2026-08-09 at approximately 22:15Z. The
+focused, repository-wide, and review results are recorded below.
+
 This plan covers roadmap item 5.2.2 only:
 
 > Define job structs for `GenerateRouteJob` and `EnrichmentJob`.
@@ -38,8 +41,8 @@ The observable outcome of this plan is:
   silently.
 - The types are tested through unit tests (`rstest`), property-based
   round-trip tests (`proptest`), and behavioural tests (`rstest-bdd`)
-  exercising enqueue via the existing `StubRouteQueue` and (where embedded
-  PostgreSQL is available) `ApalisRouteQueue`.
+  exercising enqueue via the existing `StubRouteQueue` and the mandatory
+  PostgreSQL-backed `job_structs_postgres_bdd` persisted-boundary scenario.
 - V1-only consumers reject unsupported envelope versions, and producer/consumer
   rollouts keep their emitted and understood versions compatible.
 - `make check-fmt`, `make lint`, and `make test` pass after each major
@@ -68,11 +71,11 @@ Hard invariants. Violation requires escalation, not workarounds.
 - Keep producer and consumer rollouts compatible: a producer must continue to
   emit V1 while any deployed consumer is V1-only, and consumers that understand
   a newer version must be deployed before producers emit that version.
-- Keep the public `RouteSubmissionRequest::payload: serde_json::Value`
-  contract unchanged (`backend/src/domain/ports/route_submission.rs:17`).
-  Adding a typed conversion from a submission to a `GenerateRouteJob` is
-  permitted as a domain-layer helper; rewiring the submission API surface is
-  not.
+- Keep the typed `RouteSubmissionRequest::payload: RouteSubmissionPayload`
+  contract (`backend/src/domain/ports/route_submission.rs`). The explicit HTTP
+  DTO conversion into that payload and the domain helper that copies it into a
+  `GenerateRouteJob` are the permitted boundary changes; do not reintroduce an
+  untyped submission payload.
 - Do not modify `backend/src/outbound/queue/apalis_route_queue.rs` beyond
   what is strictly required to demonstrate that the existing adapter accepts
   the new typed `Plan`. Specifically, do not switch from
@@ -116,10 +119,10 @@ Hard invariants. Violation requires escalation, not workarounds.
 - Queue adapter: stop and escalate before touching
   `ApalisPostgresProvider`, `PostgresStorage`, or `QueueProvider`.
 - Dependencies: stop and escalate before adding any production dependency
-  not already in `backend/Cargo.toml`. The plan expects only dev-dependency
-  additions of `pretty_assertions` and `googletest` (both are currently absent
-  from the workspace; see Surprises & Discoveries) plus continued use of the
-  existing `rstest`, `rstest-bdd`, `proptest`, and `insta` crates.
+  not already in `backend/Cargo.toml`. Use the existing `pretty_assertions`
+  dev-dependency for structural equality assertions; no matcher dependency is
+  required. Continue using the existing `rstest`, `rstest-bdd`, `proptest`, and
+  `insta` crates.
 - Iterations: stop and document logs if any gate (`make check-fmt`,
   `make lint`, `make test`, or the focused queue/job suites) still fails after
   three focused repair loops.
@@ -153,33 +156,30 @@ contained within this plan.
   place a short header doc-comment on the envelope enum referencing the policy.
 
 - Risk: coupling `GenerateRouteJob::V1` directly to the current
-  `RouteRequest` HTTP body shape (`backend/src/inbound/http/routes.rs:25`)
-  bakes inbound-layer choices into the domain. Severity: high. Likelihood:
-  medium. Mitigation: define the job's `origin`, `destination`, and
-  `preferences` fields as domain-shaped `serde_json::Value` for now, matching
-  the current submission API. Add a conversion
-  `TryFrom<& RouteSubmissionRequest>` so the boundary is one explicit, testable
-  seam rather than implicit alignment. When the route engine grows typed inputs
-  (`wildside-engine`), a later plan can tighten this without rewriting the
-  queue.
+  `RouteRequest` HTTP body shape (`backend/src/inbound/http/routes.rs`) bakes
+  inbound-layer choices into the domain. Severity: high. Likelihood: medium.
+  Mitigation: keep the HTTP DTO-to-domain conversion explicit through the typed
+  `RouteSubmissionPayload` boundary. The job helper accepts a
+  `&RouteSubmissionRequest`, `request_id`, and `enqueued_at`, and copies the
+  typed locations and preferences into the V1 payload.
 
 - Risk: the domain payload's idempotency key could be confused with Apalis's
   task identity. Severity: low. Likelihood: medium. The current `Cargo.lock`
-  resolves `apalis-core` 1.0.0-rc.9 and `apalis-postgres` 1.0.0-rc.8, but the
-  current adapter only serializes the payload and calls `storage.push`; it
-  does not map the field to `TaskBuilder::id(...)` or apply duplicate
-  suppression. Mitigation: retain the explicit
-  `idempotency_key: Option<IdempotencyKey>` as a domain field for now. If the
-  adapter later adopts framework task identity, choose one source of truth and
-  migrate the payload contract in the same change.
+  resolves `apalis-core` 1.0.0-rc.9 and `apalis-postgres` 1.0.0-rc.8, whose
+  framework-native task identity is available, but the current adapter only
+  serializes the payload and calls `storage.push(payload)`; it does not map the
+  field to `TaskBuilder::id(...)`. Mitigation: V1 `idempotency_key` remains
+  authoritative while adapter mapping is deferred. Any future mapping must
+  choose one source of truth in the same change.
 
 - Risk: parallel job and offline bounding-box types drift into different WGS84
   policies. Severity: medium. Likelihood: medium. Mitigation: use the one
-  domain-owned `BoundingBox` value object for both features, validate every
-  decode, and preserve their different published JSON shapes through explicit
-  Serde adapters. The V1 contract explicitly does not support
-  antimeridian-wrapped boxes (see Decision Log); wrapping callers must split
-  the box client-side.
+  domain-owned `BoundingBox` value object as the sole validator for both
+  features, validate every decode, and preserve their different published JSON
+  shapes through explicit Serde adapters. `GeofenceBounds` only adds inclusive
+  `contains` and `as_array` compatibility. The V1 contract explicitly does not
+  support antimeridian-wrapped boxes (see Decision Log); wrapping callers must
+  split the box client-side.
 
 - Risk: decoding `EnrichmentJobV1::tags` into an unrestricted `Vec<String>`
   allocates the whole persisted sequence before validation. A malformed row
@@ -201,18 +201,17 @@ contained within this plan.
   high. Likelihood: medium. Mitigation: V1-only consumers reject unsupported
   versions as `JobDispatchError::Rejected`; malformed payloads use the fixed
   `malformed job payload` diagnostic, while readable unsupported string
-  versions receive only a bounded, control-escaped version diagnostic. Roll
-  out consumers before producers emit a newer version. The pure decoder does
-  not log or record metrics; the future 5.3.1 worker/consumer boundary owns
-  safe warning/rejection metrics, and retry policy (5.2.3) owns dead-letter
-  routing.
+  versions receive only a bounded, control-escaped version diagnostic. Roll out
+  consumers before producers emit a newer version. The pure decoder does not
+  log or record metrics; the future 5.3.1 worker/consumer boundary owns safe
+  warning/rejection metrics, and retry policy (5.2.3) owns dead-letter routing.
 
 - Risk: the enrichment source port and the durable job payload could drift if
   they use separate shapes. Severity: low. Likelihood: medium. Mitigation:
   provide a deterministic `EnrichmentJob::to_enrichment_request` helper plus a
   property test asserting that the conversion preserves the bounding box and
-  tag list. Keep the job-to-port relationship vendor-neutral; the concrete
-  provider remains an adapter concern.
+  tag list. Keep `EnrichmentRequest` and `EnrichmentSource` vendor-neutral; the
+  concrete provider query remains an adapter concern.
 
 - Risk: `TraceId` (`backend/src/domain/trace_id.rs:34`) is not
   serde-derived, so anyone reading the architecture doc will expect the V1
@@ -220,13 +219,6 @@ contained within this plan.
   Severity: low. Likelihood: medium. Mitigation: state the omission explicitly
   in the architecture doc, cross-reference roadmap 5.2.4, and add a Decision
   Log entry.
-
-- Risk: `googletest` and `pretty_assertions` are absent from the workspace
-  today, yet the task instructions require their assertions. Severity: low.
-  Likelihood: high. Mitigation: add both as workspace `dev-dependencies` in
-  milestone M1, scoped to job-struct test modules, and confirm the addition
-  with the user during the approval pass. If approval requires keeping them
-  out, fall back to `assert_eq!` plus structured failure messages.
 
 ## Skills and reference documents
 
@@ -292,11 +284,12 @@ historical delivery record. The relevant files today are:
 - `backend/src/outbound/queue/stub_route_queue.rs:31` exports
   `StubRouteQueue<P>` which discards plans. This is the cheap test seam for
   job-struct integration without embedded PostgreSQL.
-- `backend/src/domain/ports/route_submission.rs:17` defines
-  `RouteSubmissionRequest { idempotency_key, user_id, payload }` with
-  `payload: serde_json::Value`.
-- `backend/src/inbound/http/routes.rs:25` defines the inbound HTTP
-  `RouteRequest { origin, destination, preferences }` body shape.
+- `backend/src/domain/ports/route_submission.rs` defines the typed
+  `RouteSubmissionPayload` boundary containing `RouteLocation`,
+  `RouteCoordinates`, and `RoutePreferences`, nested in
+  `RouteSubmissionRequest { idempotency_key, user_id, payload }`.
+- `backend/src/inbound/http/routes/request.rs` defines the inbound HTTP
+  `RouteRequest` DTO and its explicit conversion into `RouteSubmissionPayload`.
 - `backend/src/domain/ports/enrichment_source.rs:19` defines the
   vendor-neutral `EnrichmentRequest { job_id, bounding_box, tags }` passed to
   enrichment adapters.
@@ -350,10 +343,9 @@ Add a new domain submodule and prepare the test surface:
    "Interfaces and dependencies" below. The module starts empty apart from the
    documentation header and `pub mod generate_route;` / `pub mod enrichment;`
    declarations.
-2. Add `pretty_assertions = "1"` and `googletest = "0.13"` (or the latest
-   1.x line that compiles with edition 2024) to `backend/Cargo.toml`'s
-   `[dev-dependencies]`. If either crate fails to compile, stop and escalate;
-   do not silently downgrade test rigour.
+2. Ensure `pretty_assertions = "1"` is present in `backend/Cargo.toml`'s
+   `[dev-dependencies]`. Use `pretty_assertions::assert_eq!` for structural
+   equality assertions; do not add a matcher dependency.
 3. Create empty test module files
    `backend/src/domain/jobs/generate_route.rs` and
    `backend/src/domain/jobs/enrichment.rs`, each with a
@@ -384,18 +376,15 @@ The minimum bar:
    `#[serde(deny_unknown_fields)]` on V1 to reject unknown keys and
    `#[serde(rename_all = "camelCase")]` to match the rest of the public
    contract.
-2. Add a `GenerateRouteJob::v1(...)` constructor and a fallible helper
+2. Add a `GenerateRouteJob::v1(...)` constructor and the fallible helper
    `GenerateRouteJob::try_from_submission(&RouteSubmissionRequest,
    request_id, enqueued_at)`
-   that returns `Result<Self, GenerateRouteJobBuildError>`. The helper
-   validates that `payload` is a JSON object containing non-null `origin` and
-   `destination` values, rejects an explicitly null `preferences` value, and
-   preserves string or object locations as opaque JSON.
-   Failure cases map to `GenerateRouteJobBuildError` variants (use the existing
-   `define_port_error!` macro pattern; see
-   `backend/src/domain/ports/route_queue.rs:6` and
-   `backend/src/domain/ports/route_queue.rs:6` for the
-   established style).
+   returning `Result<Self, GenerateRouteJobBuildError>`. The helper copies the
+   typed `RouteSubmissionPayload` into the job's V1 fields. HTTP
+   deserialization rejects null locations and preferences before this boundary;
+   persisted V1 deserialization applies the same explicit-null rejection when a
+   job is restored. Keep the fallible result to preserve the published
+   constructor API rather than reintroducing an untyped JSON validation seam.
 3. Add `rstest` unit tests covering:
    - Constructor accepts a well-formed submission.
    - Constructor rejects payloads that are not objects.
@@ -427,9 +416,10 @@ Commit when green.
 
 Implement `EnrichmentJob` in `backend/src/domain/jobs/enrichment.rs`:
 
-1. Reuse the shared `BoundingBox` newtype in
-   `backend/src/domain/bounding_box.rs`. The newtype represents `[f64; 4]` in
-   `[min_lng, min_lat, max_lng, max_lat]` order and validates at construction
+1. Reuse the shared `BoundingBox` value object in
+   `backend/src/domain/bounding_box.rs`. It is the sole WGS84 bounding-box
+   validator and represents `[f64; 4]` in
+   `[min_lng, min_lat, max_lng, max_lat]` order. It validates at construction
    time:
    - `-180.0 <= min_lng < max_lng <= 180.0`,
    - `-90.0 <= min_lat < max_lat <= 90.0`,
@@ -455,9 +445,10 @@ Implement `EnrichmentJob` in `backend/src/domain/jobs/enrichment.rs`:
    schema-evolution doc-comment on the envelope so future agents see the rule
    before they edit V1.
 3. Add `EnrichmentJob::to_enrichment_request(&self) -> EnrichmentRequest` to
-   give enrichment adapters a single vendor-neutral conversion seam. Cover it
-   with a unit test asserting the bounding-box ordering and tag list are
-   preserved.
+   give the vendor-neutral `EnrichmentSource` port a single conversion seam.
+   The outbound provider adapter converts that request into its vendor-specific
+   query. Cover the conversion with a unit test asserting the bounding-box
+   ordering and tag list are preserved.
 4. Add `rstest` unit tests for constructor validation, sort/dedupe of
    tags, serde round-trip, and `deny_unknown_fields`.
 5. Add `proptest` strategies for bounding boxes and for whole jobs. Assert
@@ -486,11 +477,11 @@ Wire the new structs through the existing queue port without changing the
 adapter contract.
 
 1. Add an integration test file `backend/tests/job_structs_bdd.rs` and a
-   feature file `backend/tests/features/job_structs.feature`. Add the
-   PostgreSQL persisted-boundary test in
+   feature file `backend/tests/features/job_structs.feature`. The mandatory
+   PostgreSQL persisted-boundary test lives in
    `backend/tests/job_structs_postgres_bdd.rs` with
-   `backend/tests/features/job_structs_postgres.feature`. Follow the patterns
-   in `docs/rstest-bdd-users-guide.md`.
+   `backend/tests/features/job_structs_postgres.feature`. Follow the patterns in
+   `docs/rstest-bdd-users-guide.md`.
 2. Scenarios to cover:
    - "Build a generate-route job from a submission and enqueue via stub".
      Given a `RouteSubmissionRequest` with origin and destination, when the
@@ -516,12 +507,12 @@ adapter contract.
      Given an `EnrichmentJob::V1`, when `to_enrichment_request` is called,
      then the resulting `EnrichmentRequest` carries the same
      bounding box, tag list, and `job_id`.
-3. Where a PostgreSQL-backed scenario is justified, reuse the embedded
-   PostgreSQL harness described in `docs/pg-embed-setup-unpriv-users-guide.md`
-   and follow the precedent in `backend/tests/route_queue_apalis_bdd.rs`. Keep
-   these scenarios behind a tag so they remain skippable when embedded
-   PostgreSQL is not available. If no scenario benefits from a live database,
-   omit the PostgreSQL-backed path and record that in `Decision Log`.
+3. Use the embedded PostgreSQL harness described in
+   `docs/pg-embed-setup-unpriv-users-guide.md` for the persisted-boundary
+   scenario, following the precedent in
+   `backend/tests/route_queue_apalis_bdd.rs`. This mandatory
+   `job_structs_postgres_bdd` scenario is not behind a tag or `cluster_skip`:
+   embedded PostgreSQL setup failure fails the test rather than skipping it.
 4. Run the behavioural suite:
 
    ```bash
@@ -555,10 +546,8 @@ Commit when green.
      variant, not a V1 edit"), the schema-evolution rule
      (`deny_unknown_fields` plus "additive changes require a new
      variant"), and the rule that domain code never imports Apalis.
-   - `docs/users-guide.md` — record that user-facing behaviour has not
-     changed and that idempotency, request IDs, and payload validation
-     continue to work as before. No new endpoint or response shape is
-     introduced.
+   - `docs/users-guide.md` — remove the internal "Route job payloads"
+     section; retain the guide's client-visible API content.
    - `docs/backend-roadmap.md` — the historical closure step marked 5.2.2 done
      only after the full gates passed.
 
@@ -626,8 +615,8 @@ Commit when green.
 The completed implementation exposes the following symbols and interfaces.
 
 `BoundingBox` is defined in `backend/src/domain/bounding_box.rs`, declared and
-re-exported from `backend/src/domain/mod.rs`, and re-exported for job
-consumers from `backend/src/domain/jobs/mod.rs`:
+re-exported from `backend/src/domain/mod.rs`, and re-exported for job consumers
+from `backend/src/domain/jobs/mod.rs`:
 
 ```rust
 // backend/src/domain/mod.rs
@@ -659,7 +648,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::{IdempotencyKey, UserId};
-use crate::domain::ports::RouteSubmissionRequest;
+use crate::domain::ports::{
+    RouteLocation, RoutePreferences, RouteSubmissionRequest,
+};
 
 /// Versioned envelope for route-generation jobs.
 ///
@@ -682,13 +673,17 @@ pub struct GenerateRouteJobV1 {
     pub idempotency_key: Option<IdempotencyKey>,
     /// Authenticated user owning the request.
     pub user_id: UserId,
-    /// Origin location identifier or coordinates, as supplied by the API.
-    pub origin: serde_json::Value,
+    /// Origin location identifier or coordinates.
+    pub origin: RouteLocation,
     /// Destination location identifier or coordinates.
-    pub destination: serde_json::Value,
-    /// Optional preference payload.
-    #[serde(default)]
-    pub preferences: Option<serde_json::Value>,
+    pub destination: RouteLocation,
+    /// Optional route-generation preferences.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_preferences"
+    )]
+    pub preferences: Option<RoutePreferences>,
     /// Wall-clock time at which the job was built and enqueued. This is
     /// the payload-authoritative timestamp until 5.2.4 picks the
     /// `Parts::run_at` carriage; see Decision Log.
@@ -715,12 +710,11 @@ pub enum GenerateRouteJobBuildError {
 ```
 
 `PartialEq` is intentional and `Eq` is intentionally not derived because the
-payload transitively contains `serde_json::Value`, which only implements
+payload transitively contains coordinate `f64` values, which only implement
 `PartialEq`. Implement `Display` and `std::error::Error` for the error using
-the existing macro patterns; the fallible constructor rejects null `origin` and
-`destination` values and an explicitly null `preferences` value. The location
-fields remain opaque `serde_json::Value`, so both string and object locations
-are preserved.
+the existing macro patterns. The HTTP DTO and persisted V1 deserializers reject
+null `origin`, `destination`, and `preferences` values; the typed submission
+helper copies the resulting `RouteLocation` and `RoutePreferences` values.
 
 In `backend/src/domain/bounding_box.rs`:
 
@@ -813,6 +807,7 @@ pub enum EnrichmentJob {
 pub struct EnrichmentJobV1 {
     job_id: Uuid,
     idempotency_key: Option<IdempotencyKey>,
+    #[serde(with = "crate::domain::bounding_box::array_wire")]
     bounding_box: BoundingBox,
     /// Sorted, deduplicated tag list. Bounded by
     /// `ENRICHMENT_JOB_V1_MAX_TAGS` and per-tag
@@ -835,7 +830,8 @@ impl EnrichmentJob {
     pub fn to_enrichment_request(&self) -> EnrichmentRequest { /* ... */ }
 }
 
-// `EnrichmentJob` implements `Deserialize` through a private raw envelope.
+// `EnrichmentJob` implements `Deserialize` through a private raw envelope,
+// which applies the same `array_wire` adapter to `bounding_box`.
 // `EnrichmentTags` uses a streaming sequence visitor that rejects item 65 and
 // overlong strings before reading the remaining input, then canonicalizes the
 // bounded collection.
@@ -852,23 +848,22 @@ pub enum EnrichmentJobBuildError {
 }
 ```
 
-`to_enrichment_request` lives on the envelope, not on `V1`, so workers always go
-through the version-aware seam. `EnrichmentJobV1` keeps its fields private and
-constructs only through `EnrichmentJob::v1` or the validating `Deserialize`
+`to_enrichment_request` lives on the envelope, not on `V1`, so workers always
+go through the version-aware seam. `EnrichmentJobV1` keeps its fields private
+and constructs only through `EnrichmentJob::v1` or the validating `Deserialize`
 impl, so every payload — built in-process or decoded off the wire — carries
 canonicalized, bounded tags. `EnrichmentJobParams::bounding_box` is already a
 validated `BoundingBox`; consequently `EnrichmentJobBuildError` contains only
 the retained tag-validation errors (`EmptyTags`, `TooManyTags`, and
 `TagTooLong`).
 
-In `backend/Cargo.toml`'s `[dev-dependencies]` (new entries only):
+In `backend/Cargo.toml`'s `[dev-dependencies]`:
 
 ```toml
 pretty_assertions = "1"
-googletest = "0.13"
 ```
 
-If neither crate compiles cleanly on edition 2024, stop and escalate.
+Use `pretty_assertions::assert_eq!` for structural equality assertions.
 
 ## Validation and acceptance
 
@@ -909,10 +904,22 @@ Test acceptance:
 
 - `cargo test -p backend domain::jobs` passes.
 - `cargo test -p backend --test job_structs_bdd` passes.
+- `cargo test -p backend --test job_structs_postgres_bdd` passes against the
+  embedded PostgreSQL harness; this persisted-boundary coverage is mandatory
+  and must not be skipped.
 - `proptest` strategies exhaust at least 256 cases per property without
   finding a counter-example (the default is 256; do not lower it).
 - `insta` snapshots are committed and `cargo insta test --check` succeeds
   during `make test`.
+
+Persisted-boundary evidence:
+
+- The required evidence is the unskipped
+  `job_structs_postgres_bdd` run showing both typed V1 envelopes persisted in
+  `apalis.jobs` and restored through `decode_job`.
+- The unskipped `job_structs_postgres_bdd` run passed 11 tests and covers both
+  typed V1 envelopes persisted in `apalis.jobs` and restored through
+  `decode_job`; the closure gates are recorded as passing.
 
 Gate acceptance:
 
@@ -971,12 +978,12 @@ The plan ships in two PRs:
   `backend-5-2-2-job-structs-for-generate-route-and-enrichment`.
 - [x] (2026-06-06 01:35Z) Surveyed the roadmap, the wildside backend
   architecture, the queue port, the route submission port, the enrichment
-  source port, the existing Apalis adapter, and the 5.2.1 ExecPlan to set
-  the baseline.
+  source port, the existing Apalis adapter, and the 5.2.1 ExecPlan to set the
+  baseline.
 - [x] (2026-06-06 01:40Z) Used a research agent team to gather Apalis 1.0
   idioms (no `Job` trait in 1.0; metadata lives in `Parts`;
-  `PostgresStorage<Args>` accepts any `Serialize + DeserializeOwned` type;
-  at planning time, rc.6/rc.7 lacked the rc.8 framework-native idempotency
+  `PostgresStorage<Args>` accepts any `Serialize + DeserializeOwned` type; at
+  planning time, rc.6/rc.7 lacked the rc.8 framework-native idempotency
   feature) and to confirm the concrete fields the new structs must carry.
 - [x] (2026-06-06 01:50Z) Drafted this ExecPlan.
 - [x] (2026-06-14 23:37Z) Approval received from the user; implementation
@@ -1035,10 +1042,16 @@ The plan ships in two PRs:
 - [x] (2026-07-31) Added an embedded PostgreSQL behavioural scenario that
   enqueues both job types, reads `apalis.jobs`, and exercises `decode_job` at
   the persisted queue boundary.
-- [x] (2026-07-31) Review closure gates passed: `make check-fmt`,
-  `make markdownlint`, `make nixie`, `make test`, `make typecheck`, and
-  `make lint`. The Rust suite ran 1410 tests with 1410 passed and 4 skipped;
-  frontend, workflow-contract, and local Kubernetes suites also passed.
+- [x] (2026-08-09 approximately 22:15Z) Current closure evidence completed:
+  `job_structs_bdd` passed 4 tests and `job_structs_postgres_bdd` passed 11;
+  all requested focused jobs, OSM, worker, Overpass, HTTP, and cache suites
+  passed; `make check-fmt`, `make lint` (Whitaker clean), `make typecheck`,
+  `make test`, `make markdownlint`, and `make nixie` exited 0; full nextest
+  passed 1,453 tests with 4 skipped; additional suites passed 1, 90, 43, 15,
+  and 107 tests; `coderabbit review --agent` completed with 0 findings.
+- [x] (2026-08-01) Review-driven test simplification removed the backend
+  `googletest` dev-dependency and replaced its sole matcher assertion with
+  `pretty_assertions::assert_eq!`; no production behaviour changed.
 
 ## Surprises & discoveries
 
@@ -1137,8 +1150,8 @@ The plan ships in two PRs:
   current `Cargo.lock` resolves Apalis versions that support framework
   idempotency, so any future `TaskBuilder::id(idempotency_key.into())`
   integration must also choose whether the payload field or task identity is
-  authoritative to avoid two sources of truth.
-  Date/Author: 2026-06-06 / planning agent.
+  authoritative to avoid two sources of truth. Date/Author: 2026-06-06 /
+  planning agent.
 
 - Decision: Defer trace-identifier fields to roadmap 5.2.4.
   Rationale: roadmap 5.2.4 explicitly owns trace propagation through job
@@ -1151,11 +1164,11 @@ The plan ships in two PRs:
 - Decision: Wrap the bounding box in a validating newtype rather than
   exposing `[f64; 4]` directly. Rationale: the current enrichment source port
   accepts `bounding_box: [f64; 4]` without validation
-  (`backend/src/domain/ports/enrichment_source.rs:19`). The job
-  payload is durable persisted state; persisting nonsensical coordinates would
-  be much harder to recover from than rejecting them at construction. The
-  newtype validates once and delegates to `[f64; 4]` on the wire so the
-  provider adapter stays compatible. Date/Author: 2026-06-06 / planning agent.
+  (`backend/src/domain/ports/enrichment_source.rs:19`). The job payload is
+  durable persisted state; persisting nonsensical coordinates would be much
+  harder to recover from than rejecting them at construction. The newtype
+  validates once and delegates to `[f64; 4]` on the wire so the provider
+  adapter stays compatible. Date/Author: 2026-06-06 / planning agent.
 
 - Decision: Keep `RouteQueue::Plan` generic and do not collapse it to a
   concrete enum like `Job::{GenerateRoute(...), Enrichment(...)}`. Rationale:
@@ -1166,27 +1179,29 @@ The plan ships in two PRs:
   planning agent.
 
 - Decision: Do not introduce a `From<RouteSubmissionRequest>` impl.
-  Rationale: building a `GenerateRouteJob` from a submission is fallible
-  (missing origin or destination, non-object payload). `From` would invite
-  silent panics. `try_from_submission` (named, fallible, and taking the extra
-  `request_id`/`enqueued_at` parameters) keeps the intent explicit.
-  Date/Author: 2026-06-06 / planning agent.
+  Rationale: `try_from_submission` is the named, fallible published helper and
+  takes the extra `request_id`/`enqueued_at` parameters. The submission already
+  carries a typed, validated `RouteSubmissionPayload`; retaining the explicit
+  helper keeps the DTO-to-job boundary visible without reintroducing an untyped
+  JSON conversion or an implicit `From` implementation. Date/Author: 2026-06-06
+  / planning agent.
 
 - Decision: Build each V1 payload from a single struct argument rather than
   a positional constructor. `GenerateRouteJob::v1` takes the whole
-  `GenerateRouteJobV1` (its fields are `pub`) and returns a result after
-  rejecting null required locations or an explicitly null preferences value.
-  `EnrichmentJob::v1` takes an `EnrichmentJobParams` struct whose
-  `bounding_box` is already validated and returns
-  `Result<Self, EnrichmentJobBuildError>` for tag validation. Rationale:
-  passing a struct sidesteps the `too_many_arguments` lint without a scoped
-  clippy expectation, keeps call sites self-documenting through named fields,
-  and — for enrichment — lets the constructor own tag validation without
-  duplicating bounding-box validation. This supersedes the earlier plan to keep
-  positional constructors under a scoped `too_many_arguments` expectation; no
-  such expectation exists in the shipped code. Date/Author: 2026-06-15 /
-  implementation agent (revised 2026-07-26 and 2026-08-02 to match
-  implementation).
+  `GenerateRouteJobV1` (its fields are `pub`) and returns a result while
+  preserving the published fallible constructor API. HTTP and persisted
+  deserializers reject null required locations and an explicitly null
+  preferences value before a typed job reaches a worker. `EnrichmentJob::v1`
+  takes an `EnrichmentJobParams` struct whose `bounding_box` is already
+  validated and returns `Result<Self, EnrichmentJobBuildError>` for tag
+  validation. Rationale: passing a struct sidesteps the `too_many_arguments`
+  lint without a scoped clippy expectation, keeps call sites self-documenting
+  through named fields, and — for enrichment — lets the constructor own tag
+  validation without duplicating bounding-box validation. This supersedes the
+  earlier plan to keep positional constructors under a scoped
+  `too_many_arguments` expectation; no such expectation exists in the shipped
+  code. Date/Author: 2026-06-15 / implementation agent (revised 2026-07-26 and
+  2026-08-02 to match implementation).
 
 - Decision: Make `EnrichmentJobV1` fields private and hand-write the envelope
   `Deserialize` implementation. Persisted tags decode through a bounded
@@ -1205,15 +1220,14 @@ The plan ships in two PRs:
   duplicating WGS84 validation. Date/Author: 2026-07-31 / implementation agent.
 
 - Decision: Derive only `PartialEq` (not `Eq`) on the job envelopes and
-  on `BoundingBox`. Rationale: `BoundingBox` stores `f64` coordinates, and
-  `GenerateRouteJobV1` embeds `serde_json::Value` for `origin`, `destination`,
-  and `preferences`. Neither `f64` nor `serde_json::Value` implements `Eq`. An
-  "i32 microdegrees" workaround for `BoundingBox` would still leave the route
-  job's `serde_json::Value` fields without `Eq`, so the whole envelope tree
-  drops `Eq` for consistency. Test code that wants hashing-based comparison
+  on `BoundingBox`. The old planning snapshot used `serde_json::Value` for
+  route fields, but the implemented route fields are typed; `BoundingBox` and
+  `RouteCoordinates` still contain `f64` values, so neither the coordinates nor
+  any enclosing job can implement `Eq`. An "i32 microdegrees" workaround would
+  change the typed route contract. Test code that wants structural comparison
   should use snapshot equality or `pretty_assertions::assert_eq!` on the
   serialized form. Date/Author: 2026-06-06 / planning agent (post-Logisphere
-  review).
+  review; wording aligned with the typed implementation).
 
 - Decision: Use human-readable string tags (`"v1"`) for the envelope
   discriminator rather than numeric (`"1"`). Rationale: ops staff inspecting
@@ -1276,15 +1290,16 @@ The plan ships in two PRs:
   Date/Author: 2026-07-31 / implementation agent.
 
 - Decision: Use `pretty_assertions::assert_eq!` for structural equality in the
-  job-struct tests and remove the backend `googletest` dev-dependency. Rationale:
-  review found that the matcher dependency served only one assertion, so the
-  existing readable equality assertion covers the same test contract with less
-  test-only dependency surface. Date/Author: 2026-08-01 / implementation agent.
+  job-struct tests and remove the backend `googletest` dev-dependency.
+  Rationale: review found that the matcher dependency served only one
+  assertion, so the existing readable equality assertion covers the same test
+  contract with less test-only dependency surface. Date/Author: 2026-08-01 /
+  implementation agent.
 
 - Decision: Keep `decode_job` pure and diagnostic-only. Rationale: the decoder
   returns a fixed `malformed job payload` diagnostic for unreadable or
-  structurally invalid payloads, and a bounded, control-escaped diagnostic
-  only for readable unsupported string versions. It never logs the payload or
+  structurally invalid payloads, and a bounded, control-escaped diagnostic only
+  for readable unsupported string versions. It never logs the payload or
   records a decode metric. Roadmap item 5.2.2 defines no decode metric; the
   future 5.3.1 worker/consumer boundary owns safe warning and rejection
   metrics, 5.2.3 owns retry/dead-letter handling, and 5.2.4 owns trace
@@ -1299,12 +1314,19 @@ The plan ships in two PRs:
 
 ## Outcomes & retrospective
 
-Roadmap item 5.2.2 is complete. The backend now has domain-owned, versioned job
+Roadmap item 5.2.2 is complete. The backend has domain-owned, versioned job
 payloads for generate-route and enrichment work, pinned by unit, property,
-snapshot, in-memory behavioural, and PostgreSQL persisted-boundary coverage. The
-`RouteQueue` port shape and `RouteSubmissionRequest` public contract were left
-unchanged, and the Apalis storage shape remains `serde_json::Value` for the
-later worker/storage milestones.
+snapshot, in-memory behavioural, and PostgreSQL persisted-boundary coverage.
+Final evidence recorded on 2026-08-09 at approximately 22:15Z includes 4
+passing `job_structs_bdd` tests and 11 passing `job_structs_postgres_bdd` tests.
+All requested focused jobs, OSM, worker, Overpass, HTTP, and cache suites
+passed. `make check-fmt`, `make lint` with Whitaker clean, `make typecheck`,
+`make test`, `make markdownlint`, and `make nixie` all exited 0. Full nextest
+reported 1,453 passed and 4 skipped; additional suites reported 1, 90, 43, 15,
+and 107 passed. The `RouteQueue` port shape and typed
+`RouteSubmissionRequest` contract remain bounded at their documented seams,
+and the Apalis storage shape remains `serde_json::Value` for later
+worker/storage milestones.
 
 The main future-facing decisions are now explicit in the code and docs: trace
 metadata stays deferred to 5.2.4, retry/dead-letter behaviour stays deferred to
@@ -1312,14 +1334,11 @@ metadata stays deferred to 5.2.4, retry/dead-letter behaviour stays deferred to
 `BoundingBox` deliberately rejects antimeridian-wrapping boxes, so callers must
 split those boxes before building enrichment jobs. `decode_job` remains pure
 and returns the fixed malformed-payload diagnostic or a bounded escaped
-unsupported-version diagnostic; 5.2.2 defines no decode metric, while the
-5.3.1 worker/consumer boundary owns safe warning/rejection metrics.
+unsupported-version diagnostic; 5.2.2 defines no decode metric, while the 5.3.1
+worker/consumer boundary owns safe warning/rejection metrics.
 
-Tooling observations: CodeRabbit was slow but returned `findings: 0` at each
-milestone. Repository-wide documentation validation also caught a pre-existing
-Mermaid parsing problem in the rstest-bdd migration guide; simplifying that
-flowchart to quoted, parser-safe labels keeps `make nixie` green for future
-documentation changes.
+`coderabbit review --agent` completed with 0 findings after the final tree
+passed the focused and repository-wide validation above.
 
 ## Revision history
 
@@ -1327,14 +1346,16 @@ documentation changes.
 - 2026-06-06: Folded findings from the Logisphere design review into
   `Risks`, `Decision Log`, `Surprises & Discoveries`, the interface signatures,
   the M3 step list, and the M5 documentation step. Notable changes: dropped
-  `Eq` from envelopes and `BoundingBox` (an `f64` and `serde_json::Value`
-  reality check); bounded `EnrichmentJobV1::tags`; switched the envelope
-  discriminator to `"v1"`; moved `to_enrichment_request` to the envelope;
-  documented the antimeridian policy and the schema-evolution rule; captured the
-  `enqueued_at`/`Parts::run_at` and `idempotency_key` open questions for 5.2.4
-  and the future Apalis upgrade. No tolerances or scope budgets shifted; the
-  implementation surface remains the same files and modules, only the type
-  derives and a small number of validation constants changed.
+  `Eq` from envelopes and `BoundingBox` (the planning snapshot used
+  `serde_json::Value`, while the implemented typed route fields and shared
+  `BoundingBox` still contain `f64` values); bounded `EnrichmentJobV1::tags`;
+  switched the envelope discriminator to `"v1"`; moved `to_enrichment_request`
+  to the envelope; documented the antimeridian policy and the schema-evolution
+  rule; captured the `enqueued_at`/`Parts::run_at` and `idempotency_key` open
+  questions for 5.2.4 and the future Apalis upgrade. No tolerances or scope
+  budgets shifted; the implementation surface remains the same files and
+  modules, only the type derives and a small number of validation constants
+  changed.
 - 2026-07-26: Post-rebase review pass. Aligned the enrichment interface
   snippet, the queue deserialization boundary in the architecture doc, and the
   Decision Log with the implemented builder API (`EnrichmentJobParams`,
@@ -1347,9 +1368,9 @@ documentation changes.
   `decode_job` and test dependencies, and closing the completed Logisphere
   planning gate.
 - 2026-07-31: Rebased onto the `bump-nixie` tooling baseline. The plan's
-  `make nixie` commands remain canonical, but now rely on the pinned `nixie`
-  and `merman-cli` tools installed as documented in the developers' guide.
-  This changes validation prerequisites only; the implementation scope and
+  `make nixie` commands remain canonical, but now rely on the pinned `nixie` and
+  `merman-cli` tools installed as documented in the developers' guide. This
+  changes validation prerequisites only; the implementation scope and
   acceptance criteria are unchanged.
 - 2026-08-01: Simplified the job-struct test dependency surface after review by
   removing backend `googletest` and replacing its sole matcher assertion with
@@ -1365,3 +1386,7 @@ documentation changes.
   malformed-job diagnostics, bounded escaped diagnostics for unsupported string
   versions, and compatible producer/consumer rollout order. Historical
   milestone and decision entries remain unchanged.
+- 2026-08-09: Recorded the final focused, PostgreSQL-backed, repository-gate,
+  nextest, additional-suite, and CodeRabbit evidence from approximately
+  22:15Z; changed the plan status from `PENDING VALIDATION` to `COMPLETE`. No
+  validation work remains for roadmap item 5.2.2.

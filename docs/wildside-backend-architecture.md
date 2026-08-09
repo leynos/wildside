@@ -2224,38 +2224,46 @@ versioning envelope with a current `"v1"` variant. Existing V1 variants use
 `deny_unknown_fields`: adding any field, even an optional field, requires a new
 variant such as V2 and a reviewed snapshot update.
 
+- The HTTP `RouteRequest` DTO in
+  `backend/src/inbound/http/routes/request.rs` converts into the typed
+  `RouteSubmissionPayload` boundary in
+  `backend/src/domain/ports/route_submission.rs`. That payload owns
+  `RouteLocation`, `RouteCoordinates`, and `RoutePreferences`; the domain job
+  boundary does not recover route fields from untyped JSON.
 - `GenerateRouteJob` lives in
   `backend/src/domain/jobs/generate_route.rs`. V1 carries `request_id`, optional
-  `idempotency_key`, `user_id`, `origin`, `destination`, optional
-  `preferences`, and `enqueued_at`. The helper
-  `GenerateRouteJob::try_from_submission` converts the existing
-  `RouteSubmissionRequest` shape into the queued payload while keeping
-  `RouteSubmissionRequest::payload` as `serde_json::Value`. The fallible
-  `GenerateRouteJob::v1` constructor rejects null `origin` and `destination`
-  values and rejects `preferences: Some(Value::Null)`, while preserving string
-  and object location values as opaque JSON.
-- `EnrichmentJob` lives in `backend/src/domain/jobs/enrichment.rs`. V1 carries
-  `job_id`, optional `idempotency_key`, a validated `BoundingBox`, sorted and
-  deduplicated tags, and `enqueued_at`. The bounding box is serialized as
-  `[min_lng, min_lat, max_lng, max_lat]`, matching `OverpassEnrichmentRequest`.
-  Antimeridian-wrapped boxes are not supported in V1; callers spanning the
-  dateline must split the request into two boxes. `EnrichmentJob::v1` accepts
-  `EnrichmentJobParams` whose `bounding_box` is already validated and returns
-  tag-validation errors only (`EmptyTags`, `TooManyTags`, and `TagTooLong`): at
-  least one non-empty tag is required, at most 64 tags are allowed, and each
-  tag is limited to 64 UTF-8 bytes.
-- `BoundingBox` lives in `backend/src/domain/bounding_box.rs` and is shared by
-  jobs and offline bundles. It rejects non-finite coordinates, out-of-range
-  WGS84 coordinates, inverted latitude ordering, and longitude ordering that
-  would imply an antimeridian wrap. Its default object-shaped Serde contract is
-  retained for offline APIs; enrichment jobs use an explicit array-wire adapter
-  to preserve their published queue representation.
+  `idempotency_key`, `user_id`, typed `origin` and `destination`, optional
+  typed `preferences`, and `enqueued_at`. The
+  `GenerateRouteJob::try_from_submission` helper takes a
+  `&RouteSubmissionRequest`, `request_id`, and `enqueued_at`, then copies the
+  typed payload into the V1 job.
+- `EnrichmentJob` lives in
+  `backend/src/domain/jobs/enrichment.rs`. V1 carries `job_id`, optional
+  `idempotency_key`, a validated `BoundingBox`, sorted and deduplicated tags,
+  and `enqueued_at`. `EnrichmentJob::to_enrichment_request` produces the
+  vendor-neutral `EnrichmentRequest { job_id, bounding_box, tags }` owned by the
+  `EnrichmentSource` port. An outbound adapter such as the Overpass HTTP
+  source converts that contract into its provider-specific query and maps
+  provider failures to `EnrichmentSourceError`; the domain does not name the
+  provider request type.
+- `BoundingBox` lives in `backend/src/domain/bounding_box.rs` and is the sole
+  WGS84 bounding-box validator for jobs and offline ingestion. Its ordinary
+  object-shaped Serde contract is retained for offline APIs; enrichment jobs
+  use an explicit array-wire adapter for
+  `[min_lng, min_lat, max_lng, max_lat]`. V1 rejects antimeridian-wrapped
+  boxes, so callers spanning the dateline must split them first.
+- `GeofenceBounds` in `backend/src/domain/osm_ingestion.rs` wraps
+  `BoundingBox` and adds only inclusive `contains` and `as_array` compatibility
+  for ingestion callers. It does not introduce a parallel WGS84 validation
+  policy.
 
 The idempotency key remains in the job payload as the durable wire-level source
-of truth. Although the resolved dependency graph now includes an `apalis-core`
-release with framework-native task identity, queue dispatch does not yet map
-the payload field into that metadata. A later integration can add that mapping
-without changing the V1 wire shape.
+of truth. Although the resolved dependency graph includes an `apalis-core`
+release with framework-native task identity, queue dispatch currently only
+serializes the payload and calls `storage.push(payload)`; it does not map the
+V1 field into that task identity. Adapter mapping is deferred, and V1
+`idempotency_key` remains authoritative until that future integration makes an
+explicit source-of-truth decision.
 
 Trace identifiers are deliberately absent from the V1 payloads. Roadmap item
 5.2.4 owns trace propagation and will decide whether trace data travels in the
