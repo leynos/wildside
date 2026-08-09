@@ -256,29 +256,40 @@ def test_typecheck_python_materializes_a_venv_before_running_ty(
     assert completed.returncode == 0, completed.stderr
     venv, install, ty = _tool_arguments(log_path, "uv")
 
-    assert venv == ("venv", "--allow-existing", ".venv"), (
+    assert venv[:2] == ("venv", "--allow-existing"), (
         "typecheck-python must reuse an existing .venv rather than rebuild it"
     )
+    assert venv[-1] == ".venv"
+    assert "--python" in venv, (
+        "the venv interpreter must be pinned; an unpinned `uv venv` takes"
+        " whichever Python uv resolves first"
+    )
+    venv_python = venv[venv.index("--python") + 1]
 
     assert install[:5] == ("pip", "install", "--quiet", "--python", ".venv")
     requirements = install[5:]
     assert {_requirement_name(item) for item in requirements} == (
         TYPECHECK_DEPENDENCIES
     ), "ty must resolve imports against the declared dependency set"
-    assert all(("==" in item or ">=" in item) for item in requirements), (
-        "every typecheck dependency must carry a version constraint"
-    )
+    for requirement in requirements:
+        if "==" in requirement:
+            continue
+        assert ">=" in requirement, (
+            f"{requirement!r} must be an exact pin or a bounded range"
+        )
+        assert "<" in requirement, (
+            f"{requirement!r} needs an upper bound: an open-ended floor admits"
+            " a future major release into the typecheck environment"
+        )
 
     assert ty[:3] == ("tool", "run", "--from")
     assert ty[3].startswith("ty==")
-    assert ty[4:10] == (
-        "ty",
-        "check",
-        "--python",
-        ".venv",
-        "--python-version",
-        "3.13",
-    ), "ty must check the materialized environment at the pinned version"
+    assert ty[4:8] == ("ty", "check", "--python", ".venv")
+    assert ty[8] == "--python-version"
+    assert ty[9] == venv_python, (
+        "ty must analyse the sources as the same Python version the .venv"
+        " provides, or it resolves a standard library it is not checking for"
+    )
     sources = ty[10:]
     assert sources, "ty must receive the configured Python sources"
     assert all(source.endswith(".py") for source in sources)

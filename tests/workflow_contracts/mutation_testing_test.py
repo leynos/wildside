@@ -136,9 +136,16 @@ def test_triggers_keep_schedule_and_plain_dispatch() -> None:
         f"on.schedule must be the daily 09:50 UTC cron, got {schedule!r}"
     )
     assert "workflow_dispatch" in triggers, "on.workflow_dispatch is missing"
-    dispatch = triggers.get("workflow_dispatch") or {}
+    # `workflow_dispatch:` with no value parses as None, which is the only
+    # valid shorthand for an empty mapping. Normalizing any falsey value would
+    # let a malformed list or scalar pass the mapping assertions below.
+    dispatch = triggers.get("workflow_dispatch")
+    if dispatch is None:
+        dispatch = {}
     assert isinstance(dispatch, dict), "on.workflow_dispatch must be a mapping"
-    inputs = dispatch.get("inputs") or {}
+    inputs = dispatch.get("inputs")
+    if inputs is None:
+        inputs = {}
     assert isinstance(inputs, dict), "on.workflow_dispatch.inputs must be a mapping"
     assert "branch" not in inputs, (
         "on.workflow_dispatch must not declare a branch input; the Actions "

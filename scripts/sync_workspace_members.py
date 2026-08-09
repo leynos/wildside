@@ -55,7 +55,7 @@ def discover_members(globs: list[str]) -> list[str]:
     Examples
     --------
     >>> discover_members(["crates/*"])  # doctest: +SKIP
-    ['crates/foo', 'crates/bar']
+    ['crates/bar', 'crates/foo']
     """
     members: list[str] = []
     for pattern in globs:

@@ -51,6 +51,8 @@ def run_bash(
     if env is not None:
         merged_env.update(env)
     return subprocess.run(  # noqa: S603 -- args are test-controlled, not external input
+        # S607 below: bash is required to source SCRIPT_PATH before running the
+        # snippet, and is resolved from PATH so the platform's shell wins.
         ["bash", "-c", f"source {SCRIPT_PATH} && {snippet}"],  # noqa: S607
         cwd=PROJECT_ROOT,
         env=merged_env,

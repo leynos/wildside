@@ -69,6 +69,11 @@ OPENAPI_SPEC ?= spec/openapi.json
 # between Ruff releases.
 RUFF ?= uv tool run --from ruff==$(RUFF_VERSION) ruff
 TY_VERSION ?= 0.0.59
+# Drives both the .venv interpreter and ty's analysis target so the resolved
+# standard library always matches the version the sources are checked against.
+# Keep in step with requires-python, ruff's target-version, and
+# [tool.ty.environment] python-version in pyproject.toml.
+PY_TYPECHECK_VERSION ?= 3.13
 INTERROGATE_VERSION ?= 1.7.0
 # Pylint runs on PyPy via the pylint-pypy shim for speed, mirroring
 # leynos/lading; uv downloads a managed PyPy when none is installed.
@@ -91,7 +96,7 @@ TOMLI_VERSION ?= 2.4.1
 CYCLOPTS_VERSION ?= 4.10.1
 PLUMBUM_VERSION ?= 1.9.0
 PY_TEST_DEPS = pytest==$(PYTEST_VERSION) pytest-mock==$(PYTEST_MOCK_VERSION) \
-	hypothesis==$(HYPOTHESIS_VERSION) 'pyyaml>=6' \
+	hypothesis==$(HYPOTHESIS_VERSION) 'pyyaml>=6,<7' \
 	cyclopts==$(CYCLOPTS_VERSION) plumbum==$(PLUMBUM_VERSION)
 # Runtime and test dependencies the helper scripts import. ty resolves
 # imports from a materialized virtual environment (`uv run --with` builds a
@@ -282,8 +287,8 @@ test-frontend: deps typecheck
 
 # Validate the mutation-testing caller workflow contract
 test-workflow-contracts:
-	$(PYTHON_NO_BYTECODE_ENV) uv run --no-project --with 'pytest>=8' --with 'pyyaml>=6' \
-		--with 'hypothesis>=6' \
+	$(PYTHON_NO_BYTECODE_ENV) uv run --no-project --with 'pytest>=8' --with 'pyyaml>=6,<7' \
+		--with 'hypothesis>=6,<7' \
 		python -m pytest tests/workflow_contracts -q
 
 # Python unit tests for the local Kubernetes preview helper
@@ -338,12 +343,15 @@ typecheck: deps typecheck-python ; for dir in $(TS_WORKSPACES); do $(call exec_o
 
 # Typecheck the Python helper scripts with ty against a materialized .venv
 # so third-party imports (cyclopts, plumbum, etc.) resolve. The scripts/
-# search path lives in [tool.ty.environment] in pyproject.toml.
+# search path lives in [tool.ty.environment] in pyproject.toml. The venv
+# interpreter is pinned because an unpinned `uv venv` takes whichever Python
+# uv resolves first, which could supply a newer standard library than the
+# version ty analyses the sources as.
 typecheck-python:
-	uv venv --allow-existing .venv
+	uv venv --allow-existing --python $(PY_TYPECHECK_VERSION) .venv
 	uv pip install --quiet --python .venv $(PY_TYPECHECK_DEPS)
 	uv tool run --from ty==$(TY_VERSION) ty check --python .venv \
-		--python-version 3.13 $(PY_SOURCES)
+		--python-version $(PY_TYPECHECK_VERSION) $(PY_SOURCES)
 
 
 audit: deps audit-node rust-audit
