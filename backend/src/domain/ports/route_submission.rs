@@ -5,11 +5,140 @@
 //! adapters call this port to submit routes without knowing the backing
 //! infrastructure details.
 
+use std::fmt;
+
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::de::{IgnoredAny, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
 use crate::domain::{Error, IdempotencyKey, UserId};
+
+/// A location accepted by route generation.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum RouteLocation {
+    /// A stable saved-location or point-of-interest identifier.
+    Identifier(String),
+    /// Explicit decimal-degree coordinates.
+    Coordinates(RouteCoordinates),
+}
+
+/// Decimal-degree coordinates used by a route endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct RouteCoordinates {
+    /// Latitude in decimal degrees.
+    pub lat: f64,
+    /// Longitude in decimal degrees.
+    pub lng: f64,
+}
+
+struct RouteLocationVisitor;
+
+impl<'de> Visitor<'de> for RouteLocationVisitor {
+    type Value = RouteLocation;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a location identifier string or coordinate object")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(RouteLocation::Identifier(value.to_owned()))
+    }
+
+    fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(RouteLocation::Identifier(value))
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut lat = None;
+        let mut lng = None;
+        while let Some(field) = map.next_key::<String>()? {
+            match field.as_str() {
+                "lat" if lat.is_none() => lat = Some(map.next_value()?),
+                "lng" if lng.is_none() => lng = Some(map.next_value()?),
+                "lat" => return Err(serde::de::Error::duplicate_field("lat")),
+                "lng" => return Err(serde::de::Error::duplicate_field("lng")),
+                _ => {
+                    map.next_value::<IgnoredAny>()?;
+                }
+            }
+        }
+        let lat = lat.ok_or_else(|| serde::de::Error::missing_field("lat"))?;
+        let lng = lng.ok_or_else(|| serde::de::Error::missing_field("lng"))?;
+        Ok(RouteLocation::Coordinates(RouteCoordinates { lat, lng }))
+    }
+}
+
+impl<'de> Deserialize<'de> for RouteLocation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(RouteLocationVisitor)
+    }
+}
+
+/// Optional route-generation preferences supported by the HTTP contract.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutePreferences {
+    /// Routing mode, such as `walking`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    /// Theme names used to bias route generation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub themes: Option<Vec<String>>,
+    /// Theme identifiers used to bias route generation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_ids: Option<Vec<String>>,
+    /// Interest-theme identifiers used to bias route generation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interest_theme_ids: Option<Vec<String>>,
+    /// Route features that should be avoided.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avoid: Option<Vec<String>>,
+    /// Whether routes should avoid stairs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avoid_stairs: Option<bool>,
+}
+
+/// Typed route-generation payload shared by the inbound port and queued job.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteSubmissionPayload {
+    /// Origin location identifier or coordinates.
+    pub origin: RouteLocation,
+    /// Destination location identifier or coordinates.
+    pub destination: RouteLocation,
+    /// Optional route-generation preferences.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_route_preferences"
+    )]
+    pub preferences: Option<RoutePreferences>,
+}
+
+fn deserialize_route_preferences<'de, D>(
+    deserializer: D,
+) -> Result<Option<RoutePreferences>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<RoutePreferences>::deserialize(deserializer)?
+        .map(Some)
+        .ok_or_else(|| serde::de::Error::custom("preferences must not be null"))
+}
 
 /// Request payload for route submission.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,8 +148,8 @@ pub struct RouteSubmissionRequest {
     pub idempotency_key: Option<IdempotencyKey>,
     /// User making the request.
     pub user_id: UserId,
-    /// The route generation payload (origin, destination, preferences, etc.).
-    pub payload: serde_json::Value,
+    /// Typed route-generation payload.
+    pub payload: RouteSubmissionPayload,
 }
 
 /// Status of a route submission.
@@ -113,13 +242,21 @@ mod tests {
     //! Regression coverage for this module.
     use super::*;
 
+    fn route_payload() -> RouteSubmissionPayload {
+        RouteSubmissionPayload {
+            origin: RouteLocation::Identifier("A".to_owned()),
+            destination: RouteLocation::Identifier("B".to_owned()),
+            preferences: None,
+        }
+    }
+
     #[tokio::test]
     async fn fixture_service_accepts_requests() {
         let service = FixtureRouteSubmissionService;
         let request = RouteSubmissionRequest {
             idempotency_key: None,
             user_id: UserId::random(),
-            payload: serde_json::json!({"origin": "A", "destination": "B"}),
+            payload: route_payload(),
         };
 
         let response = service
@@ -135,7 +272,7 @@ mod tests {
         let request = RouteSubmissionRequest {
             idempotency_key: Some(IdempotencyKey::random()),
             user_id: UserId::random(),
-            payload: serde_json::json!({"origin": "A", "destination": "B"}),
+            payload: route_payload(),
         };
 
         let response = service

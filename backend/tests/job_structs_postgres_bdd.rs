@@ -53,11 +53,12 @@ fn route_job() -> GenerateRouteJob {
     let submission = RouteSubmissionRequest {
         idempotency_key: Some(IdempotencyKey::from_uuid(Uuid::from_bytes([0x63; 16]))),
         user_id: UserId::from_uuid(Uuid::from_bytes([0x64; 16])),
-        payload: json!({
+        payload: serde_json::from_value(json!({
             "origin": { "lat": 51.5074, "lng": -0.1278 },
             "destination": { "lat": 51.5014, "lng": -0.1419 },
             "preferences": { "mode": "walking" }
-        }),
+        }))
+        .expect("route submission fixture should be valid"),
     };
 
     match GenerateRouteJob::try_from_submission(

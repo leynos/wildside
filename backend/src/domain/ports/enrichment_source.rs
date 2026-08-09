@@ -1,9 +1,8 @@
 //! Driven port for fetching POIs from an enrichment source.
 //!
 //! The domain owns the request shape and response contract so worker
-//! orchestration can stay adapter-agnostic. Nothing here names a specific
-//! provider: the Overpass adapter in `crate::outbound::overpass` translates
-//! [`EnrichmentRequest`] into a provider query and maps provider failures onto
+//! orchestration can stay adapter-agnostic. Outbound adapters translate
+//! [`EnrichmentRequest`] into provider queries and map provider failures onto
 //! [`EnrichmentSourceError`].
 
 use std::collections::BTreeMap;
@@ -91,7 +90,7 @@ impl EnrichmentSourceError {
     }
 }
 
-/// Port for querying Overpass for enrichment POIs.
+/// Port for querying an external source for enrichment POIs.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait EnrichmentSource: Send + Sync {

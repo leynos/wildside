@@ -125,31 +125,6 @@ fn constructor_accepts_string_location_identifiers(request_id: Uuid, enqueued_at
 #[case::boolean_destination("destination", json!(false))]
 #[case::number_destination("destination", json!(42.0))]
 #[case::array_destination("destination", json!([51.5014, -0.1419]))]
-fn constructor_rejects_invalid_location_shapes(
-    #[case] field: &'static str,
-    #[case] invalid_location: Value,
-    request_id: Uuid,
-    enqueued_at: DateTime<Utc>,
-) {
-    let mut submission = valid_submission();
-    submission.payload[field] = invalid_location;
-
-    let error = GenerateRouteJob::try_from_submission(&submission, request_id, enqueued_at)
-        .expect_err("invalid location shapes should be rejected");
-
-    assert_eq!(
-        error,
-        GenerateRouteJobBuildError::PayloadInvalidLocation { field }
-    );
-}
-
-#[rstest]
-#[case::boolean_origin("origin", json!(true))]
-#[case::number_origin("origin", json!(42))]
-#[case::array_origin("origin", json!([51.5074, -0.1278]))]
-#[case::boolean_destination("destination", json!(false))]
-#[case::number_destination("destination", json!(42.0))]
-#[case::array_destination("destination", json!([51.5014, -0.1419]))]
 fn serde_rejects_invalid_location_shapes(
     #[case] field: &'static str,
     #[case] invalid_location: Value,

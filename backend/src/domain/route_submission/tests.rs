@@ -29,6 +29,10 @@ fn build_request(
     user_id: UserId,
     payload: serde_json::Value,
 ) -> RouteSubmissionRequest {
+    let payload = match serde_json::from_value(payload) {
+        Ok(payload) => payload,
+        Err(error) => panic!("route submission test payload should be valid: {error}"),
+    };
     RouteSubmissionRequest {
         idempotency_key,
         user_id,

@@ -171,7 +171,8 @@ pub use route_queue::{JobDispatchError, RouteQueue};
 pub use route_queue_metrics::{NoOpRouteQueueMetrics, RouteQueueMetrics, RouteQueueOutcome};
 pub use route_repository::{RoutePersistenceError, RouteRepository};
 pub use route_submission::{
-    FixtureRouteSubmissionService, RouteSubmissionRequest, RouteSubmissionResponse,
+    FixtureRouteSubmissionService, RouteCoordinates, RouteLocation, RoutePreferences,
+    RouteSubmissionPayload, RouteSubmissionRequest, RouteSubmissionResponse,
     RouteSubmissionService, RouteSubmissionStatus,
 };
 #[cfg(test)]

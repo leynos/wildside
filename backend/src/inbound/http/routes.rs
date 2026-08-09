@@ -7,30 +7,17 @@
 //! Supports idempotent request submission via the `Idempotency-Key` header.
 
 use actix_web::{HttpRequest, HttpResponse, post, web};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-use crate::domain::Error;
 use crate::domain::ports::{RouteSubmissionRequest, RouteSubmissionStatus};
 use crate::inbound::http::ApiResult;
 use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
 
-/// Route generation request body.
-///
-/// The structure of route requests is intentionally flexible during early
-/// development. The payload is validated by downstream services.
-#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct RouteRequest {
-    /// Origin location identifier or coordinates.
-    pub origin: serde_json::Value,
-    /// Destination location identifier or coordinates.
-    pub destination: serde_json::Value,
-    /// Optional route preferences.
-    #[serde(default)]
-    pub preferences: Option<serde_json::Value>,
-}
+#[path = "routes/request.rs"]
+mod request;
+pub use request::RouteRequest;
 
 /// Route submission response.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -89,14 +76,10 @@ pub async fn submit_route(
     let idempotency_key =
         extract_idempotency_key(request.headers()).map_err(map_idempotency_key_error)?;
 
-    // Convert request body to JSON value for hashing.
-    let payload_value = serde_json::to_value(payload.into_inner())
-        .map_err(|err| Error::internal(format!("failed to serialize request: {err}")))?;
-
     let submission_request = RouteSubmissionRequest {
         idempotency_key,
         user_id,
-        payload: payload_value,
+        payload: payload.into_inner().into(),
     };
 
     let response = state.route_submission.submit(submission_request).await?;
@@ -275,5 +258,22 @@ mod tests {
 
         let response = actix_test::call_service(&app, request).await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[rstest]
+    #[case::coordinates(json!({"origin":{"lat":51.5,"lng":-0.1},"destination":{"lat":48.8,"lng":2.3}}), true)]
+    #[case::identifiers(json!({"origin":"saved:home","destination":"poi:work"}), true)]
+    #[case::boolean_origin(json!({"origin":true,"destination":"poi:work"}), false)]
+    #[case::array_destination(json!({"origin":"saved:home","destination":[48.8,2.3]}), false)]
+    #[case::null_origin(json!({"origin":null,"destination":"poi:work"}), false)]
+    #[case::null_destination(json!({"origin":"saved:home","destination":null}), false)]
+    #[case::null_preferences(json!({"origin":"saved:home","destination":"poi:work","preferences":null}), false)]
+    fn route_request_validates_documented_shapes(
+        #[case] payload: Value,
+        #[case] should_accept: bool,
+    ) {
+        let result = serde_json::from_value::<RouteRequest>(payload);
+
+        assert_eq!(result.is_ok(), should_accept);
     }
 }
