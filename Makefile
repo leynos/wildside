@@ -87,7 +87,9 @@ PYLINT = uv tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pyli
 PY_SOURCES := $(sort $(filter-out $(SPELLING_PY_SRCS),\
 	$(shell find scripts tests -type f -name '*.py' -print)))
 # Test-dependency pins shared by typecheck-python and test-scripts so both
-# resolve the same interpreter-visible packages; bump them together.
+# resolve the same interpreter-visible packages; bump them together. PyYAML
+# stays a range because nothing here needs a particular 6.x, but the upper
+# bound keeps a 7.0 release from arriving without review.
 PYTEST_VERSION ?= 9.1.1
 PYTEST_MOCK_VERSION ?= 3.15.1
 HYPOTHESIS_VERSION ?= 6.157.2
@@ -285,7 +287,12 @@ test-frontend: deps typecheck
 	pnpm run test
 	pnpm run test:workspaces
 
-# Validate the mutation-testing caller workflow contract
+# Validate the mutation-testing caller workflow contract. This runner stays
+# deliberately minimal — pytest and PyYAML only — so it sits outside
+# PY_TEST_DEPS. Both requirements carry an upper bound so a new major cannot
+# arrive without review. pytest's ceiling is <10 rather than <9 on purpose:
+# PYTEST_VERSION pins 9.1.1 for every other Python target, so <9 would pin
+# this suite back to pytest 8 and split the repository across two majors.
 test-workflow-contracts:
 	$(PYTHON_NO_BYTECODE_ENV) uv run --no-project --with 'pytest>=8,<10' --with 'pyyaml>=6,<7' \
 		--with 'hypothesis>=6,<7' \
