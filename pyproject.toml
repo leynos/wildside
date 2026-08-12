@@ -196,9 +196,11 @@ ignore = [
 # Expand directory targets like scripts and tests even when a target is not
 # a package.
 recursive = true
-# Keep Pylint's module-size check active without forcing an unrelated module
-# split while importing the second-tier lint gate (mirrors leynos/lading).
-max-module-lines = 800
+# Keep modules small enough to hold in view at once. The largest source is
+# currently scripts/local_k8s/cluster.py at ~395 lines, so this leaves little
+# headroom: a module approaching the limit wants splitting along a seam, not
+# a raised threshold.
+max-module-lines = 400
 
 [tool.pylint.design]
 # Keep function call surfaces small enough to understand without memorising

@@ -194,6 +194,19 @@ def _requirement_name(requirement: str) -> str:
     return match.group()
 
 
+def _assert_bounded(requirement: str) -> None:
+    """Fail unless *requirement* is an exact pin or a bounded range."""
+    if "==" in requirement:
+        return
+    assert ">=" in requirement, (
+        f"{requirement!r} must be an exact pin or a bounded range"
+    )
+    assert "<" in requirement, (
+        f"{requirement!r} needs an upper bound: an open-ended floor admits a"
+        " future major release without review"
+    )
+
+
 def test_check_fmt_python_verifies_formatting_without_rewriting(
     fake_tool_environment: tuple[dict[str, str], Path],
 ) -> None:
@@ -272,15 +285,7 @@ def test_typecheck_python_materializes_a_venv_before_running_ty(
         TYPECHECK_DEPENDENCIES
     ), "ty must resolve imports against the declared dependency set"
     for requirement in requirements:
-        if "==" in requirement:
-            continue
-        assert ">=" in requirement, (
-            f"{requirement!r} must be an exact pin or a bounded range"
-        )
-        assert "<" in requirement, (
-            f"{requirement!r} needs an upper bound: an open-ended floor admits"
-            " a future major release into the typecheck environment"
-        )
+        _assert_bounded(requirement)
 
     assert ty[:3] == ("tool", "run", "--from")
     assert ty[3].startswith("ty==")
@@ -332,3 +337,8 @@ def test_targets_run_uv_without_project_discovery(
     )
     for expected in expected_arguments:
         assert expected in arguments, f"{target} must pass {expected!r} to uv run"
+    # `--with` requirements bypass PY_TEST_DEPS, so they need the same bounding
+    # discipline: an unbounded floor silently admits a new major release.
+    for index, argument in enumerate(arguments):
+        if argument == "--with":
+            _assert_bounded(arguments[index + 1])

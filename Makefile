@@ -287,7 +287,7 @@ test-frontend: deps typecheck
 
 # Validate the mutation-testing caller workflow contract
 test-workflow-contracts:
-	$(PYTHON_NO_BYTECODE_ENV) uv run --no-project --with 'pytest>=8' --with 'pyyaml>=6,<7' \
+	$(PYTHON_NO_BYTECODE_ENV) uv run --no-project --with 'pytest>=8,<10' --with 'pyyaml>=6,<7' \
 		--with 'hypothesis>=6,<7' \
 		python -m pytest tests/workflow_contracts -q
 
