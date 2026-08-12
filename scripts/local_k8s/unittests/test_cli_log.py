@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+
+
+@dataclass(frozen=True)
+class _LogEntriesCase:
+    source: str
+    expected: list[list[object]] | None
+    expected_error: type[Exception] | None
+    message: str | None
 
 
 def _load_log_entries(log_path: Path) -> list[list[object]]:
@@ -32,66 +41,103 @@ def _load_log_entries(log_path: Path) -> list[list[object]]:
 
 
 @pytest.mark.parametrize(
-    ("source", "expected", "expected_error", "message"),
+    ("case",),
     [
         pytest.param(
-            '["docker", ["build"], false]\n["helm", ["status"], true]\n',
-            [["docker", ["build"], False], ["helm", ["status"], True]],
-            None,
-            None,
+            _LogEntriesCase(
+                source='["docker", ["build"], false]\n["helm", ["status"], true]\n',
+                expected=[["docker", ["build"], False], ["helm", ["status"], True]],
+                expected_error=None,
+                message=None,
+            ),
             id="multiple-lists",
         ),
-        pytest.param("[]\n", None, AssertionError, "line 1.*list", id="wrong-length"),
         pytest.param(
-            '[1, ["build"], false]\n',
-            None,
-            AssertionError,
-            "line 1.*list",
+            _LogEntriesCase(
+                source="[]\n",
+                expected=None,
+                expected_error=AssertionError,
+                message="line 1.*list",
+            ),
+            id="wrong-length",
+        ),
+        pytest.param(
+            _LogEntriesCase(
+                source='[1, ["build"], false]\n',
+                expected=None,
+                expected_error=AssertionError,
+                message="line 1.*list",
+            ),
             id="non-string-tool",
         ),
         pytest.param(
-            '["docker", "build", false]\n',
-            None,
-            AssertionError,
-            "line 1.*list",
+            _LogEntriesCase(
+                source='["docker", "build", false]\n',
+                expected=None,
+                expected_error=AssertionError,
+                message="line 1.*list",
+            ),
             id="non-list-arguments",
         ),
         pytest.param(
-            '["docker", [1], false]\n',
-            None,
-            AssertionError,
-            "line 1.*list",
+            _LogEntriesCase(
+                source='["docker", [1], false]\n',
+                expected=None,
+                expected_error=AssertionError,
+                message="line 1.*list",
+            ),
             id="non-string-argument",
         ),
         pytest.param(
-            '["docker", ["build"], 0]\n',
-            None,
-            AssertionError,
-            "line 1.*list",
+            _LogEntriesCase(
+                source='["docker", ["build"], 0]\n',
+                expected=None,
+                expected_error=AssertionError,
+                message="line 1.*list",
+            ),
             id="non-boolean-stdin",
         ),
         pytest.param(
-            '{"tool": "docker"}\n', None, AssertionError, "line 1.*dict", id="object"
+            _LogEntriesCase(
+                source='{"tool": "docker"}\n',
+                expected=None,
+                expected_error=AssertionError,
+                message="line 1.*dict",
+            ),
+            id="object",
         ),
-        pytest.param("42\n", None, AssertionError, "line 1.*int", id="scalar"),
-        pytest.param("{invalid\n", None, json.JSONDecodeError, None, id="invalid-json"),
+        pytest.param(
+            _LogEntriesCase(
+                source="42\n",
+                expected=None,
+                expected_error=AssertionError,
+                message="line 1.*int",
+            ),
+            id="scalar",
+        ),
+        pytest.param(
+            _LogEntriesCase(
+                source="{invalid\n",
+                expected=None,
+                expected_error=json.JSONDecodeError,
+                message=None,
+            ),
+            id="invalid-json",
+        ),
     ],
 )
 def test_load_log_entries_validates_each_json_line(
     tmp_path: Path,
-    source: str,
-    expected: list[list[object]] | None,
-    expected_error: type[Exception] | None,
-    message: str | None,
+    case: _LogEntriesCase,
 ) -> None:
     """Return list entries and reject other decoded JSON shapes."""
     log_path = tmp_path / "commands.jsonl"
-    log_path.write_text(source, encoding="utf8")
+    log_path.write_text(case.source, encoding="utf8")
 
-    if expected_error is None:
-        assert _load_log_entries(log_path) == expected, (
+    if case.expected_error is None:
+        assert _load_log_entries(log_path) == case.expected, (
             "decoded fake-tool records must match the complete command log"
         )
     else:
-        with pytest.raises(expected_error, match=message):
+        with pytest.raises(case.expected_error, match=case.message):
             _load_log_entries(log_path)
