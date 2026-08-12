@@ -216,6 +216,31 @@ fn bounding_box_serde_preserves_validated_offline_object_shape() {
 }
 
 #[rstest]
+fn valid_zoom_range_round_trips_and_is_preserved_by_bundle() -> TestResult {
+    let zoom_range = ZoomRange::new(11, 15).expect("valid zoom range");
+
+    assert_eq!(zoom_range.min_zoom(), 11);
+    assert_eq!(zoom_range.max_zoom(), 15);
+
+    let mut draft = route_bundle_draft()?;
+    draft.zoom_range = zoom_range;
+    let bundle = OfflineBundle::new(draft)?;
+    assert_eq!(bundle.zoom_range(), zoom_range);
+
+    let value = serde_json::to_value(zoom_range)?;
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "minZoom": 11,
+            "maxZoom": 15,
+        })
+    );
+    let decoded = serde_json::from_value::<ZoomRange>(value)?;
+    assert_eq!(decoded, zoom_range);
+
+    Ok(())
+}
+#[rstest]
 fn zoom_range_rejects_min_greater_than_max() {
     let result = ZoomRange::new(16, 12);
     assert!(matches!(
