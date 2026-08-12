@@ -28,9 +28,9 @@ pub enum RouteLocation {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct RouteCoordinates {
     /// Latitude in decimal degrees.
-    pub lat: f64,
+    lat: f64,
     /// Longitude in decimal degrees.
-    pub lng: f64,
+    lng: f64,
 }
 
 impl RouteCoordinates {
@@ -42,7 +42,7 @@ impl RouteCoordinates {
     /// use backend::domain::ports::RouteCoordinates;
     ///
     /// let coordinates = RouteCoordinates::new(51.5, -0.1)?;
-    /// assert_eq!(coordinates.lat, 51.5);
+    /// assert_eq!(coordinates.lat(), 51.5);
     /// # Ok::<(), backend::domain::Error>(())
     /// ```
     ///
@@ -62,6 +62,16 @@ impl RouteCoordinates {
             ));
         }
         Ok(Self { lat, lng })
+    }
+
+    /// Return the latitude in decimal degrees.
+    pub const fn lat(&self) -> f64 {
+        self.lat
+    }
+
+    /// Return the longitude in decimal degrees.
+    pub const fn lng(&self) -> f64 {
+        self.lng
     }
 }
 

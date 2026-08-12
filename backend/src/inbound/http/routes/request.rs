@@ -129,8 +129,8 @@ impl TryFrom<RouteCoordinatesDto> for RouteCoordinates {
 impl From<RouteCoordinates> for RouteCoordinatesDto {
     fn from(coordinates: RouteCoordinates) -> Self {
         Self {
-            lat: coordinates.lat,
-            lng: coordinates.lng,
+            lat: coordinates.lat(),
+            lng: coordinates.lng(),
         }
     }
 }
