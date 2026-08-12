@@ -8,7 +8,7 @@
 use std::fmt;
 
 use async_trait::async_trait;
-use serde::de::{IgnoredAny, MapAccess, Visitor};
+use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
@@ -31,6 +31,38 @@ pub struct RouteCoordinates {
     pub lat: f64,
     /// Longitude in decimal degrees.
     pub lng: f64,
+}
+
+impl RouteCoordinates {
+    /// Construct validated WGS84 route coordinates.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use backend::domain::ports::RouteCoordinates;
+    ///
+    /// let coordinates = RouteCoordinates::new(51.5, -0.1)?;
+    /// assert_eq!(coordinates.lat, 51.5);
+    /// # Ok::<(), backend::domain::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`] when latitude or longitude is non-finite or outside
+    /// the WGS84 ranges `[-90, 90]` and `[-180, 180]`, respectively.
+    pub fn new(lat: f64, lng: f64) -> Result<Self, Error> {
+        if !lat.is_finite() || !(-90.0..=90.0).contains(&lat) {
+            return Err(Error::invalid_request(
+                "route latitude must be finite and within [-90, 90]",
+            ));
+        }
+        if !lng.is_finite() || !(-180.0..=180.0).contains(&lng) {
+            return Err(Error::invalid_request(
+                "route longitude must be finite and within [-180, 180]",
+            ));
+        }
+        Ok(Self { lat, lng })
+    }
 }
 
 struct RouteLocationVisitor;
@@ -68,14 +100,14 @@ impl<'de> Visitor<'de> for RouteLocationVisitor {
                 "lng" if lng.is_none() => lng = Some(map.next_value()?),
                 "lat" => return Err(serde::de::Error::duplicate_field("lat")),
                 "lng" => return Err(serde::de::Error::duplicate_field("lng")),
-                _ => {
-                    map.next_value::<IgnoredAny>()?;
-                }
+                _ => return Err(serde::de::Error::unknown_field(&field, &["lat", "lng"])),
             }
         }
         let lat = lat.ok_or_else(|| serde::de::Error::missing_field("lat"))?;
         let lng = lng.ok_or_else(|| serde::de::Error::missing_field("lng"))?;
-        Ok(RouteLocation::Coordinates(RouteCoordinates { lat, lng }))
+        let coordinates = RouteCoordinates::new(lat, lng)
+            .map_err(|error| serde::de::Error::custom(error.message()))?;
+        Ok(RouteLocation::Coordinates(coordinates))
     }
 }
 
@@ -90,7 +122,7 @@ impl<'de> Deserialize<'de> for RouteLocation {
 
 /// Optional route-generation preferences supported by the HTTP contract.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RoutePreferences {
     /// Routing mode, such as `walking`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -114,7 +146,7 @@ pub struct RoutePreferences {
 
 /// Typed route-generation payload shared by the inbound port and queued job.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RouteSubmissionPayload {
     /// Origin location identifier or coordinates.
     pub origin: RouteLocation,
@@ -135,14 +167,24 @@ fn deserialize_route_preferences<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    Option::<RoutePreferences>::deserialize(deserializer)?
-        .map(Some)
-        .ok_or_else(|| serde::de::Error::custom("preferences must not be null"))
+    deserialize_non_null(deserializer, "preferences").map(Some)
+}
+
+pub(crate) fn deserialize_non_null<'de, D, T>(
+    deserializer: D,
+    field: &'static str,
+) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)?
+        .ok_or_else(|| serde::de::Error::custom(format!("{field} must not be null")))
 }
 
 /// Request payload for route submission.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RouteSubmissionRequest {
     /// Optional idempotency key for safe retries.
     pub idempotency_key: Option<IdempotencyKey>,

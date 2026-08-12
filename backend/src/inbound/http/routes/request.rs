@@ -1,22 +1,26 @@
 //! HTTP request DTOs and conversion into the route-submission port.
 
-use serde::de::Error as _;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::Error;
 use crate::domain::ports::{
-    RouteCoordinates, RouteLocation, RoutePreferences, RouteSubmissionPayload,
+    RouteCoordinates, RouteLocation, RoutePreferences, RouteSubmissionPayload, deserialize_non_null,
 };
 
 /// Route generation request body.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RouteRequest {
     /// Origin location identifier or coordinates.
     pub origin: RouteLocationDto,
     /// Destination location identifier or coordinates.
     pub destination: RouteLocationDto,
     /// Optional route preferences.
-    #[serde(default, deserialize_with = "deserialize_preferences")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_preferences"
+    )]
     pub preferences: Option<RoutePreferencesDto>,
 }
 
@@ -32,6 +36,7 @@ pub enum RouteLocationDto {
 
 /// HTTP representation of route coordinates.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RouteCoordinatesDto {
     /// Latitude in decimal degrees.
     pub lat: f64,
@@ -41,7 +46,7 @@ pub struct RouteCoordinatesDto {
 
 /// HTTP representation of optional route-generation preferences.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RoutePreferencesDto {
     /// Routing mode, such as `walking`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -67,27 +72,31 @@ fn deserialize_preferences<'de, D>(deserializer: D) -> Result<Option<RoutePrefer
 where
     D: serde::Deserializer<'de>,
 {
-    Option::<RoutePreferencesDto>::deserialize(deserializer)?
-        .map(Some)
-        .ok_or_else(|| D::Error::custom("preferences must not be null"))
+    deserialize_non_null(deserializer, "preferences").map(Some)
 }
 
-impl From<RouteRequest> for RouteSubmissionPayload {
-    fn from(request: RouteRequest) -> Self {
-        Self {
-            origin: request.origin.into(),
-            destination: request.destination.into(),
+impl TryFrom<RouteRequest> for RouteSubmissionPayload {
+    type Error = Error;
+
+    fn try_from(request: RouteRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            origin: request.origin.try_into()?,
+            destination: request.destination.try_into()?,
             preferences: request.preferences.map(Into::into),
-        }
+        })
     }
 }
 
-impl From<RouteLocationDto> for RouteLocation {
-    fn from(location: RouteLocationDto) -> Self {
-        match location {
+impl TryFrom<RouteLocationDto> for RouteLocation {
+    type Error = Error;
+
+    fn try_from(location: RouteLocationDto) -> Result<Self, Self::Error> {
+        Ok(match location {
             RouteLocationDto::Identifier(identifier) => Self::Identifier(identifier),
-            RouteLocationDto::Coordinates(coordinates) => Self::Coordinates(coordinates.into()),
-        }
+            RouteLocationDto::Coordinates(coordinates) => {
+                Self::Coordinates(coordinates.try_into()?)
+            }
+        })
     }
 }
 
@@ -109,12 +118,11 @@ impl<'de> Deserialize<'de> for RouteLocationDto {
     }
 }
 
-impl From<RouteCoordinatesDto> for RouteCoordinates {
-    fn from(coordinates: RouteCoordinatesDto) -> Self {
-        Self {
-            lat: coordinates.lat,
-            lng: coordinates.lng,
-        }
+impl TryFrom<RouteCoordinatesDto> for RouteCoordinates {
+    type Error = Error;
+
+    fn try_from(coordinates: RouteCoordinatesDto) -> Result<Self, Self::Error> {
+        Self::new(coordinates.lat, coordinates.lng)
     }
 }
 

@@ -41,7 +41,7 @@ def _load_log_entries(log_path: Path) -> list[list[object]]:
 
 
 @pytest.mark.parametrize(
-    ("case",),
+    "case",
     [
         pytest.param(
             _LogEntriesCase(

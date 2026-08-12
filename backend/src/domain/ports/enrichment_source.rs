@@ -101,6 +101,7 @@ pub trait EnrichmentSource: Send + Sync {
     /// ```rust,ignore
     /// use uuid::Uuid;
     ///
+    /// use backend::domain::BoundingBox;
     /// use backend::domain::ports::{
     ///     FixtureEnrichmentSource, EnrichmentRequest,
     ///     EnrichmentSource,
@@ -110,7 +111,7 @@ pub trait EnrichmentSource: Send + Sync {
     /// let response = source
     ///     .fetch_pois(&EnrichmentRequest {
     ///         job_id: Uuid::new_v4(),
-    ///         bounding_box: [-3.30, 55.90, -3.10, 56.00],
+    ///         bounding_box: BoundingBox::new(-3.30, 55.90, -3.10, 56.00)?,
     ///         tags: vec!["amenity".to_owned()],
     ///     })
     ///     .await?;

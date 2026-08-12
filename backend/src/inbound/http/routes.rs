@@ -17,7 +17,7 @@ use crate::inbound::http::state::HttpState;
 
 #[path = "routes/request.rs"]
 mod request;
-pub use request::RouteRequest;
+pub use request::{RouteCoordinatesDto, RouteLocationDto, RoutePreferencesDto, RouteRequest};
 
 /// Route submission response.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -76,10 +76,11 @@ pub async fn submit_route(
     let idempotency_key =
         extract_idempotency_key(request.headers()).map_err(map_idempotency_key_error)?;
 
+    let route_payload = payload.into_inner().try_into()?;
     let submission_request = RouteSubmissionRequest {
         idempotency_key,
         user_id,
-        payload: payload.into_inner().into(),
+        payload: route_payload,
     };
 
     let response = state.route_submission.submit(submission_request).await?;
@@ -263,11 +264,20 @@ mod tests {
     #[rstest]
     #[case::coordinates(json!({"origin":{"lat":51.5,"lng":-0.1},"destination":{"lat":48.8,"lng":2.3}}), true)]
     #[case::identifiers(json!({"origin":"saved:home","destination":"poi:work"}), true)]
+    #[case::minimum_coordinates(json!({"origin":{"lat":-90.0,"lng":-180.0},"destination":{"lat":48.8,"lng":2.3}}), true)]
+    #[case::maximum_coordinates(json!({"origin":{"lat":90.0,"lng":180.0},"destination":{"lat":48.8,"lng":2.3}}), true)]
     #[case::boolean_origin(json!({"origin":true,"destination":"poi:work"}), false)]
     #[case::array_destination(json!({"origin":"saved:home","destination":[48.8,2.3]}), false)]
     #[case::null_origin(json!({"origin":null,"destination":"poi:work"}), false)]
     #[case::null_destination(json!({"origin":"saved:home","destination":null}), false)]
     #[case::null_preferences(json!({"origin":"saved:home","destination":"poi:work","preferences":null}), false)]
+    #[case::latitude_too_low(json!({"origin":{"lat":-90.1,"lng":0.0},"destination":"poi:work"}), false)]
+    #[case::latitude_too_high(json!({"origin":{"lat":90.1,"lng":0.0},"destination":"poi:work"}), false)]
+    #[case::longitude_too_low(json!({"origin":{"lat":0.0,"lng":-180.1},"destination":"poi:work"}), false)]
+    #[case::longitude_too_high(json!({"origin":{"lat":0.0,"lng":180.1},"destination":"poi:work"}), false)]
+    #[case::unknown_top_level(json!({"origin":"saved:home","destination":"poi:work","extra":true}), false)]
+    #[case::unknown_location_field(json!({"origin":{"lat":51.5,"lng":-0.1,"extra":true},"destination":"poi:work"}), false)]
+    #[case::unknown_preferences_field(json!({"origin":"saved:home","destination":"poi:work","preferences":{"extra":true}}), false)]
     fn route_request_validates_documented_shapes(
         #[case] payload: Value,
         #[case] should_accept: bool,
@@ -275,5 +285,31 @@ mod tests {
         let result = serde_json::from_value::<RouteRequest>(payload);
 
         assert_eq!(result.is_ok(), should_accept);
+    }
+
+    #[rstest]
+    #[case::latitude(-90.1, 0.0)]
+    #[case::longitude(0.0, 180.1)]
+    fn route_coordinate_dto_conversion_rejects_invalid_wgs84_values(
+        #[case] lat: f64,
+        #[case] lng: f64,
+    ) {
+        let result =
+            crate::domain::ports::RouteCoordinates::try_from(RouteCoordinatesDto { lat, lng });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn route_request_omits_absent_preferences_when_serialized() {
+        let request = RouteRequest {
+            origin: RouteLocationDto::Identifier("saved:home".to_owned()),
+            destination: RouteLocationDto::Identifier("poi:work".to_owned()),
+            preferences: None,
+        };
+
+        let value = serde_json::to_value(request).expect("route request should serialize");
+
+        assert!(value.get("preferences").is_none());
     }
 }

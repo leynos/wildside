@@ -170,6 +170,7 @@ pub use route_metrics::{RouteMetrics, RouteMetricsError};
 pub use route_queue::{JobDispatchError, RouteQueue};
 pub use route_queue_metrics::{NoOpRouteQueueMetrics, RouteQueueMetrics, RouteQueueOutcome};
 pub use route_repository::{RoutePersistenceError, RouteRepository};
+pub(crate) use route_submission::deserialize_non_null;
 pub use route_submission::{
     FixtureRouteSubmissionService, RouteCoordinates, RouteLocation, RoutePreferences,
     RouteSubmissionPayload, RouteSubmissionRequest, RouteSubmissionResponse,
