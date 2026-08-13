@@ -131,7 +131,7 @@ impl<'de> Deserialize<'de> for RouteLocation {
 }
 
 /// Optional route-generation preferences supported by the HTTP contract.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RoutePreferences {
     /// Routing mode, such as `walking`.

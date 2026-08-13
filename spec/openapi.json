@@ -627,6 +627,40 @@
         ],
         "type": "object"
       },
+      "RouteCoordinatesDto": {
+        "additionalProperties": false,
+        "description": "HTTP representation of route coordinates.",
+        "properties": {
+          "lat": {
+            "description": "Latitude in decimal degrees.",
+            "format": "double",
+            "type": "number"
+          },
+          "lng": {
+            "description": "Longitude in decimal degrees.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ],
+        "type": "object"
+      },
+      "RouteLocationDto": {
+        "description": "HTTP representation of a route location.",
+        "oneOf": [
+          {
+            "description": "A saved-location or point-of-interest identifier.",
+            "type": "string"
+          },
+          {
+            "$ref": "#/components/schemas/RouteCoordinatesDto",
+            "description": "Explicit coordinates."
+          }
+        ]
+      },
       "RouteNoteResponse": {
         "description": "Response payload for a route note.",
         "properties": {
@@ -672,6 +706,67 @@
         ],
         "type": "object"
       },
+      "RoutePreferences": {
+        "additionalProperties": false,
+        "description": "Optional route-generation preferences supported by the HTTP contract.",
+        "properties": {
+          "avoid": {
+            "description": "Route features that should be avoided.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "avoidStairs": {
+            "description": "Whether routes should avoid stairs.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "interestThemeIds": {
+            "description": "Interest-theme identifiers used to bias route generation.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "mode": {
+            "description": "Routing mode, such as `walking`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "themeIds": {
+            "description": "Theme identifiers used to bias route generation.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "themes": {
+            "description": "Theme names used to bias route generation.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "RouteProgressResponse": {
         "description": "Response payload for route progress.",
         "properties": {
@@ -702,6 +797,54 @@
           "visitedStopIds",
           "updatedAt",
           "revision"
+        ],
+        "type": "object"
+      },
+      "RouteRequest": {
+        "additionalProperties": false,
+        "description": "Route generation request body.",
+        "properties": {
+          "destination": {
+            "$ref": "#/components/schemas/RouteLocationDto",
+            "description": "Destination location identifier or coordinates."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/RouteLocationDto",
+            "description": "Origin location identifier or coordinates."
+          },
+          "preferences": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutePreferences",
+                "description": "Optional route preferences."
+              }
+            ]
+          }
+        },
+        "required": [
+          "origin",
+          "destination"
+        ],
+        "type": "object"
+      },
+      "RouteResponse": {
+        "description": "Route submission response.",
+        "properties": {
+          "requestId": {
+            "description": "Unique identifier for this route request.",
+            "type": "string"
+          },
+          "status": {
+            "description": "Status of the submission.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requestId",
+          "status"
         ],
         "type": "object"
       },
@@ -1627,6 +1770,92 @@
         "summary": "Delete an offline bundle manifest.",
         "tags": [
           "offline"
+        ]
+      }
+    },
+    "/api/v1/routes": {
+      "post": {
+        "description": "# Idempotency\n\nClients may provide an `Idempotency-Key` header (UUID format) for safe\nretries. When a key is provided:\n\n- First request: Returns `202 Accepted` with a new `requestId`.\n- Duplicate with same payload: Returns `202 Accepted` with the original\n  `requestId` (status: `replayed`).\n- Duplicate with different payload: Returns `409 Conflict`.\n\n# Errors\n\n- `400 Bad Request`: Invalid idempotency key format or request body.\n- `401 Unauthorized`: No valid session.\n- `409 Conflict`: Idempotency key reused with different payload.\n- `503 Service Unavailable`: Backend services unavailable.",
+        "operationId": "submitRoute",
+        "parameters": [
+          {
+            "description": "UUID for idempotent request submission",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            },
+            "description": "Route request accepted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Idempotency key conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.Error"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "summary": "Submit a route generation request.",
+        "tags": [
+          "routes"
         ]
       }
     },

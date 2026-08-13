@@ -5,8 +5,7 @@
 //!
 //! - **Paths**: All HTTP endpoints from the inbound layer (users, health)
 //! - **Schemas**: Domain type wrappers ([`ErrorSchema`], [`ErrorCodeSchema`],
-//!   [`UserSchema`]) that provide OpenAPI definitions without coupling domain
-//!   types to the utoipa framework
+//!   [`UserSchema`]) for shared types that use external schema registration
 //! - **Security**: Session cookie authentication scheme
 //!
 //! The generated specification is used by Swagger UI (debug builds) and
@@ -88,6 +87,7 @@ impl Modify for SecurityAddon {
         crate::inbound::http::offline::upsert_offline_bundle,
         crate::inbound::http::offline::delete_offline_bundle,
         crate::inbound::http::walk_sessions::create_walk_session,
+        crate::inbound::http::routes::submit_route,
     ),
     components(schemas(
         UserSchema,
@@ -144,6 +144,7 @@ mod tests {
 
     // Note: utoipa replaces :: with . in schema names
     const ERROR_SCHEMA_NAME: &str = "crate.domain.Error";
+    const ROUTE_PREFERENCES_SCHEMA_NAME: &str = "RoutePreferences";
     const USER_SCHEMA_NAME: &str = "crate.domain.User";
 
     /// Assert that an Object schema contains a field with the given name.
@@ -210,6 +211,31 @@ mod tests {
 
         assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "id");
         assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "displayName");
+    }
+
+    #[test]
+    fn openapi_route_preferences_schema_has_expected_fields() {
+        let doc = ApiDoc::openapi();
+        let schemas = &doc.components.as_ref().expect("components").schemas;
+        let preferences_schema = schemas
+            .get(ROUTE_PREFERENCES_SCHEMA_NAME)
+            .expect("RoutePreferences schema");
+
+        assert_object_schema_has_field(
+            preferences_schema,
+            ROUTE_PREFERENCES_SCHEMA_NAME,
+            "themeIds",
+        );
+        assert_object_schema_has_field(
+            preferences_schema,
+            ROUTE_PREFERENCES_SCHEMA_NAME,
+            "interestThemeIds",
+        );
+        assert_object_schema_has_field(
+            preferences_schema,
+            ROUTE_PREFERENCES_SCHEMA_NAME,
+            "avoidStairs",
+        );
     }
 
     #[test]

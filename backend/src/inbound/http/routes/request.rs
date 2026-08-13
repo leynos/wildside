@@ -21,7 +21,7 @@ pub struct RouteRequest {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_preferences"
     )]
-    pub preferences: Option<RoutePreferencesDto>,
+    pub preferences: Option<RoutePreferences>,
 }
 
 /// HTTP representation of a route location.
@@ -44,31 +44,7 @@ pub struct RouteCoordinatesDto {
     pub lng: f64,
 }
 
-/// HTTP representation of optional route-generation preferences.
-#[derive(Debug, Clone, Default, Deserialize, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RoutePreferencesDto {
-    /// Routing mode, such as `walking`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mode: Option<String>,
-    /// Theme names used to bias route generation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub themes: Option<Vec<String>>,
-    /// Theme identifiers used to bias route generation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub theme_ids: Option<Vec<String>>,
-    /// Interest-theme identifiers used to bias route generation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub interest_theme_ids: Option<Vec<String>>,
-    /// Route features that should be avoided.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub avoid: Option<Vec<String>>,
-    /// Whether routes should avoid stairs.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub avoid_stairs: Option<bool>,
-}
-
-fn deserialize_preferences<'de, D>(deserializer: D) -> Result<Option<RoutePreferencesDto>, D::Error>
+fn deserialize_preferences<'de, D>(deserializer: D) -> Result<Option<RoutePreferences>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -82,7 +58,7 @@ impl TryFrom<RouteRequest> for RouteSubmissionPayload {
         Ok(Self {
             origin: request.origin.try_into()?,
             destination: request.destination.try_into()?,
-            preferences: request.preferences.map(Into::into),
+            preferences: request.preferences,
         })
     }
 }
@@ -131,19 +107,6 @@ impl From<RouteCoordinates> for RouteCoordinatesDto {
         Self {
             lat: coordinates.lat(),
             lng: coordinates.lng(),
-        }
-    }
-}
-
-impl From<RoutePreferencesDto> for RoutePreferences {
-    fn from(preferences: RoutePreferencesDto) -> Self {
-        Self {
-            mode: preferences.mode,
-            themes: preferences.themes,
-            theme_ids: preferences.theme_ids,
-            interest_theme_ids: preferences.interest_theme_ids,
-            avoid: preferences.avoid,
-            avoid_stairs: preferences.avoid_stairs,
         }
     }
 }

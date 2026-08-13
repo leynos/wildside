@@ -17,7 +17,7 @@ use crate::inbound::http::state::HttpState;
 
 #[path = "routes/request.rs"]
 mod request;
-pub use request::{RouteCoordinatesDto, RouteLocationDto, RoutePreferencesDto, RouteRequest};
+pub use request::{RouteCoordinatesDto, RouteLocationDto, RouteRequest};
 
 /// Route submission response.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
