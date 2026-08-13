@@ -350,3 +350,14 @@ yamllint:
 	$(call ensure_tool,helm)
 	$(call ensure_tool,uv)
 	set -o pipefail; helm template wildside ./deploy/charts/wildside --kube-version $(KUBE_VERSION) | uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint -f parsable -
+
+# Opt-in accelerated debug builds (Cranelift + mold); requires a nightly
+# toolchain. See AGENTS.md and tools/dev-fast/config.toml.
+DEV_FAST_CONFIG ?= tools/dev-fast/config.toml
+
+.PHONY: dev-build dev-test
+dev-build: ## Build debug binaries with Cranelift and mold
+	cargo --config "$(DEV_FAST_CONFIG)" build
+
+dev-test: ## Run tests with Cranelift and mold
+	cargo --config "$(DEV_FAST_CONFIG)" test
