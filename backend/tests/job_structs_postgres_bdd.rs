@@ -127,13 +127,19 @@ fn valid_generate_route_and_enrichment_jobs(world: &SharedContext) {
 
 #[when("I enqueue both jobs through Apalis PostgreSQL")]
 fn enqueue_both_jobs_through_apalis_postgresql(world: &SharedContext) {
-    let results = {
+    let (handle, pool, route_job, enrichment_job) = {
         let context = world.lock().expect("context lock");
-        let handle = context.runtime.handle().clone();
-        let pool = context.pool.clone();
+        (
+            context.runtime.handle().clone(),
+            context.pool.clone(),
+            context.route_job.clone(),
+            context.enrichment_job.clone(),
+        )
+    };
 
-        let provider = handle
-            .block_on(ApalisPostgresProvider::new(pool))
+    let results = handle.block_on(async move {
+        let provider = ApalisPostgresProvider::new(pool)
+            .await
             .map_err(|error| error.to_string());
         match provider {
             Ok(provider) => {
@@ -141,9 +147,8 @@ fn enqueue_both_jobs_through_apalis_postgresql(world: &SharedContext) {
                     GenericApalisRouteQueue::new(provider.clone(), Arc::new(NoOpRouteQueueMetrics));
                 let enrichment_queue: GenericApalisRouteQueue<EnrichmentJob, _> =
                     GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
-                let route_result = handle.block_on(route_queue.enqueue(&context.route_job));
-                let enrichment_result =
-                    handle.block_on(enrichment_queue.enqueue(&context.enrichment_job));
+                let route_result = route_queue.enqueue(&route_job).await;
+                let enrichment_result = enrichment_queue.enqueue(&enrichment_job).await;
                 vec![
                     route_result.map_err(|error| error.to_string()),
                     enrichment_result.map_err(|error| error.to_string()),
@@ -151,7 +156,7 @@ fn enqueue_both_jobs_through_apalis_postgresql(world: &SharedContext) {
             }
             Err(error) => vec![Err(error)],
         }
-    };
+    });
 
     world.lock().expect("context lock").enqueue_results = results;
 }

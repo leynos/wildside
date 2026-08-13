@@ -1958,8 +1958,8 @@ Roadmap item 3.4.2 is implemented with a domain-owned
 `OverpassEnrichmentWorker` and explicit ports so infrastructure concerns remain
 inside outbound adapters:
 
-- `OverpassEnrichmentSource` handles Overpass HTTP transport and response
-  decoding.
+- `EnrichmentSource` defines the domain port; `OverpassHttpSource` is the
+  outbound implementation for Overpass HTTP transport and response decoding.
 - `OsmPoiRepository` remains the single persistence path for POI `UPSERT`s.
 - `EnrichmentJobMetrics` records enrichment outcomes without exposing
   Prometheus types to the domain.

@@ -18,7 +18,7 @@ st = pytest.importorskip("hypothesis.strategies")
 from hypothesis import HealthCheck, given, settings  # noqa: E402
 from local_k8s.cluster import import_image  # noqa: E402
 from local_k8s.config import PreviewConfig  # noqa: E402
-from local_k8s.k8s import print_kubernetes_status  # noqa: E402
+from local_k8s.k8s import helm_fullname, print_kubernetes_status  # noqa: E402
 
 if typ.TYPE_CHECKING:
     from hypothesis.strategies import DrawFn
@@ -242,18 +242,13 @@ def test_podman_archive_image_name_preserves_registry_hosts(
     )
 
 
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(release_name=helm_names(max_suffix_size=52), chart_name=helm_names())
 def test_helm_fullname_obeys_kubernetes_name_bounds(
-    monkeypatch: pytest.MonkeyPatch,
     release_name: str,
     chart_name: str,
 ) -> None:
     """Verify Helm fullnames stay inside Kubernetes DNS label bounds."""
-    fullname = _printed_service_name(
-        monkeypatch,
-        _preview_config(release_name=release_name, chart_name=chart_name),
-    )
+    fullname = helm_fullname(_preview_config(release_name=release_name, chart_name=chart_name))
 
     assert len(fullname) <= 63, (
         "Helm fullname must fit within the 63-char DNS label limit"
