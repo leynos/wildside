@@ -106,3 +106,7 @@ deploy/k8s/backend/secret.env
 
 # Local agent memory state
 .memdb/
+.vtcode/
+.claude/
+*.swo
+*~
