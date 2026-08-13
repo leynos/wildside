@@ -2,12 +2,29 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import cast
 
 import yaml
 
 WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
+
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _assert_pinned_to_full_sha(uses: object, expected_path: str) -> None:
+    """Assert ``uses`` references ``expected_path`` pinned to a full commit SHA.
+
+    Dependabot owns shared-action SHA bumps, so the contract asserts the pin's
+    shape rather than its current value. Hard-coding the SHA would fail the
+    suite on every routine bump.
+    """
+    assert isinstance(uses, str), f"expected a 'uses' string, got {uses!r}"
+    path, separator, ref = uses.partition("@")
+    assert separator, f"expected {expected_path} to carry an '@' ref, got {uses!r}"
+    assert path == expected_path, f"expected {expected_path}, got {path!r}"
+    assert SHA_RE.match(ref), f"expected a 40-hex commit SHA, got {ref!r}"
 
 
 def _load_steps(job_name: str = "coverage") -> list[dict[str, object]]:
@@ -76,10 +93,10 @@ def test_codescene_check_uses_the_guarded_project_contract() -> None:
     assert check.get("if") == (
         "github.event_name == 'pull_request' && env.CS_ACCESS_TOKEN != ''"
     ), "the CodeScene check must skip pull requests without the secret"
-    assert check.get("uses") == (
-        "leynos/shared-actions/.github/actions/upload-codescene-coverage@"
-        "8add2d99854a5b77548eae98cca59202e68fefc8"
-    ), "the CodeScene check must use the reviewed shared-action pin"
+    _assert_pinned_to_full_sha(
+        check.get("uses"),
+        "leynos/shared-actions/.github/actions/upload-codescene-coverage",
+    )
     assert check.get("with") == {
         "format": "lcov",
         "mode": "check",
