@@ -913,11 +913,27 @@ resolve in the top-level `resolutions` block, which Bun consumes without
 exposing the fixes to npm's override handling. Regenerate both `pnpm-lock.yaml`
 and `bun.lock` after changing a shared security pin.
 
+`resolutions` accepts only bare package names. Bun silently ignores ranged keys
+such as `picomatch@<2.3.2`, so the ranged form works in `pnpm.overrides` but has
+no effect for Bun. Where a package is present at two majors that each need a
+different patched release, there is no `resolutions` entry that fixes both: a
+bare key collapses every consumer onto one version and breaks the consumers
+that need the other major. Such advisories need a time-bound entry in
+`security/audit-exceptions.json` rather than a resolution.
+
 Bun audit exceptions are handled by `security/run-bun-audit.js`, which turns
 non-expired entries in `security/audit-exceptions.json` into explicit
 `bun audit --ignore=<GHSA>` flags. This keeps Bun audit policy visible without
 changing npm's dependency resolution surface. Prefer a patched Bun resolution;
 use an exception only when no compatible patched release can be resolved.
+
+The ledger's `package` field selects which pnpm workspace audit may honour the
+entry, not the name of the vulnerable package. `security/run-bun-audit.js`
+ignores the field and passes every non-expired advisory to Bun, but
+`frontend-pwa/scripts/run-audit.mjs` only honours entries whose `package`
+matches its own workspace name. An advisory that both `pnpm audit` and
+`bun audit` report therefore needs `"package": "frontend-pwa"`; record the
+vulnerable package in the optional `introducedBy` field instead.
 
 The script `scripts/check-overrides-policy.mjs` verifies that `pnpm.overrides`
 is present and that top-level overrides are absent. It is run automatically in
