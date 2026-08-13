@@ -851,7 +851,6 @@ The `lint-asyncapi` target invokes AsyncAPI CLI 3.4.2 through `pnpm dlx` and
 validates `spec/asyncapi.yaml` with `--fail-severity=info`. Keep this runner form
 because it resolves the package's `asyncapi` binary reliably in the workspace.
 
-
 ## Python quality gates
 
 Python under `scripts/` and `tests/` is held to the same standard as the Rust
@@ -875,7 +874,6 @@ lint, and typecheck gates as discrete steps.
 The vendored spelling-rollout helper is excluded from these gates: `make
 spelling-helper-test` gates it separately against its own pinned Ruff.
 
-
 ### Isolated uv execution
 
 The root `pyproject.toml` is tooling configuration only. It declares no
@@ -888,7 +886,6 @@ adopt the repository as a project, and change how those invocations resolve —
 syncing an empty environment and writing a `uv.lock`. Passing `--no-project`
 keeps each invocation resolving against the dependencies it declares itself,
 whether through `--with` or PEP 723 inline script metadata.
-
 
 ### Rust-only coverage selection
 
