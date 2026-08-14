@@ -110,9 +110,11 @@ deploy/k8s/backend/secret.env
 
 # Memtrace daemon runtime state.
 .memdb/
+
+# VTCode runtime state.
 .vtcode/
 
 # Claude Code per-session runtime state (PIDs, scheduled-task locks, etc.)
-.claude/
+.claude/scheduled_tasks.lock
 *.swo
 *~
