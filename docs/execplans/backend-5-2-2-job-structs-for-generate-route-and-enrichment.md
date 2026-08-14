@@ -376,21 +376,18 @@ The minimum bar:
    `#[serde(deny_unknown_fields)]` on V1 to reject unknown keys and
    `#[serde(rename_all = "camelCase")]` to match the rest of the public
    contract.
-2. Add a `GenerateRouteJob::v1(...)` constructor and the fallible helper
+2. Add `GenerateRouteJob::v1(...)` and
    `GenerateRouteJob::try_from_submission(&RouteSubmissionRequest,
-   request_id, enqueued_at)`
-   returning `Result<Self, GenerateRouteJobBuildError>`. The helper copies the
-   typed `RouteSubmissionPayload` into the job's V1 fields. HTTP
-   deserialization rejects null locations and preferences before this boundary;
-   persisted V1 deserialization applies the same explicit-null rejection when a
-   job is restored. Keep the fallible result to preserve the published
-   constructor API rather than reintroducing an untyped JSON validation seam.
+   request_id, enqueued_at)` as infallible constructors. Each accepts typed
+   inputs and copies them into the job's V1 fields. HTTP deserialization rejects
+   null locations and preferences before this boundary; malformed persisted
+   envelopes are rejected during Serde decoding when a job is restored. Do not
+   reintroduce an untyped JSON validation seam.
 3. Add `rstest` unit tests covering:
-   - Constructor accepts a well-formed submission.
-   - Constructor rejects payloads that are not objects.
-   - Constructor rejects payloads missing `origin` or `destination`.
+   - Typed constructors accept well-formed route submissions and V1 payloads.
    - Round-trip through `serde_json::to_value` and back is the identity.
-   - Unknown fields are rejected on decode (uses `deny_unknown_fields`).
+   - Malformed persisted envelopes and unknown fields are rejected during
+     Serde decoding (using `deny_unknown_fields`).
 4. Add a `proptest` strategy in
    `backend/src/domain/jobs/generate_route/proptest_strategies.rs` (or inline
    in the tests module if it stays under 400 lines) that generates
@@ -489,10 +486,6 @@ adapter contract.
      `StubRouteQueue<GenerateRouteJob>`, then the stub accepts it and
      records no error. Asserts the stub's logged outcome via the existing
      `tracing` test infrastructure.
-   - "Reject an ill-formed submission".
-     Given a `RouteSubmissionRequest` whose payload is not an object, when
-     `GenerateRouteJob::try_from_submission` is called, then the builder
-     returns the documented `GenerateRouteJobBuildError` variant.
    - "Build an enrichment job and observe its queue payload".
      Given an `EnrichmentJob::V1` with a known bounding box and tags, when
      the job is enqueued via a `FakeQueueProvider` wrapped in
@@ -636,7 +629,7 @@ pub use enrichment::{
     EnrichmentJob, EnrichmentJobBuildError, EnrichmentJobParams, EnrichmentJobV1,
 };
 pub use generate_route::{
-    GenerateRouteJob, GenerateRouteJobBuildError, GenerateRouteJobV1,
+    GenerateRouteJob, GenerateRouteJobV1,
 };
 ```
 
@@ -691,30 +684,21 @@ pub struct GenerateRouteJobV1 {
 }
 
 impl GenerateRouteJob {
-    pub fn v1(payload: GenerateRouteJobV1)
-        -> Result<Self, GenerateRouteJobBuildError>;
+    pub fn v1(payload: GenerateRouteJobV1) -> Self;
 
     pub fn try_from_submission(
         submission: &RouteSubmissionRequest,
         request_id: Uuid,
         enqueued_at: DateTime<Utc>,
-    ) -> Result<Self, GenerateRouteJobBuildError>;
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GenerateRouteJobBuildError {
-    PayloadNotObject,
-    PayloadMissingField { field: &'static str },
-    PayloadNullField { field: &'static str },
+    ) -> Self;
 }
 ```
 
 `PartialEq` is intentional and `Eq` is intentionally not derived because the
 payload transitively contains coordinate `f64` values, which only implement
-`PartialEq`. Implement `Display` and `std::error::Error` for the error using
-the existing macro patterns. The HTTP DTO and persisted V1 deserializers reject
-null `origin`, `destination`, and `preferences` values; the typed submission
-helper copies the resulting `RouteLocation` and `RoutePreferences` values.
+`PartialEq`. The HTTP DTO and persisted V1 deserializers reject null `origin`,
+`destination`, and `preferences` values; the infallible typed constructors copy
+the resulting `RouteLocation` and `RoutePreferences` values.
 
 In `backend/src/domain/bounding_box.rs`:
 
@@ -874,11 +858,10 @@ Functional acceptance:
 - `backend::domain::jobs::GenerateRouteJob` and
   `backend::domain::jobs::EnrichmentJob` exist with the documented envelope and
   V1 payload shapes.
-- `GenerateRouteJob::try_from_submission` accepts well-formed
-  `RouteSubmissionRequest` payloads and returns the documented
-  `GenerateRouteJobBuildError` variants on ill-formed input. The V1 constructor
-  rejects null `origin`, `destination`, and `preferences` values while
-  preserving string and object locations.
+- `GenerateRouteJob::v1` and `GenerateRouteJob::try_from_submission` construct
+  V1 jobs directly from typed inputs. HTTP and persisted Serde deserialization
+  reject null `origin`, `destination`, and `preferences` values and malformed
+  persisted envelopes, while preserving string and object locations.
 - `EnrichmentJob::to_enrichment_request` returns a value-equal
   `EnrichmentRequest`.
 - `BoundingBox::new` rejects non-finite inputs, longitudes outside
@@ -1178,20 +1161,21 @@ The plan ships in two PRs:
   every job, violating the hexagonal boundary. Date/Author: 2026-06-06 /
   planning agent.
 
-- Decision: Do not introduce a `From<RouteSubmissionRequest>` impl.
-  Rationale: `try_from_submission` is the named, fallible published helper and
-  takes the extra `request_id`/`enqueued_at` parameters. The submission already
-  carries a typed, validated `RouteSubmissionPayload`; retaining the explicit
-  helper keeps the DTO-to-job boundary visible without reintroducing an untyped
-  JSON conversion or an implicit `From` implementation. Date/Author: 2026-06-06
-  / planning agent.
+- Historical decision (2026-06-06, superseded): Do not introduce a
+  `From<RouteSubmissionRequest>` impl. Rationale: the planned
+  `try_from_submission` helper was the named, fallible published helper and
+  took the extra `request_id`/`enqueued_at` parameters. The submission already
+  carried a typed, validated `RouteSubmissionPayload`; retaining the explicit
+  helper kept the DTO-to-job boundary visible without reintroducing an untyped
+  JSON conversion or an implicit `From` implementation. Date/Author:
+  2026-06-06 / planning agent.
 
 - Decision: Build each V1 payload from a single struct argument rather than
   a positional constructor. `GenerateRouteJob::v1` takes the whole
-  `GenerateRouteJobV1` (its fields are `pub`) and returns a result while
-  preserving the published fallible constructor API. HTTP and persisted
-  deserializers reject null required locations and an explicitly null
-  preferences value before a typed job reaches a worker. `EnrichmentJob::v1`
+  `GenerateRouteJobV1` (its fields are `pub`) and constructs the envelope
+  directly. HTTP and persisted deserializers reject null required locations and
+  an explicitly null preferences value before a typed job reaches a worker.
+  `EnrichmentJob::v1`
   takes an `EnrichmentJobParams` struct whose `bounding_box` is already
   validated and returns `Result<Self, EnrichmentJobBuildError>` for tag
   validation. Rationale: passing a struct sidesteps the `too_many_arguments`
@@ -1200,8 +1184,8 @@ The plan ships in two PRs:
   validation without duplicating bounding-box validation. This supersedes the
   earlier plan to keep positional constructors under a scoped
   `too_many_arguments` expectation; no such expectation exists in the shipped
-  code. Date/Author: 2026-06-15 / implementation agent (revised 2026-07-26 and
-  2026-08-02 to match implementation).
+  code. Date/Author: 2026-06-15 / implementation agent (revised 2026-07-26,
+  2026-08-02, and 2026-08-14 to match implementation).
 
 - Decision: Make `EnrichmentJobV1` fields private and hand-write the envelope
   `Deserialize` implementation. Persisted tags decode through a bounded

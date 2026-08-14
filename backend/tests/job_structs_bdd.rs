@@ -4,9 +4,7 @@ use std::cell::RefCell;
 use std::fmt;
 use std::sync::Arc;
 
-use backend::domain::jobs::{
-    BoundingBox, EnrichmentJob, EnrichmentJobParams, GenerateRouteJob, GenerateRouteJobBuildError,
-};
+use backend::domain::jobs::{BoundingBox, EnrichmentJob, EnrichmentJobParams, GenerateRouteJob};
 use backend::domain::ports::{
     EnrichmentRequest, JobDispatchError, NoOpRouteQueueMetrics, RouteQueue, RouteSubmissionRequest,
 };
@@ -26,7 +24,7 @@ use uuid::Uuid;
 struct JobStructWorld {
     runtime: Runtime,
     route_submission: RefCell<Option<RouteSubmissionRequest>>,
-    generated_route_job: RefCell<Option<Result<GenerateRouteJob, GenerateRouteJobBuildError>>>,
+    generated_route_job: RefCell<Option<GenerateRouteJob>>,
     stub_enqueue_result: RefCell<Option<Result<(), JobDispatchError>>>,
     enrichment_job: RefCell<Option<EnrichmentJob>>,
     fake_payloads: RefCell<Vec<Value>>,
@@ -164,13 +162,8 @@ fn i_build_and_enqueue_a_generate_route_job_through_the_stub_queue(world: &JobSt
         .as_ref()
         .expect("route submission should be configured");
     let job = GenerateRouteJob::try_from_submission(submission, request_id(), route_enqueued_at());
-    let enqueue_result = match &job {
-        Ok(job) => {
-            let queue: StubRouteQueue<GenerateRouteJob> = StubRouteQueue::new();
-            world.runtime.block_on(async { queue.enqueue(job).await })
-        }
-        Err(error) => Err(JobDispatchError::rejected(error.to_string())),
-    };
+    let queue: StubRouteQueue<GenerateRouteJob> = StubRouteQueue::new();
+    let enqueue_result = world.runtime.block_on(async { queue.enqueue(&job).await });
 
     *world.generated_route_job.borrow_mut() = Some(job);
     *world.stub_enqueue_result.borrow_mut() = Some(enqueue_result);

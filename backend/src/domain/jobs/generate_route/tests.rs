@@ -84,8 +84,7 @@ fn valid_job_payload(request_id: Uuid, enqueued_at: DateTime<Utc>) -> GenerateRo
 
 #[rstest]
 fn constructor_accepts_coordinate_locations(request_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let job = GenerateRouteJob::try_from_submission(&valid_submission(), request_id, enqueued_at)
-        .expect("valid submission should build a route-generation job");
+    let job = GenerateRouteJob::try_from_submission(&valid_submission(), request_id, enqueued_at);
 
     assert_eq!(
         job,
@@ -104,8 +103,7 @@ fn constructor_accepts_string_location_identifiers(request_id: Uuid, enqueued_at
         ..valid_submission()
     };
 
-    let job = GenerateRouteJob::try_from_submission(&submission, request_id, enqueued_at)
-        .expect("string location identifiers should build a route job");
+    let job = GenerateRouteJob::try_from_submission(&submission, request_id, enqueued_at);
     let GenerateRouteJob::V1(payload) = job;
 
     assert_eq!(
@@ -131,8 +129,7 @@ fn serde_rejects_invalid_location_shapes(
     request_id: Uuid,
     enqueued_at: DateTime<Utc>,
 ) {
-    let job = GenerateRouteJob::v1(valid_job_payload(request_id, enqueued_at))
-        .expect("fixture job should be valid");
+    let job = GenerateRouteJob::v1(valid_job_payload(request_id, enqueued_at));
     let mut value = serde_json::to_value(job).expect("job should serialize");
     value[field] = invalid_location;
 
@@ -149,8 +146,7 @@ fn serde_rejects_invalid_location_shapes(
 
 #[rstest]
 fn serde_round_trip_is_identity(request_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let job = GenerateRouteJob::try_from_submission(&valid_submission(), request_id, enqueued_at)
-        .expect("valid submission should build a route-generation job");
+    let job = GenerateRouteJob::try_from_submission(&valid_submission(), request_id, enqueued_at);
 
     let value = serde_json::to_value(&job).expect("job should serialize");
     let decoded: GenerateRouteJob = serde_json::from_value(value).expect("job should deserialize");
@@ -160,8 +156,7 @@ fn serde_round_trip_is_identity(request_id: Uuid, enqueued_at: DateTime<Utc>) {
 
 #[rstest]
 fn serde_rejects_unsupported_envelope_version(request_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let job = GenerateRouteJob::v1(valid_job_payload(request_id, enqueued_at))
-        .expect("fixture job should be valid");
+    let job = GenerateRouteJob::v1(valid_job_payload(request_id, enqueued_at));
     let mut value = serde_json::to_value(job).expect("job should serialize");
     value["v"] = json!("v2");
 
@@ -176,7 +171,7 @@ fn serde_rejects_unsupported_envelope_version(request_id: Uuid, enqueued_at: Dat
 fn absent_preferences_round_trip_without_null(request_id: Uuid, enqueued_at: DateTime<Utc>) {
     let mut payload = valid_job_payload(request_id, enqueued_at);
     payload.preferences = None;
-    let job = GenerateRouteJob::v1(payload).expect("absent preferences should be valid");
+    let job = GenerateRouteJob::v1(payload);
 
     let value = serde_json::to_value(&job).expect("job should serialize");
     assert!(
@@ -193,7 +188,7 @@ fn string_location_identifiers_round_trip(request_id: Uuid, enqueued_at: DateTim
     let mut payload = valid_job_payload(request_id, enqueued_at);
     payload.origin = RouteLocation::Identifier("saved:home".to_owned());
     payload.destination = RouteLocation::Identifier("poi:work".to_owned());
-    let job = GenerateRouteJob::v1(payload).expect("string identifiers should be valid");
+    let job = GenerateRouteJob::v1(payload);
 
     let value = serde_json::to_value(&job).expect("job should serialize");
     let decoded: GenerateRouteJob = serde_json::from_value(value).expect("job should deserialize");
@@ -212,7 +207,7 @@ fn preferences_serialize_with_camel_case_field_names(request_id: Uuid, enqueued_
         avoid: Some(vec!["motorway".to_owned()]),
         avoid_stairs: Some(true),
     });
-    let job = GenerateRouteJob::v1(payload).expect("all preference fields should be valid");
+    let job = GenerateRouteJob::v1(payload);
 
     let value = serde_json::to_value(job).expect("job should serialize");
     let preferences = &value["preferences"];
@@ -232,8 +227,7 @@ fn serde_rejects_null_payload_fields(
     request_id: Uuid,
     enqueued_at: DateTime<Utc>,
 ) {
-    let job = GenerateRouteJob::v1(valid_job_payload(request_id, enqueued_at))
-        .expect("fixture job should be valid");
+    let job = GenerateRouteJob::v1(valid_job_payload(request_id, enqueued_at));
     let mut value = serde_json::to_value(job).expect("job should serialize");
     value[field] = Value::Null;
 
@@ -248,8 +242,7 @@ fn serde_rejects_null_payload_fields(
 
 #[rstest]
 fn serde_rejects_unbounded_preferences(request_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let job = GenerateRouteJob::v1(valid_job_payload(request_id, enqueued_at))
-        .expect("fixture job should be valid");
+    let job = GenerateRouteJob::v1(valid_job_payload(request_id, enqueued_at));
     let mut value = serde_json::to_value(job).expect("job should serialize");
     let preferences = value["preferences"]
         .as_object_mut()
@@ -264,10 +257,10 @@ fn serde_rejects_unbounded_preferences(request_id: Uuid, enqueued_at: DateTime<U
 
     assert!(error.to_string().contains("route preference list exceeds"));
 
-    let mut value = serde_json::to_value(
-        GenerateRouteJob::v1(valid_job_payload(request_id, enqueued_at))
-            .expect("fixture job should be valid"),
-    )
+    let mut value = serde_json::to_value(GenerateRouteJob::v1(valid_job_payload(
+        request_id,
+        enqueued_at,
+    )))
     .expect("job should serialize");
     value["preferences"]["mode"] = json!("é".repeat((ROUTE_PREFERENCE_MAX_VALUE_BYTES / 2) + 1));
 
@@ -279,8 +272,7 @@ fn serde_rejects_unbounded_preferences(request_id: Uuid, enqueued_at: DateTime<U
 
 #[rstest]
 fn unknown_fields_are_rejected(request_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let job = GenerateRouteJob::try_from_submission(&valid_submission(), request_id, enqueued_at)
-        .expect("valid submission should build a route-generation job");
+    let job = GenerateRouteJob::try_from_submission(&valid_submission(), request_id, enqueued_at);
     let mut value = serde_json::to_value(job).expect("job should serialize");
     value
         .as_object_mut()
@@ -295,8 +287,7 @@ fn unknown_fields_are_rejected(request_id: Uuid, enqueued_at: DateTime<Utc>) {
 
 #[rstest]
 fn snapshot_locks_v1_json_shape(request_id: Uuid, enqueued_at: DateTime<Utc>) {
-    let job = GenerateRouteJob::try_from_submission(&valid_submission(), request_id, enqueued_at)
-        .expect("valid submission should build a route-generation job");
+    let job = GenerateRouteJob::try_from_submission(&valid_submission(), request_id, enqueued_at);
     let value = serde_json::to_value(job).expect("job should serialize");
 
     assert_json_snapshot!("generate_route_job_v1", value);
@@ -342,7 +333,7 @@ fn generate_route_job_strategy() -> impl Strategy<Value = GenerateRouteJob> {
         prop::option::of(preferences_strategy()),
     )
         .prop_map(|(origin, destination, preferences)| {
-            let job = GenerateRouteJob::v1(GenerateRouteJobV1 {
+            GenerateRouteJob::v1(GenerateRouteJobV1 {
                 request_id: Uuid::nil(),
                 idempotency_key: Some(fixture_idempotency_key()),
                 user_id: fixture_user_id(),
@@ -350,13 +341,7 @@ fn generate_route_job_strategy() -> impl Strategy<Value = GenerateRouteJob> {
                 destination,
                 preferences,
                 enqueued_at: fixture_enqueued_at(),
-            });
-            match job {
-                Ok(job) => job,
-                Err(error) => {
-                    panic!("strategy should generate valid route job payloads: {error}")
-                }
-            }
+            })
         })
 }
 

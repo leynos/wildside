@@ -1156,11 +1156,13 @@ only supported contract for values passed into `RouteQueue::enqueue`:
   type independent of Utoipa; deserialization remains authoritative for the
   byte-length bound.
 - `GenerateRouteJob` is defined in
-  `backend/src/domain/jobs/generate_route.rs`. Its
+  `backend/src/domain/jobs/generate_route.rs`. Its typed
+  `v1(GenerateRouteJobV1)` and
   `try_from_submission(&RouteSubmissionRequest, request_id, enqueued_at)`
-  helper copies the already typed route payload and the request metadata into
-  `GenerateRouteJobV1`. The helper remains fallible for the published
-  constructor API, but it is not an untyped JSON-object validator.
+  constructors copy typed route data and request metadata into
+  `GenerateRouteJobV1` directly. They are infallible because they do not
+  validate untyped JSON; malformed persisted envelopes are rejected during
+  Serde decoding instead.
 - `GenerateRouteJobV1` is a stable `#[serde(tag = "v")]` `"v1"` envelope with
   camel-case fields. Its current JSON shape is:
 
@@ -1207,9 +1209,11 @@ only supported contract for values passed into `RouteQueue::enqueue`:
   does not define a second validation policy. Split dateline-spanning inputs
   before building either domain value.
 
-The job constructors return their domain-specific build errors, and bounding
-box construction returns `BoundingBoxError`. These are distinct from
-`JobDispatchError`, which reports queue or worker-boundary failures.
+`GenerateRouteJob` construction accepts typed inputs directly and is
+infallible. `EnrichmentJob` construction still returns its domain-specific tag
+validation errors, and bounding-box construction returns `BoundingBoxError`.
+These are distinct from `JobDispatchError`, which reports queue or
+worker-boundary failures.
 
 Both job families use a serde envelope with `#[serde(tag = "v")]`, currently
 `"v1"`. V1 structs use `deny_unknown_fields`; do not remove that restriction.

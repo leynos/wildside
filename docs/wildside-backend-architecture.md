@@ -2233,10 +2233,11 @@ variant such as V2 and a reviewed snapshot update.
 - `GenerateRouteJob` lives in
   `backend/src/domain/jobs/generate_route.rs`. V1 carries `request_id`, optional
   `idempotency_key`, `user_id`, typed `origin` and `destination`, optional
-  typed `preferences`, and `enqueued_at`. The
-  `GenerateRouteJob::try_from_submission` helper takes a
-  `&RouteSubmissionRequest`, `request_id`, and `enqueued_at`, then copies the
-  typed payload into the V1 job.
+  typed `preferences`, and `enqueued_at`. Its typed
+  `GenerateRouteJob::v1(GenerateRouteJobV1)` and
+  `GenerateRouteJob::try_from_submission` constructors take typed inputs and
+  construct the V1 job directly. They are infallible; malformed persisted
+  envelopes are rejected during Serde decoding at the queue boundary.
 - `EnrichmentJob` lives in
   `backend/src/domain/jobs/enrichment.rs`. V1 carries `job_id`, optional
   `idempotency_key`, a validated `BoundingBox`, sorted and deduplicated tags,

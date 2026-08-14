@@ -13,7 +13,6 @@ use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
-use crate::domain::ports::define_port_error;
 use crate::domain::ports::{
     RouteLocation, RoutePreferences, RouteSubmissionRequest, deserialize_non_null,
 };
@@ -141,25 +140,17 @@ impl<'de> Deserialize<'de> for GenerateRouteJob {
 impl GenerateRouteJob {
     /// Build a V1 route-generation job from validated pieces.
     ///
-    /// # Errors
-    ///
-    /// The typed payload is already validated by the inbound adapter. The
-    /// result remains fallible to preserve the published constructor API.
-    pub fn v1(payload: GenerateRouteJobV1) -> Result<Self, GenerateRouteJobBuildError> {
-        Ok(Self::V1(payload))
+    pub fn v1(payload: GenerateRouteJobV1) -> Self {
+        Self::V1(payload)
     }
 
     /// Build a route-generation job from the route-submission port request.
     ///
-    /// # Errors
-    ///
-    /// The route-submission port carries typed, validated values. The result
-    /// remains fallible to preserve the published constructor API.
     pub fn try_from_submission(
         submission: &RouteSubmissionRequest,
         request_id: Uuid,
         enqueued_at: DateTime<Utc>,
-    ) -> Result<Self, GenerateRouteJobBuildError> {
+    ) -> Self {
         Self::v1(GenerateRouteJobV1 {
             request_id,
             idempotency_key: submission.idempotency_key.clone(),
@@ -201,23 +192,6 @@ where
     D: serde::Deserializer<'de>,
 {
     deserialize_non_null(deserializer, "preferences").map(Some)
-}
-
-define_port_error! {
-    /// Compatibility errors retained by the published V1 constructor surface.
-    ///
-    /// Typed submission values are validated before construction, so current
-    /// constructors do not emit these variants.
-    pub enum GenerateRouteJobBuildError {
-        /// Submission payload was not a JSON object.
-        PayloadNotObject => "route job payload must be a JSON object",
-        /// Submission payload missed a required field.
-        PayloadMissingField { field: &'static str } =>
-            "route job payload is missing required field: {field}",
-        /// An optional payload field was explicitly JSON null.
-        PayloadNullField { field: &'static str } =>
-            "route job payload field must not be null: {field}",
-    }
 }
 
 #[cfg(test)]

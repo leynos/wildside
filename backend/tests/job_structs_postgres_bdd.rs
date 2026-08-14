@@ -61,14 +61,11 @@ fn route_job() -> GenerateRouteJob {
         .expect("route submission fixture should be valid"),
     };
 
-    match GenerateRouteJob::try_from_submission(
+    GenerateRouteJob::try_from_submission(
         &submission,
         REQUEST_ID,
         parse_timestamp("2026-07-31T12:00:00Z"),
-    ) {
-        Ok(job) => job,
-        Err(error) => panic!("static route job should be valid: {error}"),
-    }
+    )
 }
 
 fn enrichment_job() -> EnrichmentJob {

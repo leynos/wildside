@@ -13,4 +13,4 @@ pub use crate::domain::bounding_box::{BoundingBox, BoundingBoxError};
 pub use enrichment::{
     EnrichmentJob, EnrichmentJobBuildError, EnrichmentJobParams, EnrichmentJobV1,
 };
-pub use generate_route::{GenerateRouteJob, GenerateRouteJobBuildError, GenerateRouteJobV1};
+pub use generate_route::{GenerateRouteJob, GenerateRouteJobV1};
