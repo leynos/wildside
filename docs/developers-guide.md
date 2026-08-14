@@ -1146,6 +1146,15 @@ only supported contract for values passed into `RouteQueue::enqueue`:
   HTTP `RouteRequest` DTO converts to this payload before constructing the
   `RouteSubmissionRequest`; route job code does not recover fields from an
   untyped `serde_json::Value`.
+- `RoutePreferences` contains optional `mode`, `themes`, `themeIds`,
+  `interestThemeIds`, `avoid`, and `avoidStairs` values. Each preference list
+  accepts at most 64 entries, and each string value, including `mode` and list
+  entries, is limited to 64 UTF-8 bytes. The same deserialization limits apply
+  to HTTP requests and persisted V1 payloads; `deny_unknown_fields` rejects
+  unknown preference keys. The HTTP adapter's `RoutePreferencesSchema` mirrors
+  the field and collection constraints for OpenAPI while keeping the domain
+  type independent of Utoipa; deserialization remains authoritative for the
+  byte-length bound.
 - `GenerateRouteJob` is defined in
   `backend/src/domain/jobs/generate_route.rs`. Its
   `try_from_submission(&RouteSubmissionRequest, request_id, enqueued_at)`
