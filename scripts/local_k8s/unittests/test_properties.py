@@ -248,7 +248,9 @@ def test_helm_fullname_obeys_kubernetes_name_bounds(
     chart_name: str,
 ) -> None:
     """Verify Helm fullnames stay inside Kubernetes DNS label bounds."""
-    fullname = helm_fullname(_preview_config(release_name=release_name, chart_name=chart_name))
+    fullname = helm_fullname(
+        _preview_config(release_name=release_name, chart_name=chart_name)
+    )
 
     assert len(fullname) <= 63, (
         "Helm fullname must fit within the 63-char DNS label limit"

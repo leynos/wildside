@@ -10,7 +10,6 @@ from pathlib import Path
 from shutil import which
 
 import pytest
-
 from local_k8s.unittests.test_cli_log import _load_log_entries
 
 if typ.TYPE_CHECKING:
@@ -112,7 +111,7 @@ def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
 def _assert_command_logged(
     log_entries: list[list[object]],
     tool: str,
-    predicate: cabc.Callable[[list[object]], bool],
+    predicate: cabc.Callable[[cabc.Sequence[object]], bool],
     message: str,
 ) -> None:
     """Assert a fake-tool log contains a matching command."""
@@ -121,7 +120,8 @@ def _assert_command_logged(
         assert isinstance(arguments, list), "validated command arguments must be a list"
         if entry[0] == tool and predicate(arguments):
             return
-    raise AssertionError(f"{message}; recorded commands: {log_entries!r}")
+    failure_message = f"{message}; recorded commands: {log_entries!r}"
+    raise AssertionError(failure_message)
 
 
 def test_fake_tool_rejects_unsupported_wrapper_options(tmp_path: Path) -> None:
@@ -195,14 +195,16 @@ def _assert_provider_image_import_commands(
         _assert_command_logged(
             log_entries,
             "kind",
-            lambda args: args
-            == [
-                "load",
-                "docker-image",
-                "wildside-backend:local",
-                "--name",
-                "wildside-preview",
-            ],
+            lambda args: (
+                args
+                == [
+                    "load",
+                    "docker-image",
+                    "wildside-backend:local",
+                    "--name",
+                    "wildside-preview",
+                ]
+            ),
             "local-k8s-up must load the Docker image into kind",
         )
     elif container_engine == "podman":
@@ -291,7 +293,7 @@ def _assert_fake_command_fails_closed(
 def _count_commands_logged(
     log_entries: list[list[object]],
     tool: str,
-    predicate: cabc.Callable[[list[object]], bool],
+    predicate: cabc.Callable[[cabc.Sequence[object]], bool],
 ) -> int:
     """Count fake-tool log records matching a tool and argument predicate."""
     matches = 0

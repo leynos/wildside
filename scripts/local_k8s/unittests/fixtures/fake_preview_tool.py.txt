@@ -10,7 +10,7 @@ fake fail-closed rather than silently tolerating a drifted contract.
 
 Supported command forms
 -----------------------
-- ``uv run scripts/local_k8s.py {up,status,logs,down}`` re-executes the real CLI
+- ``uv run --no-project scripts/local_k8s.py {up,status,logs,down}`` re-executes the real CLI
   under ``WILDSIDE_FAKE_PYTHON``, so the tests cross the genuine CLI boundary.
 - ``k3d``/``kind`` cluster list, create, and delete, which read and write the
   cluster-state marker.
@@ -65,11 +65,11 @@ def _unwrap(name: str, args: list[str]) -> tuple[str, list[str]]:
         return "kind", args[7:]
     return name, args
 name, args = _unwrap(name, args)
-if name == "uv" and args[:2] == ["run", "scripts/local_k8s.py"] and args[2:] in (
+if name == "uv" and args[:3] == ["run", "--no-project", "scripts/local_k8s.py"] and args[3:] in (
     ["up"], ["status"], ["logs"], ["down"],
 ):
     python = os.environ["WILDSIDE_FAKE_PYTHON"]
-    os.execv(python, [str(python), *args[1:]])
+    os.execv(python, [str(python), *args[2:]])
 def has_cluster() -> bool:
     return state_path.exists() and state_path.read_text() == "created"
 cluster_name = "wildside-preview"

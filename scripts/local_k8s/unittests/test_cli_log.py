@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import dataclasses as dc
 import json
-from dataclasses import dataclass
-from pathlib import Path
+import typing as typ
 
 import pytest
 
+if typ.TYPE_CHECKING:
+    from pathlib import Path
 
-@dataclass(frozen=True)
+
+@dc.dataclass(frozen=True)
 class _LogEntriesCase:
     source: str
     expected: list[list[object]] | None

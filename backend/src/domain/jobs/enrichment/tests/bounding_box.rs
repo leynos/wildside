@@ -11,7 +11,7 @@ fn bounding_box_accepts_valid_coordinates() {
     let bounding_box = BoundingBox::new(-180.0, -90.0, 180.0, 90.0)
         .expect("world-spanning bounding box should be valid");
 
-    assert_eq!(bounding_box.coords(), [-180.0, -90.0, 180.0, 90.0]);
+    assert_eq!(bounding_box.as_array(), [-180.0, -90.0, 180.0, 90.0]);
 }
 
 #[derive(Clone)]
@@ -47,6 +47,13 @@ struct InvalidBoundingBoxCase {
 })]
 #[case(InvalidBoundingBoxCase {
     min_lng: 0.0,
+    min_lat: 0.0,
+    max_lng: 0.0,
+    max_lat: 1.0,
+    expected: BoundingBoxError::InvertedOrdering,
+})]
+#[case(InvalidBoundingBoxCase {
+    min_lng: 1.0,
     min_lat: 0.0,
     max_lng: 0.0,
     max_lat: 1.0,
@@ -152,7 +159,25 @@ proptest! {
     }
 
     #[test]
-    fn inverted_bounding_box_longitude_ordering_is_rejected(
+    fn antimeridian_wrapping_bounding_box_longitudes_are_rejected(
+        min_lng in -179.0_f64..179.0,
+        min_lat in -89.0_f64..89.0,
+        lng_span in 0.001_f64..1.0,
+        lat_span in 0.001_f64..1.0,
+    ) {
+        let error = BoundingBox::new(
+            min_lng,
+            min_lat,
+            min_lng - lng_span,
+            min_lat + lat_span,
+        )
+        .expect_err("antimeridian-wrapping longitudes should be rejected");
+
+        prop_assert_eq!(error, BoundingBoxError::AntimeridianWrap);
+    }
+
+    #[test]
+    fn equal_bounding_box_longitudes_are_rejected(
         min_lng in -179.0_f64..179.0,
         min_lat in -89.0_f64..89.0,
         lat_span in 0.001_f64..1.0,
@@ -160,7 +185,7 @@ proptest! {
         let error = BoundingBox::new(min_lng, min_lat, min_lng, min_lat + lat_span)
             .expect_err("equal longitudes should be rejected");
 
-        prop_assert_eq!(error, BoundingBoxError::AntimeridianWrap);
+        prop_assert_eq!(error, BoundingBoxError::InvertedOrdering);
     }
 
     #[test]

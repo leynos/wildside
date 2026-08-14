@@ -244,7 +244,8 @@ mod tests {
             "avoidStairs",
         );
 
-        let preferences_object = unwrap_object_schema(preferences_schema, ROUTE_PREFERENCES_SCHEMA_NAME);
+        let preferences_object =
+            unwrap_object_schema(preferences_schema, ROUTE_PREFERENCES_SCHEMA_NAME);
         assert!(
             matches!(
                 preferences_object.additional_properties.as_deref(),
