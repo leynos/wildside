@@ -53,7 +53,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 def test_uses_pinned_full_sha(caller_step):
     ref = caller_step["uses"].split("@")[-1]
-    assert SHA_RE.match(ref), f"expected a 40-hex commit SHA, got {ref!r}"
+    assert SHA_RE.fullmatch(ref), f"expected a 40-hex commit SHA, got {ref!r}"
 ```
 
 If a workflow's behaviour genuinely depends on a feature only present from a
@@ -921,19 +921,27 @@ bare key collapses every consumer onto one version and breaks the consumers
 that need the other major. Such advisories need a time-bound entry in
 `security/audit-exceptions.json` rather than a resolution.
 
-Bun audit exceptions are handled by `security/run-bun-audit.js`, which turns
-non-expired entries in `security/audit-exceptions.json` into explicit
-`bun audit --ignore=<GHSA>` flags. This keeps Bun audit policy visible without
-changing npm's dependency resolution surface. Prefer a patched Bun resolution;
-use an exception only when no compatible patched release can be resolved.
+Bun audit exceptions are handled by `runBunAudit()` in
+`security/run-bun-audit.js`. It first calls `assertNoExpired()`, defined in
+`security/audit-exception-policy.js` and also used by
+`security/validate-audit.js`, which aborts the whole run if any entry in
+`security/audit-exceptions.json` has expired. Once that check passes,
+`buildBunAuditArgs()`, also in `security/run-bun-audit.js`, maps every entry's
+advisory into an explicit `bun audit --ignore=<GHSA>` flag, with no further
+filtering. This keeps Bun audit policy visible without changing npm's
+dependency resolution surface. Prefer a patched Bun resolution; use an
+exception only when no compatible patched release can be resolved.
 
 The ledger's `package` field selects which pnpm workspace audit may honour the
 entry, not the name of the vulnerable package. `security/run-bun-audit.js`
-ignores the field and passes every non-expired advisory to Bun, but
+ignores the field and passes every entry's advisory to Bun, but
 `frontend-pwa/scripts/run-audit.mjs` only honours entries whose `package`
-matches its own workspace name. An advisory that both `pnpm audit` and
-`bun audit` report therefore needs `"package": "frontend-pwa"`; record the
-vulnerable package in the optional `introducedBy` field instead.
+matches its own workspace name, via the `workspaceKeys.has(entry.package)`
+check inside `buildLedgerMaps()`. `workspaceKeys` is a Set built from the
+workspace's own `package.json` `name`, plus the unscoped suffix when that name
+is scoped. An advisory that both `pnpm audit` and `bun audit` report therefore
+needs `"package": "frontend-pwa"`; record the vulnerable package in the
+optional `introducedBy` field instead.
 
 The script `scripts/check-overrides-policy.mjs` verifies that `pnpm.overrides`
 is present and that top-level overrides are absent. It is run automatically in

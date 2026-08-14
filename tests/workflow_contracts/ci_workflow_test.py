@@ -24,7 +24,7 @@ def _assert_pinned_to_full_sha(uses: object, expected_path: str) -> None:
     path, separator, ref = uses.partition("@")
     assert separator, f"expected {expected_path} to carry an '@' ref, got {uses!r}"
     assert path == expected_path, f"expected {expected_path}, got {path!r}"
-    assert SHA_RE.match(ref), f"expected a 40-hex commit SHA, got {ref!r}"
+    assert SHA_RE.fullmatch(ref), f"expected a 40-hex commit SHA, got {ref!r}"
 
 
 def _load_steps(job_name: str = "coverage") -> list[dict[str, object]]:
