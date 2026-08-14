@@ -11,7 +11,9 @@ use serde::Serialize;
 
 use crate::domain::ports::{RouteSubmissionRequest, RouteSubmissionStatus};
 use crate::inbound::http::ApiResult;
-use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
+use crate::inbound::http::idempotency::{
+    IdempotencyKeyHeader, extract_idempotency_key, map_idempotency_key_error,
+};
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
 
@@ -58,9 +60,7 @@ pub struct RouteResponse {
         (status = 409, description = "Idempotency key conflict", body = crate::inbound::http::schemas::ErrorSchema),
         (status = 503, description = "Service unavailable", body = crate::inbound::http::schemas::ErrorSchema)
     ),
-    params(
-        ("Idempotency-Key" = Option<String>, Header, description = "UUID for idempotent request submission")
-    ),
+    params(IdempotencyKeyHeader),
     tags = ["routes"],
     operation_id = "submitRoute"
 )]

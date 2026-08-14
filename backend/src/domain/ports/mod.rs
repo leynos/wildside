@@ -29,6 +29,7 @@ mod route_annotations_command;
 mod route_annotations_query;
 mod route_cache;
 mod route_metrics;
+mod route_preferences;
 mod route_queue;
 mod route_queue_metrics;
 mod route_repository;
@@ -167,14 +168,16 @@ pub use route_annotations_query::MockRouteAnnotationsQuery;
 pub use route_annotations_query::{FixtureRouteAnnotationsQuery, RouteAnnotationsQuery};
 pub use route_cache::{RouteCache, RouteCacheError};
 pub use route_metrics::{RouteMetrics, RouteMetricsError};
+pub use route_preferences::RoutePreferences;
+#[cfg(test)]
+pub(crate) use route_preferences::{ROUTE_PREFERENCE_MAX_ITEMS, ROUTE_PREFERENCE_MAX_VALUE_BYTES};
 pub use route_queue::{JobDispatchError, RouteQueue};
 pub use route_queue_metrics::{NoOpRouteQueueMetrics, RouteQueueMetrics, RouteQueueOutcome};
 pub use route_repository::{RoutePersistenceError, RouteRepository};
 pub(crate) use route_submission::deserialize_non_null;
 pub use route_submission::{
-    FixtureRouteSubmissionService, RouteCoordinates, RouteLocation, RoutePreferences,
-    RouteSubmissionPayload, RouteSubmissionRequest, RouteSubmissionResponse,
-    RouteSubmissionService, RouteSubmissionStatus,
+    FixtureRouteSubmissionService, RouteCoordinates, RouteLocation, RouteSubmissionPayload,
+    RouteSubmissionRequest, RouteSubmissionResponse, RouteSubmissionService, RouteSubmissionStatus,
 };
 #[cfg(test)]
 pub use schema_snapshot_repository::MockSchemaSnapshotRepository;

@@ -138,7 +138,9 @@ mod tests {
 
     use super::*;
     use crate::test_support::openapi::unwrap_object_schema;
+    use rstest::{fixture, rstest};
     use utoipa::OpenApi;
+    use utoipa::openapi::Components;
     use utoipa::openapi::RefOr;
     use utoipa::openapi::schema::Schema;
 
@@ -146,6 +148,14 @@ mod tests {
     const ERROR_SCHEMA_NAME: &str = "crate.domain.Error";
     const ROUTE_PREFERENCES_SCHEMA_NAME: &str = "RoutePreferences";
     const USER_SCHEMA_NAME: &str = "crate.domain.User";
+
+    #[fixture]
+    fn openapi_components() -> Components {
+        match ApiDoc::openapi().components {
+            Some(components) => components,
+            None => panic!("OpenAPI document should include components"),
+        }
+    }
 
     /// Assert that an Object schema contains a field with the given name.
     ///
@@ -193,30 +203,27 @@ mod tests {
         }
     }
 
-    #[test]
-    fn openapi_error_schema_has_required_fields() {
-        let doc = ApiDoc::openapi();
-        let schemas = &doc.components.as_ref().expect("components").schemas;
+    #[rstest]
+    fn openapi_error_schema_has_required_fields(openapi_components: Components) {
+        let schemas = &openapi_components.schemas;
         let error_schema = schemas.get(ERROR_SCHEMA_NAME).expect("Error schema");
 
         assert_object_schema_has_field(error_schema, ERROR_SCHEMA_NAME, "code");
         assert_object_schema_has_field(error_schema, ERROR_SCHEMA_NAME, "message");
     }
 
-    #[test]
-    fn openapi_user_schema_has_required_fields() {
-        let doc = ApiDoc::openapi();
-        let schemas = &doc.components.as_ref().expect("components").schemas;
+    #[rstest]
+    fn openapi_user_schema_has_required_fields(openapi_components: Components) {
+        let schemas = &openapi_components.schemas;
         let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
 
         assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "id");
         assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "displayName");
     }
 
-    #[test]
-    fn openapi_route_preferences_schema_has_expected_fields() {
-        let doc = ApiDoc::openapi();
-        let schemas = &doc.components.as_ref().expect("components").schemas;
+    #[rstest]
+    fn openapi_route_preferences_schema_has_expected_fields(openapi_components: Components) {
+        let schemas = &openapi_components.schemas;
         let preferences_schema = schemas
             .get(ROUTE_PREFERENCES_SCHEMA_NAME)
             .expect("RoutePreferences schema");
@@ -238,12 +245,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn openapi_user_id_has_uuid_format() {
+    #[rstest]
+    fn openapi_user_id_has_uuid_format(openapi_components: Components) {
         use utoipa::openapi::schema::SchemaFormat;
 
-        let doc = ApiDoc::openapi();
-        let schemas = &doc.components.as_ref().expect("components").schemas;
+        let schemas = &openapi_components.schemas;
         let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
         let obj = unwrap_object_schema(user_schema, USER_SCHEMA_NAME);
 
@@ -257,10 +263,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn openapi_user_display_name_has_constraints() {
-        let doc = ApiDoc::openapi();
-        let schemas = &doc.components.as_ref().expect("components").schemas;
+    #[rstest]
+    fn openapi_user_display_name_has_constraints(openapi_components: Components) {
+        let schemas = &openapi_components.schemas;
         let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
         let obj = unwrap_object_schema(user_schema, USER_SCHEMA_NAME);
 

@@ -12,6 +12,7 @@ use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
+use super::route_preferences::RoutePreferences;
 use crate::domain::{Error, IdempotencyKey, UserId};
 
 /// A location accepted by route generation.
@@ -128,30 +129,6 @@ impl<'de> Deserialize<'de> for RouteLocation {
     {
         deserializer.deserialize_any(RouteLocationVisitor)
     }
-}
-
-/// Optional route-generation preferences supported by the HTTP contract.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RoutePreferences {
-    /// Routing mode, such as `walking`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mode: Option<String>,
-    /// Theme names used to bias route generation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub themes: Option<Vec<String>>,
-    /// Theme identifiers used to bias route generation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub theme_ids: Option<Vec<String>>,
-    /// Interest-theme identifiers used to bias route generation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub interest_theme_ids: Option<Vec<String>>,
-    /// Route features that should be avoided.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub avoid: Option<Vec<String>>,
-    /// Whether routes should avoid stairs.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub avoid_stairs: Option<bool>,
 }
 
 /// Typed route-generation payload shared by the inbound port and queued job.

@@ -118,10 +118,16 @@ contain only `lat` and `lng`; both values are required. The optional
 | `avoid`            | string[] | Route features to avoid.    |
 | `avoidStairs`      | boolean  | Whether to avoid stairs.    |
 
+Each preference list (`themes`, `themeIds`, `interestThemeIds`, and `avoid`)
+may contain at most 64 entries. Each string preference value, including `mode`
+and every list entry, may contain at most 64 UTF-8 bytes. Values or lists
+exceeding these limits are rejected as `400 Bad Request`.
+
 The request body rejects null `origin`, `destination`, or `preferences`,
 boolean or array locations, coordinate objects with missing or unknown fields,
 and unknown fields at the top level or in `preferences`. Omit `preferences`
-when no preferences are needed; do not send it as `null`.
+when no preferences are needed; do not send it as `null`. These validation
+failures return `400 Bad Request`.
 
 Successful submissions return `202 Accepted` with a generated request ID:
 
@@ -137,7 +143,8 @@ first request returns `202 Accepted` with `status: "accepted"`. Repeating the
 same key with the same payload returns `202 Accepted` with the original
 `requestId` and `status: "replayed"`. Reusing the key with a different payload
 returns `409 Conflict`. An invalid or empty key returns `400 Bad Request`; the
-header is optional.
+header is optional. If a backend service required to accept or persist the
+submission is unavailable, the endpoint returns `503 Service Unavailable`.
 
 ## Users list pagination
 

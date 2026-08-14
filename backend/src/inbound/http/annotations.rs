@@ -20,7 +20,9 @@ use crate::domain::ports::{
 };
 use crate::domain::{Error, IdempotencyKey, UserId};
 use crate::inbound::http::ApiResult;
-use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
+use crate::inbound::http::idempotency::{
+    IdempotencyKeyHeader, extract_idempotency_key, map_idempotency_key_error,
+};
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
@@ -211,7 +213,7 @@ route_mutation_handler!(
         request_body = NoteRequest,
         params(
             ("route_id" = String, Path, description = "Route identifier"),
-            ("Idempotency-Key" = Option<String>, Header, description = "UUID for idempotent requests")
+            IdempotencyKeyHeader
         ),
         responses(
             (status = 200, description = "Upserted note", body = RouteNoteResponse),
@@ -252,7 +254,7 @@ route_mutation_handler!(
         request_body = ProgressRequest,
         params(
             ("route_id" = String, Path, description = "Route identifier"),
-            ("Idempotency-Key" = Option<String>, Header, description = "UUID for idempotent requests")
+            IdempotencyKeyHeader
         ),
         responses(
             (status = 200, description = "Updated progress", body = RouteProgressResponse),
