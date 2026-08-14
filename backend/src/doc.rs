@@ -142,7 +142,7 @@ mod tests {
     use utoipa::OpenApi;
     use utoipa::openapi::Components;
     use utoipa::openapi::RefOr;
-    use utoipa::openapi::schema::Schema;
+    use utoipa::openapi::schema::{AdditionalProperties, Schema};
 
     // Note: utoipa replaces :: with . in schema names
     const ERROR_SCHEMA_NAME: &str = "crate.domain.Error";
@@ -242,6 +242,15 @@ mod tests {
             preferences_schema,
             ROUTE_PREFERENCES_SCHEMA_NAME,
             "avoidStairs",
+        );
+
+        let preferences_object = unwrap_object_schema(preferences_schema, ROUTE_PREFERENCES_SCHEMA_NAME);
+        assert!(
+            matches!(
+                preferences_object.additional_properties.as_deref(),
+                Some(AdditionalProperties::FreeForm(false))
+            ),
+            "RoutePreferences should reject unknown fields"
         );
     }
 

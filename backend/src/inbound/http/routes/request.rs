@@ -22,8 +22,43 @@ pub struct RouteRequest {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_preferences"
     )]
-    #[schema(nullable = false)]
+    #[schema(nullable = false, value_type = RoutePreferencesSchema)]
     pub preferences: Option<RoutePreferences>,
+}
+
+/// OpenAPI schema for [`RoutePreferences`].
+///
+/// This mirror stays in the HTTP adapter so the domain request contract remains
+/// independent of the OpenAPI framework.
+#[derive(utoipa::ToSchema)]
+#[schema(
+    as = RoutePreferences,
+    description = "Optional route-generation preferences supported by the HTTP contract.\n\nString values and list entries are bounded during deserialization so the\nsame limits apply to HTTP requests and persisted job payloads."
+)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[expect(
+    dead_code,
+    reason = "Used only for OpenAPI schema generation via utoipa at the HTTP adapter boundary"
+)]
+struct RoutePreferencesSchema {
+    /// Routing mode, such as `walking`.
+    #[schema(max_length = 64)]
+    mode: Option<String>,
+    /// Theme names used to bias route generation.
+    #[schema(max_items = 64)]
+    themes: Option<Vec<String>>,
+    /// Theme identifiers used to bias route generation.
+    #[schema(rename = "themeIds", max_items = 64)]
+    theme_ids: Option<Vec<String>>,
+    /// Interest-theme identifiers used to bias route generation.
+    #[schema(rename = "interestThemeIds", max_items = 64)]
+    interest_theme_ids: Option<Vec<String>>,
+    /// Route features that should be avoided.
+    #[schema(max_items = 64)]
+    avoid: Option<Vec<String>>,
+    /// Whether routes should avoid stairs.
+    #[schema(rename = "avoidStairs")]
+    avoid_stairs: Option<bool>,
 }
 
 /// HTTP representation of a route location.

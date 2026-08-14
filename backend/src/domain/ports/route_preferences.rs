@@ -14,7 +14,7 @@ pub const ROUTE_PREFERENCE_MAX_VALUE_BYTES: usize = 64;
 ///
 /// String values and list entries are bounded during deserialization so the
 /// same limits apply to HTTP requests and persisted job payloads.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RoutePreferences {
     /// Routing mode, such as `walking`.
@@ -23,7 +23,6 @@ pub struct RoutePreferences {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_optional_preference_value"
     )]
-    #[schema(max_length = 64)]
     pub mode: Option<String>,
     /// Theme names used to bias route generation.
     #[serde(
@@ -31,7 +30,6 @@ pub struct RoutePreferences {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_optional_preference_values"
     )]
-    #[schema(max_items = 64)]
     pub themes: Option<Vec<String>>,
     /// Theme identifiers used to bias route generation.
     #[serde(
@@ -39,7 +37,6 @@ pub struct RoutePreferences {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_optional_preference_values"
     )]
-    #[schema(max_items = 64)]
     pub theme_ids: Option<Vec<String>>,
     /// Interest-theme identifiers used to bias route generation.
     #[serde(
@@ -47,7 +44,6 @@ pub struct RoutePreferences {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_optional_preference_values"
     )]
-    #[schema(max_items = 64)]
     pub interest_theme_ids: Option<Vec<String>>,
     /// Route features that should be avoided.
     #[serde(
@@ -55,7 +51,6 @@ pub struct RoutePreferences {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_optional_preference_values"
     )]
-    #[schema(max_items = 64)]
     pub avoid: Option<Vec<String>>,
     /// Whether routes should avoid stairs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
