@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import dataclasses as dc
 import os
 import typing as typ
 
@@ -287,35 +288,57 @@ def test_install_cache_dir_restores_previous_directory_when_final_mv_fails(
     assert not prepared_dir.exists()
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _CacheCompletenessCase:
+    """One cache-completeness scenario and the exit status it should produce."""
+
+    has_complete_marker: bool
+    postgres_mode: int
+    expected_returncode: int
+    description: str
+
+
 @pytest.mark.parametrize(
-    ("has_complete_marker", "postgres_mode", "expected_returncode", "description"),
+    "case",
     [
-        (False, 0o755, 1, "missing marker"),
-        (True, 0o644, 1, "non-executable postgres"),
-        (True, 0o755, 0, "complete cache"),
+        _CacheCompletenessCase(
+            has_complete_marker=False,
+            postgres_mode=0o755,
+            expected_returncode=1,
+            description="missing marker",
+        ),
+        _CacheCompletenessCase(
+            has_complete_marker=True,
+            postgres_mode=0o644,
+            expected_returncode=1,
+            description="non-executable postgres",
+        ),
+        _CacheCompletenessCase(
+            has_complete_marker=True,
+            postgres_mode=0o755,
+            expected_returncode=0,
+            description="complete cache",
+        ),
     ],
     ids=["missing-marker", "non-executable-postgres", "complete-cache"],
 )
 def test_cache_is_complete(
     tmp_path: Path,
     *,
-    has_complete_marker: bool,
-    postgres_mode: int,
-    expected_returncode: int,
-    description: str,
+    case: _CacheCompletenessCase,
 ) -> None:
     """cache_is_complete requires a marker and an executable postgres binary."""
     version_dir = tmp_path / "16.10.0"
     postgres = version_dir / "bin" / "postgres"
     postgres.parent.mkdir(parents=True)
     postgres.write_bytes(b"\x7fELF")
-    postgres.chmod(postgres_mode)
-    if has_complete_marker:
+    postgres.chmod(case.postgres_mode)
+    if case.has_complete_marker:
         (version_dir / ".complete").write_text("")
 
     result = run_bash(f"cache_is_complete {version_dir}")
 
-    assert result.returncode == expected_returncode, (
-        f"cache_is_complete returned {result.returncode} for {description}; "
+    assert result.returncode == case.expected_returncode, (
+        f"cache_is_complete returned {result.returncode} for {case.description}; "
         f"{result_diagnostics(result)}"
     )
