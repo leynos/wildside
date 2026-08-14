@@ -1236,6 +1236,20 @@ Domain job modules must not import Apalis, SQLx, Diesel, Actix, or outbound
 adapter types. Adapter code serializes domain payloads at the boundary; domain
 code defines the contract and validation rules.
 
+### Offline bundle value objects
+
+`ZoomRange` is the public offline-bundle value object for inclusive tile zoom
+levels. Construct it with `ZoomRange::new(min_zoom, max_zoom)`, which returns
+`Result<Self, OfflineValidationError>` and rejects `min_zoom > max_zoom`. Use
+`min_zoom()` and `max_zoom()` to read the validated endpoints. Its Serde shape
+uses camel case: `{ "minZoom": 12, "maxZoom": 16 }`.
+
+`BoundingBox` remains the shared WGS84 owner. Offline code must reuse its
+validation rather than define a parallel coordinate policy. At the offline
+boundary, `OfflineValidationError::BoundingBox` wraps `BoundingBoxError`,
+including through the `From<BoundingBoxError>` conversion, so the offline
+error type preserves the underlying validation failure.
+
 Queue observability:
 
 - `RouteQueueMetrics` – The domain-owned metrics port used by queue adapters
