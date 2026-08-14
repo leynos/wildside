@@ -13,25 +13,12 @@ use actix_web::{
     http::{Method, StatusCode},
     web,
 };
-use backend::domain::BoundingBox;
-use backend::domain::ports::{EnrichmentRequest, EnrichmentSource, EnrichmentSourceError};
+use backend::domain::ports::{EnrichmentSource, EnrichmentSourceError};
 use backend::outbound::overpass::{OverpassHttpIdentity, OverpassHttpSource};
+use backend::test_support::overpass_enrichment::enrichment_request;
 use url::Url;
-use uuid::Uuid;
 
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
-
-fn request(tags: Vec<&str>) -> EnrichmentRequest {
-    let bounding_box = match BoundingBox::new(-3.30, 55.90, -3.10, 56.00) {
-        Ok(bounding_box) => bounding_box,
-        Err(error) => panic!("fixture bounding box should be valid: {error}"),
-    };
-    EnrichmentRequest {
-        job_id: Uuid::new_v4(),
-        bounding_box,
-        tags: tags.into_iter().map(str::to_owned).collect(),
-    }
-}
 
 #[derive(Debug, PartialEq, Eq)]
 struct RecordedRequest {
@@ -48,6 +35,14 @@ struct LocalOverpassState {
     status: StatusCode,
     body: &'static str,
     recorded_request: Arc<Mutex<Option<RecordedRequest>>>,
+}
+
+struct LocalOverpassServer(ServerHandle);
+
+impl Drop for LocalOverpassServer {
+    fn drop(&mut self) {
+        actix_web::rt::spawn(self.0.stop(false));
+    }
 }
 
 async fn respond_from_local_overpass(
@@ -95,7 +90,11 @@ async fn respond_from_local_overpass(
 async fn start_local_overpass(
     status: StatusCode,
     body: &'static str,
-) -> TestResult<(Url, Arc<Mutex<Option<RecordedRequest>>>, ServerHandle)> {
+) -> TestResult<(
+    Url,
+    Arc<Mutex<Option<RecordedRequest>>>,
+    LocalOverpassServer,
+)> {
     let listener = TcpListener::bind(("127.0.0.1", 0))?;
     let address = listener.local_addr()?;
     let recorded_request = Arc::new(Mutex::new(None));
@@ -118,7 +117,7 @@ async fn start_local_overpass(
     Ok((
         Url::parse(&format!("http://{address}"))?,
         recorded_request,
-        handle,
+        LocalOverpassServer(handle),
     ))
 }
 
@@ -143,7 +142,7 @@ async fn fetch_pois_posts_identity_and_bbox_query_to_the_endpoint() -> TestResul
             "tags": { "amenity": "cafe" }
         }]
     }"#;
-    let (endpoint, recorded_request, server) =
+    let (endpoint, recorded_request, _server) =
         start_local_overpass(StatusCode::OK, response_body).await?;
     let source = OverpassHttpSource::with_identity(
         endpoint.clone(),
@@ -156,9 +155,8 @@ async fn fetch_pois_posts_identity_and_bbox_query_to_the_endpoint() -> TestResul
     )?;
 
     let response = source
-        .fetch_pois(&request(vec!["amenity", "name=coffee"]))
+        .fetch_pois(&enrichment_request(vec!["amenity", "name=coffee"]))
         .await?;
-    server.stop(true).await;
 
     assert_eq!(response.pois.len(), 1, "valid Overpass JSON should decode");
     assert_eq!(response.pois[0].element_id, 101);
@@ -202,15 +200,14 @@ async fn fetch_pois_posts_identity_and_bbox_query_to_the_endpoint() -> TestResul
 
 #[actix_web::test]
 async fn fetch_pois_maps_non_success_http_responses() -> TestResult {
-    let (endpoint, _recorded_request, server) =
+    let (endpoint, _recorded_request, _server) =
         start_local_overpass(StatusCode::TOO_MANY_REQUESTS, "slow down").await?;
     let source = OverpassHttpSource::new(endpoint, Duration::from_secs(2))?;
 
     let error = source
-        .fetch_pois(&request(vec!["amenity"]))
+        .fetch_pois(&enrichment_request(vec!["amenity"]))
         .await
         .expect_err("429 responses should be returned as domain errors");
-    server.stop(true).await;
 
     assert!(
         matches!(

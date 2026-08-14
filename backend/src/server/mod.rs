@@ -35,7 +35,7 @@ use backend::inbound::http::offline::{
     delete_offline_bundle, list_offline_bundles, upsert_offline_bundle,
 };
 use backend::inbound::http::preferences::{get_preferences, update_preferences};
-use backend::inbound::http::routes::submit_route;
+use backend::inbound::http::routes::{route_request_json_config, submit_route};
 use backend::inbound::http::state::HttpState;
 use backend::inbound::http::users::{current_user, list_users, login, update_interests};
 use backend::inbound::http::walk_sessions::create_walk_session;
@@ -175,6 +175,7 @@ fn build_app(
         .build();
 
     let api = web::scope("/api/v1")
+        .app_data(route_request_json_config())
         .wrap(session)
         .service(login)
         .service(list_users)

@@ -1,27 +1,18 @@
 //! Regression coverage for Overpass HTTP transport and mapping helpers.
 
 use rstest::rstest;
-use uuid::Uuid;
 
 use super::*;
 use crate::domain::BoundingBox;
-
-fn request(tags: Vec<&str>) -> EnrichmentRequest {
-    let bounding_box = match BoundingBox::new(-3.30, 55.90, -3.10, 56.00) {
-        Ok(bounding_box) => bounding_box,
-        Err(error) => panic!("fixture bounding box should be valid: {error}"),
-    };
-    EnrichmentRequest {
-        job_id: Uuid::new_v4(),
-        bounding_box,
-        tags: tags.into_iter().map(str::to_owned).collect(),
-    }
-}
+use crate::test_support::overpass_enrichment::enrichment_request;
 
 #[test]
 fn builds_query_with_bbox_reordered_for_overpass() {
-    let query = build_overpass_query(&request(vec!["amenity", "name=coffee \"bar\""]), 180)
-        .expect("query should build");
+    let query = build_overpass_query(
+        &enrichment_request(vec!["amenity", "name=coffee \"bar\""]),
+        180,
+    )
+    .expect("query should build");
 
     assert!(
         query.contains("node[\"amenity\"](55.9,-3.3,56,-3.1);"),
@@ -38,43 +29,54 @@ fn builds_query_with_bbox_reordered_for_overpass() {
 }
 
 #[rstest]
-#[case::rate_limited(StatusCode::TOO_MANY_REQUESTS, "RateLimited")]
-#[case::request_timeout(StatusCode::REQUEST_TIMEOUT, "Timeout")]
-#[case::gateway_timeout(StatusCode::GATEWAY_TIMEOUT, "Timeout")]
-#[case::bad_request(StatusCode::BAD_REQUEST, "InvalidRequest")]
-#[case::server_error(StatusCode::INTERNAL_SERVER_ERROR, "Transport")]
+#[case::rate_limited(
+    StatusCode::TOO_MANY_REQUESTS,
+    is_rate_limited,
+    "429 should map to RateLimited"
+)]
+#[case::request_timeout(
+    StatusCode::REQUEST_TIMEOUT,
+    is_timeout,
+    "timeout statuses should map to Timeout"
+)]
+#[case::gateway_timeout(
+    StatusCode::GATEWAY_TIMEOUT,
+    is_timeout,
+    "timeout statuses should map to Timeout"
+)]
+#[case::bad_request(
+    StatusCode::BAD_REQUEST,
+    is_invalid_request,
+    "client statuses should map to InvalidRequest"
+)]
+#[case::server_error(
+    StatusCode::INTERNAL_SERVER_ERROR,
+    is_transport,
+    "other statuses should map to Transport"
+)]
 fn maps_http_statuses_to_expected_domain_errors(
     #[case] status: StatusCode,
-    #[case] expected: &str,
+    #[case] expected: fn(&EnrichmentSourceError) -> bool,
+    #[case] message: &str,
 ) {
     let error = map_status_error(status, b"{\"remark\":\"backend unavailable\"}");
-    match expected {
-        "RateLimited" => {
-            assert!(
-                matches!(error, EnrichmentSourceError::RateLimited { .. }),
-                "429 should map to RateLimited",
-            );
-        }
-        "Timeout" => {
-            assert!(
-                matches!(error, EnrichmentSourceError::Timeout { .. }),
-                "timeout statuses should map to Timeout",
-            );
-        }
-        "InvalidRequest" => {
-            assert!(
-                matches!(error, EnrichmentSourceError::InvalidRequest { .. }),
-                "client statuses should map to InvalidRequest",
-            );
-        }
-        "Transport" => {
-            assert!(
-                matches!(error, EnrichmentSourceError::Transport { .. }),
-                "other statuses should map to Transport",
-            );
-        }
-        _ => panic!("unsupported test expectation: {expected}"),
-    }
+    assert!(expected(&error), "{message}");
+}
+
+fn is_rate_limited(error: &EnrichmentSourceError) -> bool {
+    matches!(error, EnrichmentSourceError::RateLimited { .. })
+}
+
+fn is_timeout(error: &EnrichmentSourceError) -> bool {
+    matches!(error, EnrichmentSourceError::Timeout { .. })
+}
+
+fn is_invalid_request(error: &EnrichmentSourceError) -> bool {
+    matches!(error, EnrichmentSourceError::InvalidRequest { .. })
+}
+
+fn is_transport(error: &EnrichmentSourceError) -> bool {
+    matches!(error, EnrichmentSourceError::Transport { .. })
 }
 
 #[test]

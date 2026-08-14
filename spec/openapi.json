@@ -634,11 +634,15 @@
           "lat": {
             "description": "Latitude in decimal degrees.",
             "format": "double",
+            "maximum": 90,
+            "minimum": -90,
             "type": "number"
           },
           "lng": {
             "description": "Longitude in decimal degrees.",
             "format": "double",
+            "maximum": 180,
+            "minimum": -180,
             "type": "number"
           }
         },
@@ -818,15 +822,8 @@
             "description": "Origin location identifier or coordinates."
           },
           "preferences": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RoutePreferences",
-                "description": "Optional route preferences."
-              }
-            ]
+            "$ref": "#/components/schemas/RoutePreferences",
+            "description": "Optional route preferences."
           }
         },
         "required": [

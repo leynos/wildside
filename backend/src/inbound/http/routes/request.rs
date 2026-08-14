@@ -1,5 +1,6 @@
 //! HTTP request DTOs and conversion into the route-submission port.
 
+use actix_web::web;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::Error;
@@ -21,6 +22,7 @@ pub struct RouteRequest {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_preferences"
     )]
+    #[schema(nullable = false)]
     pub preferences: Option<RoutePreferences>,
 }
 
@@ -39,9 +41,17 @@ pub enum RouteLocationDto {
 #[serde(deny_unknown_fields)]
 pub struct RouteCoordinatesDto {
     /// Latitude in decimal degrees.
+    #[schema(minimum = -90.0, maximum = 90.0)]
     pub lat: f64,
     /// Longitude in decimal degrees.
+    #[schema(minimum = -180.0, maximum = 180.0)]
     pub lng: f64,
+}
+
+/// Configure JSON extraction failures as client request errors.
+pub fn route_request_json_config() -> web::JsonConfig {
+    web::JsonConfig::default()
+        .error_handler(|_error, _request| Error::invalid_request("invalid JSON request").into())
 }
 
 fn deserialize_preferences<'de, D>(deserializer: D) -> Result<Option<RoutePreferences>, D::Error>

@@ -19,6 +19,7 @@ use crate::inbound::http::state::HttpState;
 
 #[path = "routes/request.rs"]
 mod request;
+pub use request::route_request_json_config;
 pub use request::{RouteCoordinatesDto, RouteLocationDto, RouteRequest};
 
 /// Route submission response.
@@ -146,6 +147,8 @@ mod tests {
         });
         App::new()
             .app_data(web::Data::new(state))
+            .app_data(route_request_json_config())
+            .wrap(crate::Trace)
             .wrap(crate::inbound::http::test_utils::test_session_middleware())
             .service(
                 web::scope("/api/v1")
@@ -262,6 +265,37 @@ mod tests {
 
         let response = actix_test::call_service(&app, request).await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    async fn submit_route_maps_invalid_coordinates_to_an_error_envelope() -> TestResult {
+        let app = actix_test::init_service(test_app(Arc::new(FixtureRouteSubmissionService))).await;
+        let cookie = login_and_get_cookie(&app).await?;
+
+        let request = actix_test::TestRequest::post()
+            .uri("/api/v1/routes")
+            .cookie(cookie)
+            .set_json(json!({
+                "origin": {"lat": 90.1, "lng": 0.0},
+                "destination": "poi:work"
+            }))
+            .to_request();
+
+        let response = actix_test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body: Value = actix_test::read_body_json(response).await;
+        assert_eq!(
+            body.get("code").and_then(Value::as_str),
+            Some("invalid_request")
+        );
+        assert!(
+            body.get("traceId")
+                .and_then(Value::as_str)
+                .is_some_and(|trace_id| !trace_id.is_empty()),
+            "invalid request errors should include a trace identifier",
+        );
+        Ok(())
     }
 
     #[rstest]
