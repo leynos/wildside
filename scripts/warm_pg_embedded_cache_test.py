@@ -287,56 +287,35 @@ def test_install_cache_dir_restores_previous_directory_when_final_mv_fails(
     assert not prepared_dir.exists()
 
 
-def test_cache_is_complete_returns_false_for_missing_marker(tmp_path: Path) -> None:
-    """A cache directory without a .complete marker is not considered complete."""
-    version_dir = tmp_path / "16.10.0"
-    version_dir.mkdir()
-    (version_dir / "bin").mkdir()
-    postgres = version_dir / "bin" / "postgres"
-    postgres.write_bytes(b"\x7fELF")
-    postgres.chmod(0o755)
-    result = run_bash(
-        f"cache_is_complete {version_dir}",
-    )
-    assert result.returncode != 0, (
-        f"cache_is_complete should return non-zero without .complete; "
-        f"{result_diagnostics(result)}"
-    )
-
-
-def test_cache_is_complete_returns_false_for_non_executable_postgres(
+@pytest.mark.parametrize(
+    ("has_complete_marker", "postgres_mode", "expected_returncode", "description"),
+    [
+        (False, 0o755, 1, "missing marker"),
+        (True, 0o644, 1, "non-executable postgres"),
+        (True, 0o755, 0, "complete cache"),
+    ],
+    ids=["missing-marker", "non-executable-postgres", "complete-cache"],
+)
+def test_cache_is_complete(
     tmp_path: Path,
+    *,
+    has_complete_marker: bool,
+    postgres_mode: int,
+    expected_returncode: int,
+    description: str,
 ) -> None:
-    """A cache with a non-executable postgres binary is not considered complete."""
+    """cache_is_complete requires a marker and an executable postgres binary."""
     version_dir = tmp_path / "16.10.0"
-    version_dir.mkdir()
-    (version_dir / "bin").mkdir()
     postgres = version_dir / "bin" / "postgres"
+    postgres.parent.mkdir(parents=True)
     postgres.write_bytes(b"\x7fELF")
-    postgres.chmod(0o644)
-    (version_dir / ".complete").write_text("")
-    result = run_bash(
-        f"cache_is_complete {version_dir}",
-    )
-    assert result.returncode != 0, (
-        f"cache_is_complete should return non-zero without executable postgres; "
-        f"{result_diagnostics(result)}"
-    )
+    postgres.chmod(postgres_mode)
+    if has_complete_marker:
+        (version_dir / ".complete").write_text("")
 
+    result = run_bash(f"cache_is_complete {version_dir}")
 
-def test_cache_is_complete_returns_true_for_complete_cache(tmp_path: Path) -> None:
-    """A cache with the marker file and an executable postgres is complete."""
-    version_dir = tmp_path / "16.10.0"
-    version_dir.mkdir()
-    (version_dir / "bin").mkdir()
-    postgres = version_dir / "bin" / "postgres"
-    postgres.write_bytes(b"\x7fELF")
-    postgres.chmod(0o755)
-    (version_dir / ".complete").write_text("")
-    result = run_bash(
-        f"cache_is_complete {version_dir}",
-    )
-    assert result.returncode == 0, (
-        f"cache_is_complete should succeed for complete cache; "
+    assert result.returncode == expected_returncode, (
+        f"cache_is_complete returned {result.returncode} for {description}; "
         f"{result_diagnostics(result)}"
     )
