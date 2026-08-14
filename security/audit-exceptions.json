@@ -8,43 +8,28 @@
     "expiresAt": "2026-08-28"
   },
   {
-    "id": "BUN_POSTCSS_STRINGIFY_XSS_2026_06",
-    "package": "postcss",
-    "advisory": "GHSA-qx2v-qp2m-jg93",
-    "reason": "Bun reports this transitive frontend-tooling advisory; keep it ledgered until the Bun lockfile resolves a patched PostCSS without npm-visible overrides.",
-    "addedAt": "2026-06-28",
-    "expiresAt": "2026-08-05"
-  },
-  {
-    "id": "BUN_VITE_LAUNCH_EDITOR_2026_06",
-    "package": "vite",
-    "advisory": "GHSA-v6wh-96g9-6wx3",
-    "reason": "Bun reports the Vite tooling advisory despite package.json requesting a safe Vite range; keep it explicit until the Bun lockfile no longer reports it.",
-    "addedAt": "2026-06-28",
-    "expiresAt": "2026-08-07"
-  },
-  {
-    "id": "BUN_VITE_FS_DENY_2026_06",
-    "package": "vite",
-    "advisory": "GHSA-fx2h-pf6j-xcff",
-    "reason": "Bun reports the Vite tooling advisory despite package.json requesting a safe Vite range; keep it explicit until the Bun lockfile no longer reports it.",
-    "addedAt": "2026-06-28",
-    "expiresAt": "2026-08-09"
-  },
-  {
     "id": "BUN_PICOMATCH_POSIX_2026_06",
     "package": "picomatch",
     "advisory": "GHSA-3v7f-55p6-f55p",
-    "reason": "Bun reports transitive Picomatch versions from frontend tooling; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "reason": "Bun reports transitive Picomatch versions from frontend tooling. pnpm holds both affected majors on patched releases through the ranged pnpm.overrides entries, but Bun ignores ranged resolution keys such as 'picomatch@<2.3.2', so bun.lock keeps 2.3.1 and 4.0.3. A flat resolution cannot fix this without collapsing both majors onto one version and breaking the v2 consumers. Revisit when Bun supports ranged resolutions or the tooling drops Picomatch 2.",
     "addedAt": "2026-06-28",
-    "expiresAt": "2026-08-11"
+    "expiresAt": "2026-09-11"
   },
   {
     "id": "BUN_PICOMATCH_REDOS_2026_06",
     "package": "picomatch",
     "advisory": "GHSA-c2c7-rcm5-vvqj",
-    "reason": "Bun reports transitive Picomatch versions from frontend tooling; pnpm keeps patched ranges through pnpm.overrides while Bun audit cannot consume pnpm's scoped override metadata.",
+    "reason": "Bun reports transitive Picomatch versions from frontend tooling. pnpm holds both affected majors on patched releases through the ranged pnpm.overrides entries, but Bun ignores ranged resolution keys such as 'picomatch@<2.3.2', so bun.lock keeps 2.3.1 and 4.0.3. A flat resolution cannot fix this without collapsing both majors onto one version and breaking the v2 consumers. Revisit when Bun supports ranged resolutions or the tooling drops Picomatch 2.",
     "addedAt": "2026-06-28",
-    "expiresAt": "2026-08-13"
+    "expiresAt": "2026-09-13"
+  },
+  {
+    "id": "EXTRACT_ZIP_SYMLINK_TRAVERSAL_2026_08",
+    "package": "frontend-pwa",
+    "advisory": "GHSA-jmr9-qjv8-65gv",
+    "introducedBy": "extract-zip",
+    "reason": "Both pnpm and Bun report this, so the entry is scoped to the frontend-pwa workspace ledger. extract-zip has no patched release; 2.0.1 is the latest published version and the advisory covers everything up to it. It reaches the tree only through puppeteer 23 via @puppeteer/browsers 2.x, which is used at build time to download a Mermaid rendering browser from Google's own endpoints, so no untrusted archive is extracted. The fix is @puppeteer/browsers 3.x, which replaced extract-zip with modern-tar and first ships in puppeteer 25.7; that is a two-major bump and scripts/install-mermaid-browser.mjs deep-imports puppeteer internals, so it needs its own change and verification.",
+    "addedAt": "2026-08-13",
+    "expiresAt": "2026-09-15"
   }
 ]

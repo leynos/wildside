@@ -231,6 +231,7 @@ test-frontend: deps typecheck
 # Validate the mutation-testing caller workflow contract
 test-workflow-contracts:
 	$(PYTHON_NO_BYTECODE_ENV) uv run --with 'pytest>=8' --with 'pyyaml>=6' \
+		--with 'hypothesis>=6' \
 		python -m pytest tests/workflow_contracts -q
 
 # Python unit tests for the local Kubernetes preview helper

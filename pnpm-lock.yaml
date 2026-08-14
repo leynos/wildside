@@ -8,27 +8,29 @@ overrides:
   '@babel/core': 7.29.6
   ajv: 8.20.0
   brace-expansion: 5.0.9
-  dompurify: 3.4.12
+  dompurify: 3.4.13
   esbuild: 0.28.1
   fast-uri: 3.1.5
   glob: 11.1.0
   ip-address: 10.4.0
-  js-yaml: 4.3.0
+  js-yaml: 4.3.1
   linkify-it: 5.0.2
   markdown-it: 14.2.0
+  mermaid: 11.16.1
+  nanoid: 3.3.18
   postcss: 8.5.23
   uuid: 14.0.0
   yaml: 2.8.3
   '@isaacs/brace-expansion': 5.0.1
   brace-expansion@<5.0.9: 5.0.9
   lodash: 4.18.1
-  mermaid: 11.15.0
   minimatch: 10.2.3
   lodash-es: 4.18.1
   pino: 9.13.1
   qs: 6.15.2
   rollup: 4.59.0
   basic-ftp: 5.3.1
+  nanoid@<3.3.18: 3.3.18
   tar-fs: 3.1.1
   validator: 13.15.23
   ws: 8.21.0
@@ -323,8 +325,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@braintree/sanitize-url@7.1.1':
-    resolution: {integrity: sha512-i1L7noDNxtFyL5DmZafWy1wRVhGehQmzZaz1HiN5e7iylJMSZR7ekOV7NsIqa5qBldlLrsKv4HbgFUVlQrz8Mw==}
+  '@braintree/sanitize-url@7.1.2':
+    resolution: {integrity: sha512-jigsZK+sMF/cuiB7sERuo9V7N9jx+dhmHHnQyDSVdpZwVutaBu7WvNYqMDLSgFgfB30n452TP3vjDAvFC973mA==}
 
   '@bundled-es-modules/deepmerge@4.3.1':
     resolution: {integrity: sha512-Rk453EklPUPC3NRWc3VUNI/SSUjdBaFoaQvFRmNBNtMHVtOFD5AntiWg5kEE1hqcPqedYFDzxE3ZcMYPcA195w==}
@@ -611,12 +613,12 @@ packages:
   '@mermaid-js/layout-elk@0.2.1':
     resolution: {integrity: sha512-MX9jwhMyd5zDcFsYcl3duDUkKhjVRUCGEQrdCeNV5hCIR6+3FuDDbRbFmvVbAu15K1+juzsYGG+K8MDvCY1Amg==}
     peerDependencies:
-      mermaid: 11.15.0
+      mermaid: 11.16.1
 
   '@mermaid-js/layout-tidy-tree@0.2.2':
     resolution: {integrity: sha512-8RmjDXjKJBxqTS1mICStm8zWRM45fSzs0SOrkp28+KsOGS2YEMFMVTwwRU8CsC6M1L+pDYZVjf1m9AC1c9Wndg==}
     peerDependencies:
-      mermaid: 11.15.0
+      mermaid: 11.16.1
 
   '@mermaid-js/mermaid-cli@11.15.0':
     resolution: {integrity: sha512-rmz9ELKtmKQvRcYJGI2e509FK9yCBvmEVfHeRSYkleGqo6qqh8LFooxRPCqq04uVx3JHMp9g/vmM85gi/QFFlQ==}
@@ -628,10 +630,10 @@ packages:
   '@mermaid-js/mermaid-zenuml@0.2.2':
     resolution: {integrity: sha512-sUjwk4NWUpy9uaHypYSIGJDks10ZaZo5CHH9lx9xcmyqv9w7yvd4vecUmlUQxmlHStYO+aqSkYKX5/gFjDfypw==}
     peerDependencies:
-      mermaid: 11.15.0
+      mermaid: 11.16.1
 
-  '@mermaid-js/parser@1.1.1':
-    resolution: {integrity: sha512-VuHdsYMK1bT6X2JbcAaWAhugTRvRBRyuZgd+c22swUeI9g/ntaxF7CY7dYarhZovofCbUNO0G7JesfmNtjYOCw==}
+  '@mermaid-js/parser@1.2.0':
+    resolution: {integrity: sha512-oYPyv8A4As1yH5Bx+04iQEQxXuIQDe0GKCNSRgao6z8AM9jixXIfP0vsppRLvGf+nKIOb9/LdpWA4YuJiVvESA==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -1461,8 +1463,8 @@ packages:
     peerDependencies:
       cytoscape: ^3.2.0
 
-  cytoscape@3.33.1:
-    resolution: {integrity: sha512-iJc4TwyANnOGR1OmWhsS9ayRS3s+XQ185FmuHObThD+5AeJCakAAbWv8KimMTt08xCCLNgneQwFp+JRJOr9qGQ==}
+  cytoscape@3.34.1:
+    resolution: {integrity: sha512-Lr0RvH9H75y9ar8h9Toy6u4lxRSCcxUq+hHcQ26sVWo6BnaQp1gwEZOYqwuYTZhyW7npyKnNLP8oJ2p1/3OZ7g==}
     engines: {node: '>=0.10'}
 
   d3-array@2.12.1:
@@ -1678,8 +1680,8 @@ packages:
   dlv@1.1.3:
     resolution: {integrity: sha512-+HlytyjlPKnIG8XuRG8WvmBP8xs8P71y+SKKS6ZXWoEgLuePxtDoUEiH7WkdePWrQ5JBpE6aoVqfZfJUQkjXwA==}
 
-  dompurify@3.4.12:
-    resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
+  dompurify@3.4.13:
+    resolution: {integrity: sha512-2vmYIoqjze2d+kakP8S/nS5shfsl587kzwEjcGlTdiksUVgFHnFCsLYDVj/JNqJVOQZGSYBTmuycv0PodwmnMQ==}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -2110,8 +2112,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@4.3.0:
-    resolution: {integrity: sha512-1td788aAnnZ5qs7V2QIRl1owjtYpbKt749Y3xauqQgwIIGF/xXWz1wMTEBx5O3LK3lXLVuqXPdPxj2BoFHaW9Q==}
+  js-yaml@4.3.1:
+    resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
     hasBin: true
 
   jsesc@3.1.0:
@@ -2240,8 +2242,8 @@ packages:
     resolution: {integrity: sha512-8q7VEgMJW4J8tcfVPy8g09NcQwZdbwFEqhe/WZkoIzjn/3TGDwtOCYtXGxA3O8tPzpczCCDgv+P2P5y00ZJOOg==}
     engines: {node: '>= 8'}
 
-  mermaid@11.15.0:
-    resolution: {integrity: sha512-pTMbcf3rWdtLiYGpmoTjHEpeY8seiy6sR+9nD7LOs8KfUbHE4lOUAprTRqRAcWSQ6MQpdX+YEsxShtGsINtPtw==}
+  mermaid@11.16.1:
+    resolution: {integrity: sha512-TQsq6u22fAn3rek5VOubrhKPo1g5hwC3FXUN9hiyupTckcYiGuuKGkNQrKYwGJkXUxZdojwRG46gsSCFZMDp4g==}
 
   micromark-core-commonmark@2.0.3:
     resolution: {integrity: sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==}
@@ -2342,8 +2344,8 @@ packages:
   mz@2.7.0:
     resolution: {integrity: sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q==}
 
-  nanoid@3.3.16:
-    resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
+  nanoid@3.3.18:
+    resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -3370,7 +3372,7 @@ snapshots:
   '@biomejs/cli-win32-x64@2.3.1':
     optional: true
 
-  '@braintree/sanitize-url@7.1.1': {}
+  '@braintree/sanitize-url@7.1.2': {}
 
   '@bundled-es-modules/deepmerge@4.3.1':
     dependencies:
@@ -3608,49 +3610,49 @@ snapshots:
       '@jsonjoy.com/codegen': 1.0.0(tslib@2.8.1)
       tslib: 2.8.1
 
-  '@mermaid-js/layout-elk@0.2.1(mermaid@11.15.0)':
+  '@mermaid-js/layout-elk@0.2.1(mermaid@11.16.1)':
     dependencies:
       d3: 7.9.0
       elkjs: 0.9.3
-      mermaid: 11.15.0
+      mermaid: 11.16.1
 
-  '@mermaid-js/layout-tidy-tree@0.2.2(mermaid@11.15.0)':
+  '@mermaid-js/layout-tidy-tree@0.2.2(mermaid@11.16.1)':
     dependencies:
       d3: 7.9.0
-      mermaid: 11.15.0
+      mermaid: 11.16.1
     optional: true
 
   '@mermaid-js/mermaid-cli@11.15.0(@babel/core@7.29.6)(@babel/template@7.29.7)(@types/react@18.3.24)(puppeteer@23.11.1(typescript@5.9.2))':
     dependencies:
       '@fortawesome/fontawesome-free': 7.2.0
-      '@mermaid-js/layout-elk': 0.2.1(mermaid@11.15.0)
-      '@mermaid-js/mermaid-zenuml': 0.2.2(@babel/core@7.29.6)(@babel/template@7.29.7)(@types/react@18.3.24)(mermaid@11.15.0)
+      '@mermaid-js/layout-elk': 0.2.1(mermaid@11.16.1)
+      '@mermaid-js/mermaid-zenuml': 0.2.2(@babel/core@7.29.6)(@babel/template@7.29.7)(@types/react@18.3.24)(mermaid@11.16.1)
       chalk: 5.6.2
       commander: 13.1.0
       import-meta-resolve: 4.2.0
       katex: 0.16.47
-      mermaid: 11.15.0
+      mermaid: 11.16.1
       p-limit: 6.2.0
       puppeteer: 23.11.1(typescript@5.9.2)
     optionalDependencies:
-      '@mermaid-js/layout-tidy-tree': 0.2.2(mermaid@11.15.0)
+      '@mermaid-js/layout-tidy-tree': 0.2.2(mermaid@11.16.1)
     transitivePeerDependencies:
       - '@babel/core'
       - '@babel/template'
       - '@types/react'
       - ts-node
 
-  '@mermaid-js/mermaid-zenuml@0.2.2(@babel/core@7.29.6)(@babel/template@7.29.7)(@types/react@18.3.24)(mermaid@11.15.0)':
+  '@mermaid-js/mermaid-zenuml@0.2.2(@babel/core@7.29.6)(@babel/template@7.29.7)(@types/react@18.3.24)(mermaid@11.16.1)':
     dependencies:
       '@zenuml/core': 3.40.1(@babel/core@7.29.6)(@babel/template@7.29.7)(@types/react@18.3.24)
-      mermaid: 11.15.0
+      mermaid: 11.16.1
     transitivePeerDependencies:
       - '@babel/core'
       - '@babel/template'
       - '@types/react'
       - ts-node
 
-  '@mermaid-js/parser@1.1.1':
+  '@mermaid-js/parser@1.2.0':
     dependencies:
       '@chevrotain/types': 11.1.2
 
@@ -4255,7 +4257,7 @@ snapshots:
       class-variance-authority: 0.7.1
       clsx: 2.1.1
       color-string: 2.1.0
-      dompurify: 3.4.12
+      dompurify: 3.4.13
       highlight.js: 10.7.3
       html-to-image: 1.11.13
       immer: 10.1.3
@@ -4538,7 +4540,7 @@ snapshots:
     dependencies:
       env-paths: 2.2.1
       import-fresh: 3.3.1
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       parse-json: 5.2.0
     optionalDependencies:
       typescript: 5.9.2
@@ -4560,17 +4562,17 @@ snapshots:
 
   culori@3.3.0: {}
 
-  cytoscape-cose-bilkent@4.1.0(cytoscape@3.33.1):
+  cytoscape-cose-bilkent@4.1.0(cytoscape@3.34.1):
     dependencies:
       cose-base: 1.0.3
-      cytoscape: 3.33.1
+      cytoscape: 3.34.1
 
-  cytoscape-fcose@2.2.0(cytoscape@3.33.1):
+  cytoscape-fcose@2.2.0(cytoscape@3.34.1):
     dependencies:
       cose-base: 2.2.0
-      cytoscape: 3.33.1
+      cytoscape: 3.34.1
 
-  cytoscape@3.33.1: {}
+  cytoscape@3.34.1: {}
 
   d3-array@2.12.1:
     dependencies:
@@ -4807,7 +4809,7 @@ snapshots:
 
   dlv@1.1.3: {}
 
-  dompurify@3.4.12:
+  dompurify@3.4.13:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -5229,7 +5231,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@4.3.0:
+  js-yaml@4.3.1:
     dependencies:
       argparse: 2.0.1
 
@@ -5315,7 +5317,7 @@ snapshots:
       commander: 14.0.3
       deep-extend: 0.6.0
       ignore: 7.0.5
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       jsonc-parser: 3.3.1
       jsonpointer: 5.0.1
       markdown-it: 14.2.0
@@ -5360,21 +5362,21 @@ snapshots:
 
   merge2@1.4.1: {}
 
-  mermaid@11.15.0:
+  mermaid@11.16.1:
     dependencies:
-      '@braintree/sanitize-url': 7.1.1
+      '@braintree/sanitize-url': 7.1.2
       '@iconify/utils': 3.1.3
-      '@mermaid-js/parser': 1.1.1
+      '@mermaid-js/parser': 1.2.0
       '@types/d3': 7.4.3
       '@upsetjs/venn.js': 2.0.0
-      cytoscape: 3.33.1
-      cytoscape-cose-bilkent: 4.1.0(cytoscape@3.33.1)
-      cytoscape-fcose: 2.2.0(cytoscape@3.33.1)
+      cytoscape: 3.34.1
+      cytoscape-cose-bilkent: 4.1.0(cytoscape@3.34.1)
+      cytoscape-fcose: 2.2.0(cytoscape@3.34.1)
       d3: 7.9.0
       d3-sankey: 0.12.3
       dagre-d3-es: 7.0.14
       dayjs: 1.11.20
-      dompurify: 3.4.12
+      dompurify: 3.4.13
       es-toolkit: 1.46.1
       katex: 0.16.47
       khroma: 2.1.0
@@ -5579,7 +5581,7 @@ snapshots:
       object-assign: 4.1.1
       thenify-all: 1.6.0
 
-  nanoid@3.3.16: {}
+  nanoid@3.3.18: {}
 
   netmask@2.0.2: {}
 
@@ -5647,7 +5649,7 @@ snapshots:
       find-up: 8.0.0
       fs-extra: 11.3.3
       jiti: 2.6.1
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       remeda: 2.33.4
       string-argv: 0.3.2
       tsconfck: 3.1.6(typescript@5.9.2)
@@ -5813,7 +5815,7 @@ snapshots:
 
   postcss@8.5.23:
     dependencies:
-      nanoid: 3.3.16
+      nanoid: 3.3.18
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
