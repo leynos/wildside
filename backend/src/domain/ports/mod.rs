@@ -169,7 +169,6 @@ pub use route_annotations_query::{FixtureRouteAnnotationsQuery, RouteAnnotations
 pub use route_cache::{RouteCache, RouteCacheError};
 pub use route_metrics::{RouteMetrics, RouteMetricsError};
 pub use route_preferences::RoutePreferences;
-#[cfg(test)]
 pub(crate) use route_preferences::{ROUTE_PREFERENCE_MAX_ITEMS, ROUTE_PREFERENCE_MAX_VALUE_BYTES};
 pub use route_queue::{JobDispatchError, RouteQueue};
 pub use route_queue_metrics::{NoOpRouteQueueMetrics, RouteQueueMetrics, RouteQueueOutcome};

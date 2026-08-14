@@ -8,6 +8,7 @@
 
 use actix_web::{HttpRequest, HttpResponse, post, web};
 use serde::Serialize;
+use utoipa::openapi::schema::{Object, ObjectBuilder, Type};
 
 use crate::domain::ports::{RouteSubmissionRequest, RouteSubmissionStatus};
 use crate::inbound::http::ApiResult;
@@ -27,9 +28,18 @@ pub use request::{RouteCoordinatesDto, RouteLocationDto, RouteRequest};
 #[serde(rename_all = "camelCase")]
 pub struct RouteResponse {
     /// Unique identifier for this route request.
+    #[schema(format = "uuid")]
     pub request_id: String,
     /// Status of the submission.
+    #[schema(schema_with = route_response_status_schema)]
     pub status: String,
+}
+
+fn route_response_status_schema() -> Object {
+    ObjectBuilder::new()
+        .schema_type(Type::String)
+        .enum_values(Some(["accepted", "replayed"]))
+        .build()
 }
 
 /// Submit a route generation request.

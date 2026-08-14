@@ -715,9 +715,10 @@
         "description": "Optional route-generation preferences supported by the HTTP contract.\n\nString values and list entries are bounded during deserialization so the\nsame limits apply to HTTP requests and persisted job payloads.",
         "properties": {
           "avoid": {
-            "description": "Route features that should be avoided.",
             "items": {
-              "type": "string"
+              "description": "At most 64 UTF-8 bytes.",
+              "type": "string",
+              "x-max-utf8-bytes": 64
             },
             "maxItems": 64,
             "type": [
@@ -733,9 +734,10 @@
             ]
           },
           "interestThemeIds": {
-            "description": "Interest-theme identifiers used to bias route generation.",
             "items": {
-              "type": "string"
+              "description": "At most 64 UTF-8 bytes.",
+              "type": "string",
+              "x-max-utf8-bytes": 64
             },
             "maxItems": 64,
             "type": [
@@ -744,17 +746,18 @@
             ]
           },
           "mode": {
-            "description": "Routing mode, such as `walking`.",
-            "maxLength": 64,
+            "description": "At most 64 UTF-8 bytes.",
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "x-max-utf8-bytes": 64
           },
           "themeIds": {
-            "description": "Theme identifiers used to bias route generation.",
             "items": {
-              "type": "string"
+              "description": "At most 64 UTF-8 bytes.",
+              "type": "string",
+              "x-max-utf8-bytes": 64
             },
             "maxItems": 64,
             "type": [
@@ -763,9 +766,10 @@
             ]
           },
           "themes": {
-            "description": "Theme names used to bias route generation.",
             "items": {
-              "type": "string"
+              "description": "At most 64 UTF-8 bytes.",
+              "type": "string",
+              "x-max-utf8-bytes": 64
             },
             "maxItems": 64,
             "type": [
@@ -837,10 +841,14 @@
         "properties": {
           "requestId": {
             "description": "Unique identifier for this route request.",
+            "format": "uuid",
             "type": "string"
           },
           "status": {
-            "description": "Status of the submission.",
+            "enum": [
+              "accepted",
+              "replayed"
+            ],
             "type": "string"
           }
         },

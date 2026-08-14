@@ -2,10 +2,13 @@
 
 use actix_web::web;
 use serde::{Deserialize, Serialize};
+use utoipa::openapi::extensions::ExtensionsBuilder;
+use utoipa::openapi::schema::{Array, ArrayBuilder, Object, ObjectBuilder, SchemaType, Type};
 
 use crate::domain::Error;
 use crate::domain::ports::{
-    RouteCoordinates, RouteLocation, RoutePreferences, RouteSubmissionPayload, deserialize_non_null,
+    ROUTE_PREFERENCE_MAX_ITEMS, ROUTE_PREFERENCE_MAX_VALUE_BYTES, RouteCoordinates, RouteLocation,
+    RoutePreferences, RouteSubmissionPayload, deserialize_non_null,
 };
 
 /// Route generation request body.
@@ -42,23 +45,56 @@ pub struct RouteRequest {
 )]
 struct RoutePreferencesSchema {
     /// Routing mode, such as `walking`.
-    #[schema(max_length = 64)]
+    #[schema(schema_with = optional_preference_value_schema)]
     mode: Option<String>,
     /// Theme names used to bias route generation.
-    #[schema(max_items = 64)]
+    #[schema(schema_with = preference_values_schema)]
     themes: Option<Vec<String>>,
     /// Theme identifiers used to bias route generation.
-    #[schema(rename = "themeIds", max_items = 64)]
+    #[schema(rename = "themeIds", schema_with = preference_values_schema)]
     theme_ids: Option<Vec<String>>,
     /// Interest-theme identifiers used to bias route generation.
-    #[schema(rename = "interestThemeIds", max_items = 64)]
+    #[schema(
+        rename = "interestThemeIds",
+        schema_with = preference_values_schema
+    )]
     interest_theme_ids: Option<Vec<String>>,
     /// Route features that should be avoided.
-    #[schema(max_items = 64)]
+    #[schema(schema_with = preference_values_schema)]
     avoid: Option<Vec<String>>,
     /// Whether routes should avoid stairs.
     #[schema(rename = "avoidStairs")]
     avoid_stairs: Option<bool>,
+}
+
+fn preference_value_schema() -> Object {
+    preference_value_schema_with_type(Type::String.into())
+}
+
+fn optional_preference_value_schema() -> Object {
+    preference_value_schema_with_type(SchemaType::from_iter([Type::String, Type::Null]))
+}
+
+fn preference_value_schema_with_type(schema_type: SchemaType) -> Object {
+    ObjectBuilder::new()
+        .schema_type(schema_type)
+        .description(Some(format!(
+            "At most {ROUTE_PREFERENCE_MAX_VALUE_BYTES} UTF-8 bytes."
+        )))
+        .extensions(Some(
+            ExtensionsBuilder::new()
+                .add("max-utf8-bytes", ROUTE_PREFERENCE_MAX_VALUE_BYTES as u64)
+                .build(),
+        ))
+        .build()
+}
+
+fn preference_values_schema() -> Array {
+    ArrayBuilder::new()
+        .schema_type(SchemaType::from_iter([Type::Array, Type::Null]))
+        .items(preference_value_schema())
+        .max_items(Some(ROUTE_PREFERENCE_MAX_ITEMS))
+        .build()
 }
 
 /// HTTP representation of a route location.
