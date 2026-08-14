@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import typing as typ
+
 from .commands import run
-from .config import PreviewConfig
 from .validation import require_tools
+
+if typ.TYPE_CHECKING:
+    from .config import PreviewConfig
 
 
 def ensure_namespace(config: PreviewConfig) -> None:
@@ -25,7 +29,6 @@ def ensure_namespace(config: PreviewConfig) -> None:
     LocalK8sError
         Raised when ``kubectl`` is unavailable or command execution fails.
     """
-
     require_tools(("kubectl",))
     result = run(
         "kubectl",
@@ -40,7 +43,10 @@ def ensure_namespace(config: PreviewConfig) -> None:
     )
     if result.stdout.strip():
         return
-    run("kubectl", ["--context", config.kube_context, "create", "namespace", config.namespace])
+    run(
+        "kubectl",
+        ["--context", config.kube_context, "create", "namespace", config.namespace],
+    )
 
 
 def helm_fullname(config: PreviewConfig) -> str:
@@ -56,7 +62,6 @@ def helm_fullname(config: PreviewConfig) -> str:
     str
         Helm-compatible fullname, truncated to the Kubernetes DNS label limit.
     """
-
     chart_name = config.chart_path.name
     if config.release_name == chart_name:
         return chart_name
@@ -81,7 +86,6 @@ def print_kubernetes_status(config: PreviewConfig) -> None:
     LocalK8sError
         Raised when ``kubectl`` is unavailable or command execution fails.
     """
-
     require_tools(("kubectl",))
     print(f"namespace: {config.namespace}")
     pods = run(

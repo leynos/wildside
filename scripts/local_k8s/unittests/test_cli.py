@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+import subprocess  # noqa: S404 - tests deliberately exercise the CLI via subprocess.
 import sys
 import textwrap
-from collections.abc import Callable
+import typing as typ
 from pathlib import Path
 from shutil import which
-from typing import cast
 
 import pytest
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 FAKE_TOOL_SOURCE = textwrap.dedent(
     """\
@@ -59,8 +61,13 @@ FAKE_TOOL_SOURCE = textwrap.dedent(
 
 
     if name == "uv" and args[:1] == ["run"]:
+        # Skip `uv run` options (such as the --no-project the Makefile passes)
+        # so the interpreter receives the script path, not uv's own flags.
+        rest = args[1:]
+        while rest and rest[0].startswith("-"):
+            rest = rest[1:]
         python = os.environ["WILDSIDE_FAKE_PYTHON"]
-        os.execv(python, [str(python), *args[1:]])
+        os.execv(python, [str(python), *rest])
 
 
     def has_cluster() -> bool:
@@ -186,12 +193,12 @@ def _load_log_entries(log_path: Path) -> list[list[object]]:
 def _assert_command_logged(
     log_entries: list[list[object]],
     tool: str,
-    predicate: Callable[[list[object]], bool],
+    predicate: cabc.Callable[[list[object]], bool],
     message: str,
 ) -> None:
     """Assert a fake-tool log contains a matching command."""
     assert any(
-        entry[0] == tool and predicate(cast(list[object], entry[1]))
+        entry[0] == tool and predicate(typ.cast("list[object]", entry[1]))
         for entry in log_entries
     ), f"{message}; recorded commands: {log_entries!r}"
 

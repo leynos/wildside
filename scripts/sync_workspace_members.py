@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Keep Cargo workspace members in sync with the repository layout."""
+
 from __future__ import annotations
 
 import sys
@@ -15,6 +16,18 @@ MANIFEST = ROOT / "Cargo.toml"
 
 
 def read_patterns() -> list[str]:
+    """Return the workspace autodiscover glob patterns from Cargo.toml.
+
+    Returns
+    -------
+    list of str
+        Configured autodiscover globs, or an empty list if none are set.
+
+    Examples
+    --------
+    >>> read_patterns()  # doctest: +SKIP
+    ['crates/*']
+    """
     data = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
     workspace = data.get("workspace", {})
     metadata = workspace.get("metadata", {})
@@ -26,6 +39,24 @@ def read_patterns() -> list[str]:
 
 
 def discover_members(globs: list[str]) -> list[str]:
+    """Return workspace-relative paths of crates matching *globs*.
+
+    Parameters
+    ----------
+    globs : list of str
+        Glob patterns, resolved relative to the repository root.
+
+    Returns
+    -------
+    list of str
+        POSIX-style paths, relative to the repository root, of directories
+        matching *globs* that contain a ``Cargo.toml`` file.
+
+    Examples
+    --------
+    >>> discover_members(["crates/*"])  # doctest: +SKIP
+    ['crates/bar', 'crates/foo']
+    """
     members: list[str] = []
     for pattern in globs:
         for path in sorted(ROOT.glob(pattern)):
@@ -37,6 +68,23 @@ def discover_members(globs: list[str]) -> list[str]:
 
 
 def unique_preserving_order(items: list[str]) -> list[str]:
+    """Return *items* with duplicates removed, preserving first occurrence.
+
+    Parameters
+    ----------
+    items : list of str
+        Values to deduplicate.
+
+    Returns
+    -------
+    list of str
+        *items* in original order, with later duplicates dropped.
+
+    Examples
+    --------
+    >>> unique_preserving_order(["a", "b", "a", "c"])
+    ['a', 'b', 'c']
+    """
     seen: set[str] = set()
     result: list[str] = []
     for item in items:
@@ -48,64 +96,47 @@ def unique_preserving_order(items: list[str]) -> list[str]:
 
 
 def format_members(members: list[str], indent: str) -> list[str]:
+    """Render *members* as TOML lines for the workspace ``members`` array.
+
+    Parameters
+    ----------
+    members : list of str
+        Workspace member paths to render.
+    indent : str
+        Leading whitespace to apply to each rendered line.
+
+    Returns
+    -------
+    list of str
+        Lines forming a TOML ``members = [...]`` array, single-line when
+        there is exactly one member and multi-line otherwise.
+
+    Examples
+    --------
+    >>> format_members(["backend", "crates/foo"], "")
+    ['members = [', '    "backend",', '    "crates/foo",', ']']
+    """
     if len(members) == 1:
         return [f'{indent}members = ["{members[0]}"]']
     lines = [f"{indent}members = ["]
-    for member in members:
-        lines.append(f'{indent}    "{member}",')
+    lines.extend(f'{indent}    "{member}",' for member in members)
     lines.append(f"{indent}]")
     return lines
 
 
 def _calculate_bracket_depth_change(line: str) -> int:
-    """Compute the net bracket depth delta for a line.
-
-    Parameters
-    ----------
-    line : str
-        A single line of text from the manifest.
-
-    Returns
-    -------
-    int
-        Net change in bracket nesting produced by the line.
-
-    Examples
-    --------
-    >>> _calculate_bracket_depth_change('members = [')
-    1
-    >>> _calculate_bracket_depth_change('    ]')
-    -1
-    """
-
+    """Compute the net bracket depth delta produced by a line of text."""
     return line.count("[") - line.count("]")
 
 
 def _find_members_array_bounds(lines: list[str]) -> tuple[int, int, str]:
-    """Locate the bounds of the workspace members array.
-
-    Parameters
-    ----------
-    lines : list of str
-        Lines from the workspace manifest.
-
-    Returns
-    -------
-    tuple of int and str
-        Start index, end index, and indentation for the members array.
+    """Locate the members array's start index, end index, and indentation.
 
     Raises
     ------
     SystemExit
         If the members array cannot be located in the manifest.
-
-    Examples
-    --------
-    >>> example = ['[workspace]', 'members = [', '    "crate",', ']']
-    >>> _find_members_array_bounds(example)
-    (1, 3, '')
     """
-
     start = None
     indent = ""
     depth = 0
@@ -123,10 +154,29 @@ def _find_members_array_bounds(lines: list[str]) -> tuple[int, int, str]:
         depth += _calculate_bracket_depth_change(line)
         if depth <= 0:
             return start, idx, indent
-    raise SystemExit("workspace members array not found in Cargo.toml")
+    message = "workspace members array not found in Cargo.toml"
+    raise SystemExit(message)
 
 
 def update_manifest(members: list[str]) -> bool:
+    """Rewrite the workspace ``members`` array in Cargo.toml if it changed.
+
+    Parameters
+    ----------
+    members : list of str
+        Desired workspace member paths, in order.
+
+    Returns
+    -------
+    bool
+        ``True`` if the manifest was rewritten, ``False`` if it already
+        matched *members*.
+
+    Examples
+    --------
+    >>> update_manifest(["backend", "crates/foo"])  # doctest: +SKIP
+    True
+    """
     lines = MANIFEST.read_text(encoding="utf-8").splitlines()
     start, end, indent = _find_members_array_bounds(lines)
     replacement = format_members(members, indent)
@@ -139,6 +189,24 @@ def update_manifest(members: list[str]) -> bool:
 
 
 def main() -> int:
+    """Discover Cargo workspace members and rewrite the manifest if stale.
+
+    Returns
+    -------
+    int
+        Process exit code; ``0`` on success.
+
+    Raises
+    ------
+    SystemExit
+        Propagated from ``_find_members_array_bounds`` if the workspace
+        members array cannot be located in Cargo.toml.
+
+    Examples
+    --------
+    >>> main()  # doctest: +SKIP
+    0
+    """
     patterns = read_patterns()
     discovered = discover_members(patterns)
     ordered = unique_preserving_order(["backend", *discovered])

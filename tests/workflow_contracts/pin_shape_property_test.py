@@ -13,12 +13,15 @@ on the boundary under test and counter-examples shrink cleanly.
 
 from __future__ import annotations
 
+import typing as typ
+
 import pytest
+from ci_workflow_test import _assert_pinned_to_full_sha
 from hypothesis import given
 from hypothesis import strategies as st
-from hypothesis.strategies import DrawFn
 
-from ci_workflow_test import _assert_pinned_to_full_sha
+if typ.TYPE_CHECKING:
+    from hypothesis.strategies import DrawFn
 
 EXPECTED_PATH = "leynos/shared-actions/.github/actions/upload-codescene-coverage"
 

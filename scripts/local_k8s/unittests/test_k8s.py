@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-import typing
-from dataclasses import replace
+import dataclasses as dc
+import typing as typ
 from types import SimpleNamespace
 
-from local_k8s.config import PreviewConfig
 from local_k8s.k8s import ensure_namespace, print_kubernetes_status
 
-if typing.TYPE_CHECKING:
+if typ.TYPE_CHECKING:
     import pytest
+    from local_k8s.config import PreviewConfig
 
 
-def _capture_status_commands(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, list[str]]]:
+def _capture_status_commands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, list[str]]]:
     """Install status command stubs and return captured kubectl calls."""
     calls: list[tuple[str, list[str]]] = []
 
@@ -48,7 +50,9 @@ def test_print_kubernetes_status_uses_helm_fullname_for_service(
             "preview-wildside",
             "--ignore-not-found",
         ],
-    ) in calls, "expected kubectl get service preview-wildside call to be present in calls"
+    ) in calls, (
+        "expected kubectl get service preview-wildside call to be present in calls"
+    )
 
 
 def test_print_kubernetes_status_uses_configured_kube_context(
@@ -56,7 +60,7 @@ def test_print_kubernetes_status_uses_configured_kube_context(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify status uses the kube context for the selected provider."""
-    config = replace(preview_config, k8s_provider="kind")
+    config = dc.replace(preview_config, k8s_provider="kind")
     calls = _capture_status_commands(monkeypatch)
 
     print_kubernetes_status(config)
@@ -83,7 +87,7 @@ def test_ensure_namespace_uses_configured_kube_context(
     preview_config: PreviewConfig,
 ) -> None:
     """Verify namespace creation targets the provider-specific kube context."""
-    config = replace(preview_config, k8s_provider="kind")
+    config = dc.replace(preview_config, k8s_provider="kind")
     calls = _capture_status_commands(monkeypatch)
 
     ensure_namespace(config)

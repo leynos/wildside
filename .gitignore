@@ -1,3 +1,7 @@
+# Python
+.venv/
+.ruff_cache/
+
 # Rust
 **/target/
 /target

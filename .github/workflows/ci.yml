@@ -159,6 +159,14 @@ jobs:
       - name: Workflow contract tests
         run: make test-workflow-contracts
 
+      - name: Python format check
+        run: make check-fmt-python
+
+      # Pylint runs on a uv-managed PyPy (downloaded on demand), mirroring
+      # the pylint-pypy-shim setup in leynos/lading.
+      - name: Python lint
+        run: make lint-python
+
       - name: Type check
         run: make typecheck
 
@@ -338,6 +346,10 @@ jobs:
           # Root-path bootstrap requires the worker binary for privilege demotion.
           PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
         with:
+          # Force Rust-only coverage: the repo's root pyproject.toml is
+          # tooling-only (no [project] table), so auto-detection would classify
+          # the repo as mixed and reject lcov. See leynos/shared-actions#373.
+          language: rust
           output-path: lcov.info
           format: lcov
           # nextest is required: .config/nextest.toml serializes the
