@@ -41,7 +41,7 @@ pub struct RouteRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[expect(
     dead_code,
-    reason = "Used only for OpenAPI schema generation via utoipa at the HTTP adapter boundary"
+    reason = "Used only for OpenAPI schema generation via utoipa; tracked by docs/backend-roadmap.md 3.5.1 (see `#360`)"
 )]
 struct RoutePreferencesSchema {
     /// Routing mode, such as `walking`.

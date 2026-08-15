@@ -32,7 +32,7 @@ pub enum GenerateRouteJob {
 
 /// Version 1 payload for `GenerateRouteJob`.
 ///
-/// Keep this field list synchronized with [`GenerateRouteJobV1EnvelopeRaw`].
+/// Keep this field list synchronized with `GenerateRouteJobV1EnvelopeRaw`.
 /// Apply every V1 field addition, removal, or change to both declarations.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
