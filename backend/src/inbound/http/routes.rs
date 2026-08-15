@@ -125,11 +125,16 @@ mod tests {
     use crate::inbound::http::users::LoginRequest;
     use actix_web::http::StatusCode;
     use actix_web::{App, test as actix_test, web};
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use serde_json::{Value, json};
     use std::{error::Error as StdError, io, sync::Arc};
 
     type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
+
+    #[fixture]
+    fn route_submission() -> Arc<dyn RouteSubmissionService> {
+        Arc::new(FixtureRouteSubmissionService)
+    }
 
     fn test_app(
         route_submission: Arc<dyn RouteSubmissionService>,
@@ -191,9 +196,12 @@ mod tests {
             .into_owned())
     }
 
+    #[rstest]
     #[actix_web::test]
-    async fn submit_route_accepts_request_without_idempotency_key() -> TestResult {
-        let app = actix_test::init_service(test_app(Arc::new(FixtureRouteSubmissionService))).await;
+    async fn submit_route_accepts_request_without_idempotency_key(
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> TestResult {
+        let app = actix_test::init_service(test_app(route_submission)).await;
         let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()
@@ -214,9 +222,12 @@ mod tests {
         Ok(())
     }
 
+    #[rstest]
     #[actix_web::test]
-    async fn submit_route_accepts_request_with_valid_idempotency_key() -> TestResult {
-        let app = actix_test::init_service(test_app(Arc::new(FixtureRouteSubmissionService))).await;
+    async fn submit_route_accepts_request_with_valid_idempotency_key(
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> TestResult {
+        let app = actix_test::init_service(test_app(route_submission)).await;
         let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()
@@ -242,8 +253,11 @@ mod tests {
     #[case("550e8400")]
     #[case("")]
     #[actix_web::test]
-    async fn submit_route_rejects_invalid_idempotency_key(#[case] invalid_key: &str) -> TestResult {
-        let app = actix_test::init_service(test_app(Arc::new(FixtureRouteSubmissionService))).await;
+    async fn submit_route_rejects_invalid_idempotency_key(
+        route_submission: Arc<dyn RouteSubmissionService>,
+        #[case] invalid_key: &str,
+    ) -> TestResult {
+        let app = actix_test::init_service(test_app(route_submission)).await;
         let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()
@@ -261,9 +275,12 @@ mod tests {
         Ok(())
     }
 
+    #[rstest]
     #[actix_web::test]
-    async fn submit_route_rejects_without_session() {
-        let app = actix_test::init_service(test_app(Arc::new(FixtureRouteSubmissionService))).await;
+    async fn submit_route_rejects_without_session(
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) {
+        let app = actix_test::init_service(test_app(route_submission)).await;
 
         let request = actix_test::TestRequest::post()
             .uri("/api/v1/routes")
@@ -277,9 +294,12 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
+    #[rstest]
     #[actix_web::test]
-    async fn submit_route_maps_invalid_coordinates_to_an_error_envelope() -> TestResult {
-        let app = actix_test::init_service(test_app(Arc::new(FixtureRouteSubmissionService))).await;
+    async fn submit_route_maps_invalid_coordinates_to_an_error_envelope(
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> TestResult {
+        let app = actix_test::init_service(test_app(route_submission)).await;
         let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()

@@ -184,8 +184,8 @@ fn bounding_box_rejects_invalid_coordinates() {
 }
 
 #[rstest]
-fn bounding_box_rejects_min_greater_than_max() {
-    let result = BoundingBox::new(-3.0, 56.0, -3.2, 55.9);
+fn bounding_box_rejects_antimeridian_wrap() {
+    let result = BoundingBox::new(-3.0, 55.9, -3.2, 56.0);
     assert!(matches!(result, Err(BoundingBoxError::AntimeridianWrap)));
 }
 

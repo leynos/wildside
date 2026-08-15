@@ -31,6 +31,9 @@ pub enum GenerateRouteJob {
 }
 
 /// Version 1 payload for `GenerateRouteJob`.
+///
+/// Keep this field list synchronized with [`GenerateRouteJobV1EnvelopeRaw`].
+/// Apply every V1 field addition, removal, or change to both declarations.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GenerateRouteJobV1 {
@@ -57,6 +60,10 @@ pub struct GenerateRouteJobV1 {
     pub enqueued_at: DateTime<Utc>,
 }
 
+/// Strict wire envelope decoded into [`GenerateRouteJobV1`].
+///
+/// Keep this field list synchronized with [`GenerateRouteJobV1`]. Apply every
+/// V1 field addition, removal, or change to both declarations.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GenerateRouteJobV1EnvelopeRaw {
@@ -138,14 +145,33 @@ impl<'de> Deserialize<'de> for GenerateRouteJob {
 }
 
 impl GenerateRouteJob {
-    /// Build a V1 route-generation job from validated pieces.
+    /// Wrap a complete, typed V1 payload in the versioned job envelope.
     ///
+    /// Returns [`GenerateRouteJob::V1`] without further validation because
+    /// `GenerateRouteJobV1` already contains typed domain values.
     pub fn v1(payload: GenerateRouteJobV1) -> Self {
         Self::V1(payload)
     }
 
-    /// Build a route-generation job from the route-submission port request.
+    /// Build a V1 job from a typed route submission, request identifier, and
+    /// enqueue timestamp.
     ///
+    /// Copies the validated submission fields into a
+    /// [`GenerateRouteJob::V1`] payload. Malformed persisted envelopes are
+    /// rejected during Serde decoding before reaching this constructor.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use backend::domain::jobs::GenerateRouteJob;
+    /// # use backend::domain::ports::RouteSubmissionRequest;
+    /// # use chrono::{DateTime, Utc};
+    /// # use uuid::Uuid;
+    /// # fn build(submission: &RouteSubmissionRequest, request_id: Uuid, enqueued_at: DateTime<Utc>) {
+    /// let job = GenerateRouteJob::try_from_submission(submission, request_id, enqueued_at);
+    /// # let _ = job;
+    /// # }
+    /// ```
     pub fn try_from_submission(
         submission: &RouteSubmissionRequest,
         request_id: Uuid,
