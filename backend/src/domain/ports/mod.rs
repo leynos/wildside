@@ -10,6 +10,7 @@ mod descriptor_ingestion_repository;
 mod descriptor_repository;
 mod enrichment_job_metrics;
 mod enrichment_provenance_repository;
+mod enrichment_source;
 mod example_data_runs_repository;
 mod example_data_seed_repository;
 mod health_observer;
@@ -23,12 +24,12 @@ mod osm_ingestion_command;
 mod osm_ingestion_provenance_repository;
 mod osm_poi_repository;
 mod osm_source_repository;
-mod overpass_enrichment_source;
 mod route_annotation_repository;
 mod route_annotations_command;
 mod route_annotations_query;
 mod route_cache;
 mod route_metrics;
+mod route_preferences;
 mod route_queue;
 mod route_queue_metrics;
 mod route_repository;
@@ -83,6 +84,12 @@ pub use enrichment_provenance_repository::{
     EnrichmentProvenanceCursor, EnrichmentProvenanceRecord, EnrichmentProvenanceRepository,
     EnrichmentProvenanceRepositoryError, FixtureEnrichmentProvenanceRepository,
     ListEnrichmentProvenanceRequest, ListEnrichmentProvenanceResponse,
+};
+#[cfg(test)]
+pub use enrichment_source::MockEnrichmentSource;
+pub use enrichment_source::{
+    EnrichmentPoi, EnrichmentRequest, EnrichmentResponse, EnrichmentSource, EnrichmentSourceError,
+    FixtureEnrichmentSource,
 };
 pub use example_data_runs_repository::{
     ExampleDataRunsError, ExampleDataRunsRepository, FixtureExampleDataRunsRepository,
@@ -146,12 +153,6 @@ pub use osm_source_repository::{
     OsmSourceRepositoryError,
 };
 #[cfg(test)]
-pub use overpass_enrichment_source::MockOverpassEnrichmentSource;
-pub use overpass_enrichment_source::{
-    FixtureOverpassEnrichmentSource, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
-    OverpassEnrichmentSource, OverpassEnrichmentSourceError, OverpassPoi,
-};
-#[cfg(test)]
 pub use route_annotation_repository::MockRouteAnnotationRepository;
 pub use route_annotation_repository::{
     FixtureRouteAnnotationRepository, RouteAnnotationRepository, RouteAnnotationRepositoryError,
@@ -167,12 +168,15 @@ pub use route_annotations_query::MockRouteAnnotationsQuery;
 pub use route_annotations_query::{FixtureRouteAnnotationsQuery, RouteAnnotationsQuery};
 pub use route_cache::{RouteCache, RouteCacheError};
 pub use route_metrics::{RouteMetrics, RouteMetricsError};
+pub use route_preferences::RoutePreferences;
+pub(crate) use route_preferences::{ROUTE_PREFERENCE_MAX_ITEMS, ROUTE_PREFERENCE_MAX_VALUE_BYTES};
 pub use route_queue::{JobDispatchError, RouteQueue};
 pub use route_queue_metrics::{NoOpRouteQueueMetrics, RouteQueueMetrics, RouteQueueOutcome};
 pub use route_repository::{RoutePersistenceError, RouteRepository};
+pub(crate) use route_submission::deserialize_non_null;
 pub use route_submission::{
-    FixtureRouteSubmissionService, RouteSubmissionRequest, RouteSubmissionResponse,
-    RouteSubmissionService, RouteSubmissionStatus,
+    FixtureRouteSubmissionService, RouteCoordinates, RouteLocation, RouteSubmissionPayload,
+    RouteSubmissionRequest, RouteSubmissionResponse, RouteSubmissionService, RouteSubmissionStatus,
 };
 #[cfg(test)]
 pub use schema_snapshot_repository::MockSchemaSnapshotRepository;

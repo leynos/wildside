@@ -2,101 +2,21 @@
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess  # noqa: S404 - tests deliberately exercise the CLI via subprocess.
 import sys
-import textwrap
 import typing as typ
 from pathlib import Path
 from shutil import which
 
 import pytest
+from local_k8s.unittests.test_cli_log import _load_log_entries
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-FAKE_TOOL_SOURCE = textwrap.dedent(
-    """\
-    #!/usr/bin/env python3
-    from __future__ import annotations
-
-    import json
-    import os
-    import sys
-    from pathlib import Path
-
-    name = Path(sys.argv[0]).name
-    args = sys.argv[1:]
-    state_path = Path(os.environ["WILDSIDE_FAKE_TOOL_STATE"])
-    log_path = Path(os.environ["WILDSIDE_FAKE_TOOL_LOG"])
-    stdin_text = sys.stdin.read()
-    log_path.write_text(
-        log_path.read_text() + json.dumps([name, args, bool(stdin_text)]) + "\\n"
-        if log_path.exists()
-        else json.dumps([name, args, bool(stdin_text)]) + "\\n"
-    )
-
-
-    def _unwrap(name: str, args: list[str]) -> tuple[str, list[str]]:
-        # Emulate `systemd-run --scope --user -p KEY=VAL env VAR=x kind ...`
-        # and `env VAR=x kind ...` by stripping scope flags and leading
-        # `VAR=value` assignments, then re-dispatching to the wrapped tool.
-        while name in ("env", "systemd-run"):
-            rest = list(args)
-            while rest and (
-                rest[0].startswith("-") or "=" in rest[0] or rest[0] == "env"
-            ):
-                if rest[0] == "-p":
-                    rest = rest[2:]
-                else:
-                    rest = rest[1:]
-            if not rest:
-                return name, args
-            name, args = rest[0], rest[1:]
-        return name, args
-
-
-    name, args = _unwrap(name, args)
-
-
-    if name == "uv" and args[:1] == ["run"]:
-        # Skip `uv run` options (such as the --no-project the Makefile passes)
-        # so the interpreter receives the script path, not uv's own flags.
-        rest = args[1:]
-        while rest and rest[0].startswith("-"):
-            rest = rest[1:]
-        python = os.environ["WILDSIDE_FAKE_PYTHON"]
-        os.execv(python, [str(python), *rest])
-
-
-    def has_cluster() -> bool:
-        return state_path.exists() and state_path.read_text() == "created"
-
-    if name == "k3d" and args[:3] == ["cluster", "list", "--output"]:
-        print('[{"name":"wildside-preview"}]' if has_cluster() else "[]")
-    elif name == "k3d" and args[:2] == ["cluster", "create"]:
-        state_path.write_text("created")
-    elif name == "k3d" and args[:2] == ["cluster", "delete"]:
-        state_path.unlink(missing_ok=True)
-    elif name == "kind" and args[:2] == ["get", "clusters"]:
-        print("wildside-preview" if has_cluster() else "other")
-    elif name == "kind" and args[:2] == ["create", "cluster"]:
-        state_path.write_text("created")
-    elif name == "kind" and args[:2] == ["delete", "cluster"]:
-        state_path.unlink(missing_ok=True)
-    elif name == "helm" and args[:2] in (
-        ["--kube-context", "k3d-wildside-preview"],
-        ["--kube-context", "kind-wildside-preview"],
-    ):
-        print("helm status")
-    elif name == "kubectl" and "logs" in args:
-        print("backend log")
-    elif name == "kubectl" and "get" in args and "pods" in args:
-        print("pod/wildside-backend Running")
-    elif name == "kubectl" and "get" in args and "service" in args:
-        print("service/wildside")
-    """
+FAKE_TOOL_FIXTURE = (
+    Path(__file__).with_name("fixtures").joinpath("fake_preview_tool.py.txt")
 )
 
 FAKE_TOOL_NAMES = (
@@ -155,10 +75,15 @@ def test_local_k8s_status_reports_configuration_errors_at_cli_boundary(
     )
 
 
+def _fake_tool_source() -> str:
+    """Read the fake preview tool fixture, deferring I/O until first use."""
+    return FAKE_TOOL_FIXTURE.read_text(encoding="utf8")
+
+
 def _write_fake_tool(fake_bin: Path) -> None:
     """Write fake preview executables used by the Makefile smoke test."""
     fake_tool = fake_bin / "fake_tool.py"
-    fake_tool.write_text(FAKE_TOOL_SOURCE, encoding="utf8")
+    fake_tool.write_text(_fake_tool_source(), encoding="utf8")
     fake_tool.chmod(0o755)
     for tool_name in FAKE_TOOL_NAMES:
         (fake_bin / tool_name).symlink_to(fake_tool)
@@ -183,44 +108,61 @@ def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
         )
 
 
-def _load_log_entries(log_path: Path) -> list[list[object]]:
-    """Load fake tool command records from the JSON-lines log."""
-    return [
-        json.loads(line) for line in log_path.read_text(encoding="utf8").splitlines()
-    ]
-
-
 def _assert_command_logged(
     log_entries: list[list[object]],
     tool: str,
-    predicate: cabc.Callable[[list[object]], bool],
+    predicate: cabc.Callable[[cabc.Sequence[object]], bool],
     message: str,
 ) -> None:
     """Assert a fake-tool log contains a matching command."""
-    assert any(
-        entry[0] == tool and predicate(typ.cast("list[object]", entry[1]))
-        for entry in log_entries
-    ), f"{message}; recorded commands: {log_entries!r}"
+    for entry in log_entries:
+        arguments = entry[1]
+        assert isinstance(arguments, list), "validated command arguments must be a list"
+        if entry[0] == tool and predicate(arguments):
+            return
+    failure_message = f"{message}; recorded commands: {log_entries!r}"
+    raise AssertionError(failure_message)
 
 
-@pytest.mark.parametrize(
-    ("container_engine", "k8s_provider"),
-    [
-        pytest.param("docker", "k3d", id="docker-k3d"),
-        pytest.param("podman", "kind", id="podman-kind"),
-    ],
-)
-def test_local_k8s_make_targets_smoke_successful_flow(
+def test_fake_tool_rejects_unsupported_wrapper_options(tmp_path: Path) -> None:
+    """Reject wrapper options outside the production command contract."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    _write_fake_tool(fake_bin)
+    env = os.environ | {
+        "WILDSIDE_FAKE_TOOL_LOG": str(tmp_path / "commands.jsonl"),
+        "WILDSIDE_FAKE_TOOL_STATE": str(tmp_path / "cluster-state"),
+        "WILDSIDE_CONTAINER_ENGINE": "podman",
+    }
+
+    completed = subprocess.run(  # noqa: S603 - executable is the test fake.
+        [fake_bin / "env", "--unexpected", "kind", "get", "clusters"],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+
+    assert completed.returncode != 0, (
+        "unsupported wrapper options must preserve fail-closed fake dispatch"
+    )
+    assert "unexpected fake command: env" in completed.stderr, (
+        "fake dispatch must identify the rejected wrapper command"
+    )
+
+
+def _prepare_preview_smoke_environment(
     tmp_path: Path,
     container_engine: str,
     k8s_provider: str,
-) -> None:
-    """Verify Makefile preview targets cross the real CLI boundary."""
+) -> tuple[Path, dict[str, str], Path]:
+    """Build the fake executable directory and Makefile environment."""
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     _write_fake_tool(fake_bin)
 
     env = os.environ.copy()
+    # A host BASH_ENV can rewrite PATH when Make starts its recipe shell.
     env.pop("BASH_ENV", None)
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
     env["UV"] = str(fake_bin / "uv")
@@ -230,16 +172,87 @@ def test_local_k8s_make_targets_smoke_successful_flow(
     env["WILDSIDE_CONTAINER_ENGINE"] = container_engine
     env["WILDSIDE_K8S_PROVIDER"] = k8s_provider
 
-    _run_make_targets(
-        env, ("local-k8s-up", "local-k8s-status", "local-k8s-logs", "local-k8s-down")
-    )
+    return fake_bin, env, Path(env["WILDSIDE_FAKE_TOOL_STATE"])
 
-    log_entries = _load_log_entries(Path(env["WILDSIDE_FAKE_TOOL_LOG"]))
+
+def _assert_provider_image_import_commands(
+    log_entries: list[list[object]],
+    container_engine: str,
+    k8s_provider: str,
+) -> None:
+    """Assert the image-import contract for the active cluster provider."""
+    if k8s_provider == "k3d":
+        _assert_command_logged(
+            log_entries,
+            "k3d",
+            lambda args: (
+                args[:2] == ["image", "import"]
+                and args[-2:] == ["--cluster", "wildside-preview"]
+            ),
+            "local-k8s-up must import the image into the k3d cluster",
+        )
+    elif container_engine == "docker":
+        _assert_command_logged(
+            log_entries,
+            "kind",
+            lambda args: (
+                args
+                == [
+                    "load",
+                    "docker-image",
+                    "wildside-backend:local",
+                    "--name",
+                    "wildside-preview",
+                ]
+            ),
+            "local-k8s-up must load the Docker image into kind",
+        )
+    elif container_engine == "podman":
+        _assert_command_logged(
+            log_entries,
+            "podman",
+            lambda args: args[:2] == ["save", "--output"],
+            "local-k8s-up must save the Podman image for kind",
+        )
+        _assert_command_logged(
+            log_entries,
+            "env",
+            lambda args: (
+                args[:4]
+                == [
+                    "KIND_EXPERIMENTAL_PROVIDER=podman",
+                    "kind",
+                    "load",
+                    "image-archive",
+                ]
+                and args[-2:] == ["--name", "wildside-preview"]
+            ),
+            "local-k8s-up must load the Podman image archive into kind",
+        )
+
+
+def _assert_preview_deployment_commands(
+    log_entries: list[list[object]],
+    container_engine: str,
+    k8s_provider: str,
+) -> None:
+    """Assert the preview deployment command contract for the active provider."""
     _assert_command_logged(
         log_entries,
         container_engine,
         lambda args: args[0] == "build",
         "local-k8s-up must build the backend image through the CLI boundary",
+    )
+    _assert_provider_image_import_commands(
+        log_entries,
+        container_engine,
+        k8s_provider,
+    )
+    _assert_command_logged(
+        log_entries,
+        "helm",
+        lambda args: "upgrade" in args and "--install" in args,
+        "local-k8s-up must install or upgrade the Helm release",
     )
     _assert_command_logged(
         log_entries,
@@ -253,6 +266,113 @@ def test_local_k8s_make_targets_smoke_successful_flow(
         lambda args: "logs" in args,
         "local-k8s-logs must stream pod logs through the CLI boundary",
     )
-    assert not Path(env["WILDSIDE_FAKE_TOOL_STATE"]).exists(), (
+
+
+def _assert_fake_command_fails_closed(
+    fake_bin: Path,
+    env: dict[str, str],
+    container_engine: str,
+) -> None:
+    """Assert an unmodelled container-engine command fails closed."""
+    unexpected = subprocess.run(  # noqa: S603 - executable is the test fake.
+        [fake_bin / container_engine, "push", "wildside-backend:local"],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+
+    assert unexpected.returncode != 0, (
+        "an unmodelled container-engine command must fail closed"
+    )
+    assert f"unexpected fake command: {container_engine}" in unexpected.stderr, (
+        f"stderr must identify the rejected {container_engine} command"
+    )
+
+
+def _count_commands_logged(
+    log_entries: list[list[object]],
+    tool: str,
+    predicate: cabc.Callable[[cabc.Sequence[object]], bool],
+) -> int:
+    """Count fake-tool log records matching a tool and argument predicate."""
+    matches = 0
+    for entry in log_entries:
+        arguments = entry[1]
+        assert isinstance(arguments, list), "validated command arguments must be a list"
+        if entry[0] == tool and predicate(arguments):
+            matches += 1
+    return matches
+
+
+def test_local_k8s_up_creates_then_reuses_the_session_secret(tmp_path: Path) -> None:
+    """Verify a second deploy reuses the persisted session Secret key material."""
+    _, env, state_path = _prepare_preview_smoke_environment(tmp_path, "docker", "k3d")
+    secret_path = state_path.with_name(f"{state_path.name}-session-secret")
+
+    _run_make_targets(env, ("local-k8s-up",))
+    assert secret_path.exists(), (
+        "the first deploy must persist the session Secret manifest"
+    )
+    created_key = secret_path.read_text(encoding="utf8")
+
+    _run_make_targets(env, ("local-k8s-up",))
+
+    log_entries = _load_log_entries(Path(env["WILDSIDE_FAKE_TOOL_LOG"]))
+    assert (
+        _count_commands_logged(
+            log_entries, "kubectl", lambda args: args[2:] == ["create", "-f", "-"]
+        )
+        == 1
+    ), "the second deploy must reuse the existing Secret rather than recreating it"
+    assert (
+        _count_commands_logged(
+            log_entries,
+            "kubectl",
+            lambda args: args[4:7] == ["get", "secret", "wildside-session-key"],
+        )
+        >= 2
+    ), "each deploy must read the session Secret before deciding to create it"
+    assert secret_path.read_text(encoding="utf8") == created_key, (
+        "the persisted session key must survive a second deploy unchanged"
+    )
+
+
+@pytest.mark.parametrize(
+    ("container_engine", "k8s_provider"),
+    [
+        pytest.param("docker", "k3d", id="docker-k3d"),
+        pytest.param("docker", "kind", id="docker-kind"),
+        pytest.param("podman", "kind", id="podman-kind"),
+    ],
+)
+def test_local_k8s_make_targets_smoke_successful_flow(
+    tmp_path: Path,
+    container_engine: str,
+    k8s_provider: str,
+) -> None:
+    """Verify Makefile preview targets cross the real CLI boundary."""
+    fake_bin, env, state_path = _prepare_preview_smoke_environment(
+        tmp_path, container_engine, k8s_provider
+    )
+
+    _run_make_targets(env, ("local-k8s-up",))
+    assert state_path.exists(), (
+        "local-k8s-up must create the preview cluster through the CLI boundary"
+    )
+    assert state_path.read_text(encoding="utf8") == "created", (
+        "local-k8s-up must record the created-cluster marker the fake tool's "
+        "has_cluster() check reads"
+    )
+
+    _run_make_targets(env, ("local-k8s-status", "local-k8s-logs"))
+
+    log_entries = _load_log_entries(Path(env["WILDSIDE_FAKE_TOOL_LOG"]))
+    _assert_preview_deployment_commands(log_entries, container_engine, k8s_provider)
+
+    _run_make_targets(env, ("local-k8s-down",))
+    assert not state_path.exists(), (
         "local-k8s-down must delete the preview cluster through the CLI boundary"
     )
+
+    _assert_fake_command_fails_closed(fake_bin, env, container_engine)

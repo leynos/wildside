@@ -108,9 +108,13 @@ deploy/k8s/backend/secret.env
 # Grepai index
 .grepai/
 
-# Local agent memory state
+# Memtrace daemon runtime state.
 .memdb/
+
+# VTCode runtime state.
 .vtcode/
-.claude/
+
+# Claude Code per-session runtime state (PIDs, scheduled-task locks, etc.)
+.claude/scheduled_tasks.lock
 *.swo
 *~

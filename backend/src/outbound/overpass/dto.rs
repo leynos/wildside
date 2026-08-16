@@ -1,13 +1,13 @@
 //! DTOs for decoding Overpass JSON responses.
 //!
 //! The adapter decodes into these transport DTOs first, then maps into domain
-//! records (`OverpassPoi`) in one pass.
+//! records (`EnrichmentPoi`) in one pass.
 
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use crate::domain::ports::OverpassPoi;
+use crate::domain::ports::EnrichmentPoi;
 
 #[derive(Debug, Deserialize)]
 pub(super) struct OverpassResponseDto {
@@ -34,7 +34,7 @@ pub(super) struct OverpassElementCenterDto {
 }
 
 impl OverpassResponseDto {
-    pub(super) fn into_domain_pois(self) -> Result<Vec<OverpassPoi>, String> {
+    pub(super) fn into_domain_pois(self) -> Result<Vec<EnrichmentPoi>, String> {
         self.elements
             .into_iter()
             .map(OverpassElementDto::into_domain_poi)
@@ -43,7 +43,7 @@ impl OverpassResponseDto {
 }
 
 impl OverpassElementDto {
-    fn into_domain_poi(self) -> Result<OverpassPoi, String> {
+    fn into_domain_poi(self) -> Result<EnrichmentPoi, String> {
         let (longitude, latitude) = self.coordinates().ok_or_else(|| {
             format!(
                 "element {} ({}) missing coordinates",
@@ -57,7 +57,7 @@ impl OverpassElementDto {
             ));
         }
 
-        Ok(OverpassPoi {
+        Ok(EnrichmentPoi {
             element_type: self.element_type,
             element_id: self.id,
             longitude,

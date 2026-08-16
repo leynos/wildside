@@ -273,6 +273,14 @@ fn map_payload_hash_error(error: PayloadHashError) -> Error {
     Error::internal(format!("failed to hash idempotency payload: {error}"))
 }
 
+fn hash_submission_payload(
+    payload: &super::ports::RouteSubmissionPayload,
+) -> Result<PayloadHash, Error> {
+    let payload = serde_json::to_value(payload)
+        .map_err(|error| Error::internal(format!("failed to serialize route payload: {error}")))?;
+    canonicalize_and_hash(&payload).map_err(map_payload_hash_error)
+}
+
 #[async_trait]
 impl<R, M> RouteSubmissionService for RouteSubmissionServiceImpl<R, M>
 where
@@ -297,8 +305,7 @@ where
         };
 
         // Compute payload hash only when idempotency key is present.
-        let payload_hash =
-            canonicalize_and_hash(&request.payload).map_err(map_payload_hash_error)?;
+        let payload_hash = hash_submission_payload(&request.payload)?;
 
         // Look up existing record for this key (scoped to user and mutation type).
         let query = IdempotencyLookupQuery::new(

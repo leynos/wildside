@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""Fake preview tool standing in for the local Kubernetes CLI's subprocesses.
+
+The local preview smoke tests symlink this script as ``docker``, ``podman``,
+``helm``, ``k3d``, ``kind``, ``kubectl``, ``uv``, ``env``, and ``systemd-run``.
+Dispatch is keyed on the invoked name plus the exact argument vector, so only
+the command forms the production CLI actually emits are accepted; anything else
+exits non-zero with ``unexpected fake command: <name>`` on stderr, keeping the
+fake fail-closed rather than silently tolerating a drifted contract.
+
+Supported command forms
+-----------------------
+- ``uv run --no-project scripts/local_k8s.py {up,status,logs,down}`` re-executes the real CLI
+  under ``WILDSIDE_FAKE_PYTHON``, so the tests cross the genuine CLI boundary.
+- ``k3d``/``kind`` cluster list, create, and delete, which read and write the
+  cluster-state marker.
+- container-engine ``build``, ``podman tag``/``save``, ``k3d image import``,
+  ``kind load docker-image``, and ``kind load image-archive`` (optionally
+  reached through the ``env`` or ``systemd-run`` wrappers the CLI uses to set
+  ``KIND_EXPERIMENTAL_PROVIDER=podman``).
+- ``helm upgrade --install`` and ``helm status``.
+- ``kubectl`` namespace get/create, pod/service/log queries, and the session
+  Secret get/create pair.
+
+Environment variables
+---------------------
+``WILDSIDE_FAKE_TOOL_STATE``
+    Path to the cluster-state marker file. It contains ``created`` while the
+    fake cluster exists and is removed on delete.
+``WILDSIDE_FAKE_TOOL_LOG``
+    Path to a JSON-lines log. Every invocation appends
+    ``[name, args, bool(stdin)]`` before dispatch, so tests can assert the
+    command contract.
+``WILDSIDE_FAKE_PYTHON``
+    Interpreter used to re-execute the real CLI for ``uv run`` invocations.
+``WILDSIDE_CONTAINER_ENGINE``
+    Selects which engine name (``docker`` or ``podman``) accepts ``build``.
+
+The session Secret manifest is persisted alongside the cluster-state marker, so
+a create is observable by later gets: the first ``up`` creates key material and
+a second ``up`` reads it back and reuses it, matching the production reuse path.
+"""
+from __future__ import annotations
+import json
+import os
+import sys
+from pathlib import Path
+name = Path(sys.argv[0]).name
+args = sys.argv[1:]
+state_path = Path(os.environ["WILDSIDE_FAKE_TOOL_STATE"])
+log_path = Path(os.environ["WILDSIDE_FAKE_TOOL_LOG"])
+secret_path = state_path.with_name(f"{state_path.name}-session-secret")
+stdin_text = sys.stdin.read()
+with log_path.open("a", encoding="utf8") as log_file:
+    print(json.dumps([name, args, bool(stdin_text)]), file=log_file)
+def _unwrap(name: str, args: list[str]) -> tuple[str, list[str]]:
+    # Emulate `systemd-run --scope --user -p KEY=VAL env VAR=x kind ...`
+    # and `env VAR=x kind ...` using only the production wrapper forms.
+    provider = "KIND_EXPERIMENTAL_PROVIDER=podman"
+    if name == "env" and args[:2] == [provider, "kind"]:
+        return "kind", args[2:]
+    if name == "systemd-run" and args[:7] == [
+        "--scope", "--user", "-p", "Delegate=yes", "env", provider, "kind",
+    ]:
+        return "kind", args[7:]
+    return name, args
+name, args = _unwrap(name, args)
+if name == "uv" and args[:3] == ["run", "--no-project", "scripts/local_k8s.py"] and args[3:] in (
+    ["up"], ["status"], ["logs"], ["down"],
+):
+    python = os.environ["WILDSIDE_FAKE_PYTHON"]
+    os.execv(python, [str(python), *args[2:]])
+def has_cluster() -> bool:
+    return state_path.exists() and state_path.read_text() == "created"
+cluster_name = "wildside-preview"
+contexts = ("k3d-wildside-preview", "kind-wildside-preview")
+def contextual(flag: str, suffix: list[str]) -> bool:
+    return len(args) >= 2 and args[0] == flag and args[1] in contexts and args[2:] == suffix
+is_build = (
+    name == os.environ["WILDSIDE_CONTAINER_ENGINE"]
+    and len(args) == 6 and args[:2] == ["build", "-f"]
+    and args[3:5] == ["-t", "wildside-backend:local"]
+)
+is_podman_save = (
+    name == "podman" and len(args) == 4 and args[:2] == ["save", "--output"]
+    and args[3] == "docker.io/library/wildside-backend:local"
+)
+is_kind_load = (
+    name == "kind" and len(args) == 5 and args[:2] == ["load", "image-archive"]
+    and args[3:] == ["--name", cluster_name]
+)
+is_kind_docker_load = name == "kind" and args == [
+    "load", "docker-image", "wildside-backend:local", "--name", cluster_name,
+]
+is_helm_upgrade = (
+    name == "helm" and len(args) == 17
+    and args[:1] == ["--kube-context"] and args[1] in contexts
+    and args[2:5] == ["upgrade", "--install", "wildside"]
+    and args[6:8] == ["--namespace", "wildside"] and args[8] == "--values"
+    and args[10:] == [
+        "--set-string", "image.repository=wildside-backend",
+        "--set-string", "image.tag=local",
+        "--wait", "--timeout", "5m",
+    ]
+)
+is_session_secret_get = name == "kubectl" and contextual(
+    "--context", ["-n", "wildside", "get", "secret", "wildside-session-key", "--ignore-not-found",
+    "-o=jsonpath={.data.session_key}"],
+)
+is_session_secret_create = (
+    name == "kubectl" and contextual("--context", ["create", "-f", "-"]) and bool(stdin_text)
+)
+is_no_output_command = any((
+    is_build,
+    name == "k3d" and args == ["image", "import", "wildside-backend:local", "--cluster", cluster_name],
+    name == "podman" and args == [
+        "tag", "wildside-backend:local", "docker.io/library/wildside-backend:local",
+    ],
+    is_podman_save,
+    is_kind_load,
+    is_kind_docker_load,
+    is_helm_upgrade,
+    name == "kubectl" and contextual(
+        "--context", ["get", "namespace", "wildside", "--ignore-not-found"],
+    ),
+    name == "kubectl" and contextual("--context", ["create", "namespace", "wildside"]),
+))
+def stored_session_key() -> str:
+    # Read the persisted manifest back the way `kubectl get -o=jsonpath` would.
+    if not secret_path.exists():
+        return ""
+    for line in secret_path.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("session_key:"):
+            return stripped.split(":", 1)[1].strip()
+    return ""
+def delete_cluster() -> None:
+    # Deleting the cluster discards its Secrets along with it.
+    state_path.unlink(missing_ok=True)
+    secret_path.unlink(missing_ok=True)
+if name == "k3d" and args == ["cluster", "list", "--output", "json"]:
+    print('[{"name":"wildside-preview"}]' if has_cluster() else "[]")
+elif name == "k3d" and args == [
+    "cluster", "create", cluster_name, "--servers", "1", "--agents", "1",
+    "--port", "127.0.0.1:8088:80@loadbalancer", "--wait",
+]:
+    state_path.write_text("created")
+elif name == "k3d" and args == ["cluster", "delete", cluster_name]:
+    delete_cluster()
+elif name == "kind" and args == ["get", "clusters"]:
+    print("wildside-preview" if has_cluster() else "other")
+elif name == "kind" and args == [
+    "create", "cluster", "--name", cluster_name, "--config", "-", "--wait", "180s",
+] and stdin_text:
+    state_path.write_text("created")
+elif name == "kind" and args == ["delete", "cluster", "--name", cluster_name]:
+    delete_cluster()
+elif is_session_secret_get:
+    # An absent Secret yields empty stdout, matching `--ignore-not-found`.
+    print(stored_session_key(), end="")
+elif is_session_secret_create:
+    if secret_path.exists():
+        print(
+            'Error from server (AlreadyExists): secrets "wildside-session-key" '
+            "already exists",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    secret_path.write_text(stdin_text)
+elif is_no_output_command:
+    pass
+elif name == "helm" and args in (
+    ["--kube-context", contexts[0], "-n", "wildside", "status", "wildside"],
+    ["--kube-context", contexts[1], "-n", "wildside", "status", "wildside"],
+):
+    print("helm status")
+elif name == "kubectl" and contextual(
+    "--context", ["-n", "wildside", "logs", "-l",
+    "app.kubernetes.io/instance=wildside", "-c", "app", "--tail", "200"],
+):
+    print("backend log")
+elif name == "kubectl" and contextual(
+    "--context", ["-n", "wildside", "get", "pods", "-l",
+    "app.kubernetes.io/instance=wildside", "-o", "wide"],
+):
+    print("pod/wildside-backend Running")
+elif name == "kubectl" and contextual(
+    "--context", ["-n", "wildside", "get", "service", "wildside", "--ignore-not-found"],
+):
+    print("service/wildside")
+else:
+    print(f"unexpected fake command: {name} {args!r}", file=sys.stderr)
+    raise SystemExit(1)

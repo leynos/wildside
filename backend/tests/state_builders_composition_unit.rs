@@ -181,7 +181,11 @@ async fn route_submission_flow(state: &web::Data<HttpState>, user_id: &UserId) {
         .submit(RouteSubmissionRequest {
             idempotency_key: Some(IdempotencyKey::random()),
             user_id: user_id.clone(),
-            payload: serde_json::json!({"origin": "A", "destination": "B"}),
+            payload: serde_json::from_value(serde_json::json!({
+                "origin": "A",
+                "destination": "B"
+            }))
+            .expect("route submission fixture should be valid"),
         })
         .await;
     assert!(

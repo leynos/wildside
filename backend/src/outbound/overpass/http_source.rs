@@ -10,8 +10,7 @@ use reqwest::{Client, StatusCode, Url};
 
 use super::dto::OverpassResponseDto;
 use crate::domain::ports::{
-    OverpassEnrichmentRequest, OverpassEnrichmentResponse, OverpassEnrichmentSource,
-    OverpassEnrichmentSourceError, OverpassPoi,
+    EnrichmentPoi, EnrichmentRequest, EnrichmentResponse, EnrichmentSource, EnrichmentSourceError,
 };
 
 const DEFAULT_OVERPASS_QUERY_TIMEOUT_SECONDS: u32 = 180;
@@ -85,11 +84,11 @@ impl OverpassHttpSource {
 }
 
 #[async_trait]
-impl OverpassEnrichmentSource for OverpassHttpSource {
+impl EnrichmentSource for OverpassHttpSource {
     async fn fetch_pois(
         &self,
-        request: &OverpassEnrichmentRequest,
-    ) -> Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError> {
+        request: &EnrichmentRequest,
+    ) -> Result<EnrichmentResponse, EnrichmentSourceError> {
         let query = build_overpass_query(request, self.query_timeout_seconds)?;
         let response = self
             .client
@@ -110,7 +109,7 @@ impl OverpassEnrichmentSource for OverpassHttpSource {
 
         let transfer_bytes = body.len() as u64;
         let pois = parse_pois(body.as_ref())?;
-        Ok(OverpassEnrichmentResponse {
+        Ok(EnrichmentResponse {
             pois,
             transfer_bytes,
             source_url: self.endpoint.to_string(),
@@ -118,27 +117,23 @@ impl OverpassEnrichmentSource for OverpassHttpSource {
     }
 }
 
-fn parse_pois(body: &[u8]) -> Result<Vec<OverpassPoi>, OverpassEnrichmentSourceError> {
+fn parse_pois(body: &[u8]) -> Result<Vec<EnrichmentPoi>, EnrichmentSourceError> {
     let decoded: OverpassResponseDto = serde_json::from_slice(body).map_err(|error| {
-        OverpassEnrichmentSourceError::decode(format!("invalid Overpass JSON payload: {error}"))
+        EnrichmentSourceError::decode(format!("invalid Overpass JSON payload: {error}"))
     })?;
     decoded
         .into_domain_pois()
-        .map_err(OverpassEnrichmentSourceError::decode)
+        .map_err(EnrichmentSourceError::decode)
 }
 
 fn build_overpass_query(
-    request: &OverpassEnrichmentRequest,
+    request: &EnrichmentRequest,
     query_timeout_seconds: u32,
-) -> Result<String, OverpassEnrichmentSourceError> {
-    validate_bounding_box(&request.bounding_box)?;
-    let bbox = format!(
-        "({min_lat},{min_lng},{max_lat},{max_lng})",
-        min_lng = request.bounding_box[0],
-        min_lat = request.bounding_box[1],
-        max_lng = request.bounding_box[2],
-        max_lat = request.bounding_box[3],
-    );
+) -> Result<String, EnrichmentSourceError> {
+    // `BoundingBox` has already enforced WGS84 validity, so the adapter only
+    // reorders the coordinates into Overpass's south,west,north,east form.
+    let [min_lng, min_lat, max_lng, max_lat] = request.bounding_box.as_array();
+    let bbox = format!("({min_lat},{min_lng},{max_lat},{max_lng})");
 
     let selectors = if request.tags.is_empty() {
         vec![String::new()]
@@ -163,38 +158,10 @@ fn build_overpass_query(
     ))
 }
 
-fn validate_bounding_box(bounding_box: &[f64; 4]) -> Result<(), OverpassEnrichmentSourceError> {
-    let [min_lng, min_lat, max_lng, max_lat] = *bounding_box;
-    if [min_lng, min_lat, max_lng, max_lat]
-        .into_iter()
-        .any(|value| !value.is_finite())
-    {
-        return Err(OverpassEnrichmentSourceError::invalid_request(
-            "bounding box must contain finite coordinates",
-        ));
-    }
-    if min_lng >= max_lng || min_lat >= max_lat {
-        return Err(OverpassEnrichmentSourceError::invalid_request(
-            "bounding box must be [min_lng, min_lat, max_lng, max_lat]",
-        ));
-    }
-    if !(-180.0..=180.0).contains(&min_lng) || !(-180.0..=180.0).contains(&max_lng) {
-        return Err(OverpassEnrichmentSourceError::invalid_request(
-            "longitude must be within [-180, 180]",
-        ));
-    }
-    if !(-90.0..=90.0).contains(&min_lat) || !(-90.0..=90.0).contains(&max_lat) {
-        return Err(OverpassEnrichmentSourceError::invalid_request(
-            "latitude must be within [-90, 90]",
-        ));
-    }
-    Ok(())
-}
-
-fn build_tag_selector(tag: &str) -> Result<String, OverpassEnrichmentSourceError> {
+fn build_tag_selector(tag: &str) -> Result<String, EnrichmentSourceError> {
     let trimmed = tag.trim();
     if trimmed.is_empty() {
-        return Err(OverpassEnrichmentSourceError::invalid_request(
+        return Err(EnrichmentSourceError::invalid_request(
             "tags must not include blank values",
         ));
     }
@@ -204,14 +171,14 @@ fn build_tag_selector(tag: &str) -> Result<String, OverpassEnrichmentSourceError
         None => (trimmed, None),
     };
     if key.is_empty() {
-        return Err(OverpassEnrichmentSourceError::invalid_request(
+        return Err(EnrichmentSourceError::invalid_request(
             "tags must provide a non-empty key",
         ));
     }
 
     let escaped_key = escape_quoted(key);
     match maybe_value {
-        Some("") => Err(OverpassEnrichmentSourceError::invalid_request(
+        Some("") => Err(EnrichmentSourceError::invalid_request(
             "tags must not include empty values",
         )),
         Some(value) => Ok(format!("[\"{escaped_key}\"=\"{}\"]", escape_quoted(value))),
@@ -223,15 +190,15 @@ fn escape_quoted(raw: &str) -> String {
     raw.replace('\\', r"\\").replace('"', "\\\"")
 }
 
-fn map_transport_error(error: reqwest::Error) -> OverpassEnrichmentSourceError {
+fn map_transport_error(error: reqwest::Error) -> EnrichmentSourceError {
     if error.is_timeout() {
-        OverpassEnrichmentSourceError::timeout(error.to_string())
+        EnrichmentSourceError::timeout(error.to_string())
     } else {
-        OverpassEnrichmentSourceError::transport(error.to_string())
+        EnrichmentSourceError::transport(error.to_string())
     }
 }
 
-fn map_status_error(status: StatusCode, body: &[u8]) -> OverpassEnrichmentSourceError {
+fn map_status_error(status: StatusCode, body: &[u8]) -> EnrichmentSourceError {
     let body_preview = body_preview(body);
     let message = if body_preview.is_empty() {
         format!("status {}", status.as_u16())
@@ -240,12 +207,12 @@ fn map_status_error(status: StatusCode, body: &[u8]) -> OverpassEnrichmentSource
     };
 
     match status {
-        StatusCode::TOO_MANY_REQUESTS => OverpassEnrichmentSourceError::rate_limited(message),
+        StatusCode::TOO_MANY_REQUESTS => EnrichmentSourceError::rate_limited(message),
         StatusCode::REQUEST_TIMEOUT | StatusCode::GATEWAY_TIMEOUT => {
-            OverpassEnrichmentSourceError::timeout(message)
+            EnrichmentSourceError::timeout(message)
         }
-        _ if status.is_client_error() => OverpassEnrichmentSourceError::invalid_request(message),
-        _ => OverpassEnrichmentSourceError::transport(message),
+        _ if status.is_client_error() => EnrichmentSourceError::invalid_request(message),
+        _ => EnrichmentSourceError::transport(message),
     }
 }
 
@@ -265,133 +232,5 @@ fn body_preview(body: &[u8]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    //! Regression coverage for non-network Overpass mapping helpers.
-
-    use super::*;
-    use rstest::rstest;
-    use uuid::Uuid;
-
-    fn request(tags: Vec<&str>) -> OverpassEnrichmentRequest {
-        OverpassEnrichmentRequest {
-            job_id: Uuid::new_v4(),
-            bounding_box: [-3.30, 55.90, -3.10, 56.00],
-            tags: tags.into_iter().map(str::to_owned).collect(),
-        }
-    }
-
-    #[test]
-    fn builds_query_with_bbox_reordered_for_overpass() {
-        let query = build_overpass_query(&request(vec!["amenity", "name=coffee \"bar\""]), 180)
-            .expect("query should build");
-
-        assert!(
-            query.contains("node[\"amenity\"](55.9,-3.3,56,-3.1);"),
-            "query should include bbox in south,west,north,east order"
-        );
-        assert!(
-            query.starts_with("[out:json][timeout:180];"),
-            "query should include configured timeout"
-        );
-        assert!(
-            query.contains("way[\"name\"=\"coffee \\\"bar\\\"\"](55.9,-3.3,56,-3.1);"),
-            "query should escape quoted values in tag selectors"
-        );
-    }
-
-    #[rstest]
-    #[case::rate_limited(StatusCode::TOO_MANY_REQUESTS, "RateLimited")]
-    #[case::request_timeout(StatusCode::REQUEST_TIMEOUT, "Timeout")]
-    #[case::gateway_timeout(StatusCode::GATEWAY_TIMEOUT, "Timeout")]
-    #[case::bad_request(StatusCode::BAD_REQUEST, "InvalidRequest")]
-    #[case::server_error(StatusCode::INTERNAL_SERVER_ERROR, "Transport")]
-    fn maps_http_statuses_to_expected_domain_errors(
-        #[case] status: StatusCode,
-        #[case] expected: &str,
-    ) {
-        let error = map_status_error(status, b"{\"remark\":\"backend unavailable\"}");
-        match expected {
-            "RateLimited" => {
-                assert!(
-                    matches!(error, OverpassEnrichmentSourceError::RateLimited { .. }),
-                    "429 should map to RateLimited",
-                );
-            }
-            "Timeout" => {
-                assert!(
-                    matches!(error, OverpassEnrichmentSourceError::Timeout { .. }),
-                    "timeout statuses should map to Timeout",
-                );
-            }
-            "InvalidRequest" => {
-                assert!(
-                    matches!(error, OverpassEnrichmentSourceError::InvalidRequest { .. }),
-                    "client statuses should map to InvalidRequest",
-                );
-            }
-            "Transport" => {
-                assert!(
-                    matches!(error, OverpassEnrichmentSourceError::Transport { .. }),
-                    "other statuses should map to Transport",
-                );
-            }
-            _ => panic!("unsupported test expectation: {expected}"),
-        }
-    }
-
-    #[test]
-    fn parses_overpass_json_into_domain_pois() {
-        let body = r#"{
-            "elements": [
-                {
-                    "type": "node",
-                    "id": 101,
-                    "lat": 55.91,
-                    "lon": -3.21,
-                    "tags": { "amenity": "cafe" }
-                },
-                {
-                    "type": "way",
-                    "id": 102,
-                    "center": { "lat": 55.92, "lon": -3.22 },
-                    "tags": { "name": "The Meadows" }
-                }
-            ]
-        }"#;
-
-        let pois = parse_pois(body.as_bytes()).expect("JSON should decode");
-        assert_eq!(pois.len(), 2, "two POIs should be decoded");
-        assert_eq!(pois[0].element_type, "node");
-        assert_eq!(pois[0].longitude, -3.21);
-        assert_eq!(pois[1].element_type, "way");
-        assert_eq!(pois[1].latitude, 55.92);
-    }
-
-    #[test]
-    fn rejects_elements_without_coordinates() {
-        let body = r#"{
-            "elements": [
-                { "type": "way", "id": 201, "tags": { "name": "missing-centre" } }
-            ]
-        }"#;
-
-        let error = parse_pois(body.as_bytes()).expect_err("decode should fail");
-        assert!(
-            matches!(error, OverpassEnrichmentSourceError::Decode { .. }),
-            "missing coordinates should map to Decode errors",
-        );
-    }
-
-    #[test]
-    fn rejects_bbox_outside_wgs84_ranges() {
-        for bounding_box in [[-181.0, 55.90, -3.10, 56.00], [-3.30, -91.0, -3.10, 56.00]] {
-            let mut request = request(vec!["amenity"]);
-            request.bounding_box = bounding_box;
-            let error = build_overpass_query(&request, 180).expect_err("bbox must fail");
-            assert!(
-                matches!(error, OverpassEnrichmentSourceError::InvalidRequest { .. }),
-                "invalid ranges should map to invalid request",
-            );
-        }
-    }
-}
+#[path = "http_source/tests.rs"]
+mod tests;

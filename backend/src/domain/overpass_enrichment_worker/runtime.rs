@@ -7,8 +7,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use crate::domain::ports::{
-    EnrichmentJobMetrics, EnrichmentProvenanceRepository, OsmPoiRepository,
-    OverpassEnrichmentSource,
+    EnrichmentJobMetrics, EnrichmentProvenanceRepository, EnrichmentSource, OsmPoiRepository,
 };
 
 use super::{BackoffJitter, EnrichmentSleeper};
@@ -16,7 +15,7 @@ use super::{BackoffJitter, EnrichmentSleeper};
 /// Port bundle required by the enrichment worker.
 pub struct OverpassEnrichmentWorkerPorts {
     /// Outbound Overpass source adapter.
-    pub source: Arc<dyn OverpassEnrichmentSource>,
+    pub source: Arc<dyn EnrichmentSource>,
     /// POI persistence adapter.
     pub poi_repository: Arc<dyn OsmPoiRepository>,
     /// Enrichment provenance persistence/listing adapter.
@@ -35,12 +34,12 @@ impl OverpassEnrichmentWorkerPorts {
     ///
     /// use backend::domain::overpass_enrichment_worker::OverpassEnrichmentWorkerPorts;
     /// use backend::domain::ports::{
-    ///     FixtureEnrichmentProvenanceRepository, FixtureOverpassEnrichmentSource,
+    ///     FixtureEnrichmentProvenanceRepository, FixtureEnrichmentSource,
     ///     FixtureOsmPoiRepository, NoOpEnrichmentJobMetrics,
     /// };
     ///
     /// let ports = OverpassEnrichmentWorkerPorts::new(
-    ///     Arc::new(FixtureOverpassEnrichmentSource),
+    ///     Arc::new(FixtureEnrichmentSource),
     ///     Arc::new(FixtureOsmPoiRepository),
     ///     Arc::new(FixtureEnrichmentProvenanceRepository),
     ///     Arc::new(NoOpEnrichmentJobMetrics),
@@ -52,7 +51,7 @@ impl OverpassEnrichmentWorkerPorts {
     /// let _metrics = ports.metrics.clone();
     /// ```
     pub fn new(
-        source: Arc<dyn OverpassEnrichmentSource>,
+        source: Arc<dyn EnrichmentSource>,
         poi_repository: Arc<dyn OsmPoiRepository>,
         provenance_repository: Arc<dyn EnrichmentProvenanceRepository>,
         metrics: Arc<dyn EnrichmentJobMetrics>,

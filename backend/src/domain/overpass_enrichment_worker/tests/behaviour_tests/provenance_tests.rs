@@ -20,7 +20,7 @@ fn worker_fixture(now: TestResult<DateTime<Utc>>) -> TestResult<WorkerTestFixtur
 
 fn set_source_script(
     source: &SourceStub,
-    scripted: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
+    scripted: Vec<Result<EnrichmentResponse, EnrichmentSourceError>>,
 ) -> TestResult {
     *source
         .scripted
@@ -53,7 +53,7 @@ fn set_provenance_script(
 
 async fn assert_provenance_failure_records_metrics_and_maps_error(
     fixture: WorkerTestFixture,
-    job: OverpassEnrichmentRequest,
+    job: EnrichmentRequest,
     case: ProvenanceFailureCase,
 ) -> TestResult {
     set_source_script(fixture.source.as_ref(), vec![Ok(response(1, 32))])?;
@@ -123,7 +123,7 @@ async fn assert_provenance_failure_records_metrics_and_maps_error(
 )]
 #[tokio::test]
 async fn provenance_failure_records_metric_and_maps_error(
-    job: OverpassEnrichmentRequest,
+    job: EnrichmentRequest,
     worker_fixture: TestResult<WorkerTestFixture>,
     #[case] case: ProvenanceFailureCase,
 ) -> TestResult {
@@ -136,14 +136,14 @@ async fn provenance_failure_records_metric_and_maps_error(
 #[tokio::test]
 async fn source_url_is_persisted_verbatim(
     now: TestResult<DateTime<Utc>>,
-    mut job: OverpassEnrichmentRequest,
+    mut job: EnrichmentRequest,
     worker_fixture: TestResult<WorkerTestFixture>,
 ) -> TestResult {
     let now = now?;
     let worker_fixture = worker_fixture?;
     let edge_source_url =
         "https://overpass.example/api/interpreter?mirror=2&query=name%3Dfoo+bar#regional";
-    job.bounding_box = [-3.399_999, 55.900_001, -3.100_001, 56.000_001];
+    job.bounding_box = test_bounding_box(-3.399_999, 55.900_001, -3.100_001, 56.000_001);
 
     set_source_script(
         worker_fixture.source.as_ref(),
@@ -163,6 +163,6 @@ async fn source_url_is_persisted_verbatim(
     assert_eq!(persisted[0].job_id, job.job_id);
     assert_eq!(persisted[0].source_url, edge_source_url);
     assert_eq!(persisted[0].imported_at, now);
-    assert_eq!(persisted[0].bounding_box, job.bounding_box);
+    assert_eq!(persisted[0].bounding_box, job.bounding_box.as_array());
     Ok(())
 }

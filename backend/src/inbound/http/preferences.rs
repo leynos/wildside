@@ -17,7 +17,9 @@ use crate::domain::ports::UpdatePreferencesRequest;
 use crate::domain::{Error, UnitSystem, UserPreferences};
 use crate::inbound::http::ApiResult;
 use crate::inbound::http::cache_control::private_no_cache_header;
-use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
+use crate::inbound::http::idempotency::{
+    IdempotencyKeyHeader, extract_idempotency_key, map_idempotency_key_error,
+};
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
@@ -155,9 +157,7 @@ pub async fn get_preferences(
         (status = 409, description = "Conflict", body = ErrorSchema),
         (status = 503, description = "Service unavailable", body = ErrorSchema)
     ),
-    params(
-        ("Idempotency-Key" = Option<String>, Header, description = "UUID for idempotent requests")
-    ),
+    params(IdempotencyKeyHeader),
     tags = ["users"],
     operation_id = "updateUserPreferences",
     security(("SessionCookie" = []))

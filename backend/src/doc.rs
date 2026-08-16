@@ -5,8 +5,7 @@
 //!
 //! - **Paths**: All HTTP endpoints from the inbound layer (users, health)
 //! - **Schemas**: Domain type wrappers ([`ErrorSchema`], [`ErrorCodeSchema`],
-//!   [`UserSchema`]) that provide OpenAPI definitions without coupling domain
-//!   types to the utoipa framework
+//!   [`UserSchema`]) for shared types that use external schema registration
 //! - **Security**: Session cookie authentication scheme
 //!
 //! The generated specification is used by Swagger UI (debug builds) and
@@ -88,6 +87,7 @@ impl Modify for SecurityAddon {
         crate::inbound::http::offline::upsert_offline_bundle,
         crate::inbound::http::offline::delete_offline_bundle,
         crate::inbound::http::walk_sessions::create_walk_session,
+        crate::inbound::http::routes::submit_route,
     ),
     components(schemas(
         UserSchema,
@@ -137,14 +137,28 @@ mod tests {
     //! BDD tests in `backend/tests/openapi_schemas_bdd.rs`.
 
     use super::*;
+    use crate::domain::ports::{ROUTE_PREFERENCE_MAX_ITEMS, ROUTE_PREFERENCE_MAX_VALUE_BYTES};
     use crate::test_support::openapi::unwrap_object_schema;
+    use rstest::{fixture, rstest};
+    use serde_json::json;
     use utoipa::OpenApi;
+    use utoipa::openapi::Components;
     use utoipa::openapi::RefOr;
-    use utoipa::openapi::schema::Schema;
+    use utoipa::openapi::schema::{AdditionalProperties, Schema};
 
     // Note: utoipa replaces :: with . in schema names
     const ERROR_SCHEMA_NAME: &str = "crate.domain.Error";
+    const ROUTE_PREFERENCES_SCHEMA_NAME: &str = "RoutePreferences";
+    const ROUTE_RESPONSE_SCHEMA_NAME: &str = "RouteResponse";
     const USER_SCHEMA_NAME: &str = "crate.domain.User";
+
+    #[fixture]
+    fn openapi_components() -> Components {
+        match ApiDoc::openapi().components {
+            Some(components) => components,
+            None => panic!("OpenAPI document should include components"),
+        }
+    }
 
     /// Assert that an Object schema contains a field with the given name.
     ///
@@ -192,32 +206,137 @@ mod tests {
         }
     }
 
-    #[test]
-    fn openapi_error_schema_has_required_fields() {
-        let doc = ApiDoc::openapi();
-        let schemas = &doc.components.as_ref().expect("components").schemas;
+    #[rstest]
+    fn openapi_error_schema_has_required_fields(openapi_components: Components) {
+        let schemas = &openapi_components.schemas;
         let error_schema = schemas.get(ERROR_SCHEMA_NAME).expect("Error schema");
 
         assert_object_schema_has_field(error_schema, ERROR_SCHEMA_NAME, "code");
         assert_object_schema_has_field(error_schema, ERROR_SCHEMA_NAME, "message");
     }
 
-    #[test]
-    fn openapi_user_schema_has_required_fields() {
-        let doc = ApiDoc::openapi();
-        let schemas = &doc.components.as_ref().expect("components").schemas;
+    #[rstest]
+    fn openapi_user_schema_has_required_fields(openapi_components: Components) {
+        let schemas = &openapi_components.schemas;
         let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
 
         assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "id");
         assert_object_schema_has_field(user_schema, USER_SCHEMA_NAME, "displayName");
     }
 
-    #[test]
-    fn openapi_user_id_has_uuid_format() {
+    #[rstest]
+    fn openapi_route_preferences_schema_has_expected_fields(openapi_components: Components) {
+        let schemas = &openapi_components.schemas;
+        let preferences_schema = schemas
+            .get(ROUTE_PREFERENCES_SCHEMA_NAME)
+            .expect("RoutePreferences schema");
+
+        assert_object_schema_has_field(
+            preferences_schema,
+            ROUTE_PREFERENCES_SCHEMA_NAME,
+            "themeIds",
+        );
+        assert_object_schema_has_field(
+            preferences_schema,
+            ROUTE_PREFERENCES_SCHEMA_NAME,
+            "interestThemeIds",
+        );
+        assert_object_schema_has_field(
+            preferences_schema,
+            ROUTE_PREFERENCES_SCHEMA_NAME,
+            "avoidStairs",
+        );
+
+        let preferences_object =
+            unwrap_object_schema(preferences_schema, ROUTE_PREFERENCES_SCHEMA_NAME);
+        assert!(
+            matches!(
+                preferences_object.additional_properties.as_deref(),
+                Some(AdditionalProperties::FreeForm(false))
+            ),
+            "RoutePreferences should reject unknown fields"
+        );
+    }
+
+    #[rstest]
+    fn openapi_route_preferences_schema_documents_collection_and_byte_limits(
+        openapi_components: Components,
+    ) {
+        let schemas = &openapi_components.schemas;
+        let preferences_schema = schemas
+            .get(ROUTE_PREFERENCES_SCHEMA_NAME)
+            .expect("RoutePreferences schema");
+        let preferences_object =
+            unwrap_object_schema(preferences_schema, ROUTE_PREFERENCES_SCHEMA_NAME);
+
+        for field in ["themes", "themeIds", "interestThemeIds", "avoid"] {
+            let schema = preferences_object
+                .properties
+                .get(field)
+                .unwrap_or_else(|| panic!("{field} property exists"));
+            let schema = serde_json::to_value(schema).expect("serializes array schema");
+
+            assert_eq!(
+                schema.pointer("/maxItems"),
+                Some(&json!(ROUTE_PREFERENCE_MAX_ITEMS)),
+                "{field} should limit collection size"
+            );
+            assert_eq!(
+                schema.pointer("/items/x-max-utf8-bytes"),
+                Some(&json!(ROUTE_PREFERENCE_MAX_VALUE_BYTES)),
+                "{field} items should publish the UTF-8 byte limit"
+            );
+        }
+
+        let mode_schema = preferences_object
+            .properties
+            .get("mode")
+            .expect("mode property exists");
+        let mode_schema = serde_json::to_value(mode_schema).expect("serializes mode schema");
+        assert_eq!(
+            mode_schema.pointer("/x-max-utf8-bytes"),
+            Some(&json!(ROUTE_PREFERENCE_MAX_VALUE_BYTES)),
+            "mode should publish the UTF-8 byte limit"
+        );
+    }
+
+    #[rstest]
+    fn openapi_route_response_schema_has_typed_metadata(openapi_components: Components) {
+        let schemas = &openapi_components.schemas;
+        let response_schema = schemas
+            .get(ROUTE_RESPONSE_SCHEMA_NAME)
+            .expect("RouteResponse schema");
+        let response_object = unwrap_object_schema(response_schema, ROUTE_RESPONSE_SCHEMA_NAME);
+
+        let request_id_schema = response_object
+            .properties
+            .get("requestId")
+            .expect("requestId property exists");
+        let request_id_schema =
+            serde_json::to_value(request_id_schema).expect("serializes requestId schema");
+        assert_eq!(
+            request_id_schema.pointer("/format"),
+            Some(&json!("uuid")),
+            "requestId should have UUID format"
+        );
+
+        let status_schema = response_object
+            .properties
+            .get("status")
+            .expect("status property exists");
+        let status_schema = serde_json::to_value(status_schema).expect("serializes status schema");
+        assert_eq!(
+            status_schema.pointer("/enum"),
+            Some(&json!(["accepted", "replayed"])),
+            "status should enumerate submission outcomes"
+        );
+    }
+
+    #[rstest]
+    fn openapi_user_id_has_uuid_format(openapi_components: Components) {
         use utoipa::openapi::schema::SchemaFormat;
 
-        let doc = ApiDoc::openapi();
-        let schemas = &doc.components.as_ref().expect("components").schemas;
+        let schemas = &openapi_components.schemas;
         let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
         let obj = unwrap_object_schema(user_schema, USER_SCHEMA_NAME);
 
@@ -231,10 +350,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn openapi_user_display_name_has_constraints() {
-        let doc = ApiDoc::openapi();
-        let schemas = &doc.components.as_ref().expect("components").schemas;
+    #[rstest]
+    fn openapi_user_display_name_has_constraints(openapi_components: Components) {
+        let schemas = &openapi_components.schemas;
         let user_schema = schemas.get(USER_SCHEMA_NAME).expect("User schema");
         let obj = unwrap_object_schema(user_schema, USER_SCHEMA_NAME);
 

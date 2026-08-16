@@ -1,8 +1,7 @@
 //! OpenAPI schema definitions for domain types.
 //!
-//! Domain types remain framework-agnostic by not deriving `ToSchema`. This
-//! module provides the schema definitions required for OpenAPI documentation
-//! using utoipa's external schema registration.
+//! Domain types generally remain framework-agnostic. This module provides
+//! schema definitions for types that use utoipa's external schema registration.
 //!
 //! The schema wrappers mirror the structure of their corresponding domain
 //! types but live in the inbound adapter layer where framework concerns belong.

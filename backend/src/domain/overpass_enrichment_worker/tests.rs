@@ -19,13 +19,14 @@ use super::{
     OverpassEnrichmentWorker, OverpassEnrichmentWorkerConfig, OverpassEnrichmentWorkerPorts,
     OverpassEnrichmentWorkerRuntime,
 };
+use crate::domain::BoundingBox;
 use crate::domain::ports::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics,
-    EnrichmentJobMetricsError, EnrichmentJobSuccess, EnrichmentProvenanceRecord,
-    EnrichmentProvenanceRepository, EnrichmentProvenanceRepositoryError,
-    ListEnrichmentProvenanceRequest, ListEnrichmentProvenanceResponse, OsmPoiIngestionRecord,
-    OsmPoiRepository, OsmPoiRepositoryError, OverpassEnrichmentRequest, OverpassEnrichmentResponse,
-    OverpassEnrichmentSource, OverpassEnrichmentSourceError, OverpassPoi,
+    EnrichmentJobMetricsError, EnrichmentJobSuccess, EnrichmentPoi, EnrichmentProvenanceRecord,
+    EnrichmentProvenanceRepository, EnrichmentProvenanceRepositoryError, EnrichmentRequest,
+    EnrichmentResponse, EnrichmentSource, EnrichmentSourceError, ListEnrichmentProvenanceRequest,
+    ListEnrichmentProvenanceResponse, OsmPoiIngestionRecord, OsmPoiRepository,
+    OsmPoiRepositoryError,
 };
 use crate::test_support::overpass_enrichment::{
     AttemptOffsetJitter, MutableClock, NoJitter, RecordingSleeper,
@@ -34,7 +35,7 @@ use crate::test_support::overpass_enrichment::{
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 struct SourceStub {
-    scripted: Mutex<VecDeque<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>>,
+    scripted: Mutex<VecDeque<Result<EnrichmentResponse, EnrichmentSourceError>>>,
     calls: AtomicUsize,
     active: AtomicUsize,
     max_active: AtomicUsize,
@@ -42,9 +43,7 @@ struct SourceStub {
     release: Option<Arc<Notify>>,
 }
 impl SourceStub {
-    fn scripted(
-        scripted: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
-    ) -> Self {
+    fn scripted(scripted: Vec<Result<EnrichmentResponse, EnrichmentSourceError>>) -> Self {
         Self {
             scripted: Mutex::new(scripted.into()),
             calls: AtomicUsize::new(0),
@@ -55,7 +54,7 @@ impl SourceStub {
         }
     }
     fn blocking(
-        scripted: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
+        scripted: Vec<Result<EnrichmentResponse, EnrichmentSourceError>>,
         entered: mpsc::UnboundedSender<usize>,
         release: Arc<Notify>,
     ) -> Self {
@@ -67,18 +66,18 @@ impl SourceStub {
     }
 }
 #[async_trait]
-impl OverpassEnrichmentSource for SourceStub {
+impl EnrichmentSource for SourceStub {
     async fn fetch_pois(
         &self,
-        _request: &OverpassEnrichmentRequest,
-    ) -> Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError> {
+        _request: &EnrichmentRequest,
+    ) -> Result<EnrichmentResponse, EnrichmentSourceError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let active_now = self.active.fetch_add(1, Ordering::SeqCst) + 1;
         self.max_active.fetch_max(active_now, Ordering::SeqCst);
         if let Some(entered) = &self.entered {
-            entered.send(active_now).map_err(|error| {
-                OverpassEnrichmentSourceError::invalid_request(error.to_string())
-            })?;
+            entered
+                .send(active_now)
+                .map_err(|error| EnrichmentSourceError::invalid_request(error.to_string()))?;
         }
         if let Some(release) = &self.release {
             release.notified().await;
@@ -86,10 +85,10 @@ impl OverpassEnrichmentSource for SourceStub {
         self.active.fetch_sub(1, Ordering::SeqCst);
         self.scripted
             .lock()
-            .map_err(|_| OverpassEnrichmentSourceError::invalid_request("source mutex"))?
+            .map_err(|_| EnrichmentSourceError::invalid_request("source mutex"))?
             .pop_front()
             .unwrap_or_else(|| {
-                Err(OverpassEnrichmentSourceError::invalid_request(
+                Err(EnrichmentSourceError::invalid_request(
                     "source script exhausted unexpectedly",
                 ))
             })
@@ -250,11 +249,19 @@ fn now() -> TestResult<DateTime<Utc>> {
         .ok_or_else(|| io::Error::other("valid time"))?)
 }
 #[fixture]
-fn job() -> OverpassEnrichmentRequest {
-    OverpassEnrichmentRequest {
+fn job() -> EnrichmentRequest {
+    EnrichmentRequest {
         job_id: Uuid::new_v4(),
-        bounding_box: [-3.30, 55.90, -3.10, 56.00],
+        bounding_box: test_bounding_box(-3.30, 55.90, -3.10, 56.00),
         tags: vec!["amenity".to_owned()],
+    }
+}
+
+/// Build a bounding box for tests, panicking on coordinates that cannot be one.
+fn test_bounding_box(min_lng: f64, min_lat: f64, max_lng: f64, max_lat: f64) -> BoundingBox {
+    match BoundingBox::new(min_lng, min_lat, max_lng, max_lat) {
+        Ok(bounding_box) => bounding_box,
+        Err(error) => panic!("test bounding box should be valid: {error}"),
     }
 }
 
@@ -271,7 +278,7 @@ fn config() -> OverpassEnrichmentWorkerConfig {
     }
 }
 
-fn response(poi_count: usize, transfer_bytes: u64) -> OverpassEnrichmentResponse {
+fn response(poi_count: usize, transfer_bytes: u64) -> EnrichmentResponse {
     response_with_source_url(
         poi_count,
         transfer_bytes,
@@ -283,12 +290,12 @@ fn response_with_source_url(
     poi_count: usize,
     transfer_bytes: u64,
     source_url: &str,
-) -> OverpassEnrichmentResponse {
-    OverpassEnrichmentResponse {
+) -> EnrichmentResponse {
+    EnrichmentResponse {
         transfer_bytes,
         source_url: source_url.to_owned(),
         pois: (0..poi_count)
-            .map(|idx| OverpassPoi {
+            .map(|idx| EnrichmentPoi {
                 element_type: "node".to_owned(),
                 element_id: idx as i64,
                 longitude: -3.2,

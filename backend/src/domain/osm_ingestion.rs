@@ -11,12 +11,12 @@ use async_trait::async_trait;
 use mockable::Clock;
 use url::Url;
 
-use crate::domain::Error;
 use crate::domain::ports::{
     OsmIngestionCommand, OsmIngestionOutcome, OsmIngestionProvenanceRecord,
     OsmIngestionProvenanceRepository, OsmIngestionRequest, OsmIngestionStatus,
     OsmPoiIngestionRecord, OsmSourcePoi, OsmSourceRepository,
 };
+use crate::domain::{BoundingBox, BoundingBoxError, Error};
 
 #[path = "osm_ingestion_mapping.rs"]
 mod mapping;
@@ -32,7 +32,7 @@ const TYPE_ID_MASK: u64 = (1 << 62) - 1;
 /// Validated geofence bounds in `[min_lng, min_lat, max_lng, max_lat]` order.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GeofenceBounds {
-    inner: [f64; 4],
+    inner: BoundingBox,
 }
 
 impl GeofenceBounds {
@@ -43,24 +43,9 @@ impl GeofenceBounds {
     /// assert_eq!(bounds.as_array(), [-3.30, 55.90, -3.10, 56.00]); // Ordered bounds persist.
     /// ```
     pub fn new(min_lng: f64, min_lat: f64, max_lng: f64, max_lat: f64) -> Result<Self, Error> {
-        if !validation::is_valid_longitude(min_lng) || !validation::is_valid_longitude(max_lng) {
-            return Err(Error::invalid_request(
-                "geofence longitude values must be finite and within [-180, 180]",
-            ));
-        }
-        if !validation::is_valid_latitude(min_lat) || !validation::is_valid_latitude(max_lat) {
-            return Err(Error::invalid_request(
-                "geofence latitude values must be finite and within [-90, 90]",
-            ));
-        }
-        if min_lng > max_lng || min_lat > max_lat {
-            return Err(Error::invalid_request(
-                "geofenceBounds must be ordered as [minLng, minLat, maxLng, maxLat]",
-            ));
-        }
-        Ok(Self {
-            inner: [min_lng, min_lat, max_lng, max_lat],
-        })
+        BoundingBox::new(min_lng, min_lat, max_lng, max_lat)
+            .map(|inner| Self { inner })
+            .map_err(|error| map_geofence_bounds_error(error, min_lng, max_lng))
     }
 
     /// Return whether a point lies within this geofence.
@@ -71,7 +56,7 @@ impl GeofenceBounds {
     /// assert!(bounds.contains(&coordinate)); // Boundary points are inside.
     /// ```
     pub fn contains(&self, coordinate: &Coordinate) -> bool {
-        let [min_lng, min_lat, max_lng, max_lat] = self.inner;
+        let [min_lng, min_lat, max_lng, max_lat] = self.inner.as_array();
         coordinate.longitude() >= min_lng
             && coordinate.longitude() <= max_lng
             && coordinate.latitude() >= min_lat
@@ -85,8 +70,29 @@ impl GeofenceBounds {
     /// assert_eq!(bounds.as_array(), [-3.30, 55.90, -3.10, 56.00]); // Adapter-facing format.
     /// ```
     pub fn as_array(&self) -> [f64; 4] {
-        self.inner
+        self.inner.as_array()
     }
+}
+
+fn map_geofence_bounds_error(error: BoundingBoxError, min_lng: f64, max_lng: f64) -> Error {
+    let message = match error {
+        BoundingBoxError::LongitudeOutOfRange => {
+            "geofence longitude values must be finite and within [-180, 180]"
+        }
+        BoundingBoxError::LatitudeOutOfRange => {
+            "geofence latitude values must be finite and within [-90, 90]"
+        }
+        BoundingBoxError::NonFinite if !min_lng.is_finite() || !max_lng.is_finite() => {
+            "geofence longitude values must be finite and within [-180, 180]"
+        }
+        BoundingBoxError::NonFinite => {
+            "geofence latitude values must be finite and within [-90, 90]"
+        }
+        BoundingBoxError::AntimeridianWrap | BoundingBoxError::InvertedOrdering => {
+            "geofenceBounds must be ordered as [minLng, minLat, maxLng, maxLat]"
+        }
+    };
+    Error::invalid_request(message)
 }
 
 /// Validated SHA-256 input digest.

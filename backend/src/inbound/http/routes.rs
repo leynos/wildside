@@ -7,39 +7,39 @@
 //! Supports idempotent request submission via the `Idempotency-Key` header.
 
 use actix_web::{HttpRequest, HttpResponse, post, web};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use utoipa::openapi::schema::{Object, ObjectBuilder, Type};
 
-use crate::domain::Error;
 use crate::domain::ports::{RouteSubmissionRequest, RouteSubmissionStatus};
 use crate::inbound::http::ApiResult;
-use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
+use crate::inbound::http::idempotency::{
+    IdempotencyKeyHeader, extract_idempotency_key, map_idempotency_key_error,
+};
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
 
-/// Route generation request body.
-///
-/// The structure of route requests is intentionally flexible during early
-/// development. The payload is validated by downstream services.
-#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct RouteRequest {
-    /// Origin location identifier or coordinates.
-    pub origin: serde_json::Value,
-    /// Destination location identifier or coordinates.
-    pub destination: serde_json::Value,
-    /// Optional route preferences.
-    #[serde(default)]
-    pub preferences: Option<serde_json::Value>,
-}
+#[path = "routes/request.rs"]
+mod request;
+pub use request::route_request_json_config;
+pub use request::{RouteCoordinatesDto, RouteLocationDto, RouteRequest};
 
 /// Route submission response.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RouteResponse {
     /// Unique identifier for this route request.
+    #[schema(format = "uuid")]
     pub request_id: String,
     /// Status of the submission.
+    #[schema(schema_with = route_response_status_schema)]
     pub status: String,
+}
+
+fn route_response_status_schema() -> Object {
+    ObjectBuilder::new()
+        .schema_type(Type::String)
+        .enum_values(Some(["accepted", "replayed"]))
+        .build()
 }
 
 /// Submit a route generation request.
@@ -71,9 +71,7 @@ pub struct RouteResponse {
         (status = 409, description = "Idempotency key conflict", body = crate::inbound::http::schemas::ErrorSchema),
         (status = 503, description = "Service unavailable", body = crate::inbound::http::schemas::ErrorSchema)
     ),
-    params(
-        ("Idempotency-Key" = Option<String>, Header, description = "UUID for idempotent request submission")
-    ),
+    params(IdempotencyKeyHeader),
     tags = ["routes"],
     operation_id = "submitRoute"
 )]
@@ -89,14 +87,11 @@ pub async fn submit_route(
     let idempotency_key =
         extract_idempotency_key(request.headers()).map_err(map_idempotency_key_error)?;
 
-    // Convert request body to JSON value for hashing.
-    let payload_value = serde_json::to_value(payload.into_inner())
-        .map_err(|err| Error::internal(format!("failed to serialize request: {err}")))?;
-
+    let route_payload = payload.into_inner().try_into()?;
     let submission_request = RouteSubmissionRequest {
         idempotency_key,
         user_id,
-        payload: payload_value,
+        payload: route_payload,
     };
 
     let response = state.route_submission.submit(submission_request).await?;
@@ -123,19 +118,27 @@ mod tests {
         FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery,
         FixtureRouteSubmissionService, FixtureUserInterestsCommand, FixtureUserPreferencesCommand,
         FixtureUserPreferencesQuery, FixtureUserProfileQuery, FixtureUsersQuery,
+        RouteSubmissionService,
     };
     use crate::inbound::http::idempotency::IDEMPOTENCY_KEY_HEADER;
     use crate::inbound::http::state::HttpStatePorts;
     use crate::inbound::http::users::LoginRequest;
     use actix_web::http::StatusCode;
     use actix_web::{App, test as actix_test, web};
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use serde_json::{Value, json};
     use std::{error::Error as StdError, io, sync::Arc};
 
     type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
-    fn test_app() -> App<
+    #[fixture]
+    fn route_submission() -> Arc<dyn RouteSubmissionService> {
+        Arc::new(FixtureRouteSubmissionService)
+    }
+
+    fn test_app(
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> App<
         impl actix_web::dev::ServiceFactory<
             actix_web::dev::ServiceRequest,
             Config = (),
@@ -153,12 +156,14 @@ mod tests {
             preferences_query: Arc::new(FixtureUserPreferencesQuery),
             route_annotations: Arc::new(FixtureRouteAnnotationsCommand),
             route_annotations_query: Arc::new(FixtureRouteAnnotationsQuery),
-            route_submission: Arc::new(FixtureRouteSubmissionService),
+            route_submission,
             catalogue: Arc::new(FixtureCatalogueRepository),
             descriptors: Arc::new(FixtureDescriptorRepository),
         });
         App::new()
             .app_data(web::Data::new(state))
+            .app_data(route_request_json_config())
+            .wrap(crate::Trace)
             .wrap(crate::inbound::http::test_utils::test_session_middleware())
             .service(
                 web::scope("/api/v1")
@@ -191,9 +196,12 @@ mod tests {
             .into_owned())
     }
 
+    #[rstest]
     #[actix_web::test]
-    async fn submit_route_accepts_request_without_idempotency_key() -> TestResult {
-        let app = actix_test::init_service(test_app()).await;
+    async fn submit_route_accepts_request_without_idempotency_key(
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> TestResult {
+        let app = actix_test::init_service(test_app(route_submission)).await;
         let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()
@@ -214,9 +222,12 @@ mod tests {
         Ok(())
     }
 
+    #[rstest]
     #[actix_web::test]
-    async fn submit_route_accepts_request_with_valid_idempotency_key() -> TestResult {
-        let app = actix_test::init_service(test_app()).await;
+    async fn submit_route_accepts_request_with_valid_idempotency_key(
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> TestResult {
+        let app = actix_test::init_service(test_app(route_submission)).await;
         let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()
@@ -242,8 +253,11 @@ mod tests {
     #[case("550e8400")]
     #[case("")]
     #[actix_web::test]
-    async fn submit_route_rejects_invalid_idempotency_key(#[case] invalid_key: &str) -> TestResult {
-        let app = actix_test::init_service(test_app()).await;
+    async fn submit_route_rejects_invalid_idempotency_key(
+        route_submission: Arc<dyn RouteSubmissionService>,
+        #[case] invalid_key: &str,
+    ) -> TestResult {
+        let app = actix_test::init_service(test_app(route_submission)).await;
         let cookie = login_and_get_cookie(&app).await?;
 
         let request = actix_test::TestRequest::post()
@@ -261,9 +275,12 @@ mod tests {
         Ok(())
     }
 
+    #[rstest]
     #[actix_web::test]
-    async fn submit_route_rejects_without_session() {
-        let app = actix_test::init_service(test_app()).await;
+    async fn submit_route_rejects_without_session(
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) {
+        let app = actix_test::init_service(test_app(route_submission)).await;
 
         let request = actix_test::TestRequest::post()
             .uri("/api/v1/routes")
@@ -276,4 +293,93 @@ mod tests {
         let response = actix_test::call_service(&app, request).await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
+
+    #[rstest]
+    #[actix_web::test]
+    async fn submit_route_maps_invalid_coordinates_to_an_error_envelope(
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> TestResult {
+        let app = actix_test::init_service(test_app(route_submission)).await;
+        let cookie = login_and_get_cookie(&app).await?;
+
+        let request = actix_test::TestRequest::post()
+            .uri("/api/v1/routes")
+            .cookie(cookie)
+            .set_json(json!({
+                "origin": {"lat": 90.1, "lng": 0.0},
+                "destination": "poi:work"
+            }))
+            .to_request();
+
+        let response = actix_test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body: Value = actix_test::read_body_json(response).await;
+        assert_eq!(
+            body.get("code").and_then(Value::as_str),
+            Some("invalid_request")
+        );
+        assert!(
+            body.get("traceId")
+                .and_then(Value::as_str)
+                .is_some_and(|trace_id| !trace_id.is_empty()),
+            "invalid request errors should include a trace identifier",
+        );
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::coordinates(json!({"origin":{"lat":51.5,"lng":-0.1},"destination":{"lat":48.8,"lng":2.3}}), true)]
+    #[case::identifiers(json!({"origin":"saved:home","destination":"poi:work"}), true)]
+    #[case::minimum_coordinates(json!({"origin":{"lat":-90.0,"lng":-180.0},"destination":{"lat":48.8,"lng":2.3}}), true)]
+    #[case::maximum_coordinates(json!({"origin":{"lat":90.0,"lng":180.0},"destination":{"lat":48.8,"lng":2.3}}), true)]
+    #[case::boolean_origin(json!({"origin":true,"destination":"poi:work"}), false)]
+    #[case::array_destination(json!({"origin":"saved:home","destination":[48.8,2.3]}), false)]
+    #[case::null_origin(json!({"origin":null,"destination":"poi:work"}), false)]
+    #[case::null_destination(json!({"origin":"saved:home","destination":null}), false)]
+    #[case::null_preferences(json!({"origin":"saved:home","destination":"poi:work","preferences":null}), false)]
+    #[case::latitude_too_low(json!({"origin":{"lat":-90.1,"lng":0.0},"destination":"poi:work"}), false)]
+    #[case::latitude_too_high(json!({"origin":{"lat":90.1,"lng":0.0},"destination":"poi:work"}), false)]
+    #[case::longitude_too_low(json!({"origin":{"lat":0.0,"lng":-180.1},"destination":"poi:work"}), false)]
+    #[case::longitude_too_high(json!({"origin":{"lat":0.0,"lng":180.1},"destination":"poi:work"}), false)]
+    #[case::unknown_top_level(json!({"origin":"saved:home","destination":"poi:work","extra":true}), false)]
+    #[case::unknown_location_field(json!({"origin":{"lat":51.5,"lng":-0.1,"extra":true},"destination":"poi:work"}), false)]
+    #[case::unknown_preferences_field(json!({"origin":"saved:home","destination":"poi:work","preferences":{"extra":true}}), false)]
+    fn route_request_validates_documented_shapes(
+        #[case] payload: Value,
+        #[case] should_accept: bool,
+    ) {
+        let result = serde_json::from_value::<RouteRequest>(payload);
+
+        assert_eq!(result.is_ok(), should_accept);
+    }
+
+    #[rstest]
+    #[case::latitude(-90.1, 0.0)]
+    #[case::longitude(0.0, 180.1)]
+    fn route_coordinate_dto_conversion_rejects_invalid_wgs84_values(
+        #[case] lat: f64,
+        #[case] lng: f64,
+    ) {
+        let result =
+            crate::domain::ports::RouteCoordinates::try_from(RouteCoordinatesDto { lat, lng });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn route_request_omits_absent_preferences_when_serialized() {
+        let request = RouteRequest {
+            origin: RouteLocationDto::Identifier("saved:home".to_owned()),
+            destination: RouteLocationDto::Identifier("poi:work".to_owned()),
+            preferences: None,
+        };
+
+        let value = serde_json::to_value(request).expect("route request should serialize");
+
+        assert!(value.get("preferences").is_none());
+    }
+
+    #[path = "recording_tests.rs"]
+    mod recording_tests;
 }

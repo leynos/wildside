@@ -15,7 +15,9 @@ use crate::domain::{
     normalize_offline_device_id,
 };
 use crate::inbound::http::ApiResult;
-use crate::inbound::http::idempotency::{extract_idempotency_key, map_idempotency_key_error};
+use crate::inbound::http::idempotency::{
+    IdempotencyKeyHeader, extract_idempotency_key, map_idempotency_key_error,
+};
 use crate::inbound::http::schemas::ErrorSchema;
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
@@ -291,9 +293,7 @@ pub async fn list_offline_bundles(
     post,
     path = "/api/v1/offline/bundles",
     request_body = UpsertOfflineBundleRequestBody,
-    params(
-        ("Idempotency-Key" = Option<String>, Header, description = "UUID for idempotent requests")
-    ),
+    params(IdempotencyKeyHeader),
     responses(
         (status = 200, description = "Bundle upserted", body = UpsertOfflineBundleResponseBody),
         (status = 400, description = "Invalid request", body = ErrorSchema),
@@ -350,7 +350,7 @@ pub async fn upsert_offline_bundle(
     path = "/api/v1/offline/bundles/{bundle_id}",
     params(
         ("bundle_id" = String, Path, description = "Offline bundle identifier"),
-        ("Idempotency-Key" = Option<String>, Header, description = "UUID for idempotent requests")
+        IdempotencyKeyHeader
     ),
     responses(
         (status = 200, description = "Bundle deleted", body = DeleteOfflineBundleResponseBody),

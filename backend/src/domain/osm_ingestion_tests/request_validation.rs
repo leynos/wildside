@@ -5,6 +5,14 @@ use rstest::rstest;
 use super::*;
 use crate::domain::ErrorCode;
 
+#[test]
+fn geofence_bounds_preserve_canonical_array_order() {
+    let bounds = GeofenceBounds::new(-3.30, 55.90, -3.10, 56.00)
+        .expect("valid WGS84 bounds should be accepted");
+
+    assert_eq!(bounds.as_array(), [-3.30, 55.90, -3.10, 56.00]);
+}
+
 #[rstest]
 #[case::inside(-3.20, 55.95, true)]
 #[case::on_min_boundary(-3.30, 55.90, true)]
@@ -118,6 +126,14 @@ fn validate_request_trims_fields(
 )]
 #[case::inverted_latitude(
     [-3.30, 56.10, -3.10, 56.00],
+    "geofenceBounds must be ordered as [minLng, minLat, maxLng, maxLat]"
+)]
+#[case::equal_longitude(
+    [-3.10, 55.90, -3.10, 56.00],
+    "geofenceBounds must be ordered as [minLng, minLat, maxLng, maxLat]"
+)]
+#[case::equal_latitude(
+    [-3.30, 56.00, -3.10, 56.00],
     "geofenceBounds must be ordered as [minLng, minLat, maxLng, maxLat]"
 )]
 fn validate_request_rejects_invalid_bounds(

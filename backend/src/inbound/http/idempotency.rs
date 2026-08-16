@@ -1,11 +1,26 @@
 //! Helpers for parsing idempotency headers in HTTP handlers.
 
 use actix_web::http::header::HeaderMap;
+use utoipa::IntoParams;
 
 use crate::domain::{Error, IdempotencyKey, IdempotencyKeyValidationError};
 
 /// HTTP header name for idempotency keys.
 pub const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
+
+/// Optional UUID idempotency header used by mutating HTTP endpoints.
+#[derive(IntoParams)]
+#[into_params(parameter_in = Header)]
+pub struct IdempotencyKeyHeader {
+    /// UUID for idempotent requests.
+    #[param(
+        rename = "Idempotency-Key",
+        value_type = String,
+        required = false,
+        format = "uuid"
+    )]
+    _value: Option<String>,
+}
 
 /// Extract the idempotency key from request headers.
 pub fn extract_idempotency_key(

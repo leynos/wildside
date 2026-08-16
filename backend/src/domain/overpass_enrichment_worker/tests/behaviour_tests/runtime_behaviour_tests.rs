@@ -14,7 +14,7 @@ async fn recv_with_timeout<T>(
 
 struct CircuitBreakerTestFixtureBuilder {
     now: DateTime<Utc>,
-    source_responses: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
+    source_responses: Vec<Result<EnrichmentResponse, EnrichmentSourceError>>,
     failure_threshold: u32,
     cooldown_duration: Duration,
 }
@@ -22,7 +22,7 @@ struct CircuitBreakerTestFixtureBuilder {
 impl CircuitBreakerTestFixtureBuilder {
     fn new(
         now: DateTime<Utc>,
-        source_responses: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
+        source_responses: Vec<Result<EnrichmentResponse, EnrichmentSourceError>>,
         failure_threshold: u32,
         cooldown_duration: Duration,
     ) -> Self {
@@ -61,7 +61,7 @@ struct CircuitBreakerTestFixture {
 impl CircuitBreakerTestFixture {
     async fn process_job(
         &self,
-        request: OverpassEnrichmentRequest,
+        request: EnrichmentRequest,
     ) -> Result<crate::domain::OverpassEnrichmentJobOutcome, crate::domain::Error> {
         self.worker_fixture.worker.process_job(request).await
     }
@@ -85,11 +85,11 @@ impl CircuitBreakerTestFixture {
 
 #[rstest]
 #[tokio::test]
-async fn half_open_probe_success_closes_circuit(job: OverpassEnrichmentRequest) -> TestResult {
+async fn half_open_probe_success_closes_circuit(job: EnrichmentRequest) -> TestResult {
     let fixture = CircuitBreakerTestFixtureBuilder::new(
         now()?,
         vec![
-            Err(OverpassEnrichmentSourceError::transport("failure")),
+            Err(EnrichmentSourceError::transport("failure")),
             Ok(response(1, 20)),
             Ok(response(1, 20)),
         ],
@@ -120,13 +120,13 @@ async fn half_open_probe_success_closes_circuit(job: OverpassEnrichmentRequest) 
 
 #[rstest]
 #[tokio::test]
-async fn semaphore_limits_concurrent_calls(job: OverpassEnrichmentRequest) -> TestResult {
+async fn semaphore_limits_concurrent_calls(job: EnrichmentRequest) -> TestResult {
     let (entered_tx, mut entered_rx) = mpsc::unbounded_channel();
     let release = Arc::new(Notify::new());
     let source = Arc::new(SourceStub::blocking(
         vec![
-            Ok(OverpassEnrichmentResponse::default()),
-            Ok(OverpassEnrichmentResponse::default()),
+            Ok(EnrichmentResponse::default()),
+            Ok(EnrichmentResponse::default()),
         ],
         entered_tx,
         release.clone(),
@@ -168,12 +168,12 @@ async fn semaphore_limits_concurrent_calls(job: OverpassEnrichmentRequest) -> Te
 
 #[rstest]
 #[tokio::test]
-async fn circuit_opens_and_blocks_until_cooldown(job: OverpassEnrichmentRequest) -> TestResult {
+async fn circuit_opens_and_blocks_until_cooldown(job: EnrichmentRequest) -> TestResult {
     let fixture = CircuitBreakerTestFixtureBuilder::new(
         now()?,
         vec![
-            Err(OverpassEnrichmentSourceError::transport("failure-1")),
-            Err(OverpassEnrichmentSourceError::transport("failure-2")),
+            Err(EnrichmentSourceError::transport("failure-1")),
+            Err(EnrichmentSourceError::transport("failure-2")),
         ],
         2,
         Duration::from_secs(120),

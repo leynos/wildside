@@ -81,6 +81,71 @@ This guide records user-visible server behaviour for Wildside application
 programming interface (API) consumers. It focuses on contracts that clients can
 rely on when calling the backend.
 
+## Submit a route request
+
+`POST /api/v1/routes` accepts an authenticated route-generation request. Send a
+valid session; requests without one return `401 Unauthorized`.
+
+Each of `origin` and `destination` must be either an identifier string, such as
+`"saved:home"` or `"poi:work"`, or a coordinate object:
+
+```json
+{
+  "origin": {"lat": 51.5, "lng": -0.1},
+  "destination": "poi:work",
+  "preferences": {
+    "mode": "walking",
+    "themes": ["heritage"],
+    "themeIds": ["theme-1"],
+    "interestThemeIds": ["interest-1"],
+    "avoid": ["busy-roads"],
+    "avoidStairs": true
+  }
+}
+```
+
+Coordinates use WGS84 decimal degrees. Latitude must be between `-90` and `90`,
+and longitude between `-180` and `180`, inclusive. The coordinate object must
+contain only `lat` and `lng`; both values are required. The optional
+`preferences` object accepts these fields, all of which are optional:
+
+| Field              | Type     | Meaning                     |
+| ------------------ | -------- | --------------------------- |
+| `mode`             | string   | Routing mode.               |
+| `themes`           | string[] | Theme names.                |
+| `themeIds`         | string[] | Theme identifiers.          |
+| `interestThemeIds` | string[] | Interest-theme identifiers. |
+| `avoid`            | string[] | Route features to avoid.    |
+| `avoidStairs`      | boolean  | Whether to avoid stairs.    |
+
+Each preference list (`themes`, `themeIds`, `interestThemeIds`, and `avoid`)
+may contain at most 64 entries. Each string preference value, including `mode`
+and every list entry, may contain at most 64 UTF-8 bytes. Values or lists
+exceeding these limits are rejected as `400 Bad Request`.
+
+The request body rejects null `origin`, `destination`, or `preferences`,
+boolean or array locations, coordinate objects with missing or unknown fields,
+and unknown fields at the top level or in `preferences`. Omit `preferences`
+when no preferences are needed; do not send it as `null`. These validation
+failures return `400 Bad Request`.
+
+Successful submissions return `202 Accepted` with a generated request ID:
+
+```json
+{
+  "requestId": "<request-id>",
+  "status": "accepted"
+}
+```
+
+To make retries safe, send an `Idempotency-Key` header containing a UUID. The
+first request returns `202 Accepted` with `status: "accepted"`. Repeating the
+same key with the same payload returns `202 Accepted` with the original
+`requestId` and `status: "replayed"`. Reusing the key with a different payload
+returns `409 Conflict`. An invalid or empty key returns `400 Bad Request`; the
+header is optional. If a backend service required to accept or persist the
+submission is unavailable, the endpoint returns `503 Service Unavailable`.
+
 ## Users list pagination
 
 `GET /api/v1/users` returns a paginated user-list response. Clients should

@@ -6,8 +6,24 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Local, TimeDelta, Utc};
 use mockable::Clock;
+use uuid::Uuid;
 
+use crate::domain::BoundingBox;
 use crate::domain::overpass_enrichment_worker::{BackoffJitter, EnrichmentSleeper};
+use crate::domain::ports::EnrichmentRequest;
+
+/// Build an enrichment request with the shared Edinburgh-area bounding box.
+pub fn enrichment_request(tags: Vec<&str>) -> EnrichmentRequest {
+    let bounding_box = match BoundingBox::new(-3.30, 55.90, -3.10, 56.00) {
+        Ok(bounding_box) => bounding_box,
+        Err(error) => panic!("fixture bounding box should be valid: {error}"),
+    };
+    EnrichmentRequest {
+        job_id: Uuid::new_v4(),
+        bounding_box,
+        tags: tags.into_iter().map(str::to_owned).collect(),
+    }
+}
 
 /// Mutable test clock backed by a mutex-protected UTC instant.
 ///

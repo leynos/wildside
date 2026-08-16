@@ -4,8 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use backend::domain::ports::{
-    OverpassEnrichmentRequest, OverpassEnrichmentResponse, OverpassEnrichmentSourceError,
-    OverpassPoi,
+    EnrichmentPoi, EnrichmentRequest, EnrichmentResponse, EnrichmentSourceError,
 };
 use backend::domain::{
     OverpassEnrichmentWorker, OverpassEnrichmentWorkerConfig, OverpassEnrichmentWorkerPorts,
@@ -23,8 +22,8 @@ use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_c
 use crate::support::cluster_skip::handle_cluster_setup_failure;
 use crate::support::embedded_postgres::provision_template_database;
 use crate::{
-    DatabaseHandle, ImmediateSleeper, LAUNCH_A_BOUNDS, MutableClock, NoJitter,
-    OverpassEnrichmentWorld, RecordingEnrichmentMetrics, RuntimeHandle, ScriptedOverpassSource,
+    DatabaseHandle, ImmediateSleeper, MutableClock, NoJitter, OverpassEnrichmentWorld,
+    RecordingEnrichmentMetrics, RuntimeHandle, ScriptedOverpassSource, launch_a_bounding_box,
 };
 
 enum CountTable {
@@ -37,7 +36,7 @@ impl OverpassEnrichmentWorld {
     pub fn setup_worker(
         &self,
         config: OverpassEnrichmentWorkerConfig,
-        source_data: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
+        source_data: Vec<Result<EnrichmentResponse, EnrichmentSourceError>>,
     ) {
         // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
         ensure_stable_cluster_environment()
@@ -103,7 +102,7 @@ impl OverpassEnrichmentWorld {
     pub fn setup_with_config_and_data(
         &self,
         configure: impl FnOnce(&mut OverpassEnrichmentWorkerConfig),
-        source_data: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
+        source_data: Vec<Result<EnrichmentResponse, EnrichmentSourceError>>,
     ) {
         let mut config = self.default_config();
         configure(&mut config);
@@ -125,16 +124,12 @@ impl OverpassEnrichmentWorld {
     }
 
     /// Create a deterministic synthetic source response payload.
-    pub fn make_response(
-        &self,
-        poi_count: usize,
-        transfer_bytes: u64,
-    ) -> OverpassEnrichmentResponse {
-        OverpassEnrichmentResponse {
+    pub fn make_response(&self, poi_count: usize, transfer_bytes: u64) -> EnrichmentResponse {
+        EnrichmentResponse {
             transfer_bytes,
             source_url: "https://overpass.example/api/interpreter".to_owned(),
             pois: (0..poi_count)
-                .map(|idx| OverpassPoi {
+                .map(|idx| EnrichmentPoi {
                     element_type: "node".to_owned(),
                     element_id: idx as i64,
                     longitude: -3.20 + idx as f64 * 0.01,
@@ -178,9 +173,9 @@ impl OverpassEnrichmentWorld {
     pub fn run_job(&self) {
         if let Some(result) = self.execute_async(|runtime, worker, _database_url| {
             runtime.block_on(async {
-                let request = OverpassEnrichmentRequest {
+                let request = EnrichmentRequest {
                     job_id: Uuid::new_v4(),
-                    bounding_box: LAUNCH_A_BOUNDS,
+                    bounding_box: launch_a_bounding_box(),
                     tags: vec!["amenity".to_owned()],
                 };
                 worker.process_job(request).await

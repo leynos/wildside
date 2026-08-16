@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use backend::domain::ports::{
     EnrichmentJobFailure, EnrichmentJobFailureKind, EnrichmentJobMetrics,
-    EnrichmentJobMetricsError, EnrichmentJobSuccess, OverpassEnrichmentRequest,
-    OverpassEnrichmentResponse, OverpassEnrichmentSource, OverpassEnrichmentSourceError,
+    EnrichmentJobMetricsError, EnrichmentJobSuccess, EnrichmentRequest, EnrichmentResponse,
+    EnrichmentSource, EnrichmentSourceError,
 };
 use backend::domain::{OverpassEnrichmentJobOutcome, OverpassEnrichmentWorker};
 use backend::test_support::overpass_enrichment::{ImmediateSleeper, MutableClock, NoJitter};
@@ -25,6 +25,14 @@ declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
 const LAUNCH_A_BOUNDS: [f64; 4] = [-3.30, 55.90, -3.10, 56.00];
 
+/// Return [`LAUNCH_A_BOUNDS`] as the validated domain value object.
+fn launch_a_bounding_box() -> backend::domain::BoundingBox {
+    match backend::domain::BoundingBox::try_from(LAUNCH_A_BOUNDS) {
+        Ok(bounding_box) => bounding_box,
+        Err(error) => panic!("launch A bounds should be a valid bounding box: {error}"),
+    }
+}
+
 #[derive(Clone)]
 struct RuntimeHandle(Arc<tokio::runtime::Runtime>);
 
@@ -38,7 +46,7 @@ struct DatabaseHandle(
 );
 
 struct ScriptedOverpassSource {
-    scripted: Mutex<VecDeque<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>>,
+    scripted: Mutex<VecDeque<Result<EnrichmentResponse, EnrichmentSourceError>>>,
     calls: AtomicUsize,
     active: AtomicUsize,
     max_active: AtomicUsize,
@@ -52,9 +60,7 @@ struct BlockingControl {
 }
 
 impl ScriptedOverpassSource {
-    fn new(
-        scripted: Vec<Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError>>,
-    ) -> Self {
+    fn new(scripted: Vec<Result<EnrichmentResponse, EnrichmentSourceError>>) -> Self {
         Self {
             scripted: Mutex::new(scripted.into()),
             calls: AtomicUsize::new(0),
@@ -87,11 +93,11 @@ impl ScriptedOverpassSource {
 }
 
 #[async_trait]
-impl OverpassEnrichmentSource for ScriptedOverpassSource {
+impl EnrichmentSource for ScriptedOverpassSource {
     async fn fetch_pois(
         &self,
-        _request: &OverpassEnrichmentRequest,
-    ) -> Result<OverpassEnrichmentResponse, OverpassEnrichmentSourceError> {
+        _request: &EnrichmentRequest,
+    ) -> Result<EnrichmentResponse, EnrichmentSourceError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let active_now = self.active.fetch_add(1, Ordering::SeqCst) + 1;
         self.max_active.fetch_max(active_now, Ordering::SeqCst);
@@ -108,7 +114,7 @@ impl OverpassEnrichmentSource for ScriptedOverpassSource {
             .expect("source script mutex")
             .pop_front()
             .unwrap_or_else(|| {
-                Err(OverpassEnrichmentSourceError::invalid_request(
+                Err(EnrichmentSourceError::invalid_request(
                     "source script exhausted unexpectedly",
                 ))
             })
