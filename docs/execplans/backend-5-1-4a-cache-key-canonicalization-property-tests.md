@@ -217,15 +217,15 @@ class check already pinned by example tests; a harness would restate it.
 
 Axioms (external interfaces treated as correct, not verified here):
 
-- AX-1: `sha2::Sha256` implements FIPS 180-4 SHA-256 (collision behaviour is
+- AXM-1: `sha2::Sha256` implements FIPS 180-4 SHA-256 (collision behaviour is
   not tested; "different canonical bytes give different digests" is assumed
   for the divergence properties, which is sound for test purposes because a
   collision would be a cryptographic event).
-- AX-2: `serde_json` 1.0.150 without `preserve_order`: `Value::Object` is
+- AXM-2: `serde_json` 1.0.150 without `preserve_order`: `Value::Object` is
   `BTreeMap`-backed; `to_vec` is deterministic for a given `Value`;
   `Number::from_f64` rejects non-finite values; `Number::as_f64` always
   returns `Some` in this build.
-- AX-3: `proptest` 1.x generates values from the stated strategies and
+- AXM-3: `proptest` 1.x generates values from the stated strategies and
   shrinks failures; default 256 cases per property.
 
 Obligations. Each is exercised through the public entry point
@@ -271,7 +271,7 @@ via `super::`.
   `cell` and a nonzero `delta: i64` in `1..=1_000`, using `cell` and
   `cell + delta`.
   Artefact: same file, `distinct_grid_cells_diverge`.
-  Non-vacuity: relies on AX-1 (no SHA-256 collisions); negative control NC-3
+  Non-vacuity: relies on AXM-1 (no SHA-256 collisions); negative control NC-3
   (make `round_coordinate` return `0.0` unconditionally) must fail this
   property while leaving V-2 passing — this pair of controls demonstrates the
   two properties are independent, not restatements.
@@ -295,7 +295,7 @@ via `super::`.
 - Obligation V-5 (key format totality): every generated payload derives
   `Ok(key)` whose string matches `^route:v1:[0-9a-f]{64}$`, and
   `RouteCacheKey::new(key.as_str())` re-validates it. Error paths of
-  derivation are unreachable for `Value` inputs in this build (AX-2); this
+  derivation are unreachable for `Value` inputs in this build (AXM-2); this
   property documents that totality.
   Method: property test over the same recursive strategy as V-4.
   Artefact: same file, `derived_keys_match_route_v1_format`.
@@ -330,7 +330,7 @@ via `super::`.
 
 Deliberately not verified, with rationale:
 
-- Object key-order invariance: vacuous in this build (AX-2, BTreeMap); it
+- Object key-order invariance: vacuous in this build (AXM-2, BTreeMap); it
   cannot fail whatever the implementation does. Recording this here and in
   the module documentation instead of writing a tautological property. If
   `preserve_order` is ever enabled, this decision must be revisited — a note
