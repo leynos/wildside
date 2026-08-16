@@ -83,6 +83,15 @@ touching a shared wire format.
   returns `()`; a metrics failure cannot produce a non-2xx status.
 - Metric label sets must be closed at compile time. Every label value comes
   from a fieldless enum with a `const fn as_label`.
+- Label *order* is part of the metric contract. `with_label_values` matches
+  values positionally against the declared names, so a transposition
+  silently mislabels every series while leaving the series count correct.
+  The adapter must declare and populate labels in one place, and
+  V-LABEL-CORRECT asserts the pairing.
+- Call sites invoke `record`, never `increment`. `record` is the provided
+  method that emits the structured log before delegating; calling
+  `increment` directly would silently drop the log in every build. This is
+  the whole point of the approved provided-method idiom.
 - New or updated documentation must use en-GB Oxford spelling, wrap prose at
   80 columns and code at 120, and follow
   `docs/documentation-style-guide.md`.
@@ -520,6 +529,48 @@ and non-vacuity argument.
   string collapses two series into one and the gathered count drops to 20,
   failing the test for the intended reason.
 
+- Obligation: V-LABEL-CORRECT — each gathered series carries the label
+  *names* paired with the intended *values*, not merely a distinct
+  combination of values.
+  Method: assert over `Registry::gather`, reading `label_pair()` on a
+  representative sample and checking name-to-value pairing explicitly, for
+  example that the pair named `traversal` holds `"prev"` and the pair named
+  `outcome` holds `"terminal"`.
+  Rationale: V-LABEL-CLOSED counts series and would pass unchanged if the
+  four label values were transposed, because a permutation of values across
+  a fixed set of names yields exactly the same number of distinct series.
+  Every dashboard and alert would then be silently wrong. A count-based
+  assertion cannot detect this, so a separate pairing assertion is required.
+  This is the vacuity hole V-LABEL-CLOSED cannot close by itself.
+  Domain: one series per metric family, chosen so that all four label values
+  differ from one another, so that no transposition is a fixed point.
+  Artefact:
+  `backend/src/outbound/metrics/prometheus_pagination_pages.rs` tests.
+  Evidence: red — fails before the adapter exists; green — the pairing
+  assertions pass.
+  Non-vacuity: a seeded mutation swapping the `traversal` and `outcome`
+  arguments in the `with_label_values` call must fail this test while
+  leaving V-LABEL-CLOSED green. Both halves of that statement must be
+  recorded, since the point of the obligation is the gap between them.
+
+- Obligation: V-RECORD-NOT-INCREMENT — the inbound adapter reaches the port
+  through `record`, so the structured log is emitted on every delivered
+  page, and passes an observation whose fields match the response actually
+  returned.
+  Method: unit test with a `mockall` mock of the port, asserting `record` is
+  called exactly once per delivered page with the expected observation, and
+  that `increment` is never called directly by inbound code.
+  Rationale: the provided-method idiom is only load-bearing if call sites
+  use it; a caller that reaches for `increment` compiles, passes every
+  counter assertion, and silently loses logging in all builds. No type check
+  catches this.
+  Domain: one call per traversal variant.
+  Artefact: `backend/src/inbound/http/users_pagination/telemetry.rs` tests.
+  Evidence: red — fails before emission exists; green — the expectation is
+  satisfied.
+  Non-vacuity: rewriting the call site to use `increment` must fail this
+  test while leaving V-COUNTS-MATCH green, because the counters still move.
+
 - Obligation: V-OUTCOME-DERIVED — `outcome` is `Terminal` exactly when the
   boundary link for the direction of travel is absent, and `Continuing`
   otherwise. It is *not* `!has_more`.
@@ -766,7 +817,9 @@ rejected, and the metrics pattern itself is settled by
 
 - EP-M2 — Prometheus adapter exists and is tested against a fresh registry;
   still uncalled.
-  Acceptance: V-LABEL-CLOSED discharged, 21 series confirmed.
+  Acceptance: V-LABEL-CLOSED and V-LABEL-CORRECT discharged, 21 series
+  confirmed, and the label-transposition mutation recorded as failing
+  V-LABEL-CORRECT while leaving V-LABEL-CLOSED green.
   Conformance: adapter confined to `outbound::metrics`.
   Recovery: revert.
   Remaining: wiring.
@@ -777,7 +830,8 @@ rejected, and the metrics pattern itself is settled by
   Recovery: revert.
 
 - EP-M4 — the users endpoint records an observation per delivered page.
-  Acceptance: V-OUTCOME-DERIVED and V-COUNTS-MATCH discharged.
+  Acceptance: V-OUTCOME-DERIVED, V-RECORD-NOT-INCREMENT, and V-COUNTS-MATCH
+  discharged, including the `increment`-at-call-site mutation.
   Conformance: `list_users` still imports no outbound module; response
   envelope byte-identical.
   Recovery: revert; the port and adapter remain harmlessly unused.
@@ -880,9 +934,14 @@ Quality criteria:
 
 - Tests: all suites green under `cargo nextest run --workspace
   --all-targets --all-features`, plus the feature-off compile.
-- Verification: V-LABEL-CLOSED, V-OUTCOME-DERIVED, V-OBS-SATURATES,
-  V-LOG-ALWAYS, V-COUNTS-MATCH, V-WIRED, V-FEATURE-OFF, and V-IMAGE-SCRAPE
-  all discharged with the stated non-vacuity evidence.
+- Verification: V-LABEL-CLOSED, V-LABEL-CORRECT, V-OUTCOME-DERIVED,
+  V-OBS-SATURATES, V-LOG-ALWAYS, V-RECORD-NOT-INCREMENT, V-COUNTS-MATCH,
+  V-WIRED, V-FEATURE-OFF, and V-IMAGE-SCRAPE all discharged with the stated
+  non-vacuity evidence. Three of these are guarded by a mutation that must
+  fail one obligation while leaving a sibling green — V-LABEL-CORRECT
+  against V-LABEL-CLOSED, V-RECORD-NOT-INCREMENT against V-COUNTS-MATCH, and
+  the wiring deletion for V-WIRED. Each mutation must be performed and both
+  halves of its outcome recorded, not merely asserted.
 - Lint and typecheck: `make lint` green against a pre-change baseline,
   including both Whitaker manifest passes under `-D warnings`.
 - Performance: no benchmark threshold. The recording path must be two
@@ -978,8 +1037,17 @@ pub struct PaginationPageObservation {
     pub returned_rows: usize,
 }
 
+/// Records delivered pages.
+///
+/// Call [`PaginationPageMetrics::record`], never `increment`: `record` is
+/// what emits the structured log, and it delegates. Calling `increment`
+/// directly compiles and moves the counters while silently dropping the log
+/// in every build, including builds without the `metrics` feature.
+#[cfg_attr(test, mockall::automock)]
 pub trait PaginationPageMetrics: Send + Sync {
     /// Increment the page counters for `observation`.
+    ///
+    /// Implementation hook. Prefer `record` at call sites.
     fn increment(&self, observation: PaginationPageObservation);
 
     /// Emit the structured log, then increment.
@@ -992,6 +1060,12 @@ pub trait PaginationPageMetrics: Send + Sync {
 
 pub struct NoOpPaginationPageMetrics;
 ```
+
+`#[cfg_attr(test, mockall::automock)]` follows the prevailing port
+convention — 26 of the ports under `backend/src/domain/ports/` carry it,
+including the closest analogue, `enrichment_job_metrics.rs` — and supplies
+the mock that V-RECORD-NOT-INCREMENT needs. `mockall` is already a backend
+dev-dependency at version 0.15.
 
 Each label enum gains a `const fn as_label(self) -> &'static str`.
 `PaginationPageObservation::new` saturates rather than panics, discharging
@@ -1019,6 +1093,15 @@ Metric contract, which dashboards treat as a wire format:
 - `wildside_pagination_rows_returned_total`, labels
   `["endpoint", "traversal"]`, 3 series per endpoint.
 
+Label order is load-bearing. `IntCounterVec::with_label_values` takes a
+`&[&str]` matched positionally against the names given to `Opts`, so the
+call must pass exactly `[endpoint, traversal, outcome, limit_source]` in
+that order. The approved plan makes the same point for the two-label error
+counter; with four labels the hazard is larger, because most transpositions
+still yield well-formed, distinct, plausible-looking series. Declare the
+name array once as a private constant and build the value array in the same
+function, so the two cannot drift. V-LABEL-CORRECT is the gate.
+
 Derived queries, which is where page size and traversal depth are answered:
 
 ```plaintext
@@ -1045,3 +1128,37 @@ Deleted by this plan: `UsersPageDirection` in
 Explicitly not touched: `backend/crates/pagination` in any form,
 `RouteMetrics` (removed by `competing-metrics-patterns` EP-M4), and
 `tools/architecture-lint` (extended by that plan's EP-M5).
+
+## Revision note
+
+2026-08-16, second revision. Re-audited this plan element by element against
+`docs/execplans/competing-metrics-patterns.md` at commit `750c3d8`, which is
+unchanged since the first alignment. The port, `NoOp`, adapter,
+`&Registry` construction, composition-root injection, absence of global
+state, synchronous infallible signature, and the required-`increment` plus
+provided-`record` idiom all already conformed. The audit found three gaps,
+now closed.
+
+The first was a vacuity hole in this plan's own verification. V-LABEL-CLOSED
+asserts the number of distinct series, but a transposition of label values
+across a fixed set of label names produces exactly the same count, so every
+dashboard could be silently wrong with that obligation green. V-LABEL-CORRECT
+now asserts name-to-value pairing, and is guarded by a mutation that must
+fail it while leaving V-LABEL-CLOSED passing. The approved plan makes the
+same argument-order point for its two-label counter; the hazard is larger
+here because four labels admit more plausible-looking transpositions.
+
+The second was that nothing pinned call sites to `record` rather than
+`increment`. The provided-method idiom is the mechanism by which logging
+survives in builds without the `metrics` feature, and a caller reaching for
+`increment` would compile, pass every counter assertion, and silently lose
+the log. V-RECORD-NOT-INCREMENT closes this, with a mutation that must fail
+it while leaving V-COUNTS-MATCH green.
+
+The third was the missing `#[cfg_attr(test, mockall::automock)]`. Twenty-six
+ports carry it, including the closest analogue `enrichment_job_metrics.rs`,
+and it supplies the mock V-RECORD-NOT-INCREMENT needs.
+
+Effect on remaining work: EP-M2 and EP-M4 each gain one obligation and one
+recorded mutation. No milestone boundary, interface, or metric contract
+changed, and the scope tolerance is unaffected.
