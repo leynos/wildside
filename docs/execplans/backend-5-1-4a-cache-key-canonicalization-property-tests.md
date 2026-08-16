@@ -197,7 +197,15 @@ Relevant guides to read before implementing: the `proptest` skill,
 Trace links:
 
 ```plaintext
-ARCH-CACHEKEY-CONTRACT -> RM-5.1.4a -> EP-M2 -> cache_key::tests::properties::{theme_permutations_share_a_key, coordinates_in_one_grid_cell_share_a_key, distinct_grid_cells_diverge, normalization_is_idempotent, derived_keys_match_route_v1_format, non_theme_array_order_is_material, non_string_theme_arrays_preserve_order}
+ARCH-CACHEKEY-CONTRACT -> RM-5.1.4a -> EP-M2
+  -> cache_key::tests::properties::{
+       theme_permutations_share_a_key,
+       coordinates_in_one_grid_cell_share_a_key,
+       distinct_grid_cells_diverge,
+       normalization_is_idempotent,
+       derived_keys_match_route_v1_format,
+       non_theme_array_order_is_material,
+       non_string_theme_arrays_preserve_order }
 ARCH-CACHEKEY-OWNERSHIP -> EP-M1 -> module split keeps tests inside the domain port module (no adapter involvement)
 ```
 
@@ -533,8 +541,11 @@ no data, schema, or wire format is touched.
 No interface changes. The property module consumes, via `super::` and crate
 paths:
 
-- `crate::domain::ports::cache_key::{RouteCacheKey, RouteCacheKeyDerivationError, RouteCacheKeyValidationError}`
-- `super::super::{normalize_route_request_value, SORTED_ARRAY_KEYS, ROUNDED_COORDINATE_KEYS, COORDINATE_PRECISION_FACTOR}` (private items visible to descendant test modules)
+- `RouteCacheKey`, `RouteCacheKeyDerivationError`, and
+  `RouteCacheKeyValidationError` from `crate::domain::ports::cache_key`;
+- the private items `normalize_route_request_value`, `SORTED_ARRAY_KEYS`,
+  `ROUNDED_COORDINATE_KEYS`, and `COORDINATE_PRECISION_FACTOR` via
+  `super::super::` (visible to descendant test modules);
 - dev-dependencies already present: `proptest = "1"`, `rstest = "0.26"`,
   `serde_json` (`json!` macro), `pretty_assertions` where a non-property
   equality assertion reads better.
