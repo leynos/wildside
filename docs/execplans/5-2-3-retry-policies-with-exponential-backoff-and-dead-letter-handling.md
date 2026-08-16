@@ -128,7 +128,7 @@ apalis-dev repositories; these are external axioms for this plan:
   (see Decision log D4).
 - There is no built-in dead-letter table or requeue API. Dead jobs are
   `Killed` rows (or exhausted `Failed` rows) that remain in `apalis.jobs`;
-  listing and requeueing require direct SQL.
+  listing and requeuing require direct SQL.
 - Backoff sleeps happen in-process inside the tower retry layer while the
   job row stays `Running` and locked; `run_at` is not rescheduled on
   failure. Attempts are written once at final acknowledgement. Long backoff
