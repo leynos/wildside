@@ -10,6 +10,12 @@ import { describe, expect, it } from 'vitest';
 const execFileAsync = promisify(execFile);
 const repositoryRoot = new URL('../', import.meta.url);
 
+// Mirrors CARGO_AUDIT_IGNORES in the Makefile. Extend this when an advisory is
+// added to or retired from that variable; the rationale for each entry lives
+// beside the `rust-audit` target.
+const EXPECTED_CARGO_AUDIT_COMMAND =
+  'cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258';
+
 /**
  * Ask Make to print a target's execution plan without running the recipes.
  * @param {string} target Make target to dry-run.
@@ -29,7 +35,7 @@ describe('Makefile audit targets', () => {
     expect(stdout).toContain('pnpm -r --if-present run audit');
     expect(stdout).toContain('pnpm run audit:validate');
     expect(stdout).toContain('pnpm run audit:bun');
-    expect(stdout).toContain('cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071');
+    expect(stdout).toContain(EXPECTED_CARGO_AUDIT_COMMAND);
   });
 
   it('does not reinstall node dependencies inside audit-node', async () => {
@@ -52,7 +58,7 @@ describe('Makefile audit targets', () => {
   it('runs cargo audit against Cargo.lock with configured ignores', async () => {
     const stdout = await dryRunMake('rust-audit');
 
-    expect(stdout).toContain('cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071');
+    expect(stdout).toContain(EXPECTED_CARGO_AUDIT_COMMAND);
   });
 
   it('executes rust-audit after checking cargo-audit availability', async () => {
@@ -79,7 +85,7 @@ printf 'cargo %s\\n' "$*" >> "${commandLog}"
       });
 
       await expect(readFile(commandLog, 'utf8')).resolves.toBe(
-        'cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071\n',
+        `${EXPECTED_CARGO_AUDIT_COMMAND}\n`,
       );
     } finally {
       await rm(tempDir, { force: true, recursive: true });

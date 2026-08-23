@@ -136,7 +136,9 @@ fn sha256_file(path: &Path) -> io::Result<String> {
         }
         hasher.update(&buffer[..read]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    // `sha2` 0.11 finalizes to `hybrid_array::Array<u8, _>`, which no longer
+    // implements `LowerHex`, so the digest is encoded explicitly.
+    Ok(hex::encode(hasher.finalize()))
 }
 
 fn resolve_database_url(explicit: Option<String>) -> io::Result<String> {
@@ -169,12 +171,24 @@ fn resolve_database_url(explicit: Option<String>) -> io::Result<String> {
 mod tests {
     //! Unit tests for CLI parsing helpers.
 
-    use std::io::Write;
+    use std::io::{self, Write};
 
     use rstest::rstest;
     use tempfile::NamedTempFile;
 
-    use super::{parse_geofence_bounds, resolve_database_url, sha256_file};
+    use super::{Digest, Sha256, parse_geofence_bounds, resolve_database_url, sha256_file};
+
+    /// Write `contents` to a temporary file and digest it via [`sha256_file`].
+    ///
+    /// Arrangement is fallible, so the helper propagates rather than panicking;
+    /// each test unwraps in its own body so a failure reads as that test's
+    /// verdict.
+    fn digest_of(contents: &[u8]) -> io::Result<String> {
+        let mut file = NamedTempFile::new()?;
+        file.write_all(contents)?;
+        file.flush()?;
+        sha256_file(file.path())
+    }
 
     #[rstest]
     fn geofence_bounds_parser_accepts_valid_input() {
@@ -203,6 +217,47 @@ mod tests {
         let second = sha256_file(file.path()).expect("second digest");
         assert_eq!(first, second);
         assert_eq!(first.len(), 64);
+    }
+
+    /// Pin the rendered digest against the published SHA-256 vectors, so a
+    /// future change to the encoding (or to the digest crate) cannot silently
+    /// alter the provenance keys already recorded in the database.
+    #[rstest]
+    #[case::empty(
+        b"",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    )]
+    #[case::abc(
+        b"abc",
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    )]
+    fn sha256_file_matches_known_vectors(#[case] contents: &[u8], #[case] expected: &str) {
+        let digest = digest_of(contents).expect("digest fixture");
+        assert_eq!(digest, expected);
+    }
+
+    /// The hasher reads through a fixed 8 KiB buffer, so a payload spanning
+    /// several reads must agree with a single-shot digest of the same bytes.
+    #[rstest]
+    fn sha256_file_hashes_payloads_larger_than_the_read_buffer() {
+        let contents: Vec<u8> = (0..40_000_u32).map(|index| (index % 251) as u8).collect();
+        let expected = hex::encode(Sha256::digest(&contents));
+        let digest = digest_of(&contents).expect("digest fixture");
+        assert_eq!(digest, expected);
+    }
+
+    /// Digests are rendered as fixed-width lowercase hex, including the leading
+    /// zeroes that `{:x}`-style formatting of individual bytes would drop.
+    #[rstest]
+    fn sha256_file_renders_fixed_width_lowercase_hex() {
+        let digest = digest_of(b"wildside").expect("digest fixture");
+        assert_eq!(digest.len(), 64);
+        assert!(
+            digest
+                .chars()
+                .all(|character| character.is_ascii_digit() || ('a'..='f').contains(&character)),
+            "digest should be lowercase hex: {digest}"
+        );
     }
 
     #[rstest]
