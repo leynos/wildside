@@ -4,7 +4,7 @@ CARGO ?= cargo
 WHITAKER ?= whitaker
 KUBE_VERSION ?= 1.31.0
 export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go/bin:$(CURDIR)/node_modules/.bin:$(PATH)
-CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071
+CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
@@ -368,9 +368,20 @@ audit-node: deps
 	pnpm run audit:validate
 	pnpm run audit:bun
 
+# Advisories ignored via CARGO_AUDIT_IGNORES (see the variable near the top of this file):
+#
+#   RUSTSEC-2023-0071 is in SQLx's optional MySQL support; this workspace only enables
+#   PostgreSQL.
+#
+#   RUSTSEC-2026-0258 (h2 unbounded empty DATA frames) is fixed in h2 >=0.4.16, which the
+#   lockfile pins for the 0.4 line. The remaining h2 0.3.27 has no patched release — 0.3.27
+#   is the final 0.3 publication — and reaches the tree through actix-http 3.x, which cannot
+#   make that semver-major move. It is also pulled unconditionally by the awc test client,
+#   whose actix-http/http2 dependency has no feature toggle, so it cannot leave Cargo.lock
+#   while the WebSocket integration tests exist. Added 2026-08-23; revisit when actix-web
+#   ships a release built on h2 0.4.
 rust-audit:
 	$(call ensure_tool,cargo-audit)
-	# RUSTSEC-2023-0071 is in SQLx's optional MySQL support; this workspace only enables PostgreSQL.
 	# Install cargo-audit with: cargo binstall --no-confirm cargo-audit@0.22.1
 	$(CARGO) audit --file Cargo.lock $(CARGO_AUDIT_IGNORES)
 
