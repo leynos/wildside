@@ -27,6 +27,19 @@ All suites run through the same quality gateways:
 
 ## Workflow pins and Dependabot
 
+## GitHub Actions runner profiles
+
+The scheduled dependency audit and delayed pull-request comment jobs use the
+shared uncached `namespace-profile-default` runner (Ubuntu 22.04, amd64,
+4 vCPU, and 16 GB). Its cache volume is disabled, so these jobs continue to use
+their existing action-managed caches during the initial baseline.
+
+The build and coverage workflows remain on `ubicloud-standard-8`. They run the
+repository's broad Rust, front-end, and embedded-PostgreSQL gates and therefore
+retain their existing 8-core capacity until an equivalent shared Namespace
+profile is available and measured. Externally owned reusable workflows retain
+their caller-selected runners.
+
 Dependabot owns the upgrade of GitHub Actions and reusable workflows, including
 calls into `leynos/shared-actions`. Contract tests that assert a caller's exact
 commit SHA create a lockstep dependency: every time Dependabot opens a bump PR,
