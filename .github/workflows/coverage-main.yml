@@ -45,7 +45,7 @@ jobs:
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
           PG_WORKER_HASH: ${{ hashFiles('Makefile', 'rust-toolchain.toml') }}
-          SHARED_ACTIONS_PIN: 7d46a399558914f5a05074e55a560fec0269fd0d
+          SHARED_ACTIONS_PIN: f6d4d5f549655c118f86f371b8d55c200d3efa50
         run: |
           set -euo pipefail
           scope="${RUNNER_SCOPE}-${ImageOS:-unknown}"
@@ -107,7 +107,7 @@ jobs:
           key: ${{ env.PG_WORKER_CACHE_KEY }}
 
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@7d46a399558914f5a05074e55a560fec0269fd0d
+        uses: leynos/shared-actions/.github/actions/setup-rust@f6d4d5f549655c118f86f371b8d55c200d3efa50
         with:
           # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
           cache-provider: external
@@ -123,7 +123,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@7d46a399558914f5a05074e55a560fec0269fd0d
+        uses: leynos/shared-actions/.github/actions/generate-coverage@f6d4d5f549655c118f86f371b8d55c200d3efa50
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -151,7 +151,7 @@ jobs:
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@7d46a399558914f5a05074e55a560fec0269fd0d
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@f6d4d5f549655c118f86f371b8d55c200d3efa50
         with:
           # mode defaults to "upload"; CodeScene infers project 70675 from
           # the git remote, so no project-url is needed here. The PR check
