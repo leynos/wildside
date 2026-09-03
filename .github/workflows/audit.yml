@@ -13,9 +13,17 @@ name: Scheduled dependency audit
 permissions:
   contents: read
 
+env:
+  BUN_VERSION: '1.2.21'
+  CARGO_AUDIT_VERSION: '0.22.1'
+
 jobs:
+  # Scheduled work stays on a GitHub-hosted runner: it is off the developer
+  # feedback path, so the queue contention that motivates the managed runners
+  # does not apply to it.
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
       # v4.1.0
@@ -27,11 +35,21 @@ jobs:
           cache: 'pnpm'
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76  # v2
         with:
-          bun-version: '1.2.21'
+          bun-version: ${{ env.BUN_VERSION }}
+      # cache-provider stays "github": this job mounts no cache of its own, so
+      # the shared action is the single owner of the Cargo paths it uses.
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@8add2d99854a5b77548eae98cca59202e68fefc8
+        uses: leynos/shared-actions/.github/actions/setup-rust@7d46a399558914f5a05074e55a560fec0269fd0d
       - name: Install cargo-audit
-        run: cargo binstall --no-confirm cargo-audit@0.22.1
+        run: |
+          set -euo pipefail
+          if ! cargo audit --version 2>/dev/null | grep -qF "$CARGO_AUDIT_VERSION"; then
+            # Fail closed: neither strategy compiles the crate from source.
+            cargo binstall --no-confirm --locked \
+              --strategies crate-meta-data,quick-install \
+              "cargo-audit@${CARGO_AUDIT_VERSION}"
+          fi
+          cargo audit --version
       - name: Install dependencies (frozen)
         run: pnpm install --frozen-lockfile
       - name: Audit dependencies

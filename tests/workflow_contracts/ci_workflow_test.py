@@ -82,6 +82,7 @@ def test_codescene_check_immediately_follows_coverage_generation() -> None:
         "use-cargo-nextest": "true",
         "features": "example-data metrics test-support",
         "with-ratchet": "true",
+        "cache-provider": "external",
     }, "coverage generation must force Rust-only LCOV via language: rust"
 
 

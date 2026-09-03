@@ -65,6 +65,7 @@ def test_coverage_generation_forces_rust_only_lcov() -> None:
         "use-cargo-nextest": "true",
         "features": "example-data metrics test-support",
         "with-ratchet": "true",
+        "cache-provider": "external",
     }, "main-branch coverage must force Rust-only ratcheted LCOV output"
 
 

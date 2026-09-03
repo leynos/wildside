@@ -7,6 +7,10 @@ name: Coverage (main)
 # are readable by every pull-request run, so the baseline written here is the
 # one PR ratchet checks compare against.
 #
+# This job is the single writer of the Cargo registry, coverage-tool,
+# PostgreSQL embedded, and pg_worker cache keys. ci.yml restores all four and
+# never saves them, so no two jobs race to reserve the same key.
+#
 # workflow_dispatch is mandatory: merges performed by the automerge
 # workflow's GITHUB_TOKEN do not fire push-event workflows, so automerged
 # changes to main only get coverage via a manual dispatch.
@@ -22,6 +26,7 @@ permissions:
 jobs:
   coverage-upload:
     runs-on: ubicloud-standard-8
+    timeout-minutes: 90
     env:
       PG_VERSION: "16.10.0"
       # See ci.yml's coverage job: raise the per-invocation cargo
@@ -29,16 +34,85 @@ jobs:
       RUN_RUST_CARGO_WAIT_TIMEOUT: '5400'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
-      - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@8add2d99854a5b77548eae98cca59202e68fefc8
-      - name: Cache PostgreSQL embedded binaries
-        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
+
+      - name: Set cache keys
+        shell: bash
+        env:
+          # ImageOS names the runner image line (for example "ubuntu24"), so
+          # a prebuilt binary is never restored onto an image whose glibc
+          # cannot run it. It is a runner environment variable rather than a
+          # workflow one, so it is read here in the shell.
+          RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
+          CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
+          PG_WORKER_HASH: ${{ hashFiles('Makefile', 'rust-toolchain.toml') }}
+          SHARED_ACTIONS_PIN: 7d46a399558914f5a05074e55a560fec0269fd0d
+        run: |
+          set -euo pipefail
+          scope="${RUNNER_SCOPE}-${ImageOS:-unknown}"
+          {
+            printf 'CACHE_SCOPE=%s\n' "$scope"
+            printf 'CARGO_CACHE_KEY=cargo-v1-%s-%s\n' "$scope" "$CARGO_LOCK_HASH"
+            printf 'COVERAGE_TOOLS_CACHE_KEY=coverage-tools-v1-%s-%s\n' \
+              "$scope" "$SHARED_ACTIONS_PIN"
+            printf 'PG_EMBEDDED_CACHE_KEY=pg-embedded-v1-%s-%s\n' \
+              "$scope" "$PG_VERSION"
+            printf 'PG_WORKER_CACHE_KEY=pg-worker-v1-%s-%s\n' \
+              "$scope" "$PG_WORKER_HASH"
+          } >>"$GITHUB_ENV"
+
+      # `target` is deliberately absent from every path list below: sccache,
+      # not an archive, owns compiler output, and a target tree is invalidated
+      # far more often than the registry it would travel with.
+      - name: Restore Cargo registry
+        id: cargo-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ env.CARGO_CACHE_KEY }}
+          restore-keys: cargo-v1-${{ env.CACHE_SCOPE }}-
+
+      - name: Restore coverage tools
+        id: coverage-tools-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cache/uv
+            ~/.local/bin
+            ~/.local/share/uv
+          key: ${{ env.COVERAGE_TOOLS_CACHE_KEY }}
+          restore-keys: coverage-tools-v1-${{ env.CACHE_SCOPE }}-
+
+      - name: Restore PostgreSQL embedded binaries
+        id: pg-embedded-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
             ~/.theseus/postgresql
             ~/.cache/pg-embedded/binaries
-          key: ${{ runner.os }}-pg-embedded-${{ env.PG_VERSION }}
-          restore-keys: ${{ runner.os }}-pg-embedded-
+          key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
+          restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
+
+      # Documented source-build exception: pg-embed-setup-unpriv publishes no
+      # release binaries, so `make prepare-pg-worker` builds pg_worker from
+      # source. Caching the install root makes `cargo install --root` a no-op
+      # on a warm run. Removal condition:
+      # https://github.com/leynos/pg-embed-setup-unpriv/issues/217
+      - name: Restore pg_worker install root
+        id: pg-worker-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: target/pg-worker-root
+          key: ${{ env.PG_WORKER_CACHE_KEY }}
+          restore-keys: pg-worker-v1-${{ env.CACHE_SCOPE }}-
+
+      - name: Install Rust toolchain
+        uses: leynos/shared-actions/.github/actions/setup-rust@7d46a399558914f5a05074e55a560fec0269fd0d
+        with:
+          # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
+          cache-provider: external
       - name: Build pg_worker binary
         run: make prepare-pg-worker
       - name: Warm PostgreSQL embedded binary cache
@@ -51,7 +125,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@8add2d99854a5b77548eae98cca59202e68fefc8
+        uses: leynos/shared-actions/.github/actions/generate-coverage@7d46a399558914f5a05074e55a560fec0269fd0d
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -74,11 +148,12 @@ jobs:
           # trybuild-tests, which the coverage nextest timeout would kill).
           features: example-data metrics test-support
           with-ratchet: 'true'
+          cache-provider: external
       - name: Upload coverage data to CodeScene
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@8add2d99854a5b77548eae98cca59202e68fefc8
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@7d46a399558914f5a05074e55a560fec0269fd0d
         with:
           # mode defaults to "upload"; CodeScene infers project 70675 from
           # the git remote, so no project-url is needed here. The PR check
@@ -86,3 +161,72 @@ jobs:
           format: lcov
           access-token: ${{ env.CS_ACCESS_TOKEN }}
           installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
+
+      # Trunk is the only cache writer. Every save below is this key's sole
+      # owner, so a pull request restores a generation that exactly one job
+      # published.
+      - name: Save Cargo registry
+        if: >-
+          github.ref == 'refs/heads/main'
+          && steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ env.CARGO_CACHE_KEY }}
+
+      - name: Save coverage tools
+        if: >-
+          github.ref == 'refs/heads/main'
+          && steps.coverage-tools-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cache/uv
+            ~/.local/bin
+            ~/.local/share/uv
+          key: ${{ env.COVERAGE_TOOLS_CACHE_KEY }}
+
+      - name: Save PostgreSQL embedded binaries
+        if: >-
+          github.ref == 'refs/heads/main'
+          && steps.pg-embedded-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.theseus/postgresql
+            ~/.cache/pg-embedded/binaries
+          key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
+
+      - name: Save pg_worker install root
+        if: >-
+          github.ref == 'refs/heads/main'
+          && steps.pg-worker-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: target/pg-worker-root
+          key: ${{ env.PG_WORKER_CACHE_KEY }}
+
+      - name: Record cache observations
+        if: always()
+        shell: bash
+        env:
+          CARGO_HIT: ${{ steps.cargo-cache.outputs.cache-hit }}
+          COVERAGE_TOOLS_HIT: ${{ steps.coverage-tools-cache.outputs.cache-hit }}
+          PG_EMBEDDED_HIT: ${{ steps.pg-embedded-cache.outputs.cache-hit }}
+          PG_WORKER_HIT: ${{ steps.pg-worker-cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          {
+            printf '### Cache observations\n\n'
+            printf -- "- cargo key: \`%s\` hit: \`%s\`\n" \
+              "${CARGO_CACHE_KEY:-}" "${CARGO_HIT:-}"
+            printf -- "- coverage tools key: \`%s\` hit: \`%s\`\n" \
+              "${COVERAGE_TOOLS_CACHE_KEY:-}" "${COVERAGE_TOOLS_HIT:-}"
+            printf -- "- pg-embedded key: \`%s\` hit: \`%s\`\n" \
+              "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
+            printf -- "- pg-worker key: \`%s\` hit: \`%s\`\n" \
+              "${PG_WORKER_CACHE_KEY:-}" "${PG_WORKER_HIT:-}"
+          } >> "$GITHUB_STEP_SUMMARY"

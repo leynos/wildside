@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from ci_workflow_test import _assert_pinned_to_full_sha
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml"
@@ -60,28 +61,45 @@ def _nixie_recipe() -> list[str]:
     return recipe
 
 
+INSTALL_NIXIE_PATH = "leynos/shared-actions/.github/actions/install-nixie"
+
+
 def test_ci_installs_pinned_renderers_before_running_nixie() -> None:
-    """CI installs the reviewed tool versions before Mermaid validation."""
+    """CI installs both renderers from the shared action before validation.
+
+    The action downloads a checksum-verified Merman release and the pinned
+    Nixie distribution, which replaced the former ``cargo binstall`` and bare
+    ``uv tool install`` steps.
+    """
     steps = _build_steps()
-    merman = _find_step(steps, "Install Merman CLI")
-    nixie = _find_step(steps, "Install Nixie")
+    installation = _find_step(steps, "Install Nixie and Merman")
     validation = _find_step(steps, "Nixie")
 
-    assert merman.get("run") == (
-        "cargo binstall --no-confirm --locked merman-cli@0.7.0"
-    ), "CI must install the locked Merman CLI 0.7.0 release"
-    assert nixie.get("run") == 'uv tool install --python 3.14 "nixie-cli==1.1.0"', (
-        "CI must install Nixie CLI 1.1.0"
-    )
+    _assert_pinned_to_full_sha(installation.get("uses"), INSTALL_NIXIE_PATH)
+    assert installation.get("with") == {
+        "nixie-version": "${{ env.NIXIE_VERSION }}",
+        "merman-version": "${{ env.MERMAN_VERSION }}",
+    }, "CI must pin both renderer versions through the shared action"
     assert validation.get("run") == "make nixie", (
         "CI must run Mermaid validation through the Makefile contract"
     )
-    assert steps.index(merman) < steps.index(validation), (
-        "CI must install Merman before running Nixie"
+    assert steps.index(installation) < steps.index(validation), (
+        "CI must install both renderers before running Nixie"
     )
-    assert steps.index(nixie) < steps.index(validation), (
-        "CI must install Nixie before running Nixie"
+
+
+def test_ci_pins_the_renderer_versions_the_estate_reviewed() -> None:
+    """The workflow environment carries the reviewed renderer pins."""
+    workflow = typ.cast(
+        "object", yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     )
+    match workflow:
+        case {"env": dict() as environment}:
+            pass
+        case _:
+            pytest.fail("the CI workflow must declare workflow-level env")
+    assert environment.get("NIXIE_VERSION") == "1.1.0"
+    assert environment.get("MERMAN_VERSION") == "0.7.0"
 
 
 def test_makefile_nixie_requires_both_installed_commands() -> None:
