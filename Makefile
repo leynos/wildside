@@ -4,7 +4,16 @@ CARGO ?= cargo
 WHITAKER ?= whitaker
 KUBE_VERSION ?= 1.31.0
 export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go/bin:$(CURDIR)/node_modules/.bin:$(PATH)
-CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071
+# RUSTSEC-2023-0071 is in SQLx's optional MySQL support; this workspace only
+# enables PostgreSQL.
+# RUSTSEC-2026-0258 (h2 unbounded empty DATA frames) is fixed for the hyper
+# path, which Cargo.lock pins at 0.4.16. The remaining instance is
+# actix-http 3.x's h2 ^0.3, which has no patched release. The server binds
+# plaintext with no TLS listener and no bind_auto_h2c, so actix's HTTP/2
+# path is unreachable in the deployed configuration. Review by 2026-10-03,
+# and remove this ignore rather than renew it if the server ever terminates
+# TLS or enables h2c: https://github.com/leynos/wildside/issues/472
+CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
@@ -370,7 +379,7 @@ audit-node: deps
 
 rust-audit:
 	$(call ensure_tool,cargo-audit)
-	# RUSTSEC-2023-0071 is in SQLx's optional MySQL support; this workspace only enables PostgreSQL.
+	# Ignored advisories and their reasons live with CARGO_AUDIT_IGNORES above.
 	# Install cargo-audit with: cargo binstall --no-confirm cargo-audit@0.22.1
 	$(CARGO) audit --file Cargo.lock $(CARGO_AUDIT_IGNORES)
 
