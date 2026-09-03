@@ -62,20 +62,39 @@ def load_workflow(filename: str) -> dict[str, typ.Any]:
 
 
 def workflow_filenames() -> list[str]:
-    """Return every workflow filename, sorted for stable test identifiers."""
-    return sorted(path.name for path in WORKFLOWS_DIR.glob("*.yml"))
+    """Return every workflow filename, sorted for stable test identifiers.
+
+    Both suffixes are collected. GitHub accepts either, and the repository's
+    own workflow lint already globs both, so a file named `something.yaml`
+    would otherwise escape every contract built on this helper.
+    """
+    return sorted(
+        path.name
+        for suffix in ("*.yml", "*.yaml")
+        for path in WORKFLOWS_DIR.glob(suffix)
+    )
+
+
+def workflow_jobs(filename: str) -> list[tuple[str, dict[str, typ.Any]]]:
+    """Return one workflow's ``(job_id, job)`` pairs.
+
+    Examples
+    --------
+    >>> [job_id for job_id, _ in workflow_jobs("coverage-main.yml")]
+    ['coverage-upload']
+    """
+    jobs = load_workflow(filename).get("jobs", {})
+    if not isinstance(jobs, dict):
+        message = f"{filename} must declare a jobs mapping"
+        raise TypeError(message)
+    return [(job_id, job) for job_id, job in jobs.items() if isinstance(job, dict)]
 
 
 def iter_jobs() -> cabc.Iterator[tuple[str, str, dict[str, typ.Any]]]:
     """Yield ``(filename, job_id, job)`` for every job in the estate."""
     for filename in workflow_filenames():
-        jobs = load_workflow(filename).get("jobs", {})
-        if not isinstance(jobs, dict):
-            message = f"{filename} must declare a jobs mapping"
-            raise TypeError(message)
-        for job_id, job in jobs.items():
-            if isinstance(job, dict):
-                yield filename, job_id, job
+        for job_id, job in workflow_jobs(filename):
+            yield filename, job_id, job
 
 
 def job_steps(job: dict[str, typ.Any]) -> list[dict[str, typ.Any]]:
@@ -134,13 +153,25 @@ def cache_key_prefixes(job: dict[str, typ.Any]) -> dict[str, str]:
 
 
 def resolved_cache_key(step: dict[str, typ.Any], prefixes: dict[str, str]) -> str:
-    """Return the key prefix a cache step reserves, or its raw key expression."""
+    """Return the key prefix a cache step reserves, or its raw key expression.
+
+    A key that names an environment variable with no parsed prefix is an
+    error rather than a fallback. Returning the variable name would let the
+    ownership and writer contracts compare names instead of published keys
+    and keep passing after a reformatted key assignment.
+    """
     options = step.get("with")
     key = options.get("key") if isinstance(options, dict) else None
     if not isinstance(key, str):
         return ""
     match = _ENV_REFERENCE.match(key.strip())
-    return prefixes.get(match.group("name"), key) if match else key
+    if match is None:
+        return key
+    name = match.group("name")
+    if name not in prefixes:
+        message = f"no cache-key prefix was parsed for {name}"
+        raise AssertionError(message)
+    return prefixes[name]
 
 
 def find_step(steps: list[dict[str, typ.Any]], name: str) -> dict[str, typ.Any]:

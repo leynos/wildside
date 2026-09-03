@@ -79,23 +79,38 @@ def test_no_job_archives_a_target_tree() -> None:
     assert offenders == [], f"these cache steps archive compiler output: {offenders}"
 
 
+def _owned_paths(job: dict[str, typ.Any]) -> list[tuple[str, str]]:
+    """Return each cached path in a job alongside the key that owns it.
+
+    A restore and its matching save are the same owner, so ownership is
+    identified by the key a step reserves rather than by the step itself.
+    """
+    prefixes = inv.cache_key_prefixes(job)
+    return [
+        (path, inv.resolved_cache_key(step, prefixes))
+        for step in inv.job_steps(job)
+        if inv.is_cache_step(step)
+        for path in inv.cache_paths(step)
+    ]
+
+
+def _contested_paths(job: dict[str, typ.Any]) -> list[tuple[str, str, str]]:
+    """Return ``(path, first owner, rival owner)`` for every contested path."""
+    seen: dict[str, str] = {}
+    contested: list[tuple[str, str, str]] = []
+    for path, owner in _owned_paths(job):
+        if seen.get(path, owner) != owner:
+            contested.append((path, seen[path], owner))
+        seen[path] = owner
+    return contested
+
+
 def test_each_mutable_path_has_exactly_one_owner_per_job() -> None:
     """Two cache steps claiming one path race to define its contents."""
     for filename, job_id, job in inv.iter_jobs():
-        seen: dict[str, str] = {}
-        duplicates: list[tuple[str, str, str]] = []
-        for step in inv.job_steps(job):
-            if not inv.is_cache_step(step):
-                continue
-            # A restore and its matching save are the same owner, so compare
-            # ownership per key rather than per step.
-            owner = inv.resolved_cache_key(step, inv.cache_key_prefixes(job))
-            for path in inv.cache_paths(step):
-                if path in seen and seen[path] != owner:
-                    duplicates.append((path, seen[path], owner))
-                seen[path] = owner
-        assert not duplicates, (
-            f"{filename}:{job_id} has more than one owner for: {duplicates}"
+        contested = _contested_paths(job)
+        assert not contested, (
+            f"{filename}:{job_id} has more than one owner for: {contested}"
         )
 
 

@@ -222,7 +222,6 @@ jobs:
         with:
           path: target/pg-worker-root
           key: ${{ env.PG_WORKER_CACHE_KEY }}
-          restore-keys: pg-worker-v1-${{ env.CACHE_SCOPE }}-
 
       # cache-provider: external — this job owns ~/.cargo/registry,
       # ~/.cargo/bin, and the uv layers above, so the shared action must not
@@ -255,12 +254,20 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         run: |
           set -euo pipefail
-          if ! cargo audit --version 2>/dev/null | grep -qF "$CARGO_AUDIT_VERSION"; then
+          # Compare the whole version field. A substring match would accept
+          # 0.22.10 for a 0.22.1 pin, and the reported program name differs
+          # between `cargo audit` and `cargo-audit`, so only the last field is
+          # dependable.
+          installed_version() {
+            cargo audit --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+          }
+          if [ "$(installed_version)" != "$CARGO_AUDIT_VERSION" ]; then
             # Fail closed: neither strategy compiles the crate.
             cargo binstall --no-confirm --locked \
               --strategies crate-meta-data,quick-install \
               "cargo-audit@${CARGO_AUDIT_VERSION}"
           fi
+          test "$(installed_version)" = "$CARGO_AUDIT_VERSION"
           cargo audit --version
 
       - name: Audit
@@ -298,9 +305,15 @@ jobs:
       - name: Install yamllint
         run: |
           set -euo pipefail
-          if ! yamllint --version 2>/dev/null | grep -qF "$YAMLLINT_VERSION"; then
+          # Compare the whole version field: a substring match would accept
+          # 1.35.10 for a 1.35.1 pin.
+          installed_version() {
+            yamllint --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+          }
+          if [ "$(installed_version)" != "$YAMLLINT_VERSION" ]; then
             uv tool install "yamllint==${YAMLLINT_VERSION}"
           fi
+          test "$(installed_version)" = "$YAMLLINT_VERSION"
           yamllint --version
 
       - name: Install workflow linters
@@ -323,7 +336,12 @@ jobs:
           fi
           command -v action-validator
 
-          if ! actionlint --version 2>/dev/null | grep -qF "$ACTIONLINT_VERSION"; then
+          # actionlint prints "v<version>" on its first line; compare the
+          # whole field so 1.7.120 cannot satisfy a 1.7.12 pin.
+          actionlint_version() {
+            actionlint --version 2>/dev/null | awk 'NR == 1 { sub(/^v/, ""); print }'
+          }
+          if [ "$(actionlint_version)" != "$ACTIONLINT_VERSION" ]; then
             case "${RUNNER_ARCH:-}" in
               X64) platform=linux_amd64; expected_sha="$ACTIONLINT_SHA256_X64" ;;
               ARM64) platform=linux_arm64; expected_sha="$ACTIONLINT_SHA256_ARM64" ;;
@@ -344,6 +362,7 @@ jobs:
             mkdir -p "${HOME}/.local/bin"
             install -m 0755 "${staging}/actionlint" "${HOME}/.local/bin/actionlint"
           fi
+          test "$(actionlint_version)" = "$ACTIONLINT_VERSION"
           actionlint --version
 
       - name: Helm lint
@@ -612,7 +631,6 @@ jobs:
             ~/.local/bin
             ~/.local/share/uv
           key: ${{ env.COVERAGE_TOOLS_CACHE_KEY }}
-          restore-keys: coverage-tools-v1-${{ env.CACHE_SCOPE }}-
 
       - name: Restore PostgreSQL embedded binaries
         id: pg-embedded-cache
@@ -632,7 +650,6 @@ jobs:
         with:
           path: target/pg-worker-root
           key: ${{ env.PG_WORKER_CACHE_KEY }}
-          restore-keys: pg-worker-v1-${{ env.CACHE_SCOPE }}-
 
       - name: Install Rust toolchain
         uses: leynos/shared-actions/.github/actions/setup-rust@7d46a399558914f5a05074e55a560fec0269fd0d

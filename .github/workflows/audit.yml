@@ -43,12 +43,20 @@ jobs:
       - name: Install cargo-audit
         run: |
           set -euo pipefail
-          if ! cargo audit --version 2>/dev/null | grep -qF "$CARGO_AUDIT_VERSION"; then
+          # Compare the whole version field. A substring match would accept
+          # 0.22.10 for a 0.22.1 pin, and the reported program name differs
+          # between `cargo audit` and `cargo-audit`, so only the last field is
+          # dependable.
+          installed_version() {
+            cargo audit --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+          }
+          if [ "$(installed_version)" != "$CARGO_AUDIT_VERSION" ]; then
             # Fail closed: neither strategy compiles the crate from source.
             cargo binstall --no-confirm --locked \
               --strategies crate-meta-data,quick-install \
               "cargo-audit@${CARGO_AUDIT_VERSION}"
           fi
+          test "$(installed_version)" = "$CARGO_AUDIT_VERSION"
           cargo audit --version
       - name: Install dependencies (frozen)
         run: pnpm install --frozen-lockfile

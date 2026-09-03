@@ -83,7 +83,6 @@ jobs:
             ~/.local/bin
             ~/.local/share/uv
           key: ${{ env.COVERAGE_TOOLS_CACHE_KEY }}
-          restore-keys: coverage-tools-v1-${{ env.CACHE_SCOPE }}-
 
       - name: Restore PostgreSQL embedded binaries
         id: pg-embedded-cache
@@ -106,7 +105,6 @@ jobs:
         with:
           path: target/pg-worker-root
           key: ${{ env.PG_WORKER_CACHE_KEY }}
-          restore-keys: pg-worker-v1-${{ env.CACHE_SCOPE }}-
 
       - name: Install Rust toolchain
         uses: leynos/shared-actions/.github/actions/setup-rust@7d46a399558914f5a05074e55a560fec0269fd0d

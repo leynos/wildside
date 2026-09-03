@@ -166,6 +166,12 @@ Four consequences follow from the table.
 - **No `target` tree is archived.** A cached `target` duplicates the
   compiler's own output ownership, dwarfs the registry it would travel with,
   and is invalidated far more often.
+- **A restore fallback needs a corrector.** `restore-keys` is used only where
+  something downstream repairs a stale archive: a version probe for the tool
+  archive, `pnpm install --frozen-lockfile` for `node_modules`, or the
+  warm-up script for the PostgreSQL binaries. The `pg_worker` install root and
+  the coverage-lane tools have no such corrector, so they match on their exact
+  key or miss.
 - **Trunk is the only writer.** Pull requests restore the trusted generation
   and never reserve a key, which removes both the wasted upload and the "Unable
   to reserve cache" races. `ci.yml` therefore also runs on pushes to `main`,
