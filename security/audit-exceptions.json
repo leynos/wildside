@@ -3,9 +3,9 @@
     "id": "STYLE_DICTIONARY_PROTOTYPE_POLLUTION_2026_07",
     "package": "frontend-pwa",
     "advisory": "GHSA-vj5c-m527-mpff",
-    "reason": "Style Dictionary runs only against repository-controlled token files during builds; its patched release requires glob 13, which is incompatible with the Bun-wide glob 11 resolution needed for the current CLI command-injection advisory.",
+    "reason": "Development-time build tooling only; not shipped to end users. Style Dictionary runs against repository-controlled token files during builds, and its patched release requires glob 13, which is incompatible with the Bun-wide glob 11 resolution needed for the current CLI command-injection advisory. Tracked for proper resolution in #471.",
     "addedAt": "2026-07-29",
-    "expiresAt": "2026-08-28"
+    "expiresAt": "2026-10-03"
   },
   {
     "id": "BUN_PICOMATCH_POSIX_2026_06",
