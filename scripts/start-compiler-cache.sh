@@ -24,6 +24,20 @@ set -euo pipefail
 : "${SCCACHE_SHA256_X64:?SCCACHE_SHA256_X64 must be set}"
 : "${SCCACHE_SHA256_ARM64:?SCCACHE_SHA256_ARM64 must be set}"
 
+# The binary lives here whether the tool archive restored it or this script
+# installs it below. Runner images differ on whether that directory is already
+# on PATH, and the later steps resolve `sccache` through PATH too, because it
+# is named as RUSTC_WRAPPER. Put it on PATH for this script and, when running
+# under Actions, for every step after it.
+install_dir="${HOME}/.local/bin"
+case ":${PATH}:" in
+  *":${install_dir}:"*) ;;
+  *) PATH="${install_dir}:${PATH}"; export PATH ;;
+esac
+if [ -n "${GITHUB_PATH:-}" ]; then
+  printf '%s\n' "$install_dir" >>"$GITHUB_PATH"
+fi
+
 version() {
   sccache --version 2>/dev/null | awk 'NR == 1 { print $NF }'
 }
@@ -50,8 +64,8 @@ if [ "$(version)" != "$SCCACHE_VERSION" ]; then
   fi
   tar -xzf "${staging}/${archive}" -C "$staging" --strip-components=1 \
     "sccache-v${SCCACHE_VERSION}-${target}/sccache"
-  mkdir -p "${HOME}/.local/bin"
-  install -m 0755 "${staging}/sccache" "${HOME}/.local/bin/sccache"
+  mkdir -p "$install_dir"
+  install -m 0755 "${staging}/sccache" "${install_dir}/sccache"
 fi
 
 test "$(version)" = "$SCCACHE_VERSION"
