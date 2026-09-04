@@ -10,10 +10,15 @@ for one key, but a cache that reports success while its objects go elsewhere.
 from __future__ import annotations
 
 import pathlib
-import typing as typ
 
 import pytest
 import workflow_inventory as inv
+
+#: A parsed workflow step. The inventory hands these back straight from YAML,
+#: so the values are unvalidated. `object` keeps them unusable until a
+#: narrowing check proves what they are, which is exactly what `Any` would
+#: throw away.
+type Step = dict[str, object]
 
 #: Every Rust job starts its compiler cache through this one script, so the
 #: digest pins and the backend guard have a single place to change.
@@ -27,14 +32,25 @@ def _compiler_cache_script() -> str:
     return COMPILER_CACHE_SCRIPT.read_text(encoding="utf-8")
 
 
-def _structured_composer(steps: list[dict[str, typ.Any]], key: str) -> str | None:
+def _step_env(step: Step) -> dict[str, object]:
+    """Return a step's `env` block, or an empty mapping when it declares none.
+
+    The block arrives unvalidated from YAML, so it is narrowed here once and
+    its keys coerced, rather than at each use.
+    """
+    env = step.get("env")
+    if not isinstance(env, dict):
+        return {}
+    return {str(name): value for name, value in env.items()}
+
+
+def _structured_composer(steps: list[Step], key: str) -> str | None:
     """Return `key`'s value where a step declares it as a structured `env` entry."""
-    values = (step.get("env", {}) for step in steps)
-    matches = (env[key] for env in values if isinstance(env, dict) and key in env)
+    matches = (env[key] for env in map(_step_env, steps) if key in env)
     return next((str(value) for value in matches), None)
 
 
-def _script_composer(steps: list[dict[str, typ.Any]], key: str) -> str | None:
+def _script_composer(steps: list[Step], key: str) -> str | None:
     """Return the `Set cache keys` line that assigns `key`.
 
     The `printf` that builds it continues onto the next line, so the scalar is
@@ -46,7 +62,7 @@ def _script_composer(steps: list[dict[str, typ.Any]], key: str) -> str | None:
     return next((line for line in lines if f"{key}=" in line), None)
 
 
-def _cache_key_composer(steps: list[dict[str, typ.Any]], key: str) -> str:
+def _cache_key_composer(steps: list[Step], key: str) -> str:
     """Return the text that builds `key`, and nothing else in the job.
 
     A cache key is composed one of two ways here. `TOOL_PINS` is a structured
@@ -199,8 +215,11 @@ def test_the_compiler_cache_start_verifies_its_backend(
     # through PATH. The script installs it into a directory that not every
     # runner image carries, so it must publish that directory itself rather
     # than inherit it.
-    assert "GITHUB_PATH" in script, (
-        "the start script must publish its install directory to later steps"
+    # Match the redirection, not the name. The comment explaining why the
+    # publication is needed also contains `GITHUB_PATH`, so asserting the
+    # identifier alone would survive the write being deleted.
+    assert '>>"$GITHUB_PATH"' in script, (
+        "the start script must append its install directory to GITHUB_PATH"
     )
 
 
