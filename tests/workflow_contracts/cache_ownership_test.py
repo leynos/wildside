@@ -8,6 +8,7 @@ without publishing a competing one.
 
 from __future__ import annotations
 
+import pathlib
 import re
 import typing as typ
 
@@ -19,6 +20,18 @@ import yaml
 #: together. Restoring the environment store alone leaves `uv tool install`
 #: reporting success while the command it installed is missing.
 UV_LAYERS = ("~/.cache/uv", "~/.local/share/uv", "~/.local/bin")
+
+#: Every Rust job starts its compiler cache through this one script, so the
+#: digest pins and the backend guard have a single place to change.
+COMPILER_CACHE_SCRIPT = (
+    pathlib.Path(__file__).resolve().parents[2] / "scripts" / "start-compiler-cache.sh"
+)
+
+
+def _compiler_cache_script() -> str:
+    """Return the compiler-cache start script's source."""
+    return COMPILER_CACHE_SCRIPT.read_text(encoding="utf-8")
+
 
 _FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -312,8 +325,12 @@ def test_the_compiler_cache_server_starts_from_a_run_step(
 
     starter = inv.find_step(steps, "Install and start the compiler cache")
     assert "run" in starter, "the server must start from a run step, not an action"
-    assert "--start-server" in str(starter["run"]), (
-        f"{filename}:{job_id} must start the server explicitly"
+    assert COMPILER_CACHE_SCRIPT.name in str(starter["run"]), (
+        f"{filename}:{job_id} must start the server through "
+        f"{COMPILER_CACHE_SCRIPT.name}"
+    )
+    assert "--start-server" in _compiler_cache_script(), (
+        f"{COMPILER_CACHE_SCRIPT.name} must start the server explicitly"
     )
     assert export < start < toolchain < reset, (
         f"{filename}:{job_id} must export credentials, start the server, set up "
@@ -332,12 +349,50 @@ def test_the_compiler_cache_server_starts_from_a_run_step(
 def test_the_compiler_cache_start_verifies_its_backend(
     filename: str, job_id: str
 ) -> None:
-    """A server on the wrong backend must fail the job, not be measured."""
+    """A server on the wrong backend must fail the job, not be measured.
+
+    Both assertions target the guard rather than a mention of it. `ghac`
+    appears in the script's prose, and `sha256sum` computes a digest that a
+    script could then ignore, so neither name alone proves the protection is
+    still wired.
+    """
     steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
-    script = str(inv.find_step(steps, "Install and start the compiler cache")["run"])
-    assert "ghac" in script, (
-        f"{filename}:{job_id} must assert the server bound the Actions backend"
+    starter = inv.find_step(steps, "Install and start the compiler cache")
+    invocation = str(starter["run"])
+    assert COMPILER_CACHE_SCRIPT.name in invocation, (
+        f"{filename}:{job_id} must delegate to {COMPILER_CACHE_SCRIPT.name}"
     )
-    assert "sha256sum" in script, (
-        f"{filename}:{job_id} must verify the downloaded sccache archive"
+    script = _compiler_cache_script()
+    assert "ghac*)" in script, (
+        "the start script must branch on the backend, not merely name it"
+    )
+    assert '"$actual_sha" != "$expected_sha"' in script, (
+        "the start script must compare the archive digest against its pin"
+    )
+    assert "sha256sum" in script, "the start script must compute the archive digest"
+
+
+@pytest.mark.parametrize(
+    ("filename", "job_id", "key"),
+    [
+        ("ci.yml", "build", "TOOL_PINS"),
+        ("ci.yml", "coverage", "COVERAGE_TOOLS_CACHE_KEY"),
+        ("coverage-main.yml", "coverage-upload", "COVERAGE_TOOLS_CACHE_KEY"),
+    ],
+)
+def test_the_sccache_pin_feeds_the_archive_that_stores_it(
+    filename: str, job_id: str, key: str
+) -> None:
+    """Every job caches `~/.local/bin`, which is where sccache is installed.
+
+    Without the pin in the key, bumping `SCCACHE_VERSION` leaves the warm
+    archive valid and the old binary is restored under the new pin. The start
+    script's version probe then re-downloads on every run until an unrelated
+    pin happens to move.
+    """
+    job = inv.load_workflow(filename)["jobs"][job_id]
+    rendered = yaml.safe_dump(job)
+    assert key in rendered, f"{filename}:{job_id} must compose {key}"
+    assert "SCCACHE_VERSION" in rendered, (
+        f"{filename}:{job_id} must feed the sccache pin into {key}"
     )

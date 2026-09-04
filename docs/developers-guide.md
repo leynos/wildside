@@ -130,9 +130,11 @@ each Rust job carries all three:
   `ACTIONS_CACHE_SERVICE_V2`. The managed runner exposes its local cache proxy
   to action steps but not to plain `run:` steps, and emptying the service
   variable keeps sccache on the endpoint the proxy intercepts.
-- A `run:` step that installs a pinned, digest-verified sccache and starts the
-  server, before the toolchain setup. `setup-rust` is called with
-  `use-sccache: 'false'` so it cannot start a second one.
+- A `run:` step that calls `scripts/start-compiler-cache.sh`, before the
+  toolchain setup. The script installs a pinned, digest-verified sccache and
+  starts the server. `setup-rust` is called with `use-sccache: 'false'` so it
+  cannot start a second one. Every Rust job calls the same script, so the
+  digest pins and the backend guard have one place to change.
 - `sccache --zero-stats` before the build and `--show-stats` into the job
   summary afterwards.
 
@@ -146,6 +148,12 @@ that: 14,480 compile requests, a plausible-looking `ghac` backend, and no
 objects in the managed cache at all. Starting the server from a `run:` step,
 which sees the exported values, is what fixes it. The start step fails the job
 if the resulting backend is not `ghac`.
+
+`SCCACHE_VERSION` feeds the key of every archive that carries
+`~/.local/bin`, which is where the script installs the binary. Bumping the pin
+without that would leave the warm archive valid and restore the old binary
+under the new pin, so the script would re-download on every run until an
+unrelated pin moved.
 
 Read the statistics rather than assuming. Zero compile requests, or a cache
 location of local disk, means the wrapper never engaged; that is a failed
