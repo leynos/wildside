@@ -321,6 +321,12 @@ test-scripts:
 		python -m pytest scripts/local_k8s/unittests
 
 .ONESHELL: prepare-pg-worker
+# Documented source-build exception. pg-embed-setup-unpriv publishes no
+# release binaries, so the privilege-demotion worker has to be compiled. CI
+# caches PG_WORKER_INSTALL_ROOT, which makes `cargo install --root` a no-op on
+# a warm run. Remove this branch once
+# https://github.com/leynos/pg-embed-setup-unpriv/issues/217 ships verifiable
+# prebuilt assets.
 define PREPARE_PG_WORKER_CMD
 set -euo pipefail
 mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"

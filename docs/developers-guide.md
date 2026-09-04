@@ -60,6 +60,180 @@ If a workflow's behaviour genuinely depends on a feature only present from a
 particular commit onwards, express that as a comment or a changelog note, not
 as a test assertion on the SHA string.
 
+## CI runners, installers, and cache ownership
+
+Three rules govern the workflow estate. Contract tests in
+`tests/workflow_contracts/cache_ownership_test.py` and
+`tests/workflow_contracts/tool_installation_test.py` enforce all three, and
+they run through `make test-workflow-contracts`.
+
+### Job placement
+
+Build and test work runs on the managed `ubicloud-standard-8` label: `ci.yml`'s
+`build` and `coverage` jobs, and `coverage-main.yml`'s `coverage-upload` job.
+Every managed job declares `timeout-minutes`.
+
+That `-8` shape is inherited rather than measured. It predates the managed
+runner work and no job here has yet been sampled for peak memory or disk, so
+there is no evidence for or against a smaller shape. Add a sampler to the two
+Rust jobs and read it before proposing a change; the default elsewhere in the
+estate is `ubicloud-standard-2`, with `-4` only on measured disk evidence.
+
+Everything else stays on GitHub-hosted `ubuntu-latest`. Scheduled, delayed,
+metadata, label, review-bot, and release-orchestration work sits off the
+developer feedback path, so the queue contention that justifies a managed
+runner does not apply to it. That covers the weekly dependency audit, the
+delayed pull-request comment job, nightly mutation testing, and Dependabot
+automerge. The last two call reusable workflows in `leynos/shared-actions`; the
+callee chooses the runner and the caller must not override it.
+
+Register any new managed label in `.github/actionlint.yaml`, and check required
+status-check contexts before changing a label that appears in a matrix job name.
+
+### Installers
+
+CI installs prebuilt, version-pinned distributions. A tool installer that
+compiles from source is a policy failure, not a fallback.
+
+- Every tool pin lives in the workflow-level `env` block of `ci.yml`, and the
+  same block feeds the tool cache key. Bump the pin there and the archive
+  holding the old binary is invalidated automatically.
+- `cargo binstall` must carry `--strategies crate-meta-data,quick-install`.
+  Without an explicit strategy list it falls back to compiling the crate.
+- `taiki-e/install-action` must set `fallback: none`.
+- Whitaker comes from `leynos/shared-actions`' `install-whitaker` action,
+  which downloads a digest-verified release. Nixie and Merman come from the
+  same repository's `install-nixie` action.
+- `actionlint` is downloaded from its GitHub release and verified against a
+  SHA-256 digest recorded in the workflow, per architecture.
+- Global Bun and uv installs name an exact version. Note that the published
+  `action-validator` command is the `@action-validator/cli` package; the
+  unscoped `action-validator` package on npm is an unrelated project that ships
+  no executable.
+- Every installer is guarded by a version probe, so a warm tool cache skips
+  the download instead of repeating it.
+
+There is one documented exception. `pg-embed-setup-unpriv` publishes no release
+binaries, so `make prepare-pg-worker` compiles the `pg_worker`
+privilege-demotion binary. CI caches its install root, which makes
+`cargo install --root` a no-op on a warm run. The exception is removed when
+[pg-embed-setup-unpriv issue 217][pg-worker-issue] ships verifiable prebuilt
+assets.
+
+[pg-worker-issue]: https://github.com/leynos/pg-embed-setup-unpriv/issues/217
+
+### The compiler cache
+
+No `target` tree is archived, so sccache is the only thing standing between a
+warm run and a full recompile. Three pieces have to be present together, and
+each Rust job carries all three:
+
+- `RUSTC_WRAPPER: sccache` and `SCCACHE_GHA_ENABLED` at job level. The shared
+  `setup-rust` action installs sccache but does not export the wrapper, so a
+  job that omits this compiles uncached while reporting a healthy cache.
+- An `actions/github-script` step, immediately after checkout, that
+  republishes `ACTIONS_CACHE_URL` and `ACTIONS_RUNTIME_TOKEN` and empties
+  `ACTIONS_CACHE_SERVICE_V2`. The managed runner exposes its local cache proxy
+  to action steps but not to plain `run:` steps, and emptying the service
+  variable keeps sccache on the endpoint the proxy intercepts.
+- A `run:` step that calls `scripts/start-compiler-cache.sh`, before the
+  toolchain setup. The script installs a pinned, digest-verified sccache and
+  starts the server. `setup-rust` is called with `use-sccache: 'false'` so it
+  cannot start a second one. Every Rust job calls the same script, so the
+  digest pins and the backend guard have one place to change.
+- `sccache --zero-stats` before the build and `--show-stats` into the job
+  summary afterwards.
+
+**Where the server starts decides which backend it uses**, and this is the
+part that is easy to get wrong. The server binds its backend once, at start.
+`setup-rust` with `use-sccache: true` starts one through
+`mozilla-actions/sccache-action`, and that action's last act is to write
+`ACTIONS_CACHE_SERVICE_V2=on` back to the environment file, along with
+GitHub's own results URL and token. That clobbers the credential export the
+job made earlier, both for the server it just started and for every step after
+it, so the objects go to GitHub rather than the managed store. Wildside's
+first attempt did exactly that: 14,480 compile requests, a plausible-looking
+`ghac` backend, and no objects in the managed cache at all. Calling
+`setup-rust` with `use-sccache: 'false'` keeps that step out of the job, and
+starting the server from a `run:` step means it reads the exported values as
+they were written. The start step fails the job if the resulting backend is
+not `ghac`.
+
+`SCCACHE_VERSION` feeds the key of every archive that carries
+`~/.local/bin`, which is where the script installs the binary. Bumping the pin
+without that would leave the warm archive valid and restore the old binary
+under the new pin, so the script would re-download on every run until an
+unrelated pin moved.
+
+Read the statistics rather than assuming. Zero compile requests, or a cache
+location of local disk, means the wrapper never engaged; that is a failed
+integration, not a cold cache.
+
+### Cache ownership
+
+Every mutable path has exactly one owner, and every key has exactly one writer.
+Caching goes through `actions/cache/restore` and `actions/cache/save`, both
+pinned to the same full commit SHA. The deprecated `ubicloud/cache` fork is not
+used: it reads variables that only a managed VM supplies, so a workflow
+carrying it cannot move between runner providers unchanged.
+
+Table 1 names every cache archive, the single job that writes it, and the
+inputs its key is built from.
+
+| Archive                      | Owner                   | Key inputs                           |
+| ---------------------------- | ----------------------- | ------------------------------------ |
+| pnpm store                   | `setup-node` in `build` | the action's own lockfile hash       |
+| Workspace `node_modules`     | `build`                 | the pnpm and Bun lock hashes         |
+| Bun download cache           | `build`                 | both Bun lock hashes                 |
+| Global tools                 | `build`                 | tool pins, `Makefile`, `dylint.toml` |
+| Cargo registry and Git index | `coverage-upload`       | `rust-toolchain.toml`, `Cargo.lock`  |
+| Coverage-lane tools          | `coverage-upload`       | the shared-actions commit            |
+| Embedded PostgreSQL binaries | `coverage-upload`       | the PostgreSQL version               |
+| `pg_worker` install root     | `coverage-upload`       | `Makefile`, `rust-toolchain.toml`    |
+
+The archives above cover these paths:
+
+- Workspace `node_modules`: `node_modules`, `frontend-pwa/node_modules`, and
+  `packages/tokens/node_modules`.
+- Bun download cache: `~/.bun/install/cache`.
+- Global tools: `~/.cargo/bin`, `~/.cache/cargo-binstall`, `~/.cache/merman`,
+  `~/.cache/uv`, `~/.local/bin`, `~/.local/share/uv`, `~/.local/share/whitaker`,
+  `~/.bun/bin`, `~/.bun/install/global`, `.uv-cache`, and `.uv-tools`.
+- Cargo registry and Git index: `~/.cargo/registry` and `~/.cargo/git`.
+- Coverage-lane tools: `~/.cargo/bin`, `~/.cache/uv`, `~/.local/bin`, and
+  `~/.local/share/uv`.
+- Embedded PostgreSQL binaries: `~/.theseus/postgresql` and
+  `~/.cache/pg-embedded/binaries`.
+
+Every key also carries the runner operating system, architecture, environment,
+and image line. The image line decides which glibc is available, so a prebuilt
+binary is never restored onto an image that cannot run it, and the environment
+separates managed archives from GitHub-hosted ones.
+
+Four consequences follow from the table.
+
+- **Shared actions must not own a path a job already owns.** `setup-rust`,
+  `generate-coverage`, and `install-whitaker` are all called with
+  `cache-provider: external` wherever the calling job mounts the paths they
+  would otherwise cache.
+- **The uv layers travel together.** Restoring the environment store without
+  `~/.local/bin` leaves `uv tool install` reporting success while the command
+  it installed is missing.
+- **No `target` tree is archived.** A cached `target` duplicates the
+  compiler's own output ownership, dwarfs the registry it would travel with,
+  and is invalidated far more often.
+- **A restore fallback needs a corrector.** `restore-keys` is used only where
+  something downstream repairs a stale archive: a version probe for the tool
+  archive, `pnpm install --frozen-lockfile` for `node_modules`, or the warm-up
+  script for the PostgreSQL binaries. The `pg_worker` install root and the
+  coverage-lane tools have no such corrector, so they match on their exact key
+  or miss.
+- **Trunk is the only writer.** Pull requests restore the trusted generation
+  and never reserve a key, which removes both the wasted upload and the "Unable
+  to reserve cache" races. `ci.yml` therefore also runs on pushes to `main`,
+  where its `coverage` job is skipped because `coverage-main.yml` already
+  covers that branch.
+
 ## Local Kubernetes preview
 
 Use the repository-local Kubernetes preview when validating the backend image
@@ -865,15 +1039,15 @@ duplicating it elsewhere.
   `scripts/` and `tests/`.
 - `make typecheck-python` creates or reuses `.venv`, installs the declared
   typecheck dependencies into it, then runs ty against the configured Python
-  sources. ty needs a real environment on disk to resolve imports, because
-  the layered environment `uv run --with ...` builds is not discoverable.
+  sources. ty needs a real environment on disk to resolve imports, because the
+  layered environment `uv run --with ...` builds is not discoverable.
 
 `make lint` includes `lint-python` and `make typecheck` includes
 `typecheck-python`, so the aggregate gates cover Python. CI runs the format,
 lint, and typecheck gates as discrete steps.
 
-The vendored spelling-rollout helper is excluded from these gates: `make
-spelling-helper-test` gates it separately against its own pinned Ruff.
+The vendored spelling-rollout helper is excluded from these gates:
+`make spelling-helper-test` gates it separately against its own pinned Ruff.
 
 ### Isolated uv execution
 
@@ -881,12 +1055,12 @@ The root `pyproject.toml` is tooling configuration only. It declares no
 `[project]` table and sets `[tool.uv] managed = false`, so it is deliberately
 not a managed uv project.
 
-Helper-script and workflow-contract targets therefore invoke `uv run
---no-project`. Without that flag uv would discover the root `pyproject.toml`,
-adopt the repository as a project, and change how those invocations resolve —
-syncing an empty environment and writing a `uv.lock`. Passing `--no-project`
-keeps each invocation resolving against the dependencies it declares itself,
-whether through `--with` or PEP 723 inline script metadata.
+Helper-script and workflow-contract targets therefore invoke
+`uv run --no-project`. Without that flag uv would discover the root
+`pyproject.toml`, adopt the repository as a project, and change how those
+invocations resolve — syncing an empty environment and writing a `uv.lock`.
+Passing `--no-project` keeps each invocation resolving against the dependencies
+it declares itself, whether through `--with` or PEP 723 inline script metadata.
 
 ### Rust-only coverage selection
 
@@ -898,12 +1072,12 @@ That action's automatic detection reads any root `pyproject.toml` as a Python
 project. Because this repository's is tooling-only, detection would classify
 the repository as mixed, and mixed runs support only Cobertura. Selecting
 `language: rust` explicitly keeps coverage Rust-only: it preserves the
-`lcov.info` LCOV report CodeScene consumes and stops a Python coverage run
-that would have no package to measure.
+`lcov.info` LCOV report CodeScene consumes and stops a Python coverage run that
+would have no package to measure.
 
 Contract tests in `tests/workflow_contracts/` protect this configuration,
-including the immutable shared-action pins, alongside the Python gate steps
-and the Makefile recipes described above.
+including the immutable shared-action pins, alongside the Python gate steps and
+the Makefile recipes described above.
 
 ## UX audit helpers
 
@@ -974,9 +1148,9 @@ exposing the fixes to npm's override handling. Regenerate both `pnpm-lock.yaml`
 and `bun.lock` after changing a shared security pin.
 
 `resolutions` accepts only bare package names. Bun silently ignores ranged keys
-such as `picomatch@<2.3.2`, so the ranged form works in `pnpm.overrides` but has
-no effect for Bun. Where a package is present at two majors that each need a
-different patched release, there is no `resolutions` entry that fixes both: a
+such as `picomatch@<2.3.2`, so the ranged form works in `pnpm.overrides` but
+has no effect for Bun. Where a package is present at two majors that each need
+a different patched release, there is no `resolutions` entry that fixes both: a
 bare key collapses every consumer onto one version and breaks the consumers
 that need the other major. Such advisories need a time-bound entry in
 `security/audit-exceptions.json` rather than a resolution.
@@ -1000,8 +1174,8 @@ matches its own workspace name, via the `workspaceKeys.has(entry.package)`
 check inside `buildLedgerMaps()`. `workspaceKeys` is a Set built from the
 workspace's own `package.json` `name`, plus the unscoped suffix when that name
 is scoped. An advisory that both `pnpm audit` and `bun audit` report therefore
-needs `"package": "frontend-pwa"`; record the vulnerable package in the
-optional `introducedBy` field instead.
+needs `"package": "frontend-pwa"`; record the vulnerable package in the optional
+`introducedBy` field instead.
 
 The script `scripts/check-overrides-policy.mjs` verifies that `pnpm.overrides`
 is present and that top-level overrides are absent. It is run automatically in
@@ -1209,11 +1383,11 @@ only supported contract for values passed into `RouteQueue::enqueue`:
   does not define a second validation policy. Split dateline-spanning inputs
   before building either domain value.
 
-`GenerateRouteJob` construction accepts typed inputs directly and is
-infallible. `EnrichmentJob` construction still returns its domain-specific tag
-validation errors, and bounding-box construction returns `BoundingBoxError`.
-These are distinct from `JobDispatchError`, which reports queue or
-worker-boundary failures.
+`GenerateRouteJob` construction accepts typed inputs directly and is infallible.
+`EnrichmentJob` construction still returns its domain-specific tag validation
+errors, and bounding-box construction returns `BoundingBoxError`. These are
+distinct from `JobDispatchError`, which reports queue or worker-boundary
+failures.
 
 Both job families use a serde envelope with `#[serde(tag = "v")]`, currently
 `"v1"`. V1 structs use `deny_unknown_fields`; do not remove that restriction.
@@ -1260,8 +1434,8 @@ uses camel case: `{ "minZoom": 12, "maxZoom": 16 }`.
 `BoundingBox` remains the shared WGS84 owner. Offline code must reuse its
 validation rather than define a parallel coordinate policy. At the offline
 boundary, `OfflineValidationError::BoundingBox` wraps `BoundingBoxError`,
-including through the `From<BoundingBoxError>` conversion, so the offline
-error type preserves the underlying validation failure.
+including through the `From<BoundingBoxError>` conversion, so the offline error
+type preserves the underlying validation failure.
 
 Queue observability:
 

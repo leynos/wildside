@@ -13,9 +13,17 @@ name: Scheduled dependency audit
 permissions:
   contents: read
 
+env:
+  BUN_VERSION: '1.2.21'
+  CARGO_AUDIT_VERSION: '0.22.1'
+
 jobs:
+  # Scheduled work stays on a GitHub-hosted runner: it is off the developer
+  # feedback path, so the queue contention that motivates the managed runners
+  # does not apply to it.
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
       # v4.1.0
@@ -27,11 +35,29 @@ jobs:
           cache: 'pnpm'
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76  # v2
         with:
-          bun-version: '1.2.21'
+          bun-version: ${{ env.BUN_VERSION }}
+      # cache-provider stays "github": this job mounts no cache of its own, so
+      # the shared action is the single owner of the Cargo paths it uses.
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@8add2d99854a5b77548eae98cca59202e68fefc8
+        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
       - name: Install cargo-audit
-        run: cargo binstall --no-confirm cargo-audit@0.22.1
+        run: |
+          set -euo pipefail
+          # Compare the whole version field. A substring match would accept
+          # 0.22.10 for a 0.22.1 pin, and the reported program name differs
+          # between `cargo audit` and `cargo-audit`, so only the last field is
+          # dependable.
+          installed_version() {
+            cargo audit --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+          }
+          if [ "$(installed_version)" != "$CARGO_AUDIT_VERSION" ]; then
+            # Fail closed: neither strategy compiles the crate from source.
+            cargo binstall --no-confirm --locked \
+              --strategies crate-meta-data,quick-install \
+              "cargo-audit@${CARGO_AUDIT_VERSION}"
+          fi
+          test "$(installed_version)" = "$CARGO_AUDIT_VERSION"
+          cargo audit --version
       - name: Install dependencies (frozen)
         run: pnpm install --frozen-lockfile
       - name: Audit dependencies

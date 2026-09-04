@@ -2,10 +2,35 @@ name: ci
 "on":
   pull_request:
     types: [opened, synchronize, reopened]
+  # `main` is the only trusted cache writer. Pull requests restore the
+  # generation published here and never save a competing one, so a push to
+  # `main` (or a manual dispatch on `main`) is what refreshes the archives.
+  # The `coverage` job is skipped on push because coverage-main.yml already
+  # runs it there.
+  push:
+    branches: [main]
   workflow_dispatch:
 
 env:
   PG_VERSION: "16.10.0"
+  # Tool pins. Every entry is a prebuilt, version-pinned distribution and
+  # every entry feeds the shared tool cache key, so bumping one here
+  # invalidates the archive that holds it.
+  ACTIONLINT_VERSION: '1.7.12'
+  ACTIONLINT_SHA256_X64: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
+  ACTIONLINT_SHA256_ARM64: '325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6'
+  ACTION_VALIDATOR_VERSION: '0.6.0'
+  BUN_VERSION: '1.2.21'
+  CARGO_AUDIT_VERSION: '0.22.1'
+  MERMAN_VERSION: '0.7.0'
+  NEXTEST_VERSION: '0.9.114'
+  NIXIE_VERSION: '1.1.0'
+  SCCACHE_VERSION: '0.17.0'
+  SCCACHE_SHA256_X64: '67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006'
+  SCCACHE_SHA256_ARM64: '821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77'
+  UV_VERSION: '0.12.9'
+  WHITAKER_INSTALLER_VERSION: '0.2.7'
+  YAMLLINT_VERSION: '1.35.1'
 
 # Default GITHUB_TOKEN to no access; each job re-grants only what it needs.
 # Both jobs only read repository contents — the token's sole runtime use is
@@ -16,17 +41,41 @@ permissions: {}
 jobs:
   build:
     runs-on: ubicloud-standard-8
+    # 90, matching the two coverage jobs. A cold sccache pays about 1.4 s to
+    # store each miss, and a run with no trunk generation to restore misses
+    # almost everything, so the first run on a new generation is the longest
+    # this job ever gets. 60 cancelled it mid compile-fail suite with every
+    # step passing, which loses the generation the next run would have read.
+    timeout-minutes: 90
     permissions:
       contents: read
     env:
-      WHITAKER_INSTALLER_VERSION: '0.2.6'
+      # The shared setup-rust action installs sccache but does not export the
+      # wrapper, so without these two the compiler runs uncached.
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      # Ubicloud publishes its local cache proxy to action steps, not to plain
+      # `run:` steps, so sccache's GitHub Actions backend sees no credentials
+      # unless an action republishes them. Emptying ACTIONS_CACHE_SERVICE_V2
+      # keeps sccache on the v1 endpoint, which is the one the proxy
+      # intercepts. Without this the build silently compiles uncached.
+      - name: Export cache credentials for sccache
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+            core.exportVariable('ACTIONS_CACHE_SERVICE_V2', '');
       # v4.1.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
+      # `cache: 'pnpm'` makes this action the sole owner of the pnpm store.
+      # No other step in this job touches it.
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v4
         with:
           node-version: '22'
@@ -34,57 +83,199 @@ jobs:
           cache: 'pnpm'
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76  # v2
         with:
-          bun-version: '1.2.21'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Compute dependency cache keys
         id: dependency-hashes
         shell: bash
+        env:
+          # Concatenated tool pins. Any change to a pin changes the tool
+          # archive's key, so a stale binary can never be restored under a
+          # newer pin.
+          TOOL_PINS: >-
+            actionlint=${{ env.ACTIONLINT_VERSION }}
+            action-validator=${{ env.ACTION_VALIDATOR_VERSION }}
+            bun=${{ env.BUN_VERSION }}
+            cargo-audit=${{ env.CARGO_AUDIT_VERSION }}
+            merman=${{ env.MERMAN_VERSION }}
+            nextest=${{ env.NEXTEST_VERSION }}
+            nixie=${{ env.NIXIE_VERSION }}
+            sccache=${{ env.SCCACHE_VERSION }}
+            uv=${{ env.UV_VERSION }}
+            whitaker-installer=${{ env.WHITAKER_INSTALLER_VERSION }}
+            yamllint=${{ env.YAMLLINT_VERSION }}
+          # The Makefile pins every `uv tool run` version, so its digest owns
+          # the repository-local uv layers, and dylint.toml selects the
+          # Whitaker suite the installer materializes.
+          MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
+          DYLINT_HASH: ${{ hashFiles('dylint.toml') }}
         run: |
           set -euo pipefail
 
           if command -v sha256sum >/dev/null 2>&1; then
-            pnpm_lock_hash=$(sha256sum pnpm-lock.yaml | awk '{print $1}')
+            hash_stdin() { sha256sum | awk '{print $1}'; }
           else
-            pnpm_lock_hash=$(shasum -a 256 pnpm-lock.yaml | awk '{print $1}')
+            hash_stdin() { shasum -a 256 | awk '{print $1}'; }
           fi
+
+          pnpm_lock_hash=$(hash_stdin <pnpm-lock.yaml)
 
           frontend_hash=$(cd frontend-pwa && bun pm hash 2>/dev/null || echo 'no-frontend-lock')
           tokens_hash=$(cd packages/tokens && bun pm hash 2>/dev/null || echo 'no-tokens-lock')
 
-          echo "modules=${pnpm_lock_hash}-${frontend_hash}-${tokens_hash}" >>"$GITHUB_OUTPUT"
-          echo "bun=${frontend_hash}-${tokens_hash}" >>"$GITHUB_OUTPUT"
+          tools_hash=$(printf '%s|%s|%s' \
+            "${TOOL_PINS}" "${MAKEFILE_HASH}" "${DYLINT_HASH}" | hash_stdin)
 
-      - name: Cache workspace node_modules
-        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
+          # ImageOS identifies the runner image line (for example "ubuntu24"),
+          # which is what decides whether a prebuilt binary's glibc
+          # requirement is satisfiable.
+          {
+            printf 'modules=%s-%s-%s\n' \
+              "$pnpm_lock_hash" "$frontend_hash" "$tokens_hash"
+            printf 'bun=%s-%s\n' "$frontend_hash" "$tokens_hash"
+            printf 'tools=%s\n' "$tools_hash"
+            printf 'image=%s\n' "${ImageOS:-unknown}"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Set cache keys
+        shell: bash
+        env:
+          RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
+          IMAGE_ID: ${{ steps.dependency-hashes.outputs.image }}
+          MODULES_HASH: ${{ steps.dependency-hashes.outputs.modules }}
+          BUN_HASH: ${{ steps.dependency-hashes.outputs.bun }}
+          TOOLS_HASH: ${{ steps.dependency-hashes.outputs.tools }}
+          CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
+          PG_WORKER_HASH: ${{ hashFiles('Makefile', 'rust-toolchain.toml') }}
+        run: |
+          set -euo pipefail
+          scope="${RUNNER_SCOPE}-${IMAGE_ID}"
+          {
+            printf 'CACHE_SCOPE=%s\n' "$scope"
+            printf 'MODULES_CACHE_KEY=modules-v1-%s-%s\n' "$scope" "$MODULES_HASH"
+            printf 'BUN_CACHE_KEY=bun-v1-%s-%s\n' "$scope" "$BUN_HASH"
+            printf 'TOOLS_CACHE_KEY=tools-v1-%s-%s\n' "$scope" "$TOOLS_HASH"
+            printf 'CARGO_CACHE_KEY=cargo-v1-%s-%s\n' "$scope" "$CARGO_LOCK_HASH"
+            printf 'PG_EMBEDDED_CACHE_KEY=pg-embedded-v1-%s-%s\n' \
+              "$scope" "$PG_VERSION"
+            printf 'PG_WORKER_CACHE_KEY=pg-worker-v1-%s-%s\n' \
+              "$scope" "$PG_WORKER_HASH"
+          } >>"$GITHUB_ENV"
+          # uv shims and the downloaded actionlint land here. The runner
+          # images already carry it, but making it explicit keeps the
+          # installers' executable probes honest on any image that does not.
+          printf '%s\n' "${HOME}/.local/bin" >>"$GITHUB_PATH"
+
+      # Every restore below precedes the first installer or build that reads
+      # its paths, and no two steps list the same path.
+      - name: Restore workspace node_modules
+        id: modules-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
             node_modules
-            node_modules/.pnpm-install-*
             frontend-pwa/node_modules
             packages/tokens/node_modules
-          key: ${{ runner.os }}-modules-${{ steps.dependency-hashes.outputs.modules }}
-          restore-keys: ${{ runner.os }}-modules-
+          key: ${{ env.MODULES_CACHE_KEY }}
+          restore-keys: modules-v1-${{ env.CACHE_SCOPE }}-
 
-      - name: Cache Bun downloads
-        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
+      - name: Restore Bun download cache
+        id: bun-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ env.BUN_CACHE_KEY }}
+          restore-keys: bun-v1-${{ env.CACHE_SCOPE }}-
+
+      # Restore only. coverage-main.yml's `coverage-upload` job is the single
+      # writer of this key, so the two workflows never race to reserve it.
+      # `target` is deliberately absent: an archived target tree duplicates
+      # the compiler's own output ownership and dwarfs the registry it
+      # travels with.
+      - name: Restore Cargo registry
+        id: cargo-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
-            ~/.bun/install/cache
-            ~/.bun/install/global
-          key: ${{ runner.os }}-bun-${{ steps.dependency-hashes.outputs.bun }}
-          restore-keys: ${{ runner.os }}-bun-
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ env.CARGO_CACHE_KEY }}
+          restore-keys: cargo-v1-${{ env.CACHE_SCOPE }}-
 
+      # One owner for every executable this job installs: Cargo-installed
+      # binaries, the uv download store, tool environments and shims, the
+      # Bun global prefix, Merman's verified binary, and the Whitaker suite.
+      # The uv layers travel together because restoring the environment
+      # store without ~/.local/bin leaves `uv tool install` reporting success
+      # while the command is missing.
+      - name: Restore global tools
+        id: tools-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cache/cargo-binstall
+            ~/.cache/merman
+            ~/.cache/uv
+            ~/.local/bin
+            ~/.local/share/uv
+            ~/.local/share/whitaker
+            ~/.bun/bin
+            ~/.bun/install/global
+            .uv-cache
+            .uv-tools
+          key: ${{ env.TOOLS_CACHE_KEY }}
+          restore-keys: tools-v1-${{ env.CACHE_SCOPE }}-
+
+      - name: Restore PostgreSQL embedded binaries
+        id: pg-embedded-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.theseus/postgresql
+            ~/.cache/pg-embedded/binaries
+          key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
+          restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
+
+      # Documented source-build exception: pg-embed-setup-unpriv publishes no
+      # release binaries, so `make prepare-pg-worker` builds pg_worker from
+      # source. Caching the install root makes `cargo install --root` a no-op
+      # on a warm run. coverage-main.yml owns this key; both jobs here only
+      # read it. Removal condition:
+      # https://github.com/leynos/pg-embed-setup-unpriv/issues/217
+      - name: Restore pg_worker install root
+        id: pg-worker-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: target/pg-worker-root
+          key: ${{ env.PG_WORKER_CACHE_KEY }}
+
+      # setup-rust runs with use-sccache: false because the sccache action it
+      # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
+      # clobbering the export above for every later step. The script explains
+      # the rest.
+      - name: Install and start the compiler cache
+        shell: bash
+        run: bash scripts/start-compiler-cache.sh
+
+      # cache-provider: external — this job owns ~/.cargo/registry,
+      # ~/.cargo/bin, and the uv layers above, so the shared action must not
+      # become a second owner of them.
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@8add2d99854a5b77548eae98cca59202e68fefc8
+        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        with:
+          cache-provider: external
+          # The server is started from a `run:` step above; a second one
+          # started inside this action would bind the wrong backend.
+          use-sccache: 'false'
 
       - name: Install uv
         id: setup-uv
         # v6.4.3
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39
         with:
-          cache-dependency-glob: |
-            **/pyproject.toml
-            **/uv.lock
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
 
       - name: Check lockfile consistency
         run: make lockfile
@@ -93,37 +284,42 @@ jobs:
       - name: Install dependencies (frozen)
         run: make deps
 
-      - name: Install Mermaid CLI
-        run: |
-          set -euxo pipefail
-          bun install --global @mermaid-js/mermaid-cli@11.9.0
-          # bun x @puppeteer/browsers browsers install chrome-headless-shell
-          mmdc --version
-
-      - name: Debug Bun and Mermaid
-        run: |
-          set -euxo pipefail
-          which mmdc
-          mmdc --version
-          bun --version
-
       # Dependency audits report advisories against the whole lockfile, so a
       # newly published advisory would fail every Dependabot PR regardless of
       # content and deadlock auto-merge. The scheduled audit workflow covers
       # Dependabot merges instead.
       - name: Install cargo-audit
         if: github.actor != 'dependabot[bot]'
-        run: cargo binstall --no-confirm cargo-audit@0.22.1
+        run: |
+          set -euo pipefail
+          # Compare the whole version field. A substring match would accept
+          # 0.22.10 for a 0.22.1 pin, and the reported program name differs
+          # between `cargo audit` and `cargo-audit`, so only the last field is
+          # dependable.
+          installed_version() {
+            cargo audit --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+          }
+          if [ "$(installed_version)" != "$CARGO_AUDIT_VERSION" ]; then
+            # Fail closed: neither strategy compiles the crate.
+            cargo binstall --no-confirm --locked \
+              --strategies crate-meta-data,quick-install \
+              "cargo-audit@${CARGO_AUDIT_VERSION}"
+          fi
+          test "$(installed_version)" = "$CARGO_AUDIT_VERSION"
+          cargo audit --version
 
       - name: Audit
         if: github.actor != 'dependabot[bot]'
         run: make audit
 
-      - name: Install Merman CLI
-        run: cargo binstall --no-confirm --locked merman-cli@0.7.0
-
-      - name: Install Nixie
-        run: uv tool install --python 3.14 "nixie-cli==1.1.0"
+      # Installs a checksum-verified Merman release and the pinned Nixie
+      # distribution; replaces the former `cargo binstall merman-cli` and
+      # bare `uv tool install nixie-cli` steps.
+      - name: Install Nixie and Merman
+        uses: leynos/shared-actions/.github/actions/install-nixie@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        with:
+          nixie-version: ${{ env.NIXIE_VERSION }}
+          merman-version: ${{ env.MERMAN_VERSION }}
 
       - name: Enforce en-GB-oxendict spelling
         run: make spelling
@@ -145,16 +341,76 @@ jobs:
           version: v3.15.0
 
       - name: Install yamllint
-        run: uv tool install yamllint==1.35.1
+        run: |
+          set -euo pipefail
+          # Compare the whole version field: a substring match would accept
+          # 1.35.10 for a 1.35.1 pin.
+          installed_version() {
+            yamllint --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+          }
+          if [ "$(installed_version)" != "$YAMLLINT_VERSION" ]; then
+            uv tool install "yamllint==${YAMLLINT_VERSION}"
+          fi
+          test "$(installed_version)" = "$YAMLLINT_VERSION"
+          yamllint --version
 
-      - name: Install action-validator
-        run: bun install -g action-validator
+      - name: Install workflow linters
+        run: |
+          set -euo pipefail
+
+          # @action-validator/cli is the published distribution of
+          # mpalmer/action-validator. The unscoped `action-validator` package
+          # is an unrelated project that ships no executable.
+          #
+          # The CLI takes no --version flag, so the installed version is
+          # recorded beside its shim. Both live in the Bun global prefix that
+          # the tool cache owns, so a warm run skips the download.
+          validator_marker="${HOME}/.bun/bin/.action-validator-version"
+          installed_version="$(cat "$validator_marker" 2>/dev/null || true)"
+          if [ "$installed_version" != "$ACTION_VALIDATOR_VERSION" ] \
+            || ! command -v action-validator >/dev/null 2>&1; then
+            bun install --global "@action-validator/cli@${ACTION_VALIDATOR_VERSION}"
+            printf '%s\n' "$ACTION_VALIDATOR_VERSION" >"$validator_marker"
+          fi
+          command -v action-validator
+
+          # actionlint prints "v<version>" on its first line; compare the
+          # whole field so 1.7.120 cannot satisfy a 1.7.12 pin.
+          actionlint_version() {
+            actionlint --version 2>/dev/null | awk 'NR == 1 { sub(/^v/, ""); print }'
+          }
+          if [ "$(actionlint_version)" != "$ACTIONLINT_VERSION" ]; then
+            case "${RUNNER_ARCH:-}" in
+              X64) platform=linux_amd64; expected_sha="$ACTIONLINT_SHA256_X64" ;;
+              ARM64) platform=linux_arm64; expected_sha="$ACTIONLINT_SHA256_ARM64" ;;
+              *) echo "unsupported runner architecture: ${RUNNER_ARCH:-}" >&2; exit 1 ;;
+            esac
+            archive="actionlint_${ACTIONLINT_VERSION}_${platform}.tar.gz"
+            staging="$(mktemp -d)"
+            trap 'rm -rf -- "$staging"' EXIT
+            curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-all-errors \
+              "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}" \
+              -o "${staging}/${archive}"
+            actual_sha="$(sha256sum "${staging}/${archive}" | awk '{print $1}')"
+            if [ "$actual_sha" != "$expected_sha" ]; then
+              echo "actionlint digest mismatch: expected ${expected_sha}, got ${actual_sha}" >&2
+              exit 1
+            fi
+            tar -xzf "${staging}/${archive}" -C "$staging" actionlint
+            mkdir -p "${HOME}/.local/bin"
+            install -m 0755 "${staging}/actionlint" "${HOME}/.local/bin/actionlint"
+          fi
+          test "$(actionlint_version)" = "$ACTIONLINT_VERSION"
+          actionlint --version
 
       - name: Helm lint
         run: helm lint --strict ./deploy/charts/wildside
 
       - name: YAML lint
         run: make yamllint
+
+      - name: Workflow lint
+        run: make lint-actions
 
       - name: Workflow contract tests
         run: make test-workflow-contracts
@@ -174,23 +430,10 @@ jobs:
         run: make test-scripts
 
       # Backend
-      - name: Cache cargo
-        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-      - name: Cache PostgreSQL embedded binaries
-        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
-        with:
-          path: |
-            ~/.theseus/postgresql
-            ~/.cache/pg-embedded/binaries
-          key: ${{ runner.os }}-pg-embedded-${{ env.PG_VERSION }}
-          restore-keys: ${{ runner.os }}-pg-embedded-
+      # Counters are reset here so the statistics below describe this job's
+      # compilation rather than anything the setup actions did.
+      - name: Reset compiler-cache counters
+        run: sccache --zero-stats
       - name: Rust build
         run: cargo check --locked --manifest-path backend/Cargo.toml --all-targets --all-features
       - name: Rust fmt check
@@ -198,24 +441,12 @@ jobs:
       - name: Rust clippy
         run: make lint-clippy
 
-      - name: Cache Whitaker installer
-        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
+      - name: Install Whitaker
+        uses: leynos/shared-actions/.github/actions/install-whitaker@c6125f19593668cbfefd65a59c08cb7aefe90d93
         with:
-          path: |
-            ~/.cargo/bin/whitaker-installer
-            ~/.cache/cargo-binstall
-          key: whitaker-installer-${{ runner.os }}-${{ runner.arch }}-${{ env.WHITAKER_INSTALLER_VERSION }}
-      - name: Install whitaker
-        run: |
-          if ! command -v whitaker-installer >/dev/null 2>&1; then
-            if cargo binstall --version >/dev/null 2>&1; then
-              cargo binstall --no-confirm --locked "whitaker-installer@${WHITAKER_INSTALLER_VERSION}"
-            else
-              echo "cargo-binstall unavailable; building whitaker-installer from crates.io"
-              cargo install --locked whitaker-installer --version "${WHITAKER_INSTALLER_VERSION}"
-            fi
-          fi
-          whitaker-installer
+          installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
+          # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
+          cache-provider: external
       - name: Whitaker lint
         run: make lint-whitaker
 
@@ -225,7 +456,9 @@ jobs:
       - name: Install nextest
         uses: taiki-e/install-action@db22c42b5af88356329b9a8056bb2c2f026d5a10
         with:
-          tool: nextest@0.9.114
+          tool: nextest@${{ env.NEXTEST_VERSION }}
+          # Fail closed rather than compiling nextest from source.
+          fallback: none
 
       - name: Build pg_worker binary
         run: |
@@ -288,15 +521,114 @@ jobs:
           bun run gen:api
           bun run build
 
+      # Zero compile requests means the wrapper never engaged, which is a
+      # failed integration rather than a cold cache.
+      - name: Record compiler-cache effectiveness
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          fence='```'
+          # This step runs with always(), so it can be reached when the job
+          # failed before setup-rust installed sccache. Report nothing rather
+          # than adding a second red step that buries the real cause.
+          if ! command -v sccache >/dev/null 2>&1; then
+            echo 'sccache is not installed; skipping compiler-cache statistics.'
+            exit 0
+          fi
+          sccache --show-stats | tee sccache-stats.txt
+          {
+            printf '### sccache\n\n%s text\n' "$fence"
+            cat sccache-stats.txt
+            printf '%s\n' "$fence"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Cache generations are published from `main` only. A pull request
+      # restores the trusted generation and never reserves a key, which
+      # removes both the wasted upload and the "Unable to reserve cache"
+      # races the estate has been seeing.
+      - name: Save workspace node_modules
+        if: >-
+          github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+          && steps.modules-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            node_modules
+            frontend-pwa/node_modules
+            packages/tokens/node_modules
+          key: ${{ env.MODULES_CACHE_KEY }}
+
+      - name: Save Bun download cache
+        if: >-
+          github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+          && steps.bun-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ env.BUN_CACHE_KEY }}
+
+      - name: Save global tools
+        if: >-
+          github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+          && steps.tools-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cache/cargo-binstall
+            ~/.cache/merman
+            ~/.cache/uv
+            ~/.local/bin
+            ~/.local/share/uv
+            ~/.local/share/whitaker
+            ~/.bun/bin
+            ~/.bun/install/global
+            .uv-cache
+            .uv-tools
+          key: ${{ env.TOOLS_CACHE_KEY }}
+
+      # Every miss must be explainable from the run evidence alone, so the
+      # rendered key travels with its hit result.
+      - name: Record cache observations
+        if: always()
+        shell: bash
+        env:
+          MODULES_HIT: ${{ steps.modules-cache.outputs.cache-hit }}
+          BUN_HIT: ${{ steps.bun-cache.outputs.cache-hit }}
+          CARGO_HIT: ${{ steps.cargo-cache.outputs.cache-hit }}
+          TOOLS_HIT: ${{ steps.tools-cache.outputs.cache-hit }}
+          PG_EMBEDDED_HIT: ${{ steps.pg-embedded-cache.outputs.cache-hit }}
+          PG_WORKER_HIT: ${{ steps.pg-worker-cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          {
+            printf '### Cache observations\n\n'
+            printf -- "- node_modules key: \`%s\` hit: \`%s\`\n" \
+              "${MODULES_CACHE_KEY:-}" "${MODULES_HIT:-}"
+            printf -- "- bun key: \`%s\` hit: \`%s\`\n" \
+              "${BUN_CACHE_KEY:-}" "${BUN_HIT:-}"
+            printf -- "- cargo key: \`%s\` hit: \`%s\`\n" \
+              "${CARGO_CACHE_KEY:-}" "${CARGO_HIT:-}"
+            printf -- "- tools key: \`%s\` hit: \`%s\`\n" \
+              "${TOOLS_CACHE_KEY:-}" "${TOOLS_HIT:-}"
+            printf -- "- pg-embedded key: \`%s\` hit: \`%s\`\n" \
+              "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
+            printf -- "- pg-worker key: \`%s\` hit: \`%s\`\n" \
+              "${PG_WORKER_CACHE_KEY:-}" "${PG_WORKER_HIT:-}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Rust coverage for CodeScene. The changed-line gate runs immediately after
   # generation when CS_ACCESS_TOKEN is available; the explicit token guard
   # lets forked pull requests skip the secret-dependent step safely.
   # coverage-main.yml uploads main-branch coverage and advances the ratchet
-  # baseline that pull-request runs compare against. This job skips Dependabot
-  # so dependency automerge stays off the expensive coverage path.
+  # baseline that pull-request runs compare against, so this job is skipped on
+  # push. It also skips Dependabot so dependency automerge stays off the
+  # expensive coverage path.
   coverage:
-    if: github.actor != 'dependabot[bot]'
+    if: github.actor != 'dependabot[bot]' && github.event_name != 'push'
     runs-on: ubicloud-standard-8
+    timeout-minutes: 90
     permissions:
       contents: read
     env:
@@ -307,6 +639,10 @@ jobs:
       # suite needs far longer — the repo's nextest global-timeout alone is
       # 60 minutes — so raise the cap well above it.
       RUN_RUST_CARGO_WAIT_TIMEOUT: '5400'
+      # The shared setup-rust action installs sccache but does not export the
+      # wrapper, so without these two the compiler runs uncached.
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
@@ -314,16 +650,108 @@ jobs:
           # `cs-coverage check` diffs against the pull-request merge base, so
           # fetch the full history used by the active changed-line gate.
           fetch-depth: 0
-      - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@8add2d99854a5b77548eae98cca59202e68fefc8
-      - name: Cache PostgreSQL embedded binaries
-        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
+
+      # Ubicloud publishes its local cache proxy to action steps, not to plain
+      # `run:` steps, so sccache's GitHub Actions backend sees no credentials
+      # unless an action republishes them. Emptying ACTIONS_CACHE_SERVICE_V2
+      # keeps sccache on the v1 endpoint, which is the one the proxy
+      # intercepts. Without this the build silently compiles uncached.
+      - name: Export cache credentials for sccache
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+            core.exportVariable('ACTIONS_CACHE_SERVICE_V2', '');
+
+      - name: Set cache keys
+        shell: bash
+        env:
+          # ImageOS names the runner image line (for example "ubuntu24"), so
+          # a prebuilt binary is never restored onto an image whose glibc
+          # cannot run it. It is a runner environment variable rather than a
+          # workflow one, so it is read here in the shell.
+          RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
+          CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
+          PG_WORKER_HASH: ${{ hashFiles('Makefile', 'rust-toolchain.toml') }}
+          SHARED_ACTIONS_PIN: c6125f19593668cbfefd65a59c08cb7aefe90d93
+        run: |
+          set -euo pipefail
+          scope="${RUNNER_SCOPE}-${ImageOS:-unknown}"
+          {
+            printf 'CACHE_SCOPE=%s\n' "$scope"
+            printf 'CARGO_CACHE_KEY=cargo-v1-%s-%s\n' "$scope" "$CARGO_LOCK_HASH"
+            printf 'COVERAGE_TOOLS_CACHE_KEY=coverage-tools-v1-%s-%s-sccache%s\n' \
+              "$scope" "$SHARED_ACTIONS_PIN" "$SCCACHE_VERSION"
+            printf 'PG_EMBEDDED_CACHE_KEY=pg-embedded-v1-%s-%s\n' \
+              "$scope" "$PG_VERSION"
+            printf 'PG_WORKER_CACHE_KEY=pg-worker-v1-%s-%s\n' \
+              "$scope" "$PG_WORKER_HASH"
+          } >>"$GITHUB_ENV"
+
+      - name: Restore Cargo registry
+        id: cargo-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ env.CARGO_CACHE_KEY }}
+          restore-keys: cargo-v1-${{ env.CACHE_SCOPE }}-
+
+      # The coverage lane's executables (cargo-binstall, cargo-llvm-cov,
+      # cargo-nextest) are chosen by the pinned shared action, so its commit
+      # is the key that explains the archive's contents.
+      - name: Restore coverage tools
+        id: coverage-tools-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cache/uv
+            ~/.local/bin
+            ~/.local/share/uv
+          key: ${{ env.COVERAGE_TOOLS_CACHE_KEY }}
+
+      - name: Restore PostgreSQL embedded binaries
+        id: pg-embedded-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
             ~/.theseus/postgresql
             ~/.cache/pg-embedded/binaries
-          key: ${{ runner.os }}-pg-embedded-${{ env.PG_VERSION }}
-          restore-keys: ${{ runner.os }}-pg-embedded-
+          key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
+          restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
+
+      # See the build job: pg-embed-setup-unpriv publishes no release binary.
+      # https://github.com/leynos/pg-embed-setup-unpriv/issues/217
+      - name: Restore pg_worker install root
+        id: pg-worker-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: target/pg-worker-root
+          key: ${{ env.PG_WORKER_CACHE_KEY }}
+
+      # setup-rust runs with use-sccache: false because the sccache action it
+      # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
+      # clobbering the export above for every later step. The script explains
+      # the rest.
+      - name: Install and start the compiler cache
+        shell: bash
+        run: bash scripts/start-compiler-cache.sh
+
+      - name: Install Rust toolchain
+        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        with:
+          cache-provider: external
+          # The server is started from a `run:` step above; a second one
+          # started inside this action would bind the wrong backend.
+          use-sccache: 'false'
+
+      # Counters are reset here so the statistics below describe this job's
+      # compilation rather than anything the setup actions did.
+      - name: Reset compiler-cache counters
+        run: sccache --zero-stats
       - name: Build pg_worker binary
         run: make prepare-pg-worker
       - name: Warm PostgreSQL embedded binary cache
@@ -336,7 +764,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@8add2d99854a5b77548eae98cca59202e68fefc8
+        uses: leynos/shared-actions/.github/actions/generate-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -363,14 +791,60 @@ jobs:
           # would be killed. The compile-fail tests add no line coverage.
           features: example-data metrics test-support
           with-ratchet: 'true'
+          # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
+          cache-provider: external
       - name: Check coverage against CodeScene gates
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: github.event_name == 'pull_request' && env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@8add2d99854a5b77548eae98cca59202e68fefc8
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
         with:
           format: lcov
           mode: check
           project-url: https://api.codescene.io/v2/projects/70675
           access-token: ${{ env.CS_ACCESS_TOKEN }}
           installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
+
+      # Zero compile requests means the wrapper never engaged, which is a
+      # failed integration rather than a cold cache.
+      - name: Record compiler-cache effectiveness
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          fence='```'
+          # This step runs with always(), so it can be reached when the job
+          # failed before setup-rust installed sccache. Report nothing rather
+          # than adding a second red step that buries the real cause.
+          if ! command -v sccache >/dev/null 2>&1; then
+            echo 'sccache is not installed; skipping compiler-cache statistics.'
+            exit 0
+          fi
+          sccache --show-stats | tee sccache-stats.txt
+          {
+            printf '### sccache\n\n%s text\n' "$fence"
+            cat sccache-stats.txt
+            printf '%s\n' "$fence"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record cache observations
+        if: always()
+        shell: bash
+        env:
+          CARGO_HIT: ${{ steps.cargo-cache.outputs.cache-hit }}
+          COVERAGE_TOOLS_HIT: ${{ steps.coverage-tools-cache.outputs.cache-hit }}
+          PG_EMBEDDED_HIT: ${{ steps.pg-embedded-cache.outputs.cache-hit }}
+          PG_WORKER_HIT: ${{ steps.pg-worker-cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          {
+            printf '### Cache observations\n\n'
+            printf -- "- cargo key: \`%s\` hit: \`%s\`\n" \
+              "${CARGO_CACHE_KEY:-}" "${CARGO_HIT:-}"
+            printf -- "- coverage tools key: \`%s\` hit: \`%s\`\n" \
+              "${COVERAGE_TOOLS_CACHE_KEY:-}" "${COVERAGE_TOOLS_HIT:-}"
+            printf -- "- pg-embedded key: \`%s\` hit: \`%s\`\n" \
+              "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
+            printf -- "- pg-worker key: \`%s\` hit: \`%s\`\n" \
+              "${PG_WORKER_CACHE_KEY:-}" "${PG_WORKER_HIT:-}"
+          } >> "$GITHUB_STEP_SUMMARY"
