@@ -27,25 +27,37 @@ def _compiler_cache_script() -> str:
     return COMPILER_CACHE_SCRIPT.read_text(encoding="utf-8")
 
 
+def _structured_composer(steps: list[dict[str, typ.Any]], key: str) -> str | None:
+    """Return `key`'s value where a step declares it as a structured `env` entry."""
+    values = (step.get("env", {}) for step in steps)
+    matches = (env[key] for env in values if isinstance(env, dict) and key in env)
+    return next((str(value) for value in matches), None)
+
+
+def _script_composer(steps: list[dict[str, typ.Any]], key: str) -> str | None:
+    """Return the `Set cache keys` line that assigns `key`.
+
+    The `printf` that builds it continues onto the next line, so the scalar is
+    unwrapped before it is split; matching a line at a time would find the
+    format string without its arguments.
+    """
+    script = str(inv.find_step(steps, "Set cache keys")["run"])
+    lines = script.replace("\\\n", " ").splitlines()
+    return next((line for line in lines if f"{key}=" in line), None)
+
+
 def _cache_key_composer(steps: list[dict[str, typ.Any]], key: str) -> str:
     """Return the text that builds `key`, and nothing else in the job.
 
     A cache key is composed one of two ways here. `TOOL_PINS` is a structured
     `env` value on the step that consumes it. `COVERAGE_TOOLS_CACHE_KEY` is a
-    `printf` in the `Set cache keys` shell script, whose arguments continue
-    onto the next line. Both wrap, so neither can be matched a line at a time.
+    `printf` in the `Set cache keys` shell script.
     """
-    for step in steps:
-        env = step.get("env")
-        if isinstance(env, dict) and key in env:
-            return str(env[key])
-    script = str(inv.find_step(steps, "Set cache keys")["run"])
-    unwrapped = script.replace("\\\n", " ")
-    for line in unwrapped.splitlines():
-        if f"{key}=" in line:
-            return line
-    message = f"no step composes {key}"
-    raise AssertionError(message)
+    composer = _structured_composer(steps, key) or _script_composer(steps, key)
+    if composer is None:
+        message = f"no step composes {key}"
+        raise AssertionError(message)
+    return composer
 
 
 RUST_JOBS = (
