@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Install a pinned sccache and start its server from a `run:` step.
 #
-# The server binds its storage backend at the moment it starts, and a managed
-# runner re-injects its own reserved cache variables into every *action* step.
-# A server started inside a composite action therefore binds GitHub's v2 cache
-# service no matter what the preceding credential export wrote to GITHUB_ENV,
-# and its writes leave the managed runner's proxy entirely. A `run:` step sees
-# the exported values, so starting the server here is what routes objects to
-# the local proxy. Every Rust job calls this script instead of inlining it, so
-# the digest pins and the backend guard have one place to change.
+# The server binds its storage backend at the moment it starts, so where it
+# starts decides where its objects go. The shared `setup-rust` action starts
+# one through `mozilla-actions/sccache-action`, and that action's last act is
+# to write `ACTIONS_CACHE_SERVICE_V2=on` back to GITHUB_ENV along with
+# GitHub's own results URL and token. That clobbers the credential export this
+# job made earlier, for that server and for every step after it, and the
+# objects go to GitHub rather than the managed runner's proxy. Calling
+# `setup-rust` with `use-sccache: false` keeps that step out of the job, and
+# starting the server here means it reads the exported values as they were
+# written. Every Rust job calls this script instead of inlining it, so the
+# digest pins and the backend guard have one place to change.
 #
 # Required environment:
 #   SCCACHE_VERSION      the release to install, without the leading `v`

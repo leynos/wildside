@@ -73,6 +73,12 @@ Build and test work runs on the managed `ubicloud-standard-8` label: `ci.yml`'s
 `build` and `coverage` jobs, and `coverage-main.yml`'s `coverage-upload` job.
 Every managed job declares `timeout-minutes`.
 
+That `-8` shape is inherited rather than measured. It predates the managed
+runner work and no job here has yet been sampled for peak memory or disk, so
+there is no evidence for or against a smaller shape. Add a sampler to the two
+Rust jobs and read it before proposing a change; the default elsewhere in the
+estate is `ubicloud-standard-2`, with `-4` only on measured disk evidence.
+
 Everything else stays on GitHub-hosted `ubuntu-latest`. Scheduled, delayed,
 metadata, label, review-bot, and release-orchestration work sits off the
 developer feedback path, so the queue contention that justifies a managed
@@ -140,14 +146,18 @@ each Rust job carries all three:
 
 **Where the server starts decides which backend it uses**, and this is the
 part that is easy to get wrong. The server binds its backend once, at start.
-The managed runner re-injects its own cache-service variables into every
-action step, so a server started inside a composite action binds GitHub's v2
-service regardless of what the export wrote to the environment file, and its
-objects never reach the managed store. Wildside's first attempt did exactly
-that: 14,480 compile requests, a plausible-looking `ghac` backend, and no
-objects in the managed cache at all. Starting the server from a `run:` step,
-which sees the exported values, is what fixes it. The start step fails the job
-if the resulting backend is not `ghac`.
+`setup-rust` with `use-sccache: true` starts one through
+`mozilla-actions/sccache-action`, and that action's last act is to write
+`ACTIONS_CACHE_SERVICE_V2=on` back to the environment file, along with
+GitHub's own results URL and token. That clobbers the credential export the
+job made earlier, both for the server it just started and for every step after
+it, so the objects go to GitHub rather than the managed store. Wildside's
+first attempt did exactly that: 14,480 compile requests, a plausible-looking
+`ghac` backend, and no objects in the managed cache at all. Calling
+`setup-rust` with `use-sccache: 'false'` keeps that step out of the job, and
+starting the server from a `run:` step means it reads the exported values as
+they were written. The start step fails the job if the resulting backend is
+not `ghac`.
 
 `SCCACHE_VERSION` feeds the key of every archive that carries
 `~/.local/bin`, which is where the script installs the binary. Bumping the pin

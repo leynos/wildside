@@ -310,12 +310,14 @@ def test_the_compiler_cache_server_starts_from_a_run_step(
 ) -> None:
     """The server binds its backend at start, so where it starts decides which.
 
-    The managed runner re-injects its own cache-service variables into every
-    action step, so a server started inside a composite action binds GitHub's
-    v2 service no matter what the export wrote to the environment file, and its
-    objects leave the managed store entirely. A `run:` step sees the exported
-    values. The first Wildside run to wire sccache made exactly this mistake:
-    14,480 compile requests produced no objects in the managed cache.
+    `setup-rust` starts one through `mozilla-actions/sccache-action`, whose
+    last act is to write `ACTIONS_CACHE_SERVICE_V2=on` back to the environment
+    file along with GitHub's own results URL and token. That clobbers this
+    job's earlier credential export, for that server and every step after it,
+    and the objects go to GitHub instead of the managed store. Passing
+    `use-sccache: false` keeps that step out of the job. The first Wildside run
+    to wire sccache made exactly this mistake: 14,480 compile requests produced
+    no objects in the managed cache.
     """
     steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
     export = inv.step_index(steps, "Export cache credentials for sccache")

@@ -250,9 +250,10 @@ jobs:
           path: target/pg-worker-root
           key: ${{ env.PG_WORKER_CACHE_KEY }}
 
-      # The server must start from a `run:` step or it binds GitHub's v2
-      # cache service instead of Ubicloud's proxy; the script explains why.
-      # setup-rust is called with use-sccache: false for the same reason.
+      # setup-rust runs with use-sccache: false because the sccache action it
+      # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
+      # clobbering the export above for every later step. The script explains
+      # the rest.
       - name: Install and start the compiler cache
         shell: bash
         run: bash scripts/start-compiler-cache.sh
@@ -731,9 +732,10 @@ jobs:
           path: target/pg-worker-root
           key: ${{ env.PG_WORKER_CACHE_KEY }}
 
-      # The server must start from a `run:` step or it binds GitHub's v2
-      # cache service instead of Ubicloud's proxy; the script explains why.
-      # setup-rust is called with use-sccache: false for the same reason.
+      # setup-rust runs with use-sccache: false because the sccache action it
+      # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
+      # clobbering the export above for every later step. The script explains
+      # the rest.
       - name: Install and start the compiler cache
         shell: bash
         run: bash scripts/start-compiler-cache.sh
