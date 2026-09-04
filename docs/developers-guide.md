@@ -116,6 +116,28 @@ assets.
 
 [pg-worker-issue]: https://github.com/leynos/pg-embed-setup-unpriv/issues/217
 
+### The compiler cache
+
+No `target` tree is archived, so sccache is the only thing standing between a
+warm run and a full recompile. Three pieces have to be present together, and
+each Rust job carries all three:
+
+- `RUSTC_WRAPPER: sccache` and `SCCACHE_GHA_ENABLED` at job level. The shared
+  `setup-rust` action installs sccache but does not export the wrapper, so a
+  job that omits this compiles uncached while reporting a healthy cache.
+- An `actions/github-script` step, immediately after checkout and before the
+  toolchain setup, that republishes `ACTIONS_CACHE_URL` and
+  `ACTIONS_RUNTIME_TOKEN` and empties `ACTIONS_CACHE_SERVICE_V2`. The managed
+  runner exposes its local cache proxy to action steps but not to plain `run:`
+  steps, and emptying the service variable keeps sccache on the endpoint the
+  proxy intercepts.
+- `sccache --zero-stats` before the build and `--show-stats` into the job
+  summary afterwards.
+
+Read the statistics rather than assuming. Zero compile requests, or a cache
+location of local disk, means the wrapper never engaged; that is a failed
+integration, not a cold cache.
+
 ### Cache ownership
 
 Every mutable path has exactly one owner, and every key has exactly one writer.
@@ -168,10 +190,10 @@ Four consequences follow from the table.
   and is invalidated far more often.
 - **A restore fallback needs a corrector.** `restore-keys` is used only where
   something downstream repairs a stale archive: a version probe for the tool
-  archive, `pnpm install --frozen-lockfile` for `node_modules`, or the
-  warm-up script for the PostgreSQL binaries. The `pg_worker` install root and
-  the coverage-lane tools have no such corrector, so they match on their exact
-  key or miss.
+  archive, `pnpm install --frozen-lockfile` for `node_modules`, or the warm-up
+  script for the PostgreSQL binaries. The `pg_worker` install root and the
+  coverage-lane tools have no such corrector, so they match on their exact key
+  or miss.
 - **Trunk is the only writer.** Pull requests restore the trusted generation
   and never reserve a key, which removes both the wasted upload and the "Unable
   to reserve cache" races. `ci.yml` therefore also runs on pushes to `main`,

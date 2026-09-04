@@ -220,3 +220,70 @@ def test_actionlint_registers_every_managed_label_in_use() -> None:
         and job["runs-on"] not in inv.GITHUB_HOSTED_LABELS
     }
     assert used <= registered, f"unregistered runner labels in use: {used - registered}"
+
+
+#: The Rust jobs. Each compiles enough that an unengaged compiler cache is the
+#: difference between a warm run and a cold one.
+RUST_JOBS = (
+    ("ci.yml", "build"),
+    ("ci.yml", "coverage"),
+    ("coverage-main.yml", "coverage-upload"),
+)
+
+
+@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
+def test_rust_jobs_export_the_compiler_wrapper(filename: str, job_id: str) -> None:
+    """The shared setup action installs sccache but never exports the wrapper.
+
+    Without `RUSTC_WRAPPER` the compiler ignores sccache entirely and the job
+    reports a healthy cache while recompiling everything, which is the worst
+    of both outcomes now that no `target` tree is archived.
+    """
+    job = inv.load_workflow(filename)["jobs"][job_id]
+    environment = job.get("env", {})
+    assert environment.get("RUSTC_WRAPPER") == "sccache", (
+        f"{filename}:{job_id} must export RUSTC_WRAPPER"
+    )
+    assert environment.get("SCCACHE_GHA_ENABLED") == "true", (
+        f"{filename}:{job_id} must enable sccache's GitHub Actions backend"
+    )
+
+
+@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
+def test_cache_credentials_are_exported_before_the_toolchain(
+    filename: str, job_id: str
+) -> None:
+    """A plain `run:` step cannot see the managed runner's cache proxy.
+
+    Only an action step can, so the credentials must be republished before the
+    toolchain setup that installs sccache runs.
+    """
+    steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
+    export = inv.step_index(steps, "Export cache credentials for sccache")
+    toolchain = inv.step_index(steps, "Install Rust toolchain")
+    assert export < toolchain, (
+        f"{filename}:{job_id} must export the cache credentials before setup-rust"
+    )
+    exported = str(inv.find_step(steps, "Export cache credentials for sccache"))
+    for variable in (
+        "ACTIONS_CACHE_URL",
+        "ACTIONS_RUNTIME_TOKEN",
+        "ACTIONS_CACHE_SERVICE_V2",
+    ):
+        assert variable in exported, (
+            f"{filename}:{job_id} must republish {variable} for sccache"
+        )
+
+
+@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
+def test_compiler_cache_statistics_bracket_the_build(
+    filename: str, job_id: str
+) -> None:
+    """Statistics are the only evidence that the wrapper actually engaged."""
+    steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
+    reset = inv.step_index(steps, "Reset compiler-cache counters")
+    report = inv.step_index(steps, "Record compiler-cache effectiveness")
+    assert reset < report, f"{filename}:{job_id} must reset counters before reporting"
+    assert inv.find_step(steps, "Record compiler-cache effectiveness").get("if") == (
+        "always()"
+    ), f"{filename}:{job_id} must report statistics even when the build fails"

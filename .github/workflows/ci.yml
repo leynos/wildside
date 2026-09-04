@@ -41,11 +41,29 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    env:
+      # The shared setup-rust action installs sccache but does not export the
+      # wrapper, so without these two the compiler runs uncached.
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      # Ubicloud publishes its local cache proxy to action steps, not to plain
+      # `run:` steps, so sccache's GitHub Actions backend sees no credentials
+      # unless an action republishes them. Emptying ACTIONS_CACHE_SERVICE_V2
+      # keeps sccache on the v1 endpoint, which is the one the proxy
+      # intercepts. Without this the build silently compiles uncached.
+      - name: Export cache credentials for sccache
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+            core.exportVariable('ACTIONS_CACHE_SERVICE_V2', '');
       # v4.1.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
       # `cache: 'pnpm'` makes this action the sole owner of the pnpm store.
@@ -392,6 +410,10 @@ jobs:
         run: make test-scripts
 
       # Backend
+      # Counters are reset here so the statistics below describe this job's
+      # compilation rather than anything the setup actions did.
+      - name: Reset compiler-cache counters
+        run: sccache --zero-stats
       - name: Rust build
         run: cargo check --locked --manifest-path backend/Cargo.toml --all-targets --all-features
       - name: Rust fmt check
@@ -478,6 +500,21 @@ jobs:
           bun install
           bun run gen:api
           bun run build
+
+      # Zero compile requests means the wrapper never engaged, which is a
+      # failed integration rather than a cold cache.
+      - name: Record compiler-cache effectiveness
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          fence='```'
+          sccache --show-stats | tee sccache-stats.txt
+          {
+            printf '### sccache\n\n%s text\n' "$fence"
+            cat sccache-stats.txt
+            printf '%s\n' "$fence"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # Cache generations are published from `main` only. A pull request
       # restores the trusted generation and never reserves a key, which
@@ -575,6 +612,10 @@ jobs:
       # suite needs far longer — the repo's nextest global-timeout alone is
       # 60 minutes — so raise the cap well above it.
       RUN_RUST_CARGO_WAIT_TIMEOUT: '5400'
+      # The shared setup-rust action installs sccache but does not export the
+      # wrapper, so without these two the compiler runs uncached.
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
@@ -582,6 +623,19 @@ jobs:
           # `cs-coverage check` diffs against the pull-request merge base, so
           # fetch the full history used by the active changed-line gate.
           fetch-depth: 0
+
+      # Ubicloud publishes its local cache proxy to action steps, not to plain
+      # `run:` steps, so sccache's GitHub Actions backend sees no credentials
+      # unless an action republishes them. Emptying ACTIONS_CACHE_SERVICE_V2
+      # keeps sccache on the v1 endpoint, which is the one the proxy
+      # intercepts. Without this the build silently compiles uncached.
+      - name: Export cache credentials for sccache
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+            core.exportVariable('ACTIONS_CACHE_SERVICE_V2', '');
 
       - name: Set cache keys
         shell: bash
@@ -655,6 +709,11 @@ jobs:
         uses: leynos/shared-actions/.github/actions/setup-rust@f6d4d5f549655c118f86f371b8d55c200d3efa50
         with:
           cache-provider: external
+
+      # Counters are reset here so the statistics below describe this job's
+      # compilation rather than anything the setup actions did.
+      - name: Reset compiler-cache counters
+        run: sccache --zero-stats
       - name: Build pg_worker binary
         run: make prepare-pg-worker
       - name: Warm PostgreSQL embedded binary cache
@@ -707,6 +766,21 @@ jobs:
           project-url: https://api.codescene.io/v2/projects/70675
           access-token: ${{ env.CS_ACCESS_TOKEN }}
           installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
+
+      # Zero compile requests means the wrapper never engaged, which is a
+      # failed integration rather than a cold cache.
+      - name: Record compiler-cache effectiveness
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          fence='```'
+          sccache --show-stats | tee sccache-stats.txt
+          {
+            printf '### sccache\n\n%s text\n' "$fence"
+            cat sccache-stats.txt
+            printf '%s\n' "$fence"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Record cache observations
         if: always()
