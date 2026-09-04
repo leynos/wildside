@@ -215,11 +215,13 @@ def test_the_compiler_cache_start_verifies_its_backend(
     # through PATH. The script installs it into a directory that not every
     # runner image carries, so it must publish that directory itself rather
     # than inherit it.
-    # Match the redirection, not the name. The comment explaining why the
-    # publication is needed also contains `GITHUB_PATH`, so asserting the
-    # identifier alone would survive the write being deleted.
-    assert '>>"$GITHUB_PATH"' in script, (
-        "the start script must append its install directory to GITHUB_PATH"
+    # Match the whole command, value included. The comment explaining why the
+    # publication is needed also contains `GITHUB_PATH`, and the redirection on
+    # its own would accept a write that published nothing useful.
+    published = [line for line in script.splitlines() if '>>"$GITHUB_PATH"' in line]
+    assert published, "the start script must append to GITHUB_PATH"
+    assert all('"$install_dir"' in line for line in published), (
+        "the start script must publish its install directory, not something else"
     )
 
 
