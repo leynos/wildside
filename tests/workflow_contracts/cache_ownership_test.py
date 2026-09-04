@@ -289,3 +289,55 @@ def test_compiler_cache_statistics_bracket_the_build(
     assert inv.find_step(steps, "Record compiler-cache effectiveness").get("if") == (
         "always()"
     ), f"{filename}:{job_id} must report statistics even when the build fails"
+
+
+@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
+def test_the_compiler_cache_server_starts_from_a_run_step(
+    filename: str, job_id: str
+) -> None:
+    """The server binds its backend at start, so where it starts decides which.
+
+    The managed runner re-injects its own cache-service variables into every
+    action step, so a server started inside a composite action binds GitHub's
+    v2 service no matter what the export wrote to the environment file, and its
+    objects leave the managed store entirely. A `run:` step sees the exported
+    values. The first Wildside run to wire sccache made exactly this mistake:
+    14,480 compile requests produced no objects in the managed cache.
+    """
+    steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
+    export = inv.step_index(steps, "Export cache credentials for sccache")
+    start = inv.step_index(steps, "Install and start the compiler cache")
+    toolchain = inv.step_index(steps, "Install Rust toolchain")
+    reset = inv.step_index(steps, "Reset compiler-cache counters")
+
+    starter = inv.find_step(steps, "Install and start the compiler cache")
+    assert "run" in starter, "the server must start from a run step, not an action"
+    assert "--start-server" in str(starter["run"]), (
+        f"{filename}:{job_id} must start the server explicitly"
+    )
+    assert export < start < toolchain < reset, (
+        f"{filename}:{job_id} must export credentials, start the server, set up "
+        "the toolchain, and only then reset the counters"
+    )
+
+    setup = inv.find_step(steps, "Install Rust toolchain")
+    options = setup.get("with")
+    assert isinstance(options, dict), f"{filename}:{job_id} needs setup-rust inputs"
+    assert options.get("use-sccache") == "false", (
+        f"{filename}:{job_id} must stop setup-rust starting a second server"
+    )
+
+
+@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
+def test_the_compiler_cache_start_verifies_its_backend(
+    filename: str, job_id: str
+) -> None:
+    """A server on the wrong backend must fail the job, not be measured."""
+    steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
+    script = str(inv.find_step(steps, "Install and start the compiler cache")["run"])
+    assert "ghac" in script, (
+        f"{filename}:{job_id} must assert the server bound the Actions backend"
+    )
+    assert "sha256sum" in script, (
+        f"{filename}:{job_id} must verify the downloaded sccache archive"
+    )

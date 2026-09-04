@@ -25,6 +25,9 @@ env:
   MERMAN_VERSION: '0.7.0'
   NEXTEST_VERSION: '0.9.114'
   NIXIE_VERSION: '1.1.0'
+  SCCACHE_VERSION: '0.17.0'
+  SCCACHE_SHA256_X64: '67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006'
+  SCCACHE_SHA256_ARM64: '821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77'
   UV_VERSION: '0.12.9'
   WHITAKER_INSTALLER_VERSION: '0.2.7'
   YAMLLINT_VERSION: '1.35.1'
@@ -241,6 +244,54 @@ jobs:
           path: target/pg-worker-root
           key: ${{ env.PG_WORKER_CACHE_KEY }}
 
+      # The compiler cache server binds its backend when it starts, and it
+      # must start from a `run:` step. Ubicloud re-injects its own
+      # ACTIONS_CACHE_SERVICE_V2 into every action step, so a server started
+      # inside a composite action binds GitHub's v2 service regardless of what
+      # the export above wrote to GITHUB_ENV; its writes then leave Ubicloud
+      # entirely and mostly fail. A `run:` step sees the exported values, so
+      # starting the server here is what routes objects to the local proxy.
+      # setup-rust is called with use-sccache: false for the same reason.
+      - name: Install and start the compiler cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          version() {
+            sccache --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+          }
+          if [ "$(version)" != "$SCCACHE_VERSION" ]; then
+            case "${RUNNER_ARCH:-}" in
+              X64) target=x86_64-unknown-linux-musl; expected_sha="$SCCACHE_SHA256_X64" ;;
+              ARM64) target=aarch64-unknown-linux-musl; expected_sha="$SCCACHE_SHA256_ARM64" ;;
+              *) echo "unsupported runner architecture: ${RUNNER_ARCH:-}" >&2; exit 1 ;;
+            esac
+            archive="sccache-v${SCCACHE_VERSION}-${target}.tar.gz"
+            staging="$(mktemp -d)"
+            trap 'rm -rf -- "$staging"' EXIT
+            curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-all-errors \
+              "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${archive}" \
+              -o "${staging}/${archive}"
+            actual_sha="$(sha256sum "${staging}/${archive}" | awk '{print $1}')"
+            if [ "$actual_sha" != "$expected_sha" ]; then
+              echo "sccache digest mismatch: expected ${expected_sha}, got ${actual_sha}" >&2
+              exit 1
+            fi
+            tar -xzf "${staging}/${archive}" -C "$staging" --strip-components=1 \
+              "sccache-v${SCCACHE_VERSION}-${target}/sccache"
+            mkdir -p "${HOME}/.local/bin"
+            install -m 0755 "${staging}/sccache" "${HOME}/.local/bin/sccache"
+          fi
+          test "$(version)" = "$SCCACHE_VERSION"
+          sccache --start-server
+          # A server on any backend other than ghac writes somewhere the rest
+          # of the estate cannot read, so fail rather than measure it.
+          location="$(sccache --show-stats | awk -F'  +' '/^Cache location/ { print $2 }')"
+          echo "sccache backend: ${location}"
+          case "$location" in
+            ghac*) ;;
+            *) echo "sccache did not bind the Actions cache backend" >&2; exit 1 ;;
+          esac
+
       # cache-provider: external — this job owns ~/.cargo/registry,
       # ~/.cargo/bin, and the uv layers above, so the shared action must not
       # become a second owner of them.
@@ -248,6 +299,9 @@ jobs:
         uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
         with:
           cache-provider: external
+          # The server is started from a `run:` step above; a second one
+          # started inside this action would bind the wrong backend.
+          use-sccache: 'false'
 
       - name: Install uv
         id: setup-uv
@@ -712,10 +766,61 @@ jobs:
           path: target/pg-worker-root
           key: ${{ env.PG_WORKER_CACHE_KEY }}
 
+      # The compiler cache server binds its backend when it starts, and it
+      # must start from a `run:` step. Ubicloud re-injects its own
+      # ACTIONS_CACHE_SERVICE_V2 into every action step, so a server started
+      # inside a composite action binds GitHub's v2 service regardless of what
+      # the export above wrote to GITHUB_ENV; its writes then leave Ubicloud
+      # entirely and mostly fail. A `run:` step sees the exported values, so
+      # starting the server here is what routes objects to the local proxy.
+      # setup-rust is called with use-sccache: false for the same reason.
+      - name: Install and start the compiler cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          version() {
+            sccache --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+          }
+          if [ "$(version)" != "$SCCACHE_VERSION" ]; then
+            case "${RUNNER_ARCH:-}" in
+              X64) target=x86_64-unknown-linux-musl; expected_sha="$SCCACHE_SHA256_X64" ;;
+              ARM64) target=aarch64-unknown-linux-musl; expected_sha="$SCCACHE_SHA256_ARM64" ;;
+              *) echo "unsupported runner architecture: ${RUNNER_ARCH:-}" >&2; exit 1 ;;
+            esac
+            archive="sccache-v${SCCACHE_VERSION}-${target}.tar.gz"
+            staging="$(mktemp -d)"
+            trap 'rm -rf -- "$staging"' EXIT
+            curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-all-errors \
+              "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${archive}" \
+              -o "${staging}/${archive}"
+            actual_sha="$(sha256sum "${staging}/${archive}" | awk '{print $1}')"
+            if [ "$actual_sha" != "$expected_sha" ]; then
+              echo "sccache digest mismatch: expected ${expected_sha}, got ${actual_sha}" >&2
+              exit 1
+            fi
+            tar -xzf "${staging}/${archive}" -C "$staging" --strip-components=1 \
+              "sccache-v${SCCACHE_VERSION}-${target}/sccache"
+            mkdir -p "${HOME}/.local/bin"
+            install -m 0755 "${staging}/sccache" "${HOME}/.local/bin/sccache"
+          fi
+          test "$(version)" = "$SCCACHE_VERSION"
+          sccache --start-server
+          # A server on any backend other than ghac writes somewhere the rest
+          # of the estate cannot read, so fail rather than measure it.
+          location="$(sccache --show-stats | awk -F'  +' '/^Cache location/ { print $2 }')"
+          echo "sccache backend: ${location}"
+          case "$location" in
+            ghac*) ;;
+            *) echo "sccache did not bind the Actions cache backend" >&2; exit 1 ;;
+          esac
+
       - name: Install Rust toolchain
         uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
         with:
           cache-provider: external
+          # The server is started from a `run:` step above; a second one
+          # started inside this action would bind the wrong backend.
+          use-sccache: 'false'
 
       # Counters are reset here so the statistics below describe this job's
       # compilation rather than anything the setup actions did.

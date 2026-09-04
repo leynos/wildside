@@ -125,14 +125,27 @@ each Rust job carries all three:
 - `RUSTC_WRAPPER: sccache` and `SCCACHE_GHA_ENABLED` at job level. The shared
   `setup-rust` action installs sccache but does not export the wrapper, so a
   job that omits this compiles uncached while reporting a healthy cache.
-- An `actions/github-script` step, immediately after checkout and before the
-  toolchain setup, that republishes `ACTIONS_CACHE_URL` and
-  `ACTIONS_RUNTIME_TOKEN` and empties `ACTIONS_CACHE_SERVICE_V2`. The managed
-  runner exposes its local cache proxy to action steps but not to plain `run:`
-  steps, and emptying the service variable keeps sccache on the endpoint the
-  proxy intercepts.
+- An `actions/github-script` step, immediately after checkout, that
+  republishes `ACTIONS_CACHE_URL` and `ACTIONS_RUNTIME_TOKEN` and empties
+  `ACTIONS_CACHE_SERVICE_V2`. The managed runner exposes its local cache proxy
+  to action steps but not to plain `run:` steps, and emptying the service
+  variable keeps sccache on the endpoint the proxy intercepts.
+- A `run:` step that installs a pinned, digest-verified sccache and starts the
+  server, before the toolchain setup. `setup-rust` is called with
+  `use-sccache: 'false'` so it cannot start a second one.
 - `sccache --zero-stats` before the build and `--show-stats` into the job
   summary afterwards.
+
+**Where the server starts decides which backend it uses**, and this is the
+part that is easy to get wrong. The server binds its backend once, at start.
+The managed runner re-injects its own cache-service variables into every
+action step, so a server started inside a composite action binds GitHub's v2
+service regardless of what the export wrote to the environment file, and its
+objects never reach the managed store. Wildside's first attempt did exactly
+that: 14,480 compile requests, a plausible-looking `ghac` backend, and no
+objects in the managed cache at all. Starting the server from a `run:` step,
+which sees the exported values, is what fixes it. The start step fails the job
+if the resulting backend is not `ghac`.
 
 Read the statistics rather than assuming. Zero compile requests, or a cache
 location of local disk, means the wrapper never engaged; that is a failed
