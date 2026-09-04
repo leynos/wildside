@@ -41,7 +41,12 @@ permissions: {}
 jobs:
   build:
     runs-on: ubicloud-standard-8
-    timeout-minutes: 60
+    # 90, matching the two coverage jobs. A cold sccache pays about 1.4 s to
+    # store each miss, and a run with no trunk generation to restore misses
+    # almost everything, so the first run on a new generation is the longest
+    # this job ever gets. 60 cancelled it mid compile-fail suite with every
+    # step passing, which loses the generation the next run would have read.
+    timeout-minutes: 90
     permissions:
       contents: read
     env:
