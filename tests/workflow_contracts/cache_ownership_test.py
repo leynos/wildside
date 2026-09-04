@@ -265,14 +265,16 @@ def test_cache_credentials_are_exported_before_the_toolchain(
         f"{filename}:{job_id} must export the cache credentials before setup-rust"
     )
     exported = str(inv.find_step(steps, "Export cache credentials for sccache"))
-    for variable in (
-        "ACTIONS_CACHE_URL",
-        "ACTIONS_RUNTIME_TOKEN",
-        "ACTIONS_CACHE_SERVICE_V2",
-    ):
+    for variable in ("ACTIONS_CACHE_URL", "ACTIONS_RUNTIME_TOKEN"):
         assert variable in exported, (
             f"{filename}:{job_id} must republish {variable} for sccache"
         )
+    # A non-empty value selects the v2 cache service, which bypasses the
+    # managed runner's proxy and sends sccache's objects somewhere the rest of
+    # the estate cannot read. Assert the exact call, not just the name.
+    assert "core.exportVariable('ACTIONS_CACHE_SERVICE_V2', '')" in exported, (
+        f"{filename}:{job_id} must clear ACTIONS_CACHE_SERVICE_V2, not merely set it"
+    )
 
 
 @pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)

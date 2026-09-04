@@ -146,6 +146,9 @@ pinned to the same full commit SHA. The deprecated `ubicloud/cache` fork is not
 used: it reads variables that only a managed VM supplies, so a workflow
 carrying it cannot move between runner providers unchanged.
 
+Table 1 names every cache archive, the single job that writes it, and the
+inputs its key is built from.
+
 | Archive                      | Owner                   | Key inputs                           |
 | ---------------------------- | ----------------------- | ------------------------------------ |
 | pnpm store                   | `setup-node` in `build` | the action's own lockfile hash       |

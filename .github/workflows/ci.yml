@@ -245,7 +245,7 @@ jobs:
       # ~/.cargo/bin, and the uv layers above, so the shared action must not
       # become a second owner of them.
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@f6d4d5f549655c118f86f371b8d55c200d3efa50
+        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
         with:
           cache-provider: external
 
@@ -296,7 +296,7 @@ jobs:
       # distribution; replaces the former `cargo binstall merman-cli` and
       # bare `uv tool install nixie-cli` steps.
       - name: Install Nixie and Merman
-        uses: leynos/shared-actions/.github/actions/install-nixie@f6d4d5f549655c118f86f371b8d55c200d3efa50
+        uses: leynos/shared-actions/.github/actions/install-nixie@c6125f19593668cbfefd65a59c08cb7aefe90d93
         with:
           nixie-version: ${{ env.NIXIE_VERSION }}
           merman-version: ${{ env.MERMAN_VERSION }}
@@ -422,7 +422,7 @@ jobs:
         run: make lint-clippy
 
       - name: Install Whitaker
-        uses: leynos/shared-actions/.github/actions/install-whitaker@f6d4d5f549655c118f86f371b8d55c200d3efa50
+        uses: leynos/shared-actions/.github/actions/install-whitaker@c6125f19593668cbfefd65a59c08cb7aefe90d93
         with:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
@@ -509,6 +509,13 @@ jobs:
         run: |
           set -euo pipefail
           fence='```'
+          # This step runs with always(), so it can be reached when the job
+          # failed before setup-rust installed sccache. Report nothing rather
+          # than adding a second red step that buries the real cause.
+          if ! command -v sccache >/dev/null 2>&1; then
+            echo 'sccache is not installed; skipping compiler-cache statistics.'
+            exit 0
+          fi
           sccache --show-stats | tee sccache-stats.txt
           {
             printf '### sccache\n\n%s text\n' "$fence"
@@ -647,7 +654,7 @@ jobs:
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
           PG_WORKER_HASH: ${{ hashFiles('Makefile', 'rust-toolchain.toml') }}
-          SHARED_ACTIONS_PIN: f6d4d5f549655c118f86f371b8d55c200d3efa50
+          SHARED_ACTIONS_PIN: c6125f19593668cbfefd65a59c08cb7aefe90d93
         run: |
           set -euo pipefail
           scope="${RUNNER_SCOPE}-${ImageOS:-unknown}"
@@ -706,7 +713,7 @@ jobs:
           key: ${{ env.PG_WORKER_CACHE_KEY }}
 
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@f6d4d5f549655c118f86f371b8d55c200d3efa50
+        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
         with:
           cache-provider: external
 
@@ -726,7 +733,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@f6d4d5f549655c118f86f371b8d55c200d3efa50
+        uses: leynos/shared-actions/.github/actions/generate-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -759,7 +766,7 @@ jobs:
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: github.event_name == 'pull_request' && env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@f6d4d5f549655c118f86f371b8d55c200d3efa50
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
         with:
           format: lcov
           mode: check
@@ -775,6 +782,13 @@ jobs:
         run: |
           set -euo pipefail
           fence='```'
+          # This step runs with always(), so it can be reached when the job
+          # failed before setup-rust installed sccache. Report nothing rather
+          # than adding a second red step that buries the real cause.
+          if ! command -v sccache >/dev/null 2>&1; then
+            echo 'sccache is not installed; skipping compiler-cache statistics.'
+            exit 0
+          fi
           sccache --show-stats | tee sccache-stats.txt
           {
             printf '### sccache\n\n%s text\n' "$fence"
