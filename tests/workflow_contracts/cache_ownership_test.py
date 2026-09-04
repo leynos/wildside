@@ -68,14 +68,15 @@ def test_no_job_archives_a_target_tree() -> None:
     """A cached `target` tree duplicates the compiler's own output ownership.
 
     It is also invalidated far more often than the registry it would travel
-    with, so the archive costs transfer time on nearly every run.
+    with, so the archive costs transfer time on nearly every run. There is no
+    longer an exception: `target/pg-worker-root` went when pg_worker stopped
+    being built from source.
     """
     offenders = [
         (filename, job_id, step.get("name"), path)
         for filename, job_id, step in _cache_steps()
         for path in inv.cache_paths(step)
         if path == "target" or path.startswith("target/")
-        if path != "target/pg-worker-root"
     ]
     assert offenders == [], f"these cache steps archive compiler output: {offenders}"
 

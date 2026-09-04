@@ -17,11 +17,6 @@ import workflow_inventory as inv
 #: `cargo binstall` compiles from source unless the strategy list forbids it.
 BINSTALL_FAIL_CLOSED = "--strategies crate-meta-data,quick-install"
 
-#: The only tolerated source build in the repository. pg-embed-setup-unpriv
-#: publishes no release binaries, so `make prepare-pg-worker` compiles the
-#: privilege-demotion worker. The exception is bounded by this issue.
-PG_WORKER_EXCEPTION_ISSUE = "https://github.com/leynos/pg-embed-setup-unpriv/issues/217"
-
 #: Non-build jobs. Scheduled, API-bound, and administrative work sits off the
 #: developer feedback path, so the queue contention that motivates the managed
 #: runners does not apply to it.
@@ -47,6 +42,11 @@ BUILD_INSTALLER_ORDER = (
     ("Install workflow linters", "Workflow lint"),
     ("Install Whitaker", "Whitaker lint"),
     ("Install nextest", "Rust tests"),
+    # pg_worker now arrives through `cargo binstall`, which setup-rust
+    # installs, so the toolchain step is a hard prerequisite rather than a
+    # convention. The old `cargo install` needed only cargo itself.
+    ("Install Rust toolchain", "Install pg_worker binary"),
+    ("Install pg_worker binary", "Rust tests"),
     ("Restore PostgreSQL embedded binaries", "Warm PostgreSQL embedded binary cache"),
 )
 
@@ -164,24 +164,57 @@ def test_global_bun_and_uv_installs_are_version_pinned() -> None:
     assert unpinned == [], f"these global installs are not version-pinned: {unpinned}"
 
 
-def test_the_only_source_build_is_the_documented_exception() -> None:
-    """The Makefile's single `cargo install` is bounded by an upstream issue."""
+def test_no_source_build_remains_in_the_makefile() -> None:
+    """Nothing in CI is compiled from source, including pg_worker.
+
+    `cargo install --list` is a query rather than an installation, and the
+    pg_worker pin probe uses it, so it is the one form allowed here.
+    pg-embed-setup-unpriv published checksum-verified archives from v0.5.2 and
+    the last source build went with them.
+    """
     makefile = inv.MAKEFILE_PATH.read_text(encoding="utf-8")
     occurrences = [
         line.strip()
         for line in makefile.splitlines()
-        if "cargo install" in line and not line.lstrip().startswith("#")
+        if "cargo install" in line
+        and "cargo install --list" not in line
+        and not line.lstrip().startswith("#")
     ]
-    assert len(occurrences) == 1, (
-        f"expected one documented source build, found {occurrences}"
+    assert occurrences == [], f"these lines build from source: {occurrences}"
+
+
+def test_the_pg_worker_install_cannot_fall_back_to_compiling() -> None:
+    """`cargo binstall` compiles unless the strategy list forbids it.
+
+    The Makefile is outside the workflow-step scan that guards the same thing
+    in CI, so it needs its own assertion rather than inheriting one.
+    """
+    makefile = inv.MAKEFILE_PATH.read_text(encoding="utf-8")
+    installs = [
+        line.strip()
+        for line in makefile.splitlines()
+        if "cargo binstall" in line and not line.lstrip().startswith("#")
+    ]
+    assert installs, "the Makefile must install pg_worker from a release archive"
+    assert all(BINSTALL_FAIL_CLOSED in line for line in installs), (
+        f"these invocations must pass {BINSTALL_FAIL_CLOSED}: {installs}"
     )
-    assert "pg-embed-setup-unpriv" in occurrences[0], (
-        "the documented exception is the pg_worker privilege-demotion binary"
+
+
+def test_the_pg_worker_pin_is_probed_by_version_not_by_presence() -> None:
+    """A binary restored under an older pin must be replaced, not reused.
+
+    `pg_worker` has no `--version` flag, so cargo's install manifest is the
+    only probe available. A `command -v` check would silently keep a stale
+    binary, which is the failure the tool cache makes most likely.
+    """
+    makefile = inv.MAKEFILE_PATH.read_text(encoding="utf-8")
+    assert "PG_EMBED_SETUP_UNPRIV_VERSION ?=" in makefile, (
+        "the pg_worker pin must live in the Makefile"
     )
-    for filename in ("ci.yml", "coverage-main.yml"):
-        assert PG_WORKER_EXCEPTION_ISSUE in _workflow_text(filename), (
-            f"{filename} must record the exception's removal condition"
-        )
+    assert 'grep -qx "pg-embed-setup-unpriv v$(PG_EMBED_SETUP_UNPRIV_VERSION):"' in (
+        makefile
+    ), "the probe must match the pinned version exactly, not merely the binary"
 
 
 @pytest.mark.parametrize(("installer", "first_use"), BUILD_INSTALLER_ORDER)

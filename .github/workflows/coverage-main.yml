@@ -64,20 +64,20 @@ jobs:
           # workflow one, so it is read here in the shell.
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
-          PG_WORKER_HASH: ${{ hashFiles('Makefile', 'rust-toolchain.toml') }}
           SHARED_ACTIONS_PIN: c6125f19593668cbfefd65a59c08cb7aefe90d93
+          # The Makefile pins pg-embed-setup-unpriv, whose pg_worker binary
+          # lands in the cargo bin directory this archive carries.
+          MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
         run: |
           set -euo pipefail
           scope="${RUNNER_SCOPE}-${ImageOS:-unknown}"
           {
             printf 'CACHE_SCOPE=%s\n' "$scope"
             printf 'CARGO_CACHE_KEY=cargo-v1-%s-%s\n' "$scope" "$CARGO_LOCK_HASH"
-            printf 'COVERAGE_TOOLS_CACHE_KEY=coverage-tools-v1-%s-%s-sccache%s\n' \
-              "$scope" "$SHARED_ACTIONS_PIN" "$SCCACHE_VERSION"
+            printf 'COVERAGE_TOOLS_CACHE_KEY=coverage-tools-v1-%s-%s-sccache%s-mk%s\n' \
+              "$scope" "$SHARED_ACTIONS_PIN" "$SCCACHE_VERSION" "$MAKEFILE_HASH"
             printf 'PG_EMBEDDED_CACHE_KEY=pg-embedded-v1-%s-%s\n' \
               "$scope" "$PG_VERSION"
-            printf 'PG_WORKER_CACHE_KEY=pg-worker-v1-%s-%s\n' \
-              "$scope" "$PG_WORKER_HASH"
           } >>"$GITHUB_ENV"
 
       # `target` is deliberately absent from every path list below: sccache,
@@ -114,17 +114,6 @@ jobs:
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
           restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
 
-      # Documented source-build exception: pg-embed-setup-unpriv publishes no
-      # release binaries, so `make prepare-pg-worker` builds pg_worker from
-      # source. Caching the install root makes `cargo install --root` a no-op
-      # on a warm run. Removal condition:
-      # https://github.com/leynos/pg-embed-setup-unpriv/issues/217
-      - name: Restore pg_worker install root
-        id: pg-worker-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: target/pg-worker-root
-          key: ${{ env.PG_WORKER_CACHE_KEY }}
 
       # setup-rust runs with use-sccache: false because the sccache action it
       # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
@@ -147,7 +136,7 @@ jobs:
       # compilation rather than anything the setup actions did.
       - name: Reset compiler-cache counters
         run: sccache --zero-stats
-      - name: Build pg_worker binary
+      - name: Install pg_worker binary
         run: make prepare-pg-worker
       - name: Warm PostgreSQL embedded binary cache
         env:
@@ -234,14 +223,6 @@ jobs:
             ~/.cache/pg-embedded/binaries
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
 
-      - name: Save pg_worker install root
-        if: >-
-          github.ref == 'refs/heads/main'
-          && steps.pg-worker-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: target/pg-worker-root
-          key: ${{ env.PG_WORKER_CACHE_KEY }}
 
       # Zero compile requests means the wrapper never engaged, which is a
       # failed integration rather than a cold cache.
@@ -272,7 +253,6 @@ jobs:
           CARGO_HIT: ${{ steps.cargo-cache.outputs.cache-hit }}
           COVERAGE_TOOLS_HIT: ${{ steps.coverage-tools-cache.outputs.cache-hit }}
           PG_EMBEDDED_HIT: ${{ steps.pg-embedded-cache.outputs.cache-hit }}
-          PG_WORKER_HIT: ${{ steps.pg-worker-cache.outputs.cache-hit }}
         run: |
           set -euo pipefail
           {
@@ -283,6 +263,4 @@ jobs:
               "${COVERAGE_TOOLS_CACHE_KEY:-}" "${COVERAGE_TOOLS_HIT:-}"
             printf -- "- pg-embedded key: \`%s\` hit: \`%s\`\n" \
               "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
-            printf -- "- pg-worker key: \`%s\` hit: \`%s\`\n" \
-              "${PG_WORKER_CACHE_KEY:-}" "${PG_WORKER_HIT:-}"
           } >> "$GITHUB_STEP_SUMMARY"

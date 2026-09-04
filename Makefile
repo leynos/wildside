@@ -283,8 +283,7 @@ lint-actions:
 	$(LINT_ACTIONS_CMD)
 
 PG_WORKER_PATH ?= $(CURDIR)/target/pg_worker
-PG_WORKER_INSTALL_ROOT ?= $(CURDIR)/target/pg-worker-root
-PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.1
+PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.2
 NEXTEST_TEST_THREADS ?= 1
 
 
@@ -321,21 +320,23 @@ test-scripts:
 		python -m pytest scripts/local_k8s/unittests
 
 .ONESHELL: prepare-pg-worker
-# Documented source-build exception. pg-embed-setup-unpriv publishes no
-# release binaries, so the privilege-demotion worker has to be compiled. CI
-# caches PG_WORKER_INSTALL_ROOT, which makes `cargo install --root` a no-op on
-# a warm run. Remove this branch once
-# https://github.com/leynos/pg-embed-setup-unpriv/issues/217 ships verifiable
-# prebuilt assets.
+# pg-embed-setup-unpriv publishes checksum-verified release archives from
+# v0.5.2, so the privilege-demotion worker is downloaded rather than compiled.
+# The binary lands in the cargo bin directory, which the CI tool archives
+# already own, so no cache of its own is needed.
+#
+# `pg_worker` has no --version flag, so cargo's install manifest is the probe.
+# A `command -v` check would happily reuse a binary the tool cache restored
+# under an older pin; this one replaces it.
 define PREPARE_PG_WORKER_CMD
 set -euo pipefail
 mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"
-if command -v pg_worker >/dev/null 2>&1; then
-  install -m 0755 "$$(command -v pg_worker)" "$(PG_WORKER_PATH)"
-else
-  cargo install --locked --root "$(PG_WORKER_INSTALL_ROOT)" --version "$(PG_EMBED_SETUP_UNPRIV_VERSION)" --bin pg_worker pg-embed-setup-unpriv
-  install -m 0755 "$(PG_WORKER_INSTALL_ROOT)/bin/pg_worker" "$(PG_WORKER_PATH)"
+cargo_bin="$${CARGO_HOME:-$$HOME/.cargo}/bin"
+if ! cargo install --list | grep -qx "pg-embed-setup-unpriv v$(PG_EMBED_SETUP_UNPRIV_VERSION):"; then
+  cargo binstall --no-confirm --strategies crate-meta-data,quick-install \
+    "pg-embed-setup-unpriv@$(PG_EMBED_SETUP_UNPRIV_VERSION)"
 fi
+install -m 0755 "$$cargo_bin/pg_worker" "$(PG_WORKER_PATH)"
 endef
 
 prepare-pg-worker:
