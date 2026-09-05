@@ -56,6 +56,16 @@ _SHARED_ACTION_REFERENCE = re.compile(
 _FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
+def _cache_steps_with_paths() -> list[tuple[str, str, dict[str, object]]]:
+    """Return every cache step in the estate with its workflow and job."""
+    return [
+        (filename, job_id, step)
+        for filename, job_id, job in inv.iter_jobs()
+        for step in inv.job_steps(job)
+        if inv.is_cache_step(step)
+    ]
+
+
 def _workflow_text(filename: str) -> str:
     """Return a workflow file's raw text."""
     return (inv.WORKFLOWS_DIR / filename).read_text(encoding="utf-8")
@@ -187,12 +197,14 @@ def test_the_pg_worker_install_cannot_fall_back_to_compiling() -> None:
     """`cargo binstall` compiles unless the strategy list forbids it.
 
     The Makefile is outside the workflow-step scan that guards the same thing
-    in CI, so it needs its own assertion rather than inheriting one.
+    in CI, so it needs its own assertion rather than inheriting one. Line
+    continuations are joined first: the strategy list sits on its own line, so
+    a per-line check would report the invocation as unguarded.
     """
     makefile = inv.MAKEFILE_PATH.read_text(encoding="utf-8")
     installs = [
         line.strip()
-        for line in makefile.splitlines()
+        for line in makefile.replace("\\\n", " ").splitlines()
         if "cargo binstall" in line and not line.lstrip().startswith("#")
     ]
     assert installs, "the Makefile must install pg_worker from a release archive"
@@ -215,6 +227,62 @@ def test_the_pg_worker_pin_is_probed_by_version_not_by_presence() -> None:
     assert 'grep -qx "pg-embed-setup-unpriv v$(PG_EMBED_SETUP_UNPRIV_VERSION):"' in (
         makefile
     ), "the probe must match the pinned version exactly, not merely the binary"
+    # The manifest and the file live in different cache archives, so either can
+    # arrive without the other. A manifest naming the pinned version with the
+    # binary missing sends the copy to a path that is not there.
+    assert '[ -x "$$pinned" ] &&' in makefile, (
+        "the probe must confirm the binary exists, not only that cargo recorded it"
+    )
+    # binstall consults the same manifest the probe just rejected, so without
+    # --force it is a no-op in exactly the case the probe exists to repair.
+    # Match the invocation: `--force-exclude` elsewhere in the Makefile would
+    # satisfy a search for the flag on its own.
+    installs = [
+        line
+        for line in makefile.replace("\\\n", " ").splitlines()
+        if "cargo binstall" in line and not line.lstrip().startswith("#")
+    ]
+    assert installs and all("--force" in line for line in installs), (
+        "the reinstall must override the manifest the probe rejected"
+    )
+
+
+def test_the_cargo_install_manifest_travels_with_the_binaries() -> None:
+    """The pg_worker probe reads the manifest, so it must be cached with them.
+
+    An archive that restored `~/.cargo/bin` without `~/.cargo/.crates2.json`
+    would bring back the binary and lose the record of its version, so the
+    probe would miss and reinstall on every warm run. The failure is silent:
+    the job stays green and merely does the work again.
+    """
+    offenders = [
+        (filename, job_id, step.get("name"))
+        for filename, job_id, step in _cache_steps_with_paths()
+        if "~/.cargo/bin" in inv.cache_paths(step)
+        if "~/.cargo/.crates2.json" not in inv.cache_paths(step)
+    ]
+    assert offenders == [], (
+        f"these archives carry the cargo bin directory without its manifest: {offenders}"
+    )
+
+
+def test_the_pg_worker_install_is_authenticated() -> None:
+    """An unauthenticated release lookup is rate-limited hard.
+
+    `cargo binstall` resolves the archive through the GitHub API, so the step
+    needs the token for the same reason the PostgreSQL warm-up does.
+    """
+    for filename, job_id, job in inv.iter_jobs():
+        for step in inv.job_steps(job):
+            if step.get("name") != "Install pg_worker binary":
+                continue
+            env = step.get("env")
+            assert isinstance(env, dict), (
+                f"{filename}:{job_id} pg_worker install needs a token"
+            )
+            assert "GITHUB_TOKEN" in env, (
+                f"{filename}:{job_id} must authenticate the release lookup"
+            )
 
 
 @pytest.mark.parametrize(("installer", "first_use"), BUILD_INSTALLER_ORDER)

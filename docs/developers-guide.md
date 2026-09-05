@@ -200,14 +200,23 @@ The archives above cover these paths:
 - Workspace `node_modules`: `node_modules`, `frontend-pwa/node_modules`, and
   `packages/tokens/node_modules`.
 - Bun download cache: `~/.bun/install/cache`.
-- Global tools: `~/.cargo/bin`, `~/.cache/cargo-binstall`, `~/.cache/merman`,
-  `~/.cache/uv`, `~/.local/bin`, `~/.local/share/uv`, `~/.local/share/whitaker`,
-  `~/.bun/bin`, `~/.bun/install/global`, `.uv-cache`, and `.uv-tools`.
+- Global tools: `~/.cargo/bin`, `~/.cargo/.crates2.json`,
+  `~/.cache/cargo-binstall`, `~/.cache/merman`, `~/.cache/uv`, `~/.local/bin`,
+  `~/.local/share/uv`, `~/.local/share/whitaker`, `~/.bun/bin`,
+  `~/.bun/install/global`, `.uv-cache`, and `.uv-tools`.
 - Cargo registry and Git index: `~/.cargo/registry` and `~/.cargo/git`.
-- Coverage-lane tools: `~/.cargo/bin`, `~/.cache/uv`, `~/.local/bin`, and
-  `~/.local/share/uv`.
+- Coverage-lane tools: `~/.cargo/bin`, `~/.cargo/.crates2.json`,
+  `~/.cache/uv`, `~/.local/bin`, and `~/.local/share/uv`.
 - Embedded PostgreSQL binaries: `~/.theseus/postgresql` and
   `~/.cache/pg-embedded/binaries`.
+
+`~/.cargo/.crates2.json` travels with `~/.cargo/bin` in both archives because
+the `pg_worker` probe reads it. An archive that restored the binary without the
+record of its version would reinstall on every warm run. The two archives carry
+the same paths because they serve different jobs with different tool sets; each
+job restores exactly one of them, so each path still has one owner per job, and
+both keys now carry the `Makefile` digest, so the pin cannot move in one
+without moving in the other.
 
 Every key also carries the runner operating system, architecture, environment,
 and image line. The image line decides which glibc is available, so a prebuilt

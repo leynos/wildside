@@ -214,6 +214,10 @@ jobs:
         with:
           path: |
             ~/.cargo/bin
+            # `cargo install --list`, which the pg_worker probe reads, lives
+            # here. Without it a warm job restores the binary but not the
+            # record of its version, and reinstalls on every run.
+            ~/.cargo/.crates2.json
             ~/.cache/cargo-binstall
             ~/.cache/merman
             ~/.cache/uv
@@ -449,6 +453,10 @@ jobs:
           fallback: none
 
       - name: Install pg_worker binary
+        env:
+          # cargo-binstall resolves the release archive through the GitHub
+          # API, which is rate-limited hard when unauthenticated.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           make prepare-pg-worker
 
@@ -564,6 +572,10 @@ jobs:
         with:
           path: |
             ~/.cargo/bin
+            # `cargo install --list`, which the pg_worker probe reads, lives
+            # here. Without it a warm job restores the binary but not the
+            # record of its version, and reinstalls on every run.
+            ~/.cargo/.crates2.json
             ~/.cache/cargo-binstall
             ~/.cache/merman
             ~/.cache/uv
@@ -693,6 +705,10 @@ jobs:
         with:
           path: |
             ~/.cargo/bin
+            # `cargo install --list`, which the pg_worker probe reads, lives
+            # here. Without it a warm job restores the binary but not the
+            # record of its version, and reinstalls on every run.
+            ~/.cargo/.crates2.json
             ~/.cache/uv
             ~/.local/bin
             ~/.local/share/uv
@@ -730,6 +746,10 @@ jobs:
       - name: Reset compiler-cache counters
         run: sccache --zero-stats
       - name: Install pg_worker binary
+        env:
+          # cargo-binstall resolves the release archive through the GitHub
+          # API, which is rate-limited hard when unauthenticated.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make prepare-pg-worker
       - name: Warm PostgreSQL embedded binary cache
         env:
