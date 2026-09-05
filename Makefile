@@ -283,8 +283,7 @@ lint-actions:
 	$(LINT_ACTIONS_CMD)
 
 PG_WORKER_PATH ?= $(CURDIR)/target/pg_worker
-PG_WORKER_INSTALL_ROOT ?= $(CURDIR)/target/pg-worker-root
-PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.1
+PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.2
 NEXTEST_TEST_THREADS ?= 1
 
 
@@ -321,20 +320,43 @@ test-scripts:
 		python -m pytest scripts/local_k8s/unittests
 
 .ONESHELL: prepare-pg-worker
-# Documented source-build exception. pg-embed-setup-unpriv publishes no
-# release binaries, so the privilege-demotion worker has to be compiled. CI
-# caches PG_WORKER_INSTALL_ROOT, which makes `cargo install --root` a no-op on
-# a warm run. Remove this branch once
-# https://github.com/leynos/pg-embed-setup-unpriv/issues/217 ships verifiable
-# prebuilt assets.
+# pg-embed-setup-unpriv publishes checksum-verified release archives from
+# v0.5.2, so the privilege-demotion worker is downloaded rather than compiled.
+# The binary lands in the cargo bin directory, which the CI tool archives
+# already own, so no cache of its own is needed.
+#
+# `pg_worker` has no --version flag, so cargo's install manifest is the probe.
+# A `command -v` check would happily reuse a binary the tool cache restored
+# under an older pin; this one replaces it.
+#
+# A local checkout with pg_worker already on PATH and no cargo-binstall keeps
+# working, which is the setup the testing guide documents. It warns, because
+# that binary's version is nobody's guarantee. CI never reaches that branch:
+# setup-rust installs cargo-binstall.
 define PREPARE_PG_WORKER_CMD
 set -euo pipefail
 mkdir -p "$$(dirname "$(PG_WORKER_PATH)")"
-if command -v pg_worker >/dev/null 2>&1; then
+cargo_bin="$${CARGO_HOME:-$$HOME/.cargo}/bin"
+pinned="$$cargo_bin/pg_worker"
+# The manifest names the version and the file is what gets copied, so both
+# have to be right. They travel in different cache archives and either can
+# arrive without the other, which a check on one alone would not catch.
+if [ -x "$$pinned" ] && cargo install --list | grep -qx "pg-embed-setup-unpriv v$(PG_EMBED_SETUP_UNPRIV_VERSION):"; then
+  install -m 0755 "$$pinned" "$(PG_WORKER_PATH)"
+elif command -v cargo-binstall >/dev/null 2>&1; then
+  # --force because we only get here when the probe said the state is wrong,
+  # and binstall otherwise trusts the same manifest the probe just rejected:
+  # a manifest naming this version with the binary missing makes it a no-op.
+  cargo binstall --no-confirm --force \
+    --strategies crate-meta-data,quick-install \
+    "pg-embed-setup-unpriv@$(PG_EMBED_SETUP_UNPRIV_VERSION)"
+  install -m 0755 "$$pinned" "$(PG_WORKER_PATH)"
+elif command -v pg_worker >/dev/null 2>&1; then
+  echo "warning: using the pg_worker already on PATH; its version is not checked. Install cargo-binstall to get the pinned $(PG_EMBED_SETUP_UNPRIV_VERSION)." >&2
   install -m 0755 "$$(command -v pg_worker)" "$(PG_WORKER_PATH)"
 else
-  cargo install --locked --root "$(PG_WORKER_INSTALL_ROOT)" --version "$(PG_EMBED_SETUP_UNPRIV_VERSION)" --bin pg_worker pg-embed-setup-unpriv
-  install -m 0755 "$(PG_WORKER_INSTALL_ROOT)/bin/pg_worker" "$(PG_WORKER_PATH)"
+  echo "pg_worker not found. Install cargo-binstall so the pinned release can be fetched, or put pg_worker on PATH." >&2
+  exit 1
 fi
 endef
 

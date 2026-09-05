@@ -113,14 +113,19 @@ compiles from source is a policy failure, not a fallback.
 - Every installer is guarded by a version probe, so a warm tool cache skips
   the download instead of repeating it.
 
-There is one documented exception. `pg-embed-setup-unpriv` publishes no release
-binaries, so `make prepare-pg-worker` compiles the `pg_worker`
-privilege-demotion binary. CI caches its install root, which makes
-`cargo install --root` a no-op on a warm run. The exception is removed when
-[pg-embed-setup-unpriv issue 217][pg-worker-issue] ships verifiable prebuilt
-assets.
+There are no exceptions. The last one was the `pg_worker` privilege-demotion
+binary, which was compiled because `pg-embed-setup-unpriv` published no release
+assets. It publishes checksum-verified archives from `v0.5.2`, so
+`make prepare-pg-worker` now installs it with `cargo binstall` and the same
+fail-closed strategy list as every other tool. The binary lands in the cargo
+bin directory, which the tool archives already own, so it needs no cache of its
+own and `target/pg-worker-root` is gone.
 
-[pg-worker-issue]: https://github.com/leynos/pg-embed-setup-unpriv/issues/217
+`pg_worker` has no `--version` flag, so its probe reads cargo's install
+manifest instead: `cargo install --list` must report the pinned version or the
+install runs again. A `command -v` check would have kept whatever the tool
+archive restored, which is exactly the stale-binary case the probe exists to
+catch.
 
 ### The compiler cache
 
@@ -180,30 +185,38 @@ carrying it cannot move between runner providers unchanged.
 Table 1 names every cache archive, the single job that writes it, and the
 inputs its key is built from.
 
-| Archive                      | Owner                   | Key inputs                           |
-| ---------------------------- | ----------------------- | ------------------------------------ |
-| pnpm store                   | `setup-node` in `build` | the action's own lockfile hash       |
-| Workspace `node_modules`     | `build`                 | the pnpm and Bun lock hashes         |
-| Bun download cache           | `build`                 | both Bun lock hashes                 |
-| Global tools                 | `build`                 | tool pins, `Makefile`, `dylint.toml` |
-| Cargo registry and Git index | `coverage-upload`       | `rust-toolchain.toml`, `Cargo.lock`  |
-| Coverage-lane tools          | `coverage-upload`       | the shared-actions commit            |
-| Embedded PostgreSQL binaries | `coverage-upload`       | the PostgreSQL version               |
-| `pg_worker` install root     | `coverage-upload`       | `Makefile`, `rust-toolchain.toml`    |
+| Archive                      | Owner                   | Key inputs                              |
+| ---------------------------- | ----------------------- | --------------------------------------- |
+| pnpm store                   | `setup-node` in `build` | the action's own lockfile hash          |
+| Workspace `node_modules`     | `build`                 | the pnpm and Bun lock hashes            |
+| Bun download cache           | `build`                 | both Bun lock hashes                    |
+| Global tools                 | `build`                 | tool pins, `Makefile`, `dylint.toml`    |
+| Cargo registry and Git index | `coverage-upload`       | `rust-toolchain.toml`, `Cargo.lock`     |
+| Coverage-lane tools          | `coverage-upload`       | shared-actions pin, sccache, `Makefile` |
+| Embedded PostgreSQL binaries | `coverage-upload`       | the PostgreSQL version                  |
 
 The archives above cover these paths:
 
 - Workspace `node_modules`: `node_modules`, `frontend-pwa/node_modules`, and
   `packages/tokens/node_modules`.
 - Bun download cache: `~/.bun/install/cache`.
-- Global tools: `~/.cargo/bin`, `~/.cache/cargo-binstall`, `~/.cache/merman`,
-  `~/.cache/uv`, `~/.local/bin`, `~/.local/share/uv`, `~/.local/share/whitaker`,
-  `~/.bun/bin`, `~/.bun/install/global`, `.uv-cache`, and `.uv-tools`.
+- Global tools: `~/.cargo/bin`, `~/.cargo/.crates2.json`,
+  `~/.cache/cargo-binstall`, `~/.cache/merman`, `~/.cache/uv`, `~/.local/bin`,
+  `~/.local/share/uv`, `~/.local/share/whitaker`, `~/.bun/bin`,
+  `~/.bun/install/global`, `.uv-cache`, and `.uv-tools`.
 - Cargo registry and Git index: `~/.cargo/registry` and `~/.cargo/git`.
-- Coverage-lane tools: `~/.cargo/bin`, `~/.cache/uv`, `~/.local/bin`, and
-  `~/.local/share/uv`.
+- Coverage-lane tools: `~/.cargo/bin`, `~/.cargo/.crates2.json`,
+  `~/.cache/uv`, `~/.local/bin`, and `~/.local/share/uv`.
 - Embedded PostgreSQL binaries: `~/.theseus/postgresql` and
   `~/.cache/pg-embedded/binaries`.
+
+`~/.cargo/.crates2.json` travels with `~/.cargo/bin` in both archives because
+the `pg_worker` probe reads it. An archive that restored the binary without the
+record of its version would reinstall on every warm run. The two archives carry
+the same paths because they serve different jobs with different tool sets; each
+job restores exactly one of them, so each path still has one owner per job, and
+both keys now carry the `Makefile` digest, so the pin cannot move in one
+without moving in the other.
 
 Every key also carries the runner operating system, architecture, environment,
 and image line. The image line decides which glibc is available, so a prebuilt
@@ -225,9 +238,8 @@ Four consequences follow from the table.
 - **A restore fallback needs a corrector.** `restore-keys` is used only where
   something downstream repairs a stale archive: a version probe for the tool
   archive, `pnpm install --frozen-lockfile` for `node_modules`, or the warm-up
-  script for the PostgreSQL binaries. The `pg_worker` install root and the
-  coverage-lane tools have no such corrector, so they match on their exact key
-  or miss.
+  script for the PostgreSQL binaries. The coverage-lane tools have no such
+  corrector, so they match on their exact key or miss.
 - **Trunk is the only writer.** Pull requests restore the trusted generation
   and never reserve a key, which removes both the wasted upload and the "Unable
   to reserve cache" races. `ci.yml` therefore also runs on pushes to `main`,

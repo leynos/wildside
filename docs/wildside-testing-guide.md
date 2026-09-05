@@ -26,10 +26,12 @@ with local step definitions at build time.
 `make test` now uses the `pg_worker` helper shipped by `pg-embed-setup-unpriv`
 (imported as `pg_embedded_setup_unpriv` in Rust).
 
-- If `pg_worker` is already installed and on `PATH`, the Makefile copies that
-  binary to `PG_WORKER_PATH`.
-- Otherwise, the Makefile installs `pg-embed-setup-unpriv`'s `pg_worker` into
-  a cache under `target/pg-worker-root/` and then copies it to `PG_WORKER_PATH`.
+- If the pinned `pg-embed-setup-unpriv` release is already installed, the
+  Makefile copies its `pg_worker` to `PG_WORKER_PATH`.
+- Otherwise, if `cargo-binstall` is available, the Makefile downloads the
+  pinned release and copies the binary. Nothing is compiled.
+- Failing both, an existing `pg_worker` on `PATH` is used, with a warning that
+  its version is unchecked. Install `cargo-binstall` to get the pinned one.
 - By default, `PG_WORKER_PATH` is `target/pg_worker`. Override it when you need
   a different writable destination, for example:
 
