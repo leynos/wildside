@@ -407,14 +407,57 @@ and checks these workspaces in order:
 
 Each workspace keeps its TypeDoc configuration beside its TypeScript
 configuration. The gate requires every selected public declaration to be
-documented, reports qualified declaration names, treats validation warnings as
-errors, and uses `emit: "none"` so it never writes documentation artefacts.
-Generated files must remain excluded rather than receiving handwritten
-comments that would be overwritten.
+documented, treats validation warnings as errors, and uses `emit: "none"` so it
+never writes documentation artefacts. Generated files must remain excluded
+rather than receiving handwritten comments that would be overwritten.
 
-Run `make docs-check` while iterating. The gate also runs through `make all` and
-as an explicit pull-request CI step, so undocumented declarations cannot bypass
-the contributor workflow.
+`requiredToBeDocumented` names the declaration kinds under the gate. The
+TypeScript surfaces cover enums and their members, variables, functions,
+classes, interfaces, properties, methods, accessors, and type aliases. The
+tokens surface is JavaScript, so it omits the kinds that cannot appear there:
+enums, enum members, interfaces, and type aliases. All three configurations
+exclude private, protected, internal, and external declarations, so `@internal`
+marks something the gate should ignore rather than something to document.
+
+TypeDoc is pinned to an exact version in the root manifest and resolved to that
+same version in both `pnpm-lock.yaml` and `bun.lock`. A caret range would let a
+TypeDoc minor release change the gate's verdict without a reviewed commit.
+
+#### Running the gate locally
+
+```bash
+make deps
+make docs-check
+```
+
+`make deps` installs the workspace dependencies from the frozen lockfile;
+`make docs-check` runs the three TypeDoc configurations in sequence and stops at
+the first that reports a warning. A failing run names each undocumented
+declaration and the file it lives in, so the output is the work list. The gate
+also runs through `make all` and as an unconditional pull-request CI step, so
+undocumented declarations cannot bypass the contributor workflow.
+
+#### Documenting an export
+
+Write a JSDoc block immediately above the declaration. The configurations set
+`commentStyle: "jsdoc"`, so only `/** ... */` blocks count; a `//` comment above
+a declaration leaves it undocumented as far as the gate is concerned.
+
+```ts
+/** Runtime schema for a user record. */
+export const UserSchema = z.object({
+  /** Branded unique identifier for the user. */
+  id: UserIdSchema,
+  /** Human-readable name; trimmed and guaranteed non-empty by the schema. */
+  displayName: z.string().trim().min(1),
+});
+```
+
+Object properties and interface members are declaration kinds in their own
+right, so each needs its own block rather than a single summary on the parent.
+One sentence that says what the declaration is for is enough; the gate checks
+for presence, not length. Where a declaration is genuinely not part of any
+public surface, mark it `@internal` instead of writing a comment nobody reads.
 
 ### Architectural patterns
 
