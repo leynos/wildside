@@ -394,8 +394,8 @@ so editor analysis uses the same compiler toolchain as the repository gates.
 ### TypeDoc documentation gate
 
 `make docs-check` is the zero-tolerance documentation gate for the repository's
-JavaScript and TypeScript surfaces. It runs the root `docs:check` package script
-and checks these workspaces in order:
+JavaScript and TypeScript surfaces. It runs the root `docs:check` package
+script and checks these workspaces in order:
 
 - `frontend-pwa/src`, excluding generated Orval clients, declaration files,
   tests, and fixtures;
@@ -431,8 +431,8 @@ make docs-check
 ```
 
 `make deps` installs the workspace dependencies from the frozen lockfile;
-`make docs-check` runs the three TypeDoc configurations in sequence and stops at
-the first that reports a warning. A failing run names each undocumented
+`make docs-check` runs the three TypeDoc configurations in sequence and stops
+at the first that reports a warning. A failing run names each undocumented
 declaration and the file it lives in, so the output is the work list. The gate
 also runs through `make all` and as an unconditional pull-request CI step, so
 undocumented declarations cannot bypass the contributor workflow.
@@ -440,8 +440,8 @@ undocumented declarations cannot bypass the contributor workflow.
 #### Documenting an export
 
 Write a JSDoc block immediately above the declaration. The configurations set
-`commentStyle: "jsdoc"`, so only `/** ... */` blocks count; a `//` comment above
-a declaration leaves it undocumented as far as the gate is concerned.
+`commentStyle: "jsdoc"`, so only `/** ... */` blocks count; a `//` comment
+above a declaration leaves it undocumented as far as the gate is concerned.
 
 ```ts
 /** Runtime schema for a user record. */

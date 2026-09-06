@@ -417,8 +417,8 @@ In practice, this means:
 - Ensure at least one locale-switching regression test exists for each major
   registry-driven surface (for example, Discover, Customize, Wizard).
 - Keep the PWA, shared types, and token tooling under the zero-tolerance
-  TypeDoc gate. Generated Orval clients, declaration output, tests, and fixtures
-  stay outside this authored-documentation boundary.
+  TypeDoc gate. Generated Orval clients, declaration output, tests, and
+  fixtures stay outside this authored-documentation boundary.
 
 For concrete patterns and harness guidance, use:
 
