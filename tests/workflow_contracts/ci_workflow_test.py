@@ -134,12 +134,33 @@ def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
     return matches[0]
 
 def test_build_runs_the_typedoc_documentation_gate() -> None:
-    """Pull requests must reject undocumented JavaScript and TypeScript APIs."""
-    documentation = _find_step(
-        _load_steps("build"),
-        "TypeDoc documentation gate",
+    """Pull requests must reject undocumented JavaScript and TypeScript APIs.
+
+    The assertion looks for the gate's command rather than its step name. A
+    step name is prose: renaming it, or deleting the step while leaving a
+    similarly named neighbour, must not be able to satisfy this contract.
+    Only a step that actually invokes ``make docs-check`` does.
+    """
+    invocations = [
+        step
+        for step in _load_steps("build")
+        if isinstance(step.get("run"), str)
+        and any(
+            line.strip() == "make docs-check"
+            for line in typ.cast("str", step["run"]).splitlines()
+        )
+    ]
+    assert len(invocations) == 1, (
+        "expected exactly one build step running 'make docs-check', "
+        f"found {len(invocations)}"
     )
-    assert documentation.get("run") == "make docs-check"
+    assert "if" not in invocations[0], (
+        "the documentation gate must run unconditionally, so it cannot carry "
+        "an 'if' guard"
+    )
+    assert invocations[0].get("continue-on-error") in (None, False), (
+        "the documentation gate must fail the job rather than continue on error"
+    )
 def test_codescene_check_immediately_follows_coverage_generation() -> None:
     """The changed-line gate consumes the LCOV report produced just before it."""
     steps = _load_steps()
