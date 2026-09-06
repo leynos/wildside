@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
       id-token: write  # OIDC workflow-source resolution
-    uses: leynos/shared-actions/.github/workflows/mutation-cargo.yml@c6125f19593668cbfefd65a59c08cb7aefe90d93
+    uses: leynos/shared-actions/.github/workflows/mutation-cargo.yml@2055f0a7aba1a9d439dd7aba1f3559416b0a08ce
     with:
       # Rust source lives under the workspace members (backend, its
       # nested crates, crates/, and tools/); the vendored
