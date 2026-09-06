@@ -7,6 +7,9 @@
   "emit": "none",
   "commentStyle": "jsdoc",
   "excludeExternals": true,
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
   "validation": {
     "notDocumented": true,
     "notExported": false,
