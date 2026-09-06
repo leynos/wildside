@@ -55,7 +55,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: 'true'
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -73,15 +73,15 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
             core.exportVariable('ACTIONS_CACHE_SERVICE_V2', '');
       # v4.1.0
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
       # `cache: 'pnpm'` makes this action the sole owner of the pnpm store.
       # No other step in this job touches it.
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v4
         with:
           node-version: '22'
           corepack: true
           cache: 'pnpm'
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76  # v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -254,7 +254,7 @@ jobs:
       # ~/.cargo/bin, and the uv layers above, so the shared action must not
       # become a second owner of them.
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/setup-rust@2055f0a7aba1a9d439dd7aba1f3559416b0a08ce
         with:
           cache-provider: external
           # The server is started from a `run:` step above; a second one
@@ -264,7 +264,7 @@ jobs:
       - name: Install uv
         id: setup-uv
         # v6.4.3
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false
@@ -308,7 +308,7 @@ jobs:
       # distribution; replaces the former `cargo binstall merman-cli` and
       # bare `uv tool install nixie-cli` steps.
       - name: Install Nixie and Merman
-        uses: leynos/shared-actions/.github/actions/install-nixie@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/install-nixie@2055f0a7aba1a9d439dd7aba1f3559416b0a08ce
         with:
           nixie-version: ${{ env.NIXIE_VERSION }}
           merman-version: ${{ env.MERMAN_VERSION }}
@@ -320,7 +320,7 @@ jobs:
         run: make nixie
 
       - name: Markdown lint
-        uses: DavidAnson/markdownlint-cli2-action@8de2aa07cae85fd17c0b35642db70cf5495f1d25  # v24.0.0
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff  # v24.2.0
         with:
           globs: |
             **/*.md
@@ -434,7 +434,7 @@ jobs:
         run: make lint-clippy
 
       - name: Install Whitaker
-        uses: leynos/shared-actions/.github/actions/install-whitaker@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/install-whitaker@2055f0a7aba1a9d439dd7aba1f3559416b0a08ce
         with:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
@@ -641,7 +641,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: 'true'
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           persist-credentials: false
           # `cs-coverage check` diffs against the pull-request merge base, so
@@ -734,7 +734,7 @@ jobs:
         run: bash scripts/start-compiler-cache.sh
 
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/setup-rust@2055f0a7aba1a9d439dd7aba1f3559416b0a08ce
         with:
           cache-provider: external
           # The server is started from a `run:` step above; a second one
@@ -761,7 +761,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/generate-coverage@2055f0a7aba1a9d439dd7aba1f3559416b0a08ce
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -794,7 +794,7 @@ jobs:
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: github.event_name == 'pull_request' && env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@2055f0a7aba1a9d439dd7aba1f3559416b0a08ce
         with:
           format: lcov
           mode: check
