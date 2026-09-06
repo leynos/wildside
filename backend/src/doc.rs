@@ -12,53 +12,25 @@
 //! exported via `cargo run --bin openapi-dump` for external tooling.
 
 use crate::inbound::http::admin_enrichment::{
-    BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesResponseBody,
-    OfflineBundleResponse, UpsertOfflineBundleRequestBody, UpsertOfflineBundleResponseBody,
-    EnrichmentProvenanceRecordBody, ListEnrichmentProvenanceResponseBody, ProvenanceBoundsBody,
-    ZoomRangeBody,
+    EnrichmentProvenanceRecordBody, ListEnrichmentProvenanceQuery,
+    ListEnrichmentProvenanceResponseBody, ProvenanceBoundsBody,
 };
 use crate::inbound::http::catalogue::{DescriptorsResponse, ExploreCatalogueResponse};
 use crate::inbound::http::offline::{
-    OfflineBundleResponse, UpsertOfflineBundleRequestBody, UpsertOfflineBundleResponseBody,
-    EnrichmentProvenanceRecordBody, ListEnrichmentProvenanceResponseBody, ProvenanceBoundsBody,
-    ZoomRangeBody,
-    BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesResponseBody,
+    BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesQuery,
+    ListOfflineBundlesResponseBody, OfflineBundleResponse, UpsertOfflineBundleRequestBody,
+    UpsertOfflineBundleResponseBody, ZoomRangeBody,
 };
 use crate::inbound::http::schemas::{
     ErrorCodeSchema, ErrorSchema, InterestThemeIdSchema, UserInterestsSchema, UserSchema,
-    ZoomRangeBody,
-    OfflineBundleResponse, UpsertOfflineBundleRequestBody, UpsertOfflineBundleResponseBody,
-    BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesResponseBody,
-    EnrichmentProvenanceRecordBody, ListEnrichmentProvenanceResponseBody, ProvenanceBoundsBody,
 };
 use crate::inbound::http::users_pagination::{PaginatedUsersResponse, PaginationLinksSchema};
 use crate::inbound::http::walk_sessions::{
     CreateWalkSessionRequestBody, CreateWalkSessionResponseBody, WalkCompletionSummaryResponseBody,
     WalkPrimaryStatBody, WalkSecondaryStatBody,
-    EnrichmentProvenanceRecordBody, ListEnrichmentProvenanceResponseBody, ProvenanceBoundsBody,
-    OfflineBundleResponse, UpsertOfflineBundleRequestBody, UpsertOfflineBundleResponseBody,
-    ZoomRangeBody,
-    BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesResponseBody,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::{Modify, OpenApi};
-
-
-//! OpenAPI documentation configuration.
-//!
-//! This module defines the [`ApiDoc`] struct which generates the OpenAPI
-//! specification for the REST API. It registers:
-//!
-//! - **Paths**: All HTTP endpoints from the inbound layer (users, health)
-//!   [`UserSchema`]) for shared types that use external schema registration
-//! - **Security**: Session cookie authentication scheme
-//!
-//! The generated specification is used by Swagger UI (debug builds) and
-//! exported via `cargo run --bin openapi-dump` for external tooling.
-};
-};
-};
-};
 
 /// Enrich the generated document with the session cookie security scheme.
 struct SecurityAddon;
@@ -127,9 +99,11 @@ impl Modify for SecurityAddon {
         ErrorCodeSchema,
         ExploreCatalogueResponse,
         DescriptorsResponse,
+        ListEnrichmentProvenanceQuery,
         ProvenanceBoundsBody,
         EnrichmentProvenanceRecordBody,
         ListEnrichmentProvenanceResponseBody,
+        ListOfflineBundlesQuery,
         BoundsBody,
         ZoomRangeBody,
         OfflineBundleResponse,
