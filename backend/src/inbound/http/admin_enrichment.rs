@@ -24,7 +24,7 @@ const MAX_LIMIT: usize = 200;
 const BEFORE_CURSOR_SEPARATOR: char = '|';
 
 /// Query parameters for enrichment provenance reporting.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListEnrichmentProvenanceQuery {
     /// Maximum number of rows to return. Defaults to 50, maximum 200.
