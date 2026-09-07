@@ -152,31 +152,30 @@ def plan(root: Path, yamllint_version: str) -> list[Invocation]:
 def _run(invocation: Invocation) -> None:
     """Run one invocation, raising `LintError` unless it succeeds.
 
-    Cuprum captures a command's output rather than streaming it, so both
-    streams are relayed here. A linter's findings are the whole point of
-    running it, and yamllint reports warnings on a successful run: swallowing
-    them would leave a passing gate quieter than the shell it replaced.
+    `echo=True` mirrors both streams as the tool writes them, which is what a
+    gate needs: a linter's findings are the point of running it, and yamllint
+    reports warnings even on a successful run. Capture stays on so the failure
+    can quote stderr rather than only a status.
     """
     program, *arguments = invocation.argv
-    result = sh.make(Program(program), catalogue=CATALOGUE)(*arguments).run_sync()
-    if result.stdout:
-        print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
-    if result.stderr:
-        print(
-            result.stderr,
-            end="" if result.stderr.endswith("\n") else "\n",
-            file=sys.stderr,
-        )
+    result = sh.make(Program(program), catalogue=CATALOGUE)(*arguments).run_sync(
+        capture=True, echo=True
+    )
     if result.exit_code != 0:
-        raise LintError(invocation.tool, result.exit_code)
+        raise LintError(
+            invocation.tool, result.exit_code, (result.stderr or "").strip()
+        )
 
 
 def lint(root: Path, yamllint_version: str) -> None:
     """Run every planned invocation, stopping at the first failure."""
+    # Flushed, because cuprum's `echo` writes to the file descriptor directly
+    # while print buffers: without this the skip notice appears after the
+    # output of the tools it precedes.
     if not (root / ACTIONS_DIR).is_dir():
-        print("No composite actions found; skipping action lint")
+        print("No composite actions found; skipping action lint", flush=True)
     if not (root / WORKFLOWS_DIR).is_dir():
-        print("No workflows found; skipping workflow lint")
+        print("No workflows found; skipping workflow lint", flush=True)
 
     with scoped(allowlist=frozenset(CATALOGUE.allowlist)):
         for invocation in plan(root, yamllint_version):

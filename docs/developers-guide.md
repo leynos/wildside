@@ -1073,12 +1073,21 @@ tool last, and no failing tool at all, using `cmd-mox` for the executables.
 runs one command, carries the yamllint pin, and contains no `while`, `;`, `&&`
 or `||`, since any of those reintroduces the defect.
 
-Two notes for the next script, both learned here. cuprum 0.1.0 has no
-`Catalogue.from_programs`; build a `ProgramCatalogue` from a `ProjectSettings`
-and pass it to `sh.make`. And `cmd-mox` needs an interpreter that can import
-it on the shim's PATH, which a layered `uv run --with` environment is not: the
-shim hangs. `make test-lint-actions` builds a materialized virtual environment
-instead, as `typecheck-python` does.
+This is the repository's first cuprum script. The scripting standards name
+cuprum as the process runner and carry a plumbum-to-cuprum migration section,
+so new scripts use it; the three existing plumbum scripts are that migration's
+work and are untouched here.
+
+Three notes for the next one, all learned here and reported upstream. cuprum
+0.1.0 has no `Catalogue.from_programs`, which the standard shows: build a
+`ProgramCatalogue` from a `ProjectSettings`, pass it to `sh.make`, and wrap
+program names in `Program` (leynos/concordat#154). `run_sync(echo=True)`
+mirrors a tool's output as it runs, which a gate needs; without it the output
+is captured and a long linter looks hung. And `cmd-mox` needs an interpreter
+that can import it on the shim's PATH, which a layered `uv run --with`
+environment is not: the shim hangs rather than failing (leynos/cmd-mox#249).
+`make test-lint-actions` builds a materialized virtual environment instead, as
+`typecheck-python` does.
 
 A recipe that genuinely needs a command to be allowed to fail says so itself,
 with `|| true`, an `if`, or a captured status. Make's `-` line prefix is not an
