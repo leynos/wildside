@@ -59,6 +59,26 @@ COVERAGE_ACTION: typ.Final[str] = (
 #: genuinely cold.
 OUTSIDE_WATCHDOG_ALLOWANCE_SECONDS: typ.Final[float] = 15 * 60.0
 
+#: The condition each coverage lane legitimately carries, keyed by
+#: workflow and job, as the step's ``if`` and its job's.
+#:
+#: A skipped step runs no `cargo`, so its watchdog never arms and every
+#: assertion below says nothing about it. `if: false` on either would
+#: leave a lane that looks bounded and is not. The values are pinned
+#: rather than merely tolerated, because a lane gaining, losing or
+#: changing a condition changes when it runs at all.
+#:
+#: `ci.yml`'s coverage job is skipped for Dependabot, whose branches are
+#: bumps rather than changes worth measuring, and on pushes, where the
+#: trunk lane covers the same ground.
+REQUIRED_CONDITIONS: typ.Final[dict[tuple[str, str], tuple[object, object]]] = {
+    (
+        "ci.yml",
+        "coverage",
+    ): (None, "github.actor != 'dependabot[bot]' && github.event_name != 'push'"),
+    ("coverage-main.yml", "coverage-upload"): (None, None),
+}
+
 #: How far a ceiling must sit above the sum it contains, rather than
 #: merely reaching it. A ceiling equal to that sum cancels the job at
 #: the moment the watchdog would have reported the overrun, and the
@@ -198,6 +218,11 @@ class CoverageJob(typ.NamedTuple):
     job_timeout : float or None
         The job's ``timeout-minutes`` in seconds, or None when it
         declares none and so inherits GitHub's six-hour default.
+    conditions : tuple[tuple[object, object], ...]
+        The ``if`` on each coverage step and on its job, in step order.
+        A skipped step runs no ``cargo``, so its watchdog never arms and
+        the tiers say nothing about it; the condition is part of what
+        identifies a lane rather than incidental to it.
     """
 
     workflow: str
@@ -205,6 +230,7 @@ class CoverageJob(typ.NamedTuple):
     steps: int
     watchdogs: tuple[float | None, ...]
     job_timeout: float | None
+    conditions: tuple[tuple[object, object], ...] = ()
 
     def __str__(self) -> str:
         """Return a location suitable for a failure message.
@@ -369,6 +395,7 @@ def _coverage_job(
         steps=len(steps),
         watchdogs=tuple(_watchdog_of(document, job, step) for step in steps),
         job_timeout=None if raw_timeout is None else float(raw_timeout) * 60.0,
+        conditions=tuple((step.get("if"), job.get("if")) for step in steps),
     )
 
 
@@ -579,4 +606,34 @@ def test_the_required_ceiling_carries_all_three_terms() -> None:
     ), "the margin applies even when nothing runs outside the watchdog"
     assert required_ceiling([], 0.0) == pytest.approx(CEILING_MARGIN_SECONDS), (
         "the margin is a term of its own, not a fraction of the others"
+    )
+
+
+def test_each_coverage_lane_carries_the_condition_it_is_meant_to(
+    coverage_jobs: tuple[CoverageJob, ...],
+) -> None:
+    """A skipped step runs no `cargo`, so its watchdog never arms.
+
+    Every assertion above reads a lane's declared budgets and says
+    nothing about whether the step runs. `if: false` on the step or on
+    its job would leave a lane that looks bounded and is not, and this
+    contract would certify it. So would a plausible condition that
+    quietly excluded the event the lane exists for.
+
+    The conditions are pinned rather than forbidden, because the one
+    here is legitimate: the pull-request lane skips Dependabot branches
+    and pushes, which the trunk lane covers. Pinning it means a lane
+    gaining, losing or changing a condition has to change this contract
+    and the guide with it.
+    """
+    found = {(job.workflow, job.job): job.conditions for job in coverage_jobs}
+    wrong = {
+        coordinate: (expected, found.get(coordinate))
+        for coordinate, expected in REQUIRED_CONDITIONS.items()
+        if not found.get(coordinate) or set(found[coordinate]) != {expected}
+    }
+    assert not wrong, (
+        f"these coverage lanes do not carry the conditions the developers' "
+        f"guide records, as expected versus found: {wrong}; a lane that is "
+        f"skipped runs no cargo, so its watchdog never arms"
     )
