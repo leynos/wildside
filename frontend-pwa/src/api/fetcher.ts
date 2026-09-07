@@ -134,8 +134,13 @@ function getContentTypeForBody(body: unknown): string | null {
   return 'application/json';
 }
 /**
- * Fetch wrapper used by the generated Orval client: sets a JSON content type
- * for plain-object and string bodies, and rejects on non-2xx responses.
+ * Fetch wrapper used by the generated Orval client.
+ *
+ * Plain-object bodies are serialized to JSON. The JSON content type is set for
+ * those and for any string body, since a string is assumed to be pre-serialized
+ * JSON; native body types (`FormData`, `Blob`, `URLSearchParams`, and binary)
+ * are sent unchanged with no content type. A `Content-Type` the caller supplies
+ * is never overwritten. Rejects on a non-2xx response.
  */
 export const customFetch = async <T>(input: string, init?: RequestInit): Promise<T> => {
   const url = new URL(input, apiBase());

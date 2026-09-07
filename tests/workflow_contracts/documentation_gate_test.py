@@ -17,10 +17,36 @@ PNPM_LOCK = PROJECT_ROOT / "pnpm-lock.yaml"
 BUN_LOCK = PROJECT_ROOT / "bun.lock"
 FIXTURE_CONFIG = Path(__file__).parent / "fixtures" / "typedoc.json"
 
+#: Every declaration kind TypeDoc can require documentation for on a
+#: TypeScript surface. `validation.notDocumented` only inspects the kinds
+#: named here, so an omission is a silent hole rather than a visible one: drop
+#: `Function` and undocumented exported functions sail through a gate that
+#: still reports itself as zero-tolerance.
+TYPESCRIPT_KINDS = frozenset({
+    "Enum",
+    "EnumMember",
+    "Variable",
+    "Function",
+    "Class",
+    "Interface",
+    "Property",
+    "Method",
+    "Accessor",
+    "TypeAlias",
+})
+
+#: The tokens package is JavaScript, so the four kinds that cannot occur in it
+#: are absent by necessity rather than by choice.
+JAVASCRIPT_ONLY_ABSENT = frozenset({"Enum", "EnumMember", "Interface", "TypeAlias"})
+
 TYPEDOC_CONFIGS = (
-    "frontend-pwa/typedoc.json",
-    "packages/types/typedoc.json",
-    "packages/tokens/typedoc.json",
+    pytest.param("frontend-pwa/typedoc.json", TYPESCRIPT_KINDS, id="frontend-pwa"),
+    pytest.param("packages/types/typedoc.json", TYPESCRIPT_KINDS, id="packages-types"),
+    pytest.param(
+        "packages/tokens/typedoc.json",
+        TYPESCRIPT_KINDS - JAVASCRIPT_ONLY_ABSENT,
+        id="packages-tokens",
+    ),
 )
 EXACT_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 
@@ -115,13 +141,16 @@ def test_lockfiles_resolve_the_pinned_typedoc(lockfile: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("config_path", TYPEDOC_CONFIGS)
-def test_every_surface_enforces_the_zero_tolerance_policy(config_path: str) -> None:
+@pytest.mark.parametrize(("config_path", "expected_kinds"), TYPEDOC_CONFIGS)
+def test_every_surface_enforces_the_zero_tolerance_policy(
+    config_path: str, expected_kinds: frozenset[str]
+) -> None:
     """Each surface must fail on an undocumented export and emit nothing.
 
     The fixture test proves TypeDoc honours this policy. This test proves the
     three real configurations actually set it, so a surface cannot quietly
-    opt out by dropping a key.
+    opt out by dropping a key or by shortening the list of kinds it applies
+    to.
     """
     config = json.loads((PROJECT_ROOT / config_path).read_text(encoding="utf-8"))
     validation = config["validation"]
@@ -133,6 +162,10 @@ def test_every_surface_enforces_the_zero_tolerance_policy(config_path: str) -> N
     assert validation["rewrittenLink"] is True
     assert config["treatValidationWarningsAsErrors"] is True
     assert config["emit"] == "none"
-    assert config["requiredToBeDocumented"], (
-        "an empty requiredToBeDocumented list disables the gate"
+    required = frozenset(config["requiredToBeDocumented"])
+    assert required == expected_kinds, (
+        "requiredToBeDocumented decides which declaration kinds the gate can "
+        "see, so the set is asserted whole rather than merely non-empty; "
+        f"missing={sorted(expected_kinds - required)} "
+        f"unexpected={sorted(required - expected_kinds)}"
     )
