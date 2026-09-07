@@ -1,16 +1,28 @@
 SHELL := bash
 # `.ONESHELL` (declared further down) is global, not target-scoped, so every
 # multi-line recipe reaches the shell as one script. Under make's default
-# `.SHELLFLAGS` of `-c` that script's status is its LAST command's status, and
-# every earlier failure is discarded: `make lint-python` printed eight Ruff
-# findings and still exited zero. `-e` makes the shell abort on the first
-# failing command, which is what a gate has to do. Keep `-c`; make passes the
-# recipe as the shell's command string.
+# `.SHELLFLAGS` of `-c` that script's status is its LAST command's status and
+# every earlier failure is discarded, so `make lint-python` printed its Ruff
+# findings and still exited zero.
+#
+# Both options earn their place, and neither covers the other:
+#
+#   * `-e` aborts at the first failing command, which catches a tool that is
+#     not the recipe's last line.
+#   * `-o pipefail` gives a pipeline its first failing stage's status. Without
+#     it a failure at a pipeline's HEAD is still discarded, and this Makefile
+#     pipes into the tool that does the checking: `spelling` feeds
+#     `git ls-files` into typos, and `lint-actions` feeds `find` into yamllint
+#     and actionlint. A head that dies produces an empty list and the gate
+#     passes having examined nothing.
+#
+# `-c` stays last: make appends the recipe as the shell's command string.
 #
 # A recipe that needs a command to be allowed to fail must say so itself, with
-# `|| true`, an `if`, or a captured status. Do not weaken this flag to
-# accommodate one.
-.SHELLFLAGS := -ec
+# `|| true`, an `if`, or a captured status. Make's `-` line prefix is not an
+# option here: under `.ONESHELL` it applies to the first recipe line only. Do
+# not weaken this flag to accommodate one recipe.
+.SHELLFLAGS := -eo pipefail -c
 BUN_PATH := $(HOME)/.bun/bin:$(PATH)
 CARGO ?= cargo
 WHITAKER ?= whitaker
@@ -333,8 +345,8 @@ test-scripts:
 
 # `.ONESHELL` is a global special target: GNU make ignores the prerequisite
 # list, so naming `prepare-pg-worker` here documents which recipe needed it but
-# turns one-shell recipes on for the whole file. `.SHELLFLAGS := -ec` at the top
-# is what keeps that from swallowing failures.
+# turns one-shell recipes on for the whole file. `.SHELLFLAGS` at the top is
+# what keeps that from swallowing failures.
 .ONESHELL: prepare-pg-worker
 # pg-embed-setup-unpriv publishes checksum-verified release archives from
 # v0.5.2, so the privilege-demotion worker is downloaded rather than compiled.

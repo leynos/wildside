@@ -1017,11 +1017,11 @@ dependency declarations (PEP 723 inline metadata), and style guidance.
 The Makefile sets three things that together decide whether a failing command
 fails its target:
 
-| Setting       | Value    | What it decides                               |
-| ------------- | -------- | --------------------------------------------- |
-| `SHELL`       | `bash`   | Which shell runs every recipe.                |
-| `.SHELLFLAGS` | `-ec`    | Whether the shell stops at the first failure. |
-| `.ONESHELL`   | declared | Whether a recipe's lines share one shell.     |
+| Setting       | Value             | What it decides                           |
+| ------------- | ----------------- | ----------------------------------------- |
+| `SHELL`       | `bash`            | Which shell runs every recipe.            |
+| `.SHELLFLAGS` | `-eo pipefail -c` | Whether a failure reaches make at all.    |
+| `.ONESHELL`   | declared          | Whether a recipe's lines share one shell. |
 
 `.ONESHELL` is a global special target. GNU make ignores its prerequisite list,
 so the declaration naming `prepare-pg-worker` documents which recipe needed it
@@ -1034,23 +1034,43 @@ failure is discarded. The symptom is the worst one a gate can have: the tool
 prints its findings, the target reports success, and the job goes green. Run
 33939820204 passed with `make lint-python` printing Ruff findings, and
 `make lint-openapi` had been passing for a week over an expired review-by
-annotation in `.redocly.lint-ignore.yaml`. `-e` makes the shell abort at the
-first failing command. Keep the `c`: make passes the recipe to the shell as a
-command string.
+annotation in `.redocly.lint-ignore.yaml`.
+
+Both options earn their place, and neither covers the other:
+
+- `-e` aborts at the first failing command. This catches a tool that is not
+  the recipe's last line.
+- `-o pipefail` gives a pipeline the status of its first failing stage.
+  Without it a failure at a pipeline's **head** is still discarded, and this
+  Makefile pipes into the tool that does the checking: `spelling` feeds
+  `git ls-files` into typos, and `lint-actions` feeds `find` into yamllint and
+  actionlint. A head that dies produces an empty list, and the gate passes
+  having examined nothing.
+
+`-c` stays last, because make appends the recipe to `.SHELLFLAGS` as the
+shell's command string.
 
 A recipe that genuinely needs a command to be allowed to fail says so itself,
-with `|| true`, an `if`, or a captured status. Do not weaken `.SHELLFLAGS` to
-accommodate one; that trades a local exception for a silent, repository-wide
-one.
+with `|| true`, an `if`, or a captured status. Make's `-` line prefix is not an
+option here: under `.ONESHELL` it applies to the first recipe line only, so it
+silently does nothing on every line after it. Do not weaken `.SHELLFLAGS`
+either; that trades a local exception for a silent, repository-wide one.
 
 `tests/workflow_contracts/makefile_failure_propagation_test.py` holds the
-contract. It builds a scratch Makefile carrying the repository's own prologue
-lines and a probe target whose first line fails and last line succeeds, then
-drives GNU make over it and asserts the target fails. A companion test removes
-the `.SHELLFLAGS` line from the same prologue and asserts the identical probe
-passes, so the first test's verdict is attributable to the flag rather than to
-a typo in the probe. A third pins the assumption that `.ONESHELL` applies to
-targets it does not name.
+contract. It copies the repository's own `SHELL`, `.SHELLFLAGS` and `.ONESHELL`
+lines into a scratch Makefile alongside two probe recipes, then drives GNU make
+over each and asserts the target fails. `earlier-line` fails on a line that is
+not the last; `pipeline-head` fails in a pipeline's first stage while its last
+stage succeeds. Both probes end on a command that succeeds, so a probe that
+passes is one whose status came from the wrong command.
+
+Each probe is mutation-proved against the half-measure that would mask it:
+substituting `-ec` alone lets `pipeline-head` pass, and `-o pipefail -c` alone
+lets `earlier-line` pass. That is what stops anyone simplifying the flag to one
+option later. A further test removes the `.SHELLFLAGS` line entirely and pins
+make's default behaviour, and one more asserts the copied prologue still
+declares `.ONESHELL`, without which make would run each line in its own shell
+and the probes would pass under any flags at all.
 
 ### Makefile tooling contracts
 
