@@ -27,6 +27,63 @@ def _assert_pinned_to_full_sha(uses: object, expected_path: str) -> None:
     assert SHA_RE.fullmatch(ref), f"expected a 40-hex commit SHA, got {ref!r}"
 
 
+def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
+    """Assert a pull request cannot reach merge without ``command`` running.
+
+    Three things have to hold together, because each defeats the others on
+    its own:
+
+    1. The workflow triggers on `pull_request`. Without it nothing here runs
+       and every other assertion is about a workflow no pull request invokes.
+    2. Exactly one step in ``job_name`` has ``command`` as its **whole** `run`
+       value. Matching a line within a multiline script is satisfied by
+       `if false; then <command>; fi`, and matching a substring is satisfied
+       by `<command> || true`.
+    3. Neither the job nor that step carries an `if` key **at all**.
+
+    The third is asserted on the key's presence rather than on its value on
+    purpose. A condition need not be spelled `false` to skip the gate: an
+    ordinary looking `github.event_name == 'push'` skips it on exactly the
+    event this contract exists to cover. Enumerating falsy spellings also
+    invites a subtler error, since YAML parses `false` to a boolean whose
+    string form is `False`, so a test comparing against `"false"` passes its
+    own mutation.
+    """
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    # An unquoted `on:` key parses as the boolean True under YAML 1.1, so
+    # both spellings are accepted here rather than depending on the quoting.
+    triggers = workflow.get("on", workflow.get(True))
+    assert isinstance(triggers, dict), "the CI workflow must declare triggers"
+    assert "pull_request" in triggers, (
+        "the workflow must trigger on pull_request, or this gate never runs "
+        "on the event it exists to gate"
+    )
+
+    jobs = workflow.get("jobs")
+    assert isinstance(jobs, dict), "the CI workflow must declare jobs"
+    job = jobs.get(job_name)
+    assert isinstance(job, dict), f"the CI workflow must declare {job_name}"
+    assert "if" not in job, (
+        f"the {job_name} job must carry no condition; a skipped job runs no "
+        "steps and leaves every step-level assertion vacuous"
+    )
+
+    steps = typ.cast("list[dict[str, object]]", job.get("steps"))
+    invocations = [
+        step
+        for step in steps
+        if isinstance(step.get("run"), str)
+        and typ.cast("str", step["run"]).strip() == command
+    ]
+    assert len(invocations) == 1, (
+        f"expected exactly one step in {job_name} whose whole run value is "
+        f"{command!r}, found {len(invocations)}"
+    )
+    assert "if" not in invocations[0], (
+        f"the {command!r} step must carry no condition at all"
+    )
+
+
 def _load_steps(job_name: str = "coverage") -> list[dict[str, object]]:
     """Parse and return the steps for one CI job."""
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
@@ -154,17 +211,7 @@ def test_build_runs_the_workflow_lint_script_tests() -> None:
     substring or per-line search while running nothing, and the `if` key check
     below cannot see a condition written in shell.
     """
-    invocations = [
-        step
-        for step in _load_steps("build")
-        if isinstance(step.get("run"), str)
-        and typ.cast("str", step["run"]).strip() == "make test-lint-actions"
-    ]
-    assert len(invocations) == 1, (
-        "expected exactly one build step whose run value is exactly "
-        f"'make test-lint-actions', found {len(invocations)}"
-    )
-    assert "if" not in invocations[0], "the script's tests must run unconditionally"
+    _assert_gate_runs_unconditionally("build", "make test-lint-actions")
 
 
 @pytest.mark.parametrize(("step_name", "command"), PYTHON_GATE_STEPS)
