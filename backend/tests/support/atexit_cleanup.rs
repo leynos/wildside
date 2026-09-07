@@ -11,20 +11,34 @@
 //! sends `SIGTERM`, and waits for graceful shutdown, bridging the gap until the
 //! library provides built-in process-exit shutdown.
 //!
-//! The stable-environment resolution and repair helpers live in the sibling
+//! The stable-password resolution and repair helpers live in the sibling
 //! [`stable_cluster_env`] module so a dedicated unit-test target can exercise
 //! them without compiling this cluster-handle acquisition path. Callers keep
-//! importing `ensure_stable_cluster_environment` from here via the re-export
-//! below.
+//! importing `ensure_stable_cluster_environment` from here; the wrapper below
+//! injects the test binary's environment reader into those pure helpers.
 
 use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
 
 #[path = "stable_cluster_env.rs"]
 mod stable_cluster_env;
 
-// Re-exported so existing `support::atexit_cleanup::ensure_stable_cluster_environment`
-// call sites keep resolving after the pure helpers moved to `stable_cluster_env`.
-pub(crate) use stable_cluster_env::ensure_stable_cluster_environment;
+/// Reconciles stale shared-cluster password state using the test binary's own
+/// environment.
+///
+/// This is the composition point for the pure helpers in
+/// [`stable_cluster_env`]: it supplies `super::process_env`, the one sanctioned
+/// ambient read in the test-support tree, to
+/// [`stable_cluster_env::ensure_stable_cluster_environment_with`]. Every
+/// existing `support::atexit_cleanup::ensure_stable_cluster_environment` call
+/// site keeps working unchanged.
+///
+/// # Errors
+///
+/// Returns a [`BootstrapResult`] error when the cross-process cluster lock
+/// cannot be taken or stale password state cannot be removed.
+pub(crate) fn ensure_stable_cluster_environment() -> BootstrapResult<()> {
+    stable_cluster_env::ensure_stable_cluster_environment_with(super::process_env)
+}
 
 use stable_cluster_env::{SHARED_CLUSTER_RETRIES, SHARED_CLUSTER_RETRY_DELAY};
 
@@ -134,9 +148,10 @@ mod exit_handler {
 /// # Environment preconditions
 ///
 /// Callers **must** invoke [`ensure_stable_cluster_environment()`] before
-/// calling this function. `shared_cluster_handle()` does not set up
-/// `PG_PASSWORD` or `POSTGRESQL_RELEASES_URL` itself; separating setup from
-/// access makes the command/query boundary explicit.
+/// calling this function so stale password state is reconciled first.
+/// `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` themselves are supplied to the
+/// test process by the runner (`[env]` in `.config/nextest.toml`); nothing here
+/// mutates the process environment.
 ///
 /// # Failure caching
 ///

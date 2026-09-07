@@ -301,11 +301,25 @@ PG_WORKER_PATH ?= $(CURDIR)/target/pg_worker
 PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.2
 NEXTEST_TEST_THREADS ?= 1
 
+# Embedded PostgreSQL configuration is composed by the runner, not mutated
+# in-process by test support (issue #464). `?=` leaves a value already present
+# in the environment untouched, so a developer or CI job can still override
+# either variable; Make supplies the stable default otherwise.
+#
+# PG_PASSWORD must be stable across test binaries:
+# `postgresql_embedded::Settings::default()` generates a random password on each
+# call, and `setup()` skips `initdb` when the data directory already exists, so
+# a random password makes later binaries fail with `28P01 password
+# authentication failed`. POSTGRESQL_RELEASES_URL is pinned to the Theseus
+# binaries mirror so the download source cannot drift with crate defaults.
+PG_PASSWORD ?= wildside_embedded_test
+POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries
+
 
 test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
 
 test-rust: workspace-sync prepare-pg-worker
-	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
+	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) PG_PASSWORD=$(PG_PASSWORD) POSTGRESQL_RELEASES_URL=$(POSTGRESQL_RELEASES_URL) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
 		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests))'
 	$(RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features
 

@@ -680,7 +680,6 @@ dependencies = [
  "diesel",
  "diesel-async",
  "diesel_migrations",
- "env-lock",
  "example-data",
  "futures",
  "futures-util",
@@ -711,6 +710,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "toml 0.9.8",
  "tracing",
  "tracing-subscriber",
  "tracing-test",
@@ -1816,12 +1816,6 @@ checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
 ]
-
-[[package]]
-name = "env-lock"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2afbd3cff67810192b5bdb76b77feff72775314d41195c1d779bc92e0e83285d"
 
 [[package]]
 name = "equivalent"

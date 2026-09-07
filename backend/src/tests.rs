@@ -3,7 +3,9 @@
 
 #[cfg(feature = "metrics")]
 use super::initialize_metrics;
-use super::{HealthState, ServerConfig, create_server};
+use super::{
+    HealthState, ServerConfig, bind_addr as resolve_bind_addr, build_db_pool, create_server,
+};
 use actix_web::cookie::{Key, SameSite};
 use actix_web::web;
 #[cfg(feature = "metrics")]
@@ -181,4 +183,49 @@ async fn create_server_marks_ready_non_metrics_build(
     server_config: ServerConfig,
 ) {
     assert_server_marks_ready(health_state, server_config).await;
+}
+
+/// Scenario: `HOST` and `PORT` are absent, valid, or unparsable in an
+/// injected environment reader.
+///
+/// Invariant: the bind address falls back to `0.0.0.0:8080` for every input
+/// the reader cannot turn into a socket address, and honours valid values.
+/// The reader is a closure, so no case touches the process environment.
+#[rstest]
+#[case::defaults(None, None, "0.0.0.0:8080")]
+#[case::host_and_port(Some("127.0.0.1"), Some("9000"), "127.0.0.1:9000")]
+#[case::invalid_port_falls_back(Some("127.0.0.1"), Some("not-a-port"), "127.0.0.1:8080")]
+#[case::invalid_host_falls_back(Some("not a host"), Some("9000"), "0.0.0.0:8080")]
+fn bind_addr_resolves_from_the_injected_reader(
+    #[case] host: Option<&'static str>,
+    #[case] port: Option<&'static str>,
+    #[case] expected: &str,
+) {
+    let resolved = resolve_bind_addr(|name| match name {
+        "HOST" => host.map(str::to_owned),
+        "PORT" => port.map(str::to_owned),
+        _ => None,
+    });
+
+    assert_eq!(
+        resolved,
+        expected.parse::<SocketAddr>().expect("expected address"),
+        "the bind address must be derived from the injected reader alone"
+    );
+}
+
+/// Scenario: no database URL is supplied to the pool builder.
+///
+/// Invariant: the builder reports "no pool" rather than reading the process
+/// environment to find one.
+#[rstest]
+#[actix_rt::test]
+async fn build_db_pool_returns_none_without_a_url() {
+    let pool = build_db_pool(None)
+        .await
+        .expect("absent URL is not an error");
+    assert!(
+        pool.is_none(),
+        "an absent database URL must yield no pool rather than an ambient lookup"
+    );
 }

@@ -45,9 +45,8 @@ const FIXTURE_PROFILE_NAME: &str = "Ada Lovelace";
 
 #[fixture]
 fn world() -> World {
-    // Reconcile the stable env before the runtime spawns threads (`set_var` is
-    // unsound afterwards); a repair failure skips the scenario rather than
-    // panicking.
+    // Repair stale shared-cluster password state before acquiring the cluster;
+    // a repair failure skips the scenario rather than panicking.
     let skip_reason = ensure_stable_cluster_environment()
         .err()
         .map(|error| error.to_string());

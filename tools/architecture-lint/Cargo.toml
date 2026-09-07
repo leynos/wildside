@@ -14,3 +14,9 @@ rstest = "0.26"
 rstest-bdd = "0.4.0"
 rstest-bdd-macros = "0.4.0"
 tempfile = "3"
+
+# The full shared lint baseline lands with #461/#462. Until then this package
+# opts in to the one lint that enforces the environment-seam policy (#464), so
+# `clippy.toml`'s `disallowed-methods` entries are hard errors here too.
+[lints.clippy]
+disallowed_methods = "deny"

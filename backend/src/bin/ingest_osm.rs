@@ -58,7 +58,7 @@ async fn async_main() -> io::Result<()> {
     let args = CliArgs::try_parse().map_err(io::Error::other)?;
     let input_digest = sha256_file(&args.osm_pbf_path)?;
 
-    let database_url = resolve_database_url(args.database_url)?;
+    let database_url = resolve_database_url(args.database_url, database_url_from_process_env())?;
     let pool = DbPool::new(PoolConfig::new(&database_url))
         .await
         .map_err(|error| io::Error::other(format!("create database pool: {error}")))?;
@@ -139,7 +139,21 @@ fn sha256_file(path: &Path) -> io::Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn resolve_database_url(explicit: Option<String>) -> io::Result<String> {
+/// Reads `DATABASE_URL` from the process environment.
+///
+/// `main` is the composition root, so this is the binary's only ambient read.
+/// [`resolve_database_url`] takes the value as an argument and is unit-tested
+/// without touching the process.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "composition root: the CLI reads DATABASE_URL once and injects it \
+              into the resolution policy"
+)]
+fn database_url_from_process_env() -> Option<String> {
+    env::var("DATABASE_URL").ok()
+}
+
+fn resolve_database_url(explicit: Option<String>, from_env: Option<String>) -> io::Result<String> {
     if let Some(value) = explicit {
         if value.trim().is_empty() {
             return Err(io::Error::new(
@@ -150,7 +164,7 @@ fn resolve_database_url(explicit: Option<String>) -> io::Result<String> {
         return Ok(value);
     }
 
-    let from_env = env::var("DATABASE_URL").map_err(|_| {
+    let from_env = from_env.ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
             "database URL missing: set --database-url or DATABASE_URL",
@@ -205,9 +219,39 @@ mod tests {
         assert_eq!(first.len(), 64);
     }
 
+    /// Scenario: the CLI flag and the injected `DATABASE_URL` value are each
+    /// absent, blank, or populated.
+    ///
+    /// Invariant: the flag wins when populated, the injected value is the only
+    /// fallback, and a blank value from either source is rejected as invalid
+    /// input. No case reads or mutates the process environment.
     #[rstest]
-    fn resolve_database_url_rejects_empty_explicit() {
-        let error = resolve_database_url(Some("   ".to_owned())).expect_err("empty should fail");
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    #[case::explicit_wins(Some("postgres://flag"), Some("postgres://env"), Ok("postgres://flag"))]
+    #[case::blank_explicit_is_rejected(Some("   "), Some("postgres://env"), Err(()))]
+    #[case::falls_back_to_env(None, Some("postgres://env"), Ok("postgres://env"))]
+    #[case::blank_env_is_rejected(None, Some("   "), Err(()))]
+    #[case::missing_everywhere(None, None, Err(()))]
+    fn resolve_database_url_applies_flag_then_environment(
+        #[case] explicit: Option<&str>,
+        #[case] from_env: Option<&str>,
+        #[case] expected: Result<&str, ()>,
+    ) {
+        let resolved =
+            resolve_database_url(explicit.map(str::to_owned), from_env.map(str::to_owned));
+
+        match expected {
+            Ok(url) => assert_eq!(
+                resolved.expect("a populated source should resolve"),
+                url,
+                "resolution must prefer the flag and fall back to the injected value"
+            ),
+            Err(()) => assert_eq!(
+                resolved
+                    .expect_err("a blank or missing URL should fail")
+                    .kind(),
+                std::io::ErrorKind::InvalidInput,
+                "a blank or missing URL must surface as invalid input"
+            ),
+        }
     }
 }

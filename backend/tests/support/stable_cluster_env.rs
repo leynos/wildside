@@ -1,10 +1,11 @@
-//! Stable process-environment resolution and repair for the shared embedded
-//! PostgreSQL cluster.
+//! Stable password resolution and password-state repair for the shared
+//! embedded PostgreSQL cluster.
 //!
 //! These helpers are the unit-testable half of the shared-cluster support:
-//! they resolve `PG_PASSWORD`/`POSTGRESQL_RELEASES_URL` to stable values,
-//! repair stale `.pgpass`/data-directory state, take the cross-process cluster
-//! lock, and parse `postmaster.pid`. They are deliberately free of the
+//! they resolve the stable superuser password from an injected reader, repair
+//! stale `.pgpass`/data-directory state, take the cross-process cluster lock,
+//! and parse `postmaster.pid`. None of them writes to the process
+//! environment. They are deliberately free of the
 //! `libc::atexit` process-exit registration and cluster-handle acquisition
 //! (see `atexit_cleanup.rs`), so the dedicated `atexit_cleanup_tests` target
 //! can exercise them without compiling — and being forced to suppress — the
@@ -17,6 +18,9 @@ use pg_embedded_setup_unpriv::BootstrapResult;
 #[cfg(unix)]
 #[path = "password_state.rs"]
 mod password_state;
+
+#[cfg(unix)]
+pub(crate) use password_state::PasswordStatePaths;
 
 pub(crate) const SHARED_CLUSTER_RETRIES: usize = 5;
 pub(crate) const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
@@ -103,96 +107,64 @@ pub(crate) mod unix_atexit {
     }
 }
 
-/// Caches the resolved `PG_PASSWORD` so the environment is reconciled exactly
-/// once per process, no matter how many callers (or threads) invoke
-/// [`ensure_stable_cluster_environment`].
-static STABLE_ENV_INIT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+/// The stable superuser password used when `PG_PASSWORD` is not already set.
+pub(crate) const DEFAULT_PG_PASSWORD: &str = "wildside_embedded_test";
 
-/// Ensures that `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are both set to
-/// stable values before the shared embedded cluster is initialized.
+/// Resolves the superuser password the shared embedded cluster is expected to
+/// use.
 ///
-/// Both variables are resolved exactly once per process inside a
-/// [`OnceLock`](std::sync::OnceLock), so the `std::env::set_var` calls run at
-/// most once regardless of caller concurrency and concurrent callers within a
-/// single test binary cannot race on the environment. The resolution itself
-/// lives in `resolve_stable_env` so tests can exercise the first-call logic
-/// directly, separately from the cached-reuse path.
-///
-/// # Ordering invariant
-///
-/// On its first call this helper may invoke `std::env::set_var`, which is
-/// undefined behaviour once other threads exist. Every test setup path **must**
-/// call `ensure_stable_cluster_environment` before constructing a Tokio runtime
-/// (`Runtime::new` spawns worker threads). Concretely, place this call above the
-/// first runtime construction in each setup function; do not defer it until
-/// after a runtime — or a runtime-owning fixture — has been created.
+/// The resolution is pure: it returns an existing `PG_PASSWORD` unchanged and
+/// otherwise yields [`DEFAULT_PG_PASSWORD`]. Nothing here writes to the
+/// process. The value that the embedded PostgreSQL layer itself reads is
+/// composed by the test runner — see the `[env]` table in
+/// `.config/nextest.toml`, which supplies `PG_PASSWORD` and
+/// `POSTGRESQL_RELEASES_URL` without overriding a value already present in the
+/// parent environment.
 ///
 /// `postgresql_embedded::Settings::default()` generates a random password on
 /// each call. When the data directory already exists, `setup()` skips `initdb`,
 /// leaving the cluster configured with the *original* password. Without a
-/// stable override, subsequent nextest processes fail with `28P01 password
-/// authentication failed`.
-///
-/// `POSTGRESQL_RELEASES_URL` is pinned to the Theseus binaries mirror so that
-/// the binary download source remains stable across crate upgrades and is not
-/// subject to transient GitHub Releases fetch failures (misreported by reqwest
-/// as "error decoding response body").
-///
-/// After the environment is resolved, `ensure_stable_cluster_environment` calls
-/// `repair_password_state_serialized` so stale embedded-cluster password files
-/// and default data directories are reconciled before initialization. That
-/// keeps the cluster aligned with the stable `PG_PASSWORD` override and prevents
-/// leftover authentication state from earlier runs.
-pub(crate) fn ensure_stable_cluster_environment() -> BootstrapResult<()> {
-    // Borrow the cached password directly; no clone is needed because the
-    // repair helper only reads the bytes.
-    let password = STABLE_ENV_INIT.get_or_init(resolve_stable_env);
-
-    // The repair path is fallible (lock acquisition and filesystem cleanup);
-    // propagate any failure to the caller rather than hiding it behind a
-    // deeper `.expect()`, so fallibility is part of the helper's signature and
-    // each setup boundary decides how to surface it.
-    repair_password_state_serialized(password.as_bytes())
+/// stable value, subsequent nextest processes fail with `28P01 password
+/// authentication failed`; resolving the same stable default here is what lets
+/// the repair below detect a `.pgpass` written under a different one.
+pub(crate) fn resolve_stable_password(read_env: impl Fn(&str) -> Option<String>) -> String {
+    read_env("PG_PASSWORD")
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| DEFAULT_PG_PASSWORD.to_owned())
 }
 
-/// Resolves `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` to their stable values,
-/// applying the defaults when either is unset, and returns the resolved
+/// Reconciles stale embedded-cluster password state before the shared cluster
+/// bootstraps.
+///
+/// Resolves the stable password and the repair paths through the injected
+/// reader, then removes a `.pgpass` (and, when the data directory is the
+/// default one, that directory) left behind by a run that used a different
 /// password.
 ///
-/// This is the first-call body cached by `STABLE_ENV_INIT`. Tests call it
-/// directly to cover the resolution logic in isolation from the process-wide
-/// `OnceLock` caching.
-///
-/// # Safety of the `set_var` calls
-///
-/// `std::env::set_var` is not thread-safe, so callers must hold exclusive
-/// access to the environment: production reaches this function through
-/// `STABLE_ENV_INIT.get_or_init`, which runs it at most once per process, and
-/// tests hold the `env_lock` mutex around their calls.
-pub(crate) fn resolve_stable_env() -> String {
-    let value = std::env::var("PG_PASSWORD").unwrap_or_else(|_| {
-        let value = "wildside_embedded_test".to_owned();
-        // SAFETY: the caller holds exclusive environment access; see the
-        // function's Safety section.
-        unsafe {
-            std::env::set_var("PG_PASSWORD", value.as_str());
-        }
-        value
-    });
+/// There is no ordering invariant against Tokio runtime construction any more:
+/// this path performs no environment mutation, so it is safe to call at any
+/// point in a test setup function.
+pub(crate) fn ensure_stable_cluster_environment_with<R>(read_env: R) -> BootstrapResult<()>
+where
+    R: Fn(&str) -> Option<String>,
+{
+    let password = resolve_stable_password(&read_env);
 
-    if std::env::var_os("POSTGRESQL_RELEASES_URL").is_none() {
-        // Pin to Theseus binaries to avoid transient fetch failures in CI that
-        // reqwest misreports as "error decoding response body".
-        // SAFETY: the caller holds exclusive environment access; see above.
-        unsafe {
-            std::env::set_var(
-                "POSTGRESQL_RELEASES_URL",
-                "https://github.com/theseus-rs/postgresql-binaries",
-            );
-        }
+    #[cfg(unix)]
+    {
+        let paths = PasswordStatePaths::resolve(&read_env);
+        // The repair path is fallible (lock acquisition and filesystem
+        // cleanup); propagate any failure to the caller rather than hiding it
+        // behind a deeper `.expect()`, so each setup boundary decides how to
+        // surface it.
+        repair_password_state_serialized(password.as_bytes(), &paths)
     }
 
-    value
+    #[cfg(not(unix))]
+    {
+        let _ = password;
+        Ok(())
+    }
 }
 
 /// Serializes `.pgpass`/data-directory repair so concurrent callers cannot race
@@ -212,13 +184,13 @@ pub(crate) fn resolve_stable_env() -> String {
 ///   them as well.
 ///
 /// Crate-visible so the concurrency tests can exercise the repair/locking
-/// stage directly with a fixed password, without going through
-/// [`ensure_stable_cluster_environment`] (which resolves `STABLE_ENV_INIT` and
-/// may mutate the process environment). This helper reads only the supplied
-/// password bytes and never touches `PG_PASSWORD`, `POSTGRESQL_RELEASES_URL`,
-/// `STABLE_ENV_INIT`, or `resolve_stable_env`.
+/// stage directly with a fixed password and sandboxed paths. This helper reads
+/// only its arguments and never touches the process environment.
 #[cfg(unix)]
-pub(crate) fn repair_password_state_serialized(password: &[u8]) -> BootstrapResult<()> {
+pub(crate) fn repair_password_state_serialized(
+    password: &[u8],
+    paths: &PasswordStatePaths,
+) -> BootstrapResult<()> {
     use color_eyre::eyre::eyre;
     static PASSWORD_STATE_REPAIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -226,19 +198,17 @@ pub(crate) fn repair_password_state_serialized(password: &[u8]) -> BootstrapResu
     let _repair_guard = PASSWORD_STATE_REPAIR_LOCK
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
-    repair_default_password_state(password).map_err(|error| {
+    repair_default_password_state(password, paths).map_err(|error| {
         pg_embedded_setup_unpriv::BootstrapError::from(eyre!(
             "repair shared cluster password state: {error}"
         ))
     })
 }
 
-#[cfg(not(unix))]
-pub(crate) fn repair_password_state_serialized(_password: &[u8]) -> BootstrapResult<()> {
-    Ok(())
-}
-
 #[cfg(unix)]
-fn repair_default_password_state(password: &[u8]) -> std::io::Result<()> {
-    password_state::repair_default_password_state(password)
+fn repair_default_password_state(
+    password: &[u8],
+    paths: &PasswordStatePaths,
+) -> std::io::Result<()> {
+    password_state::repair_default_password_state(password, paths)
 }

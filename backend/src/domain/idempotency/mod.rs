@@ -11,7 +11,8 @@
 //! - [`IdempotencyLookupResult`]: Outcome of looking up an idempotency key in
 //!   the store.
 //! - [`MutationType`]: Discriminator for different outbox-backed operations.
-//! - [`IdempotencyConfig`]: Configuration for idempotency TTL.
+//! - [`IdempotencyConfig`]: Pure configuration value object for idempotency
+//!   TTL. Environment loading lives in `crate::config::idempotency`.
 //!
 //! # Payload Canonicalization
 //!
@@ -29,9 +30,7 @@ mod mutation_type;
 mod payload;
 mod record;
 
-pub use config::{
-    DefaultIdempotencyEnv, IDEMPOTENCY_TTL_HOURS_ENV, IdempotencyConfig, IdempotencyEnv,
-};
+pub use config::IdempotencyConfig;
 pub use key::{IdempotencyKey, IdempotencyKeyValidationError};
 pub use mutation_type::{MutationType, ParseMutationTypeError};
 pub use payload::{PayloadHash, PayloadHashError, canonicalize_and_hash};

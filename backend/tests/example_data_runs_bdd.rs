@@ -55,7 +55,7 @@ struct ExampleDataRunsWorld {
 
 impl ExampleDataRunsWorld {
     fn setup_fresh_database(&self) {
-        // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+        // Repair stale shared-cluster password state before acquiring the cluster.
         if let Err(error) = ensure_stable_cluster_environment() {
             let message = error.to_string();
             let _: Option<()> = handle_cluster_setup_failure(&message);

@@ -21,7 +21,7 @@ use crate::{
 
 impl OsmIngestionWorld {
     pub fn setup_command(&self) {
-        // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+        // Repair stale shared-cluster password state before acquiring the cluster.
         ensure_stable_cluster_environment()
             .expect("reconcile stable cluster environment before cluster access");
         let runtime = Runtime::new().expect("create runtime");

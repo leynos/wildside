@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use ortho_config::declarative::{LayerComposition, MergeComposer, MergeLayer, merge_value};
 use ortho_config::discovery::{ConfigDiscovery, DiscoveryLayersOutcome};
-use ortho_config::figment::Figment;
+use ortho_config::figment::{Figment, Provider};
 use ortho_config::{
     CsvEnv, OrthoConfig, OrthoJsonMergeExt, OrthoMergeExt, OrthoResult, sanitize_value,
 };
@@ -131,7 +131,7 @@ impl OrthoConfig for ExampleDataSettings {
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,
     {
-        let composition = compose_layers();
+        let composition = compose_layers(process_env_provider());
         composition.into_merge_result(Self::merge_from_layers)
     }
 
@@ -140,7 +140,18 @@ impl OrthoConfig for ExampleDataSettings {
     }
 }
 
-fn compose_layers() -> LayerComposition {
+/// The `EXAMPLE_DATA_`-prefixed process environment, as a Figment provider.
+///
+/// This is the only place the settings loader touches the environment;
+/// [`compose_layers`] takes the provider as an argument so its merge
+/// precedence can be exercised against an explicit layer instead (#464).
+fn process_env_provider() -> impl Provider {
+    CsvEnv::prefixed(ENV_PREFIX)
+        .map(|key| ortho_config::uncased::Uncased::new(key.as_str().to_ascii_uppercase()))
+        .split("__")
+}
+
+fn compose_layers(env_provider: impl Provider) -> LayerComposition {
     let mut errors = Vec::new();
     let mut composer = MergeComposer::with_capacity(3);
 
@@ -172,9 +183,6 @@ fn compose_layers() -> LayerComposition {
         composer.push_layer(layer);
     }
 
-    let env_provider = CsvEnv::prefixed(ENV_PREFIX)
-        .map(|key| ortho_config::uncased::Uncased::new(key.as_str().to_ascii_uppercase()))
-        .split("__");
     match Figment::from(env_provider)
         .extract::<Value>()
         .into_ortho_merge()
@@ -192,40 +200,30 @@ mod tests {
 
     use super::*;
     use std::error::Error as StdError;
-    use std::ffi::OsString;
 
-    use env_lock::lock_env;
-    use rstest::{fixture, rstest};
+    use ortho_config::figment::providers::Serialized;
+    use rstest::rstest;
+    use serde_json::json;
 
     type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
-    struct SettingsLoader;
-
-    impl SettingsLoader {
-        fn load(&self) -> TestResult<ExampleDataSettings> {
-            Ok(ExampleDataSettings::load_from_iter([OsString::from(
-                "backend",
-            )])?)
-        }
+    /// Load the settings from an explicit environment layer.
+    ///
+    /// The layer stands in for `EXAMPLE_DATA_*` process variables, so the
+    /// merge precedence is exercised without mutating the environment or
+    /// serializing the suite behind a process-wide lock.
+    fn load_with_env_layer(env_layer: Value) -> TestResult<ExampleDataSettings> {
+        let composition = compose_layers(Serialized::defaults(env_layer));
+        Ok(composition.into_merge_result(ExampleDataSettings::merge_from_layers)?)
     }
 
-    #[fixture]
-    fn load_settings_from_empty_args() -> SettingsLoader {
-        SettingsLoader
-    }
-
+    /// Scenario: no `EXAMPLE_DATA_*` value reaches the loader.
+    ///
+    /// Invariant: every setting falls back to its documented default.
     #[rstest]
-    fn default_values_are_used_when_missing(
-        load_settings_from_empty_args: SettingsLoader,
-    ) -> TestResult {
-        let _guard = lock_env([
-            ("EXAMPLE_DATA_IS_ENABLED", None::<String>),
-            ("EXAMPLE_DATA_SEED_NAME", None::<String>),
-            ("EXAMPLE_DATA_COUNT", None::<String>),
-            ("EXAMPLE_DATA_REGISTRY_PATH", None::<String>),
-        ]);
+    fn default_values_are_used_when_missing() -> TestResult {
+        let settings = load_with_env_layer(json!({}))?;
 
-        let settings = load_settings_from_empty_args.load()?;
         assert!(!settings.is_enabled());
         assert_eq!(settings.seed_name(), DEFAULT_SEED_NAME);
         assert_eq!(settings.registry_path(), default_registry_path());
@@ -233,21 +231,19 @@ mod tests {
         Ok(())
     }
 
+    /// Scenario: every setting is supplied through the environment layer.
+    ///
+    /// Invariant: the environment layer wins over the defaults layer for each
+    /// field.
     #[rstest]
-    fn environment_overrides_are_respected(
-        load_settings_from_empty_args: SettingsLoader,
-    ) -> TestResult {
-        let _guard = lock_env([
-            ("EXAMPLE_DATA_IS_ENABLED", Some("true".to_owned())),
-            ("EXAMPLE_DATA_SEED_NAME", Some("rainbow-fox".to_owned())),
-            ("EXAMPLE_DATA_COUNT", Some("5".to_owned())),
-            (
-                "EXAMPLE_DATA_REGISTRY_PATH",
-                Some("/tmp/example_registry.json".to_owned()),
-            ),
-        ]);
+    fn environment_overrides_are_respected() -> TestResult {
+        let settings = load_with_env_layer(json!({
+            "is_enabled": true,
+            "seed_name": "rainbow-fox",
+            "count": 5,
+            "registry_path": "/tmp/example_registry.json",
+        }))?;
 
-        let settings = load_settings_from_empty_args.load()?;
         assert!(settings.is_enabled());
         assert_eq!(settings.seed_name(), "rainbow-fox");
         assert_eq!(
