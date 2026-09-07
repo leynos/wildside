@@ -305,7 +305,11 @@ NEXTEST_TEST_THREADS ?= 1
 # Zero-tolerance documentation gate: TypeDoc's notDocumented validation over
 # the frontend-pwa, packages/types, and packages/tokens surfaces (their
 # typedoc.json files). Emits no documentation artefacts.
-docs-check:
+#
+# `deps` is a prerequisite because TypeDoc runs from the workspace install:
+# without it a clean checkout fails with a missing binary rather than a
+# documentation verdict.
+docs-check: deps
 	pnpm run docs:check
 
 test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
