@@ -28,6 +28,13 @@
 //! - deleting `export PG_PASSWORD` from the Makefile failed
 //!   `the_makefile_composes_the_embedded_postgres_environment`.
 //!
+//! On 2026-09-07 the Makefile assertions were re-proved against the weaker
+//! failure they used to admit: commenting the default out, so the text stays
+//! present but Make never applies it, passed the earlier substring search and
+//! now fails with `the Makefile must carry
+//! PG_PASSWORD ?= wildside_embedded_test as a live directive, not inside a
+//! comment`.
+//!
 //! With the three mutations reverted all three tests pass. On 2026-09-07,
 //! separately, deleting `allow_attributes = "deny"` from `backend/Cargo.toml`
 //! failed `a_local_deny_carries_the_companion_attribute_lints` with
@@ -195,33 +202,41 @@ fn a_local_deny_carries_the_companion_attribute_lints() -> TestResult {
     Ok(())
 }
 
+/// Report whether the Makefile carries `statement` as a live directive.
+///
+/// The comparison is against a whole line with its trailing whitespace
+/// removed, and commented-out lines are skipped. A substring search would be
+/// satisfied by the same text inside a comment, certifying a default that Make
+/// never applies.
+fn makefile_declares(statement: &str) -> bool {
+    MAKEFILE
+        .lines()
+        .map(str::trim_end)
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .any(|line| line == statement)
+}
+
 /// Scenario: the embedded PostgreSQL settings stop reaching the test runner,
 /// so nothing supplies them once test support no longer writes them.
 ///
 /// Invariant: the Makefile still declares both overridable defaults and still
 /// exports both names, so every recipe passes them to its children verbatim.
-/// The assertion matches the `export` directive rather than a command line: a
-/// recipe-level `NAME=$(NAME)` prefix would be re-parsed by the shell and lose
-/// a value containing whitespace.
+/// Each of the four directives is matched as a whole, uncommented line: a
+/// substring search would pass on a commented-out default, and a recipe-level
+/// `NAME=$(NAME)` prefix would be re-parsed by the shell and lose a value
+/// containing whitespace.
 #[test]
 fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
-    for (default, export) in [
-        (
-            "PG_PASSWORD ?= wildside_embedded_test",
-            "export PG_PASSWORD",
-        ),
-        (
-            "POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries",
-            "export POSTGRESQL_RELEASES_URL",
-        ),
+    for statement in [
+        "PG_PASSWORD ?= wildside_embedded_test",
+        "export PG_PASSWORD",
+        "POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries",
+        "export POSTGRESQL_RELEASES_URL",
     ] {
         assert!(
-            MAKEFILE.contains(default),
-            "the Makefile must declare the overridable default `{default}`"
-        );
-        assert!(
-            MAKEFILE.lines().any(|line| line.trim_end() == export),
-            "the Makefile must carry `{export}` so recipes pass the value verbatim"
+            makefile_declares(statement),
+            "the Makefile must carry `{statement}` as a live directive, not \
+             inside a comment"
         );
     }
     Ok(())
