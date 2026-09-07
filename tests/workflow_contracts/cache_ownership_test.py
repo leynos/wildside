@@ -8,7 +8,6 @@ without publishing a competing one.
 
 from __future__ import annotations
 
-import pathlib
 import re
 import typing as typ
 

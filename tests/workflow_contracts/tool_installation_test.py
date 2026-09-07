@@ -242,7 +242,8 @@ def test_the_pg_worker_pin_is_probed_by_version_not_by_presence() -> None:
         for line in makefile.replace("\\\n", " ").splitlines()
         if "cargo binstall" in line and not line.lstrip().startswith("#")
     ]
-    assert installs and all("--force" in line for line in installs), (
+    assert installs, "the Makefile must invoke cargo binstall for pg_worker"
+    assert all("--force" in line for line in installs), (
         "the reinstall must override the manifest the probe rejected"
     )
 
@@ -262,7 +263,8 @@ def test_the_cargo_install_manifest_travels_with_the_binaries() -> None:
         if "~/.cargo/.crates2.json" not in inv.cache_paths(step)
     ]
     assert offenders == [], (
-        f"these archives carry the cargo bin directory without its manifest: {offenders}"
+        "these archives carry the cargo bin directory without its manifest: "
+        f"{offenders}"
     )
 
 
