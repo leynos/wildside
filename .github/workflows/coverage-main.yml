@@ -26,7 +26,10 @@ permissions:
 jobs:
   coverage-upload:
     runs-on: ubicloud-standard-8
-    timeout-minutes: 90
+    # Above the 5,400 s cargo watchdog below plus the work either side of
+    # the coverage step, which reached 522 s on run 33921794186. At 90
+    # minutes the ceiling equalled the watchdog exactly.
+    timeout-minutes: 120
     env:
       PG_VERSION: "16.10.0"
       SCCACHE_VERSION: '0.17.0'
