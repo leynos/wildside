@@ -55,7 +55,12 @@ def test_docs_check_runs_all_three_typedoc_configs() -> None:
 def test_make_targets_keep_docs_check_in_the_repository_gate() -> None:
     """The Makefile must expose TypeDoc and retain it in the aggregate gate."""
     makefile = MAKEFILE.read_text(encoding="utf-8")
-    assert "all: check-fmt lint docs-check test spelling" in makefile
+    aggregate = re.search(r"(?m)^all:(.*)$", makefile)
+    assert aggregate is not None, "the Makefile must declare an 'all' target"
+    assert "docs-check" in aggregate.group(1).split(), (
+        "'all' must depend on docs-check; reordering its other prerequisites "
+        "is fine, dropping this one is not"
+    )
 
     completed = subprocess.run(  # noqa: S603 - a fixed, resolved local command.
         [_resolve("make"), "--dry-run", "docs-check"],
