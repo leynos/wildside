@@ -39,5 +39,6 @@
     "Accessor",
     "TypeAlias"
   ],
-  "treatValidationWarningsAsErrors": true
+  "treatValidationWarningsAsErrors": true,
+  "treatWarningsAsErrors": true
 }
