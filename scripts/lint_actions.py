@@ -71,6 +71,22 @@ class LintError(Exception):
     Carrying the tool's name and status separately keeps the message the same
     shape whether the tool failed or was missing, so a caller never has to
     parse it back out.
+
+    Parameters
+    ----------
+    tool : str
+        Name of the linter, as a reader would refer to it.
+    status : int
+        Exit status the linter returned.
+    detail : str, optional
+        Diagnostic text to append to the message.
+
+    Attributes
+    ----------
+    tool : str
+        Name of the linter that failed.
+    status : int
+        Exit status, reused as the script's own exit status.
     """
 
     def __init__(self, tool: str, status: int, detail: str = "") -> None:
@@ -86,8 +102,14 @@ class Invocation:
     """One external command, named by the tool it is really running.
 
     `uvx` runs yamllint on this project's behalf, so reporting `uvx` as the
-    failing tool would send the reader to the wrong place. `tool` is what the
-    message says; `argv` is what actually runs.
+    failing tool would send the reader to the wrong place.
+
+    Attributes
+    ----------
+    tool : str
+        Name the failure message uses.
+    argv : tuple[str, ...]
+        Program and arguments actually executed.
     """
 
     tool: str
@@ -121,6 +143,19 @@ def plan(root: Path, yamllint_version: str) -> list[Invocation]:
     Building the plan separately from running it is what lets a test assert
     the ordering, and what makes "the first failure wins" a property of one
     loop rather than of control flow scattered through the script.
+
+    Parameters
+    ----------
+    root : Path
+        Repository root to search for actions and workflows.
+    yamllint_version : str
+        Exact yamllint version the invocations pin.
+
+    Returns
+    -------
+    list[Invocation]
+        Invocations in the order they must run; empty when there is nothing
+        to lint.
 
     Examples
     --------
@@ -168,7 +203,20 @@ def _run(invocation: Invocation) -> None:
 
 
 def lint(root: Path, yamllint_version: str) -> None:
-    """Run every planned invocation, stopping at the first failure."""
+    """Run every planned invocation, stopping at the first failure.
+
+    Parameters
+    ----------
+    root : Path
+        Repository root to lint.
+    yamllint_version : str
+        Exact yamllint version to run.
+
+    Raises
+    ------
+    LintError
+        If any linter exits non-zero. Later invocations do not run.
+    """
     # Flushed, because cuprum's `echo` writes to the file descriptor directly
     # while print buffers: without this the skip notice appears after the
     # output of the tools it precedes.
@@ -197,6 +245,12 @@ def main(
         cannot change underneath the gate.
     repository : Path
         Repository root to lint. Defaults to the working directory.
+
+    Raises
+    ------
+    SystemExit
+        With the failing linter's exit status, after reporting which linter
+        failed.
     """
     try:
         lint(repository.resolve(), yamllint_version)

@@ -39,7 +39,7 @@ def _write_executable(path: Path, source: str) -> None:
 #: "whoever ran the suite happened to have no TMPDIR set". Reading the
 #: ambient value made the suite pass on GitHub's runners, which set none, and
 #: fail on any developer machine that sets one.
-TMPDIR_SENTINEL = "tmpdir-owned-by-the-fixture"
+TMPDIR_SENTINEL: str = "tmpdir-owned-by-the-fixture"
 
 
 @pytest.fixture

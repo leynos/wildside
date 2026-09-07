@@ -148,19 +148,21 @@ def test_build_runs_the_workflow_lint_script_tests() -> None:
     targets rather than the aggregate, so a suite that is not named here never
     runs. That is worth a contract because the failure is silent: the tests
     pass locally and simply never execute on a pull request.
+
+    The whole `run` value must be the command, not merely contain it. A step
+    whose script wraps the command in `if false; then ... fi` satisfies a
+    substring or per-line search while running nothing, and the `if` key check
+    below cannot see a condition written in shell.
     """
     invocations = [
         step
         for step in _load_steps("build")
         if isinstance(step.get("run"), str)
-        and any(
-            line.strip() == "make test-lint-actions"
-            for line in typ.cast("str", step["run"]).splitlines()
-        )
+        and typ.cast("str", step["run"]).strip() == "make test-lint-actions"
     ]
     assert len(invocations) == 1, (
-        "expected exactly one build step running 'make test-lint-actions', "
-        f"found {len(invocations)}"
+        "expected exactly one build step whose run value is exactly "
+        f"'make test-lint-actions', found {len(invocations)}"
     )
     assert "if" not in invocations[0], "the script's tests must run unconditionally"
 

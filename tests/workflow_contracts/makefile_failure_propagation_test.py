@@ -25,6 +25,7 @@ probe pass.
 
 from __future__ import annotations
 
+import functools
 import re
 import subprocess  # noqa: S404 - the contract has to run make to observe it.
 import typing as typ
@@ -73,11 +74,45 @@ HALF_MEASURES = (
 # The helper below resolves make rather than naming it: Ruff rejects a bare
 # program name in a subprocess call because PATH decides what runs, and a
 # readable assertion here beats an OSError from deep inside the test.
+#
+# `gmake` comes first because on the BSDs and macOS `make` is a different
+# implementation. These probes measure `.ONESHELL`, which is a GNU extension,
+# so a non-GNU make would report every probe as passing and the contract would
+# quietly measure nothing.
+@functools.cache
 def _make() -> str:
-    """Return the absolute path to GNU make."""
-    resolved = which("make")
-    assert resolved is not None, "GNU make must be installed to run these contracts"
+    """Return the absolute path to GNU Make.
+
+    Returns
+    -------
+    str
+        Path to a `make` executable that identifies itself as GNU Make.
+    """
+    resolved = next(
+        (
+            path
+            for path in (which(name) for name in ("gmake", "make"))
+            if path is not None and _is_gnu_make(path)
+        ),
+        None,
+    )
+    assert resolved is not None, (
+        "GNU Make must be installed to run these contracts; these probes "
+        "measure .ONESHELL, which only GNU Make implements"
+    )
     return resolved
+
+
+def _is_gnu_make(path: str) -> bool:
+    """Return whether the executable at ``path`` identifies as GNU Make."""
+    version = subprocess.run(  # noqa: S603 - a resolved executable.
+        [path, "--version"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    return version.stdout.startswith("GNU Make")
 
 
 def _prologue_line(pattern: re.Pattern[str], description: str) -> str:
