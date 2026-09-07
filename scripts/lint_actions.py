@@ -116,16 +116,105 @@ class Invocation:
     argv: tuple[str, ...]
 
 
-def _action_manifests(root: Path) -> list[Path]:
-    """Return every composite action manifest, in a stable order."""
-    return sorted((root / ACTIONS_DIR).rglob(ACTION_FILENAME))
+@dc.dataclass(frozen=True, slots=True)
+class Surfaces:
+    """The files the gate will lint, already discovered.
+
+    Separating discovery from planning is what keeps `plan` a pure function
+    of its inputs: everything that can touch the filesystem, and therefore
+    everything that can fail, happens before it.
+
+    Attributes
+    ----------
+    manifests : tuple[Path, ...]
+        Composite action manifests, in a stable order.
+    workflows : tuple[Path, ...]
+        Workflow definitions, in a stable order.
+    """
+
+    manifests: tuple[Path, ...]
+    workflows: tuple[Path, ...]
 
 
-def _workflow_files(root: Path) -> list[Path]:
-    """Return every workflow definition, in a stable order."""
-    directory = root / WORKFLOWS_DIR
-    return sorted(
-        path for suffix in WORKFLOW_SUFFIXES for path in directory.glob(f"*{suffix}")
+class DiscoveryError(Exception):
+    """A directory the gate must read exists but could not be listed.
+
+    An unreadable directory is not an empty one. Treating the two alike is
+    how a gate reports success having examined nothing, which is the failure
+    this whole recipe change exists to remove.
+
+    Parameters
+    ----------
+    directory : Path
+        The directory that could not be listed.
+    reason : str
+        The underlying error's message.
+    """
+
+    def __init__(self, directory: Path, reason: str) -> None:
+        """Record which directory could not be read, and why."""
+        self.directory = directory
+        super().__init__(f"cannot list {directory}: {reason}")
+
+
+def _listed(
+    directory: Path, produce: cabc.Callable[[], cabc.Iterable[Path]]
+) -> tuple[Path, ...]:
+    """Return the produced paths sorted, turning a listing failure into an error.
+
+    ``produce`` is a callable rather than an iterable because the failure can
+    surface either when the listing starts or while it is consumed, and both
+    have to be caught.
+    """
+    try:
+        return tuple(sorted(produce()))
+    except OSError as error:
+        raise DiscoveryError(directory, error.strerror or str(error)) from error
+
+
+def discover(root: Path) -> Surfaces:
+    """Find the manifests and workflows to lint.
+
+    A directory that is absent yields nothing, which is how a repository with
+    no composite actions is meant to behave. A directory that exists but
+    cannot be listed raises, because that is a broken checkout rather than an
+    empty one.
+
+    Parameters
+    ----------
+    root : Path
+        Repository root to search.
+
+    Returns
+    -------
+    Surfaces
+        The discovered manifests and workflows.
+
+    Raises
+    ------
+    DiscoveryError
+        If a directory exists but cannot be listed.
+    """
+    actions = root / ACTIONS_DIR
+    workflows = root / WORKFLOWS_DIR
+    return Surfaces(
+        manifests=(
+            _listed(actions, lambda: actions.rglob(ACTION_FILENAME))
+            if actions.is_dir()
+            else ()
+        ),
+        workflows=(
+            _listed(
+                workflows,
+                lambda: (
+                    path
+                    for suffix in WORKFLOW_SUFFIXES
+                    for path in workflows.glob(f"*{suffix}")
+                ),
+            )
+            if workflows.is_dir()
+            else ()
+        ),
     )
 
 
@@ -137,7 +226,7 @@ def _yamllint(version: str, paths: cabc.Sequence[Path]) -> Invocation:
     )
 
 
-def plan(root: Path, yamllint_version: str) -> list[Invocation]:
+def plan(surfaces: Surfaces, yamllint_version: str) -> list[Invocation]:
     """Return every invocation the gate will run, in order.
 
     Building the plan separately from running it is what lets a test assert
@@ -146,8 +235,8 @@ def plan(root: Path, yamllint_version: str) -> list[Invocation]:
 
     Parameters
     ----------
-    root : Path
-        Repository root to search for actions and workflows.
+    surfaces : Surfaces
+        Files to lint, from `discover`.
     yamllint_version : str
         Exact yamllint version the invocations pin.
 
@@ -159,12 +248,12 @@ def plan(root: Path, yamllint_version: str) -> list[Invocation]:
 
     Examples
     --------
-    >>> plan(Path("/nonexistent"), "1.35.1")
+    >>> plan(Surfaces(manifests=(), workflows=()), "1.35.1")
     []
     """
     invocations: list[Invocation] = []
 
-    manifests = _action_manifests(root)
+    manifests = surfaces.manifests
     if manifests:
         invocations.append(_yamllint(yamllint_version, manifests))
         invocations.extend(
@@ -174,7 +263,7 @@ def plan(root: Path, yamllint_version: str) -> list[Invocation]:
             for manifest in manifests
         )
 
-    workflows = _workflow_files(root)
+    workflows = surfaces.workflows
     if workflows:
         invocations.extend((
             _yamllint(yamllint_version, workflows),
@@ -216,17 +305,21 @@ def lint(root: Path, yamllint_version: str) -> None:
     ------
     LintError
         If any linter exits non-zero. Later invocations do not run.
+    DiscoveryError
+        If a directory exists but cannot be listed.
     """
+    surfaces = discover(root)
+
     # Flushed, because cuprum's `echo` writes to the file descriptor directly
     # while print buffers: without this the skip notice appears after the
     # output of the tools it precedes.
-    if not (root / ACTIONS_DIR).is_dir():
+    if not surfaces.manifests:
         print("No composite actions found; skipping action lint", flush=True)
-    if not (root / WORKFLOWS_DIR).is_dir():
+    if not surfaces.workflows:
         print("No workflows found; skipping workflow lint", flush=True)
 
     with scoped(allowlist=frozenset(CATALOGUE.allowlist)):
-        for invocation in plan(root, yamllint_version):
+        for invocation in plan(surfaces, yamllint_version):
             _run(invocation)
 
 
@@ -257,6 +350,9 @@ def main(
     except LintError as failure:
         print(f"lint-actions: {failure}", file=sys.stderr)
         raise SystemExit(failure.status or 1) from failure
+    except DiscoveryError as failure:
+        print(f"lint-actions: {failure}", file=sys.stderr)
+        raise SystemExit(1) from failure
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised through the CLI.

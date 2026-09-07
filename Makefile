@@ -343,7 +343,8 @@ test-scripts:
 # way typecheck-python does.
 LINT_ACTIONS_TEST_VENV := .venv-lint-actions
 LINT_ACTIONS_TEST_DEPS = pytest==$(PYTEST_VERSION) cyclopts==$(CYCLOPTS_VERSION) \
-	cuprum==$(CUPRUM_VERSION) cmd-mox==$(CMD_MOX_VERSION)
+	cuprum==$(CUPRUM_VERSION) cmd-mox==$(CMD_MOX_VERSION) \
+	hypothesis==$(HYPOTHESIS_VERSION)
 
 test-lint-actions:
 	$(UV) venv --allow-existing --python 3.13 $(LINT_ACTIONS_TEST_VENV)

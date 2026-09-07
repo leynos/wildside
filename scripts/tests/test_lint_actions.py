@@ -15,6 +15,8 @@ import typing as typ
 
 import lint_actions
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 #: cmd-mox's fixture enters the replay phase for you by default. These tests
 #: declare their expectations first, so they take the lifecycle back and call
@@ -54,7 +56,9 @@ def test_plan_orders_the_tools_as_the_shell_did(repository: Path) -> None:
     """
     tools = [
         invocation.tool
-        for invocation in lint_actions.plan(repository, YAMLLINT_VERSION)
+        for invocation in lint_actions.plan(
+            lint_actions.discover(repository), YAMLLINT_VERSION
+        )
     ]
 
     assert tools == ["yamllint", "action-validator", "yamllint", "actionlint"]
@@ -62,12 +66,12 @@ def test_plan_orders_the_tools_as_the_shell_did(repository: Path) -> None:
 
 def test_plan_is_empty_for_a_repository_with_neither_tree(tmp_path: Path) -> None:
     """Nothing to lint means nothing to run, rather than an error."""
-    assert lint_actions.plan(tmp_path, YAMLLINT_VERSION) == []
+    assert lint_actions.plan(lint_actions.discover(tmp_path), YAMLLINT_VERSION) == []
 
 
 def test_the_yamllint_pin_reaches_the_command(repository: Path) -> None:
     """The caller's pin must reach `uvx`, or the gate floats between versions."""
-    first = lint_actions.plan(repository, YAMLLINT_VERSION)[0]
+    first = lint_actions.plan(lint_actions.discover(repository), YAMLLINT_VERSION)[0]
 
     assert first.argv[:4] == (
         "uvx",
@@ -132,3 +136,177 @@ def test_every_tool_passing_is_a_clean_run(cmd_mox: CmdMox, repository: Path) ->
     lint_actions.lint(repository, YAMLLINT_VERSION)
 
     cmd_mox.verify()
+
+
+@manual_lifecycle
+def test_the_cli_exits_with_the_failing_linters_status(
+    cmd_mox: CmdMox, repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The command-line entry point must surface the failure, not just raise.
+
+    Everything above tests `lint`. This tests what a caller actually invokes:
+    that the process exits non-zero with the linter's own status, and says
+    which linter failed. A script that detected the failure and exited zero
+    would pass every test above.
+    """
+    cmd_mox.mock("uvx").returns(exit_code=2, stderr="bad manifest")
+    cmd_mox.replay()
+
+    with pytest.raises(SystemExit) as raised:
+        lint_actions.main(yamllint_version=YAMLLINT_VERSION, repository=repository)
+
+    cmd_mox.verify()
+    assert raised.value.code == 2, "the linter's own status must reach the caller"
+    assert "yamllint" in capsys.readouterr().err
+
+
+@manual_lifecycle
+def test_the_cli_is_silent_and_zero_when_every_linter_passes(
+    cmd_mox: CmdMox, repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The companion case, so the exit status above is attributable."""
+    cmd_mox.mock("uvx").times(2).returns(exit_code=0)
+    cmd_mox.mock("action-validator").returns(exit_code=0)
+    cmd_mox.mock("actionlint").returns(exit_code=0)
+    cmd_mox.replay()
+
+    lint_actions.main(yamllint_version=YAMLLINT_VERSION, repository=repository)
+
+    cmd_mox.verify()
+    assert capsys.readouterr().err == ""
+
+
+def test_an_unreadable_directory_is_not_an_empty_one(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A listing failure must raise rather than yield nothing.
+
+    This is the defect the whole change exists to remove, one level down: a
+    directory that cannot be read looks exactly like a directory with no
+    actions in it, so the gate would report success having examined nothing.
+    """
+
+    def _refuse(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(lint_actions.Path, "rglob", _refuse)
+
+    with pytest.raises(lint_actions.DiscoveryError) as raised:
+        lint_actions.discover(repository)
+
+    assert ".github/actions" in str(raised.value)
+    assert "Permission denied" in str(raised.value)
+
+
+def test_a_missing_directory_is_an_empty_one(tmp_path: Path) -> None:
+    """An absent directory yields nothing, which is not an error.
+
+    The complement of the test above: a repository with no composite actions
+    is normal, and must not be confused with one that cannot be read.
+    """
+    surfaces = lint_actions.discover(tmp_path)
+
+    assert surfaces.manifests == ()
+    assert surfaces.workflows == ()
+
+
+#: Names that are valid path segments and distinct under sorting. The
+#: invariants below hold for any number of surfaces, which is exactly what a
+#: fixed fixture cannot show: the ordering rule is stated over an unbounded
+#: set, so it is asserted over one.
+_NAMES = st.text(
+    alphabet=st.characters(min_codepoint=97, max_codepoint=122), min_size=1, max_size=8
+)
+
+
+@given(
+    manifest_names=st.lists(_NAMES, min_size=0, max_size=6, unique=True),
+    workflow_names=st.lists(_NAMES, min_size=0, max_size=6, unique=True),
+)
+@settings(max_examples=40, deadline=None)
+def test_plan_orders_every_surface_the_same_way(
+    tmp_path_factory: pytest.TempPathFactory,
+    manifest_names: list[str],
+    workflow_names: list[str],
+) -> None:
+    """Actions precede workflows, and yamllint precedes each surface's linter.
+
+    Whatever the counts, the shape is: yamllint over the manifests, one
+    `action-validator` per manifest, yamllint over the workflows, then
+    `actionlint`. Each group is present only when that surface has files.
+    """
+    root = tmp_path_factory.mktemp("repo")
+    for name in manifest_names:
+        directory = root / ".github" / "actions" / name
+        directory.mkdir(parents=True)
+        (directory / "action.yml").write_text("name: a\n", encoding="utf-8")
+    if workflow_names:
+        (root / ".github" / "workflows").mkdir(parents=True)
+        for name in workflow_names:
+            (root / ".github" / "workflows" / f"{name}.yml").write_text(
+                "name: w\n", encoding="utf-8"
+            )
+
+    invocations = lint_actions.plan(lint_actions.discover(root), YAMLLINT_VERSION)
+    tools = [invocation.tool for invocation in invocations]
+
+    expected: list[str] = []
+    if manifest_names:
+        expected += ["yamllint", *["action-validator"] * len(manifest_names)]
+    if workflow_names:
+        expected += ["yamllint", "actionlint"]
+    assert tools == expected
+
+    for invocation in invocations:
+        assert invocation.argv, "every invocation must name a program"
+    paths = [
+        argument
+        for invocation in invocations
+        if invocation.tool == "action-validator"
+        for argument in invocation.argv[1:]
+    ]
+    assert paths == sorted(paths), "manifests are visited in a stable order"
+
+
+@given(failure_index=st.integers(min_value=0, max_value=3))
+@settings(max_examples=12, deadline=None)
+def test_the_run_stops_at_whichever_invocation_fails(
+    tmp_path_factory: pytest.TempPathFactory,
+    failure_index: int,
+) -> None:
+    """`lint` stops at the first failing invocation, wherever it falls.
+
+    The real loop is exercised with a substituted runner, so the property is
+    about `lint`'s control flow rather than a reimplementation of it. The
+    cmd-mox cases above cover the real executables; a property test should not
+    stand up a shim per example.
+    """
+    root = tmp_path_factory.mktemp("repo")
+    actions = root / ".github" / "actions" / "demo"
+    actions.mkdir(parents=True)
+    (actions / "action.yml").write_text("name: a\n", encoding="utf-8")
+    workflows = root / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text("name: w\n", encoding="utf-8")
+
+    attempted: list[str] = []
+
+    def _record(invocation: lint_actions.Invocation) -> None:
+        attempted.append(invocation.tool)
+        if len(attempted) == failure_index + 1:
+            raise lint_actions.LintError(invocation.tool, 1)
+
+    planned = lint_actions.plan(lint_actions.discover(root), YAMLLINT_VERSION)
+
+    # Patched through a context rather than the `monkeypatch` fixture, which
+    # Hypothesis rejects here: a function-scoped fixture is not reset between
+    # generated examples.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(lint_actions, "_run", _record)
+        with pytest.raises(lint_actions.LintError) as raised:
+            lint_actions.lint(root, YAMLLINT_VERSION)
+
+    assert raised.value.tool == planned[failure_index].tool
+    assert len(attempted) == failure_index + 1, (
+        "no invocation after the failing one may be attempted"
+    )
