@@ -1,0 +1,9 @@
+//! Control probe: an injected reader, which the policy permits.
+//!
+//! This must lint clean. If it does not, the harness is reporting diagnostics
+//! that have nothing to do with the environment policy and the other probes'
+//! results cannot be trusted.
+
+pub fn reads(read_env: impl Fn(&str) -> Option<String>) -> Option<String> {
+    read_env("WILDSIDE_PROBE")
+}

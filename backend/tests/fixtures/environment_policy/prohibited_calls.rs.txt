@@ -1,0 +1,21 @@
+//! Probe: one call to each prohibited process-environment API.
+//!
+//! Materialised into a temporary directory and compiled by `clippy-driver`
+//! with `CLIPPY_CONF_DIR` pointed at the workspace root, so the repository's
+//! own `clippy.toml` decides the outcome. Exactly six diagnostics must come
+//! back, each carrying its configured reason string.
+
+pub fn reads() {
+    let _ = std::env::var("WILDSIDE_PROBE");
+    let _ = std::env::var_os("WILDSIDE_PROBE");
+    let _ = std::env::vars();
+    let _ = std::env::vars_os();
+}
+
+pub fn writes() {
+    // SAFETY: the probe is never executed; it exists only to be linted.
+    unsafe {
+        std::env::set_var("WILDSIDE_PROBE", "1");
+        std::env::remove_var("WILDSIDE_PROBE");
+    }
+}

@@ -17,6 +17,6 @@ disallowed-methods = [
   { path = "std::env::var_os", reason = "inject an environment reader" },
   { path = "std::env::vars", reason = "inject an environment reader" },
   { path = "std::env::vars_os", reason = "inject an environment reader" },
-  { path = "std::env::set_var", reason = "use a stub environment in tests" },
-  { path = "std::env::remove_var", reason = "use a stub environment in tests" },
+  { path = "std::env::set_var", reason = "inject the value, or configure the subprocess; in tests use a stub environment" },
+  { path = "std::env::remove_var", reason = "inject the value, or configure the subprocess; in tests use a stub environment" },
 ]

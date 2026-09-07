@@ -706,9 +706,12 @@ reader that application composition injects.
 
 ### The composition-root exception
 
-A direct read may remain only at a genuine composition root: a binary's `main`
-path, or the single reader a test binary composes its support tree with. It
-must carry an item-scoped attribute naming why:
+A direct read may remain only at a genuine composition root. There are three:
+a binary's `main` path; the single reader a test binary composes its support
+tree with; and the one process-backed adapter behind an environment trait, such
+as `DefaultEnv` or `DefaultIdempotencyEnv`, which application composition
+injects and which domain and service code never reach for directly. Each must
+carry an item-scoped attribute naming why:
 
 ```rust
 #[expect(
@@ -723,8 +726,10 @@ fn process_env(name: &str) -> Option<String> {
 
 Use `expect`, never `allow`. An `expect` that stops firing is itself a warning,
 so a site that later migrates off the ambient read cleans up its own exception.
-Do not widen an exception to a module, and do not let one spread into domain or
-service code.
+An `#[allow]` would silence the call permanently, which is why `backend` and
+`architecture-lint` deny `clippy::allow_attributes` and
+`clippy::allow_attributes_without_reason` alongside the policy. Do not widen an
+exception to a module, and do not let one spread into domain or service code.
 
 ### Tests
 
@@ -735,8 +740,11 @@ coverage steps. Nothing in `backend/tests/` needs a process-wide environment
 lock, and no nextest group exists to protect environment state.
 
 `docs/adr-002-environment-seam-taxonomy.md` records the decision and the full
-list of sanctioned roots. `backend/tests/environment_policy_contract.rs` guards
-the configuration itself.
+list of sanctioned roots. Two contract targets guard the mechanism:
+`backend/tests/environment_policy_contract.rs` asserts what the repository
+declares, and `backend/tests/environment_policy_lint.rs` runs `clippy-driver`
+over probe sources to prove those declarations actually fire. Add a probe there
+when the policy grows an entry.
 
 ## Adding or changing behavioural tests
 

@@ -143,48 +143,34 @@ impl ClusterStateSandbox {
     }
 }
 
-/// Scenario: the resolved password reaches the repair through
-/// `ensure_stable_cluster_environment_with`.
+/// Scenario: the cluster's existing `.pgpass` was written under a different
+/// password, or under the one the reader resolves.
 ///
-/// Invariant: a `.pgpass` written under a different password is removed, which
-/// can only happen if the injected reader's value was carried into the repair.
+/// Invariant: `ensure_stable_cluster_environment_with` carries the reader's
+/// resolved password into the repair, so a mismatched file is removed and a
+/// matching one survives. A warm cluster is therefore not torn down on every
+/// setup call.
 #[cfg(unix)]
-#[test]
-fn ensure_stable_cluster_environment_repairs_with_the_resolved_password() {
+#[rstest]
+#[case::stale_password_is_cleared(b"stale-password", false)]
+#[case::matching_password_is_kept(b"resolved-password", true)]
+fn ensure_stable_cluster_environment_repairs_with_the_resolved_password(
+    #[case] existing_password: &[u8],
+    #[case] should_keep_password_file: bool,
+) {
     let sandbox = ClusterStateSandbox::new();
     sandbox
         .install_dir
-        .write(".pgpass", b"stale-password")
-        .expect("seed stale password file");
+        .write(".pgpass", existing_password)
+        .expect("seed the existing password file");
 
     stable_cluster_env::ensure_stable_cluster_environment_with(sandbox.reader("resolved-password"))
-        .expect("repair stale password state");
+        .expect("repair password state");
 
-    assert!(
-        !sandbox.install_dir.exists(".pgpass"),
-        "the resolved password must reach the repair and clear the stale file"
-    );
-}
-
-/// Scenario: the resolved password already matches the cluster's `.pgpass`.
-///
-/// Invariant: the repair leaves matching state alone, so a warm cluster is not
-/// torn down on every setup call.
-#[cfg(unix)]
-#[test]
-fn ensure_stable_cluster_environment_keeps_matching_password_state() {
-    let sandbox = ClusterStateSandbox::new();
-    sandbox
-        .install_dir
-        .write(".pgpass", b"resolved-password")
-        .expect("seed matching password file");
-
-    stable_cluster_env::ensure_stable_cluster_environment_with(sandbox.reader("resolved-password"))
-        .expect("repair should be a no-op");
-
-    assert!(
+    assert_eq!(
         sandbox.install_dir.exists(".pgpass"),
-        "a matching password file must survive the repair"
+        should_keep_password_file,
+        "the repair must compare the resolved password against the existing file"
     );
 }
 

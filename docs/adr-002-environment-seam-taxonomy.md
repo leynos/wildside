@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted.
+Accepted — 2026-09-06: prohibit ambient process-environment access with Clippy
+and inject every environment-dependent boundary through one of four seam
+shapes, with a direct read allowed only at a documented composition root.
 
 ## Date
 
@@ -65,9 +67,11 @@ Choose the smallest seam that fits the boundary:
   `Command::env_remove`. Mutating the test process to influence a child is not
   an accepted alternative.
 
-A direct read may remain only at a genuine executable composition root — a
-binary's `main` path or the one reader a test binary composes its support tree
-with — and must carry an item-scoped
+A direct read may remain only at a genuine composition root: a binary's `main`
+path, the one reader a test binary composes its support tree with, or the
+single process-backed adapter behind an environment trait, composed at the
+application boundary and never reached from domain or service code. It must
+carry an item-scoped
 `#[expect(clippy::disallowed_methods, reason = "…")]` naming why the site is a
 root. Use `expect`, never `allow`: the expectation goes unfulfilled, and
 therefore warns, once the site is migrated, so the backlog removes itself

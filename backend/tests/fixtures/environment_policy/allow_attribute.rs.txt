@@ -1,0 +1,10 @@
+//! Probe: silencing a prohibited call with `#[allow]` rather than `#[expect]`.
+//!
+//! The allow suppresses the `disallowed_methods` diagnostic, which is exactly
+//! why the policy forbids it: the suppression would survive the site being
+//! migrated. `clippy::allow_attributes` is what must object instead.
+
+#[allow(clippy::disallowed_methods, reason = "an allow must not be accepted")]
+pub fn reads() {
+    let _ = std::env::var("WILDSIDE_PROBE");
+}

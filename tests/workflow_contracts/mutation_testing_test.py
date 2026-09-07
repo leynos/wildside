@@ -55,6 +55,9 @@ EXPECTED_WITH = {
         'echo "POSTGRESQL_VERSION==16.10.0" >> "$GITHUB_ENV"\n'
         'echo "POSTGRESQL_RELEASES_URL='
         'https://github.com/theseus-rs/postgresql-binaries" >> "$GITHUB_ENV"\n'
+        # Test support resolves PG_PASSWORD without setting it (issue 464), so
+        # this run must supply the stable value like every other test lane.
+        'echo "PG_PASSWORD=wildside_embedded_test" >> "$GITHUB_ENV"\n'
     ),
 }
 
