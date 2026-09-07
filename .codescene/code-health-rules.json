@@ -1,9 +1,15 @@
 {
-  "rules": {
-    "string-heavy-function-arguments": {
-      "threshold-by-pattern": {
-        "**/domain/*.rs": 100
-      }
+  "usage": "Repo-scoped CodeScene overrides. Keep each rule_set narrowly scoped and justify it in matching_content_path_doc, so a reader can tell a deliberate exemption from an unexamined one.",
+  "rule_sets": [
+    {
+      "matching_content_path": "**/domain/*.rs",
+      "matching_content_path_doc": "Domain types model the vocabulary the rest of the backend speaks, so their constructors and conversions legitimately take several string-like fields in a row: an identifier, a display name, a slug. Grouping them into a context type would add a value that is constructed once and immediately unpacked at every call site, and the alternative, newtyping each field, is a separate design decision rather than something this rule should force. Reassess if a domain constructor grows past a handful of arguments, or if the same run of strings starts appearing in signatures outside this directory.",
+      "rules": [
+        {
+          "name": "String Heavy Function Arguments",
+          "weight": 0.0
+        }
+      ]
     }
-  }
+  ]
 }
