@@ -2,7 +2,7 @@
 //! fires (issue #464).
 //!
 //! `environment_policy_contract.rs` asserts what the repository declares. This
-//! target asserts what Clippy *does* with those declarations: it materialises
+//! target asserts what Clippy *does* with those declarations: it materializes
 //! a probe source into a temporary directory and runs `clippy-driver` over it
 //! with `CLIPPY_CONF_DIR` pointed at the workspace root, then reads the JSON
 //! diagnostics. One process per probe, no nested Cargo, no fixture package.
