@@ -39,6 +39,21 @@ from pathlib import Path
 import pytest
 import yaml
 
+
+class Lane(typ.NamedTuple):
+    """One workflow lane that runs the Rust suite.
+
+    Grouped into a single value so each case is named once and the test takes
+    one parameter rather than five positional ones.
+    """
+
+    workflow_name: str
+    job_name: str
+    step_name: str
+    required_trigger: str
+    job_condition: str | None
+
+
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 
 # Not a secret: this is the documented default superuser password for the
@@ -96,36 +111,35 @@ def _step(job: dict[str, object], step_name: str) -> dict[str, object]:
 
 
 @pytest.mark.parametrize(
-    ("workflow_name", "job_name", "step_name", "required_trigger", "job_condition"),
+    "lane",
     [
         pytest.param(
-            "ci.yml", "build", "Rust tests", "pull_request", None, id="ci-rust-tests"
+            Lane("ci.yml", "build", "Rust tests", "pull_request", None),
+            id="ci-rust-tests",
         ),
         pytest.param(
-            "ci.yml",
-            "coverage",
-            "Generate Rust coverage",
-            "pull_request",
-            COVERAGE_JOB_CONDITION,
+            Lane(
+                "ci.yml",
+                "coverage",
+                "Generate Rust coverage",
+                "pull_request",
+                COVERAGE_JOB_CONDITION,
+            ),
             id="ci-coverage",
         ),
         pytest.param(
-            "coverage-main.yml",
-            "coverage-upload",
-            "Generate Rust coverage",
-            "push",
-            None,
+            Lane(
+                "coverage-main.yml",
+                "coverage-upload",
+                "Generate Rust coverage",
+                "push",
+                None,
+            ),
             id="coverage-main",
         ),
     ],
 )
-def test_the_rust_suite_receives_the_embedded_postgres_settings(
-    workflow_name: str,
-    job_name: str,
-    step_name: str,
-    required_trigger: str,
-    job_condition: str | None,
-) -> None:
+def test_the_rust_suite_receives_the_embedded_postgres_settings(lane: Lane) -> None:
     """Each step running the Rust suite is reachable and supplies the settings.
 
     Test support resolves the password without setting it, so a step that omits
@@ -133,30 +147,30 @@ def test_the_rust_suite_receives_the_embedded_postgres_settings(
     test binaries with ``28P01 password authentication failed``. A step that is
     skipped supplies nothing at all, so reachability is asserted first.
     """
-    document = _load(WORKFLOWS / workflow_name)
+    document = _load(WORKFLOWS / lane.workflow_name)
 
-    assert required_trigger in _triggers(document), (
-        f"{workflow_name} must trigger on {required_trigger}, or the "
-        f"{step_name} step never runs"
+    assert lane.required_trigger in _triggers(document), (
+        f"{lane.workflow_name} must trigger on {lane.required_trigger}, or the "
+        f"{lane.step_name} step never runs"
     )
 
-    job = _job(document, job_name)
-    assert job.get("if") == job_condition, (
-        f"the {job_name} job's condition must be {job_condition!r}; a changed "
-        f"or added condition can skip {step_name} entirely"
+    job = _job(document, lane.job_name)
+    assert job.get("if") == lane.job_condition, (
+        f"the {lane.job_name} job's condition must be {lane.job_condition!r}; a "
+        f"changed or added condition can skip {lane.step_name} entirely"
     )
 
-    step = _step(job, step_name)
+    step = _step(job, lane.step_name)
     assert "if" not in step, (
-        f"the {step_name} step must carry no condition; one would let it be "
-        "skipped while its env block still reads correctly"
+        f"the {lane.step_name} step must carry no condition; one would let it "
+        "be skipped while its env block still reads correctly"
     )
 
     env = step.get("env")
-    assert isinstance(env, dict), f"the {step_name!r} step must declare env"
+    assert isinstance(env, dict), f"the {lane.step_name!r} step must declare env"
     assert env.get("PG_PASSWORD") == STABLE_PG_PASSWORD, (
-        f"the {step_name} step must set PG_PASSWORD to the stable default"
+        f"the {lane.step_name} step must set PG_PASSWORD to the stable default"
     )
     assert env.get("POSTGRESQL_RELEASES_URL") == THESEUS_RELEASES_URL, (
-        f"the {step_name} step must pin POSTGRESQL_RELEASES_URL"
+        f"the {lane.step_name} step must pin POSTGRESQL_RELEASES_URL"
     )
