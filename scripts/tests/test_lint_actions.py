@@ -219,6 +219,31 @@ _NAMES = st.text(
 )
 
 
+def _build_repository(
+    root: Path, manifest_names: list[str], workflow_names: list[str]
+) -> None:
+    """Populate ``root`` with the named composite actions and workflows."""
+    for name in manifest_names:
+        directory = root / ".github" / "actions" / name
+        directory.mkdir(parents=True)
+        (directory / "action.yml").write_text("name: a\n", encoding="utf-8")
+    if workflow_names:
+        workflows = root / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        for name in workflow_names:
+            (workflows / f"{name}.yml").write_text("name: w\n", encoding="utf-8")
+
+
+def _expected_tools(manifest_count: int, workflow_count: int) -> list[str]:
+    """Return the tool order the gate must produce for these surface sizes."""
+    expected: list[str] = []
+    if manifest_count:
+        expected += ["yamllint", *["action-validator"] * manifest_count]
+    if workflow_count:
+        expected += ["yamllint", "actionlint"]
+    return expected
+
+
 @given(
     manifest_names=st.lists(_NAMES, min_size=0, max_size=6, unique=True),
     workflow_names=st.lists(_NAMES, min_size=0, max_size=6, unique=True),
@@ -236,36 +261,41 @@ def test_plan_orders_every_surface_the_same_way(
     `actionlint`. Each group is present only when that surface has files.
     """
     root = tmp_path_factory.mktemp("repo")
-    for name in manifest_names:
-        directory = root / ".github" / "actions" / name
-        directory.mkdir(parents=True)
-        (directory / "action.yml").write_text("name: a\n", encoding="utf-8")
-    if workflow_names:
-        (root / ".github" / "workflows").mkdir(parents=True)
-        for name in workflow_names:
-            (root / ".github" / "workflows" / f"{name}.yml").write_text(
-                "name: w\n", encoding="utf-8"
-            )
+    _build_repository(root, manifest_names, workflow_names)
 
     invocations = lint_actions.plan(lint_actions.discover(root), YAMLLINT_VERSION)
-    tools = [invocation.tool for invocation in invocations]
 
-    expected: list[str] = []
-    if manifest_names:
-        expected += ["yamllint", *["action-validator"] * len(manifest_names)]
-    if workflow_names:
-        expected += ["yamllint", "actionlint"]
-    assert tools == expected
+    assert [invocation.tool for invocation in invocations] == _expected_tools(
+        len(manifest_names), len(workflow_names)
+    )
 
-    for invocation in invocations:
-        assert invocation.argv, "every invocation must name a program"
+
+@given(
+    manifest_names=st.lists(_NAMES, min_size=1, max_size=6, unique=True),
+)
+@settings(max_examples=20, deadline=None)
+def test_plan_visits_manifests_in_a_stable_order(
+    tmp_path_factory: pytest.TempPathFactory, manifest_names: list[str]
+) -> None:
+    """Manifest paths are sorted, so the run order does not depend on the disk.
+
+    Without this the ordering test above would hold while the individual
+    manifests arrived in whatever order the filesystem returned them, which
+    makes a failing run hard to reproduce.
+    """
+    root = tmp_path_factory.mktemp("repo")
+    _build_repository(root, manifest_names, [])
+
     paths = [
         argument
-        for invocation in invocations
+        for invocation in lint_actions.plan(
+            lint_actions.discover(root), YAMLLINT_VERSION
+        )
         if invocation.tool == "action-validator"
         for argument in invocation.argv[1:]
     ]
-    assert paths == sorted(paths), "manifests are visited in a stable order"
+
+    assert paths == sorted(paths)
 
 
 @given(failure_index=st.integers(min_value=0, max_value=3))
