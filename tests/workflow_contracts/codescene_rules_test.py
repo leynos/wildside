@@ -277,3 +277,35 @@ def test_a_rule_set_that_overrides_nothing_is_rejected(
 
     with pytest.raises(AssertionError):
         test_every_rule_set_actually_overrides_something()
+
+
+def test_the_domain_exemption_is_the_one_this_repository_intends() -> None:
+    """The committed override must be the specific exemption #487 restores.
+
+    The schema checks above are generic: they would pass just as happily for
+    an unrelated rule set, or for none at all once this one was replaced.
+    This pins what the repository actually means to exempt, so removing or
+    retargeting the domain exemption is a deliberate edit here rather than a
+    silent change of policy.
+    """
+    domain = [
+        rule_set
+        for rule_set in _rule_sets()
+        if rule_set.get("matching_content_path") == "**/domain/*.rs"
+    ]
+    assert len(domain) == 1, (
+        "exactly one rule set must target '**/domain/*.rs'; that is the "
+        "exemption #229 intended and #487 restores"
+    )
+
+    rules = domain[0].get("rules")
+    assert isinstance(rules, list), "the domain rule set must declare rules"
+    weights = {
+        rule["name"]: rule["weight"]
+        for rule in rules
+        if isinstance(rule, dict) and isinstance(rule.get("name"), str)
+    }
+    assert weights == {"String Heavy Function Arguments": 0.0}, (
+        "the domain rule set exists to disable String Heavy Function "
+        f"Arguments, and nothing else: {weights}"
+    )
