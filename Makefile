@@ -286,20 +286,26 @@ define LINT_ACTIONS_CMD
 $(call ensure_tool,uv)
 $(call ensure_tool,action-validator)
 $(call ensure_tool,actionlint)
+# Each command carries `|| exit 1` rather than relying on `.SHELLFLAGS`'s
+# `-e`. Two shapes here lose a status without it, and both are invisible:
+# a failing `action-validator` in an earlier loop iteration is replaced by
+# the last iteration's status, and the first `find | xargs` below is
+# replaced by the second's. `-e` covers both today; the guards say so
+# explicitly and survive a future change to the flag.
 @if [ ! -d .github/actions ]; then \
   echo "No composite actions found; skipping lint-actions"; \
 else \
-  find .github/actions -name 'action.yml' -print0 | xargs -0 -r uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint; \
+  find .github/actions -name 'action.yml' -print0 | xargs -0 -r uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint || exit 1; \
   while IFS= read -r -d '' action; do \
     echo "$$action:"; \
-    action-validator "$$action"; \
+    action-validator "$$action" || exit 1; \
   done < <(find .github/actions -name 'action.yml' -print0); \
 fi
 @if [ ! -d .github/workflows ]; then \
   echo "No workflows found; skipping workflow lint"; \
 else \
-  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint; \
-  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r actionlint; \
+  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint || exit 1; \
+  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r actionlint || exit 1; \
 fi
 endef
 

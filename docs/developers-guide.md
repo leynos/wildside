@@ -1053,6 +1053,26 @@ Both options earn their place, and neither covers the other:
 `-c` stays last, because make appends the recipe to `.SHELLFLAGS` as the
 shell's command string.
 
+The flag is the floor, not the whole story. Two shapes lose a command's status
+on their own, and both are invisible in the output:
+
+- **A loop body.** `lint-actions` runs `action-validator` once per composite
+  action. Without a guard the loop reports its last iteration's status, so a
+  failure in any earlier one disappears.
+- **Two commands in one branch.** The same recipe runs `find | xargs yamllint`
+  and then `find | xargs actionlint` inside a single `if`. Without a guard the
+  second's status replaces the first's.
+
+`-e` covers both today, so each of those invocations carries `|| exit 1`
+anyway. The guard states the intent where the reader meets it, and it survives
+a future change to `.SHELLFLAGS` that the shapes themselves would not.
+`tests/workflow_contracts/makefile_tooling_test.py` asserts every linter
+invocation in that recipe carries one, and drives the recipe with a failing
+first linter and a passing second. A companion probe in
+`makefile_failure_propagation_test.py` switches `-e` off with `set +e` and
+measures the guard alone, since no behavioural test can tell the guard and the
+flag apart while both are present.
+
 A recipe that genuinely needs a command to be allowed to fail says so itself,
 with `|| true`, an `if`, or a captured status. Make's `-` line prefix is not an
 option here: under `.ONESHELL` it applies to the first recipe line only, so it
