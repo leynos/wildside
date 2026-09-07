@@ -41,6 +41,10 @@ pub(crate) mod unix_atexit {
     static SHARED_CLUSTER_PROCESS_LOCK_FD: OnceLock<i32> = OnceLock::new();
     static SHARED_CLUSTER_PROCESS_LOCK_INIT: Mutex<()> = Mutex::new(());
 
+    /// Take the cross-process `flock` guarding the shared cluster directory.
+    ///
+    /// Idempotent within a process: once the descriptor is stored, later calls
+    /// short-circuit rather than re-locking.
     pub(crate) fn acquire_shared_cluster_process_lock() -> BootstrapResult<()> {
         if SHARED_CLUSTER_PROCESS_LOCK_FD.get().is_some() {
             return Ok(());

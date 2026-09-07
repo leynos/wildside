@@ -153,6 +153,13 @@ fn database_url_from_process_env() -> Option<String> {
     env::var("DATABASE_URL").ok()
 }
 
+/// Choose the database URL from the `--database-url` flag, falling back to the
+/// injected `DATABASE_URL` value.
+///
+/// # Errors
+///
+/// Returns `InvalidInput` when the chosen source is blank, and when neither
+/// source supplies a value.
 fn resolve_database_url(explicit: Option<String>, from_env: Option<String>) -> io::Result<String> {
     if let Some(value) = explicit {
         if value.trim().is_empty() {

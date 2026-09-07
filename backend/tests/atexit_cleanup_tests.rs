@@ -95,6 +95,7 @@ struct ClusterStateSandbox {
 
 #[cfg(unix)]
 impl ClusterStateSandbox {
+    /// Create the sandbox with an empty install and data directory pair.
     fn new() -> Self {
         let sandbox = tempfile::tempdir().expect("tempdir");
         let install_path = sandbox.path().join("install");

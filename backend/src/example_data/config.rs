@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use ortho_config::declarative::{LayerComposition, MergeComposer, MergeLayer, merge_value};
 use ortho_config::discovery::{ConfigDiscovery, DiscoveryLayersOutcome};
 use ortho_config::figment::{Figment, Provider};
+use ortho_config::uncased::{Uncased, UncasedStr};
 use ortho_config::{
     CsvEnv, OrthoConfig, OrthoJsonMergeExt, OrthoMergeExt, OrthoResult, sanitize_value,
 };
@@ -17,6 +18,10 @@ const DEFAULT_SEED_NAME: &str = "mossy-owl";
 const DOTFILE_NAME: &str = ".example_data.toml";
 const ENV_PREFIX: &str = "EXAMPLE_DATA_";
 
+/// Locate the bundled seed registry relative to the current directory.
+///
+/// Tries `fixtures/` and then `backend/fixtures/` so the binary works whether
+/// it runs from the workspace root or from the backend crate.
 fn default_registry_path() -> PathBuf {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let direct = cwd.join("fixtures").join("example-data").join("seeds.json");
@@ -116,6 +121,17 @@ impl ExampleDataSettings {
             .unwrap_or_else(default_registry_path)
     }
 
+    /// Load the settings from the defaults, any discovered configuration
+    /// files, and an explicit environment layer.
+    ///
+    /// This is the whole of [`OrthoConfig::load_from_iter`] apart from
+    /// constructing the provider, so a test that calls it exercises the same
+    /// composition and merge path the application uses (#464).
+    fn load_with_provider(env_provider: impl Provider) -> OrthoResult<Self> {
+        compose_layers(env_provider).into_merge_result(Self::merge_from_layers)
+    }
+
+    /// Merge the composed layers, lowest precedence first, into the settings.
     fn merge_from_layers(layers: Vec<MergeLayer<'static>>) -> OrthoResult<Self> {
         let mut buffer = Value::Object(Map::new());
         for layer in layers {
@@ -131,8 +147,7 @@ impl OrthoConfig for ExampleDataSettings {
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,
     {
-        let composition = compose_layers(process_env_provider());
-        composition.into_merge_result(Self::merge_from_layers)
+        Self::load_with_provider(process_env_provider())
     }
 
     fn prefix() -> &'static str {
@@ -147,10 +162,24 @@ impl OrthoConfig for ExampleDataSettings {
 /// precedence can be exercised against an explicit layer instead (#464).
 fn process_env_provider() -> impl Provider {
     CsvEnv::prefixed(ENV_PREFIX)
-        .map(|key| ortho_config::uncased::Uncased::new(key.as_str().to_ascii_uppercase()))
+        .map(uppercase_env_key)
         .split("__")
 }
 
+/// Normalize an environment variable name to the upper-case form the layer
+/// keys on.
+///
+/// Named rather than inlined so the mapping the provider applies can be
+/// asserted without reading the process.
+fn uppercase_env_key(key: &UncasedStr) -> Uncased<'_> {
+    Uncased::new(key.as_str().to_ascii_uppercase())
+}
+
+/// Compose the defaults, any discovered configuration files, and the supplied
+/// environment layer, in ascending order of precedence.
+///
+/// Errors from each stage are collected rather than short-circuiting, so a
+/// caller sees every problem at once.
 fn compose_layers(env_provider: impl Provider) -> LayerComposition {
     let mut errors = Vec::new();
     let mut composer = MergeComposer::with_capacity(3);
@@ -209,12 +238,14 @@ mod tests {
 
     /// Load the settings from an explicit environment layer.
     ///
-    /// The layer stands in for `EXAMPLE_DATA_*` process variables, so the
-    /// merge precedence is exercised without mutating the environment or
-    /// serializing the suite behind a process-wide lock.
+    /// `load_with_provider` is the whole of `load_from_iter` apart from
+    /// constructing the provider, so these cases exercise the real defaults,
+    /// discovery, and merge path with the process read replaced by a layer
+    /// (#464).
     fn load_with_env_layer(env_layer: Value) -> TestResult<ExampleDataSettings> {
-        let composition = compose_layers(Serialized::defaults(env_layer));
-        Ok(composition.into_merge_result(ExampleDataSettings::merge_from_layers)?)
+        Ok(ExampleDataSettings::load_with_provider(
+            Serialized::defaults(env_layer),
+        )?)
     }
 
     /// Scenario: no `EXAMPLE_DATA_*` value reaches the loader.
@@ -252,5 +283,58 @@ mod tests {
         );
         assert_eq!(settings.count, Some(5));
         Ok(())
+    }
+
+    /// Scenario: the environment layer supplies one field and omits the rest.
+    ///
+    /// Invariant: the supplied field overrides its default and the omitted
+    /// ones keep theirs, so the layers merge field by field rather than
+    /// wholesale.
+    #[rstest]
+    fn a_partial_environment_layer_overrides_only_its_own_fields() -> TestResult {
+        let settings = load_with_env_layer(json!({ "seed_name": "rainbow-fox" }))?;
+
+        assert_eq!(settings.seed_name(), "rainbow-fox");
+        assert!(
+            !settings.is_enabled(),
+            "an unset toggle must keep its default rather than being cleared"
+        );
+        assert!(
+            settings.count.is_none(),
+            "an unset count must keep its default rather than being cleared"
+        );
+        Ok(())
+    }
+
+    /// Scenario: the environment layer carries a value of the wrong type.
+    ///
+    /// Invariant: loading reports an error rather than silently falling back
+    /// to the default, so a malformed `EXAMPLE_DATA_COUNT` is not mistaken for
+    /// an absent one.
+    #[rstest]
+    fn a_malformed_value_fails_the_load() {
+        let outcome = load_with_env_layer(json!({ "count": "not-a-number" }));
+
+        assert!(
+            outcome.is_err(),
+            "a non-numeric count must fail the load, not fall back to the default"
+        );
+    }
+
+    /// Scenario: the provider maps a lower-case variable name.
+    ///
+    /// Invariant: the key is upper-cased, which is what lets the
+    /// `EXAMPLE_DATA_` prefix and the `__` nesting separator match regardless
+    /// of how the variable was spelled.
+    #[rstest]
+    #[case::lower_case("example_data_seed_name", "EXAMPLE_DATA_SEED_NAME")]
+    #[case::mixed_case("Example_Data__Seed_Name", "EXAMPLE_DATA__SEED_NAME")]
+    #[case::already_upper_case("EXAMPLE_DATA_COUNT", "EXAMPLE_DATA_COUNT")]
+    fn the_provider_upper_cases_environment_keys(#[case] key: &str, #[case] expected: &str) {
+        assert_eq!(
+            uppercase_env_key(UncasedStr::new(key)).as_str(),
+            expected,
+            "the provider must key on the upper-case form of the variable name"
+        );
     }
 }

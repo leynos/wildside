@@ -13,6 +13,7 @@ struct PasswordStateFixture {
 }
 
 impl PasswordStateFixture {
+    /// Build a fixture whose data parent is seeded by `create_data_entry`.
     fn with_data_entry(should_remove_data_dir: bool, create_data_entry: impl FnOnce(&Dir)) -> Self {
         let sandbox = tempfile::tempdir().expect("tempdir");
         let install_path = sandbox.path().join("install");
@@ -41,6 +42,7 @@ impl PasswordStateFixture {
         }
     }
 
+    /// Build a fixture whose data parent holds an ordinary `data` directory.
     fn new(should_remove_data_dir: bool) -> Self {
         Self::with_data_entry(should_remove_data_dir, |data_parent| {
             data_parent.create_dir("data").expect("create data dir");
@@ -91,6 +93,7 @@ impl PasswordStateFixture {
         })
     }
 
+    /// Seed the install directory's `.pgpass` with `contents`.
     fn write_pgpass(&self, contents: &[u8]) {
         self.install_dir
             .write(".pgpass", contents)
@@ -246,6 +249,7 @@ fn repair_password_file_state_propagates_non_not_found_read_errors() {
     );
 }
 
+/// Build a stub environment reader over a fixed variable list.
 fn stub_env(vars: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
     let vars: HashMap<&str, &str> = vars.iter().copied().collect();
     move |name| vars.get(name).map(|value| (*value).to_owned())

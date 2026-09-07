@@ -731,6 +731,25 @@ An `#[allow]` would silence the call permanently, which is why `backend` and
 `clippy::allow_attributes_without_reason` alongside the policy. Do not widen an
 exception to a module, and do not let one spread into domain or service code.
 
+### Moved idempotency configuration API
+
+Environment loading for idempotency left the domain layer in the change that
+introduced this policy. Callers of the old paths move as follows:
+
+| Removed from `backend::domain::idempotency` | Replacement                                                                |
+| ------------------------------------------- | -------------------------------------------------------------------------- |
+| `IdempotencyConfig::from_env()`             | `config::idempotency::idempotency_config_from_env(&DefaultIdempotencyEnv)` |
+| `IdempotencyConfig::from_env_with(&env)`    | `config::idempotency::idempotency_config_from_env(&env)`                   |
+| `IdempotencyEnv`                            | `backend::config::idempotency::IdempotencyEnv`                             |
+| `DefaultIdempotencyEnv`                     | `backend::config::idempotency::DefaultIdempotencyEnv`                      |
+| `IDEMPOTENCY_TTL_HOURS_ENV`                 | `backend::config::idempotency::IDEMPOTENCY_TTL_HOURS_ENV`                  |
+
+`IdempotencyConfig` stays in the domain and keeps `default()`, `with_ttl`, and
+`ttl()`. It gains `from_ttl_hours(Option<u64>)`, which applies the default and
+the one-hour to ten-year clamp to an already-parsed value; the adapter does the
+string parsing. `IDEMPOTENCY_TTL_HOURS` itself is unchanged: absent,
+non-numeric, and out-of-range values behave exactly as before.
+
 ### Tests
 
 Tests never mutate the parent process. Where a value has to reach a third-party

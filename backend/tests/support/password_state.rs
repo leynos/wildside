@@ -11,6 +11,11 @@ use std::path::{Path, PathBuf};
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
+/// Remove embedded-cluster password state left behind under a different
+/// password.
+///
+/// A missing install directory is a quiet success; every other I/O failure is
+/// propagated so the caller can surface it.
 pub(super) fn repair_default_password_state(
     password: &[u8],
     paths: &PasswordStatePaths,
@@ -89,6 +94,7 @@ impl PasswordStatePaths {
     }
 }
 
+/// Compare the stored `.pgpass` with `password` and clear the stale state.
 fn repair_password_file_state(
     password: &[u8],
     install_dir: &Dir,
@@ -125,6 +131,7 @@ fn repair_password_file_state(
     Ok(())
 }
 
+/// Remove a directory tree, treating an absent path as a quiet success.
 fn remove_dir_if_exists(parent: &Dir, path: &Path) -> io::Result<()> {
     match parent.remove_dir_all(path) {
         Ok(()) => Ok(()),

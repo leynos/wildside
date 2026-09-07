@@ -31,6 +31,7 @@ fn is_env_truthy(read_env: impl Fn(&str) -> Option<String>, var: &str) -> bool {
     })
 }
 
+/// Report whether a `redis-server` binary can be executed from `PATH`.
 pub fn redis_server_is_available() -> bool {
     std::process::Command::new("redis-server")
         .arg("--version")

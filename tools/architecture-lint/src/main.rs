@@ -82,6 +82,12 @@ fn repo_root_candidates() -> Vec<PathBuf> {
     .collect()
 }
 
+/// Locate the workspace root for the current process.
+///
+/// # Errors
+///
+/// Returns [`RepoRootError`] when no candidate resolves to a directory
+/// declaring a workspace.
 fn repo_root() -> Result<PathBuf, RepoRootError> {
     first_workspace_root(&repo_root_candidates())
 }
@@ -99,6 +105,8 @@ fn first_workspace_root(candidates: &[PathBuf]) -> Result<PathBuf, RepoRootError
         .ok_or(RepoRootError)
 }
 
+/// Walk upwards from `start` for the first directory whose `Cargo.toml`
+/// declares a workspace.
 fn find_workspace_root(start: &Path) -> Option<PathBuf> {
     let cargo_toml = Utf8Path::new("Cargo.toml");
     let mut current = Some(start);

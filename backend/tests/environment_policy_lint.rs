@@ -68,6 +68,7 @@ struct Diagnostic {
 }
 
 impl Diagnostic {
+    /// Report whether this diagnostic carries the given lint code.
     fn has_code(&self, code: &str) -> bool {
         self.code.as_deref() == Some(code)
     }
