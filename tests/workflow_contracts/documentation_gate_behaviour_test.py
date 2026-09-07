@@ -6,9 +6,9 @@ every key the reviewer expects and still let an undocumented export through,
 because what each key actually does is TypeDoc's business, not the
 configuration's.
 
-These tests run the real TypeDoc against the repository's own
-`frontend-pwa/typedoc.json`, overriding only the entry point, the TypeScript
-configuration and the project name, over a fixture in a temporary directory.
+These tests run the real TypeDoc against each of the three surfaces' own
+configurations, overriding only the entry point, the TypeScript configuration
+and the project name, over a fixture in a temporary directory.
 A documented fixture must pass; a missing comment, a link to a symbol that
 does not exist, and an unknown block tag must each fail. Clearing the key
 responsible must let exactly that one case through, which is what ties each
@@ -29,7 +29,16 @@ if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
     import collections.abc as cabc
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-BASE_CONFIG = PROJECT_ROOT / "frontend-pwa" / "typedoc.json"
+
+#: Every surface the gate covers. The cases below run against each one's real
+#: configuration rather than a representative, because the three are
+#: maintained separately: one could lose a key while the other two keep it,
+#: and a test that only read the front end would never notice.
+SURFACES = (
+    pytest.param("frontend-pwa/typedoc.json", id="frontend-pwa"),
+    pytest.param("packages/types/typedoc.json", id="packages-types"),
+    pytest.param("packages/tokens/typedoc.json", id="packages-tokens"),
+)
 
 #: The TypeScript configuration the fixture compiles under. It mirrors the
 #: front-end's compiler options closely enough for a single-function module;
@@ -95,16 +104,20 @@ def _typedoc() -> str:
 
 
 def _write_project(
-    directory: Path, source: str, *, cleared: cabc.Sequence[str] = ()
+    directory: Path,
+    source: str,
+    config_path: str,
+    *,
+    cleared: cabc.Sequence[str] = (),
 ) -> Path:
     """Write a fixture project and return its TypeDoc configuration path.
 
-    The configuration is the repository's own, so a change to the real gate is
-    a change to what these tests measure. Only the entry point, the TypeScript
+    The configuration is the surface's own, so a change to the real gate is a
+    change to what these tests measure. Only the entry point, the TypeScript
     configuration and the project name are overridden, and optionally one
     validation key is cleared.
     """
-    config = json.loads(BASE_CONFIG.read_text(encoding="utf-8"))
+    config = json.loads((PROJECT_ROOT / config_path).read_text(encoding="utf-8"))
     config.pop("$schema", None)
     config["entryPoints"] = ["probe.ts"]
     config["tsconfig"] = "tsconfig.json"
@@ -123,9 +136,9 @@ def _write_project(
     (directory / "tsconfig.json").write_text(
         json.dumps(FIXTURE_TSCONFIG), encoding="utf-8"
     )
-    config_path = directory / "typedoc.json"
-    config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
-    return config_path
+    written = directory / "typedoc.json"
+    written.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return written
 
 
 def _run(config_path: Path) -> subprocess.CompletedProcess[str]:
@@ -140,16 +153,19 @@ def _run(config_path: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_a_documented_export_passes_and_writes_nothing(tmp_path: Path) -> None:
+@pytest.mark.parametrize("config_path", SURFACES)
+def test_a_documented_export_passes_and_writes_nothing(
+    tmp_path: Path, config_path: str
+) -> None:
     """A fully documented fixture passes, and `emit: "none"` is honoured.
 
     The second half matters as much as the first: a gate that quietly wrote a
     documentation tree into the working copy would show up as untracked files
     on every contributor's machine.
     """
-    config_path = _write_project(tmp_path, DOCUMENTED)
+    written_config = _write_project(tmp_path, DOCUMENTED, config_path)
 
-    completed = _run(config_path)
+    completed = _run(written_config)
 
     assert completed.returncode == 0, (
         f"stdout={completed.stdout!r} stderr={completed.stderr!r}"
@@ -160,14 +176,15 @@ def test_a_documented_export_passes_and_writes_nothing(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize("config_path", SURFACES)
 @pytest.mark.parametrize(("source", "expected"), DEFECTS)
 def test_each_documentation_defect_fails_the_gate(
-    tmp_path: Path, source: str, expected: str
+    tmp_path: Path, source: str, expected: str, config_path: str
 ) -> None:
-    """Each defect must fail, with a diagnostic naming it."""
-    config_path = _write_project(tmp_path, source)
+    """Each defect must fail on every surface, with a diagnostic naming it."""
+    written_config = _write_project(tmp_path, source, config_path)
 
-    completed = _run(config_path)
+    completed = _run(written_config)
 
     diagnostics = completed.stdout + completed.stderr
     assert completed.returncode != 0, diagnostics
@@ -176,9 +193,10 @@ def test_each_documentation_defect_fails_the_gate(
     )
 
 
+@pytest.mark.parametrize("config_path", SURFACES)
 @pytest.mark.parametrize(("cleared", "source"), KEY_TO_DEFECT)
 def test_clearing_a_key_admits_exactly_its_own_defect(
-    tmp_path: Path, cleared: tuple[str, ...], source: str
+    tmp_path: Path, cleared: tuple[str, ...], source: str, config_path: str
 ) -> None:
     """Clearing one key lets its defect through and leaves the others failing.
 
@@ -186,7 +204,9 @@ def test_clearing_a_key_admits_exactly_its_own_defect(
     that any particular key is why. Pinning each key to one defect is what
     stops a key being dropped from the configuration unnoticed.
     """
-    admitted = _run(_write_project(tmp_path / "admitted", source, cleared=cleared))
+    admitted = _run(
+        _write_project(tmp_path / "admitted", source, config_path, cleared=cleared)
+    )
     assert admitted.returncode == 0, (
         f"clearing {'.'.join(cleared)} should admit this fixture; "
         f"stdout={admitted.stdout!r} stderr={admitted.stderr!r}"
@@ -195,7 +215,12 @@ def test_clearing_a_key_admits_exactly_its_own_defect(
     others = [other for other in DEFECT_SOURCES if other != source]
     for index, other_source in enumerate(others):
         still_failing = _run(
-            _write_project(tmp_path / f"other{index}", other_source, cleared=cleared)
+            _write_project(
+                tmp_path / f"other{index}",
+                other_source,
+                config_path,
+                cleared=cleared,
+            )
         )
         assert still_failing.returncode != 0, (
             f"clearing {'.'.join(cleared)} also admitted an unrelated defect"

@@ -461,9 +461,10 @@ resolution in both lockfiles, and the `docs-check` target's `deps` prerequisite.
 
 That proves the gate is configured, not that it catches anything.
 `tests/workflow_contracts/documentation_gate_behaviour_test.py` runs the real
-TypeDoc against the repository's own `frontend-pwa/typedoc.json` over a
-fixture, overriding only the entry point, the TypeScript configuration and the
-project name. A documented fixture passes and writes no files; the three
+TypeDoc against each of the three surfaces' own configurations over a fixture,
+overriding only the entry point, the TypeScript configuration and the project
+name. All three are exercised rather than one representative, because they are
+maintained separately: one can lose a key while the others keep it. A documented fixture passes and writes no files; the three
 defects in the table each fail with a diagnostic naming them; and clearing a
 key admits exactly its own defect while the other two keep failing. That last
 part is what ties each key to a defect rather than to an expectation of one.
