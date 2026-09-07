@@ -48,7 +48,53 @@ TYPEDOC_CONFIGS = (
         id="packages-tokens",
     ),
 )
+
+#: What each surface must look at, and what it must ignore. An entry point
+#: silently narrowed is the cheapest way to make a zero-tolerance gate pass:
+#: it examines less and reports the same verdict. The exclusions are asserted
+#: too, because widening them has the same effect one directory at a time.
+SURFACE_SCOPE = (
+    pytest.param(
+        "frontend-pwa/typedoc.json",
+        ["src"],
+        {
+            "**/*.d.ts",
+            "**/src/api/generated/**",
+            "**/*.gen.*",
+            "**/*.generated.*",
+            "**/__generated__/**",
+            "**/*.test.*",
+            "**/tests/**",
+            "**/fixtures/**",
+        },
+        id="frontend-pwa",
+    ),
+    pytest.param(
+        "packages/types/typedoc.json",
+        ["src"],
+        {"**/*.d.ts", "**/dist/**"},
+        id="packages-types",
+    ),
+    pytest.param(
+        "packages/tokens/typedoc.json",
+        ["build", "build-utils", "src/utils"],
+        {"**/*.d.ts", "**/node_modules/**"},
+        id="packages-tokens",
+    ),
+)
 EXACT_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
+
+#: The validation object every surface must carry, compared whole rather than
+#: key by key. TypeDoc defaults an unrecognized key to its own preference, so
+#: a key introduced by a future release would otherwise arrive unreviewed.
+EXPECTED_VALIDATION = {
+    "notDocumented": True,
+    "notExported": False,
+    "invalidLink": True,
+    "invalidPath": True,
+    "rewrittenLink": True,
+    "unusedMergeModuleWith": False,
+}
 
 EXPECTED_TYPEDOC_COMMANDS = [
     "typedoc --options frontend-pwa/typedoc.json",
@@ -88,6 +134,14 @@ def test_make_targets_keep_docs_check_in_the_repository_gate() -> None:
         "is fine, dropping this one is not"
     )
 
+    target = re.search(r"(?m)^docs-check:(.*)$", makefile)
+    assert target is not None, "the Makefile must declare a 'docs-check' target"
+    assert "deps" in target.group(1).split(), (
+        "docs-check must require deps; TypeDoc runs from the workspace "
+        "install, so without it a clean checkout reports a missing binary "
+        "rather than a documentation verdict"
+    )
+
     completed = subprocess.run(  # noqa: S603 - a fixed, resolved local command.
         [_resolve("make"), "--dry-run", "docs-check"],
         cwd=PROJECT_ROOT,
@@ -96,6 +150,18 @@ def test_make_targets_keep_docs_check_in_the_repository_gate() -> None:
         text=True,
     )
     assert "pnpm run docs:check" in completed.stdout.splitlines()
+
+    recipe = re.search(r"(?m)^docs-check:.*\n((?:\t.*\n)+)", makefile)
+    assert recipe is not None, "the docs-check target must carry a recipe"
+    prefixed = [
+        line
+        for line in recipe.group(1).splitlines()
+        if line.lstrip("\t").startswith("-")
+    ]
+    assert prefixed == [], (
+        "no recipe line may carry make's '-' ignore-errors prefix; under "
+        f"the global .ONESHELL it would silently do nothing anyway: {prefixed}"
+    )
 
 
 def test_typedoc_rejects_an_undocumented_public_function() -> None:
@@ -153,14 +219,15 @@ def test_every_surface_enforces_the_zero_tolerance_policy(
     to.
     """
     config = json.loads((PROJECT_ROOT / config_path).read_text(encoding="utf-8"))
-    validation = config["validation"]
-    assert validation["notDocumented"] is True
-    assert validation["invalidLink"] is True, (
-        "a reference to a symbol that does not exist must fail the gate"
+    assert config["validation"] == EXPECTED_VALIDATION, (
+        "the validation object is compared whole, so a key added by a future "
+        "TypeDoc release has to be considered rather than inherited silently"
     )
-    assert validation["invalidPath"] is True
-    assert validation["rewrittenLink"] is True
     assert config["treatValidationWarningsAsErrors"] is True
+    assert config["treatWarningsAsErrors"] is True, (
+        "an unknown block tag is a warning rather than a validation warning, "
+        "so only this key turns a misspelled tag name into a failure"
+    )
     assert config["emit"] == "none"
     required = frozenset(config["requiredToBeDocumented"])
     assert required == expected_kinds, (
@@ -168,4 +235,26 @@ def test_every_surface_enforces_the_zero_tolerance_policy(
         "see, so the set is asserted whole rather than merely non-empty; "
         f"missing={sorted(expected_kinds - required)} "
         f"unexpected={sorted(required - expected_kinds)}"
+    )
+
+
+@pytest.mark.parametrize(("config_path", "entry_points", "exclude"), SURFACE_SCOPE)
+def test_every_surface_looks_at_what_it_claims_to(
+    config_path: str, entry_points: list[str], exclude: set[str]
+) -> None:
+    """Each surface's entry points and exclusions are pinned.
+
+    A gate that examines nothing passes. Narrowing an entry point, or adding a
+    pattern to `exclude`, is the cheapest way to make this one green without
+    documenting anything, and neither shows up in a verdict.
+    """
+    config = json.loads((PROJECT_ROOT / config_path).read_text(encoding="utf-8"))
+    assert config["entryPoints"] == entry_points
+    assert config["entryPointStrategy"] == "expand", (
+        "'expand' is what walks a directory; another strategy would treat the "
+        "entry point as a single module and examine far less"
+    )
+    assert set(config["exclude"]) == exclude, (
+        "exclusions are compared whole: each one removes declarations from the "
+        "gate's view and needs a reviewed reason"
     )

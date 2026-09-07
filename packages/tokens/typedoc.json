@@ -19,5 +19,6 @@
     "unusedMergeModuleWith": false
   },
   "requiredToBeDocumented": ["Variable", "Function", "Class", "Property", "Method", "Accessor"],
-  "treatValidationWarningsAsErrors": true
+  "treatValidationWarningsAsErrors": true,
+  "treatWarningsAsErrors": true
 }
