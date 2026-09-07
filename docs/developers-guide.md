@@ -1083,11 +1083,14 @@ Three notes for the next one, all learned here and reported upstream. cuprum
 `ProgramCatalogue` from a `ProjectSettings`, pass it to `sh.make`, and wrap
 program names in `Program` (leynos/concordat#154). `run_sync(echo=True)`
 mirrors a tool's output as it runs, which a gate needs; without it the output
-is captured and a long linter looks hung. And `cmd-mox` needs an interpreter
-that can import it on the shim's PATH, which a layered `uv run --with`
-environment is not: the shim hangs rather than failing (leynos/cmd-mox#249).
-`make test-lint-actions` builds a materialized virtual environment instead, as
-`typecheck-python` does.
+is captured and a long linter looks hung. And a `cmd-mox` shim occasionally
+stalls instead of returning, with the server logging `IPC received malformed
+JSON`; it ignores its own `CMOX_IPC_TIMEOUT` while it waits, so the symptom is
+a run that never finishes (leynos/cmd-mox#249). It is intermittent and appears
+under load rather than in any particular environment.
+`make test-lint-actions` uses a materialized virtual environment, which is
+where the suite has been stable, and `typecheck-python` already needs one, so
+the shape is not new.
 
 A recipe that genuinely needs a command to be allowed to fail says so itself,
 with `|| true`, an `if`, or a captured status. Make's `-` line prefix is not an

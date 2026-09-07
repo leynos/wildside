@@ -334,12 +334,13 @@ test-scripts:
 		$(foreach dep,$(PY_TEST_DEPS),--with $(dep)) \
 		python -m pytest scripts/local_k8s/unittests
 
-# cmd-mox intercepts a command by putting a shim on PATH, and the shim needs
-# an interpreter that can import cmd_mox. Under `uv run --with` the layered
-# environment is not one, and the shim hangs waiting for a reply that never
-# comes; a materialized virtual environment works, so this target builds one
-# the way typecheck-python does. Keep it out of PY_TEST_DEPS for the same
-# reason: those run under `uv run --with`.
+# cmd-mox intercepts a command by putting a shim on PATH. That shim sometimes
+# stalls instead of returning, with the server logging `IPC received malformed
+# JSON`, and it ignores its own CMOX_IPC_TIMEOUT while it waits, so the symptom
+# is a run that never finishes (leynos/cmd-mox#249). It is intermittent and
+# load-related rather than tied to one environment, but the suite has been
+# stable in a materialized virtual environment, so this target builds one the
+# way typecheck-python does.
 LINT_ACTIONS_TEST_VENV := .venv-lint-actions
 LINT_ACTIONS_TEST_DEPS = pytest==$(PYTEST_VERSION) cyclopts==$(CYCLOPTS_VERSION) \
 	cuprum==$(CUPRUM_VERSION) cmd-mox==$(CMD_MOX_VERSION)
