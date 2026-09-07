@@ -1023,6 +1023,9 @@ fails its target:
 | `.SHELLFLAGS` | `-eo pipefail -c` | Whether a failure reaches make at all.    |
 | `.ONESHELL`   | declared          | Whether a recipe's lines share one shell. |
 
+*Table 1: The three Makefile settings that decide whether a failing recipe
+command fails its target.*
+
 `.ONESHELL` is a global special target. GNU make ignores its prerequisite list,
 so the declaration naming `prepare-pg-worker` documents which recipe needed it
 but turns one-shell recipes on for the whole file. Every multi-line recipe

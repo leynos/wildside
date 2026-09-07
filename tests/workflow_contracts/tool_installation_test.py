@@ -235,16 +235,19 @@ def test_the_pg_worker_pin_is_probed_by_version_not_by_presence() -> None:
     )
     # binstall consults the same manifest the probe just rejected, so without
     # --force it is a no-op in exactly the case the probe exists to repair.
-    # Match the invocation: `--force-exclude` elsewhere in the Makefile would
-    # satisfy a search for the flag on its own.
+    # Match whole arguments rather than searching the line: `--force-exclude`
+    # elsewhere in the Makefile contains the string `--force` and would
+    # satisfy a substring check on its own.
     installs = [
         line
         for line in makefile.replace("\\\n", " ").splitlines()
         if "cargo binstall" in line and not line.lstrip().startswith("#")
     ]
     assert installs, "the Makefile must invoke cargo binstall for pg_worker"
-    assert all("--force" in line for line in installs), (
-        "the reinstall must override the manifest the probe rejected"
+    unforced = [line for line in installs if "--force" not in line.split()]
+    assert unforced == [], (
+        "the reinstall must override the manifest the probe rejected; these "
+        f"invocations carry no bare --force argument: {unforced}"
     )
 
 

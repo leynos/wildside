@@ -70,13 +70,11 @@ HALF_MEASURES = (
 )
 
 
+# The helper below resolves make rather than naming it: Ruff rejects a bare
+# program name in a subprocess call because PATH decides what runs, and a
+# readable assertion here beats an OSError from deep inside the test.
 def _make() -> str:
-    """Return the absolute path to GNU make.
-
-    Ruff rejects a bare program name in a subprocess call because PATH decides
-    what runs, and a readable failure here beats an OSError from deep inside
-    the test.
-    """
+    """Return the absolute path to GNU make."""
     resolved = which("make")
     assert resolved is not None, "GNU make must be installed to run these contracts"
     return resolved
