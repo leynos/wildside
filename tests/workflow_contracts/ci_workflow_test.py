@@ -159,7 +159,7 @@ def test_build_runs_the_typedoc_documentation_gate() -> None:
         "the documentation gate must run unconditionally, so it cannot carry "
         "an 'if' guard"
     )
-    assert invocations[0].get("continue-on-error") in (None, False), (
+    assert invocations[0].get("continue-on-error") in {None, False}, (
         "the documentation gate must fail the job rather than continue on error"
     )
 def test_codescene_check_immediately_follows_coverage_generation() -> None:

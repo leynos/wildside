@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
+import shutil
+import subprocess  # noqa: S404 - the contract has to run the gate to observe it.
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,20 @@ EXPECTED_TYPEDOC_COMMANDS = [
 ]
 
 
+def _resolve(executable: str) -> str:
+    """Return the absolute path to ``executable``.
+
+    Ruff rejects a bare program name in a subprocess call because PATH decides
+    what runs. Resolving it here keeps the call explicit and fails with a
+    readable message when the tool is missing rather than an OSError.
+    """
+    resolved = shutil.which(executable)
+    assert resolved is not None, (
+        f"{executable} must be installed to verify the documentation gate"
+    )
+    return resolved
+
+
 def test_docs_check_runs_all_three_typedoc_configs() -> None:
     """The package script must validate every maintained TypeDoc surface."""
     manifest = json.loads(PACKAGE_MANIFEST.read_text(encoding="utf-8"))
@@ -42,8 +57,8 @@ def test_make_targets_keep_docs_check_in_the_repository_gate() -> None:
     makefile = MAKEFILE.read_text(encoding="utf-8")
     assert "all: check-fmt lint docs-check test spelling" in makefile
 
-    completed = subprocess.run(  # noqa: S603 - fixed local build command.
-        ["make", "--dry-run", "docs-check"],
+    completed = subprocess.run(  # noqa: S603 - a fixed, resolved local command.
+        [_resolve("make"), "--dry-run", "docs-check"],
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
@@ -54,9 +69,9 @@ def test_make_targets_keep_docs_check_in_the_repository_gate() -> None:
 
 def test_typedoc_rejects_an_undocumented_public_function() -> None:
     """The configured warning policy must fail on an undocumented declaration."""
-    completed = subprocess.run(  # noqa: S603 - fixed local TypeDoc fixture.
+    completed = subprocess.run(  # noqa: S603 - a fixed, resolved local command.
         [
-            "pnpm",
+            _resolve("pnpm"),
             "exec",
             "typedoc",
             "--options",
