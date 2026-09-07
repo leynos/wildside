@@ -1708,9 +1708,17 @@ several runs rather than one:
 *Table: measured coverage-step and whole-job durations, read across ten
 successful runs of each workflow.*
 
-The widest gap is 522 s, so the contract allows 15 minutes, making the
-requirement 105 minutes, and the ceilings are 120: fifteen above it, which is
-the margin the estate asks for above every requirement.
+The widest gap is 522 s, so the contract allows 15 minutes. The requirement is
+therefore 120 minutes: the 5,400 s watchdog, 900 s of measured work outside it,
+and a 900 s margin. Both ceilings are 120 minutes, so each equals its
+requirement exactly.
+
+The margin is one of the three terms rather than slack above them. A ceiling
+equal to the watchdog plus the work outside it cancels the job at the moment
+the watchdog would have reported the overrun, and the report is the only thing
+that makes an overrun actionable. On the trunk lane most of that gap is the
+database fixtures and the artefact upload, which run outside the coverage step
+and so outside the watchdog.
 
 The contract also pins the condition each lane carries. A skipped step runs no
 `cargo`, so its watchdog never arms and the tiers say nothing about it:
@@ -1718,12 +1726,8 @@ The contract also pins the condition each lane carries. A skipped step runs no
 is not. The conditions are pinned rather than forbidden, because the one here
 is legitimate: the pull-request lane skips Dependabot branches, whose bumps are
 not changes worth measuring, and pushes, which the trunk lane covers. A lane
-gaining, losing or changing a condition has to change this section with it. A ceiling equal to the
-sum it contains cancels the job at the moment the watchdog would have reported
-the overrun, so the margin is a term of the requirement rather than slack that
-happens to be there. On the trunk lane most of that
-gap is the database fixtures and the artefact upload, which run outside the
-coverage step and so outside the watchdog.
+gaining, losing or changing a condition has to change this section with it, and
+a lane appearing without an entry here fails the contract too.
 
 None of those runs was genuinely cold. One run is the coldest seen so far, not
 a measurement of the cold case.
@@ -1734,17 +1738,28 @@ a measurement of the cold case.
 value over every job invoking the coverage action, in both the `.yml` and
 `.yaml` extensions. It resolves the watchdog from the step, then the job, then
 the workflow, as GitHub does, and it fails on a coverage-invoking job that
-declares no ceiling at all.
+declares no ceiling at all. The readings it rests on live in
+`timeout_budgets.py` and `coverage_lanes.py`, and are exercised on their own in
+`timeout_reading_test.py`.
 
-Two of its readings are driven with controlled configurations rather than this
-repository's file, because this file cannot exercise them. Every
+Those readings are driven with controlled configurations rather than this
+repository's files, because these files cannot exercise them. Every
 `terminate-after` here is one, so a reading that ignored the multiplier
-entirely would give the same answer; and `period` and `grace-period` share an
+entirely would give the same answer; `period` and `grace-period` share an
 inline table, so a substring match would take a grace period for a per-test
-budget whenever it were the larger. Both would pass silently against the tree
-and fail the moment someone raised a multiplier.
+budget whenever it were the larger; and no job here runs the coverage action
+twice, which is the case the ceiling arithmetic exists for. Each would pass
+silently against the tree and fail the moment someone raised a multiplier or
+added a second invocation.
 
-The `build` job also carries a 90 minute ceiling. It invokes no coverage step,
+`terminate-after` is optional, and a `slow-timeout` without it marks a test
+slow and never stops it. The reading refuses that form rather than reporting
+one period as the budget, because a number on a tier that does not exist makes
+every comparison above it pass against nothing. Nothing here relies on the
+looser reading: every profile and override in `.config/nextest.toml` sets
+`terminate-after` explicitly.
+
+The `build` job also carries a 90-minute ceiling. It invokes no coverage step,
 so it is outside this contract.
 
 [shared-actions-coverage]: https://github.com/leynos/shared-actions/blob/main/.github/actions/generate-coverage/README.md
