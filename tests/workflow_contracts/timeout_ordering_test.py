@@ -278,6 +278,66 @@ def nextest_config() -> str:
     return NEXTEST_CONFIG.read_text(encoding="utf-8")
 
 
+def _coverage_steps(job: dict[str, typ.Any]) -> list[dict[str, typ.Any]]:
+    """Return the steps in one job that invoke the coverage action.
+
+    Parameters
+    ----------
+    job : dict[str, typ.Any]
+        The parsed job.
+
+    Returns
+    -------
+    list[dict[str, typ.Any]]
+        The matching steps, in the order the job runs them.
+    """
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        return []
+    return [
+        step
+        for step in steps
+        if isinstance(step, dict) and COVERAGE_ACTION in str(step.get("uses", ""))
+    ]
+
+
+def _coverage_job(
+    workflow: str,
+    document: dict[str, typ.Any],
+    job_name: str,
+    job: dict[str, typ.Any],
+) -> CoverageJob | None:
+    """Return one job's budgets, or None when it runs no coverage step.
+
+    Parameters
+    ----------
+    workflow : str
+        The workflow file's name.
+    document : dict[str, typ.Any]
+        The enclosing document, read for a workflow-level watchdog.
+    job_name : str
+        The job's identifier.
+    job : dict[str, typ.Any]
+        The parsed job.
+
+    Returns
+    -------
+    CoverageJob or None
+        The job's budgets, or None when it invokes no coverage step.
+    """
+    steps = _coverage_steps(job)
+    if not steps:
+        return None
+    raw_timeout = job.get("timeout-minutes")
+    return CoverageJob(
+        workflow=workflow,
+        job=job_name,
+        steps=len(steps),
+        watchdogs=tuple(_watchdog_of(document, job, step) for step in steps),
+        job_timeout=None if raw_timeout is None else float(raw_timeout) * 60.0,
+    )
+
+
 @pytest.fixture(scope="module")
 def coverage_jobs() -> tuple[CoverageJob, ...]:
     """Return every job invoking the coverage action, with its budgets.
@@ -291,34 +351,13 @@ def coverage_jobs() -> tuple[CoverageJob, ...]:
     tuple[CoverageJob, ...]
         One entry per coverage-invoking job.
     """
-    found: list[CoverageJob] = []
-    for name, document in _workflow_documents().items():
-        for job_name, job in (document.get("jobs") or {}).items():
-            if not isinstance(job, dict):
-                continue
-            steps = [
-                step
-                for step in (job.get("steps") or [])
-                if isinstance(step, dict)
-                and COVERAGE_ACTION in str(step.get("uses", ""))
-            ]
-            if not steps:
-                continue
-            raw_timeout = job.get("timeout-minutes")
-            found.append(
-                CoverageJob(
-                    workflow=name,
-                    job=str(job_name),
-                    steps=len(steps),
-                    watchdogs=tuple(
-                        _watchdog_of(document, job, step) for step in steps
-                    ),
-                    job_timeout=(
-                        None if raw_timeout is None else float(raw_timeout) * 60.0
-                    ),
-                )
-            )
-    return tuple(found)
+    return tuple(
+        found
+        for name, document in _workflow_documents().items()
+        for job_name, job in (document.get("jobs") or {}).items()
+        if isinstance(job, dict)
+        and (found := _coverage_job(name, document, str(job_name), job)) is not None
+    )
 
 
 def test_the_coverage_action_is_invoked_somewhere(
