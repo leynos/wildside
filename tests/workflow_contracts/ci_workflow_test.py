@@ -141,6 +141,30 @@ PYTHON_GATE_STEPS = (
 )
 
 
+def test_build_runs_the_workflow_lint_script_tests() -> None:
+    """The lint-actions script's own suite must run in CI.
+
+    `make test` gathers it, but the workflow invokes the individual test
+    targets rather than the aggregate, so a suite that is not named here never
+    runs. That is worth a contract because the failure is silent: the tests
+    pass locally and simply never execute on a pull request.
+    """
+    invocations = [
+        step
+        for step in _load_steps("build")
+        if isinstance(step.get("run"), str)
+        and any(
+            line.strip() == "make test-lint-actions"
+            for line in typ.cast("str", step["run"]).splitlines()
+        )
+    ]
+    assert len(invocations) == 1, (
+        "expected exactly one build step running 'make test-lint-actions', "
+        f"found {len(invocations)}"
+    )
+    assert "if" not in invocations[0], "the script's tests must run unconditionally"
+
+
 @pytest.mark.parametrize(("step_name", "command"), PYTHON_GATE_STEPS)
 def test_build_runs_python_quality_gates(step_name: str, command: str) -> None:
     """CI drives every Python quality gate through its Makefile target."""
