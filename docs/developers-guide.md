@@ -407,9 +407,10 @@ script and checks these workspaces in order:
 
 Each workspace keeps its TypeDoc configuration beside its TypeScript
 configuration. The gate requires every selected public declaration to be
-documented, treats validation warnings as errors, and uses `emit: "none"` so it
-never writes documentation artefacts. Generated files must remain excluded
-rather than receiving handwritten comments that would be overwritten.
+documented, rejects a `{@link}` that resolves to nothing, treats validation
+warnings as errors, and uses `emit: "none"` so it never writes documentation
+artefacts. Generated files must remain excluded rather than receiving
+handwritten comments that would be overwritten.
 
 `requiredToBeDocumented` names the declaration kinds under the gate. The
 TypeScript surfaces cover enums and their members, variables, functions,

@@ -13,9 +13,9 @@
   "validation": {
     "notDocumented": true,
     "notExported": false,
-    "invalidLink": false,
-    "invalidPath": false,
-    "rewrittenLink": false,
+    "invalidLink": true,
+    "invalidPath": true,
+    "rewrittenLink": true,
     "unusedMergeModuleWith": false
   },
   "requiredToBeDocumented": [
