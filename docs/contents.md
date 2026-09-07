@@ -29,6 +29,10 @@
 - [Architecture Decision Record (ADR) 001: WebSockets on actix-ws](adr-001-websockets-on-actix-ws.md)
   – rationale for migrating the WebSocket adapter to `actix-ws`. _Audience:
   backend developers._
+- [Architecture Decision Record (ADR) 002: Environment seam
+  taxonomy](adr-002-environment-seam-taxonomy.md) – how environment-dependent
+  boundaries are injected and where a direct read is still allowed. _Audience:
+  backend developers._
 
 ## Frontend development
 
