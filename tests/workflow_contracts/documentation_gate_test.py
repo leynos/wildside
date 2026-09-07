@@ -119,7 +119,13 @@ def test_every_surface_enforces_the_zero_tolerance_policy(config_path: str) -> N
     opt out by dropping a key.
     """
     config = json.loads((PROJECT_ROOT / config_path).read_text(encoding="utf-8"))
-    assert config["validation"]["notDocumented"] is True
+    validation = config["validation"]
+    assert validation["notDocumented"] is True
+    assert validation["invalidLink"] is True, (
+        "a reference to a symbol that does not exist must fail the gate"
+    )
+    assert validation["invalidPath"] is True
+    assert validation["rewrittenLink"] is True
     assert config["treatValidationWarningsAsErrors"] is True
     assert config["emit"] == "none"
     assert config["requiredToBeDocumented"], (
