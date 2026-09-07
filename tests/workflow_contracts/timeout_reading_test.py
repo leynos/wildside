@@ -110,7 +110,7 @@ def test_a_grace_period_is_not_read_as_a_per_test_budget() -> None:
 
 
 def test_the_termination_allowance_adds_its_two_terms() -> None:
-    """The grace period and the teardown margin are added, not maximised.
+    """The grace period and the teardown margin are added, not compared.
 
     A single floor over the two would absorb every grace period below
     the margin, so raising one would look free until the run it
