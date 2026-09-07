@@ -407,10 +407,26 @@ script and checks these workspaces in order:
 
 Each workspace keeps its TypeDoc configuration beside its TypeScript
 configuration. The gate requires every selected public declaration to be
-documented, rejects a `{@link}` that resolves to nothing, treats validation
-warnings as errors, and uses `emit: "none"` so it never writes documentation
-artefacts. Generated files must remain excluded rather than receiving
-handwritten comments that would be overwritten.
+documented, rejects a `{@link}` that resolves to nothing, rejects an unknown
+block tag, which is usually a misspelled one, and uses `emit: "none"` so it
+never writes documentation artefacts. Generated files must remain excluded
+rather than receiving handwritten comments that would be overwritten.
+
+Three keys decide what fails, and each catches one thing:
+
+| Key                        | What clearing it would admit                     |
+| -------------------------- | ------------------------------------------------ |
+| `validation.notDocumented` | An export with no doc comment.                   |
+| `validation.invalidLink`   | A `{@link}` naming a symbol that does not exist. |
+| `treatWarningsAsErrors`    | An unknown block tag.                            |
+
+*Table 2: The TypeDoc keys that make the gate fail, and the defect each one
+catches.*
+
+`treatValidationWarningsAsErrors` is also set, but it is subsumed by
+`treatWarningsAsErrors`, which promotes every warning rather than only the
+validation ones. It stays because it carries the intent on its own if the
+broader key is ever removed.
 
 `requiredToBeDocumented` names the declaration kinds under the gate. The
 TypeScript surfaces cover enums and their members, variables, functions,
@@ -437,6 +453,20 @@ at the first that reports a warning. A failing run names each undocumented
 declaration and the file it lives in, so the output is the work list. The gate
 also runs through `make all` and as an unconditional pull-request CI step, so
 undocumented declarations cannot bypass the contributor workflow.
+
+`tests/workflow_contracts/documentation_gate_test.py` pins the configuration:
+the validation object compared whole, the declaration kinds each surface
+requires, the entry points and exclusions, the exact TypeDoc pin and its
+resolution in both lockfiles, and the `docs-check` target's `deps` prerequisite.
+
+That proves the gate is configured, not that it catches anything.
+`tests/workflow_contracts/documentation_gate_behaviour_test.py` runs the real
+TypeDoc against the repository's own `frontend-pwa/typedoc.json` over a
+fixture, overriding only the entry point, the TypeScript configuration and the
+project name. A documented fixture passes and writes no files; the three
+defects in the table each fail with a diagnostic naming them; and clearing a
+key admits exactly its own defect while the other two keep failing. That last
+part is what ties each key to a defect rather than to an expectation of one.
 
 #### Documenting an export
 
