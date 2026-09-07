@@ -1759,6 +1759,15 @@ every comparison above it pass against nothing. Nothing here relies on the
 looser reading: every profile and override in `.config/nextest.toml` sets
 `terminate-after` explicitly.
 
+The configuration is parsed with `tomllib` rather than matched as text. A text
+match finds a key inside a comment, inside a `filter` string, or in a table
+nextest never consults, and reports a budget the runner does not use. The
+commented-out `global-timeout` is the case that matters most, because this
+contract requires that tier to be present: a scraping reader would go on
+reporting a budget somebody had switched off, and the four-tier contract would
+pass with three. Parsing also keeps a profile's own table separate from its
+overrides, so a budget can be attributed to the lane it governs.
+
 The `build` job also carries a 90-minute ceiling. It invokes no coverage step,
 so it is outside this contract.
 

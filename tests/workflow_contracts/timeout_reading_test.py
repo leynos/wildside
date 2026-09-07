@@ -24,28 +24,59 @@ from timeout_budgets import (
 )
 
 
+def document(*tables: str, profile: str = "default") -> str:
+    """Return a nextest document declaring those slow-timeouts.
+
+    The reading parses the file, so a configuration it is driven with
+    has to be shaped the way nextest reads one: the first table is the
+    profile's own and the rest are its overrides. A bare assignment at
+    the root of the document is not configuration to nextest and is not
+    read as any here either.
+
+    Parameters
+    ----------
+    *tables : str
+        The lines to declare, the profile's own first.
+    profile : str
+        The profile to declare them under.
+
+    Returns
+    -------
+    str
+        A configuration document.
+    """
+    lines = [f"[profile.{profile}]"]
+    if tables:
+        lines.append(tables[0])
+    for override in tables[1:]:
+        lines += ["", f"[[profile.{profile}.overrides]]", override]
+    return "\n".join(lines) + "\n"
+
+
 @pytest.mark.parametrize(
     ("config_text", "expected"),
     [
         pytest.param(
-            'slow-timeout = { period = "180s", terminate-after = 1 }',
+            document('slow-timeout = { period = "180s", terminate-after = 1 }'),
             180.0,
             id="a-single-period",
         ),
         pytest.param(
-            'slow-timeout = { period = "60s", terminate-after = 5 }',
+            document('slow-timeout = { period = "60s", terminate-after = 5 }'),
             300.0,
             id="five-warning-periods",
         ),
         pytest.param(
-            'slow-timeout = { period = "2m", terminate-after = 3 }',
+            document('slow-timeout = { period = "2m", terminate-after = 3 }'),
             360.0,
             id="minutes-times-three",
         ),
         pytest.param(
-            'slow-timeout = { period = "30s", terminate-after = 2, '
-            'grace-period = "5s" }\n'
-            'slow-timeout = { period = "60s", terminate-after = 1 }',
+            document(
+                'slow-timeout = { period = "30s", terminate-after = 2, '
+                'grace-period = "5s" }',
+                'slow-timeout = { period = "60s", terminate-after = 1 }',
+            ),
             60.0,
             id="the-largest-of-several",
         ),
@@ -71,13 +102,13 @@ def test_the_largest_per_test_allowance_counts_the_multiplier(
 @pytest.mark.parametrize(
     "config_text",
     [
-        pytest.param('slow-timeout = "2m"', id="a-bare-duration"),
+        pytest.param(document('slow-timeout = "2m"'), id="a-bare-duration"),
         pytest.param(
-            'slow-timeout = { period = "2m" }',
+            document('slow-timeout = { period = "2m" }'),
             id="a-table-without-terminate-after",
         ),
         pytest.param(
-            'slow-timeout = { period = "2m", grace-period = "5s" }',
+            document('slow-timeout = { period = "2m", grace-period = "5s" }'),
             id="a-table-with-only-a-grace-period",
         ),
     ],
@@ -101,7 +132,7 @@ def test_a_grace_period_is_not_read_as_a_per_test_budget() -> None:
     for a per-test budget whenever the former were the larger, which
     would silently raise the whole-run budget this contract demands.
     """
-    config_text = (
+    config_text = document(
         'slow-timeout = { period = "30s", terminate-after = 1, grace-period = "30m" }'
     )
     assert largest_test_allowance(config_text) == pytest.approx(30.0), (
@@ -116,13 +147,20 @@ def test_the_termination_allowance_adds_its_two_terms() -> None:
     the margin, so raising one would look free until the run it
     cancelled. nextest's own default applies when none is named.
     """
-    assert termination_allowance('grace-period = "5s"') == pytest.approx(65.0), (
+    five = document(
+        'slow-timeout = { period = "30s", terminate-after = 1, grace-period = "5s" }'
+    )
+    assert termination_allowance(five) == pytest.approx(65.0), (
         "a five-second grace period plus the sixty-second margin is 65 s"
     )
-    assert termination_allowance('grace-period = "5m"') == pytest.approx(360.0), (
+    raised = document(
+        'slow-timeout = { period = "30s", terminate-after = 1, grace-period = "5m" }'
+    )
+    assert termination_allowance(raised) == pytest.approx(360.0), (
         "raising the grace period must raise the allowance with it"
     )
-    assert termination_allowance("") == pytest.approx(grace_period("") + 60.0), (
+    unset = document('slow-timeout = { period = "30s", terminate-after = 1 }')
+    assert termination_allowance(unset) == pytest.approx(grace_period(unset) + 60.0), (
         "with no grace period named, nextest's default is the first term"
     )
 
@@ -133,11 +171,27 @@ def test_the_whole_run_budget_is_read_only_at_the_root() -> None:
     Reading it from anywhere in the file would let an indented value in
     a table be taken for the whole-run budget.
     """
-    assert global_timeout('global-timeout = "60m"') == pytest.approx(3600.0)
-    assert global_timeout('  global-timeout = "5m"') is None, (
-        "an indented global-timeout is not the profile's whole-run budget"
+    assert global_timeout(
+        document(
+            'slow-timeout = { period = "30s", terminate-after = 1 }\n'
+            'global-timeout = "60m"'
+        )
+    ) == pytest.approx(3600.0)
+    assert (
+        global_timeout(
+            document(
+                'slow-timeout = { period = "30s", terminate-after = 1 }',
+                'global-timeout = "5m"',
+            )
+        )
+        is None
+    ), "an indented global-timeout is not the profile's whole-run budget"
+    assert (
+        global_timeout(
+            document('slow-timeout = { period = "60s", terminate-after = 1 }')
+        )
+        is None
     )
-    assert global_timeout('slow-timeout = { period = "60s" }') is None
 
 
 def test_the_required_ceiling_carries_all_three_terms() -> None:
@@ -262,3 +316,50 @@ def test_a_synthetic_workflow_is_read_as_one_lane_per_job() -> None:
     ]
     assert jobs[0].watchdogs == (1800.0, 1800.0)
     assert jobs[0].job_timeout == pytest.approx(5400.0)
+
+
+def test_a_commented_out_entry_is_not_configuration() -> None:
+    """A comment is not configuration, and TOML is what says so.
+
+    A text match would find every key below and report budgets the
+    runner never applies. The commented-out `global-timeout` is the one
+    that matters most: the contract asserts that tier is present, so a
+    scraping reader would go on reporting a budget somebody had switched
+    off and the four-tier contract would pass with three.
+    """
+    config_text = document(
+        '# global-timeout = "90m"\n'
+        '# slow-timeout = { period = "30m", terminate-after = 1, '
+        'grace-period = "30m" }\n'
+        'slow-timeout = { period = "60s", terminate-after = 1, '
+        'grace-period = "5s" }\n'
+        'global-timeout = "60m"'
+    )
+    assert global_timeout(config_text) == pytest.approx(3600.0), (
+        "a commented-out global-timeout was read as the budget in force"
+    )
+    assert largest_test_allowance(config_text) == pytest.approx(60.0), (
+        "a commented-out slow-timeout was read as a live one"
+    )
+    assert termination_allowance(config_text) == pytest.approx(65.0), (
+        "a commented-out grace period was read as the one in force"
+    )
+
+
+def test_a_filter_naming_a_timeout_key_is_not_a_budget() -> None:
+    """An override's ``filter`` is a string, not configuration.
+
+    A binary named after one of these keys would be matched by a text
+    search and read as a budget nextest never applies.
+    """
+    config_text = document(
+        'slow-timeout = { period = "60s", terminate-after = 1 }\n'
+        'global-timeout = "60m"',
+        "filter = 'binary(global_timeout_probe) | binary(grace_period_probe)'\n"
+        'slow-timeout = { period = "300s", terminate-after = 1 }',
+    )
+    assert largest_test_allowance(config_text) == pytest.approx(300.0)
+    assert global_timeout(config_text) == pytest.approx(3600.0)
+    assert termination_allowance(config_text) == pytest.approx(
+        grace_period(config_text) + 60.0
+    )
