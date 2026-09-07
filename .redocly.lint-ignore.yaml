@@ -1,21 +1,23 @@
 # This file instructs Redocly's linter to ignore the rules contained for specific parts of your API.
 # See https://redocly.com/docs/cli/ for more information.
-spec/openapi.json:
-  no-empty-servers:
-    - '#/servers'
-      # owner: platform-engineering
-      # rationale: Server URLs are injected per environment by Traefik; the spec intentionally leaves them blank.
-      # review by: 2026-08-31
-  operation-4xx-response:
-    - '#/paths/~1health~1live/get/responses'
-      # owner: platform-engineering
-      # rationale: Health probes return 200 or 503 to reflect service state;
-      #   4xx responses would signal client misconfiguration, not an API
-      #   contract change.
-      # review by: 2026-08-31
-    - '#/paths/~1health~1ready/get/responses'
-      # owner: platform-engineering
-      # rationale: Health probes return 200 or 503 to reflect service state;
-      #   4xx responses would signal client misconfiguration, not an API
-      #   contract change.
-      # review by: 2026-08-31
+#
+# Every exception carries an owner, a rationale, and a `review by:` date that
+# `scripts/check_redoc_ignore.py` enforces. An expired date fails
+# `make lint-openapi`; renew it only after re-checking the rationale against
+# the current specification, and delete the exception when the rationale no
+# longer holds.
+#
+# The three exceptions this file carried until 2026-09-07 were reviewed and
+# removed rather than renewed, because the specification had moved past them:
+#
+#   * `no-empty-servers` on `#/servers`: the specification now declares a
+#     server, `/`, described as relative to the deployment base URL.
+#   * `operation-4xx-response` on `#/paths/~1health~1live/get/responses` and
+#     `#/paths/~1health~1ready/get/responses`: both probes now document a 405
+#     alongside 200 and 503, so each carries a 4xx response.
+#
+# Redocly lints the specification cleanly with no exceptions at all. Keep the
+# `spec/openapi.json` key: the Makefile asserts the specification has an entry
+# here, so that a future exception lands in a reviewed file rather than an
+# unreviewed one.
+spec/openapi.json: {}
