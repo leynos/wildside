@@ -7,14 +7,19 @@ and a whole-run ``global-timeout`` in ``.config/nextest.toml``, the
 shared coverage action's wall-clock watchdog on the ``cargo``
 invocation, and the job's own ``timeout-minutes``.
 
-The outermost tier was the one missing. Neither coverage job declared
-``timeout-minutes``, so both inherited GitHub's six-hour default while
-the pull-request lane already runs for eighteen minutes.
+The outermost tier was the one set wrong. Both coverage jobs were capped
+at 90 minutes, exactly the watchdog's budget, so a step that spent that
+budget was cancelled by the job timer rather than reported by the
+watchdog.
 
-The contract also holds the inner ordering, which this repository does
-satisfy: a 600 s whole-run budget above a 360 s largest per-test
-allowance, and a 1,800 s watchdog above that budget once nextest's
+The three inner tiers were already sound, and this contract holds them
+there: a 3,600 s whole-run budget above a 300 s largest per-test
+allowance, and a 5,400 s watchdog above that budget once nextest's
 termination procedure and a cold build are counted.
+
+The readings these assertions rest on are exercised in
+``timeout_reading_test.py``; the helpers themselves live in
+``timeout_budgets.py`` and ``coverage_lanes.py``.
 
 See "Test timeouts: four tiers, outermost last" in
 ``docs/developers-guide.md``, and the canonical wording in
@@ -23,41 +28,22 @@ See "Test timeouts: four tiers, outermost last" in
 
 from __future__ import annotations
 
-import re
 import typing as typ
 
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-from pathlib import Path
-
 import pytest
-import yaml
-
-REPO_ROOT: typ.Final[Path] = Path(__file__).resolve().parents[2]
-WORKFLOWS_DIRECTORY: typ.Final[Path] = REPO_ROOT / ".github" / "workflows"
-NEXTEST_CONFIG: typ.Final[Path] = REPO_ROOT / ".config" / "nextest.toml"
-
-#: The environment variable the shared coverage action reads for its
-#: wall-clock cap on one `cargo` invocation.
-WATCHDOG_VARIABLE: typ.Final[str] = "RUN_RUST_CARGO_WAIT_TIMEOUT"
-
-#: The action whose steps run under that watchdog.
-COVERAGE_ACTION: typ.Final[str] = (
-    "leynos/shared-actions/.github/actions/generate-coverage"
+from coverage_lanes import CoverageJob, coverage_jobs_of
+from timeout_budgets import (
+    CEILING_MARGIN_SECONDS,
+    COLD_BUILD_ALLOWANCE_SECONDS,
+    COVERAGE_ACTION,
+    NEXTEST_CONFIG,
+    OUTSIDE_WATCHDOG_ALLOWANCE_SECONDS,
+    WATCHDOG_VARIABLE,
+    global_timeout,
+    largest_test_allowance,
+    required_ceiling,
+    termination_allowance,
 )
-
-#: Everything in a coverage job that is not a `cargo` invocation the
-#: watchdog bounds: checkout, toolchain setup, and above all the cache
-#: save and restore. The job timer covers it; the watchdog does not.
-#:
-#: Measured from the worst of several runs rather than one. Across ten
-#: successful `coverage-main.yml` runs the widest gap between the
-#: coverage step and its job was 522 s on run 33921794186, where the
-#: database fixtures and the artefact upload run outside the coverage
-#: step. Across ten of `ci.yml` it was 59 s on run 33938872167. Fifteen
-#: minutes covers the worse of those, and none of those runs was
-#: genuinely cold.
-OUTSIDE_WATCHDOG_ALLOWANCE_SECONDS: typ.Final[float] = 15 * 60.0
 
 #: The condition each coverage lane legitimately carries, keyed by
 #: workflow and job, as the step's ``if`` and its job's.
@@ -79,227 +65,6 @@ REQUIRED_CONDITIONS: typ.Final[dict[tuple[str, str], tuple[object, object]]] = {
     ("coverage-main.yml", "coverage-upload"): (None, None),
 }
 
-#: How far a ceiling must sit above the sum it contains, rather than
-#: merely reaching it. A ceiling equal to that sum cancels the job at
-#: the moment the watchdog would have reported the overrun, and the
-#: report is the only thing that makes an overrun actionable.
-CEILING_MARGIN_SECONDS: typ.Final[float] = 15 * 60.0
-
-#: Floor for the termination allowance, used when the configuration sets
-#: no grace period, as this one does not. Generous against nextest's
-#: ten-second default and far too small to hide a real overrun.
-MINIMUM_TERMINATION_ALLOWANCE_SECONDS: typ.Final[float] = 60.0
-
-#: Build time inside a `cargo` invocation before nextest starts its own
-#: clock. Only used if a `global-timeout` appears.
-COLD_BUILD_ALLOWANCE_SECONDS: typ.Final[float] = 10 * 60.0
-
-_DURATION: typ.Final[re.Pattern[str]] = re.compile(
-    r"^\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ms|s|m|h)\s*$"
-)
-
-_UNIT_SECONDS: typ.Final[dict[str, float]] = {
-    "ms": 0.001,
-    "s": 1.0,
-    "m": 60.0,
-    "h": 3600.0,
-}
-
-#: One `slow-timeout` inline table, captured whole so the period and the
-#: multiplier that scales it are read together. nextest warns once per
-#: `period` and terminates after `terminate-after` of them, so the budget
-#: is their product; reading the period alone understates it fivefold
-#: here.
-_SLOW_TIMEOUT: typ.Final[re.Pattern[str]] = re.compile(
-    r"slow-timeout\s*=\s*\{(?P<body>[^}]*)\}"
-)
-
-_GRACE_PERIOD: typ.Final[re.Pattern[str]] = re.compile(r'grace-period\s*=\s*"([^"]+)"')
-
-
-def seconds(duration: str) -> float:
-    """Convert a nextest duration to seconds.
-
-    Parameters
-    ----------
-    duration : str
-        A duration as nextest spells it, such as ``"120s"``.
-
-    Returns
-    -------
-    float
-        The duration in seconds.
-    """
-    match = _DURATION.match(duration)
-    assert match is not None, f"unrecognized nextest duration {duration!r}"
-    return float(match["value"]) * _UNIT_SECONDS[match["unit"]]
-
-
-def largest_test_allowance(config_text: str) -> float:
-    """Return the longest a single test may run, in seconds.
-
-    Parameters
-    ----------
-    config_text : str
-        The nextest configuration file's text.
-
-    Returns
-    -------
-    float
-        The longest per-test budget, period multiplied by
-        ``terminate-after``.
-    """
-    budgets: list[float] = []
-    for match in _SLOW_TIMEOUT.finditer(config_text):
-        body = match["body"]
-        period = re.search(r'period\s*=\s*"([^"]+)"', body)
-        assert period is not None, f"slow-timeout without a period: {body!r}"
-        terminate = re.search(r"terminate-after\s*=\s*(\d+)", body)
-        multiplier = 1 if terminate is None else int(terminate[1])
-        budgets.append(seconds(period[1]) * multiplier)
-    assert budgets, "nextest.toml must set at least one slow-timeout"
-    return max(budgets)
-
-
-def termination_allowance(config_text: str) -> float:
-    """Return the time nextest may take to stop the run, in seconds.
-
-    Read from the configuration rather than fixed, so a profile that
-    raised its grace period raises the requirement too. This file sets
-    none, so the floor applies.
-
-    Parameters
-    ----------
-    config_text : str
-        The nextest configuration file's text.
-
-    Returns
-    -------
-    float
-        The largest configured grace period, or the floor.
-    """
-    periods = _GRACE_PERIOD.findall(config_text)
-    largest = max((seconds(period) for period in periods), default=0.0)
-    return max(largest, MINIMUM_TERMINATION_ALLOWANCE_SECONDS)
-
-
-def global_timeout(config_text: str) -> float | None:
-    """Return the whole-run budget, or None when none is set.
-
-    Parameters
-    ----------
-    config_text : str
-        The nextest configuration file's text.
-
-    Returns
-    -------
-    float or None
-        The whole-run budget in seconds, or None.
-    """
-    match = re.search(r'^global-timeout\s*=\s*"([^"]+)"', config_text, re.MULTILINE)
-    return None if match is None else seconds(match[1])
-
-
-class CoverageJob(typ.NamedTuple):
-    """One job that invokes the coverage action, with its budgets.
-
-    Attributes
-    ----------
-    workflow : str
-        The workflow file's name.
-    job : str
-        The job's identifier.
-    steps : int
-        How many coverage steps the job runs. Each gets its own watchdog,
-        so the job must contain all of their budgets.
-    watchdogs : tuple[float | None, ...]
-        The watchdog budget in force for each of those steps, in order,
-        with None where neither the step nor the job sets one.
-    job_timeout : float or None
-        The job's ``timeout-minutes`` in seconds, or None when it
-        declares none and so inherits GitHub's six-hour default.
-    conditions : tuple[tuple[object, object], ...]
-        The ``if`` on each coverage step and on its job, in step order.
-        A skipped step runs no ``cargo``, so its watchdog never arms and
-        the tiers say nothing about it; the condition is part of what
-        identifies a lane rather than incidental to it.
-    """
-
-    workflow: str
-    job: str
-    steps: int
-    watchdogs: tuple[float | None, ...]
-    job_timeout: float | None
-    conditions: tuple[tuple[object, object], ...] = ()
-
-    def __str__(self) -> str:
-        """Return a location suitable for a failure message.
-
-        Returns
-        -------
-        str
-            ``workflow:job`` for this job.
-        """
-        return f"{self.workflow}:{self.job}"
-
-
-def _watchdog_of(
-    document: dict[str, typ.Any],
-    job: dict[str, typ.Any],
-    step: dict[str, typ.Any],
-) -> float | None:
-    """Return the watchdog budget in force for one step.
-
-    All three levels are read, innermost first, as GitHub resolves them.
-    Both workflows here set the value at workflow level, so a contract
-    reading only the job would find nothing and report every lane as
-    inheriting the action's default, which is exactly backwards.
-
-    Parameters
-    ----------
-    document : dict[str, typ.Any]
-        The whole workflow document.
-    job : dict[str, typ.Any]
-        The enclosing job.
-    step : dict[str, typ.Any]
-        The coverage step.
-
-    Returns
-    -------
-    float or None
-        The budget in seconds, or None when no level sets one.
-    """
-    levels = (
-        (step.get("env") or {}),
-        (job.get("env") or {}),
-        (document.get("env") or {}),
-    )
-    for source in levels:
-        raw = source.get(WATCHDOG_VARIABLE)
-        if raw is not None:
-            return float(str(raw))
-    return None
-
-
-def _workflow_documents() -> dict[str, dict[str, typ.Any]]:
-    """Return every workflow document, keyed by file name.
-
-    Both extensions are read. A coverage lane in the other one would
-    otherwise escape every assertion below without failing anything.
-
-    Returns
-    -------
-    dict[str, dict[str, typ.Any]]
-        File name to parsed document.
-    """
-    documents: dict[str, dict[str, typ.Any]] = {}
-    for pattern in ("*.yml", "*.yaml"):
-        for path in sorted(WORKFLOWS_DIRECTORY.glob(pattern)):
-            parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
-            if isinstance(parsed, dict):
-                documents[path.name] = parsed
-    return documents
-
 
 @pytest.fixture(scope="module")
 def nextest_config() -> str:
@@ -313,112 +78,16 @@ def nextest_config() -> str:
     return NEXTEST_CONFIG.read_text(encoding="utf-8")
 
 
-def required_ceiling(budgets: cabc.Sequence[float], allowance: float) -> float:
-    """Return the smallest acceptable ceiling for one job, in seconds.
-
-    Three terms. Each coverage step may legitimately spend its whole
-    watchdog, so the sum is the floor. The measured work outside those
-    windows is added because the job timer covers it and the watchdogs
-    do not. The margin is added because a ceiling equal to that sum
-    cancels the job at the moment the watchdog would have reported the
-    overrun.
-
-    Parameters
-    ----------
-    budgets : cabc.Sequence[float]
-        One watchdog budget per coverage step in the job.
-    allowance : float
-        The measured work outside those windows, in seconds.
-
-    Returns
-    -------
-    float
-        The smallest acceptable ceiling, in seconds.
-    """
-    return sum(budgets) + allowance + CEILING_MARGIN_SECONDS
-
-
-def _coverage_steps(job: dict[str, typ.Any]) -> list[dict[str, typ.Any]]:
-    """Return the steps in one job that invoke the coverage action.
-
-    Parameters
-    ----------
-    job : dict[str, typ.Any]
-        The parsed job.
-
-    Returns
-    -------
-    list[dict[str, typ.Any]]
-        The matching steps, in the order the job runs them.
-    """
-    steps = job.get("steps")
-    if not isinstance(steps, list):
-        return []
-    return [
-        step
-        for step in steps
-        if isinstance(step, dict) and COVERAGE_ACTION in str(step.get("uses", ""))
-    ]
-
-
-def _coverage_job(
-    workflow: str,
-    document: dict[str, typ.Any],
-    job_name: str,
-    job: dict[str, typ.Any],
-) -> CoverageJob | None:
-    """Return one job's budgets, or None when it runs no coverage step.
-
-    Parameters
-    ----------
-    workflow : str
-        The workflow file's name.
-    document : dict[str, typ.Any]
-        The enclosing document, read for a workflow-level watchdog.
-    job_name : str
-        The job's identifier.
-    job : dict[str, typ.Any]
-        The parsed job.
-
-    Returns
-    -------
-    CoverageJob or None
-        The job's budgets, or None when it invokes no coverage step.
-    """
-    steps = _coverage_steps(job)
-    if not steps:
-        return None
-    raw_timeout = job.get("timeout-minutes")
-    return CoverageJob(
-        workflow=workflow,
-        job=job_name,
-        steps=len(steps),
-        watchdogs=tuple(_watchdog_of(document, job, step) for step in steps),
-        job_timeout=None if raw_timeout is None else float(raw_timeout) * 60.0,
-        conditions=tuple((step.get("if"), job.get("if")) for step in steps),
-    )
-
-
 @pytest.fixture(scope="module")
 def coverage_jobs() -> tuple[CoverageJob, ...]:
     """Return every job invoking the coverage action, with its budgets.
-
-    Jobs are the unit rather than steps, because the ceiling is a job's
-    and it has to contain every watchdog inside it. Counting steps is
-    what makes the two invocations here visible to the arithmetic.
 
     Returns
     -------
     tuple[CoverageJob, ...]
         One entry per coverage-invoking job.
     """
-    return tuple(
-        found
-        for name, document in _workflow_documents().items()
-        for job_name, job in (document.get("jobs") or {}).items()
-        if isinstance(job, dict)
-        and (found := _coverage_job(name, document, str(job_name), job)) is not None
-    )
+    return coverage_jobs_of()
 
 
 def test_the_coverage_action_is_invoked_somewhere(
@@ -441,10 +110,9 @@ def test_every_coverage_step_runs_under_an_explicit_watchdog(
 ) -> None:
     """The default is invisible, so every step must write it down.
 
-    The action kills `cargo` after 1,800 s unless told otherwise, and the
-    value here equals that default, which makes writing it down more
-    important rather than less: an accidental deletion would change
-    nothing observable until the run it killed.
+    The action kills `cargo` after 1,800 s unless told otherwise, well
+    inside the whole-run budget this repository sets, so a lane that
+    lost its override would fail runs rather than announce itself.
     """
     missing = [
         f"{job}: step {index + 1} of {job.steps}"
@@ -467,8 +135,9 @@ def test_the_job_ceiling_contains_every_watchdog_and_the_work_around_them(
     twice can legitimately spend both budgets, and its ceiling has to
     contain the sum rather than one of them. The clocks do not start
     together either: the job timer starts before the checkout and runs
-    through the cache saves afterwards, which on Windows are the largest
-    thing in the job outside the coverage steps themselves.
+    through the database fixtures and the artefact upload afterwards,
+    which on the trunk lane are the largest thing in the job outside the
+    coverage step itself.
 
     A ceiling merely above one watchdog cancels the job partway through
     the second invocation, and a cancellation discards the log that would
@@ -494,20 +163,21 @@ def test_the_job_ceiling_contains_every_watchdog_and_the_work_around_them(
         )
 
 
-def test_a_whole_run_budget_would_sit_inside_each_watchdog(
+def test_the_whole_run_budget_sits_inside_each_watchdog(
     coverage_jobs: tuple[CoverageJob, ...], nextest_config: str
 ) -> None:
-    """Tier three must not pre-empt tier two, if tier two appears.
+    """Tier three must not pre-empt tier two, nor tier two tier one.
 
-    No ``global-timeout`` is set today, so this asserts nothing about the
-    current tree and is not a licence to leave it that way: the guide
-    records the gap. What it does is bind the value the moment one is
-    added, so it arrives above the largest per-test allowance and inside
-    the watchdog rather than merely somewhere.
+    The 3,600 s whole-run budget sits above the 300 s largest per-test
+    allowance, so a database-backed test may spend its budget in full,
+    and the 5,400 s watchdog sits above that budget plus nextest's
+    termination procedure plus a cold build.
     """
     whole_run = global_timeout(nextest_config)
-    if whole_run is None:
-        pytest.skip("no global-timeout is set; the guide records this as a gap")
+    assert whole_run is not None, (
+        "no global-timeout is set; tier two is missing and a hung run is "
+        "bounded only by the watchdog"
+    )
     largest = largest_test_allowance(nextest_config)
     assert whole_run > largest, (
         f"the {whole_run:.0f}s global-timeout is not above the {largest:.0f}s "
@@ -528,87 +198,6 @@ def test_a_whole_run_budget_would_sit_inside_each_watchdog(
             )
 
 
-@pytest.mark.parametrize(
-    ("config_text", "expected"),
-    [
-        pytest.param(
-            'slow-timeout = { period = "180s", terminate-after = 1 }',
-            180.0,
-            id="a-single-period",
-        ),
-        pytest.param(
-            'slow-timeout = { period = "60s", terminate-after = 5 }',
-            300.0,
-            id="five-warning-periods",
-        ),
-        pytest.param(
-            'slow-timeout = { period = "2m", terminate-after = 3 }',
-            360.0,
-            id="minutes-times-three",
-        ),
-        pytest.param(
-            'slow-timeout = { period = "90s" }',
-            90.0,
-            id="no-multiplier-means-one",
-        ),
-        pytest.param(
-            'slow-timeout = { period = "30s", terminate-after = 2, '
-            'grace-period = "5s" }\n'
-            'slow-timeout = { period = "60s", terminate-after = 1 }',
-            60.0,
-            id="the-largest-of-several",
-        ),
-    ],
-)
-def test_the_largest_per_test_allowance_counts_the_multiplier(
-    config_text: str, expected: float
-) -> None:
-    """``terminate-after`` scales the period; the budget is their product.
-
-    This is the reading every comparison above rests on, and it is the
-    one easy to get wrong. It is driven with controlled configurations
-    rather than this repository's own, whose multipliers are all one:
-    against that file a reading that ignored the multiplier entirely
-    would give the same answer, and the test would prove nothing.
-    """
-    assert largest_test_allowance(config_text) == pytest.approx(expected), (
-        f"{config_text!r} must yield a {expected:.0f}s largest per-test "
-        f"allowance; terminate-after scales the period"
-    )
-
-
-def test_a_grace_period_is_not_read_as_a_per_test_budget() -> None:
-    """The two keys sit in the same inline table.
-
-    A matcher reading `period` as a substring would take a grace period
-    for a per-test budget whenever the former were the larger, which
-    would silently raise the whole-run budget this contract demands.
-    """
-    config_text = 'slow-timeout = { period = "30s", grace-period = "30m" }'
-    assert largest_test_allowance(config_text) == pytest.approx(30.0), (
-        "the per-test ceiling read a grace period as a slow-timeout"
-    )
-
-
-def test_the_required_ceiling_carries_all_three_terms() -> None:
-    """Watchdogs, measured work outside them, and the margin.
-
-    Both ceilings clear the smaller requirement too, so dropping the
-    margin changes nothing the assertion over the workflows can see.
-    Driving the derivation with controlled numbers is what makes the
-    missing term visible.
-    """
-    assert required_ceiling([5400.0, 1800.0], 900.0) == pytest.approx(
-        7200.0 + 900.0 + CEILING_MARGIN_SECONDS
-    ), "two watchdogs, the allowance and the margin are all added"
-    assert required_ceiling([5400.0], 0.0) == pytest.approx(
-        5400.0 + CEILING_MARGIN_SECONDS
-    ), "the margin applies even when nothing runs outside the watchdog"
-    assert required_ceiling([], 0.0) == pytest.approx(CEILING_MARGIN_SECONDS), (
-        "the margin is a term of its own, not a fraction of the others"
-    )
-
-
 def test_each_coverage_lane_carries_the_condition_it_is_meant_to(
     coverage_jobs: tuple[CoverageJob, ...],
 ) -> None:
@@ -622,15 +211,26 @@ def test_each_coverage_lane_carries_the_condition_it_is_meant_to(
 
     The conditions are pinned rather than forbidden, because the one
     here is legitimate: the pull-request lane skips Dependabot branches
-    and pushes, which the trunk lane covers. Pinning it means a lane
-    gaining, losing or changing a condition has to change this contract
-    and the guide with it.
+    and pushes, which the trunk lane covers. The coordinates are
+    compared both ways first, so a new lane with no entry here fails
+    rather than passing unexamined, and a lane that disappeared fails
+    rather than being skipped.
+
+    Proved by mutation: `if: false` on the coverage step, the job's
+    condition narrowed to `github.event_name == 'push'`, and dropping a
+    coordinate from ``REQUIRED_CONDITIONS`` each fail this test.
     """
     found = {(job.workflow, job.job): job.conditions for job in coverage_jobs}
+    assert set(found) == set(REQUIRED_CONDITIONS), (
+        f"the coverage lanes are not the ones this contract pins: "
+        f"unlisted {sorted(set(found) - set(REQUIRED_CONDITIONS))}, missing "
+        f"{sorted(set(REQUIRED_CONDITIONS) - set(found))}; a lane with no "
+        f"entry here is a lane whose condition nobody has judged"
+    )
     wrong = {
-        coordinate: (expected, found.get(coordinate))
+        coordinate: (expected, found[coordinate])
         for coordinate, expected in REQUIRED_CONDITIONS.items()
-        if not found.get(coordinate) or set(found[coordinate]) != {expected}
+        if set(found[coordinate]) != {expected}
     }
     assert not wrong, (
         f"these coverage lanes do not carry the conditions the developers' "
