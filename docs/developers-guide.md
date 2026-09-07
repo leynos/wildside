@@ -1012,6 +1012,46 @@ dependency declarations (PEP 723 inline metadata), and style guidance.
    guard (see "Programmatic API" under "Override policy check") so the module
    can be imported cleanly in tests.
 
+### How a Makefile recipe reports failure
+
+The Makefile sets three things that together decide whether a failing command
+fails its target:
+
+| Setting       | Value    | What it decides                               |
+| ------------- | -------- | --------------------------------------------- |
+| `SHELL`       | `bash`   | Which shell runs every recipe.                |
+| `.SHELLFLAGS` | `-ec`    | Whether the shell stops at the first failure. |
+| `.ONESHELL`   | declared | Whether a recipe's lines share one shell.     |
+
+`.ONESHELL` is a global special target. GNU make ignores its prerequisite list,
+so the declaration naming `prepare-pg-worker` documents which recipe needed it
+but turns one-shell recipes on for the whole file. Every multi-line recipe
+therefore reaches the shell as a single script.
+
+That is what makes `.SHELLFLAGS` load-bearing. Under make's default of `-c`, a
+one-shell recipe's status is its **last** command's status and every earlier
+failure is discarded. The symptom is the worst one a gate can have: the tool
+prints its findings, the target reports success, and the job goes green. Run
+33939820204 passed with `make lint-python` printing Ruff findings, and
+`make lint-openapi` had been passing for a week over an expired review-by
+annotation in `.redocly.lint-ignore.yaml`. `-e` makes the shell abort at the
+first failing command. Keep the `c`: make passes the recipe to the shell as a
+command string.
+
+A recipe that genuinely needs a command to be allowed to fail says so itself,
+with `|| true`, an `if`, or a captured status. Do not weaken `.SHELLFLAGS` to
+accommodate one; that trades a local exception for a silent, repository-wide
+one.
+
+`tests/workflow_contracts/makefile_failure_propagation_test.py` holds the
+contract. It builds a scratch Makefile carrying the repository's own prologue
+lines and a probe target whose first line fails and last line succeeds, then
+drives GNU make over it and asserts the target fails. A companion test removes
+the `.SHELLFLAGS` line from the same prologue and asserts the identical probe
+passes, so the first test's verdict is attributable to the flag rather than to
+a typo in the probe. A third pins the assumption that `.ONESHELL` applies to
+targets it does not name.
+
 ### Makefile tooling contracts
 
 Command-level Makefile coverage lives in

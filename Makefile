@@ -1,4 +1,16 @@
 SHELL := bash
+# `.ONESHELL` (declared further down) is global, not target-scoped, so every
+# multi-line recipe reaches the shell as one script. Under make's default
+# `.SHELLFLAGS` of `-c` that script's status is its LAST command's status, and
+# every earlier failure is discarded: `make lint-python` printed eight Ruff
+# findings and still exited zero. `-e` makes the shell abort on the first
+# failing command, which is what a gate has to do. Keep `-c`; make passes the
+# recipe as the shell's command string.
+#
+# A recipe that needs a command to be allowed to fail must say so itself, with
+# `|| true`, an `if`, or a captured status. Do not weaken this flag to
+# accommodate one.
+.SHELLFLAGS := -ec
 BUN_PATH := $(HOME)/.bun/bin:$(PATH)
 CARGO ?= cargo
 WHITAKER ?= whitaker
@@ -319,6 +331,10 @@ test-scripts:
 		$(foreach dep,$(PY_TEST_DEPS),--with $(dep)) \
 		python -m pytest scripts/local_k8s/unittests
 
+# `.ONESHELL` is a global special target: GNU make ignores the prerequisite
+# list, so naming `prepare-pg-worker` here documents which recipe needed it but
+# turns one-shell recipes on for the whole file. `.SHELLFLAGS := -ec` at the top
+# is what keeps that from swallowing failures.
 .ONESHELL: prepare-pg-worker
 # pg-embed-setup-unpriv publishes checksum-verified release archives from
 # v0.5.2, so the privilege-demotion worker is downloaded rather than compiled.
