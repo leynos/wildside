@@ -134,6 +134,7 @@ def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
     assert len(matches) == 1, f"expected one {name!r} step, found {len(matches)}"
     return matches[0]
 
+
 def test_build_runs_the_typedoc_documentation_gate() -> None:
     """Pull requests must reject undocumented JavaScript and TypeScript APIs.
 
@@ -141,27 +142,12 @@ def test_build_runs_the_typedoc_documentation_gate() -> None:
     step name is prose: renaming it, or deleting the step while leaving a
     similarly named neighbour, must not be able to satisfy this contract.
     Only a step that actually invokes ``make docs-check`` does.
+
+    See `_assert_gate_runs_unconditionally` for the three things that have to
+    hold together, and for why a condition is rejected by the presence of the
+    key rather than by its value.
     """
-    invocations = [
-        step
-        for step in _load_steps("build")
-        if isinstance(step.get("run"), str)
-        and any(
-            line.strip() == "make docs-check"
-            for line in typ.cast("str", step["run"]).splitlines()
-        )
-    ]
-    assert len(invocations) == 1, (
-        "expected exactly one build step running 'make docs-check', "
-        f"found {len(invocations)}"
-    )
-    assert "if" not in invocations[0], (
-        "the documentation gate must run unconditionally, so it cannot carry "
-        "an 'if' guard"
-    )
-    assert invocations[0].get("continue-on-error") in {None, False}, (
-        "the documentation gate must fail the job rather than continue on error"
-    )
+    _assert_gate_runs_unconditionally("build", "make docs-check")
 def test_codescene_check_immediately_follows_coverage_generation() -> None:
     """The changed-line gate consumes the LCOV report produced just before it."""
     steps = _load_steps()
