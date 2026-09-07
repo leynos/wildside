@@ -33,19 +33,32 @@ def _write_executable(path: Path, source: str) -> None:
     path.chmod(0o755)
 
 
+#: The temporary directory the fixture hands to every Make invocation. The
+#: assertions compare the tools' `TMPDIR` against this, so the contract is
+#: "the Makefile passes the caller's TMPDIR through untouched" rather than
+#: "whoever ran the suite happened to have no TMPDIR set". Reading the
+#: ambient value made the suite pass on GitHub's runners, which set none, and
+#: fail on any developer machine that sets one.
+TMPDIR_SENTINEL = "tmpdir-owned-by-the-fixture"
+
+
 @pytest.fixture
 def fake_tool_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
-    """Provide command doubles and an isolated invocation log."""
+    """Provide command doubles, an isolated invocation log, and a known TMPDIR."""
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     _write_executable(fake_bin / "tool", FAKE_TOOL)
     for tool_name in ("bun", "pnpm", "uv", "nixie", "merman-cli"):
         (fake_bin / tool_name).symlink_to(fake_bin / "tool")
 
+    temporary = tmp_path / TMPDIR_SENTINEL
+    temporary.mkdir()
+
     log_path = tmp_path / "tool.log"
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
     env["TOOL_LOG"] = str(log_path)
+    env["TMPDIR"] = str(temporary)
     return env, log_path
 
 
@@ -112,7 +125,7 @@ def test_nixie_invokes_the_installed_merman_renderer(
     uv_cache = str(REPOSITORY_ROOT / ".uv-cache")
     uv_tools = str(REPOSITORY_ROOT / ".uv-tools")
     assert _read_invocations(log_path) == [
-        ("nixie", "", uv_cache, uv_tools, ("--renderer", "merman"))
+        ("nixie", env["TMPDIR"], uv_cache, uv_tools, ("--renderer", "merman"))
     ]
 
 
@@ -142,7 +155,7 @@ def test_lint_asyncapi_uses_pnpm_cli_runner(
     assert completed.returncode == 0, completed.stderr
     expected_invocation = (
         "pnpm",
-        "",
+        env["TMPDIR"],
         str(REPOSITORY_ROOT / ".uv-cache"),
         str(REPOSITORY_ROOT / ".uv-tools"),
         (
