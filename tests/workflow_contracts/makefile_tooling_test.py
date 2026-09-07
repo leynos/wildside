@@ -188,6 +188,12 @@ TYPECHECK_DEPENDENCIES = frozenset({
     "plumbum",
     "cryptography",
     "tomli",
+    # `scripts/lint_actions.py` imports cuprum, the process runner the
+    # scripting standards name, and its tests import cmd-mox. ty resolves
+    # imports against this environment, so an omission here reads as an
+    # unresolved-import error rather than a missing dependency.
+    "cuprum",
+    "cmd-mox",
 })
 
 
@@ -357,90 +363,45 @@ def test_targets_run_uv_without_project_discovery(
             _assert_bounded(arguments[index + 1])
 
 
-#: A double that always fails, for forcing one command in a recipe to error.
-FAILING_TOOL = "#!/bin/sh\nexit 3\n"
+#: The single command `lint-actions` may run. The recipe used to carry a
+#: `while` loop over composite actions and a `yamllint`-then-`actionlint` pair
+#: in one `if`, where an earlier failure was replaced by a later command's
+#: status. Shell guards could hide that; the scripting standards say gate
+#: logic of this size belongs in a script, so the recipe now invokes one and
+#: the ordering is tested in `scripts/tests/test_lint_actions.py`.
+LINT_ACTIONS_SCRIPT = "scripts/lint_actions.py"
 
-#: A double that always succeeds, so a recipe reaches the command under test.
-PASSING_TOOL = "#!/bin/sh\nexit 0\n"
 
+def test_lint_actions_runs_the_script_as_one_command() -> None:
+    """The recipe must delegate rather than sequence tools itself.
 
-def test_lint_actions_fails_when_its_first_workflow_linter_fails(
-    tmp_path: Path,
-) -> None:
-    """A yamllint failure must fail the target even though actionlint passes.
-
-    The workflows branch of `lint-actions` runs `find | xargs uvx yamllint`
-    and then `find | xargs actionlint` inside one `if`. Without a guard the
-    second command's status replaces the first's, so a real yamllint failure
-    would be reported as a pass. This forces exactly that ordering: the first
-    linter fails, the second succeeds, and the target must still fail.
+    Asserting the shape, not just the presence of the script, is the point: a
+    loop or a second command reintroduces exactly the ordering defect the
+    script exists to remove, and neither shows up in a passing run.
     """
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    _write_executable(fake_bin / "uvx", FAILING_TOOL)
-    for tool_name in ("actionlint", "action-validator", "uv"):
-        _write_executable(fake_bin / tool_name, PASSING_TOOL)
-
-    env = os.environ.copy()
-    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
-
-    completed = _run_make("lint-actions", env)
-
-    assert completed.returncode != 0, (
-        "the failing first linter did not fail lint-actions; "
-        f"stdout={completed.stdout!r} stderr={completed.stderr!r}"
-    )
-
-
-def test_lint_actions_passes_when_every_linter_passes(tmp_path: Path) -> None:
-    """The companion case, so the test above is attributable to the failure.
-
-    Without this, a target that failed for an unrelated reason, a missing tool
-    or a bad `find` invocation, would read as proof the guard works.
-    """
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    for tool_name in ("uvx", "actionlint", "action-validator", "uv"):
-        _write_executable(fake_bin / tool_name, PASSING_TOOL)
-
-    env = os.environ.copy()
-    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
-
-    completed = _run_make("lint-actions", env)
-
-    assert completed.returncode == 0, (
-        f"stdout={completed.stdout!r} stderr={completed.stderr!r}"
-    )
-
-
-#: Every linter invocation inside `lint-actions`. Each must carry its own
-#: `|| exit 1`: two shapes here lose a status without one, an earlier loop
-#: iteration and the first of two commands in an `if` branch, and both are
-#: invisible in the output. `.SHELLFLAGS`'s `-e` also covers them, which is
-#: why this assertion is static: a behavioural test cannot tell the guard and
-#: the flag apart while both are present.
-GUARDED_LINTERS = ("yamllint", "action-validator", "actionlint")
-
-
-@pytest.mark.parametrize("linter", GUARDED_LINTERS)
-def test_every_lint_actions_linter_carries_its_own_exit_guard(linter: str) -> None:
-    """Each linter invocation must fail the recipe on its own."""
     makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf8")
     body = makefile[makefile.index("define LINT_ACTIONS_CMD") :]
     body = body[: body.index("\nendef")]
 
-    invocations = [
-        line
-        for line in body.splitlines()
-        if linter in line
-        # `ensure_tool` only checks the binary is present, and a comment
-        # merely mentions it; neither is an invocation that can fail a lint.
-        and "ensure_tool" not in line
-        and not line.lstrip().startswith("#")
+    commands = [
+        line.strip()
+        for line in body.splitlines()[1:]
+        if line.strip() and not line.strip().startswith("#")
     ]
-    assert invocations, f"lint-actions must invoke {linter}"
-    unguarded = [line for line in invocations if "|| exit 1" not in line]
-    assert unguarded == [], (
-        f"every {linter} invocation must carry '|| exit 1'; without it a "
-        f"failure is replaced by a later command's status: {unguarded}"
+    checks = [line for line in commands if line.startswith("$(call ensure_tool,")]
+    remaining = [line for line in commands if line not in checks]
+
+    assert len(remaining) == 1, (
+        "lint-actions must run exactly one command besides its tool checks; "
+        f"found {remaining}"
     )
+    assert LINT_ACTIONS_SCRIPT in remaining[0], (
+        f"the one command must invoke {LINT_ACTIONS_SCRIPT}: {remaining[0]}"
+    )
+    assert "$(YAMLLINT_VERSION)" in remaining[0], (
+        "the yamllint pin must reach the script, or the gate floats between versions"
+    )
+    for forbidden in ("while ", "; do", "&&", "||"):
+        assert forbidden not in remaining[0], (
+            f"{forbidden!r} in the recipe reintroduces shell sequencing: {remaining[0]}"
+        )

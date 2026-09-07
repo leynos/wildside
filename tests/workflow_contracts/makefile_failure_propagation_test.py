@@ -60,39 +60,6 @@ pipeline-head:
 \tfalse | cat
 """
 
-#: The two shapes in `lint-actions` that lose a command's status on their own,
-#: written with the explicit `|| exit 1` guard the real recipe carries and
-#: without the `-e` that also covers them today.
-#:
-#: `guarded-loop` mirrors the `while read` over composite actions: the first
-#: iteration fails and the second succeeds, so without a guard the loop
-#: reports the last iteration's status. `guarded-sequence` mirrors the two
-#: `find | xargs` calls in one `if` branch: the first fails and the second
-#: succeeds, so without a guard the second's status replaces the first's.
-GUARDED_RECIPES = """
-guarded-loop:
-\t@set +e; while IFS= read -r item; do \\
-\t  test "$$item" = ok || exit 1; \\
-\tdone <<<$$'bad\\nok'
-
-guarded-sequence:
-\t@set +e; if true; then \\
-\t  false || exit 1; \\
-\t  true || exit 1; \\
-\tfi
-
-unguarded-loop:
-\t@set +e; while IFS= read -r item; do \\
-\t  test "$$item" = ok; \\
-\tdone <<<$$'bad\\nok'
-
-unguarded-sequence:
-\t@set +e; if true; then \\
-\t  false; \\
-\t  true; \\
-\tfi
-"""
-
 #: The half-measures this contract exists to rule out, each with the probe it
 #: fails to catch.
 HALF_MEASURES = (
@@ -126,9 +93,7 @@ def _prologue_line(pattern: re.Pattern[str], description: str) -> str:
 def _write_scratch_makefile(directory: Path, prologue: cabc.Iterable[str]) -> Path:
     """Write a Makefile carrying ``prologue`` and both probe targets."""
     path = directory / "Makefile"
-    path.write_text(
-        "\n".join([*prologue, PROBE_RECIPES, GUARDED_RECIPES]), encoding="utf-8"
-    )
+    path.write_text("\n".join([*prologue, PROBE_RECIPES]), encoding="utf-8")
     return path
 
 
@@ -265,35 +230,4 @@ def test_removing_shellflags_masks_the_earlier_line_probe(
     assert completed.returncode == 0, (
         "make's default .SHELLFLAGS was expected to discard the earlier "
         f"failure; stderr={completed.stderr!r}"
-    )
-
-
-@pytest.mark.parametrize(
-    ("guarded", "unguarded"),
-    [
-        pytest.param("guarded-loop", "unguarded-loop", id="loop-iteration"),
-        pytest.param("guarded-sequence", "unguarded-sequence", id="command-sequence"),
-    ],
-)
-def test_an_explicit_guard_catches_what_the_flag_also_catches(
-    tmp_path: Path, prologue: list[str], guarded: str, unguarded: str
-) -> None:
-    """`|| exit 1` must catch these shapes without help from `-e`.
-
-    `lint-actions` runs `action-validator` in a loop over composite actions,
-    and two `find | xargs` calls in one `if` branch. In both, an earlier
-    command's failure is replaced by a later one's status. `.SHELLFLAGS`'s
-    `-e` covers them today, so these probes switch it off with `set +e` and
-    measure the guard alone: the guarded shape must still fail and the
-    unguarded one must still pass. Without that separation, a future change to
-    the flag would silently take the guards' protection with it.
-    """
-    makefile = _write_scratch_makefile(tmp_path, prologue)
-
-    assert _run_probe(makefile, guarded).returncode != 0, (
-        f"{guarded} relies on '|| exit 1' alone and must still fail"
-    )
-    assert _run_probe(makefile, unguarded).returncode == 0, (
-        f"{unguarded} is the same shape without the guard; if it fails here "
-        "the probe is measuring something other than the guard"
     )

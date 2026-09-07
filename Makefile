@@ -133,6 +133,10 @@ CRYPTOGRAPHY_VERSION ?= 49.0.0
 TOMLI_VERSION ?= 2.4.1
 CYCLOPTS_VERSION ?= 4.10.1
 PLUMBUM_VERSION ?= 1.9.0
+# The scripting standards name cuprum as the process runner; cmd-mox supplies
+# the external executables its tests mock. Both are new to this repository.
+CUPRUM_VERSION ?= 0.1.0
+CMD_MOX_VERSION ?= 0.2.0
 PY_TEST_DEPS = pytest==$(PYTEST_VERSION) pytest-mock==$(PYTEST_MOCK_VERSION) \
 	hypothesis==$(HYPOTHESIS_VERSION) 'pyyaml>=6,<7' \
 	cyclopts==$(CYCLOPTS_VERSION) plumbum==$(PLUMBUM_VERSION)
@@ -143,12 +147,13 @@ PY_TEST_DEPS = pytest==$(PYTEST_VERSION) pytest-mock==$(PYTEST_MOCK_VERSION) \
 # the inline metadata in scripts/local_k8s.py; tomli and cryptography cover
 # imports in sync_workspace_members.py and rotate_session_key.py.
 PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
-	cryptography==$(CRYPTOGRAPHY_VERSION) tomli==$(TOMLI_VERSION)
+	cryptography==$(CRYPTOGRAPHY_VERSION) tomli==$(TOMLI_VERSION) \
+	cuprum==$(CUPRUM_VERSION) cmd-mox==$(CMD_MOX_VERSION)
 
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile
+.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: spelling spelling-phrase-check spelling-config spelling-config-write spelling-helper-test
@@ -286,27 +291,7 @@ define LINT_ACTIONS_CMD
 $(call ensure_tool,uv)
 $(call ensure_tool,action-validator)
 $(call ensure_tool,actionlint)
-# Each command carries `|| exit 1` rather than relying on `.SHELLFLAGS`'s
-# `-e`. Two shapes here lose a status without it, and both are invisible:
-# a failing `action-validator` in an earlier loop iteration is replaced by
-# the last iteration's status, and the first `find | xargs` below is
-# replaced by the second's. `-e` covers both today; the guards say so
-# explicitly and survive a future change to the flag.
-@if [ ! -d .github/actions ]; then \
-  echo "No composite actions found; skipping lint-actions"; \
-else \
-  find .github/actions -name 'action.yml' -print0 | xargs -0 -r uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint || exit 1; \
-  while IFS= read -r -d '' action; do \
-    echo "$$action:"; \
-    action-validator "$$action" || exit 1; \
-  done < <(find .github/actions -name 'action.yml' -print0); \
-fi
-@if [ ! -d .github/workflows ]; then \
-  echo "No workflows found; skipping workflow lint"; \
-else \
-  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint || exit 1; \
-  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r actionlint || exit 1; \
-fi
+$(UV) run --no-project scripts/lint_actions.py --yamllint-version $(YAMLLINT_VERSION)
 endef
 
 lint-actions:
@@ -317,7 +302,7 @@ PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.2
 NEXTEST_TEST_THREADS ?= 1
 
 
-test: test-rust test-frontend test-workflow-contracts test-scripts
+test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
 
 test-rust: workspace-sync prepare-pg-worker
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
@@ -348,6 +333,23 @@ test-scripts:
 	PYTHONPATH=scripts uv run --no-project \
 		$(foreach dep,$(PY_TEST_DEPS),--with $(dep)) \
 		python -m pytest scripts/local_k8s/unittests
+
+# cmd-mox intercepts a command by putting a shim on PATH, and the shim needs
+# an interpreter that can import cmd_mox. Under `uv run --with` the layered
+# environment is not one, and the shim hangs waiting for a reply that never
+# comes; a materialized virtual environment works, so this target builds one
+# the way typecheck-python does. Keep it out of PY_TEST_DEPS for the same
+# reason: those run under `uv run --with`.
+LINT_ACTIONS_TEST_VENV := .venv-lint-actions
+LINT_ACTIONS_TEST_DEPS = pytest==$(PYTEST_VERSION) cyclopts==$(CYCLOPTS_VERSION) \
+	cuprum==$(CUPRUM_VERSION) cmd-mox==$(CMD_MOX_VERSION)
+
+test-lint-actions:
+	$(UV) venv --allow-existing --python 3.13 $(LINT_ACTIONS_TEST_VENV)
+	$(UV) pip install --quiet --python $(LINT_ACTIONS_TEST_VENV) $(LINT_ACTIONS_TEST_DEPS)
+	PYTHONPATH=scripts $(LINT_ACTIONS_TEST_VENV)/bin/python -m pytest \
+		scripts/tests/test_lint_actions.py -p cmd_mox.pytest_plugin \
+		-c /dev/null --rootdir=.
 
 # `.ONESHELL` is a global special target: GNU make ignores the prerequisite
 # list, so naming `prepare-pg-worker` here documents which recipe needed it but

@@ -1,5 +1,6 @@
 # Python
 .venv/
+.venv-lint-actions/
 .ruff_cache/
 
 # Rust

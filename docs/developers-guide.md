@@ -1054,24 +1054,31 @@ Both options earn their place, and neither covers the other:
 shell's command string.
 
 The flag is the floor, not the whole story. Two shapes lose a command's status
-on their own, and both are invisible in the output:
+on their own, and shell guards only paper over them. `lint-actions` had both:
+`action-validator` in a loop over composite actions, where the loop reports its
+last iteration's status, and `find | xargs yamllint` followed by
+`find | xargs actionlint` in one `if`, where the second's status replaces the
+first's.
 
-- **A loop body.** `lint-actions` runs `action-validator` once per composite
-  action. Without a guard the loop reports its last iteration's status, so a
-  failure in any earlier one disappears.
-- **Two commands in one branch.** The same recipe runs `find | xargs yamllint`
-  and then `find | xargs actionlint` inside a single `if`. Without a guard the
-  second's status replaces the first's.
+The estate's [scripting standards](scripting-standards.md) say gate logic of
+that size does not belong in a recipe at all. That recipe now invokes
+`scripts/lint_actions.py` as a single command. The script builds the list of
+invocations first and runs them in one loop, so "the first failure wins" is a
+property of four lines rather than of control flow spread across a shell
+fragment, and the ordering is testable without a shell.
 
-`-e` covers both today, so each of those invocations carries `|| exit 1`
-anyway. The guard states the intent where the reader meets it, and it survives
-a future change to `.SHELLFLAGS` that the shapes themselves would not.
-`tests/workflow_contracts/makefile_tooling_test.py` asserts every linter
-invocation in that recipe carries one, and drives the recipe with a failing
-first linter and a passing second. A companion probe in
-`makefile_failure_propagation_test.py` switches `-e` off with `set +e` and
-measures the guard alone, since no behavioural test can tell the guard and the
-flag apart while both are present.
+`scripts/tests/test_lint_actions.py` places a failing tool first, a failing
+tool last, and no failing tool at all, using `cmd-mox` for the executables.
+`tests/workflow_contracts/makefile_tooling_test.py` asserts the recipe still
+runs one command, carries the yamllint pin, and contains no `while`, `;`, `&&`
+or `||`, since any of those reintroduces the defect.
+
+Two notes for the next script, both learned here. cuprum 0.1.0 has no
+`Catalogue.from_programs`; build a `ProgramCatalogue` from a `ProjectSettings`
+and pass it to `sh.make`. And `cmd-mox` needs an interpreter that can import
+it on the shim's PATH, which a layered `uv run --with` environment is not: the
+shim hangs. `make test-lint-actions` builds a materialized virtual environment
+instead, as `typecheck-python` does.
 
 A recipe that genuinely needs a command to be allowed to fail says so itself,
 with `|| true`, an `if`, or a captured status. Make's `-` line prefix is not an
