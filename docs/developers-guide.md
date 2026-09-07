@@ -1710,7 +1710,15 @@ successful runs of each workflow.*
 
 The widest gap is 522 s, so the contract allows 15 minutes, making the
 requirement 105 minutes, and the ceilings are 120: fifteen above it, which is
-the margin the estate asks for above every requirement. A ceiling equal to the
+the margin the estate asks for above every requirement.
+
+The contract also pins the condition each lane carries. A skipped step runs no
+`cargo`, so its watchdog never arms and the tiers say nothing about it:
+`if: false` on the step or on its job would leave a lane that looks bounded and
+is not. The conditions are pinned rather than forbidden, because the one here
+is legitimate: the pull-request lane skips Dependabot branches, whose bumps are
+not changes worth measuring, and pushes, which the trunk lane covers. A lane
+gaining, losing or changing a condition has to change this section with it. A ceiling equal to the
 sum it contains cancels the job at the moment the watchdog would have reported
 the overrun, so the margin is a term of the requirement rather than slack that
 happens to be there. On the trunk lane most of that
