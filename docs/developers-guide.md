@@ -1709,7 +1709,11 @@ several runs rather than one:
 successful runs of each workflow.*
 
 The widest gap is 522 s, so the contract allows 15 minutes, making the
-requirement 105 minutes against ceilings of 120. On the trunk lane most of that
+requirement 105 minutes, and the ceilings are 120: fifteen above it, which is
+the margin the estate asks for above every requirement. A ceiling equal to the
+sum it contains cancels the job at the moment the watchdog would have reported
+the overrun, so the margin is a term of the requirement rather than slack that
+happens to be there. On the trunk lane most of that
 gap is the database fixtures and the artefact upload, which run outside the
 coverage step and so outside the watchdog.
 
