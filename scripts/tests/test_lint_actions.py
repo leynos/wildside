@@ -11,6 +11,7 @@ against real files.
 
 from __future__ import annotations
 
+import os
 import typing as typ
 
 import lint_actions
@@ -176,26 +177,52 @@ def test_the_cli_is_silent_and_zero_when_every_linter_passes(
     assert capsys.readouterr().err == ""
 
 
-def test_an_unreadable_directory_is_not_an_empty_one(
-    repository: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A listing failure must raise rather than yield nothing.
+@pytest.mark.skipif(
+    os.geteuid() == 0, reason="root bypasses the directory permission this asserts"
+)
+def test_an_unreadable_directory_is_not_an_empty_one(repository: Path) -> None:
+    """A directory the walk cannot enter must raise, not yield nothing.
 
-    This is the defect the whole change exists to remove, one level down: a
-    directory that cannot be read looks exactly like a directory with no
-    actions in it, so the gate would report success having examined nothing.
+    This is the defect the whole change exists to remove, one level down, and
+    it is exercised against a real unreadable directory rather than a patched
+    one on purpose. `Path.rglob` swallows the `OSError` and returns an empty
+    list, so a test that patched `rglob` to raise would pass while the real
+    code silently reported "no composite actions" for a subtree it could not
+    read.
     """
+    nested = repository / ".github" / "actions" / "demo"
+    nested.chmod(0o000)
+    try:
+        with pytest.raises(lint_actions.DiscoveryError) as raised:
+            lint_actions.discover(repository)
+    finally:
+        nested.chmod(0o755)
 
-    def _refuse(*_args: object, **_kwargs: object) -> typ.NoReturn:
-        raise PermissionError(13, "Permission denied")
-
-    monkeypatch.setattr(lint_actions.Path, "rglob", _refuse)
-
-    with pytest.raises(lint_actions.DiscoveryError) as raised:
-        lint_actions.discover(repository)
-
-    assert ".github/actions" in str(raised.value)
+    assert "demo" in str(raised.value)
     assert "Permission denied" in str(raised.value)
+
+
+def test_rglob_would_have_hidden_that_failure(repository: Path) -> None:
+    """Pin the behaviour that made the previous implementation a no-op.
+
+    If a future Python makes `rglob` propagate the error, the walk becomes
+    belt and braces rather than load-bearing, and this test says so by
+    failing.
+    """
+    if os.geteuid() == 0:
+        pytest.skip("root bypasses the directory permission this asserts")
+
+    nested = repository / ".github" / "actions" / "demo"
+    nested.chmod(0o000)
+    try:
+        swallowed = list((repository / ".github" / "actions").rglob("action.yml"))
+    finally:
+        nested.chmod(0o755)
+
+    assert swallowed == [], (
+        "rglob no longer suppresses the traversal error; the walk in "
+        "_manifests_under can be simplified"
+    )
 
 
 def test_a_missing_directory_is_an_empty_one(tmp_path: Path) -> None:

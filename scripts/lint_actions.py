@@ -65,7 +65,15 @@ app = cyclopts.App(
 )
 
 
-class LintError(Exception):
+class LintActionsError(Exception):
+    """Base for every error this gate raises deliberately.
+
+    Callers catch this rather than `Exception`, so an expected gate failure
+    stays distinguishable from a defect in the script itself.
+    """
+
+
+class LintError(LintActionsError):
     """A linter rejected its input, or could not be run.
 
     Carrying the tool's name and status separately keeps the message the same
@@ -136,7 +144,7 @@ class Surfaces:
     workflows: tuple[Path, ...]
 
 
-class DiscoveryError(Exception):
+class DiscoveryError(LintActionsError):
     """A directory the gate must read exists but could not be listed.
 
     An unreadable directory is not an empty one. Treating the two alike is
@@ -157,19 +165,38 @@ class DiscoveryError(Exception):
         super().__init__(f"cannot list {directory}: {reason}")
 
 
-def _listed(
-    directory: Path, produce: cabc.Callable[[], cabc.Iterable[Path]]
-) -> tuple[Path, ...]:
-    """Return the produced paths sorted, turning a listing failure into an error.
+def _manifests_under(directory: Path) -> tuple[Path, ...]:
+    """Return every action manifest beneath ``directory``.
 
-    ``produce`` is a callable rather than an iterable because the failure can
-    surface either when the listing starts or while it is consumed, and both
-    have to be caught.
+    `Path.rglob` and `Path.glob` swallow the `OSError` a denied directory
+    raises and simply yield nothing, so a subtree the gate cannot read is
+    indistinguishable from a subtree with no manifests in it. That is the
+    silent pass this script exists to remove, so the walk reports its errors
+    instead of discarding them.
+    """
+    found: list[Path] = []
+
+    def _fail(error: OSError) -> typ.NoReturn:
+        raise DiscoveryError(
+            Path(error.filename or directory), error.strerror or str(error)
+        )
+
+    for parent, _directories, files in directory.walk(on_error=_fail):
+        found.extend(parent / name for name in files if name == ACTION_FILENAME)
+    return tuple(sorted(found))
+
+
+def _workflows_in(directory: Path) -> tuple[Path, ...]:
+    """Return every workflow definition directly in ``directory``.
+
+    `iterdir` raises rather than suppressing, unlike `glob`, so the failure
+    reaches the caller.
     """
     try:
-        return tuple(sorted(produce()))
+        entries = sorted(directory.iterdir())
     except OSError as error:
         raise DiscoveryError(directory, error.strerror or str(error)) from error
+    return tuple(entry for entry in entries if entry.suffix in WORKFLOW_SUFFIXES)
 
 
 def discover(root: Path) -> Surfaces:
@@ -198,23 +225,8 @@ def discover(root: Path) -> Surfaces:
     actions = root / ACTIONS_DIR
     workflows = root / WORKFLOWS_DIR
     return Surfaces(
-        manifests=(
-            _listed(actions, lambda: actions.rglob(ACTION_FILENAME))
-            if actions.is_dir()
-            else ()
-        ),
-        workflows=(
-            _listed(
-                workflows,
-                lambda: (
-                    path
-                    for suffix in WORKFLOW_SUFFIXES
-                    for path in workflows.glob(f"*{suffix}")
-                ),
-            )
-            if workflows.is_dir()
-            else ()
-        ),
+        manifests=_manifests_under(actions) if actions.is_dir() else (),
+        workflows=_workflows_in(workflows) if workflows.is_dir() else (),
     )
 
 
