@@ -13,14 +13,18 @@ from __future__ import annotations
 
 import pytest
 from coverage_lanes import WatchdogValueError, coverage_jobs_of, watchdog_of
-from timeout_budgets import (
-    CEILING_MARGIN_SECONDS,
-    UnboundedTestError,
+from nextest_budgets import (
     global_timeout,
     grace_period,
     largest_test_allowance,
-    required_ceiling,
     termination_allowance,
+)
+from nextest_durations import (
+    UnboundedTestError,
+)
+from timeout_budgets import (
+    CEILING_MARGIN_SECONDS,
+    required_ceiling,
 )
 
 
