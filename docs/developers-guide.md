@@ -763,11 +763,35 @@ coverage steps. Nothing in `backend/tests/` needs a process-wide environment
 lock, and no nextest group exists to protect environment state.
 
 `docs/adr-002-environment-seam-taxonomy.md` records the decision and the full
-list of sanctioned roots. Two contract targets guard the mechanism:
+list of sanctioned roots. Three contract targets guard the mechanism:
 `backend/tests/environment_policy_contract.rs` asserts what the repository
-declares, and `backend/tests/environment_policy_lint.rs` runs `clippy-driver`
-over probe sources to prove those declarations actually fire. Add a probe there
-when the policy grows an entry.
+declares, `backend/tests/environment_policy_lint.rs` runs `clippy-driver` over
+probe sources to prove those declarations actually fire, and
+`backend/tests/environment_policy_source_scan.rs` parses every workspace source
+and rejects any `allow` of the policy's lint. Add a probe to the second when
+the policy grows an entry.
+
+Never suppress the policy with `allow`, in any of its forms. A crate-level
+`#![allow(clippy::disallowed_methods)]` disarms the lint for a whole crate, and
+`clippy::allow_attributes` does not fire on an inner attribute, so nothing else
+would notice. Naming the lint is not the only route: Clippy places
+`disallowed_methods` in the `style` group, so `clippy::style`, the wider
+`clippy::all`, and `warnings` each switch it off just as effectively, and any of
+them nested in a `cfg_attr` is honoured too. The source scan rejects all of
+them, wherever the attribute sits, and it protects the guard as well as the
+policy: `clippy::allow_attributes` and its companion live in the `restriction`
+group, so allowing that group would let an `allow` stand in for an `expect`
+unnoticed. Use an item-scoped `#[expect(..., reason = "...")]` at a composition
+root instead: it warns once the site no longer needs it, where `allow` stays
+silent forever.
+
+An `expect` earns that exemption only while it is item-scoped. A crate-level
+`#![expect(clippy::disallowed_methods)]` suppresses every prohibited call in
+the crate and is fulfilled by the first one, so it never warns either; the
+scan reports it. It also normalizes raw identifiers, since
+`#![allow(clippy::r#style)]` names the same lint, and walks macro token
+streams, since a `macro_rules!` arm expanding to a module with an inner
+`allow` is invisible to both the syntax tree and Clippy's guard.
 
 ## Adding or changing behavioural tests
 
