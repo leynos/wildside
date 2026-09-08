@@ -30,6 +30,12 @@
 //! form at a composition root and why this scan leaves it alone: `expect`
 //! warns once its site no longer needs it, `allow` is silent forever.
 //!
+//! The guard that enforces that choice is defeatable in its own right, also
+//! measured: `#![allow(clippy::restriction)]` takes `clippy::allow_attributes`
+//! from one diagnostic to none while leaving `disallowed_methods` reporting.
+//! It disarms the guard rather than the policy, which is why the group and
+//! both guard lints are protected too.
+//!
 //! The sources are parsed rather than searched. A text scan cannot tell an
 //! attribute from attribute-shaped text in a string literal, cannot follow
 //! `cfg_attr`, and ends an attribute early at a parenthesis inside a `reason`.
@@ -46,9 +52,13 @@
 //! - `#![cfg_attr(all(), allow(clippy::disallowed_methods))]` there fails it;
 //! - `#![allow(clippy::all)]` split over several lines fails it;
 //! - `#[allow(warnings)]` on an item in `backend/src/main.rs` fails it;
-//! - `#[allow(clippy::allow_attributes)]` must and does keep passing, because
-//!   its name contains `clippy::all`. Comparing paths rather than substrings
-//!   is what keeps that from being a false report.
+//! - `#[allow(clippy::restriction)]` in a crate root fails it, because that
+//!   group holds the two guard lints that keep `allow` from being used where
+//!   the policy requires `expect`;
+//! - `#[allow(clippy::alloc_instead_of_core)]` must and does keep passing. Its
+//!   name begins with `clippy::all`, so a substring test would reject it, and
+//!   it is a `restriction` lint, so a group-aware test would too. Comparing
+//!   paths is what keeps both from being false reports.
 
 use std::collections::VecDeque;
 use std::error::Error as StdError;
@@ -62,18 +72,31 @@ use syn::{AttrStyle, Attribute, Meta, MetaList, Path, Token};
 
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
-/// Lints whose suppression disarms the environment-access policy.
+/// Lints whose suppression disarms the environment-access policy, or the
+/// guard that keeps its escape hatch honest.
 ///
-/// Naming the lint alone is not enough: Clippy places `disallowed_methods` in
-/// the `style` group, so `clippy::style` and the wider `clippy::all` each
-/// switch it off, and `warnings` takes down everything. All four were measured
-/// against this repository's Clippy before being listed; extend this list if
-/// the lint's group ever changes.
-const PROTECTED_LINTS: [&str; 4] = [
+/// The first four protect the policy itself. Naming the lint alone is not
+/// enough: Clippy places `disallowed_methods` in the `style` group, so
+/// `clippy::style` and the wider `clippy::all` each switch it off, and
+/// `warnings` takes down everything.
+///
+/// The last three protect the guard. `backend` and `architecture-lint` deny
+/// `clippy::allow_attributes` so that a prohibited call cannot be silenced
+/// with an `allow` instead of an `expect`; allowing either guard lint, or the
+/// `restriction` group that holds them, switches that deny off. Measured:
+/// `#![allow(clippy::restriction)]` takes `clippy::allow_attributes` from one
+/// diagnostic to none while leaving `disallowed_methods` reporting, so it
+/// disarms the guard alone rather than the policy.
+///
+/// Extend this list if either lint's group changes.
+const PROTECTED_LINTS: [&str; 7] = [
     "clippy::disallowed_methods",
     "clippy::style",
     "clippy::all",
     "warnings",
+    "clippy::allow_attributes",
+    "clippy::allow_attributes_without_reason",
+    "clippy::restriction",
 ];
 
 /// Directories holding the Rust sources the policy governs.
@@ -365,14 +388,14 @@ fn attribute_shaped_text_is_not_an_attribute() -> TestResult {
 
 /// Scenario: a lint whose name merely contains a protected one.
 ///
-/// Invariant: `clippy::allow_attributes` is not reported as suppressing
-/// `clippy::all`. Comparing paths rather than substrings is what prevents it;
-/// a substring test would reject the attribute and leave a contributor unable
-/// to tell a real finding from a false one.
+/// Invariant: `clippy::alloc_instead_of_core` is not reported. Its name begins
+/// with `clippy::all`, so a substring test would reject it and leave a
+/// contributor unable to tell a real finding from a false one. Comparing paths
+/// is what prevents that. Note also that it is a `restriction` lint, and
+/// `clippy::restriction` is protected: naming a lint is not naming its group.
 #[test]
 fn a_longer_lint_name_containing_a_protected_one_is_not_an_offence() -> TestResult {
-    let innocent = "#[allow(clippy::allow_attributes, clippy::alloc_instead_of_core)]\n\
-         fn documented() {}\n";
+    let innocent = "#[allow(clippy::alloc_instead_of_core)]\nfn documented() {}\n";
 
     assert!(suppressed_lints(innocent)?.is_empty());
     Ok(())
