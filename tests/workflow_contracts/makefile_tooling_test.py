@@ -405,3 +405,43 @@ def test_lint_actions_runs_the_script_as_one_command() -> None:
         assert forbidden not in remaining[0], (
             f"{forbidden!r} in the recipe reintroduces shell sequencing: {remaining[0]}"
         )
+
+
+def test_test_lint_actions_is_reachable_from_the_aggregate_test_target() -> None:
+    """`make test` must gather the lint-actions suite.
+
+    The workflow names this target explicitly, so CI runs it either way, but a
+    contributor running `make test` before pushing should get the same answer
+    CI will give them. A suite reachable only from CI is one nobody runs until
+    it is too late to be cheap.
+    """
+    makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf8")
+    aggregate = re.search(r"(?m)^test:(.*)$", makefile)
+    assert aggregate is not None, "the Makefile must declare a 'test' target"
+    assert "test-lint-actions" in aggregate.group(1).split(), (
+        "'test' must depend on test-lint-actions; reordering its other "
+        "prerequisites is fine, dropping this one is not"
+    )
+
+
+def test_test_lint_actions_builds_its_own_environment() -> None:
+    """The target must materialize a virtual environment, not layer one.
+
+    cmd-mox's shim needs an interpreter that can import it, and the suite has
+    only been stable under a materialized environment. Running it through
+    `uv run --with`, the shape the other Python targets use, is what this
+    assertion exists to prevent, because the failure there is a hang rather
+    than a diagnosis.
+    """
+    makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf8")
+    recipe = re.search(r"(?m)^test-lint-actions:.*\n((?:\t.*\n)+)", makefile)
+    assert recipe is not None, "the Makefile must declare a test-lint-actions recipe"
+    body = recipe.group(1)
+
+    assert "uv venv" in body or "$(UV) venv" in body, (
+        "test-lint-actions must materialize a virtual environment"
+    )
+    assert "--with" not in body, (
+        "test-lint-actions must not run under a layered `uv run --with` "
+        "environment; cmd-mox's shim hangs there rather than failing"
+    )

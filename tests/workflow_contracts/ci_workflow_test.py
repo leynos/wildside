@@ -39,10 +39,13 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
        value. Matching a line within a multiline script is satisfied by
        `if false; then <command>; fi`, and matching a substring is satisfied
        by `<command> || true`.
-    3. Neither the job nor that step carries an `if` key **at all**.
+    3. Neither the job nor that step carries an `if` or `continue-on-error`
+       key **at all**. A condition skips the gate; `continue-on-error` runs
+       it and discards the verdict. Both leave a green pull request that the
+       gate never actually held.
 
-    The third is asserted on the key's presence rather than on its value on
-    purpose. A condition need not be spelled `false` to skip the gate: an
+    The third is asserted on the keys' presence rather than on their values
+    on purpose. A condition need not be spelled `false` to skip the gate: an
     ordinary looking `github.event_name == 'push'` skips it on exactly the
     event this contract exists to cover. Enumerating falsy spellings also
     invites a subtler error, since YAML parses `false` to a boolean whose
@@ -67,6 +70,10 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
         f"the {job_name} job must carry no condition; a skipped job runs no "
         "steps and leaves every step-level assertion vacuous"
     )
+    assert "continue-on-error" not in job, (
+        f"the {job_name} job must not continue on error; a job that swallows "
+        "its own failure reports success whatever its steps found"
+    )
 
     steps = typ.cast("list[dict[str, object]]", job.get("steps"))
     invocations = [
@@ -81,6 +88,10 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
     )
     assert "if" not in invocations[0], (
         f"the {command!r} step must carry no condition at all"
+    )
+    assert "continue-on-error" not in invocations[0], (
+        f"the {command!r} step must not continue on error; running the gate "
+        "and discarding its verdict is the same as not running it"
     )
 
 
