@@ -163,6 +163,11 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
           # Keep backend selection explicit for strict PG_TEST_BACKEND validation.
           PG_TEST_BACKEND: postgresql_embedded
+          # Stable superuser password for the shared embedded cluster. Test
+          # support no longer sets this in-process (issue #464), so the runner
+          # composes it; a random per-process password would make later test
+          # binaries fail with `28P01 password authentication failed`.
+          PG_PASSWORD: wildside_embedded_test
           # Root-path bootstrap requires the worker binary for privilege demotion.
           PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
         with:

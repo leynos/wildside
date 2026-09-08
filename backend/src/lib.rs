@@ -6,6 +6,7 @@
 //! domain, and outbound adapters (persistence, cache, queue).
 extern crate self as backend;
 
+pub mod config;
 pub mod doc;
 pub mod domain;
 pub mod er_snapshots;

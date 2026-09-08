@@ -50,6 +50,8 @@ where
     }
 }
 
+/// Parse a `PORT` value, warning and falling back to 8080 when it is not a
+/// valid port number.
 fn parse_port_with_fallback(port_str: &str) -> u16 {
     match port_str.parse::<u16>() {
         Ok(port) => port,
@@ -60,9 +62,27 @@ fn parse_port_with_fallback(port_str: &str) -> u16 {
     }
 }
 
-fn bind_addr() -> SocketAddr {
-    let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
-    let port = env::var("PORT")
+/// Reads one variable from the process environment.
+///
+/// `main` is the composition root, so this is the binary's single sanctioned
+/// ambient read. Every helper below takes the reader as an argument, which is
+/// what lets `bind_addr` be unit-tested without touching the process.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "composition root: the binary reads its own process environment \
+              once and injects the reader into the helpers below"
+)]
+fn process_env(name: &str) -> Option<String> {
+    env::var(name).ok()
+}
+
+/// Resolve the listen address from `HOST` and `PORT` read through `read_env`.
+///
+/// Any combination the reader supplies that does not parse as a socket address
+/// falls back to `0.0.0.0:8080` with a warning.
+fn bind_addr(read_env: impl Fn(&str) -> Option<String>) -> SocketAddr {
+    let host = read_env("HOST").unwrap_or_else(|| "0.0.0.0".into());
+    let port = read_env("PORT")
         .as_deref()
         .map(parse_port_with_fallback)
         .unwrap_or(8080u16);
@@ -77,8 +97,16 @@ fn bind_addr() -> SocketAddr {
     }
 }
 
-async fn build_db_pool() -> std::io::Result<Option<DbPool>> {
-    let Ok(database_url) = env::var("DATABASE_URL") else {
+/// Build the database pool from an already-resolved URL.
+///
+/// `None` means no database was configured, which is not an error; the server
+/// runs without persistence.
+///
+/// # Errors
+///
+/// Returns an error when a URL was supplied but the pool cannot be created.
+async fn build_db_pool(database_url: Option<String>) -> std::io::Result<Option<DbPool>> {
+    let Some(database_url) = database_url else {
         return Ok(None);
     };
 
@@ -114,7 +142,7 @@ async fn main() -> std::io::Result<()> {
     #[cfg(feature = "example-data")]
     let example_data_settings = ExampleDataSettings::load().map_err(std::io::Error::other)?;
 
-    let db_pool = build_db_pool().await?;
+    let db_pool = build_db_pool(process_env("DATABASE_URL")).await?;
 
     #[cfg(feature = "example-data")]
     seed_example_data_on_startup(&example_data_settings, db_pool.as_ref())
@@ -124,7 +152,7 @@ async fn main() -> std::io::Result<()> {
     let prometheus = initialize_metrics(make_metrics);
     let health_state = web::Data::new(HealthState::new());
     let server_config = {
-        let config = ServerConfig::new(key, cookie_secure, same_site, bind_addr());
+        let config = ServerConfig::new(key, cookie_secure, same_site, bind_addr(process_env));
         let config = if let Some(pool) = db_pool.clone() {
             config.with_db_pool(pool)
         } else {

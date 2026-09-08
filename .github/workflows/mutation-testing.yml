@@ -39,6 +39,11 @@ jobs:
       # prefix requests an exact semver match. PG_EMBEDDED_WORKER and
       # PG_TEST_BACKEND are not needed here: the worker only matters for
       # root-path bootstrap and GitHub-hosted runners are non-root.
+      # PG_PASSWORD must be stable across test binaries: test support resolves
+      # it without setting it (issue #464), so a run that omits it lets
+      # postgresql_embedded generate a different password per process and the
+      # shared cluster is torn down and re-authenticated repeatedly.
       setup-commands: |
         echo "POSTGRESQL_VERSION==16.10.0" >> "$GITHUB_ENV"
         echo "POSTGRESQL_RELEASES_URL=https://github.com/theseus-rs/postgresql-binaries" >> "$GITHUB_ENV"
+        echo "PG_PASSWORD=wildside_embedded_test" >> "$GITHUB_ENV"

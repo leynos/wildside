@@ -63,10 +63,8 @@ pub struct ExampleDataSeedingWorld {
 
 impl ExampleDataSeedingWorld {
     fn setup_fresh_database(&self) {
-        // Resolve the stable cluster environment (which performs `set_var`)
-        // before constructing the Tokio runtime, which spawns worker
-        // threads, and `std::env::set_var` is undefined behaviour once other
-        // threads exist, so the environment must be reconciled first.
+        // Repair stale shared-cluster password state before acquiring the
+        // cluster.
         ensure_stable_cluster_environment()
             .expect("reconcile stable cluster environment before cluster access");
         let runtime = Runtime::new().expect("create runtime");

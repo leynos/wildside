@@ -1,4 +1,4 @@
-//! Unit tests for the stable-cluster-environment helpers.
+//! Unit tests for the stable-cluster password helpers.
 //!
 //! These tests live in a dedicated integration-test target so they compile and
 //! run exactly once. They include `support/stable_cluster_env.rs` directly —
@@ -8,21 +8,35 @@
 //! any `#[allow(dead_code)]`/`#[allow(unused_imports)]` suppression: the
 //! `libc::atexit` registration and cluster-handle acquisition it never calls
 //! stay in `support/atexit_cleanup.rs` and are not compiled here.
+//!
+//! Every test drives the helpers through an injected reader and explicit
+//! sandbox paths. Nothing here reads or writes the process environment, so the
+//! target needs no serialization and no runtime-ordering contract.
 
 #[path = "support/stable_cluster_env.rs"]
 mod stable_cluster_env;
 
+use std::collections::HashMap;
+#[cfg(unix)]
+use std::path::PathBuf;
 use std::time::Duration;
 
+#[cfg(unix)]
 use cap_std::ambient_authority;
+#[cfg(unix)]
 use cap_std::fs::Dir;
 use rstest::rstest;
-use stable_cluster_env::{SHARED_CLUSTER_RETRIES, SHARED_CLUSTER_RETRY_DELAY};
+use stable_cluster_env::{DEFAULT_PG_PASSWORD, SHARED_CLUSTER_RETRIES, SHARED_CLUSTER_RETRY_DELAY};
 
 #[cfg(unix)]
 fn write_postmaster_pid(dir_path: &std::path::Path, content: &str) {
     let dir = Dir::open_ambient_dir(dir_path, ambient_authority()).expect("open dir");
     dir.write("postmaster.pid", content).expect("write");
+}
+
+/// Build a stub environment reader over a fixed variable map.
+fn stub_env(vars: HashMap<&'static str, String>) -> impl Fn(&str) -> Option<String> {
+    move |name| vars.get(name).cloned()
 }
 
 #[cfg(unix)]
@@ -44,213 +58,152 @@ fn read_postmaster_pid_reads_first_line(
     );
 }
 
-fn lock_pg_env(
-    pg_password: Option<&'static str>,
-    postgresql_releases_url: Option<&'static str>,
-) -> env_lock::EnvGuard<'static> {
-    env_lock::lock_env([
-        ("PG_PASSWORD", pg_password),
-        ("POSTGRESQL_RELEASES_URL", postgresql_releases_url),
-    ])
-}
-
-#[test]
-fn resolve_stable_env_does_not_overwrite_existing_values() {
-    let _guard = lock_pg_env(
-        Some("custom_value"),
-        Some("https://example.invalid/postgresql-binaries"),
-    );
-    stable_cluster_env::resolve_stable_env();
-    assert_eq!(
-        std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
-        "custom_value",
-        "resolve_stable_env should not overwrite an existing PG_PASSWORD"
-    );
-    assert_eq!(
-        std::env::var("POSTGRESQL_RELEASES_URL").expect("POSTGRESQL_RELEASES_URL should be set"),
-        "https://example.invalid/postgresql-binaries",
-        "resolve_stable_env should not overwrite an existing release URL"
-    );
-}
-
-#[test]
-fn resolve_stable_env_sets_release_url_when_missing() {
-    let _guard = lock_pg_env(Some("custom_value"), None);
-    stable_cluster_env::resolve_stable_env();
-    assert_eq!(
-        std::env::var("POSTGRESQL_RELEASES_URL").expect("POSTGRESQL_RELEASES_URL should be set"),
-        "https://github.com/theseus-rs/postgresql-binaries"
-    );
-}
-
-#[test]
-fn resolve_stable_env_sets_password_when_missing() {
-    let _guard = lock_pg_env(None, Some("https://example.invalid/postgresql-binaries"));
-    stable_cluster_env::resolve_stable_env();
-    assert_eq!(
-        std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
-        "wildside_embedded_test",
-        "resolve_stable_env should set the stable default PG_PASSWORD"
-    );
-}
-
-#[cfg(unix)]
-#[test]
-fn ensure_stable_cluster_environment_resolves_env_once_under_concurrency() {
-    // Concurrent callers of `ensure_stable_cluster_environment` must observe a
-    // consistent stable environment without racing or panicking. First-call
-    // initialization (which runs `std::env::set_var`) happens once on this
-    // single thread *before* any threads are spawned, so `set_var` never
-    // executes while other threads exist. The spawned threads then exercise only
-    // the cached, post-initialization path guarded by the `STABLE_ENV_INIT`
-    // OnceLock.
-    let sandbox = tempfile::tempdir().expect("tempdir");
-    let install_path = sandbox.path().join("install");
-    let data_parent_path = sandbox.path().join("data-parent");
-    Dir::create_ambient_dir_all(&install_path, ambient_authority()).expect("create install dir");
-    Dir::create_ambient_dir_all(&data_parent_path, ambient_authority())
-        .expect("create data parent");
-
-    // Clear the resolved variables so the OnceLock closure applies the defaults,
-    // and sandbox the repair paths so the incidental repair stays hermetic.
-    let _guard = env_lock::lock_env([
-        ("PG_PASSWORD", None),
-        ("POSTGRESQL_RELEASES_URL", None),
-        (
-            "PG_RUNTIME_DIR",
-            Some(
-                install_path
-                    .to_str()
-                    .expect("install path is valid UTF-8")
-                    .to_owned(),
-            ),
-        ),
-        (
-            "PG_DATA_DIR",
-            Some(
-                data_parent_path
-                    .join("data")
-                    .to_str()
-                    .expect("data path is valid UTF-8")
-                    .to_owned(),
-            ),
-        ),
-    ]);
-
-    // Perform first-call initialization on the current (single) thread. The
-    // process-global `STABLE_ENV_INIT` OnceLock resolves and `set_var` runs
-    // while single-threaded, which is sound.
-    stable_cluster_env::ensure_stable_cluster_environment()
-        .expect("reconcile stable cluster environment before cluster access");
-
-    // After single-threaded initialization, the spawned threads exercise the
-    // repair-only helper — never the env-initializing entrypoint — so no worker
-    // can mutate process-environment state. They must observe consistent state
-    // without racing or panicking.
-    std::thread::scope(|scope| {
-        for _ in 0..8 {
-            scope.spawn(|| {
-                stable_cluster_env::repair_password_state_serialized(b"wildside_embedded_test")
-                    .expect("repair stale password state");
-            });
-        }
+/// Scenario: `PG_PASSWORD` is supplied by the reader, absent, or empty.
+///
+/// Invariant: an existing value is returned unchanged and every other case
+/// yields the stable default. The resolver only reads the injected map, so the
+/// process environment is neither consulted nor modified.
+#[rstest]
+#[case::existing_value_is_preserved(Some("custom_value"), "custom_value")]
+#[case::absent_uses_the_default(None, DEFAULT_PG_PASSWORD)]
+#[case::empty_uses_the_default(Some(""), DEFAULT_PG_PASSWORD)]
+fn resolve_stable_password_prefers_an_existing_value(
+    #[case] configured: Option<&str>,
+    #[case] expected: &str,
+) {
+    let vars = configured.map_or_else(HashMap::new, |value| {
+        HashMap::from([("PG_PASSWORD", value.to_owned())])
     });
 
-    // `STABLE_ENV_INIT` is process-global and every caller resolves to the same
-    // stable default, so these assertions hold regardless of which test
-    // initialized it first (order-independent).
     assert_eq!(
-        std::env::var("PG_PASSWORD").expect("PG_PASSWORD should be set"),
-        "wildside_embedded_test",
-        "concurrent resolution must apply the stable default PG_PASSWORD exactly once",
-    );
-    assert_eq!(
-        std::env::var("POSTGRESQL_RELEASES_URL").expect("POSTGRESQL_RELEASES_URL should be set"),
-        "https://github.com/theseus-rs/postgresql-binaries",
-        "concurrent resolution must pin the release URL exactly once",
+        stable_cluster_env::resolve_stable_password(stub_env(vars)),
+        expected,
+        "the resolver must preserve a configured password and otherwise apply \
+         the stable default"
     );
 }
 
+/// A sandboxed install/data directory pair standing in for the shared cluster's
+/// on-disk state.
 #[cfg(unix)]
-#[test]
-fn ensure_stable_cluster_environment_serializes_concurrent_repair() {
-    // Two threads repairing the same stale password file concurrently must not
-    // race on removing it. Without the process-local repair lock, the second
-    // removal would observe the file already gone.
-    //
-    // Concurrent repair is exercised through the repair-only helper
-    // `repair_password_state_serialized`, never through
-    // `ensure_stable_cluster_environment`, so no spawned thread can touch
-    // process-environment state. The environment is initialized once on this
-    // single thread, before any threads are spawned.
-    let sandbox = tempfile::tempdir().expect("tempdir");
-    let install_path = sandbox.path().join("install");
-    let data_parent_path = sandbox.path().join("data-parent");
-    let data_dir_path = data_parent_path.join("data");
-    Dir::create_ambient_dir_all(&install_path, ambient_authority()).expect("create install dir");
-    Dir::create_ambient_dir_all(&data_parent_path, ambient_authority())
-        .expect("create data parent");
+struct ClusterStateSandbox {
+    _sandbox: tempfile::TempDir,
+    install_path: PathBuf,
+    data_path: PathBuf,
+    install_dir: Dir,
+}
 
-    let install_dir =
-        Dir::open_ambient_dir(&install_path, ambient_authority()).expect("open install");
+#[cfg(unix)]
+impl ClusterStateSandbox {
+    /// Create the sandbox with an empty install and data directory pair.
+    fn new() -> Self {
+        let sandbox = tempfile::tempdir().expect("tempdir");
+        let install_path = sandbox.path().join("install");
+        let data_path = sandbox.path().join("data-parent").join("data");
+        Dir::create_ambient_dir_all(&install_path, ambient_authority())
+            .expect("create install dir");
+        Dir::create_ambient_dir_all(&data_path, ambient_authority()).expect("create data dir");
+        let install_dir =
+            Dir::open_ambient_dir(&install_path, ambient_authority()).expect("open install");
 
-    // Pre-set every variable the repair path reads so nothing mutates the
-    // environment and the repair targets the sandbox. A custom `PG_DATA_DIR`
-    // keeps `should_remove_data_dir` false, isolating the race to the `.pgpass`
-    // removal.
-    let _guard = env_lock::lock_env([
-        ("PG_PASSWORD", Some("wildside_embedded_test".to_owned())),
-        (
-            "POSTGRESQL_RELEASES_URL",
-            Some("https://example.invalid/postgresql-binaries".to_owned()),
-        ),
-        (
-            "PG_RUNTIME_DIR",
-            Some(
-                install_path
+        Self {
+            _sandbox: sandbox,
+            install_path,
+            data_path,
+            install_dir,
+        }
+    }
+
+    /// Repair paths pointing at this sandbox.
+    ///
+    /// An explicit `PG_DATA_DIR` marks the data directory as caller-owned, so
+    /// only `.pgpass` removal is exercised.
+    fn paths(&self) -> stable_cluster_env::PasswordStatePaths {
+        stable_cluster_env::PasswordStatePaths::resolve(self.reader("unused-password"))
+    }
+
+    /// A reader that points the resolver at this sandbox.
+    fn reader(&self, password: &str) -> impl Fn(&str) -> Option<String> + use<> {
+        stub_env(HashMap::from([
+            ("PG_PASSWORD", password.to_owned()),
+            (
+                "PG_RUNTIME_DIR",
+                self.install_path
                     .to_str()
                     .expect("install path is valid UTF-8")
                     .to_owned(),
             ),
-        ),
-        (
-            "PG_DATA_DIR",
-            Some(
-                data_dir_path
+            (
+                "PG_DATA_DIR",
+                self.data_path
                     .to_str()
                     .expect("data path is valid UTF-8")
                     .to_owned(),
             ),
-        ),
-    ]);
+        ]))
+    }
+}
 
-    // Initialize the process environment once on this single thread. With every
-    // variable pre-set this performs no `set_var`, and with no `.pgpass` present
-    // yet the incidental repair is a no-op — the stale-file race is left to the
-    // spawned threads below.
-    stable_cluster_env::ensure_stable_cluster_environment()
-        .expect("initialize stable cluster environment");
+/// Scenario: the cluster's existing `.pgpass` was written under a different
+/// password, or under the one the reader resolves.
+///
+/// Invariant: `ensure_stable_cluster_environment_with` carries the reader's
+/// resolved password into the repair, so a mismatched file is removed and a
+/// matching one survives. A warm cluster is therefore not torn down on every
+/// setup call.
+#[cfg(unix)]
+#[rstest]
+#[case::stale_password_is_cleared(b"stale-password", false)]
+#[case::matching_password_is_kept(b"resolved-password", true)]
+fn ensure_stable_cluster_environment_repairs_with_the_resolved_password(
+    #[case] existing_password: &[u8],
+    #[case] should_keep_password_file: bool,
+) {
+    let sandbox = ClusterStateSandbox::new();
+    sandbox
+        .install_dir
+        .write(".pgpass", existing_password)
+        .expect("seed the existing password file");
 
-    // Seed the stale password file *after* initialization so the concurrent
-    // repair threads below are the ones that race to remove it.
-    install_dir
+    stable_cluster_env::ensure_stable_cluster_environment_with(sandbox.reader("resolved-password"))
+        .expect("repair password state");
+
+    assert_eq!(
+        sandbox.install_dir.exists(".pgpass"),
+        should_keep_password_file,
+        "the repair must compare the resolved password against the existing file"
+    );
+}
+
+/// Scenario: two threads repair the same stale password file at once.
+///
+/// Invariant: the process-local repair lock serializes the `.pgpass` removal,
+/// so neither thread observes an already-removed file and the file ends up
+/// gone exactly once.
+#[cfg(unix)]
+#[test]
+fn repair_password_state_serializes_concurrent_callers() {
+    let sandbox = ClusterStateSandbox::new();
+    let paths = sandbox.paths();
+    sandbox
+        .install_dir
         .write(".pgpass", b"stale-password")
         .expect("seed stale password file");
 
-    // Each thread runs only the repair/locking stage with the fixed password;
-    // the process-local lock must serialize the `.pgpass` removal so neither
-    // thread fails on an already-removed file.
     std::thread::scope(|scope| {
-        for _ in 0..2 {
+        for _ in 0..8 {
             scope.spawn(|| {
-                stable_cluster_env::repair_password_state_serialized(b"wildside_embedded_test")
-                    .expect("repair stale password state");
+                stable_cluster_env::repair_password_state_serialized(
+                    b"wildside_embedded_test",
+                    &paths,
+                )
+                .expect("repair stale password state");
             });
         }
     });
 
     assert!(
-        !install_dir.exists(".pgpass"),
+        !sandbox.install_dir.exists(".pgpass"),
         "concurrent repair must remove the stale password file exactly once \
          without panicking",
     );

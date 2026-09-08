@@ -301,6 +301,26 @@ PG_WORKER_PATH ?= $(CURDIR)/target/pg_worker
 PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.2
 NEXTEST_TEST_THREADS ?= 1
 
+# Embedded PostgreSQL configuration is composed by the runner, not mutated
+# in-process by test support (issue #464). `?=` leaves a value already present
+# in the environment untouched, so a developer or CI job can still override
+# either variable; Make supplies the stable default otherwise.
+#
+# PG_PASSWORD must be stable across test binaries:
+# `postgresql_embedded::Settings::default()` generates a random password on each
+# call, and `setup()` skips `initdb` when the data directory already exists, so
+# a random password makes later binaries fail with `28P01 password
+# authentication failed`. POSTGRESQL_RELEASES_URL is pinned to the Theseus
+# binaries mirror so the download source cannot drift with crate defaults.
+#
+# Both are exported rather than assigned on the recipe's command line so a
+# value containing whitespace or shell metacharacters reaches the child
+# verbatim instead of being re-parsed by the shell.
+PG_PASSWORD ?= wildside_embedded_test
+POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries
+export PG_PASSWORD
+export POSTGRESQL_RELEASES_URL
+
 
 test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
 

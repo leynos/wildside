@@ -98,7 +98,6 @@ actix-http = "3"
 actix-codec = "0.5.2"
 # Actix Web Client for WebSocket and HTTP integration testing.
 awc = "3.8.1"
-env-lock = "1.0.1"
 futures = "0.3"
 rstest = "0.26"
 rstest-bdd = "0.5.0"
@@ -109,6 +108,9 @@ serial_test = "3"
 # Provides libc::atexit for graceful embedded PostgreSQL cluster shutdown under nextest.
 libc = "0.2"
 tempfile = "3"
+# Parses clippy.toml and the workspace manifests in the environment-policy
+# contract test.
+toml = "0.9"
 # Compile-fail coverage for the `declare_test_support!` module-wiring macro.
 trybuild = { version = "1", features = ["diff"] }
 
@@ -123,3 +125,16 @@ path = "src/bin/er_snapshots.rs"
 [[bin]]
 name = "ingest-osm"
 path = "src/bin/ingest_osm.rs"
+
+# The full shared lint baseline lands with #461/#462. Until then this package
+# opts in to the lints that enforce the environment-seam policy (#464), so
+# `clippy.toml`'s `disallowed-methods` entries are hard errors here too.
+#
+# `allow_attributes` and `allow_attributes_without_reason` come with it: without
+# them a contributor could silence a prohibited call with a bare
+# `#[allow(clippy::disallowed_methods)]`, which never warns once the site is
+# migrated, instead of the `#[expect]` the policy requires.
+[lints.clippy]
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+disallowed_methods = "deny"

@@ -655,17 +655,119 @@ Three pieces cooperate here:
   ordinary `cargo test` stays fast; `make test` and CI enable it via
   `--all-features`.
 
-- **Shared embedded-cluster environment repair** lives in
+- **Shared embedded-cluster password repair** lives in
   `backend/tests/support/stable_cluster_env.rs`
-  (`ensure_stable_cluster_environment`): it resolves stable `PG_PASSWORD` and
-  `POSTGRESQL_RELEASES_URL` values once per process, then repairs stale
-  `.pgpass`/data-directory state before the cluster bootstraps. Because its
-  first call may `std::env::set_var`, every setup path must call it **before**
-  constructing a Tokio runtime (worker threads make `set_var` undefined
-  behaviour). The `libc::atexit` process-exit machinery that stops the shared
-  cluster stays in `backend/tests/support/atexit_cleanup.rs`, which re-exports
-  `ensure_stable_cluster_environment` for callers. The pure helpers are
-  unit-tested by the dedicated `atexit_cleanup_tests` target.
+  (`ensure_stable_cluster_environment_with`): it resolves the stable
+  `PG_PASSWORD` through an injected reader, then repairs stale password and
+  data-directory state before the cluster bootstraps. It writes nothing to the
+  process, so there is no ordering rule against Tokio runtime construction:
+  call it wherever setup needs it. `backend/tests/support/atexit_cleanup.rs`
+  owns both the `libc::atexit` process-exit machinery and the zero-argument
+  `ensure_stable_cluster_environment` wrapper that supplies
+  `support::process_env` to those pure helpers. The helpers are unit-tested by
+  the dedicated `atexit_cleanup_tests` target, which drives them entirely from
+  stub readers and sandbox directories.
+- **`PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are composed by the runner**,
+  not by test code: the `test-rust` Make recipe passes them on the
+  `cargo nextest run` command line (with `?=` defaults that an existing value
+  overrides), and the CI `Rust tests` and coverage steps set them in their
+  `env:` blocks. `backend/tests/environment_policy_contract.rs` fails if the
+  Make recipe stops doing so.
+
+## Environment seams
+
+No code outside a composition root may read or write the process environment.
+`clippy.toml` disallows `std::env::var`, `var_os`, `vars`, `vars_os`,
+`set_var`, and `remove_var`, and `clippy::disallowed_methods` is denied, so
+`make lint-clippy` turns any such call into a build failure across
+`--workspace --all-targets --all-features`.
+
+The rule exists for two reasons. Ambient reads couple pure logic to a
+process-global that a test cannot vary, and environment *writes* are unsound
+once another thread exists, so any test that performs one has to serialize the
+suite behind a lock or an ordering rule. That serialization is paid by every
+run and costs continuous-integration throughput.
+
+### Choosing a seam
+
+Use the smallest shape that fits the boundary:
+
+| Boundary                                       | Seam                                        | Example                                                     |
+| ---------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------- |
+| One setting, one consumer                      | Pass the value                              | `resolve_database_url` in `backend/src/bin/ingest_osm.rs`   |
+| A few names, one module                        | `impl Fn(&str) -> Option<String>` reader    | `bind_addr` in `backend/src/main.rs`                        |
+| Mocked across many tests, or expected to grow  | A trait plus a tiny process-backed adapter  | `SessionEnv`/`DefaultEnv`, `IdempotencyEnv`                 |
+| A spawned process                              | `Command::env_clear`, `env`, `env_remove`   | subprocess tests                                            |
+
+*Seam shapes, and the boundary each one fits.*
+
+Environment loading belongs in an adapter, never in `backend/src/domain`.
+`backend/src/config/` holds the process-configuration adapters: each module
+owns the variable names it reads, the parsing of their string values, and one
+reader that application composition injects.
+
+### The composition-root exception
+
+A direct read may remain only at a genuine composition root. There are three:
+a binary's `main` path; the single reader a test binary composes its support
+tree with; and the one process-backed adapter behind an environment trait, such
+as `DefaultEnv` or `DefaultIdempotencyEnv`, which application composition
+injects and which domain and service code never reach for directly. Each must
+carry an item-scoped attribute naming why:
+
+```rust
+#[expect(
+    clippy::disallowed_methods,
+    reason = "composition root: the binary reads its own process environment \
+              once and injects the reader into the helpers below"
+)]
+fn process_env(name: &str) -> Option<String> {
+    std::env::var(name).ok()
+}
+```
+
+Use `expect`, never `allow`. An `expect` that stops firing is itself a warning,
+so a site that later migrates off the ambient read cleans up its own exception.
+An `#[allow]` would silence the call permanently, which is why `backend` and
+`architecture-lint` deny `clippy::allow_attributes` and
+`clippy::allow_attributes_without_reason` alongside the policy. Do not widen an
+exception to a module, and do not let one spread into domain or service code.
+
+### Moved idempotency configuration API
+
+Environment loading for idempotency left the domain layer in the change that
+introduced this policy. Callers of the old paths move as follows:
+
+| Removed from `backend::domain::idempotency` | Replacement                                                                |
+| ------------------------------------------- | -------------------------------------------------------------------------- |
+| `IdempotencyConfig::from_env()`             | `config::idempotency::idempotency_config_from_env(&DefaultIdempotencyEnv)` |
+| `IdempotencyConfig::from_env_with(&env)`    | `config::idempotency::idempotency_config_from_env(&env)`                   |
+| `IdempotencyEnv`                            | `backend::config::idempotency::IdempotencyEnv`                             |
+| `DefaultIdempotencyEnv`                     | `backend::config::idempotency::DefaultIdempotencyEnv`                      |
+| `IDEMPOTENCY_TTL_HOURS_ENV`                 | `backend::config::idempotency::IDEMPOTENCY_TTL_HOURS_ENV`                  |
+
+*Idempotency configuration API migration map.*
+
+`IdempotencyConfig` stays in the domain and keeps `default()`, `with_ttl`, and
+`ttl()`. It gains `from_ttl_hours(Option<u64>)`, which applies the default and
+the one-hour to ten-year clamp to an already-parsed value; the adapter does the
+string parsing. `IDEMPOTENCY_TTL_HOURS` itself is unchanged: absent,
+non-numeric, and out-of-range values behave exactly as before.
+
+### Tests
+
+Tests never mutate the parent process. Where a value has to reach a third-party
+library that reads the environment itself, the runner supplies it — see the
+`test-rust` recipe in the `Makefile` and the `env:` blocks of the CI test and
+coverage steps. Nothing in `backend/tests/` needs a process-wide environment
+lock, and no nextest group exists to protect environment state.
+
+`docs/adr-002-environment-seam-taxonomy.md` records the decision and the full
+list of sanctioned roots. Two contract targets guard the mechanism:
+`backend/tests/environment_policy_contract.rs` asserts what the repository
+declares, and `backend/tests/environment_policy_lint.rs` runs `clippy-driver`
+over probe sources to prove those declarations actually fire. Add a probe there
+when the policy grows an entry.
 
 ## Adding or changing behavioural tests
 

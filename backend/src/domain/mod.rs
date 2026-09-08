@@ -26,7 +26,8 @@
 //! - MutationType — discriminator for idempotency scopes (routes, notes, etc.).
 //! - Background job payloads (`GenerateRouteJob`, `EnrichmentJob`) dispatched
 //!   through the route queue port.
-//! - IdempotencyConfig — configurable TTL for idempotency records.
+//! - IdempotencyConfig — pure TTL value object for idempotency records; the
+//!   environment adapter that builds it lives in `crate::config::idempotency`.
 //! - UserPreferences — user preferences for interests, safety, and display.
 //! - UnitSystem — metric or imperial unit display preference.
 //! - RouteNote — user annotation on a route or POI.

@@ -38,6 +38,11 @@ impl DefaultEnv {
 }
 
 impl SessionEnv for DefaultEnv {
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "process-backed adapter: the single sanctioned read behind \
+                  SessionEnv, injected from application composition"
+    )]
     fn string(&self, name: &str) -> Option<String> {
         std::env::var(name).ok()
     }

@@ -60,7 +60,7 @@ struct TestContext {
 type SharedContext = Arc<Mutex<TestContext>>;
 
 fn setup_test_context() -> Result<TestContext, String> {
-    // Reconcile the stable env before the runtime spawns threads (`set_var` is unsound afterwards).
+    // Repair stale shared-cluster password state before acquiring the cluster.
     ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|e| e.to_string())?;
     let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;

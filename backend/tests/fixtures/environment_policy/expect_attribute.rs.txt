@@ -1,0 +1,13 @@
+//! Probe: the sanctioned composition-root escape hatch.
+//!
+//! A reasoned `#[expect]` over a genuine composition root must compile with no
+//! diagnostic at all: neither `disallowed_methods` nor an unfulfilled
+//! expectation.
+
+#[expect(
+    clippy::disallowed_methods,
+    reason = "composition root: probe for the sanctioned escape hatch"
+)]
+pub fn reads() {
+    let _ = std::env::var("WILDSIDE_PROBE");
+}

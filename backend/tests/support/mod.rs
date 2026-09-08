@@ -5,6 +5,11 @@
 //! provides a small, dependency-free (relative to the test crate) home for
 //! common test-only utilities.
 
+#[path = "test_env.rs"]
+mod test_env;
+
+pub use test_env::process_env;
+
 /// Render a `postgres` error with enough detail to be useful in CI logs.
 ///
 /// The `postgres::Error` `Display` implementation often collapses database
