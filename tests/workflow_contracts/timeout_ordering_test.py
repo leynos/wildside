@@ -32,6 +32,12 @@ import typing as typ
 
 import pytest
 from coverage_lanes import CoverageJob, coverage_jobs_of
+from nextest_budgets import (
+    bounds_a_single_test,
+    global_timeout,
+    largest_test_allowance,
+    termination_allowance,
+)
 from timeout_budgets import (
     CEILING_MARGIN_SECONDS,
     COLD_BUILD_ALLOWANCE_SECONDS,
@@ -39,11 +45,7 @@ from timeout_budgets import (
     NEXTEST_CONFIG,
     OUTSIDE_WATCHDOG_ALLOWANCE_SECONDS,
     WATCHDOG_VARIABLE,
-    bounds_a_single_test,
-    global_timeout,
-    largest_test_allowance,
     required_ceiling,
-    termination_allowance,
 )
 
 #: The condition each coverage lane legitimately carries, keyed by
