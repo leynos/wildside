@@ -121,6 +121,14 @@ fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
         "--emit=metadata",
         // `allow_attributes` is allow-by-default, so the probe that reaches for
         // `#[allow]` needs it switched on to be judged at all.
+        //
+        // `disallowed_methods` deliberately gets no such flag. It is
+        // warn-by-default, so leaving it alone is what proves `clippy.toml`
+        // supplied the entries: a `-D` here would emit the diagnostics even
+        // with an empty configuration. Cargo manifest levels do not reach this
+        // invocation, and are not meant to; the severity the workspace assigns
+        // is asserted separately, from the parsed manifests, in
+        // `environment_policy_contract.rs`.
         "-W",
         "clippy::allow_attributes",
         "--error-format=json",

@@ -699,6 +699,8 @@ Use the smallest shape that fits the boundary:
 | Mocked across many tests, or expected to grow  | A trait plus a tiny process-backed adapter  | `SessionEnv`/`DefaultEnv`, `IdempotencyEnv`                 |
 | A spawned process                              | `Command::env_clear`, `env`, `env_remove`   | subprocess tests                                            |
 
+*Seam shapes, and the boundary each one fits.*
+
 Environment loading belongs in an adapter, never in `backend/src/domain`.
 `backend/src/config/` holds the process-configuration adapters: each module
 owns the variable names it reads, the parsing of their string values, and one
@@ -743,6 +745,8 @@ introduced this policy. Callers of the old paths move as follows:
 | `IdempotencyEnv`                            | `backend::config::idempotency::IdempotencyEnv`                             |
 | `DefaultIdempotencyEnv`                     | `backend::config::idempotency::DefaultIdempotencyEnv`                      |
 | `IDEMPOTENCY_TTL_HOURS_ENV`                 | `backend::config::idempotency::IDEMPOTENCY_TTL_HOURS_ENV`                  |
+
+*Idempotency configuration API migration map.*
 
 `IdempotencyConfig` stays in the domain and keeps `default()`, `with_ttl`, and
 `ttl()`. It gains `from_ttl_hours(Option<u64>)`, which applies the default and
