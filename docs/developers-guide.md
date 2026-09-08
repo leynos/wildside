@@ -778,9 +778,12 @@ would notice. Naming the lint is not the only route: Clippy places
 `disallowed_methods` in the `style` group, so `clippy::style`, the wider
 `clippy::all`, and `warnings` each switch it off just as effectively, and any of
 them nested in a `cfg_attr` is honoured too. The source scan rejects all of
-them, wherever the attribute sits. Use an item-scoped
-`#[expect(..., reason = "...")]` at a composition root instead: it warns once
-the site no longer needs it, where `allow` stays silent forever.
+them, wherever the attribute sits, and it protects the guard as well as the
+policy: `clippy::allow_attributes` and its companion live in the `restriction`
+group, so allowing that group would let an `allow` stand in for an `expect`
+unnoticed. Use an item-scoped `#[expect(..., reason = "...")]` at a composition
+root instead: it warns once the site no longer needs it, where `allow` stays
+silent forever.
 
 ## Adding or changing behavioural tests
 
