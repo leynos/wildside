@@ -113,7 +113,9 @@ tempfile = "3"
 toml = "0.9"
 # Parses workspace sources in the environment-policy source scan, which must
 # follow `cfg_attr` and read attributes on nested and function-local items.
-syn = { version = "2", features = ["full", "visit"] }
+syn = { version = "2", features = ["full", "visit", "extra-traits"] }
+# The same scan walks macro token streams, which syn leaves opaque.
+proc-macro2 = "1"
 # Compile-fail coverage for the `declare_test_support!` module-wiring macro.
 trybuild = { version = "1", features = ["diff"] }
 

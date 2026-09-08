@@ -695,6 +695,7 @@ dependencies = [
  "postgres",
  "postgresql_embedded",
  "pretty_assertions",
+ "proc-macro2",
  "prometheus",
  "proptest",
  "rand 0.8.5",
