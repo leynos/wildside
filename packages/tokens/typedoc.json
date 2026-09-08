@@ -1,0 +1,24 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "tsconfig": "tsconfig.typedoc.json",
+  "entryPoints": ["build", "build-utils", "src/utils"],
+  "entryPointStrategy": "expand",
+  "exclude": ["**/*.d.ts", "**/node_modules/**"],
+  "emit": "none",
+  "commentStyle": "jsdoc",
+  "excludeExternals": true,
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "validation": {
+    "notDocumented": true,
+    "notExported": false,
+    "invalidLink": true,
+    "invalidPath": true,
+    "rewrittenLink": true,
+    "unusedMergeModuleWith": false
+  },
+  "requiredToBeDocumented": ["Variable", "Function", "Class", "Property", "Method", "Accessor"],
+  "treatValidationWarningsAsErrors": true,
+  "treatWarningsAsErrors": true
+}
