@@ -200,10 +200,17 @@ def test_typedoc_is_pinned_to_an_exact_version() -> None:
 
 @pytest.mark.parametrize("lockfile", [PNPM_LOCK, BUN_LOCK], ids=["pnpm", "bun"])
 def test_lockfiles_resolve_the_pinned_typedoc(lockfile: Path) -> None:
-    """Both lockfiles must resolve TypeDoc to the version the manifest names."""
+    """Both lockfiles must resolve TypeDoc to the version the manifest names.
+
+    The match is anchored on a non-version character. An unanchored substring
+    search reports success when the manifest and the lockfile disagree, since
+    a pin of `0.28.2` is a prefix of the text `typedoc@0.28.20`, and that
+    disagreement is the whole thing this contract exists to catch.
+    """
     pin = _typedoc_pin()
-    assert f"typedoc@{pin}" in lockfile.read_text(encoding="utf-8"), (
-        f"{lockfile.name} does not resolve typedoc@{pin}"
+    anchored = re.compile(rf"typedoc@{re.escape(pin)}(?![0-9.])")
+    assert anchored.search(lockfile.read_text(encoding="utf-8")), (
+        f"{lockfile.name} does not resolve typedoc@{pin} exactly"
     )
 
 
