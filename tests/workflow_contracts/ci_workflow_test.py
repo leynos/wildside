@@ -148,6 +148,8 @@ def test_build_runs_the_typedoc_documentation_gate() -> None:
     key rather than by its value.
     """
     _assert_gate_runs_unconditionally("build", "make docs-check")
+
+
 def test_codescene_check_immediately_follows_coverage_generation() -> None:
     """The changed-line gate consumes the LCOV report produced just before it."""
     steps = _load_steps()
