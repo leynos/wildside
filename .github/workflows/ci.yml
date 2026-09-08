@@ -421,6 +421,9 @@ jobs:
       - name: Local preview script tests
         run: make test-scripts
 
+      - name: Workflow lint script tests
+        run: make test-lint-actions
+
       # Backend
       # Counters are reset here so the statistics below describe this job's
       # compilation rather than anything the setup actions did.

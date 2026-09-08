@@ -11,6 +11,18 @@ const execFileAsync = promisify(execFile);
 const repositoryRoot = new URL('../', import.meta.url);
 
 /**
+ * The exact cargo-audit invocation the Makefile must produce.
+ *
+ * Spelling every ignore out, rather than matching the command's prefix, is
+ * what makes a dropped advisory suppression visible: a prefix match is
+ * satisfied by the first ignore alone. Each entry is justified in the
+ * Makefile's header comment and carries its own review date, so adding or
+ * removing one is a deliberate edit here as well.
+ */
+const EXPECTED_CARGO_AUDIT =
+  'cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258';
+
+/**
  * Ask Make to print a target's execution plan without running the recipes.
  * @param {string} target Make target to dry-run.
  * @returns {Promise<string>} Commands Make would execute for the target.
@@ -29,7 +41,7 @@ describe('Makefile audit targets', () => {
     expect(stdout).toContain('pnpm -r --if-present run audit');
     expect(stdout).toContain('pnpm run audit:validate');
     expect(stdout).toContain('pnpm run audit:bun');
-    expect(stdout).toContain('cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071');
+    expect(stdout).toContain(EXPECTED_CARGO_AUDIT);
   });
 
   it('does not reinstall node dependencies inside audit-node', async () => {
@@ -52,7 +64,7 @@ describe('Makefile audit targets', () => {
   it('runs cargo audit against Cargo.lock with configured ignores', async () => {
     const stdout = await dryRunMake('rust-audit');
 
-    expect(stdout).toContain('cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071');
+    expect(stdout).toContain(EXPECTED_CARGO_AUDIT);
   });
 
   it('executes rust-audit after checking cargo-audit availability', async () => {
@@ -79,7 +91,7 @@ printf 'cargo %s\\n' "$*" >> "${commandLog}"
       });
 
       await expect(readFile(commandLog, 'utf8')).resolves.toBe(
-        'cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071\n',
+        `${EXPECTED_CARGO_AUDIT}\n`,
       );
     } finally {
       await rm(tempDir, { force: true, recursive: true });

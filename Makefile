@@ -1,4 +1,28 @@
 SHELL := bash
+# `.ONESHELL` (declared further down) is global, not target-scoped, so every
+# multi-line recipe reaches the shell as one script. Under make's default
+# `.SHELLFLAGS` of `-c` that script's status is its LAST command's status and
+# every earlier failure is discarded, so `make lint-python` printed its Ruff
+# findings and still exited zero.
+#
+# Both options earn their place, and neither covers the other:
+#
+#   * `-e` aborts at the first failing command, which catches a tool that is
+#     not the recipe's last line.
+#   * `-o pipefail` gives a pipeline its first failing stage's status. Without
+#     it a failure at a pipeline's HEAD is still discarded, and this Makefile
+#     pipes into the tool that does the checking: `spelling` feeds
+#     `git ls-files` into typos, and `lint-actions` feeds `find` into yamllint
+#     and actionlint. A head that dies produces an empty list and the gate
+#     passes having examined nothing.
+#
+# `-c` stays last: make appends the recipe as the shell's command string.
+#
+# A recipe that needs a command to be allowed to fail must say so itself, with
+# `|| true`, an `if`, or a captured status. Make's `-` line prefix is not an
+# option here: under `.ONESHELL` it applies to the first recipe line only. Do
+# not weaken this flag to accommodate one recipe.
+.SHELLFLAGS := -eo pipefail -c
 BUN_PATH := $(HOME)/.bun/bin:$(PATH)
 CARGO ?= cargo
 WHITAKER ?= whitaker
@@ -109,6 +133,10 @@ CRYPTOGRAPHY_VERSION ?= 49.0.0
 TOMLI_VERSION ?= 2.4.1
 CYCLOPTS_VERSION ?= 4.10.1
 PLUMBUM_VERSION ?= 1.9.0
+# The scripting standards name cuprum as the process runner; cmd-mox supplies
+# the external executables its tests mock. Both are new to this repository.
+CUPRUM_VERSION ?= 0.1.0
+CMD_MOX_VERSION ?= 0.2.0
 PY_TEST_DEPS = pytest==$(PYTEST_VERSION) pytest-mock==$(PYTEST_MOCK_VERSION) \
 	hypothesis==$(HYPOTHESIS_VERSION) 'pyyaml>=6,<7' \
 	cyclopts==$(CYCLOPTS_VERSION) plumbum==$(PLUMBUM_VERSION)
@@ -119,12 +147,13 @@ PY_TEST_DEPS = pytest==$(PYTEST_VERSION) pytest-mock==$(PYTEST_MOCK_VERSION) \
 # the inline metadata in scripts/local_k8s.py; tomli and cryptography cover
 # imports in sync_workspace_members.py and rotate_session_key.py.
 PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
-	cryptography==$(CRYPTOGRAPHY_VERSION) tomli==$(TOMLI_VERSION)
+	cryptography==$(CRYPTOGRAPHY_VERSION) tomli==$(TOMLI_VERSION) \
+	cuprum==$(CUPRUM_VERSION) cmd-mox==$(CMD_MOX_VERSION)
 
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts typecheck deps lockfile
+.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: spelling spelling-phrase-check spelling-config spelling-config-write spelling-helper-test
@@ -262,21 +291,7 @@ define LINT_ACTIONS_CMD
 $(call ensure_tool,uv)
 $(call ensure_tool,action-validator)
 $(call ensure_tool,actionlint)
-@if [ ! -d .github/actions ]; then \
-  echo "No composite actions found; skipping lint-actions"; \
-else \
-  find .github/actions -name 'action.yml' -print0 | xargs -0 -r uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint; \
-  while IFS= read -r -d '' action; do \
-    echo "$$action:"; \
-    action-validator "$$action"; \
-  done < <(find .github/actions -name 'action.yml' -print0); \
-fi
-@if [ ! -d .github/workflows ]; then \
-  echo "No workflows found; skipping workflow lint"; \
-else \
-  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r uvx --from "yamllint==$(YAMLLINT_VERSION)" yamllint; \
-  find .github/workflows \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r actionlint; \
-fi
+$(UV) run --no-project scripts/lint_actions.py --yamllint-version $(YAMLLINT_VERSION)
 endef
 
 lint-actions:
@@ -287,7 +302,7 @@ PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.2
 NEXTEST_TEST_THREADS ?= 1
 
 
-test: test-rust test-frontend test-workflow-contracts test-scripts
+test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
 
 test-rust: workspace-sync prepare-pg-worker
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
@@ -319,6 +334,29 @@ test-scripts:
 		$(foreach dep,$(PY_TEST_DEPS),--with $(dep)) \
 		python -m pytest scripts/local_k8s/unittests
 
+# cmd-mox intercepts a command by putting a shim on PATH. That shim sometimes
+# stalls instead of returning, with the server logging `IPC received malformed
+# JSON`, and it ignores its own CMOX_IPC_TIMEOUT while it waits, so the symptom
+# is a run that never finishes (leynos/cmd-mox#249). It is intermittent and
+# load-related rather than tied to one environment, but the suite has been
+# stable in a materialized virtual environment, so this target builds one the
+# way typecheck-python does.
+LINT_ACTIONS_TEST_VENV := .venv-lint-actions
+LINT_ACTIONS_TEST_DEPS = pytest==$(PYTEST_VERSION) cyclopts==$(CYCLOPTS_VERSION) \
+	cuprum==$(CUPRUM_VERSION) cmd-mox==$(CMD_MOX_VERSION) \
+	hypothesis==$(HYPOTHESIS_VERSION)
+
+test-lint-actions:
+	$(UV) venv --allow-existing --python 3.13 $(LINT_ACTIONS_TEST_VENV)
+	$(UV) pip install --quiet --python $(LINT_ACTIONS_TEST_VENV) $(LINT_ACTIONS_TEST_DEPS)
+	PYTHONPATH=scripts $(LINT_ACTIONS_TEST_VENV)/bin/python -m pytest \
+		scripts/tests/test_lint_actions.py -p cmd_mox.pytest_plugin \
+		-c /dev/null --rootdir=.
+
+# `.ONESHELL` is a global special target: GNU make ignores the prerequisite
+# list, so naming `prepare-pg-worker` here documents which recipe needed it but
+# turns one-shell recipes on for the whole file. `.SHELLFLAGS` at the top is
+# what keeps that from swallowing failures.
 .ONESHELL: prepare-pg-worker
 # pg-embed-setup-unpriv publishes checksum-verified release archives from
 # v0.5.2, so the privilege-demotion worker is downloaded rather than compiled.

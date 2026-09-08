@@ -1012,6 +1012,108 @@ dependency declarations (PEP 723 inline metadata), and style guidance.
    guard (see "Programmatic API" under "Override policy check") so the module
    can be imported cleanly in tests.
 
+### How a Makefile recipe reports failure
+
+The Makefile sets three things that together decide whether a failing command
+fails its target:
+
+| Setting       | Value             | What it decides                           |
+| ------------- | ----------------- | ----------------------------------------- |
+| `SHELL`       | `bash`            | Which shell runs every recipe.            |
+| `.SHELLFLAGS` | `-eo pipefail -c` | Whether a failure reaches make at all.    |
+| `.ONESHELL`   | declared          | Whether a recipe's lines share one shell. |
+
+*Table 1: The three Makefile settings that decide whether a failing recipe
+command fails its target.*
+
+`.ONESHELL` is a global special target. GNU make ignores its prerequisite list,
+so the declaration naming `prepare-pg-worker` documents which recipe needed it
+but turns one-shell recipes on for the whole file. Every multi-line recipe
+therefore reaches the shell as a single script.
+
+That is what makes `.SHELLFLAGS` load-bearing. Under make's default of `-c`, a
+one-shell recipe's status is its **last** command's status and every earlier
+failure is discarded. The symptom is the worst one a gate can have: the tool
+prints its findings, the target reports success, and the job goes green. Run
+33939820204 passed with `make lint-python` printing Ruff findings, and
+`make lint-openapi` had been passing for a week over an expired review-by
+annotation in `.redocly.lint-ignore.yaml`.
+
+Both options earn their place, and neither covers the other:
+
+- `-e` aborts at the first failing command. This catches a tool that is not
+  the recipe's last line.
+- `-o pipefail` gives a pipeline the status of its first failing stage.
+  Without it a failure at a pipeline's **head** is still discarded, and this
+  Makefile pipes into the tool that does the checking: `spelling` feeds
+  `git ls-files` into typos, and `lint-actions` feeds `find` into yamllint and
+  actionlint. A head that dies produces an empty list, and the gate passes
+  having examined nothing.
+
+`-c` stays last, because make appends the recipe to `.SHELLFLAGS` as the
+shell's command string.
+
+The flag is the floor, not the whole story. Two shapes lose a command's status
+on their own, and shell guards only paper over them. `lint-actions` had both:
+`action-validator` in a loop over composite actions, where the loop reports its
+last iteration's status, and `find | xargs yamllint` followed by
+`find | xargs actionlint` in one `if`, where the second's status replaces the
+first's.
+
+The estate's [scripting standards](scripting-standards.md) say gate logic of
+that size does not belong in a recipe at all. That recipe now invokes
+`scripts/lint_actions.py` as a single command. The script builds the list of
+invocations first and runs them in one loop, so "the first failure wins" is a
+property of four lines rather than of control flow spread across a shell
+fragment, and the ordering is testable without a shell.
+
+`scripts/tests/test_lint_actions.py` places a failing tool first, a failing
+tool last, and no failing tool at all, using `cmd-mox` for the executables.
+`tests/workflow_contracts/makefile_tooling_test.py` asserts the recipe still
+runs one command, carries the yamllint pin, and contains no `while`, `;`, `&&`
+or `||`, since any of those reintroduces the defect.
+
+This is the repository's first cuprum script. The scripting standards name
+cuprum as the process runner and carry a plumbum-to-cuprum migration section,
+so new scripts use it; the three existing plumbum scripts are that migration's
+work and are untouched here.
+
+Three notes for the next one, all learned here and reported upstream. cuprum
+0.1.0 has no `Catalogue.from_programs`, which the standard shows: build a
+`ProgramCatalogue` from a `ProjectSettings`, pass it to `sh.make`, and wrap
+program names in `Program` (leynos/concordat#154). `run_sync(echo=True)`
+mirrors a tool's output as it runs, which a gate needs; without it the output
+is captured and a long linter looks hung. And a `cmd-mox` shim occasionally
+stalls instead of returning, with the server logging `IPC received malformed
+JSON`; it ignores its own `CMOX_IPC_TIMEOUT` while it waits, so the symptom is
+a run that never finishes (leynos/cmd-mox#249). It is intermittent and appears
+under load rather than in any particular environment.
+`make test-lint-actions` uses a materialized virtual environment, which is
+where the suite has been stable, and `typecheck-python` already needs one, so
+the shape is not new.
+
+A recipe that genuinely needs a command to be allowed to fail says so itself,
+with `|| true`, an `if`, or a captured status. Make's `-` line prefix is not an
+option here: under `.ONESHELL` it applies to the first recipe line only, so it
+silently does nothing on every line after it. Do not weaken `.SHELLFLAGS`
+either; that trades a local exception for a silent, repository-wide one.
+
+`tests/workflow_contracts/makefile_failure_propagation_test.py` holds the
+contract. It copies the repository's own `SHELL`, `.SHELLFLAGS` and `.ONESHELL`
+lines into a scratch Makefile alongside two probe recipes, then drives GNU make
+over each and asserts the target fails. `earlier-line` fails on a line that is
+not the last; `pipeline-head` fails in a pipeline's first stage while its last
+stage succeeds. Both probes end on a command that succeeds, so a probe that
+passes is one whose status came from the wrong command.
+
+Each probe is mutation-proved against the half-measure that would mask it:
+substituting `-ec` alone lets `pipeline-head` pass, and `-o pipefail -c` alone
+lets `earlier-line` pass. That is what stops anyone simplifying the flag to one
+option later. A further test removes the `.SHELLFLAGS` line entirely and pins
+make's default behaviour, and one more asserts the copied prologue still
+declares `.ONESHELL`, without which make would run each line in its own shell
+and the probes would pass under any flags at all.
+
 ### Makefile tooling contracts
 
 Command-level Makefile coverage lives in
