@@ -22,6 +22,23 @@ mod password_state;
 #[cfg(unix)]
 pub(crate) use password_state::PasswordStatePaths;
 
+/// Repair paths on a platform with no `.pgpass` state to reconcile.
+///
+/// The platform difference lives in these leaf items rather than in
+/// [`ensure_stable_cluster_environment_with`], so that function has one body
+/// on every platform and needs no discarded binding to keep the compiler
+/// quiet.
+#[cfg(not(unix))]
+pub(crate) struct PasswordStatePaths;
+
+#[cfg(not(unix))]
+impl PasswordStatePaths {
+    /// Resolve the repair paths, which are empty off Unix.
+    pub(crate) fn resolve(_read_env: impl Fn(&str) -> Option<String>) -> Self {
+        Self
+    }
+}
+
 pub(crate) const SHARED_CLUSTER_RETRIES: usize = 5;
 pub(crate) const SHARED_CLUSTER_RETRY_DELAY: Duration = Duration::from_millis(500);
 
@@ -153,22 +170,11 @@ where
     R: Fn(&str) -> Option<String>,
 {
     let password = resolve_stable_password(&read_env);
-
-    #[cfg(unix)]
-    {
-        let paths = PasswordStatePaths::resolve(&read_env);
-        // The repair path is fallible (lock acquisition and filesystem
-        // cleanup); propagate any failure to the caller rather than hiding it
-        // behind a deeper `.expect()`, so each setup boundary decides how to
-        // surface it.
-        repair_password_state_serialized(password.as_bytes(), &paths)
-    }
-
-    #[cfg(not(unix))]
-    {
-        let _ = password;
-        Ok(())
-    }
+    let paths = PasswordStatePaths::resolve(&read_env);
+    // The repair path is fallible (lock acquisition and filesystem cleanup);
+    // propagate any failure to the caller rather than hiding it behind a
+    // deeper `.expect()`, so each setup boundary decides how to surface it.
+    repair_password_state_serialized(password.as_bytes(), &paths)
 }
 
 /// Serializes `.pgpass`/data-directory repair so concurrent callers cannot race
@@ -207,6 +213,21 @@ pub(crate) fn repair_password_state_serialized(
             "repair shared cluster password state: {error}"
         ))
     })
+}
+
+/// Off Unix there is no embedded-cluster password state to repair, so the
+/// resolved password and paths are accepted and ignored.
+///
+/// # Errors
+///
+/// Never fails; the signature matches the Unix arm so callers stay
+/// platform-agnostic.
+#[cfg(not(unix))]
+pub(crate) fn repair_password_state_serialized(
+    _password: &[u8],
+    _paths: &PasswordStatePaths,
+) -> BootstrapResult<()> {
+    Ok(())
 }
 
 #[cfg(unix)]
