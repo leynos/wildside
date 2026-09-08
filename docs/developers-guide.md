@@ -1653,6 +1653,127 @@ The helper:
   schema migrations idempotently
 - Returns the pool for use in subsequent BDD steps
 
+## Test timeouts: four tiers, outermost last
+
+Four independent timers can end a test run, and the canonical statement of how
+they must be ordered lives in the `generate-coverage` README in
+[`leynos/shared-actions`][shared-actions-coverage]. All four are set here, and
+until this was written the outermost one was set wrong.
+
+| Tier                     | What it bounds                     | Where it is set                               | Current value                                         |
+| ------------------------ | ---------------------------------- | --------------------------------------------- | ----------------------------------------------------- |
+| Per-test `slow-timeout`  | one test                           | `.config/nextest.toml`                        | 60 s default; 300 s for the database-backed overrides |
+| nextest `global-timeout` | the whole test run                 | `.config/nextest.toml`                        | 3,600 s (60 m)                                        |
+| Cargo watchdog           | one `cargo` invocation, wall clock | `RUN_RUST_CARGO_WAIT_TIMEOUT` at job level    | 5,400 s (90 m)                                        |
+| Job `timeout-minutes`    | the whole job                      | job level in `ci.yml` and `coverage-main.yml` | 120 m                                                 |
+
+*Table: the timers that can end a run, innermost first.*
+
+### The ceiling equalled the watchdog
+
+Both coverage jobs were capped at 90 minutes, which is exactly the watchdog's
+budget. The two clocks do not start together: the job timer starts when the job
+starts, before the checkout, the toolchain setup and the database fixtures,
+while the watchdog starts when `cargo` does. So a coverage step that spent its
+budget was always cancelled by the job timer rather than reported by the
+watchdog, and a cancellation discards the log that would have explained the
+overrun.
+
+The requirement is the watchdog plus the work outside its window, so the
+ceilings are now 120 minutes.
+
+### The three inner tiers were already sound
+
+They do not move, and the contract records why each holds.
+
+The 3,600 s whole-run budget sits above the 300 s largest per-test allowance,
+so a database-backed test may spend its budget in full. The 5,400 s watchdog
+sits above that budget plus nextest's termination procedure plus a cold build,
+with 29 minutes to spare for the build. Hitting the global timeout starts that
+procedure rather than stopping the run: on Unix nextest signals the process
+group and waits `slow-timeout.grace-period`, five seconds here, before killing
+it; on Windows termination is immediate and the grace period is ignored for
+timeouts.
+
+### What the ceilings are sized against
+
+The watchdog plus the work outside its window, measured from the worst of
+several runs rather than one:
+
+| Lane                                  | Worst coverage step | Worst whole job | Outside the step | Run         |
+| ------------------------------------- | ------------------- | --------------- | ---------------- | ----------- |
+| `coverage-main.yml` `coverage-upload` | 928 s               | 1,450 s         | 522 s            | 33921794186 |
+| `ci.yml` `coverage`                   | 406 s               | 447 s           | 59 s             | 33938872167 |
+
+*Table: measured coverage-step and whole-job durations, read across ten
+successful runs of each workflow.*
+
+The widest gap is 522 s, so the contract allows 15 minutes. The requirement is
+therefore 120 minutes: the 5,400 s watchdog, 900 s of measured work outside it,
+and a 900 s margin. Both ceilings are 120 minutes, so each equals its
+requirement exactly.
+
+The margin is one of the three terms rather than slack above them. A ceiling
+equal to the watchdog plus the work outside it cancels the job at the moment
+the watchdog would have reported the overrun, and the report is the only thing
+that makes an overrun actionable. On the trunk lane most of that gap is the
+database fixtures and the artefact upload, which run outside the coverage step
+and so outside the watchdog.
+
+The contract also pins the condition each lane carries. A skipped step runs no
+`cargo`, so its watchdog never arms and the tiers say nothing about it:
+`if: false` on the step or on its job would leave a lane that looks bounded and
+is not. The conditions are pinned rather than forbidden, because the one here
+is legitimate: the pull-request lane skips Dependabot branches, whose bumps are
+not changes worth measuring, and pushes, which the trunk lane covers. A lane
+gaining, losing or changing a condition has to change this section with it, and
+a lane appearing without an entry here fails the contract too.
+
+None of those runs was genuinely cold. One run is the coldest seen so far, not
+a measurement of the cold case.
+
+### The contract
+
+`tests/workflow_contracts/timeout_ordering_test.py` asserts all four tiers by
+value over every job invoking the coverage action, in both the `.yml` and
+`.yaml` extensions. It resolves the watchdog from the step, then the job, then
+the workflow, as GitHub does, and it fails on a coverage-invoking job that
+declares no ceiling at all. The readings it rests on live in
+`timeout_budgets.py`, `nextest_budgets.py`, `nextest_durations.py` and
+`coverage_lanes.py`, and are exercised on their own in
+`timeout_reading_test.py`.
+
+Those readings are driven with controlled configurations rather than this
+repository's files, because these files cannot exercise them. Every
+`terminate-after` here is one, so a reading that ignored the multiplier
+entirely would give the same answer; `period` and `grace-period` share an
+inline table, so a substring match would take a grace period for a per-test
+budget whenever it were the larger; and no job here runs the coverage action
+twice, which is the case the ceiling arithmetic exists for. Each would pass
+silently against the tree and fail the moment someone raised a multiplier or
+added a second invocation.
+
+`terminate-after` is optional, and a `slow-timeout` without it marks a test
+slow and never stops it. The reading refuses that form rather than reporting
+one period as the budget, because a number on a tier that does not exist makes
+every comparison above it pass against nothing. Nothing here relies on the
+looser reading: every profile and override in `.config/nextest.toml` sets
+`terminate-after` explicitly.
+
+The configuration is parsed with `tomllib` rather than matched as text. A text
+match finds a key inside a comment, inside a `filter` string, or in a table
+nextest never consults, and reports a budget the runner does not use. The
+commented-out `global-timeout` is the case that matters most, because this
+contract requires that tier to be present: a scraping reader would go on
+reporting a budget somebody had switched off, and the four-tier contract would
+pass with three. Parsing also keeps a profile's own table separate from its
+overrides, so a budget can be attributed to the lane it governs.
+
+The `build` job also carries a 90-minute ceiling. It invokes no coverage step,
+so it is outside this contract.
+
+[shared-actions-coverage]: https://github.com/leynos/shared-actions/blob/main/.github/actions/generate-coverage/README.md
+
 ## Spelling policy
 
 The `make spelling` gate enforces en-GB-oxendict spelling across tracked text.

@@ -628,7 +628,13 @@ jobs:
   coverage:
     if: github.actor != 'dependabot[bot]' && github.event_name != 'push'
     runs-on: ubicloud-standard-8
-    timeout-minutes: 90
+    # Above the 5,400 s cargo watchdog below plus the work either side of
+    # the coverage step, which reached 59 s here and 522 s on the trunk
+    # lane. At 90 minutes the ceiling equalled the watchdog exactly, so a
+    # coverage step that spent its budget was cancelled by the job timer
+    # rather than reported by the watchdog, and a cancellation discards
+    # the log that would have explained it.
+    timeout-minutes: 120
     permissions:
       contents: read
     env:
