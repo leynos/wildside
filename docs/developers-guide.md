@@ -1739,7 +1739,8 @@ value over every job invoking the coverage action, in both the `.yml` and
 `.yaml` extensions. It resolves the watchdog from the step, then the job, then
 the workflow, as GitHub does, and it fails on a coverage-invoking job that
 declares no ceiling at all. The readings it rests on live in
-`timeout_budgets.py` and `coverage_lanes.py`, and are exercised on their own in
+`timeout_budgets.py`, `nextest_budgets.py`, `nextest_durations.py` and
+`coverage_lanes.py`, and are exercised on their own in
 `timeout_reading_test.py`.
 
 Those readings are driven with controlled configurations rather than this
