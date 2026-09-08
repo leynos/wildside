@@ -1193,6 +1193,40 @@ Contract tests in `tests/workflow_contracts/` protect this configuration,
 including the immutable shared-action pins, alongside the Python gate steps and
 the Makefile recipes described above.
 
+### CodeScene rule overrides
+
+`.codescene/code-health-rules.json` narrows CodeScene's rules for parts of the
+repository where a default rule does not fit. Its schema is the one
+`cs docs code-health-rules-template` prints: a top-level `rule_sets` array,
+each entry naming a `matching_content_path`, and each rule named in prose with
+a `weight` between 0.0, which disables it, and 1.0, which is the default.
+
+Validate a change before pushing it:
+
+```bash
+cs rules-config validate
+```
+
+That command needs no CodeScene licence, so it works on any checkout. It is
+the authoritative check, and it is worth running because the failure mode here
+is silent: a rule set CodeScene cannot read is skipped, the verdicts carry on
+without the override, and the only sign is a line on standard error that a
+passing run buries. This repository's own overrides sat unread that way from
+the pull request that added them until they were noticed by accident.
+
+The command-line tool is a local check only. It is deliberately absent from CI
+and from the Makefile: the GitHub integration already evaluates the same rule
+set on every pull request, so running the CLI there would duplicate that work
+and add a tool to pin and install for no extra coverage. Do not add it to a
+gate target.
+
+`tests/workflow_contracts/codescene_rules_test.py` therefore holds the line
+where the gates run. It asserts the documented schema rather than merely that the
+file is JSON, requires every rule set to justify itself in
+`matching_content_path_doc`, and requires every `matching_content_path` to
+still match a file, since a glob left behind by a rename is an exemption that
+quietly stops applying.
+
 ## UX audit helpers
 
 `scripts/audit-ux-state-graph.mjs` supports front-end source catalogue work by
