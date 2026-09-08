@@ -763,11 +763,24 @@ coverage steps. Nothing in `backend/tests/` needs a process-wide environment
 lock, and no nextest group exists to protect environment state.
 
 `docs/adr-002-environment-seam-taxonomy.md` records the decision and the full
-list of sanctioned roots. Two contract targets guard the mechanism:
+list of sanctioned roots. Three contract targets guard the mechanism:
 `backend/tests/environment_policy_contract.rs` asserts what the repository
-declares, and `backend/tests/environment_policy_lint.rs` runs `clippy-driver`
-over probe sources to prove those declarations actually fire. Add a probe there
-when the policy grows an entry.
+declares, `backend/tests/environment_policy_lint.rs` runs `clippy-driver` over
+probe sources to prove those declarations actually fire, and
+`backend/tests/environment_policy_source_scan.rs` parses every workspace source
+and rejects any `allow` of the policy's lint. Add a probe to the second when
+the policy grows an entry.
+
+Never suppress the policy with `allow`, in any of its forms. A crate-level
+`#![allow(clippy::disallowed_methods)]` disarms the lint for a whole crate, and
+`clippy::allow_attributes` does not fire on an inner attribute, so nothing else
+would notice. Naming the lint is not the only route: Clippy places
+`disallowed_methods` in the `style` group, so `clippy::style`, the wider
+`clippy::all`, and `warnings` each switch it off just as effectively, and any of
+them nested in a `cfg_attr` is honoured too. The source scan rejects all of
+them, wherever the attribute sits. Use an item-scoped
+`#[expect(..., reason = "...")]` at a composition root instead: it warns once
+the site no longer needs it, where `allow` stays silent forever.
 
 ## Adding or changing behavioural tests
 
