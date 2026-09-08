@@ -177,6 +177,7 @@ def _manifests_under(directory: Path) -> tuple[Path, ...]:
     found: list[Path] = []
 
     def _fail(error: OSError) -> typ.NoReturn:
+        """Convert a traversal error into a `DiscoveryError`."""
         raise DiscoveryError(
             Path(error.filename or directory), error.strerror or str(error)
         )
