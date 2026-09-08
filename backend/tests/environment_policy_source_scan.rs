@@ -39,6 +39,9 @@
 //! The sources are parsed rather than searched. A text scan cannot tell an
 //! attribute from attribute-shaped text in a string literal, cannot follow
 //! `cfg_attr`, and ends an attribute early at a parenthesis inside a `reason`.
+//! Parsing alone is not sufficient either: raw identifiers are normalized
+//! before comparison, `expect` is judged by its scope rather than ignored, and
+//! macro token streams are walked because `syn` leaves a macro body opaque.
 //!
 //! # Mutation proof
 //!
@@ -55,6 +58,19 @@
 //! - `#[allow(clippy::restriction)]` in a crate root fails it, because that
 //!   group holds the two guard lints that keep `allow` from being used where
 //!   the policy requires `expect`;
+//! - `#![expect(clippy::disallowed_methods)]` in a crate root fails it. An
+//!   item-scoped `expect` is the sanctioned form and is not reported, but a
+//!   crate-scoped one is a silent, permanent suppression: measured, it took
+//!   two separate prohibited calls to zero diagnostics with no
+//!   `unfulfilled_lint_expectations`, because one call fulfils the whole
+//!   crate's expectation, where the item-scoped form still reported the
+//!   second call;
+//! - `#![allow(clippy::r#style)]` fails it. A raw identifier names the same
+//!   lint and is honoured by Clippy, but `syn` renders the `r#` prefix, so the
+//!   comparison normalizes it away;
+//! - a `macro_rules!` arm expanding to `mod inner { #![allow(...)] }` fails
+//!   it. `syn` leaves a macro body opaque, so the token stream is walked as
+//!   well as the syntax tree;
 //! - `#[allow(clippy::alloc_instead_of_core)]` must and does keep passing. Its
 //!   name begins with `clippy::all`, so a substring test would reject it, and
 //!   it is a `restriction` lint, so a group-aware test would too. Comparing
@@ -66,9 +82,11 @@ use std::path::{Path as StdPath, PathBuf};
 
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
+use proc_macro2::{Delimiter, TokenStream, TokenTree};
+use syn::ext::IdentExt;
 use syn::punctuated::Punctuated;
 use syn::visit::Visit;
-use syn::{AttrStyle, Attribute, Meta, MetaList, Path, Token};
+use syn::{AttrStyle, Attribute, Macro, Meta, MetaList, Path, Token};
 
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
@@ -138,29 +156,42 @@ fn rust_sources(root: &StdPath, relative: &str) -> TestResult<Vec<(PathBuf, Stri
     Ok(sources)
 }
 
-/// Collect every attribute in a parsed file, wherever it sits.
+/// Collect every attribute in a parsed file, and every macro token stream.
 ///
 /// A visitor is used rather than a hand-rolled walk so attributes on nested
-/// items, on function-local items, and on expressions are all reached.
+/// items, on function-local items, and on expressions are all reached. Macro
+/// bodies are opaque to the visitor, so their token streams are collected for
+/// a separate pass: a `macro_rules!` arm expanding to a module with an inner
+/// `allow` would otherwise hide a suppression from both this scan and Clippy's
+/// own guard.
 #[derive(Default)]
 struct AttributeCollector {
     attributes: Vec<Attribute>,
+    macro_tokens: Vec<TokenStream>,
 }
 
 impl<'ast> Visit<'ast> for AttributeCollector {
     fn visit_attribute(&mut self, attribute: &'ast Attribute) {
         self.attributes.push(attribute.clone());
     }
+
+    fn visit_macro(&mut self, mac: &'ast Macro) {
+        self.macro_tokens.push(mac.tokens.clone());
+        syn::visit::visit_macro(self, mac);
+    }
 }
 
-/// Render a lint path as it is written in an attribute.
+/// Render a lint path as it is written in an attribute, with raw identifiers
+/// normalized.
 ///
 /// The path in `#[allow(clippy::all)]` renders as `clippy::all`, and the path
-/// in `#[allow(warnings)]` as `warnings`.
+/// in `#[allow(warnings)]` as `warnings`. `r#` prefixes are stripped, because
+/// `#![allow(clippy::r#style)]` and `#![r#allow(...)]` name exactly the same
+/// lint and attribute as their plain spellings, and Clippy honours both.
 fn render_path(path: &Path) -> String {
     path.segments
         .iter()
-        .map(|segment| segment.ident.to_string())
+        .map(|segment| segment.ident.unraw().to_string())
         .collect::<Vec<_>>()
         .join("::")
 }
@@ -182,44 +213,134 @@ fn allowed_lints(list: &MetaList) -> Vec<String> {
         .collect()
 }
 
+/// Whether an attribute is written `#![...]` rather than `#[...]`.
+///
+/// The distinction decides how an `expect` is judged, so it is carried through
+/// `cfg_attr` nesting and through macro token streams rather than inferred at
+/// the point of comparison.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Scope {
+    /// `#![...]`, applying to the enclosing crate or module.
+    Inner,
+    /// `#[...]`, applying to the item it precedes.
+    Outer,
+}
+
 /// Return the lint names nested inside a `cfg_attr`.
 ///
 /// The leading element is the condition and is skipped; a nested `cfg_attr` is
 /// followed in turn, so `cfg_attr(all(), allow(clippy::style))` yields
-/// `["clippy::style"]`.
-fn suppressed_by_cfg_attr(list: &MetaList) -> Vec<String> {
+/// `["clippy::style"]`. The scope of the outermost attribute is carried in, so
+/// `#![cfg_attr(all(), expect(clippy::all))]` is judged as the crate-scoped
+/// expectation it becomes.
+fn suppressed_by_cfg_attr(list: &MetaList, scope: Scope) -> Vec<String> {
     let Ok(nested) = list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) else {
         return Vec::new();
     };
     nested
         .iter()
         .skip(1)
-        .filter_map(|meta| match meta {
-            Meta::List(inner) => Some(match render_path(&inner.path).as_str() {
-                "allow" => allowed_lints(inner),
-                "cfg_attr" => suppressed_by_cfg_attr(inner),
-                _ => Vec::new(),
-            }),
-            Meta::Path(_) | Meta::NameValue(_) => None,
-        })
-        .flatten()
+        .flat_map(|meta| lints_from_meta(meta, scope))
         .collect()
 }
 
-/// Return the lint names one attribute suppresses, following `cfg_attr`.
+/// Return the lint names one attribute meta suppresses.
 ///
 /// A `cfg_attr` is followed whatever its condition: a suppression that applies
 /// under some configuration is still a suppression, and deciding which
-/// configurations are reachable is not this contract's job. An `expect` yields
-/// nothing, because it is the sanctioned form.
-fn suppressed_by(attribute: &Attribute) -> Vec<String> {
-    let Ok(list) = attribute.meta.require_list() else {
+/// configurations are reachable is not this contract's job.
+///
+/// An `expect` is judged by its scope. An outer, item-scoped `expect` is the
+/// sanctioned form and yields nothing: measured, it suppresses only its own
+/// site, leaving a second prohibited call in the same file still reported. An
+/// inner `expect` does not behave that way. Measured, a crate root carrying
+/// `#![expect(clippy::disallowed_methods)]` reported nothing for two separate
+/// calls and raised no `unfulfilled_lint_expectations`, because one call
+/// fulfils the expectation for the whole crate. That is a silent, permanent
+/// suppression wearing the sanctioned form's clothes, so it is an offence.
+fn lints_from_meta(meta: &Meta, scope: Scope) -> Vec<String> {
+    let Meta::List(list) = meta else {
         return Vec::new();
     };
-    match render_path(attribute.path()).as_str() {
+    match render_path(&list.path).as_str() {
         "allow" => allowed_lints(list),
-        "cfg_attr" => suppressed_by_cfg_attr(list),
+        "expect" if scope == Scope::Inner => allowed_lints(list),
+        "cfg_attr" => suppressed_by_cfg_attr(list, scope),
         _ => Vec::new(),
+    }
+}
+
+/// Return the lint names one attribute suppresses.
+fn suppressed_by(attribute: &Attribute) -> Vec<String> {
+    let scope = match attribute.style {
+        AttrStyle::Inner(_) => Scope::Inner,
+        AttrStyle::Outer => Scope::Outer,
+    };
+    lints_from_meta(&attribute.meta, scope)
+}
+
+/// Return every protected lint suppressed by an attribute inside a macro's
+/// token stream.
+///
+/// `syn` treats a macro body as opaque tokens, so an arm expanding to
+/// `mod inner { #![allow(clippy::disallowed_methods)] ... }` is invisible to
+/// the visitor. Measured, that shape suppresses the lint for the expanded
+/// module while Clippy's own guard stays silent, so the tokens are walked here
+/// as well. Groups are entered recursively, since the attribute sits inside
+/// the arm's braces.
+fn suppressed_in_tokens(tokens: TokenStream) -> Vec<(String, String)> {
+    let trees: Vec<TokenTree> = tokens.into_iter().collect();
+    let mut found = Vec::new();
+
+    for (index, tree) in trees.iter().enumerate() {
+        match tree {
+            TokenTree::Group(group) => found.extend(suppressed_in_tokens(group.stream())),
+            TokenTree::Punct(punct) if punct.as_char() == '#' => {
+                found.extend(attribute_at(&trees, index));
+            }
+            TokenTree::Punct(_) | TokenTree::Ident(_) | TokenTree::Literal(_) => {}
+        }
+    }
+    found
+}
+
+/// Return the protected lints suppressed by the attribute starting at `index`.
+///
+/// `index` addresses the `#`. What follows is an optional `!`, which makes the
+/// attribute inner, and then the bracketed meta.
+fn attribute_at(trees: &[TokenTree], index: usize) -> Vec<(String, String)> {
+    let (scope, cursor) = scope_after_hash(trees, index);
+    let Some(group) = bracketed_group(trees, cursor) else {
+        return Vec::new();
+    };
+    let Ok(meta) = syn::parse2::<Meta>(group.stream()) else {
+        return Vec::new();
+    };
+
+    let bang = if scope == Scope::Inner { "!" } else { "" };
+    let rendered = format!("#{bang}[{}] (in a macro body)", group.stream());
+    lints_from_meta(&meta, scope)
+        .into_iter()
+        .map(|lint| (lint, rendered.clone()))
+        .collect()
+}
+
+/// Return the scope the token after a `#` implies, and the index after it.
+fn scope_after_hash(trees: &[TokenTree], index: usize) -> (Scope, usize) {
+    let cursor = index.saturating_add(1);
+    match trees.get(cursor) {
+        Some(TokenTree::Punct(bang)) if bang.as_char() == '!' => {
+            (Scope::Inner, cursor.saturating_add(1))
+        }
+        _ => (Scope::Outer, cursor),
+    }
+}
+
+/// Return the bracketed group at `cursor`, if there is one.
+fn bracketed_group(trees: &[TokenTree], cursor: usize) -> Option<&proc_macro2::Group> {
+    match trees.get(cursor) {
+        Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Bracket => Some(group),
+        _ => None,
     }
 }
 
@@ -242,15 +363,20 @@ fn suppressed_lints(contents: &str) -> TestResult<Vec<(String, String)>> {
     let mut collector = AttributeCollector::default();
     collector.visit_file(&parsed);
 
-    let mut found = Vec::new();
-    for attribute in &collector.attributes {
-        for lint in suppressed_by(attribute) {
-            if PROTECTED_LINTS.contains(&lint.as_str()) {
-                found.push((lint, render_attribute(attribute)));
-            }
-        }
-    }
-    Ok(found)
+    let from_attributes = collector.attributes.iter().flat_map(|attribute| {
+        suppressed_by(attribute)
+            .into_iter()
+            .map(|lint| (lint, render_attribute(attribute)))
+    });
+    let from_macros = collector
+        .macro_tokens
+        .into_iter()
+        .flat_map(suppressed_in_tokens);
+
+    Ok(from_attributes
+        .chain(from_macros)
+        .filter(|(lint, _)| PROTECTED_LINTS.contains(&lint.as_str()))
+        .collect())
 }
 
 /// Scenario: a source file switches the policy lint off for itself.
@@ -326,8 +452,10 @@ fn the_scan_reads_the_workspace_sources() -> TestResult {
 /// contributors towards `allow`, the attribute that never warns.
 #[test]
 fn a_sanctioned_expect_is_not_an_offence() -> TestResult {
-    let sanctioned = "#[expect(clippy::disallowed_methods, reason = \"composition root\")]\n\
-         fn read() -> Option<String> { std::env::var(\"HOME\").ok() }\n";
+    let sanctioned = concat!(
+        "#[expect(clippy::disallowed_methods, reason = \"composition root\")]\n",
+        "fn read() -> Option<String> { std::env::var(\"HOME\").ok() }\n",
+    );
 
     assert!(suppressed_lints(sanctioned)?.is_empty());
     Ok(())
@@ -379,8 +507,10 @@ fn spacing_and_a_parenthesis_in_the_reason_do_not_hide_a_suppression() -> TestRe
 /// own documentation quotes the attribute repeatedly.
 #[test]
 fn attribute_shaped_text_is_not_an_attribute() -> TestResult {
-    let literal = "//! Never write #![allow(clippy::disallowed_methods)] in a crate root.\n\
-         const EXAMPLE: &str = \"\n#![allow(warnings)]\n\";\n";
+    let literal = concat!(
+        "//! Never write #![allow(clippy::disallowed_methods)] in a crate root.\n",
+        "const EXAMPLE: &str = \"\n#![allow(warnings)]\n\";\n",
+    );
 
     assert!(suppressed_lints(literal)?.is_empty());
     Ok(())
@@ -398,5 +528,77 @@ fn a_longer_lint_name_containing_a_protected_one_is_not_an_offence() -> TestResu
     let innocent = "#[allow(clippy::alloc_instead_of_core)]\nfn documented() {}\n";
 
     assert!(suppressed_lints(innocent)?.is_empty());
+    Ok(())
+}
+
+/// Scenario: a crate-scoped `#![expect]` naming a protected lint.
+///
+/// Invariant: it is reported, although an item-scoped `expect` is not.
+/// Measured, a crate root carrying `#![expect(clippy::disallowed_methods)]`
+/// reported nothing for two separate prohibited calls and raised no
+/// `unfulfilled_lint_expectations`, because one call fulfils the expectation
+/// for the whole crate. The same file with an item-scoped `#[expect]` still
+/// reported the second call. An inner `expect` is therefore a silent,
+/// permanent suppression wearing the sanctioned form's clothes.
+#[test]
+fn a_crate_scoped_expect_is_an_offence() -> TestResult {
+    let crate_scoped = "#![expect(clippy::disallowed_methods, reason = \"x\")]\n";
+
+    assert_eq!(suppressed_lints(crate_scoped)?.len(), 1);
+    Ok(())
+}
+
+/// Scenario: a crate-scoped `expect` reached through a `cfg_attr`.
+///
+/// Invariant: it is reported too. The scope of the outermost attribute is
+/// carried through the nesting, so the conditional form is judged as the
+/// crate-scoped expectation it becomes.
+#[test]
+fn a_crate_scoped_expect_nested_in_cfg_attr_is_an_offence() -> TestResult {
+    let nested = "#![cfg_attr(all(), expect(clippy::disallowed_methods))]\n";
+
+    assert_eq!(suppressed_lints(nested)?.len(), 1);
+    Ok(())
+}
+
+/// Scenario: the attribute or the lint is spelled as a raw identifier.
+///
+/// Invariant: both are reported. `r#allow` and `clippy::r#style` name exactly
+/// the same attribute and lint as their plain spellings, and both were
+/// measured to suppress the policy lint, but `syn` renders an identifier with
+/// its `r#` prefix intact. Normalizing before comparison is what catches them.
+#[test]
+fn a_raw_identifier_does_not_hide_a_suppression() -> TestResult {
+    for raw in [
+        "#![r#allow(clippy::disallowed_methods)]\n",
+        "#![allow(clippy::r#style)]\n",
+        "#![allow(r#warnings)]\n",
+    ] {
+        assert_eq!(suppressed_lints(raw)?.len(), 1, "missed {raw}");
+    }
+    Ok(())
+}
+
+/// Scenario: the suppression sits inside a macro body.
+///
+/// Invariant: it is reported. `syn` leaves a macro body as opaque tokens, so
+/// the visitor never sees an inner attribute in an arm expanding to a module.
+/// Measured, that shape takes the prohibited call from one diagnostic to none
+/// while Clippy's own guard stays silent, which is why the token stream is
+/// walked as well as the syntax tree.
+#[test]
+fn a_suppression_inside_a_macro_body_is_an_offence() -> TestResult {
+    let shadowed = concat!(
+        "macro_rules! shadow {\n",
+        "    () => {\n",
+        "        mod inner {\n",
+        "            #![allow(clippy::disallowed_methods)]\n",
+        "            pub fn call() { let _ = std::env::var(\"A\"); }\n",
+        "        }\n",
+        "    };\n",
+        "}\n",
+    );
+
+    assert_eq!(suppressed_lints(shadowed)?.len(), 1);
     Ok(())
 }

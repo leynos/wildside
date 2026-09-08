@@ -785,6 +785,14 @@ unnoticed. Use an item-scoped `#[expect(..., reason = "...")]` at a composition
 root instead: it warns once the site no longer needs it, where `allow` stays
 silent forever.
 
+An `expect` earns that exemption only while it is item-scoped. A crate-level
+`#![expect(clippy::disallowed_methods)]` suppresses every prohibited call in
+the crate and is fulfilled by the first one, so it never warns either; the
+scan reports it. It also normalizes raw identifiers, since
+`#![allow(clippy::r#style)]` names the same lint, and walks macro token
+streams, since a `macro_rules!` arm expanding to a module with an inner
+`allow` is invisible to both the syntax tree and Clippy's guard.
+
 ## Adding or changing behavioural tests
 
 When adding a new behaviour:
