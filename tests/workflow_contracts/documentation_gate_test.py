@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import subprocess  # noqa: S404 - the contract has to run the gate to observe it.
 from pathlib import Path
 
 import pytest
+import typed_documents as docs
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_MANIFEST = PROJECT_ROOT / "package.json"
@@ -119,7 +119,7 @@ def _resolve(executable: str) -> str:
 
 def test_docs_check_runs_all_three_typedoc_configs() -> None:
     """The package script must validate every maintained TypeDoc surface."""
-    manifest = json.loads(PACKAGE_MANIFEST.read_text(encoding="utf-8"))
+    manifest = docs.load_package_manifest(PACKAGE_MANIFEST)
     command = manifest["scripts"]["docs:check"]
     assert command.split(" && ") == EXPECTED_TYPEDOC_COMMANDS
 
@@ -186,7 +186,7 @@ def test_typedoc_rejects_an_undocumented_public_function() -> None:
 
 def _typedoc_pin() -> str:
     """Return the root manifest's declared TypeDoc version."""
-    manifest = json.loads(PACKAGE_MANIFEST.read_text(encoding="utf-8"))
+    manifest = docs.load_package_manifest(PACKAGE_MANIFEST)
     return manifest["devDependencies"]["typedoc"]
 
 
@@ -225,7 +225,7 @@ def test_every_surface_enforces_the_zero_tolerance_policy(
     opt out by dropping a key or by shortening the list of kinds it applies
     to.
     """
-    config = json.loads((PROJECT_ROOT / config_path).read_text(encoding="utf-8"))
+    config = docs.load_typedoc_config(PROJECT_ROOT / config_path, config_path)
     assert config["validation"] == EXPECTED_VALIDATION, (
         "the validation object is compared whole, so a key added by a future "
         "TypeDoc release has to be considered rather than inherited silently"
@@ -255,7 +255,7 @@ def test_every_surface_looks_at_what_it_claims_to(
     pattern to `exclude`, is the cheapest way to make this one green without
     documenting anything, and neither shows up in a verdict.
     """
-    config = json.loads((PROJECT_ROOT / config_path).read_text(encoding="utf-8"))
+    config = docs.load_typedoc_config(PROJECT_ROOT / config_path, config_path)
     assert config["entryPoints"] == entry_points
     assert config["entryPointStrategy"] == "expand", (
         "'expand' is what walks a directory; another strategy would treat the "

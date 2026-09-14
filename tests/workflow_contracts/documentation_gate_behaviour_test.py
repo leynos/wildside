@@ -24,6 +24,7 @@ from pathlib import Path
 from shutil import which
 
 import pytest
+import typed_documents as docs
 
 if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
     import collections.abc as cabc
@@ -117,7 +118,7 @@ def _write_project(
     configuration and the project name are overridden, and optionally one
     validation key is cleared.
     """
-    config = json.loads((PROJECT_ROOT / config_path).read_text(encoding="utf-8"))
+    config = docs.load_json_document(PROJECT_ROOT / config_path, config_path)
     config.pop("$schema", None)
     config["entryPoints"] = ["probe.ts"]
     config["tsconfig"] = "tsconfig.json"
@@ -125,7 +126,7 @@ def _write_project(
     if cleared:
         target = config
         for key in cleared[:-1]:
-            target = target[key]
+            target = docs.as_mapping(target[key], f"{config_path} {key!r}")
         assert target[cleared[-1]] is True, (
             f"{'.'.join(cleared)} must be enabled before the mutation clears it"
         )
