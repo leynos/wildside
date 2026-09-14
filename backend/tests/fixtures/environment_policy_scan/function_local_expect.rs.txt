@@ -1,0 +1,6 @@
+fn host() {
+    mod local {
+        #![expect(clippy::disallowed_methods, reason = "x")]
+        pub fn call() -> Option<String> { std::env::var("A").ok() }
+    }
+}

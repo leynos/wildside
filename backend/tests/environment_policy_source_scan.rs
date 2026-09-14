@@ -75,13 +75,20 @@
 //!   name begins with `clippy::all`, so a substring test would reject it, and
 //!   it is a `restriction` lint, so a group-aware test would too. Comparing
 //!   paths is what keeps both from being false reports.
+//!
+//! Re-run 2026-09-14, after the scan moved to its own module:
+//! `#![allow(clippy::style)]` in `backend/src/lib.rs` still fails
+//! `no_source_file_allows_a_policy_lint`, and a probe fixture copied from
+//! `group_allow.rs.txt` to `leaked_probe.rs` fails it too, which is what the
+//! `.rs.txt` suffix exists to prevent. The two mutations run against the
+//! judgement itself are recorded in `environment_policy_scan_properties.rs`.
 
 mod environment_policy_scan;
 
 use rstest::rstest;
 
 use environment_policy_scan::{
-    SOURCE_ROOTS, TestResult, rust_sources, suppressed_lints, workspace_root,
+    PROTECTED_LINTS, SOURCE_ROOTS, TestResult, rust_sources, suppressed_lints, workspace_root,
 };
 
 /// An `expect` on the composition-root item: the form the guide prescribes.
@@ -114,6 +121,15 @@ const RAW_LINT_PATH: &str = include_str!("fixtures/environment_policy_scan/raw_l
 const RAW_WARNINGS: &str = include_str!("fixtures/environment_policy_scan/raw_warnings.rs.txt");
 /// A `macro_rules!` arm expanding to a module with an inner `allow`.
 const MACRO_BODY: &str = include_str!("fixtures/environment_policy_scan/macro_body.rs.txt");
+/// A protected `allow` on an item nested two modules deep.
+const NESTED_ITEM_ALLOW: &str =
+    include_str!("fixtures/environment_policy_scan/nested_item_allow.rs.txt");
+/// A crate-scoped `expect` inside a module declared within a function body.
+const FUNCTION_LOCAL_EXPECT: &str =
+    include_str!("fixtures/environment_policy_scan/function_local_expect.rs.txt");
+/// A macro arm forwarding attributes and lint names as metavariables.
+const MACRO_METAVARIABLE: &str =
+    include_str!("fixtures/environment_policy_scan/macro_metavariable.rs.txt");
 /// The same shape, one macro definition deeper.
 const MACRO_TWO_DEEP: &str = include_str!("fixtures/environment_policy_scan/macro_two_deep.rs.txt");
 
@@ -317,5 +333,67 @@ fn a_suppression_two_macros_deep_is_an_offence() -> TestResult {
 #[test]
 fn a_suppression_inside_a_macro_body_is_an_offence() -> TestResult {
     assert_eq!(suppressed_lints(MACRO_BODY)?.len(), 1);
+    Ok(())
+}
+
+/// Scenario: each protected lint, suppressed at crate scope both ways.
+///
+/// Invariant: every one is reported, under `allow` and under `expect` alike.
+/// The set is finite and written down, so it is covered entry by entry rather
+/// than sampled: a lint added to `PROTECTED_LINTS` but not reachable by the
+/// judgement, or one quietly dropped from it, is what this catches. The probe
+/// is built from the constant rather than held as a fixture precisely so the
+/// set drives the cases.
+#[rstest]
+fn every_protected_lint_is_reported_at_crate_scope(
+    #[values(0, 1, 2, 3, 4, 5, 6)] index: usize,
+    #[values("allow", "expect")] keyword: &str,
+) -> TestResult {
+    let lint = PROTECTED_LINTS[index];
+    let probe = format!("#![{keyword}({lint}, reason = \"x\")]\n");
+
+    let found = suppressed_lints(&probe)?;
+    assert_eq!(found.len(), 1, "{keyword} of {lint} was missed: {found:?}");
+    assert_eq!(found[0].0, lint, "{lint} was reported under another name");
+    Ok(())
+}
+
+/// Scenario: the suppression sits on an item two modules deep.
+///
+/// Invariant: it is reported. The walk is a visitor rather than a scan of the
+/// file's leading attributes, so depth in the module tree is not a hiding
+/// place; a reader that only inspected top-level items would miss this.
+#[test]
+fn a_suppression_on_a_nested_item_is_an_offence() -> TestResult {
+    assert_eq!(suppressed_lints(NESTED_ITEM_ALLOW)?.len(), 1);
+    Ok(())
+}
+
+/// Scenario: a crate-scoped `expect` inside a module declared in a function.
+///
+/// Invariant: it is reported. A function-local module has its own crate-level
+/// attribute position, so `#![expect(...)]` there suppresses every prohibited
+/// call in it while sitting somewhere no one reads.
+#[test]
+fn a_suppression_in_a_function_local_module_is_an_offence() -> TestResult {
+    assert_eq!(suppressed_lints(FUNCTION_LOCAL_EXPECT)?.len(), 1);
+    Ok(())
+}
+
+/// Scenario: a macro arm forwarding an attribute and a lint as metavariables.
+///
+/// Invariant: none of it is an offence. `#[$attribute]` and `#[allow($lint)]`
+/// are not suppressions until the macro is expanded, and `#[allow(dead_code,
+/// reason = "generated")]` is what a code-generating macro legitimately
+/// emits. Reporting any of them would make every such macro a finding, and a
+/// contract that reports false positives gets switched off. This is the case
+/// that keeps the token walk honest, and it is why a shape that fails to
+/// parse inside a macro body is passed over rather than raised.
+#[test]
+fn macro_metavariables_are_not_suppressions() -> TestResult {
+    assert!(
+        suppressed_lints(MACRO_METAVARIABLE)?.is_empty(),
+        "a macro forwarding attributes was reported as a suppression"
+    );
     Ok(())
 }
