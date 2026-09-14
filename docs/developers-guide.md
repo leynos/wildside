@@ -786,10 +786,17 @@ silent forever.
 An `expect` earns that exemption only while it is item-scoped. A crate-level
 `#![expect(clippy::disallowed_methods)]` suppresses every prohibited call in
 the crate and is fulfilled by the first one, so it never warns either; the
-scan reports it. It also normalizes raw identifiers, since
+scan reports it. The scan also normalizes raw identifiers, since
 `#![allow(clippy::r#style)]` names the same lint, and walks macro token
-streams, since a `macro_rules!` arm expanding to a module with an inner
-`allow` is invisible to both the syntax tree and Clippy's guard.
+streams to any depth, since a `macro_rules!` arm expanding to a module with an
+inner `allow` is invisible to both the syntax tree and Clippy's guard.
+
+The scan lives in `backend/tests/environment_policy_source_scan.rs`, which
+holds the cases, and `backend/tests/environment_policy_scan/`, which holds the
+reading and the attribute judgement. Its probes are fixture files under
+`backend/tests/fixtures/environment_policy_scan/`, carrying the `.rs.txt`
+suffix so the scan does not read its own counterexamples as workspace
+sources.
 
 ## Adding or changing behavioural tests
 

@@ -1,0 +1,2 @@
+#[allow(clippy::alloc_instead_of_core)]
+fn documented() {}

@@ -1,0 +1,8 @@
+macro_rules! shadow {
+    () => {
+        mod inner {
+            #![allow(clippy::disallowed_methods)]
+            pub fn call() { let _ = std::env::var("A"); }
+        }
+    };
+}
