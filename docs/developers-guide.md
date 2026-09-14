@@ -791,12 +791,28 @@ scan reports it. The scan also normalizes raw identifiers, since
 streams to any depth, since a `macro_rules!` arm expanding to a module with an
 inner `allow` is invisible to both the syntax tree and Clippy's guard.
 
-The scan lives in `backend/tests/environment_policy_source_scan.rs`, which
-holds the cases, and `backend/tests/environment_policy_scan/`, which holds the
-reading and the attribute judgement. Its probes are fixture files under
-`backend/tests/fixtures/environment_policy_scan/`, carrying the `.rs.txt`
-suffix so the scan does not read its own counterexamples as workspace
-sources.
+Two further routes were measured on 2026-09-14 and are closed. A
+`macro_rules!` arm writing `#[$attribute]` over a prohibited call, invoked as
+`forward!(allow(clippy::disallowed_methods))`, silences that call while
+neither half is a suppression on its own; the invocation's argument names the
+lint, so that is what the scan judges, and only when the lint is a protected
+one, which leaves ordinary attribute-forwarding macros untouched. And
+`include!` makes rustc parse its target as Rust whatever the extension, so an
+`allow` inside an included `.rs.txt` takes effect unseen. An `include!` is
+therefore a finding unless its target is a string literal ending in `.rs`.
+Every `include!` here names `support/entrypoint.rs` literally, and
+`include_str!` and `include_bytes!` are untouched, since they embed a file as
+data rather than as source.
+
+The scan lives in four files. `environment_policy_source_scan.rs` holds the
+measurements, the mutation record and the three tests that read the
+workspace; `environment_policy_scan_cases.rs` holds the probe-driven cases;
+`environment_policy_scan_properties.rs` generates the attribute space and
+checks the verdict against the rule; and `backend/tests/environment_policy_scan/`
+holds the reading and the attribute judgement. The probes are fixture files
+under `backend/tests/fixtures/environment_policy_scan/`, carrying the
+`.rs.txt` suffix so the scan does not read its own counterexamples as
+workspace sources.
 
 ## Adding or changing behavioural tests
 
