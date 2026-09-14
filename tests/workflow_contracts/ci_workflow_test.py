@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import re
-import typing as typ
 from pathlib import Path
 
 import pytest
-import yaml
+import typed_documents as docs
 
-WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
+WORKFLOW_LABEL = "ci.yml"
+WORKFLOW_PATH = (
+    Path(__file__).resolve().parents[2] / ".github" / "workflows" / WORKFLOW_LABEL
+)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -52,20 +54,13 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
     string form is `False`, so a test comparing against `"false"` passes its
     own mutation.
     """
-    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
-    # An unquoted `on:` key parses as the boolean True under YAML 1.1, so
-    # both spellings are accepted here rather than depending on the quoting.
-    triggers = workflow.get("on", workflow.get(True))
-    assert isinstance(triggers, dict), "the CI workflow must declare triggers"
-    assert "pull_request" in triggers, (
+    workflow = _load_workflow()
+    assert "pull_request" in workflow["triggers"], (
         "the workflow must trigger on pull_request, or this gate never runs "
         "on the event it exists to gate"
     )
 
-    jobs = workflow.get("jobs")
-    assert isinstance(jobs, dict), "the CI workflow must declare jobs"
-    job = jobs.get(job_name)
-    assert isinstance(job, dict), f"the CI workflow must declare {job_name}"
+    job = docs.workflow_job(workflow, job_name, WORKFLOW_LABEL)
     assert "if" not in job, (
         f"the {job_name} job must carry no condition; a skipped job runs no "
         "steps and leaves every step-level assertion vacuous"
@@ -75,12 +70,10 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
         "its own failure reports success whatever its steps found"
     )
 
-    steps = typ.cast("list[dict[str, object]]", job.get("steps"))
     invocations = [
         step
-        for step in steps
-        if isinstance(step.get("run"), str)
-        and typ.cast("str", step["run"]).strip() == command
+        for step in docs.job_steps(job, f"{WORKFLOW_LABEL} job {job_name!r}")
+        if _whole_run_value(step) == command
     ]
     assert len(invocations) == 1, (
         f"expected exactly one step in {job_name} whose whole run value is "
@@ -95,19 +88,30 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
     )
 
 
-def _load_steps(job_name: str = "coverage") -> list[dict[str, object]]:
+def _load_workflow() -> docs.Workflow:
+    """Return the CI workflow with its triggers and jobs shape-checked.
+
+    The boundary parser owns the YAML quirks, notably that an unquoted `on:`
+    key parses to the boolean `True` under YAML 1.1, so no contract here has
+    to know which spelling the file currently uses.
+    """
+    return docs.load_workflow(WORKFLOW_PATH, WORKFLOW_LABEL)
+
+
+def _load_steps(job_name: str = "coverage") -> list[dict[str, docs.JsonValue]]:
     """Parse and return the steps for one CI job."""
-    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
-    jobs = workflow.get("jobs")
-    assert isinstance(jobs, dict), "the CI workflow must declare jobs"
-    job = jobs.get(job_name)
-    assert isinstance(job, dict), f"the CI workflow must declare {job_name}"
-    steps = job.get("steps")
-    assert isinstance(steps, list), f"the {job_name} job must declare steps"
-    assert all(isinstance(step, dict) for step in steps), (
-        "every coverage step must be a mapping"
-    )
-    return typ.cast("list[dict[str, object]]", steps)
+    job = docs.workflow_job(_load_workflow(), job_name, WORKFLOW_LABEL)
+    return docs.job_steps(job, f"{WORKFLOW_LABEL} job {job_name!r}")
+
+
+def _whole_run_value(step: dict[str, docs.JsonValue]) -> str | None:
+    """Return a step's entire ``run`` script, stripped, when it has one.
+
+    A step without a `run` key, or with a `run` that is not a string, returns
+    `None` rather than a string that could compare equal to a gate command.
+    """
+    run = step.get("run")
+    return run.strip() if isinstance(run, str) else None
 
 
 def test_build_checkout_fetches_origin_main_history() -> None:
@@ -128,7 +132,9 @@ def test_build_checkout_fetches_origin_main_history() -> None:
     assert checkout_options.get("fetch-depth") == 0
 
 
-def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
+def _find_step(
+    steps: list[dict[str, docs.JsonValue]], name: str
+) -> dict[str, docs.JsonValue]:
     """Return the uniquely named workflow step."""
     matches = [step for step in steps if step.get("name") == name]
     assert len(matches) == 1, f"expected one {name!r} step, found {len(matches)}"
