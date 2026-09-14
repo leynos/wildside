@@ -1453,6 +1453,16 @@ indefensible fails the test suite instead of waiting for its expiry:
   reachable. The Style Dictionary entry holds only while `bun.lock` resolves a
   release below 5.4.4, the version whose glob 13 requirement collides with the
   repository-wide glob 11 resolution.
+- Entries that rest on one argument stand or fall together. The two
+  `extract-zip` entries and the two Picomatch entries are each checked as a
+  group, so a ledger holding one of a pair fails rather than quietly keeping
+  an argument for one advisory that it discarded for the other.
+
+The questions these invariants ask of `bun.lock`, which versions of a package
+it resolves and which packages reach one, are answered by
+`tests/workflow_contracts/bun_lockfile.py`. Read the lockfile through it
+rather than by matching text, so that a new invariant asserts a dependency
+edge rather than the presence of a name.
 
 Failing there is the intended outcome of the fix landing: delete the entry and
 close its issue. When adding an exception, add the matching invariant and prove

@@ -13,6 +13,7 @@ import re
 import typing as typ
 from pathlib import Path
 
+import bun_lockfile as lock
 import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -156,113 +157,55 @@ EXCEPTIONS_WITH_REMOVAL_INVARIANTS = frozenset(
 #: exception without one has no owner and no end.
 _ISSUE_REFERENCE = re.compile(r"(?:#\d+|/issues/\d+)")
 
-#: Bun writes JSONC: object literals carry trailing commas that `json` rejects.
-_TRAILING_COMMA = re.compile(r",(\s*[}\]])")
 
-#: Package entries are keyed by `name@version` in the lockfile's value tuples.
-_SPECIFIER = re.compile(r"^(?P<name>.+)@(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)")
+def _parse_ledger(text: str) -> list[AuditException]:
+    """Parse the audit exception ledger from its JSON text.
 
-#: The dependency fields a resolved package may reach another package through.
-#: `peerDependencies` is excluded: Bun records peers a package asks for, not
-#: edges it resolves, so including it would report parents that pull nothing in.
-_DEPENDENCY_FIELDS = ("dependencies", "optionalDependencies", "devDependencies")
-
-
-def _ledger() -> list[AuditException]:
-    """Return the frontend audit exception entries."""
-    return json.loads(LEDGER_PATH.read_text(encoding="utf-8"))
+    Examples
+    --------
+        >>> _parse_ledger('[{"id": "X"}]')[0]["id"]
+        'X'
+    """
+    return json.loads(text)
 
 
-def _entry_ids() -> set[str]:
+@pytest.fixture(scope="module")
+def ledger() -> list[AuditException]:
+    """Return the entries of the repository's audit exception ledger."""
+    return _parse_ledger(LEDGER_PATH.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def packages() -> lock.PackageTable:
+    """Return the package table of the repository's Bun lockfile."""
+    return lock.parse_packages(BUN_LOCK_PATH.read_text(encoding="utf-8"))
+
+
+def _entry_ids(ledger: list[AuditException]) -> set[str]:
     """Return the identifiers of every ledger entry."""
-    return {entry["id"] for entry in _ledger()}
+    return {entry["id"] for entry in ledger}
 
 
-def _bun_packages() -> dict[str, list[object]]:
-    """Return Bun's resolved package table, keyed by dependency path."""
-    text = BUN_LOCK_PATH.read_text(encoding="utf-8")
-    return json.loads(_TRAILING_COMMA.sub(r"\1", text))["packages"]
+def _coupled_group(
+    ledger: list[AuditException], group: tuple[str, ...]
+) -> frozenset[str]:
+    """Return the present members of a group of jointly argued exceptions.
 
-
-def _specifier_of(entry: list[object]) -> str | None:
-    """Return an entry's `name@version` specifier, if it carries one."""
-    specifier = entry[0]
-    return specifier if isinstance(specifier, str) else None
-
-
-def _parse_specifier(specifier: str) -> tuple[str, tuple[int, int, int] | None]:
-    """Split a specifier into its package name and numeric version.
-
-    A prerelease or other non-numeric version yields `None` for the version,
-    since every comparison here is against a release boundary.
-
-    Examples
-    --------
-        >>> _parse_specifier("@puppeteer/browsers@2.6.1")
-        ('@puppeteer/browsers', (2, 6, 1))
+    Entries that rest on one argument must stand or fall together: a ledger
+    holding some of them has kept an argument for one advisory while
+    discarding it for another that shares it.
     """
-    match = _SPECIFIER.match(specifier)
-    if match is None:
-        return specifier, None
-    version = (int(match["major"]), int(match["minor"]), int(match["patch"]))
-    return match["name"], version
+    present = frozenset(_entry_ids(ledger) & set(group))
+    assert present in {frozenset(), frozenset(group)}, (
+        f"{sorted(group)} rest on the same argument, so the ledger must hold "
+        f"all of them or none. It holds {sorted(present)}."
+    )
+    return present
 
 
-def _declared_dependencies(entry: list[object]) -> set[str]:
-    """Return every package name an entry declares as a dependency."""
-    metadata = next((item for item in entry if isinstance(item, dict)), {})
-    declared: set[str] = set()
-    for field in _DEPENDENCY_FIELDS:
-        edges = metadata.get(field)
-        if isinstance(edges, dict):
-            declared.update(key for key in edges if isinstance(key, str))
-    return declared
-
-
-def _resolved_versions(package: str) -> list[tuple[int, int, int]]:
-    """Return every version of `package` Bun's lockfile resolves.
-
-    A package can appear more than once: Bun keys a nested resolution by the
-    path that needed it, such as `vitest/picomatch`, while the value always
-    names the package itself.
-
-    Examples
-    --------
-        >>> _resolved_versions("extract-zip")  # doctest: +SKIP
-        [(2, 0, 1)]
-    """
-    versions = []
-    for entry in _bun_packages().values():
-        specifier = _specifier_of(entry)
-        if specifier is None:
-            continue
-        name, version = _parse_specifier(specifier)
-        if name == package and version is not None:
-            versions.append(version)
-    return versions
-
-
-def _dependents_of(package: str) -> set[str]:
-    """Return every resolved package that declares `package` as a dependency.
-
-    The name comes from the entry's own specifier rather than its key, because
-    a key can be a dependency path such as `vitest/picomatch` and a scoped
-    package name contains the same separator.
-
-    Examples
-    --------
-        >>> _dependents_of("extract-zip")  # doctest: +SKIP
-        {'@puppeteer/browsers'}
-    """
-    dependents = set()
-    for entry in _bun_packages().values():
-        specifier = _specifier_of(entry)
-        if specifier is not None and package in _declared_dependencies(entry):
-            dependents.add(_parse_specifier(specifier)[0])
-    return dependents
-
-
-def test_every_audit_exception_names_a_removal_condition() -> None:
+def test_every_audit_exception_names_a_removal_condition(
+    ledger: list[AuditException],
+) -> None:
     """An exception with no tracking issue becomes permanent by default.
 
     The ledger's `expiresAt` field forces a decision on a date, but it does not
@@ -271,7 +214,7 @@ def test_every_audit_exception_names_a_removal_condition() -> None:
     """
     unowned = [
         entry["id"]
-        for entry in _ledger()
+        for entry in ledger
         if not _ISSUE_REFERENCE.search(entry.get("reason", ""))
     ]
     assert not unowned, (
@@ -280,14 +223,16 @@ def test_every_audit_exception_names_a_removal_condition() -> None:
     )
 
 
-def test_every_audit_exception_has_a_tested_removal_invariant() -> None:
+def test_every_audit_exception_has_a_tested_removal_invariant(
+    ledger: list[AuditException],
+) -> None:
     """A tracking issue says who decides; an invariant says what settles it.
 
     Without this, a new entry passes the whole suite on the strength of an
     issue number alone, and silences a Bun advisory repository-wide with
     nothing in the gates watching for the day its argument stops holding.
     """
-    uncovered = _entry_ids() - EXCEPTIONS_WITH_REMOVAL_INVARIANTS
+    uncovered = _entry_ids(ledger) - EXCEPTIONS_WITH_REMOVAL_INVARIANTS
     assert not uncovered, (
         f"these audit exceptions have no tested removal invariant: "
         f"{sorted(uncovered)}. Add a test here that fails once the entry's "
@@ -295,7 +240,9 @@ def test_every_audit_exception_has_a_tested_removal_invariant() -> None:
     )
 
 
-def test_the_extract_zip_exceptions_are_void_once_puppeteer_drops_it() -> None:
+def test_the_extract_zip_exceptions_are_void_once_puppeteer_drops_it(
+    ledger: list[AuditException], packages: lock.PackageTable
+) -> None:
     """Both `extract-zip` exceptions rest on the package still being reachable.
 
     `extract-zip` 2.0.1 has no patched release, so the entries argue from
@@ -305,18 +252,20 @@ def test_the_extract_zip_exceptions_are_void_once_puppeteer_drops_it() -> None:
     `puppeteer` 25.7 or later removes the package and the advisories together.
     Failing here is the intended outcome of that upgrade: delete both entries.
     """
-    present = _entry_ids() & set(EXTRACT_ZIP_EXCEPTION_IDS)
+    present = _coupled_group(ledger, EXTRACT_ZIP_EXCEPTION_IDS)
     if not present:
         pytest.skip("the extract-zip advisories are no longer excepted")
 
-    assert _resolved_versions("extract-zip"), (
+    assert lock.resolved_versions(packages, "extract-zip"), (
         f"{sorted(present)} except advisories against extract-zip, but Bun no "
         f"longer resolves it. Remove the entries and close "
         f"{EXTRACT_ZIP_TRACKING_ISSUE}."
     )
 
 
-def test_the_extract_zip_exceptions_are_void_once_anything_else_pulls_it() -> None:
+def test_the_extract_zip_exceptions_are_void_once_anything_else_pulls_it(
+    ledger: list[AuditException], packages: lock.PackageTable
+) -> None:
     """The entries except a package, but the argument is about one caller.
 
     `run-bun-audit.js` turns a ledger entry into a repository-wide
@@ -324,11 +273,11 @@ def test_the_extract_zip_exceptions_are_void_once_anything_else_pulls_it() -> No
     exception written about Puppeteer's trusted Chrome archive. Merely
     checking that the package is still resolved would not notice.
     """
-    present = _entry_ids() & set(EXTRACT_ZIP_EXCEPTION_IDS)
+    present = _coupled_group(ledger, EXTRACT_ZIP_EXCEPTION_IDS)
     if not present:
         pytest.skip("the extract-zip advisories are no longer excepted")
 
-    dependents = _dependents_of("extract-zip")
+    dependents = lock.dependents_of(packages, "extract-zip")
     unexpected = dependents - {EXTRACT_ZIP_PERMITTED_DEPENDENT}
     assert not unexpected, (
         f"{sorted(present)} except extract-zip on the grounds that only "
@@ -338,7 +287,9 @@ def test_the_extract_zip_exceptions_are_void_once_anything_else_pulls_it() -> No
     )
 
 
-def test_the_picomatch_exceptions_are_void_once_bun_resolves_patched_builds() -> None:
+def test_the_picomatch_exceptions_are_void_once_bun_resolves_patched_builds(
+    ledger: list[AuditException], packages: lock.PackageTable
+) -> None:
     """The Picomatch exceptions rest on Bun holding a vulnerable build.
 
     Patched Picomatch releases exist on every affected major and `pnpm` reaches
@@ -348,11 +299,11 @@ def test_the_picomatch_exceptions_are_void_once_bun_resolves_patched_builds() ->
     resolution or the last Picomatch 2 consumer left, the exceptions are
     unnecessary rather than merely stale.
     """
-    present = _entry_ids() & set(PICOMATCH_EXCEPTION_IDS)
+    present = _coupled_group(ledger, PICOMATCH_EXCEPTION_IDS)
     if not present:
         pytest.skip("the Picomatch advisories are no longer excepted")
 
-    resolved = _resolved_versions("picomatch")
+    resolved = lock.resolved_versions(packages, "picomatch")
     assert resolved, "bun.lock must resolve Picomatch for these entries to apply"
 
     vulnerable = [
@@ -368,7 +319,9 @@ def test_the_picomatch_exceptions_are_void_once_bun_resolves_patched_builds() ->
     )
 
 
-def test_the_style_dictionary_exception_is_void_once_the_patch_resolves() -> None:
+def test_the_style_dictionary_exception_is_void_once_the_patch_resolves(
+    ledger: list[AuditException], packages: lock.PackageTable
+) -> None:
     """The Style Dictionary exception rests on the patch being out of reach.
 
     Unlike the others, this advisory has a fix: 5.4.4. It is excepted because
@@ -376,11 +329,11 @@ def test_the_style_dictionary_exception_is_void_once_the_patch_resolves() -> Non
     separate command-injection advisory. The day the lockfile resolves 5.4.4 or
     later, whichever way that knot is untied, the entry is unnecessary.
     """
-    present = _entry_ids() & set(STYLE_DICTIONARY_EXCEPTION_IDS)
+    present = _coupled_group(ledger, STYLE_DICTIONARY_EXCEPTION_IDS)
     if not present:
         pytest.skip("the Style Dictionary advisory is no longer excepted")
 
-    resolved = _resolved_versions("style-dictionary")
+    resolved = lock.resolved_versions(packages, "style-dictionary")
     assert resolved, "bun.lock must resolve Style Dictionary for this entry to apply"
 
     vulnerable = [
