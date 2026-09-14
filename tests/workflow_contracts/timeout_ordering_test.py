@@ -60,7 +60,7 @@ from timeout_budgets import (
 #: `ci.yml`'s coverage job is skipped for Dependabot, whose branches are
 #: bumps rather than changes worth measuring, and on pushes, where the
 #: trunk lane covers the same ground.
-REQUIRED_CONDITIONS: typ.Final[dict[tuple[str, str], tuple[object, object]]] = {
+REQUIRED_CONDITIONS: typ.Final[dict[tuple[str, str], tuple[str | None, str | None]]] = {
     (
         "ci.yml",
         "coverage",

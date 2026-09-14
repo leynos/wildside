@@ -12,10 +12,10 @@ controlled values here.
 from __future__ import annotations
 
 import pytest
-from coverage_lanes import WatchdogValueError, coverage_jobs_of, watchdog_of
+from coverage_lanes import coverage_jobs_of, watchdog_of
+from lane_fields import WatchdogValueError
 from nextest_budgets import (
     global_timeout,
-    grace_period,
     largest_test_allowance,
     termination_allowance,
 )
@@ -24,6 +24,8 @@ from nextest_durations import (
 )
 from timeout_budgets import (
     CEILING_MARGIN_SECONDS,
+    NEXTEST_DEFAULT_GRACE_PERIOD_SECONDS,
+    TERMINATION_SAFETY_MARGIN_SECONDS,
     required_ceiling,
 )
 
@@ -79,9 +81,10 @@ def document(*tables: str, profile: str = "default") -> str:
             document(
                 'slow-timeout = { period = "30s", terminate-after = 2, '
                 'grace-period = "5s" }',
-                'slow-timeout = { period = "60s", terminate-after = 1 }',
+                'slow-timeout = { period = "60s", terminate-after = 3 }',
+                'slow-timeout = { period = "30s", terminate-after = 1 }',
             ),
-            60.0,
+            180.0,
             id="the-largest-of-several",
         ),
     ],
@@ -164,9 +167,9 @@ def test_the_termination_allowance_adds_its_two_terms() -> None:
         "raising the grace period must raise the allowance with it"
     )
     unset = document('slow-timeout = { period = "30s", terminate-after = 1 }')
-    assert termination_allowance(unset) == pytest.approx(grace_period(unset) + 60.0), (
-        "with no grace period named, nextest's default is the first term"
-    )
+    assert termination_allowance(unset) == pytest.approx(
+        NEXTEST_DEFAULT_GRACE_PERIOD_SECONDS + TERMINATION_SAFETY_MARGIN_SECONDS
+    ), "with no grace period named, nextest's default is the first term"
 
 
 def test_the_whole_run_budget_is_read_only_at_the_root() -> None:
@@ -180,7 +183,7 @@ def test_the_whole_run_budget_is_read_only_at_the_root() -> None:
             'slow-timeout = { period = "30s", terminate-after = 1 }\n'
             'global-timeout = "60m"'
         )
-    ) == pytest.approx(3600.0)
+    ) == pytest.approx(3600.0), "a profile's own global-timeout is the whole-run budget"
     assert (
         global_timeout(
             document(
@@ -195,7 +198,7 @@ def test_the_whole_run_budget_is_read_only_at_the_root() -> None:
             document('slow-timeout = { period = "60s", terminate-after = 1 }')
         )
         is None
-    )
+    ), "a profile declaring no global-timeout has no whole-run budget"
 
 
 def test_the_required_ceiling_carries_all_three_terms() -> None:
@@ -254,8 +257,11 @@ def test_a_watchdog_value_is_read_or_falls_through(
     that resolved to nothing, and treating it as a budget of zero would
     report an unbounded lane as the tightest one in the estate.
     """
-    document, job, step = _lane(value)
-    assert watchdog_of(document, job, step) == expected
+    workflow, job, step = _lane(value)
+    assert watchdog_of(workflow, job, step) == expected, (
+        f"a watchdog of {value!r} must read as {expected!r}; a blank value "
+        f"says nothing and the next level decides"
+    )
 
 
 @pytest.mark.parametrize(
@@ -273,9 +279,9 @@ def test_a_watchdog_value_the_action_cannot_use_is_refused(value: str) -> None:
     one, which is worse than declaring none: the guide and this contract
     would both record a watchdog that never fires.
     """
-    document, job, step = _lane(value)
+    workflow, job, step = _lane(value)
     with pytest.raises(WatchdogValueError, match=r"RUN_RUST_CARGO_WAIT_TIMEOUT"):
-        watchdog_of(document, job, step)
+        watchdog_of(workflow, job, step)
 
 
 def test_the_watchdog_is_resolved_innermost_first() -> None:
@@ -285,13 +291,21 @@ def test_the_watchdog_is_resolved_innermost_first() -> None:
     consulted only the step would find nothing and report every lane as
     inheriting the action's default, which is exactly backwards.
     """
-    document = {"env": {"RUN_RUST_CARGO_WAIT_TIMEOUT": "100"}}
+    workflow = {"env": {"RUN_RUST_CARGO_WAIT_TIMEOUT": "100"}}
     job = {"env": {"RUN_RUST_CARGO_WAIT_TIMEOUT": "200"}}
     step = {"env": {"RUN_RUST_CARGO_WAIT_TIMEOUT": "300"}}
-    assert watchdog_of(document, job, step) == pytest.approx(300.0)
-    assert watchdog_of(document, job, {}) == pytest.approx(200.0)
-    assert watchdog_of(document, {}, {}) == pytest.approx(100.0)
-    assert watchdog_of({}, {}, {}) is None
+    assert watchdog_of(workflow, job, step) == pytest.approx(300.0), (
+        "the step's own value must win over the job's and the workflow's"
+    )
+    assert watchdog_of(workflow, job, {}) == pytest.approx(200.0), (
+        "with no value on the step, the job's decides"
+    )
+    assert watchdog_of(workflow, {}, {}) == pytest.approx(100.0), (
+        "with no value on the step or the job, the workflow's decides"
+    )
+    assert watchdog_of({}, {}, {}) is None, (
+        "with no value at any level the lane inherits the action's default"
+    )
 
 
 def test_a_synthetic_workflow_is_read_as_one_lane_per_job() -> None:
@@ -317,9 +331,13 @@ def test_a_synthetic_workflow_is_read_as_one_lane_per_job() -> None:
     jobs = coverage_jobs_of(documents)
     assert [(job.workflow, job.job, job.steps) for job in jobs] == [
         ("synthetic.yml", "twice", 2)
-    ]
-    assert jobs[0].watchdogs == (1800.0, 1800.0)
-    assert jobs[0].job_timeout == pytest.approx(5400.0)
+    ], "only the job invoking the coverage action is a lane, and it runs two steps"
+    assert jobs[0].watchdogs == (1800.0, 1800.0), (
+        "each coverage step carries its own watchdog, and the job must contain both"
+    )
+    assert jobs[0].job_timeout == pytest.approx(5400.0), (
+        "timeout-minutes is read as minutes and reported in seconds"
+    )
 
 
 def test_a_commented_out_entry_is_not_configuration() -> None:
@@ -362,8 +380,12 @@ def test_a_filter_naming_a_timeout_key_is_not_a_budget() -> None:
         "filter = 'binary(global_timeout_probe) | binary(grace_period_probe)'\n"
         'slow-timeout = { period = "300s", terminate-after = 1 }',
     )
-    assert largest_test_allowance(config_text) == pytest.approx(300.0)
-    assert global_timeout(config_text) == pytest.approx(3600.0)
-    assert termination_allowance(config_text) == pytest.approx(
-        grace_period(config_text) + 60.0
+    assert largest_test_allowance(config_text) == pytest.approx(300.0), (
+        "the override's own slow-timeout is the largest per-test allowance"
     )
+    assert global_timeout(config_text) == pytest.approx(3600.0), (
+        "a binary named after a timeout key is not a budget"
+    )
+    assert termination_allowance(config_text) == pytest.approx(
+        NEXTEST_DEFAULT_GRACE_PERIOD_SECONDS + TERMINATION_SAFETY_MARGIN_SECONDS
+    ), "an override's filter text was read as a grace period"

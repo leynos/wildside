@@ -1837,12 +1837,12 @@ they must be ordered lives in the `generate-coverage` README in
 [`leynos/shared-actions`][shared-actions-coverage]. All four are set here, and
 until this was written the outermost one was set wrong.
 
-| Tier                     | What it bounds                     | Where it is set                               | Current value                                         |
-| ------------------------ | ---------------------------------- | --------------------------------------------- | ----------------------------------------------------- |
-| Per-test `slow-timeout`  | one test                           | `.config/nextest.toml`                        | 60 s default; 300 s for the database-backed overrides |
-| nextest `global-timeout` | the whole test run                 | `.config/nextest.toml`                        | 3,600 s (60 m)                                        |
-| Cargo watchdog           | one `cargo` invocation, wall clock | `RUN_RUST_CARGO_WAIT_TIMEOUT` at job level    | 5,400 s (90 m)                                        |
-| Job `timeout-minutes`    | the whole job                      | job level in `ci.yml` and `coverage-main.yml` | 120 m                                                 |
+| Tier                     | What it bounds                     | Where it is set                                                                                           | Current value                                         |
+| ------------------------ | ---------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Per-test `slow-timeout`  | one test                           | `.config/nextest.toml`                                                                                    | 60 s default; 300 s for the database-backed overrides |
+| nextest `global-timeout` | the whole test run                 | `.config/nextest.toml`                                                                                    | 3,600 s (60 m)                                        |
+| Cargo watchdog           | one `cargo` invocation, wall clock | `RUN_RUST_CARGO_WAIT_TIMEOUT`, read from the step, then the job, then the workflow; set at job level here | 5,400 s (90 m)                                        |
+| Job `timeout-minutes`    | the whole job                      | job level in `ci.yml` and `coverage-main.yml`                                                             | 120 m                                                 |
 
 *Table: the timers that can end a run, innermost first.*
 
@@ -1885,6 +1885,9 @@ several runs rather than one:
 *Table: measured coverage-step and whole-job durations, read across ten
 successful runs of each workflow.*
 
+None of those runs was genuinely cold. One run is the coldest seen so far, not
+a measurement of the cold case.
+
 The widest gap is 522 s, so the contract allows 15 minutes. The requirement is
 therefore 120 minutes: the 5,400 s watchdog, 900 s of measured work outside it,
 and a 900 s margin. Both ceilings are 120 minutes, so each equals its
@@ -1906,9 +1909,6 @@ not changes worth measuring, and pushes, which the trunk lane covers. A lane
 gaining, losing or changing a condition has to change this section with it, and
 a lane appearing without an entry here fails the contract too.
 
-None of those runs was genuinely cold. One run is the coldest seen so far, not
-a measurement of the cold case.
-
 ### The contract
 
 `tests/workflow_contracts/timeout_ordering_test.py` asserts all four tiers by
@@ -1916,9 +1916,11 @@ value over every job invoking the coverage action, in both the `.yml` and
 `.yaml` extensions. It resolves the watchdog from the step, then the job, then
 the workflow, as GitHub does, and it fails on a coverage-invoking job that
 declares no ceiling at all. The readings it rests on live in
-`timeout_budgets.py`, `nextest_budgets.py`, `nextest_durations.py` and
-`coverage_lanes.py`, and are exercised on their own in
-`timeout_reading_test.py`.
+`timeout_budgets.py`, `nextest_budgets.py`, `nextest_durations.py`,
+`coverage_lanes.py` and `lane_fields.py`, and are exercised on their own in
+`timeout_reading_test.py`. `lane_fields.py` is where every field a workflow
+declares is narrowed, so nothing above it reads a value the YAML loader has
+not been judged on.
 
 Those readings are driven with controlled configurations rather than this
 repository's files, because these files cannot exercise them. Every
