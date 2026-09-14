@@ -184,6 +184,41 @@ def _bun_packages() -> dict[str, list[object]]:
     return json.loads(_TRAILING_COMMA.sub(r"\1", text))["packages"]
 
 
+def _specifier_of(entry: list[object]) -> str | None:
+    """Return an entry's `name@version` specifier, if it carries one."""
+    specifier = entry[0]
+    return specifier if isinstance(specifier, str) else None
+
+
+def _parse_specifier(specifier: str) -> tuple[str, tuple[int, int, int] | None]:
+    """Split a specifier into its package name and numeric version.
+
+    A prerelease or other non-numeric version yields `None` for the version,
+    since every comparison here is against a release boundary.
+
+    Examples
+    --------
+        >>> _parse_specifier("@puppeteer/browsers@2.6.1")
+        ('@puppeteer/browsers', (2, 6, 1))
+    """
+    match = _SPECIFIER.match(specifier)
+    if match is None:
+        return specifier, None
+    version = (int(match["major"]), int(match["minor"]), int(match["patch"]))
+    return match["name"], version
+
+
+def _declared_dependencies(entry: list[object]) -> set[str]:
+    """Return every package name an entry declares as a dependency."""
+    metadata = next((item for item in entry if isinstance(item, dict)), {})
+    declared: set[str] = set()
+    for field in _DEPENDENCY_FIELDS:
+        edges = metadata.get(field)
+        if isinstance(edges, dict):
+            declared.update(key for key in edges if isinstance(key, str))
+    return declared
+
+
 def _resolved_versions(package: str) -> list[tuple[int, int, int]]:
     """Return every version of `package` Bun's lockfile resolves.
 
@@ -198,13 +233,12 @@ def _resolved_versions(package: str) -> list[tuple[int, int, int]]:
     """
     versions = []
     for entry in _bun_packages().values():
-        specifier = entry[0]
-        if not isinstance(specifier, str):
+        specifier = _specifier_of(entry)
+        if specifier is None:
             continue
-        match = _SPECIFIER.match(specifier)
-        if match is None or match["name"] != package:
-            continue
-        versions.append((int(match["major"]), int(match["minor"]), int(match["patch"])))
+        name, version = _parse_specifier(specifier)
+        if name == package and version is not None:
+            versions.append(version)
     return versions
 
 
@@ -222,14 +256,9 @@ def _dependents_of(package: str) -> set[str]:
     """
     dependents = set()
     for entry in _bun_packages().values():
-        specifier = entry[0]
-        if not isinstance(specifier, str):
-            continue
-        metadata = next((item for item in entry if isinstance(item, dict)), {})
-        edges = (metadata.get(field) for field in _DEPENDENCY_FIELDS)
-        if any(isinstance(edge, dict) and package in edge for edge in edges):
-            match = _SPECIFIER.match(specifier)
-            dependents.add(specifier if match is None else match["name"])
+        specifier = _specifier_of(entry)
+        if specifier is not None and package in _declared_dependencies(entry):
+            dependents.add(_parse_specifier(specifier)[0])
     return dependents
 
 
