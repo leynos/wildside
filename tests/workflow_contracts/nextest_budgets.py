@@ -21,6 +21,7 @@ from itertools import starmap
 from nextest_durations import (
     NextestConfigurationError,
     UnboundedTestError,
+    periods,
     seconds,
 )
 from timeout_budgets import (
@@ -146,7 +147,8 @@ def _table_budget(path: str, table: dict[str, object]) -> float:
     Raises
     ------
     NextestConfigurationError
-        If the table names no ``period``.
+        If the table names no ``period``, or its ``terminate-after`` is
+        not a positive whole number of warning periods.
     UnboundedTestError
         If the table names no ``terminate-after``, so nextest marks the
         test slow and lets it run on.
@@ -163,7 +165,7 @@ def _table_budget(path: str, table: dict[str, object]) -> float:
             f"compare against"
         )
         raise UnboundedTestError(message, field="terminate-after", value=table)
-    return seconds(period) * float(str(multiplier))
+    return seconds(period) * periods(multiplier)
 
 
 def _bare_budget(path: str, period: str) -> typ.NoReturn:
