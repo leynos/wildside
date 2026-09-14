@@ -1427,6 +1427,28 @@ is scoped. An advisory that both `pnpm audit` and `bun audit` report therefore
 needs `"package": "frontend-pwa"`; record the vulnerable package in the optional
 `introducedBy` field instead.
 
+An entry's `expiresAt` date forces a decision on a date, but it cannot say
+whether the reasoning still holds. That half lives in
+`tests/workflow_contracts/audit_exception_test.py`, which runs in
+`make test` rather than in `make audit-node`, so an exception that has
+quietly become indefensible fails the test suite instead of waiting for its
+expiry:
+
+- Every entry's `reason` must name an issue, bare (`#471`) or as a full
+  URL. An exception nobody can close is a permanent one.
+- Each argument-from-reachability exception fails once its reachability
+  argument dies. The `extract-zip` entries hold only while `bun.lock` still
+  resolves `extract-zip`, which stops being true the moment Puppeteer moves
+  past 25.7 and `@puppeteer/browsers` 3.x swaps in `modern-tar`. The
+  Picomatch entries hold only while `bun.lock` still resolves a version
+  inside an advisory's range, which stops being true once Bun honours
+  ranged `resolutions` keys or the last Picomatch 2 consumer leaves.
+
+Failing there is the intended outcome of the fix landing: delete the entry
+and close its issue. When adding an exception, add the matching invariant
+and prove it by mutation, or the test records an intention rather than a
+condition.
+
 The script `scripts/check-overrides-policy.mjs` verifies that `pnpm.overrides`
 is present and that top-level overrides are absent. It is run automatically in
 Continuous Integration (CI) after the lockfile step and before dependency
