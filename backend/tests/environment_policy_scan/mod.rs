@@ -40,7 +40,7 @@ pub(crate) type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 /// disarms the guard alone rather than the policy.
 ///
 /// Extend this list if either lint's group changes.
-const PROTECTED_LINTS: [&str; 7] = [
+pub(crate) const PROTECTED_LINTS: [&str; 7] = [
     "clippy::disallowed_methods",
     "clippy::style",
     "clippy::all",
@@ -133,17 +133,21 @@ fn render_path(path: &Path) -> String {
 ///
 /// Key-value arguments such as `reason = "..."` are not lint names and are
 /// skipped, so `allow(clippy::all, reason = "x")` yields `["clippy::all"]`.
-fn allowed_lints(list: &MetaList) -> Vec<String> {
-    let Ok(nested) = list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) else {
-        return Vec::new();
-    };
-    nested
+///
+/// A failure to parse the arguments is returned rather than swallowed. The
+/// attribute reached here came from a file the compiler accepted, so an
+/// argument list this cannot read is an anomaly, and reporting it as "no
+/// lints suppressed" would be the quietest possible bypass. The macro-body
+/// pass has its own rule, because a metavariable is not an anomaly there.
+fn allowed_lints(list: &MetaList) -> TestResult<Vec<String>> {
+    let nested = list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
+    Ok(nested
         .iter()
         .filter_map(|meta| match meta {
             Meta::Path(path) => Some(render_path(path)),
             Meta::List(_) | Meta::NameValue(_) => None,
         })
-        .collect()
+        .collect())
 }
 
 /// Whether an attribute is written `#![...]` rather than `#[...]`.
@@ -166,15 +170,13 @@ enum Scope {
 /// `["clippy::style"]`. The scope of the outermost attribute is carried in, so
 /// `#![cfg_attr(all(), expect(clippy::all))]` is judged as the crate-scoped
 /// expectation it becomes.
-fn suppressed_by_cfg_attr(list: &MetaList, scope: Scope) -> Vec<String> {
-    let Ok(nested) = list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) else {
-        return Vec::new();
-    };
-    nested
-        .iter()
-        .skip(1)
-        .flat_map(|meta| lints_from_meta(meta, scope))
-        .collect()
+fn suppressed_by_cfg_attr(list: &MetaList, scope: Scope) -> TestResult<Vec<String>> {
+    let nested = list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
+    let mut lints = Vec::new();
+    for meta in nested.iter().skip(1) {
+        lints.extend(lints_from_meta(meta, scope)?);
+    }
+    Ok(lints)
 }
 
 /// Return the lint names one attribute meta suppresses.
@@ -191,20 +193,20 @@ fn suppressed_by_cfg_attr(list: &MetaList, scope: Scope) -> Vec<String> {
 /// calls and raised no `unfulfilled_lint_expectations`, because one call
 /// fulfils the expectation for the whole crate. That is a silent, permanent
 /// suppression wearing the sanctioned form's clothes, so it is an offence.
-fn lints_from_meta(meta: &Meta, scope: Scope) -> Vec<String> {
+fn lints_from_meta(meta: &Meta, scope: Scope) -> TestResult<Vec<String>> {
     let Meta::List(list) = meta else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     match render_path(&list.path).as_str() {
         "allow" => allowed_lints(list),
         "expect" if scope == Scope::Inner => allowed_lints(list),
         "cfg_attr" => suppressed_by_cfg_attr(list, scope),
-        _ => Vec::new(),
+        _ => Ok(Vec::new()),
     }
 }
 
 /// Return the lint names one attribute suppresses.
-fn suppressed_by(attribute: &Attribute) -> Vec<String> {
+fn suppressed_by(attribute: &Attribute) -> TestResult<Vec<String>> {
     let scope = match attribute.style {
         AttrStyle::Inner(_) => Scope::Inner,
         AttrStyle::Outer => Scope::Outer,
@@ -248,6 +250,14 @@ fn suppressed_in_tokens(tokens: TokenStream) -> Vec<(String, String)> {
 ///
 /// `index` addresses the `#`. What follows is an optional `!`, which makes the
 /// attribute inner, and then the bracketed meta.
+///
+/// A shape here that does not parse is not an anomaly, unlike one in the
+/// syntax-tree pass. A macro arm legitimately writes `#[$attribute]` or
+/// `#[allow($lint)]`, whose metavariables are not a `Meta` and never will be
+/// until the macro is expanded. Reporting those would make every
+/// code-generating macro a finding, and a contract that reports false
+/// positives gets switched off. They are therefore not suppressions this scan
+/// can judge, and the negative case is covered by a regression test.
 fn attribute_at(trees: &[TokenTree], index: usize) -> Vec<(String, String)> {
     let (scope, cursor) = scope_after_hash(trees, index);
     let Some(group) = bracketed_group(trees, cursor) else {
@@ -256,10 +266,13 @@ fn attribute_at(trees: &[TokenTree], index: usize) -> Vec<(String, String)> {
     let Ok(meta) = syn::parse2::<Meta>(group.stream()) else {
         return Vec::new();
     };
+    let Ok(lints) = lints_from_meta(&meta, scope) else {
+        return Vec::new();
+    };
 
     let bang = if scope == Scope::Inner { "!" } else { "" };
     let rendered = format!("#{bang}[{}] (in a macro body)", group.stream());
-    lints_from_meta(&meta, scope)
+    lints
         .into_iter()
         .map(|lint| (lint, rendered.clone()))
         .collect()
@@ -303,18 +316,22 @@ pub(crate) fn suppressed_lints(contents: &str) -> TestResult<Vec<(String, String
     let mut collector = AttributeCollector::default();
     collector.visit_file(&parsed);
 
-    let from_attributes = collector.attributes.iter().flat_map(|attribute| {
-        suppressed_by(attribute)
+    let mut found = Vec::new();
+    for attribute in &collector.attributes {
+        let rendered = render_attribute(attribute);
+        found.extend(
+            suppressed_by(attribute)?
+                .into_iter()
+                .map(|lint| (lint, rendered.clone())),
+        );
+    }
+    found.extend(
+        collector
+            .macro_tokens
             .into_iter()
-            .map(|lint| (lint, render_attribute(attribute)))
-    });
-    let from_macros = collector
-        .macro_tokens
-        .into_iter()
-        .flat_map(suppressed_in_tokens);
+            .flat_map(suppressed_in_tokens),
+    );
 
-    Ok(from_attributes
-        .chain(from_macros)
-        .filter(|(lint, _)| PROTECTED_LINTS.contains(&lint.as_str()))
-        .collect())
+    found.retain(|(lint, _)| PROTECTED_LINTS.contains(&lint.as_str()));
+    Ok(found)
 }
