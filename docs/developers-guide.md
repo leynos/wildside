@@ -1429,25 +1429,34 @@ needs `"package": "frontend-pwa"`; record the vulnerable package in the optional
 
 An entry's `expiresAt` date forces a decision on a date, but it cannot say
 whether the reasoning still holds. That half lives in
-`tests/workflow_contracts/audit_exception_test.py`, which runs in
-`make test` rather than in `make audit-node`, so an exception that has
-quietly become indefensible fails the test suite instead of waiting for its
-expiry:
+`tests/workflow_contracts/audit_exception_test.py`, which runs in `make test`
+rather than in `make audit-node`, so an exception that has quietly become
+indefensible fails the test suite instead of waiting for its expiry:
 
 - Every entry's `reason` must name an issue, bare (`#471`) or as a full
   URL. An exception nobody can close is a permanent one.
+- Every entry's identifier must be registered against an invariant below. A
+  tracking issue says who decides; an invariant says what settles it, and an
+  entry with only the former silences a Bun advisory repository-wide with
+  nothing in the gates watching for the day its argument lapses.
 - Each argument-from-reachability exception fails once its reachability
   argument dies. The `extract-zip` entries hold only while `bun.lock` still
-  resolves `extract-zip`, which stops being true the moment Puppeteer moves
-  past 25.7 and `@puppeteer/browsers` 3.x swaps in `modern-tar`. The
-  Picomatch entries hold only while `bun.lock` still resolves a version
-  inside an advisory's range, which stops being true once Bun honours
-  ranged `resolutions` keys or the last Picomatch 2 consumer leaves.
+  resolves `extract-zip` and `@puppeteer/browsers` is still its only parent;
+  both stop being true on the upgrade to Puppeteer 25.7 or later, where
+  `@puppeteer/browsers` 3.x swaps in `modern-tar`. A second consumer would end
+  the argument too, because an entry ignores the advisory repository-wide
+  rather than along the path its reason describes. The Picomatch entries hold
+  only while `bun.lock` still resolves a version inside an advisory's range,
+  which stops being true once Bun honours ranged `resolutions` keys or the last
+  Picomatch 2 consumer leaves.
+- An exception taken out against a patched release fails once the patch is
+  reachable. The Style Dictionary entry holds only while `bun.lock` resolves a
+  release below 5.4.4, the version whose glob 13 requirement collides with the
+  repository-wide glob 11 resolution.
 
-Failing there is the intended outcome of the fix landing: delete the entry
-and close its issue. When adding an exception, add the matching invariant
-and prove it by mutation, or the test records an intention rather than a
-condition.
+Failing there is the intended outcome of the fix landing: delete the entry and
+close its issue. When adding an exception, add the matching invariant and prove
+it by mutation, or the test records an intention rather than a condition.
 
 The script `scripts/check-overrides-policy.mjs` verifies that `pnpm.overrides`
 is present and that top-level overrides are absent. It is run automatically in
