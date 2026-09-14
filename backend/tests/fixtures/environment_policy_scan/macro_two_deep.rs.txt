@@ -1,0 +1,13 @@
+macro_rules! outer {
+    () => {
+        macro_rules! inner {
+            () => {
+                mod deep {
+                    #![allow(clippy::disallowed_methods)]
+                    pub fn call() { let _ = std::env::var("A"); }
+                }
+            };
+        }
+        inner!();
+    };
+}

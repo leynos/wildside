@@ -1,0 +1,1 @@
+#![cfg_attr(all(), allow(clippy::disallowed_methods, reason = "x"))]

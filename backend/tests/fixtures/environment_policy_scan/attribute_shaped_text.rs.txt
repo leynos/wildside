@@ -1,0 +1,4 @@
+//! Never write #![allow(clippy::disallowed_methods)] in a crate root.
+const EXAMPLE: &str = "
+#![allow(warnings)]
+";
