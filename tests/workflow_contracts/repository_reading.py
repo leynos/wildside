@@ -1,0 +1,158 @@
+"""Reads the repository's own files, and nothing else.
+
+Every other module in this contract is pure: it takes text or parsed
+documents and returns budgets. The filesystem lives here, at one named
+boundary, so a file that cannot be opened or cannot be parsed fails
+where the path is still in hand rather than several frames inside a
+budget derivation, where the traceback names a key and not a file.
+
+Both failures become :class:`RepositoryReadError`, which carries the
+path. `OSError` alone says "No such file or directory" without saying
+which contract wanted it, and `yaml.YAMLError` names a line in a
+document it does not name.
+
+The readers take their path or directory as an argument. A reader that
+reached for a module-level constant would make every caller's
+filesystem access invisible at the call site, which is the thing this
+module exists to prevent.
+"""
+
+from __future__ import annotations
+
+import typing as typ
+
+import yaml
+from lane_fields import Node, mapping_of
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    from pathlib import Path
+
+#: The workflow file extensions GitHub reads. Both are searched: a
+#: coverage lane in the one this contract did not read would escape
+#: every assertion without failing anything.
+WORKFLOW_PATTERNS: typ.Final[tuple[str, ...]] = ("*.yml", "*.yaml")
+
+
+class RepositoryReadError(ValueError):
+    """Raised when a repository file cannot be read or parsed.
+
+    Attributes
+    ----------
+    path : Path
+        The file at fault, so the message names what an author has to
+        open rather than only the rule that was broken.
+    """
+
+    def __init__(self, message: str, *, path: Path) -> None:
+        """Record the failing path alongside the message.
+
+        Parameters
+        ----------
+        message : str
+            The human-readable explanation.
+        path : Path
+            The file at fault.
+        """
+        super().__init__(message)
+        self.path = path
+
+
+def read_text(path: Path) -> str:
+    """Return one repository file's text.
+
+    Parameters
+    ----------
+    path : Path
+        The file to read.
+
+    Returns
+    -------
+    str
+        The file's contents, decoded as UTF-8.
+
+    Raises
+    ------
+    RepositoryReadError
+        If the file cannot be opened, or is not valid UTF-8.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        message = f"{path}: cannot be read: {error}"
+        raise RepositoryReadError(message, path=path) from error
+
+
+def parse_workflow(text: str, path: Path) -> Node | None:
+    """Return one workflow document, or None when it declares nothing.
+
+    Parameters
+    ----------
+    text : str
+        The workflow file's text.
+    path : Path
+        The file it came from, for the message.
+
+    Returns
+    -------
+    Node or None
+        The parsed document, or None when the file is empty or its top
+        level is not a mapping.
+
+    Raises
+    ------
+    RepositoryReadError
+        If the text is not valid YAML.
+    """
+    try:
+        parsed = yaml.safe_load(text)
+    except yaml.YAMLError as error:
+        message = f"{path}: is not valid YAML: {error}"
+        raise RepositoryReadError(message, path=path) from error
+    return mapping_of(parsed)
+
+
+def workflow_documents(directory: Path) -> dict[str, Node]:
+    """Return every workflow document in one directory, keyed by name.
+
+    Parameters
+    ----------
+    directory : Path
+        The directory to read, ordinarily ``.github/workflows``.
+
+    Returns
+    -------
+    dict[str, Node]
+        File name to parsed document, in file-name order.
+
+    Raises
+    ------
+    RepositoryReadError
+        If a file cannot be read, or is not valid YAML.
+    """
+    documents: dict[str, Node] = {}
+    for path in _workflow_paths(directory):
+        parsed = parse_workflow(read_text(path), path)
+        if parsed is not None:
+            documents[path.name] = parsed
+    return documents
+
+
+def _workflow_paths(directory: Path) -> cabc.Sequence[Path]:
+    """Return every workflow file in one directory, in name order.
+
+    Parameters
+    ----------
+    directory : Path
+        The directory to search.
+
+    Returns
+    -------
+    cabc.Sequence[Path]
+        The matching paths, sorted by name so the reading is the same
+        whatever order the filesystem offers them in.
+    """
+    found: list[Path] = []
+    for pattern in WORKFLOW_PATTERNS:
+        found.extend(directory.glob(pattern))
+    return sorted(found, key=lambda path: path.name)
