@@ -243,6 +243,11 @@ def duration_field(path: str, field: str, value: object) -> str:
     ------
     NextestConfigurationError
         If the value is not a string.
+
+    Examples
+    --------
+    >>> duration_field("profile.default", "global-timeout", "60m")
+    '60m'
     """
     if not isinstance(value, str):
         message = (
