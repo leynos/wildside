@@ -32,7 +32,7 @@ def _assert_pinned_to_full_sha(uses: object, expected_path: str) -> None:
 def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
     """Assert a pull request cannot reach merge without ``command`` running.
 
-    Three things have to hold together, because each defeats the others on
+    Four things have to hold together, because each defeats the others on
     its own:
 
     1. The workflow triggers on `pull_request`. Without it nothing here runs
@@ -45,14 +45,23 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
        key **at all**. A condition skips the gate; `continue-on-error` runs
        it and discards the verdict. Both leave a green pull request that the
        gate never actually held.
+    4. Nothing wraps or relocates the script: no `shell` and no
+       `working-directory`, on the step itself or in a `defaults.run`
+       mapping at job or workflow level. A `shell` value is a template the
+       command is substituted into, so `bash -c "{0}"; true` runs the gate
+       and returns success whatever it found. A `working-directory` value
+       selects which Makefile the command reaches, so the contract would
+       stop being about the repository-root gate.
 
-    The third is asserted on the keys' presence rather than on their values
-    on purpose. A condition need not be spelled `false` to skip the gate: an
-    ordinary looking `github.event_name == 'push'` skips it on exactly the
-    event this contract exists to cover. Enumerating falsy spellings also
-    invites a subtler error, since YAML parses `false` to a boolean whose
-    string form is `False`, so a test comparing against `"false"` passes its
-    own mutation.
+    The third and fourth are asserted on the keys' presence rather than on
+    their values on purpose. A condition need not be spelled `false` to skip
+    the gate: an ordinary looking `github.event_name == 'push'` skips it on
+    exactly the event this contract exists to cover. Enumerating falsy
+    spellings also invites a subtler error, since YAML parses `false` to a
+    boolean whose string form is `False`, so a test comparing against
+    `"false"` passes its own mutation. The same holds for a shell template:
+    the safe spellings cannot be enumerated, so the reviewed workflow simply
+    declares none.
     """
     workflow = _load_workflow()
     assert "pull_request" in workflow["triggers"], (
@@ -60,7 +69,10 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
         "on the event it exists to gate"
     )
 
+    _assert_no_run_defaults(workflow["defaults"], WORKFLOW_LABEL)
+
     job = docs.workflow_job(workflow, job_name, WORKFLOW_LABEL)
+    _assert_no_run_defaults(job.get("defaults"), f"the {job_name} job")
     assert "if" not in job, (
         f"the {job_name} job must carry no condition; a skipped job runs no "
         "steps and leaves every step-level assertion vacuous"
@@ -86,6 +98,46 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
         f"the {command!r} step must not continue on error; running the gate "
         "and discarding its verdict is the same as not running it"
     )
+    _assert_no_run_wrapper(invocations[0], f"the {command!r} step")
+
+
+#: The two `run` keys that change what a command means rather than what it
+#: says, each with what it lets past the gate. `shell` is a template the
+#: command is substituted into, so `bash -c "{0}"; true` runs the gate and
+#: reports success whatever it found. `working-directory` chooses which
+#: Makefile the command reaches.
+_RUN_WRAPPER_KEYS = {
+    "shell": (
+        "a shell template runs the gate and can return success whatever its verdict"
+    ),
+    "working-directory": (
+        "a working directory can point the command at a different Makefile"
+    ),
+}
+
+
+def _assert_no_run_wrapper(owner: dict[str, docs.JsonValue], description: str) -> None:
+    """Assert ``owner`` neither wraps a gate's script nor relocates it."""
+    for key, consequence in _RUN_WRAPPER_KEYS.items():
+        assert key not in owner, (
+            f"{description} must carry no {key!r} key at all; {consequence}"
+        )
+
+
+def _assert_no_run_defaults(defaults: docs.JsonValue, description: str) -> None:
+    """Assert a `defaults` mapping imposes no shell or working directory.
+
+    A missing `defaults`, and a `defaults` that declares no `run`, both leave
+    nothing to assert. Anything else is read as a mapping, so a `defaults`
+    that is not one fails at the boundary rather than being skipped.
+    """
+    if defaults is None:
+        return
+    label = f"{description} 'defaults'"
+    run = docs.as_mapping(defaults, label).get("run")
+    if run is None:
+        return
+    _assert_no_run_wrapper(docs.as_mapping(run, f"{label}.run"), f"{label}.run")
 
 
 def _load_workflow() -> docs.Workflow:
