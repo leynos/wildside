@@ -801,10 +801,18 @@ lint, so that is what the scan judges, and only when the lint is a protected
 one, which leaves ordinary attribute-forwarding macros untouched. And
 `include!` makes rustc parse its target as Rust whatever the extension, so an
 `allow` inside an included `.rs.txt` takes effect unseen. An `include!` is
-therefore a finding unless its target is a string literal ending in `.rs`.
-Every `include!` here names `support/entrypoint.rs` literally, and
-`include_str!` and `include_bytes!` are untouched, since they embed a file as
-data rather than as source.
+therefore a finding unless its target is a single string literal naming a file
+the scan already reads. Two details make that test mean what it says. The
+literal's decoded value is what is judged, not how it is written, so
+`r"support/entrypoint.rs"` and `"support/entrypoint\x2Ers"` are the same
+target and neither is a finding. And its extension is compared through the
+same `SOURCE_EXTENSION` constant the workspace traversal selects sources with,
+rather than by matching the text `.rs`, because those two disagree on
+`include!(".rs")`: the text ends with `.rs`, but a bare extension is a file
+stem with no extension at all, so the traversal would never collect it and the
+included source would go unread. Every `include!` here names
+`support/entrypoint.rs` literally, and `include_str!` and `include_bytes!` are
+untouched, since they embed a file as data rather than as source.
 
 The scan lives in four files. `environment_policy_source_scan.rs` holds the
 measurements, the mutation record and the three tests that read the
