@@ -151,7 +151,7 @@ PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
 	cuprum==$(CUPRUM_VERSION) cmd-mox==$(CMD_MOX_VERSION)
 
 # Place one consolidated PHONY declaration near the top of the file
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down
+.PHONY: all build clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
 .PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
@@ -165,6 +165,9 @@ workspace-sync:
 	./scripts/sync_workspace_members.py
 
 all: check-fmt lint test spelling
+
+build: workspace-sync fe-build
+	cargo build --workspace --all-targets
 
 clean:
 	cargo clean --manifest-path backend/Cargo.toml
