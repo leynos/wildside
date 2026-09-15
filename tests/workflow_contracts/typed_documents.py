@@ -75,10 +75,17 @@ class PackageManifest(typ.TypedDict):
 
 
 class Workflow(typ.TypedDict):
-    """A GitHub Actions workflow reduced to the parts contracts assert on."""
+    """A GitHub Actions workflow reduced to the parts contracts assert on.
+
+    `defaults` is carried even though most workflows omit it, because a
+    workflow-level `defaults.run` reaches every `run` step in every job. A
+    contract that read only the job and the step would miss a shell template
+    or a working directory imposed from the top of the file.
+    """
 
     triggers: dict[str, JsonValue]
     jobs: dict[str, JsonValue]
+    defaults: JsonValue
 
 
 class DocumentShapeError(TypeError):
@@ -241,6 +248,7 @@ def load_workflow(path: Path, label: str) -> Workflow:
     return Workflow(
         triggers=as_mapping(field(document, "on", label), f"{label} triggers"),
         jobs=as_mapping(field(document, "jobs", label), f"{label} jobs"),
+        defaults=document.get("defaults"),
     )
 
 
