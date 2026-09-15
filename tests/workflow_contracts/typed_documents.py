@@ -81,6 +81,21 @@ class Workflow(typ.TypedDict):
     workflow-level `defaults.run` reaches every `run` step in every job. A
     contract that read only the job and the step would miss a shell template
     or a working directory imposed from the top of the file.
+
+    Attributes
+    ----------
+    triggers : dict[str, JsonValue]
+        The workflow's `on` mapping, with the key restored to its source
+        spelling.
+    jobs : dict[str, JsonValue]
+        The workflow's `jobs` mapping, one entry per job.
+    defaults : JsonValue
+        The workflow's `defaults` value, or None when it declares none.
+        It is deliberately not narrowed here: a contract asserts on the
+        absence of `shell` and `working-directory` under it, and a parser
+        that closed the shape would answer that about itself rather than
+        about the workflow. `None` therefore means the key is absent, and
+        a `defaults` that is not a mapping fails where it is read.
     """
 
     triggers: dict[str, JsonValue]
@@ -243,7 +258,36 @@ def load_typedoc_config(path: Path, label: str) -> TypeDocConfig:
 
 
 def load_workflow(path: Path, label: str) -> Workflow:
-    """Return a workflow's triggers and jobs as checked mappings."""
+    """Return a workflow's triggers, jobs and defaults as checked values.
+
+    `on` and `jobs` are required, and a workflow missing either fails with
+    `label` naming the file. `defaults` is optional, so an absent key is
+    returned as None rather than raised on.
+
+    Parameters
+    ----------
+    path : Path
+        The workflow file to read.
+    label : str
+        The name the failure messages call the file.
+
+    Returns
+    -------
+    Workflow
+        The triggers, the jobs, and the `defaults` value or None.
+
+    Examples
+    --------
+    The example reads a file, so it is shown rather than run.
+
+    >>> workflow = load_workflow(  # doctest: +SKIP
+    ...     Path(".github/workflows/ci.yml"), "ci.yml"
+    ... )
+    >>> sorted(workflow)  # doctest: +SKIP
+    ['defaults', 'jobs', 'triggers']
+    >>> workflow["defaults"] is None  # doctest: +SKIP
+    True
+    """
     document = load_yaml_document(path, label)
     return Workflow(
         triggers=as_mapping(field(document, "on", label), f"{label} triggers"),
