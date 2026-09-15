@@ -1,15 +1,17 @@
-"""Contract tests for pull-request coverage enforcement in CI."""
+"""Contract tests for pull-request quality enforcement in CI."""
 
 from __future__ import annotations
 
 import re
-import typing as typ
 from pathlib import Path
 
 import pytest
-import yaml
+import typed_documents as docs
 
-WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
+WORKFLOW_LABEL = "ci.yml"
+WORKFLOW_PATH = (
+    Path(__file__).resolve().parents[2] / ".github" / "workflows" / WORKFLOW_LABEL
+)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -30,7 +32,7 @@ def _assert_pinned_to_full_sha(uses: object, expected_path: str) -> None:
 def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
     """Assert a pull request cannot reach merge without ``command`` running.
 
-    Three things have to hold together, because each defeats the others on
+    Four things have to hold together, because each defeats the others on
     its own:
 
     1. The workflow triggers on `pull_request`. Without it nothing here runs
@@ -43,29 +45,34 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
        key **at all**. A condition skips the gate; `continue-on-error` runs
        it and discards the verdict. Both leave a green pull request that the
        gate never actually held.
+    4. Nothing wraps or relocates the script: no `shell` and no
+       `working-directory`, on the step itself or in a `defaults.run`
+       mapping at job or workflow level. A `shell` value is a template the
+       command is substituted into, so `bash -c "{0}"; true` runs the gate
+       and returns success whatever it found. A `working-directory` value
+       selects which Makefile the command reaches, so the contract would
+       stop being about the repository-root gate.
 
-    The third is asserted on the keys' presence rather than on their values
-    on purpose. A condition need not be spelled `false` to skip the gate: an
-    ordinary looking `github.event_name == 'push'` skips it on exactly the
-    event this contract exists to cover. Enumerating falsy spellings also
-    invites a subtler error, since YAML parses `false` to a boolean whose
-    string form is `False`, so a test comparing against `"false"` passes its
-    own mutation.
+    The third and fourth are asserted on the keys' presence rather than on
+    their values on purpose. A condition need not be spelled `false` to skip
+    the gate: an ordinary looking `github.event_name == 'push'` skips it on
+    exactly the event this contract exists to cover. Enumerating falsy
+    spellings also invites a subtler error, since YAML parses `false` to a
+    boolean whose string form is `False`, so a test comparing against
+    `"false"` passes its own mutation. The same holds for a shell template:
+    the safe spellings cannot be enumerated, so the reviewed workflow simply
+    declares none.
     """
-    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
-    # An unquoted `on:` key parses as the boolean True under YAML 1.1, so
-    # both spellings are accepted here rather than depending on the quoting.
-    triggers = workflow.get("on", workflow.get(True))
-    assert isinstance(triggers, dict), "the CI workflow must declare triggers"
-    assert "pull_request" in triggers, (
+    workflow = _load_workflow()
+    assert "pull_request" in workflow["triggers"], (
         "the workflow must trigger on pull_request, or this gate never runs "
         "on the event it exists to gate"
     )
 
-    jobs = workflow.get("jobs")
-    assert isinstance(jobs, dict), "the CI workflow must declare jobs"
-    job = jobs.get(job_name)
-    assert isinstance(job, dict), f"the CI workflow must declare {job_name}"
+    _assert_no_run_defaults(workflow["defaults"], WORKFLOW_LABEL)
+
+    job = docs.workflow_job(workflow, job_name, WORKFLOW_LABEL)
+    _assert_no_run_defaults(job.get("defaults"), f"the {job_name} job")
     assert "if" not in job, (
         f"the {job_name} job must carry no condition; a skipped job runs no "
         "steps and leaves every step-level assertion vacuous"
@@ -75,12 +82,10 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
         "its own failure reports success whatever its steps found"
     )
 
-    steps = typ.cast("list[dict[str, object]]", job.get("steps"))
     invocations = [
         step
-        for step in steps
-        if isinstance(step.get("run"), str)
-        and typ.cast("str", step["run"]).strip() == command
+        for step in docs.job_steps(job, f"{WORKFLOW_LABEL} job {job_name!r}")
+        if _whole_run_value(step) == command
     ]
     assert len(invocations) == 1, (
         f"expected exactly one step in {job_name} whose whole run value is "
@@ -93,21 +98,72 @@ def _assert_gate_runs_unconditionally(job_name: str, command: str) -> None:
         f"the {command!r} step must not continue on error; running the gate "
         "and discarding its verdict is the same as not running it"
     )
+    _assert_no_run_wrapper(invocations[0], f"the {command!r} step")
 
 
-def _load_steps(job_name: str = "coverage") -> list[dict[str, object]]:
+#: The two `run` keys that change what a command means rather than what it
+#: says, each with what it lets past the gate. `shell` is a template the
+#: command is substituted into, so `bash -c "{0}"; true` runs the gate and
+#: reports success whatever it found. `working-directory` chooses which
+#: Makefile the command reaches.
+_RUN_WRAPPER_KEYS = {
+    "shell": (
+        "a shell template runs the gate and can return success whatever its verdict"
+    ),
+    "working-directory": (
+        "a working directory can point the command at a different Makefile"
+    ),
+}
+
+
+def _assert_no_run_wrapper(owner: dict[str, docs.JsonValue], description: str) -> None:
+    """Assert ``owner`` neither wraps a gate's script nor relocates it."""
+    for key, consequence in _RUN_WRAPPER_KEYS.items():
+        assert key not in owner, (
+            f"{description} must carry no {key!r} key at all; {consequence}"
+        )
+
+
+def _assert_no_run_defaults(defaults: docs.JsonValue, description: str) -> None:
+    """Assert a `defaults` mapping imposes no shell or working directory.
+
+    A missing `defaults`, and a `defaults` that declares no `run`, both leave
+    nothing to assert. Anything else is read as a mapping, so a `defaults`
+    that is not one fails at the boundary rather than being skipped.
+    """
+    if defaults is None:
+        return
+    label = f"{description} 'defaults'"
+    run = docs.as_mapping(defaults, label).get("run")
+    if run is None:
+        return
+    _assert_no_run_wrapper(docs.as_mapping(run, f"{label}.run"), f"{label}.run")
+
+
+def _load_workflow() -> docs.Workflow:
+    """Return the CI workflow with its triggers and jobs shape-checked.
+
+    The boundary parser owns the YAML quirks, notably that an unquoted `on:`
+    key parses to the boolean `True` under YAML 1.1, so no contract here has
+    to know which spelling the file currently uses.
+    """
+    return docs.load_workflow(WORKFLOW_PATH, WORKFLOW_LABEL)
+
+
+def _load_steps(job_name: str = "coverage") -> list[dict[str, docs.JsonValue]]:
     """Parse and return the steps for one CI job."""
-    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
-    jobs = workflow.get("jobs")
-    assert isinstance(jobs, dict), "the CI workflow must declare jobs"
-    job = jobs.get(job_name)
-    assert isinstance(job, dict), f"the CI workflow must declare {job_name}"
-    steps = job.get("steps")
-    assert isinstance(steps, list), f"the {job_name} job must declare steps"
-    assert all(isinstance(step, dict) for step in steps), (
-        "every coverage step must be a mapping"
-    )
-    return typ.cast("list[dict[str, object]]", steps)
+    job = docs.workflow_job(_load_workflow(), job_name, WORKFLOW_LABEL)
+    return docs.job_steps(job, f"{WORKFLOW_LABEL} job {job_name!r}")
+
+
+def _whole_run_value(step: dict[str, docs.JsonValue]) -> str | None:
+    """Return a step's entire ``run`` script, stripped, when it has one.
+
+    A step without a `run` key, or with a `run` that is not a string, returns
+    `None` rather than a string that could compare equal to a gate command.
+    """
+    run = step.get("run")
+    return run.strip() if isinstance(run, str) else None
 
 
 def test_build_checkout_fetches_origin_main_history() -> None:
@@ -128,11 +184,28 @@ def test_build_checkout_fetches_origin_main_history() -> None:
     assert checkout_options.get("fetch-depth") == 0
 
 
-def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
+def _find_step(
+    steps: list[dict[str, docs.JsonValue]], name: str
+) -> dict[str, docs.JsonValue]:
     """Return the uniquely named workflow step."""
     matches = [step for step in steps if step.get("name") == name]
     assert len(matches) == 1, f"expected one {name!r} step, found {len(matches)}"
     return matches[0]
+
+
+def test_build_runs_the_typedoc_documentation_gate() -> None:
+    """Pull requests must reject undocumented JavaScript and TypeScript APIs.
+
+    The assertion looks for the gate's command rather than its step name. A
+    step name is prose: renaming it, or deleting the step while leaving a
+    similarly named neighbour, must not be able to satisfy this contract.
+    Only a step that actually invokes ``make docs-check`` does.
+
+    See `_assert_gate_runs_unconditionally` for the three things that have to
+    hold together, and for why a condition is rejected by the presence of the
+    key rather than by its value.
+    """
+    _assert_gate_runs_unconditionally("build", "make docs-check")
 
 
 def test_codescene_check_immediately_follows_coverage_generation() -> None:

@@ -22,6 +22,7 @@ All suites run through the same quality gateways:
 
 - `make check-fmt`
 - `make lint`
+- `make docs-check`
 - `make audit`
 - `make test`
 
@@ -340,6 +341,7 @@ TypeScript, tokens, and documentation gates aligned:
 make deps
 make fmt
 make lint
+make docs-check
 make audit
 make test
 ```
@@ -388,6 +390,108 @@ change is not ready to commit until the relevant Makefile gates pass.
 The repository's `rust-toolchain.toml` pins the dated nightly used by local and
 CI builds. Its minimal profile installs `rustfmt`, Clippy, and `rust-analyzer`,
 so editor analysis uses the same compiler toolchain as the repository gates.
+
+### TypeDoc documentation gate
+
+`make docs-check` is the zero-tolerance documentation gate for the repository's
+JavaScript and TypeScript surfaces. It runs the root `docs:check` package
+script and checks these workspaces in order:
+
+- `frontend-pwa/src`, excluding generated Orval clients, declaration files,
+  tests, and fixtures;
+- `packages/types/src`, excluding declaration files and generated `dist`
+  output; and
+- the JavaScript under `packages/tokens/build`, `build-utils`, and `src/utils`,
+  using `tsconfig.typedoc.json` with `allowJs` enabled and JavaScript type
+  checking disabled.
+
+Each workspace keeps its TypeDoc configuration beside its TypeScript
+configuration. The gate requires every selected public declaration to be
+documented, rejects a `{@link}` that resolves to nothing, rejects an unknown
+block tag, which is usually a misspelled one, and uses `emit: "none"` so it
+never writes documentation artefacts. Generated files must remain excluded
+rather than receiving handwritten comments that would be overwritten.
+
+Three keys decide what fails, and each catches one thing:
+
+| Key                        | What clearing it would admit                     |
+| -------------------------- | ------------------------------------------------ |
+| `validation.notDocumented` | An export with no doc comment.                   |
+| `validation.invalidLink`   | A `{@link}` naming a symbol that does not exist. |
+| `treatWarningsAsErrors`    | An unknown block tag.                            |
+
+*Table 2: The TypeDoc keys that make the gate fail, and the defect each one
+catches.*
+
+`treatValidationWarningsAsErrors` is also set, but it is subsumed by
+`treatWarningsAsErrors`, which promotes every warning rather than only the
+validation ones. It stays because it carries the intent on its own if the
+broader key is ever removed.
+
+`requiredToBeDocumented` names the declaration kinds under the gate. The
+TypeScript surfaces cover enums and their members, variables, functions,
+classes, interfaces, properties, methods, accessors, and type aliases. The
+tokens surface is JavaScript, so it omits the kinds that cannot appear there:
+enums, enum members, interfaces, and type aliases. All three configurations
+exclude private, protected, internal, and external declarations, so `@internal`
+marks something the gate should ignore rather than something to document.
+
+TypeDoc is pinned to an exact version in the root manifest and resolved to that
+same version in both `pnpm-lock.yaml` and `bun.lock`. A caret range would let a
+TypeDoc minor release change the gate's verdict without a reviewed commit.
+
+#### Running the gate locally
+
+```bash
+make deps
+make docs-check
+```
+
+`make deps` installs the workspace dependencies from the frozen lockfile;
+`make docs-check` runs the three TypeDoc configurations in sequence and stops
+at the first that reports a warning. A failing run names each undocumented
+declaration and the file it lives in, so the output is the work list. The gate
+also runs through `make all` and as an unconditional pull-request CI step, so
+undocumented declarations cannot bypass the contributor workflow.
+
+`tests/workflow_contracts/documentation_gate_test.py` pins the configuration:
+the validation object compared whole, the declaration kinds each surface
+requires, the entry points and exclusions, the exact TypeDoc pin and its
+resolution in both lockfiles, and the `docs-check` target's `deps` prerequisite.
+
+That proves the gate is configured, not that it catches anything.
+`tests/workflow_contracts/documentation_gate_behaviour_test.py` runs the real
+TypeDoc against each of the three surfaces' own configurations over a fixture,
+overriding only the entry point, the TypeScript configuration and the project
+name. All three are exercised rather than one representative, because they are
+maintained separately: one can lose a key while the others keep it.
+
+A documented fixture passes and writes no files; the three defects in the
+table each fail with a diagnostic naming them; and clearing a key admits
+exactly its own defect while the other two keep failing. That last
+part is what ties each key to a defect rather than to an expectation of one.
+
+#### Documenting an export
+
+Write a JSDoc block immediately above the declaration. The configurations set
+`commentStyle: "jsdoc"`, so only `/** ... */` blocks count; a `//` comment
+above a declaration leaves it undocumented as far as the gate is concerned.
+
+```ts
+/** Runtime schema for a user record. */
+export const UserSchema = z.object({
+  /** Branded unique identifier for the user. */
+  id: UserIdSchema,
+  /** Human-readable name; trimmed and guaranteed non-empty by the schema. */
+  displayName: z.string().trim().min(1),
+});
+```
+
+Object properties and interface members are declaration kinds in their own
+right, so each needs its own block rather than a single summary on the parent.
+One sentence that says what the declaration is for is enough; the gate checks
+for presence, not length. Where a declaration is genuinely not part of any
+public surface, mark it `@internal` instead of writing a comment nobody reads.
 
 ### Architectural patterns
 
@@ -444,6 +548,7 @@ front-end gates plus the repository-wide commit gates:
 ```bash
 make check-fmt
 make lint
+make docs-check
 make audit
 make test
 ```
