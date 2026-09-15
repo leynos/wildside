@@ -248,19 +248,19 @@ def _lane(
         pytest.param("   ", None, id="whitespace-only"),
     ],
 )
-def test_a_watchdog_value_is_read_or_falls_through(
+def test_a_watchdog_value_is_read_or_reports_nothing(
     value: object, expected: float | None
 ) -> None:
-    """A blank value says nothing, so the next level decides.
+    """A blank value is no budget, not a budget of zero.
 
     That is what a workflow writes when it interpolates an expression
-    that resolved to nothing, and treating it as a budget of zero would
-    report an unbounded lane as the tightest one in the estate.
+    that resolved to nothing, and reading it as zero would report an
+    unbounded lane as the tightest one in the estate.
     """
     workflow, job, step = _lane(value)
     assert watchdog_of(workflow, job, step) == expected, (
         f"a watchdog of {value!r} must read as {expected!r}; a blank value "
-        f"says nothing and the next level decides"
+        f"names no budget at all"
     )
 
 
@@ -289,7 +289,9 @@ def test_the_watchdog_is_resolved_innermost_first() -> None:
 
     Both workflows here set the value at job level, so a reader that
     consulted only the step would find nothing and report every lane as
-    inheriting the action's default, which is exactly backwards.
+    inheriting the action's default, which is exactly backwards. The
+    search stops at the first level declaring the variable, not the
+    first yielding a budget, because GitHub's precedence is the same.
     """
     workflow = {"env": {"RUN_RUST_CARGO_WAIT_TIMEOUT": "100"}}
     job = {"env": {"RUN_RUST_CARGO_WAIT_TIMEOUT": "200"}}
@@ -305,6 +307,11 @@ def test_the_watchdog_is_resolved_innermost_first() -> None:
     )
     assert watchdog_of({}, {}, {}) is None, (
         "with no value at any level the lane inherits the action's default"
+    )
+    blank = {"env": {"RUN_RUST_CARGO_WAIT_TIMEOUT": ""}}
+    assert watchdog_of(workflow, job, blank) is None, (
+        "GitHub gives the step's env precedence even when its value is empty, "
+        "so the action receives the blank value and not the job's budget"
     )
 
 

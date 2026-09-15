@@ -256,25 +256,25 @@ def test_the_innermost_level_that_sets_a_watchdog_wins(
     outer=BUDGETS,
     inner=BUDGETS,
 )
-def test_a_blank_level_falls_through_to_the_next_one(
-    outer: float, inner: float
-) -> None:
-    """An interpolation that resolved to nothing is not a declaration.
+def test_a_blank_level_hides_the_levels_outside_it(outer: float, inner: float) -> None:
+    """An inner `env` wins even when what it sets is nothing.
 
-    Scenario: a step declares the watchdog variable as an empty string,
-    which is what a workflow writes when an expression resolves to
-    nothing, while its job declares a real budget.
+    Scenario: a step declares the watchdog variable as whitespace, which
+    is what a workflow writes when an expression resolves to nothing,
+    while its job and the workflow each declare a real budget.
 
-    Invariant: the blank step falls through and the job's budget is the
-    one in force. Treating the blank as a declaration would report a
-    lane as unbounded when it is not, and treating it as a fault would
-    fail a lane GitHub runs happily.
+    Invariant: no budget is in force. GitHub passes the step's own value
+    to the action, blank and all, so the outer budgets never reach it.
+    Falling through to them would report a budget the action does not
+    receive, and refusing the blank outright would fail a lane GitHub
+    runs happily.
     """
     step = {"env": {WATCHDOG_VARIABLE: "  "}}
     job = _level(inner)
     document = _level(outer)
-    assert watchdog_of(document, job, step) == inner, (
-        "a blank value sets nothing, so the next level out decides"
+    assert watchdog_of(document, job, step) is None, (
+        "the step declares the variable, so its blank value is the one in "
+        "force and the outer budgets are not consulted"
     )
 
 

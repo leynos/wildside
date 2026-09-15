@@ -14,6 +14,7 @@ docstring already claimed.
 
 from __future__ import annotations
 
+import math
 import typing as typ
 
 from timeout_budgets import WATCHDOG_VARIABLE
@@ -134,10 +135,14 @@ def budget_from(raw: object) -> float | None:
     it falls through to the next one. That is what a workflow writes
     when it interpolates an expression that resolved to nothing.
 
-    Anything else that is not a positive number of seconds is refused
-    with the value in the message. The shared action reads a
+    Anything else that is not a positive, finite number of seconds is
+    refused with the value in the message. The shared action reads a
     non-positive value as no timeout at all, so a lane carrying one has
-    no third tier while appearing to declare one.
+    no third tier while appearing to declare one. ``inf`` and ``nan``
+    are refused for the same reason in a harder-to-see form: ``float``
+    accepts both spellings, ``inf`` then satisfies every ordering
+    comparison the tiers make, and ``nan`` satisfies none of them while
+    failing no ``<=`` test either.
 
     Parameters
     ----------
@@ -152,14 +157,37 @@ def budget_from(raw: object) -> float | None:
     Raises
     ------
     WatchdogValueError
-        If the value is present and non-blank but not a positive number
-        of seconds.
+        If the value is present and non-blank but not a positive, finite
+        number of seconds.
     """
     if raw is None:
         return None
     text = str(raw).strip()
     if not text:
         return None
+    return _seconds_the_action_can_use(raw, text)
+
+
+def _seconds_the_action_can_use(raw: object, text: str) -> float:
+    """Return a declared watchdog as seconds, or refuse it.
+
+    Parameters
+    ----------
+    raw : object
+        The value the workflow set, carried for the message.
+    text : str
+        That value as trimmed text, known to be non-blank.
+
+    Returns
+    -------
+    float
+        The budget in seconds.
+
+    Raises
+    ------
+    WatchdogValueError
+        If the text is not a positive, finite number of seconds.
+    """
     try:
         budget = float(text)
     except ValueError as error:
@@ -169,13 +197,12 @@ def budget_from(raw: object) -> float | None:
             f"read"
         )
         raise WatchdogValueError(message) from error
-    if budget <= 0:
-        message = (
-            f"{WATCHDOG_VARIABLE}={raw!r} is not positive, so the cargo "
-            f"invocation is unbounded while appearing to be bounded"
-        )
-        raise WatchdogValueError(message)
-    return budget
+    return _bounding_value(
+        f"{WATCHDOG_VARIABLE}={raw!r}",
+        budget,
+        WatchdogValueError,
+        "the cargo invocation is unbounded",
+    )
 
 
 def job_ceiling(job: Node) -> float | None:
@@ -194,10 +221,12 @@ def job_ceiling(job: Node) -> float | None:
     Raises
     ------
     CeilingValueError
-        If the value is present but not a positive number of minutes.
-        An unresolved expression such as ``${{ env.SOMETHING }}`` and a
-        zero or negative ceiling both leave the job unbounded while
-        appearing to declare a bound.
+        If the value is present but not a positive, finite number of
+        minutes. An unresolved expression such as ``${{ env.SOMETHING }}``
+        and a zero or negative ceiling both leave the job unbounded while
+        appearing to declare a bound. So does ``inf``, which ``float``
+        accepts and which then sits above every watchdog the tiers
+        compare it with, and ``nan``, which no comparison refuses.
     """
     raw = job.get("timeout-minutes")
     if raw is None:
@@ -210,10 +239,59 @@ def job_ceiling(job: Node) -> float | None:
             f"declares a ceiling the arithmetic cannot check"
         )
         raise CeilingValueError(message) from error
-    if minutes <= 0:
-        message = (
-            f"timeout-minutes={raw!r} is not positive, so the job runs to "
-            f"GitHub's own default while appearing to be bounded"
-        )
-        raise CeilingValueError(message)
+    _bounding_value(
+        f"timeout-minutes={raw!r}",
+        minutes,
+        CeilingValueError,
+        "the job runs to GitHub's own default",
+    )
     return minutes * 60.0
+
+
+def _bounding_value(
+    subject: object,
+    value: float,
+    fault: type[LaneValueError],
+    consequence: str,
+) -> float:
+    """Return a parsed bound, or refuse one that bounds nothing.
+
+    The two faults differ only in which exception they raise and what
+    goes unbounded, so the judgement is stated once. ``inf`` satisfies
+    every ordering comparison the tiers make and ``nan`` satisfies none
+    of them while failing no ``<=`` test either, so both pass a
+    positivity check that is all the parse leaves behind.
+
+    Parameters
+    ----------
+    subject : object
+        The key and value, rendered for the message.
+    value : float
+        The parsed bound.
+    fault : type[LaneValueError]
+        The exception this level raises.
+    consequence : str
+        What runs unbounded when the value is refused.
+
+    Returns
+    -------
+    float
+        The bound, when it is positive and finite.
+
+    Raises
+    ------
+    LaneValueError
+        Of the given type, when it is not.
+    """
+    if not math.isfinite(value):
+        message = (
+            f"{subject} is not finite, so it bounds nothing while satisfying "
+            f"every comparison the tiers make of it"
+        )
+        raise fault(message)
+    if value <= 0:
+        message = (
+            f"{subject} is not positive, so {consequence} while appearing to be bounded"
+        )
+        raise fault(message)
+    return value

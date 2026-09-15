@@ -220,3 +220,35 @@ def periods(multiplier: object) -> int:
         f"warning periods, so the per-test budget it scales cannot be read"
     )
     raise NextestConfigurationError(message, field="terminate-after", value=multiplier)
+
+
+def duration_field(path: str, field: str, value: object) -> str:
+    """Return a present duration field as the string nextest requires.
+
+    Parameters
+    ----------
+    path : str
+        The dotted path of the declaring table, for the message.
+    field : str
+        The field's name within that table.
+    value : object
+        The parsed value, known to be present.
+
+    Returns
+    -------
+    str
+        The duration string.
+
+    Raises
+    ------
+    NextestConfigurationError
+        If the value is not a string.
+    """
+    if not isinstance(value, str):
+        message = (
+            f"{path}.{field} is not a duration string: {value!r}; nextest "
+            f"refuses the configuration, so the budget it names is not the "
+            f"one the run will honour"
+        )
+        raise NextestConfigurationError(message, field=field, value=value)
+    return value
