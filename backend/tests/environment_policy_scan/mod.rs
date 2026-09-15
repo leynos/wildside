@@ -60,6 +60,14 @@ pub(crate) const PROTECTED_LINTS: [&str; 7] = [
 /// workspace member and that the policy does not claim to govern.
 pub(crate) const SOURCE_ROOTS: [&str; 3] = ["backend", "crates", "tools"];
 
+/// The extension of the sources this scan reads.
+///
+/// Shared by the traversal and by the `include!` rule so the two cannot
+/// drift. The rule's whole claim is that an accepted target is a file the
+/// traversal already collects, and two separate spellings of "is it Rust"
+/// is exactly how that claim stops being true.
+pub(crate) const SOURCE_EXTENSION: &str = "rs";
+
 /// Return the workspace root, from this crate's manifest directory.
 pub(crate) fn workspace_root() -> TestResult<PathBuf> {
     Ok(StdPath::new(env!("CARGO_MANIFEST_DIR"))
@@ -84,7 +92,10 @@ pub(crate) fn rust_sources(root: &StdPath, relative: &str) -> TestResult<Vec<(Pa
             let path = prefix.join(&name);
             if entry.file_type()?.is_dir() {
                 pending.push_back((current.open_dir(&name)?, path));
-            } else if path.extension().is_some_and(|extension| extension == "rs") {
+            } else if path
+                .extension()
+                .is_some_and(|extension| extension == SOURCE_EXTENSION)
+            {
                 let contents = current.read_to_string(&name)?;
                 sources.push((path, contents));
             }
@@ -134,8 +145,32 @@ pub(crate) fn unreadable_includes(contents: &str) -> TestResult<Vec<String>> {
 }
 
 /// Whether a macro's tokens are a string literal naming a `.rs` file.
+///
+/// Two decisions, and each closes a gap between this rule and the traversal
+/// it stands in for.
+///
+/// The tokens are parsed as one `LitStr` and judged by their decoded value,
+/// not by how they are written. `r"support/entrypoint.rs"` and
+/// `"support/entrypoint\x2Ers"` name the same file rustc will include, so a
+/// rule reading the source spelling would report a target it can perfectly
+/// well read. Parsing also supplies the strictness: `parse2` refuses a
+/// `concat!` and refuses trailing tokens, so a computed target stays a
+/// finding.
+///
+/// The extension is then compared the way [`rust_sources`] selects files,
+/// through the shared [`SOURCE_EXTENSION`], rather than with
+/// `ends_with(".rs")`. Those two disagree on exactly one input, and it is a
+/// hole: `include!(".rs")` ends with `.rs` and has no extension at all,
+/// `.rs` being the whole file stem, so the traversal would never collect it
+/// and the rule would wave it through. Comparing an `OsStr` for equality is
+/// also case-sensitive without the text match Clippy's
+/// `case_sensitive_file_extension_comparisons` rejects.
 fn names_a_rust_file(tokens: &TokenStream) -> bool {
-    syn::parse2::<LitStr>(tokens.clone()).is_ok_and(|literal| literal.value().ends_with(".rs"))
+    syn::parse2::<LitStr>(tokens.clone()).is_ok_and(|literal| {
+        StdPath::new(&literal.value())
+            .extension()
+            .is_some_and(|extension| extension == SOURCE_EXTENSION)
+    })
 }
 
 /// Return every protected lint suppressed in one source file.
