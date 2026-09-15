@@ -257,10 +257,11 @@ def _bounding_value(
     """Return a parsed bound, or refuse one that bounds nothing.
 
     The two faults differ only in which exception they raise and what
-    goes unbounded, so the judgement is stated once. ``inf`` satisfies
-    every ordering comparison the tiers make and ``nan`` satisfies none
-    of them while failing no ``<=`` test either, so both pass a
-    positivity check that is all the parse leaves behind.
+    goes unbounded, so the judgement is stated once. Both non-finite
+    values defeat the ordering, in opposite ways: ``inf`` satisfies every
+    comparison the tiers make, and ``nan`` satisfies none of them. Each
+    passes a positivity check, which is all the parse leaves behind,
+    because ``inf <= 0`` and ``nan <= 0`` are both false.
 
     Parameters
     ----------
@@ -285,8 +286,9 @@ def _bounding_value(
     """
     if not math.isfinite(value):
         message = (
-            f"{subject} is not finite, so it bounds nothing while satisfying "
-            f"every comparison the tiers make of it"
+            f"{subject} is not finite, so it bounds nothing and the tiers "
+            f"cannot order it: an infinity sits above every value they "
+            f"compare it with, and a NaN compares false against all of them"
         )
         raise fault(message)
     if value <= 0:
