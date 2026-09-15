@@ -1,0 +1,8 @@
+macro_rules! forward {
+    ($attribute:meta, $lint:path) => {
+        #[$attribute]
+        #[allow($lint)]
+        #[allow(dead_code, reason = "generated")]
+        pub fn generated() {}
+    };
+}

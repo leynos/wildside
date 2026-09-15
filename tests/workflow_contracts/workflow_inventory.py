@@ -198,7 +198,7 @@ def shell_commands(step: dict[str, typ.Any]) -> list[str]:
 
     Examples
     --------
-    >>> shell_commands({"run": "# note\\ncargo build \\\\\\n  --locked\\n"})
+    >>> shell_commands({"run": "# note\ncargo build \\\n  --locked\n"})
     ['cargo build --locked']
     """
     script = step.get("run")

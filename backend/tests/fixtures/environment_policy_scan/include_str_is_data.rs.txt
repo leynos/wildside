@@ -1,0 +1,2 @@
+const PROBE: &str = include_str!("suppressed.rs.txt");
+const BYTES: &[u8] = include_bytes!("suppressed.rs.txt");

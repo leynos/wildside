@@ -25,6 +25,38 @@ All suites run through the same quality gateways:
 - `make audit`
 - `make test`
 
+### Python docstring examples
+
+Every `>>>` example in a Python module here is executed. `make
+test-workflow-contracts` and `make test-scripts` both pass
+`--doctest-modules`, so an example that states a result the code does not
+produce fails the suite that owns it.
+
+This matters more than it sounds. Until the flag was added, all forty-three
+example lines in the repository were documentation nothing ran, and five of
+them were wrong: two claimed a double-quoted `repr` that Python has never
+produced, one continued from a `+SKIP` line and so raised `NameError`, one
+over-escaped its input until the function under demonstration returned an
+empty list, and one shelled out to `kubectl` against whatever host read it.
+An example is a claim about behaviour, and an unexecuted one is the only
+kind of claim in the repository that nothing can falsify.
+
+Thirteen examples are skipped rather than executed, each carrying an explicit
+`# doctest: +SKIP`. Skipping is for an example that would touch the world:
+reading the ignore file from disk, running `kubectl`, writing a manifest. Mark
+the whole example, not its first line, because a later line that uses a name
+the skipped line was to bind fails with `NameError` rather than being skipped
+with it.
+
+`make test-scripts` cannot simply collect `scripts`: `scripts/local_k8s.py`
+and `scripts/local_k8s/` share a name, and the `*_test.py` files beside them
+belong to other targets. It therefore names the package and each helper script
+that carries examples, in `PY_DOCTEST_PATHS`. A named list goes stale in
+silence, so `tests/workflow_contracts/doctest_collection_test.py` reads that
+variable out of the Makefile and fails if any file carrying an example lies
+outside it. Add a script with an example and the contract tells you to collect
+it.
+
 ## Workflow pins and Dependabot
 
 Dependabot owns the upgrade of GitHub Actions and reusable workflows, including
@@ -763,11 +795,66 @@ coverage steps. Nothing in `backend/tests/` needs a process-wide environment
 lock, and no nextest group exists to protect environment state.
 
 `docs/adr-002-environment-seam-taxonomy.md` records the decision and the full
-list of sanctioned roots. Two contract targets guard the mechanism:
+list of sanctioned roots. Three contract targets guard the mechanism:
 `backend/tests/environment_policy_contract.rs` asserts what the repository
-declares, and `backend/tests/environment_policy_lint.rs` runs `clippy-driver`
-over probe sources to prove those declarations actually fire. Add a probe there
-when the policy grows an entry.
+declares, `backend/tests/environment_policy_lint.rs` runs `clippy-driver` over
+probe sources to prove those declarations actually fire, and
+`backend/tests/environment_policy_source_scan.rs` parses every workspace source
+and rejects any `allow` of the policy's lint. Add a probe to the second when
+the policy grows an entry.
+
+Never suppress the policy with `allow`, in any of its forms. A crate-level
+`#![allow(clippy::disallowed_methods)]` disarms the lint for a whole crate, and
+`clippy::allow_attributes` does not fire on an inner attribute, so nothing else
+would notice. Naming the lint is not the only route: Clippy places
+`disallowed_methods` in the `style` group, so `clippy::style`, the wider
+`clippy::all`, and `warnings` each switch it off just as effectively, and any of
+them nested in a `cfg_attr` is honoured too. The source scan rejects all of
+them, wherever the attribute sits, and it protects the guard as well as the
+policy: `clippy::allow_attributes` and its companion live in the `restriction`
+group, so allowing that group would let an `allow` stand in for an `expect`
+unnoticed. Use an item-scoped `#[expect(..., reason = "...")]` at a composition
+root instead: it warns once the site no longer needs it, where `allow` stays
+silent forever.
+
+An `expect` earns that exemption only while it is item-scoped. A crate-level
+`#![expect(clippy::disallowed_methods)]` suppresses every prohibited call in
+the crate and is fulfilled by the first one, so it never warns either; the
+scan reports it. The scan also normalizes raw identifiers, since
+`#![allow(clippy::r#style)]` names the same lint, and walks macro token
+streams to any depth, since a `macro_rules!` arm expanding to a module with an
+inner `allow` is invisible to both the syntax tree and Clippy's guard.
+
+Two further routes were measured on 2026-09-14 and are closed. A
+`macro_rules!` arm writing `#[$attribute]` over a prohibited call, invoked as
+`forward!(allow(clippy::disallowed_methods))`, silences that call while
+neither half is a suppression on its own; the invocation's argument names the
+lint, so that is what the scan judges, and only when the lint is a protected
+one, which leaves ordinary attribute-forwarding macros untouched. And
+`include!` makes rustc parse its target as Rust whatever the extension, so an
+`allow` inside an included `.rs.txt` takes effect unseen. An `include!` is
+therefore a finding unless its target is a single string literal naming a file
+the scan already reads. Two details make that test mean what it says. The
+literal's decoded value is what is judged, not how it is written, so
+`r"support/entrypoint.rs"` and `"support/entrypoint\x2Ers"` are the same
+target and neither is a finding. And its extension is compared through the
+same `SOURCE_EXTENSION` constant the workspace traversal selects sources with,
+rather than by matching the text `.rs`, because those two disagree on
+`include!(".rs")`: the text ends with `.rs`, but a bare extension is a file
+stem with no extension at all, so the traversal would never collect it and the
+included source would go unread. Every `include!` here names
+`support/entrypoint.rs` literally, and `include_str!` and `include_bytes!` are
+untouched, since they embed a file as data rather than as source.
+
+The scan lives in four files. `environment_policy_source_scan.rs` holds the
+measurements, the mutation record and the three tests that read the
+workspace; `environment_policy_scan_cases.rs` holds the probe-driven cases;
+`environment_policy_scan_properties.rs` generates the attribute space and
+checks the verdict against the rule; and `backend/tests/environment_policy_scan/`
+holds the reading and the attribute judgement. The probes are fixture files
+under `backend/tests/fixtures/environment_policy_scan/`, carrying the
+`.rs.txt` suffix so the scan does not read its own counterexamples as
+workspace sources.
 
 ## Adding or changing behavioural tests
 
