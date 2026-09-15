@@ -6,8 +6,8 @@ normalizes execution failures into `LocalK8sError` for use by CLI workflows.
 Examples
 --------
 >>> from local_k8s.commands import run
->>> result = run("kubectl", ["version", "--client"])
->>> print(result.stdout)
+>>> result = run("kubectl", ["version", "--client"])  # doctest: +SKIP
+>>> print(result.stdout)  # doctest: +SKIP
 """
 
 from __future__ import annotations

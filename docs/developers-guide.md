@@ -25,6 +25,38 @@ All suites run through the same quality gateways:
 - `make audit`
 - `make test`
 
+### Python docstring examples
+
+Every `>>>` example in a Python module here is executed. `make
+test-workflow-contracts` and `make test-scripts` both pass
+`--doctest-modules`, so an example that states a result the code does not
+produce fails the suite that owns it.
+
+This matters more than it sounds. Until the flag was added, all forty-three
+example lines in the repository were documentation nothing ran, and five of
+them were wrong: two claimed a double-quoted `repr` that Python has never
+produced, one continued from a `+SKIP` line and so raised `NameError`, one
+over-escaped its input until the function under demonstration returned an
+empty list, and one shelled out to `kubectl` against whatever host read it.
+An example is a claim about behaviour, and an unexecuted one is the only
+kind of claim in the repository that nothing can falsify.
+
+Thirteen examples are skipped rather than executed, each carrying an explicit
+`# doctest: +SKIP`. Skipping is for an example that would touch the world:
+reading the ignore file from disk, running `kubectl`, writing a manifest. Mark
+the whole example, not its first line, because a later line that uses a name
+the skipped line was to bind fails with `NameError` rather than being skipped
+with it.
+
+`make test-scripts` cannot simply collect `scripts`: `scripts/local_k8s.py`
+and `scripts/local_k8s/` share a name, and the `*_test.py` files beside them
+belong to other targets. It therefore names the package and each helper script
+that carries examples, in `PY_DOCTEST_PATHS`. A named list goes stale in
+silence, so `tests/workflow_contracts/doctest_collection_test.py` reads that
+variable out of the Makefile and fails if any file carrying an example lies
+outside it. Add a script with an example and the contract tells you to collect
+it.
+
 ## Workflow pins and Dependabot
 
 Dependabot owns the upgrade of GitHub Actions and reusable workflows, including

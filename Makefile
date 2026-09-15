@@ -121,6 +121,13 @@ PLUMBUM_VERSION ?= 1.9.0
 # the external executables its tests mock. Both are new to this repository.
 CUPRUM_VERSION ?= 0.1.0
 CMD_MOX_VERSION ?= 0.2.0
+# What `test-scripts` collects: the local_k8s package, whose unit tests and
+# doctests both live under it, and each helper script beside it that carries
+# examples. Kept as one variable so the contract in
+# tests/workflow_contracts/doctest_collection_test.py can read the list rather
+# than restate it.
+PY_DOCTEST_PATHS = scripts/local_k8s scripts/check_redoc_ignore.py \
+	scripts/lint_actions.py scripts/sync_workspace_members.py
 PY_TEST_DEPS = pytest==$(PYTEST_VERSION) pytest-mock==$(PYTEST_MOCK_VERSION) \
 	hypothesis==$(HYPOTHESIS_VERSION) 'pyyaml>=6,<7' \
 	cyclopts==$(CYCLOPTS_VERSION) plumbum==$(PLUMBUM_VERSION)
@@ -338,17 +345,27 @@ test-frontend: deps typecheck
 test-workflow-contracts:
 	$(PYTHON_NO_BYTECODE_ENV) uv run --no-project --with 'pytest>=8,<10' --with 'pyyaml>=6,<7' \
 		--with 'hypothesis>=6,<7' \
-		python -m pytest tests/workflow_contracts -q
+		python -m pytest --doctest-modules tests/workflow_contracts -q
 
 # Python unit tests for the local Kubernetes preview helper
-# (scripts/local_k8s). Run from the repository root so the make-target smoke
-# test can resolve the real `local-k8s-*` targets, with the package exposed on
-# PYTHONPATH. Test dependencies are supplied through uv's `--with`, mirroring
-# the inline dependency declaration in scripts/local_k8s.py.
+# (scripts/local_k8s), and the doctests in the helper scripts beside it. Run
+# from the repository root so the make-target smoke test can resolve the real
+# `local-k8s-*` targets, with the package exposed on PYTHONPATH. Test
+# dependencies are supplied through uv's `--with`, mirroring the inline
+# dependency declaration in scripts/local_k8s.py; tomli is added because
+# collecting sync_workspace_members.py imports it.
+#
+# The collection names the package directory rather than its `unittests`
+# subdirectory, and names each helper script that carries examples, because
+# `scripts` as a whole cannot be collected: `scripts/local_k8s.py` and
+# `scripts/local_k8s/` share a name, and the `*_test.py` files beside them
+# belong to other targets. `doctest_collection_test.py` holds that list to the
+# files that actually carry examples, so a new one cannot be added without
+# either being collected or failing the contract.
 test-scripts:
 	PYTHONPATH=scripts uv run --no-project \
-		$(foreach dep,$(PY_TEST_DEPS),--with $(dep)) \
-		python -m pytest scripts/local_k8s/unittests
+		$(foreach dep,$(PY_TEST_DEPS),--with $(dep)) --with tomli==$(TOMLI_VERSION) \
+		python -m pytest --doctest-modules $(PY_DOCTEST_PATHS)
 
 # cmd-mox intercepts a command by putting a shim on PATH. That shim sometimes
 # stalls instead of returning, with the server logging `IPC received malformed

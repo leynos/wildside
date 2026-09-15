@@ -322,8 +322,17 @@ NO_PROJECT_TARGETS = (
     ("local-k8s-down", ("scripts/local_k8s.py", "down")),
     ("local-k8s-status", ("scripts/local_k8s.py", "status")),
     ("local-k8s-logs", ("scripts/local_k8s.py", "logs")),
-    ("test-workflow-contracts", ("tests/workflow_contracts",)),
-    ("test-scripts", ("scripts/local_k8s/unittests",)),
+    ("test-workflow-contracts", ("tests/workflow_contracts", "--doctest-modules")),
+    (
+        "test-scripts",
+        (
+            "scripts/local_k8s",
+            "scripts/check_redoc_ignore.py",
+            "scripts/lint_actions.py",
+            "scripts/sync_workspace_members.py",
+            "--doctest-modules",
+        ),
+    ),
 )
 
 

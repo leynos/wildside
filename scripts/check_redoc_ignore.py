@@ -18,7 +18,7 @@ def load_ignore_file_lines() -> list[str]:
     Examples
     --------
         >>> lines = load_ignore_file_lines()  # doctest: +SKIP
-        >>> isinstance(lines, list)
+        >>> isinstance(lines, list)  # doctest: +SKIP
         True
     """
     try:
@@ -67,7 +67,7 @@ def validate_review_line(line: str, line_num: int, today: dt.date) -> str | None
     --------
         >>> today = dt.date(2025, 1, 1)
         >>> validate_review_line('# review by: 2024-12-31', 8, today)
-        "line 8: review by 2024-12-31 has already passed"
+        'line 8: review by 2024-12-31 has already passed'
         >>> validate_review_line('# review by: 2025-01-02', 9, today) is None
         True
     """
@@ -94,7 +94,7 @@ def collect_problems(lines: list[str], today: dt.date) -> list[str]:
     --------
         >>> today = dt.date(2025, 1, 1)
         >>> collect_problems(['# review by: 2024-12-31'], today)
-        ["line 1: review by 2024-12-31 has already passed"]
+        ['line 1: review by 2024-12-31 has already passed']
     """
     return [
         issue
