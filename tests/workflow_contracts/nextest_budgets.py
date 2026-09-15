@@ -21,6 +21,7 @@ from itertools import starmap
 from nextest_durations import (
     NextestConfigurationError,
     UnboundedTestError,
+    duration_field,
     periods,
     seconds,
 )
@@ -293,6 +294,10 @@ def bounds_a_single_test(config_text: str, profile: str = "default") -> bool:
 def grace_period(config_text: str) -> float:
     r"""Return the longest grace period the configuration names, in seconds.
 
+    A table naming no ``grace-period`` runs on nextest's default; one
+    naming a non-string is malformed, and read as the default it would
+    understate the allowance the run takes.
+
     Parameters
     ----------
     config_text : str
@@ -302,7 +307,12 @@ def grace_period(config_text: str) -> float:
     -------
     float
         The largest configured grace period, or nextest's default when
-        the configuration names none.
+        no table names one.
+
+    Raises
+    ------
+    NextestConfigurationError
+        If a ``grace-period`` is present but is not a string.
 
     Examples
     --------
@@ -314,10 +324,9 @@ def grace_period(config_text: str) -> float:
     5.0
     """
     periods = [
-        seconds(grace)
-        for _, value in _slow_timeouts(config_text)
-        if isinstance(value, dict)
-        and isinstance(grace := value.get("grace-period"), str)
+        seconds(duration_field(f"{path}.slow-timeout", "grace-period", grace))
+        for path, value in _slow_timeouts(config_text)
+        if isinstance(value, dict) and (grace := value.get("grace-period")) is not None
     ]
     return max(periods, default=NEXTEST_DEFAULT_GRACE_PERIOD_SECONDS)
 
@@ -361,7 +370,8 @@ def global_timeout(config_text: str) -> float | None:
 
     Read from ``[profile.default]`` alone. nextest's other profiles
     inherit that table unless they override it, and an ``[[overrides]]``
-    entry cannot carry one.
+    entry cannot carry one. None means the key is absent; a present
+    non-string is refused, not reported as absent.
 
     Parameters
     ----------
@@ -373,6 +383,11 @@ def global_timeout(config_text: str) -> float | None:
     float or None
         The whole-run budget in seconds, or None.
 
+    Raises
+    ------
+    NextestConfigurationError
+        If ``profile.default.global-timeout`` is present but not a string.
+
     Examples
     --------
     >>> global_timeout('[profile.default]\nglobal-timeout = "60m"\n')
@@ -380,4 +395,6 @@ def global_timeout(config_text: str) -> float | None:
     """
     profile = _table(_table(_parsed(config_text).get("profile")).get("default"))
     budget = profile.get("global-timeout")
-    return seconds(budget) if isinstance(budget, str) else None
+    if budget is None:
+        return None
+    return seconds(duration_field("profile.default", "global-timeout", budget))

@@ -12,7 +12,14 @@ exist for, and each is supplied here directly.
 from __future__ import annotations
 
 import pytest
-from lane_fields import CeilingValueError, condition, job_ceiling
+from lane_fields import (
+    CeilingValueError,
+    WatchdogValueError,
+    budget_from,
+    condition,
+    job_ceiling,
+)
+from nextest_budgets import global_timeout, grace_period
 from nextest_durations import NextestConfigurationError, periods, seconds
 
 
@@ -170,3 +177,54 @@ def test_a_condition_is_rendered_rather_than_refused(
     assert condition(raw) == expected, (
         f"{raw!r} must read as the condition {expected!r}"
     )
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("inf", id="infinity"),
+        pytest.param("-inf", id="negative-infinity"),
+        pytest.param("nan", id="not-a-number"),
+    ],
+)
+def test_a_bound_that_is_not_a_finite_number_is_refused(raw: str) -> None:
+    """``float`` accepts these three spellings; no ordering test catches them.
+
+    They are the hardest of the unbounded values to see, because each
+    defeats the comparisons rather than the parse. ``inf`` sits above
+    every watchdog a ceiling is compared with, so a job declaring it
+    satisfies the ordering while bounding nothing. ``nan`` compares false
+    against everything, so it fails no ``<= 0`` test either and reaches
+    the arithmetic intact.
+
+    ``-inf`` is the control. It is the one of the three the positivity
+    check already refused, so it survives a mutation removing the
+    finiteness check and the other two do not, which is what says the
+    new guard is the one doing the work.
+    """
+    with pytest.raises(CeilingValueError, match=r"timeout-minutes"):
+        job_ceiling({"timeout-minutes": raw})
+    with pytest.raises(WatchdogValueError, match=r"RUN_RUST_CARGO_WAIT_TIMEOUT"):
+        budget_from(raw)
+
+
+def test_a_nextest_duration_field_that_is_present_must_be_a_string() -> None:
+    """Absent and malformed are different faults with different remedies.
+
+    nextest requires both fields to be duration strings and refuses the
+    configuration otherwise, so a present non-string is not a field the
+    run falls back from. Read as absent, ``grace-period`` would report
+    nextest's ten-second default and the termination allowance built on
+    it would understate what the run takes; ``global-timeout`` would be
+    reported as unset, naming a missing whole-run budget where the
+    configuration declares an unreadable one.
+    """
+    malformed_grace = (
+        "[profile.default]\n"
+        'slow-timeout = { period = "60s", terminate-after = 1, '
+        "grace-period = 5 }\n"
+    )
+    with pytest.raises(NextestConfigurationError, match=r"grace-period"):
+        grace_period(malformed_grace)
+    with pytest.raises(NextestConfigurationError, match=r"global-timeout"):
+        global_timeout("[profile.default]\nglobal-timeout = 3600\n")

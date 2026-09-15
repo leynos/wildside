@@ -42,6 +42,13 @@ def watchdog_of(document: Node, job: Node, step: Node) -> float | None:
     inheriting the action's default, which is exactly backwards. A
     workflow-level value would be missed the same way.
 
+    The search stops at the first level that declares the variable at
+    all, not at the first that yields a budget. GitHub gives an inner
+    ``env`` precedence even when its value is empty, so a step setting
+    the variable to nothing hands the action an empty value rather than
+    the job's. Falling through to the outer level would report a budget
+    the action never receives.
+
     Parameters
     ----------
     document : Node
@@ -64,10 +71,9 @@ def watchdog_of(document: Node, job: Node, step: Node) -> float | None:
     """
     for owner in (step, job, document):
         environment = mapping_of(owner.get("env"))
-        raw = None if environment is None else environment.get(WATCHDOG_VARIABLE)
-        budget = budget_from(raw)
-        if budget is not None:
-            return budget
+        if environment is None or WATCHDOG_VARIABLE not in environment:
+            continue
+        return budget_from(environment[WATCHDOG_VARIABLE])
     return None
 
 
