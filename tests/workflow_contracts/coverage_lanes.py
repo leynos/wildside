@@ -1,8 +1,13 @@
-"""Reads every coverage-invoking job out of the workflow files.
+"""Finds every coverage-invoking job in already-parsed workflows.
 
 Separated from :mod:`timeout_budgets` so the workflow reading and the
 nextest arithmetic stay legible apart, and so neither module outgrows
 the 400-line limit the Python lint gate enforces.
+
+Nothing here opens a file. Parsed documents arrive as an argument, from
+:mod:`repository_reading` in the contract and written out by hand in the
+reading tests, so the query is pure and a file that cannot be read fails
+at the boundary that read it.
 
 The parsed documents are untyped as far as the YAML loader is concerned.
 Every field is narrowed by :mod:`lane_fields` before it reaches the
@@ -13,7 +18,6 @@ from __future__ import annotations
 
 import typing as typ
 
-import yaml
 from lane_fields import (
     LaneValueError,
     Node,
@@ -23,7 +27,7 @@ from lane_fields import (
     mapping_of,
     mappings_in,
 )
-from timeout_budgets import COVERAGE_ACTION, WATCHDOG_VARIABLE, WORKFLOWS_DIRECTORY
+from timeout_budgets import COVERAGE_ACTION, WATCHDOG_VARIABLE
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -108,29 +112,6 @@ class CoverageJob(typ.NamedTuple):
             ``workflow:job`` for this job.
         """
         return f"{self.workflow}:{self.job}"
-
-
-def workflow_documents() -> dict[str, Node]:
-    """Return every workflow document in the repository, keyed by name.
-
-    This is the one place the contract touches the filesystem, so an
-    unreadable or unparsable workflow fails here rather than inside a
-    budget derivation. Both extensions are read; a coverage lane in the
-    other one would otherwise escape every assertion without failing
-    anything.
-
-    Returns
-    -------
-    dict[str, Node]
-        File name to parsed document.
-    """
-    documents: dict[str, Node] = {}
-    for pattern in ("*.yml", "*.yaml"):
-        for path in sorted(WORKFLOWS_DIRECTORY.glob(pattern)):
-            parsed = mapping_of(yaml.safe_load(path.read_text(encoding="utf-8")))
-            if parsed is not None:
-                documents[path.name] = parsed
-    return documents
 
 
 def _coverage_steps(job: Node) -> list[Node]:
@@ -232,7 +213,7 @@ def _declared_jobs(
 
 
 def coverage_jobs_of(
-    documents: cabc.Mapping[str, Node] | None = None,
+    documents: cabc.Mapping[str, Node],
 ) -> tuple[CoverageJob, ...]:
     """Return every job invoking the coverage action, with its budgets.
 
@@ -240,23 +221,24 @@ def coverage_jobs_of(
     and it has to contain every watchdog inside it. Counting steps is
     what makes two invocations in one job visible to the arithmetic.
 
-    The documents are a parameter so the reading can be driven with
-    synthetic workflows, which keeps the filesystem access at one named
-    boundary instead of inside the derivation.
+    The documents are required rather than defaulted. A default that
+    read the repository would make this function fallible and
+    filesystem-touching at every call site that omitted the argument,
+    with nothing at the call site to say so; :mod:`repository_reading`
+    owns that step, and the caller names it.
 
     Parameters
     ----------
-    documents : cabc.Mapping[str, Node] or None
-        Parsed workflow documents keyed by file name. When None, the
-        repository's own ``.github/workflows`` is read.
+    documents : cabc.Mapping[str, Node]
+        Parsed workflow documents keyed by file name, from
+        :func:`repository_reading.workflow_documents` or written out by
+        a test.
 
     Returns
     -------
     tuple[CoverageJob, ...]
         One entry per coverage-invoking job.
     """
-    if documents is None:
-        documents = workflow_documents()
     return tuple(
         found
         for workflow, document, job_name, job in _declared_jobs(documents)

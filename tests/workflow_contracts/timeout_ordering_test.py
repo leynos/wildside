@@ -38,6 +38,7 @@ from nextest_budgets import (
     largest_test_allowance,
     termination_allowance,
 )
+from repository_reading import read_text, workflow_documents
 from timeout_budgets import (
     CEILING_MARGIN_SECONDS,
     COLD_BUILD_ALLOWANCE_SECONDS,
@@ -45,6 +46,7 @@ from timeout_budgets import (
     NEXTEST_CONFIG,
     OUTSIDE_WATCHDOG_ALLOWANCE_SECONDS,
     WATCHDOG_VARIABLE,
+    WORKFLOWS_DIRECTORY,
     required_ceiling,
 )
 
@@ -73,24 +75,33 @@ REQUIRED_CONDITIONS: typ.Final[dict[tuple[str, str], tuple[str | None, str | Non
 def nextest_config() -> str:
     """Return the nextest configuration file's text.
 
+    Read through :func:`repository_reading.read_text` rather than
+    directly, so a missing or undecodable configuration fails with the
+    path in the message instead of a bare `OSError` from inside a
+    fixture.
+
     Returns
     -------
     str
         The file's contents.
     """
-    return NEXTEST_CONFIG.read_text(encoding="utf-8")
+    return read_text(NEXTEST_CONFIG)
 
 
 @pytest.fixture(scope="module")
 def coverage_jobs() -> tuple[CoverageJob, ...]:
     """Return every job invoking the coverage action, with its budgets.
 
+    The reading and the query are two steps here rather than one, so
+    the filesystem access this contract performs is visible at the one
+    place it happens.
+
     Returns
     -------
     tuple[CoverageJob, ...]
         One entry per coverage-invoking job.
     """
-    return coverage_jobs_of()
+    return coverage_jobs_of(workflow_documents(WORKFLOWS_DIRECTORY))
 
 
 def test_the_coverage_action_is_invoked_somewhere(
