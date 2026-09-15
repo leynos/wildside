@@ -73,6 +73,12 @@ const INCLUDE_RUST_PATH: &str =
 /// An `include!` whose target is computed rather than named.
 const INCLUDE_COMPUTED: &str =
     include_str!("fixtures/environment_policy_scan/include_computed.rs.txt");
+/// One `.rs` target, written as a raw string and with an escaped dot.
+const INCLUDE_SPELLINGS: &str =
+    include_str!("fixtures/environment_policy_scan/include_spellings.rs.txt");
+/// An `include!` of a bare extension, which names no file the scan collects.
+const INCLUDE_BARE_EXTENSION: &str =
+    include_str!("fixtures/environment_policy_scan/include_bare_extension.rs.txt");
 /// `include_str!` and `include_bytes!`, which embed data rather than source.
 const INCLUDE_STR_IS_DATA: &str =
     include_str!("fixtures/environment_policy_scan/include_str_is_data.rs.txt");
@@ -348,6 +354,38 @@ fn an_include_naming_a_rust_file_is_not_an_offence() -> TestResult {
         unreadable_includes(INCLUDE_RUST_PATH)?.is_empty(),
         "the workspace's own include! form was reported"
     );
+    Ok(())
+}
+
+/// Scenario: one `.rs` target, written as a raw string and with the dot
+/// escaped as `\x2E`.
+///
+/// Invariant: neither is an offence. rustc resolves the decoded value, so
+/// both name `support/entrypoint.rs`, a file the scan already reads. A rule
+/// that judged the literal as it is written would report a target it can
+/// read perfectly well, and the first author to write a Windows path as a
+/// raw string would meet a finding with no defect behind it.
+#[test]
+fn the_spelling_of_a_rust_target_does_not_matter() -> TestResult {
+    assert!(
+        unreadable_includes(INCLUDE_SPELLINGS)?.is_empty(),
+        "a raw or escaped spelling of a .rs target was reported"
+    );
+    Ok(())
+}
+
+/// Scenario: `include!(".rs")`, a bare extension with no file stem.
+///
+/// Invariant: it is an offence. This is the one input on which
+/// `ends_with(".rs")` and the traversal disagree: the text ends with `.rs`,
+/// but `Path::new(".rs")` has no extension at all, `.rs` being the whole
+/// stem, so `rust_sources` would never collect such a file and whatever
+/// rustc included behind it would go unread. The rule therefore compares the
+/// extension exactly as the traversal selects sources, through one shared
+/// constant.
+#[test]
+fn an_include_of_a_bare_extension_is_an_offence() -> TestResult {
+    assert_eq!(unreadable_includes(INCLUDE_BARE_EXTENSION)?.len(), 1);
     Ok(())
 }
 
