@@ -1917,10 +1917,32 @@ value over every job invoking the coverage action, in both the `.yml` and
 the workflow, as GitHub does, and it fails on a coverage-invoking job that
 declares no ceiling at all. The readings it rests on live in
 `timeout_budgets.py`, `nextest_budgets.py`, `nextest_durations.py`,
-`coverage_lanes.py` and `lane_fields.py`, and are exercised on their own in
-`timeout_reading_test.py`. `lane_fields.py` is where every field a workflow
+`coverage_lanes.py`, `lane_fields.py` and `repository_reading.py`, and are
+exercised on their own in `timeout_reading_test.py`,
+`lane_field_reading_test.py`, `repository_reading_test.py` and
+`timeout_property_test.py`. `lane_fields.py` is where every field a workflow
 declares is narrowed, so nothing above it reads a value the YAML loader has
 not been judged on.
+
+`repository_reading.py` is the only module that opens a file. Everything above
+it takes text or parsed documents as an argument, so `coverage_jobs_of` is a
+pure query over documents a caller supplies rather than a function that reads
+`.github/workflows` whenever it is called without one. A file that cannot be
+opened, or that is not YAML, fails there as a `RepositoryReadError` naming the
+path, rather than several frames later inside a budget derivation whose
+traceback names a key and not a file.
+
+The rules three of those readings follow hold over more inputs than a table can
+list, so `timeout_property_test.py` states each one once and checks it against
+generated ones with Hypothesis: the required ceiling is the sum of its three
+terms, the watchdog in force is the innermost level that sets one, and a
+per-test budget is a warning period multiplied by a count of periods. Each rule
+has a reading that agrees with every configuration in this repository and with
+the rule nowhere else, which is what the generated cases are there to separate:
+a ceiling taken as the largest budget agrees with every one-step job, a
+watchdog taken from the first level present agrees with every lane that sets
+exactly one, and a budget that ignores `terminate-after` agrees with every
+multiplier of one.
 
 Those readings are driven with controlled configurations rather than this
 repository's files, because these files cannot exercise them. Every
