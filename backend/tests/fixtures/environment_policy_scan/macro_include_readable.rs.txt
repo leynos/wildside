@@ -1,0 +1,11 @@
+macro_rules! entrypoint {
+    () => {
+        include!("./support/entrypoint.rs");
+    };
+}
+
+macro_rules! embed {
+    () => {
+        include_str!("suppressed.rs.txt");
+    };
+}

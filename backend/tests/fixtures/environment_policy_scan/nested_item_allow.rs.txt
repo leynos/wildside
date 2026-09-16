@@ -1,0 +1,6 @@
+mod outer {
+    pub mod inner {
+        #[allow(clippy::allow_attributes)]
+        pub fn nested() {}
+    }
+}
