@@ -220,7 +220,7 @@ fmt: workspace-sync
 	cargo fmt --all
 	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
-	@unset FORCE_COLOR; $(MDLINT) --fix "**/*.md"
+	$(MDLINT) --fix "**/*.md"
 	$(RUFF) format
 	$(RUFF) check --select I --fix
 
