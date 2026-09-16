@@ -15,6 +15,12 @@ rule. `coverage-main.yml` runs on a push to `main`, which a fork cannot
 perform, so its unconditional Ubicloud label is correct and a contract
 that demanded a fallback there would be demanding a branch that can never
 be taken.
+
+The raw declaration is checked as well as the expression it parses to.
+A folded scalar whose continuation is indented deeper than its first
+line keeps the break rather than folding it, so the value GitHub
+evaluates has a newline inside it. GitHub evaluates it anyway, which is
+why a green run says nothing and the shape has to be refused here.
 """
 
 from __future__ import annotations
@@ -108,6 +114,35 @@ def test_the_estate_has_paid_lanes_a_fork_can_reach() -> None:
     assert _paid_lanes(), (
         "no Ubicloud lane on a pull-request trigger was found, so the fork "
         "fallback contract would be asserting over nothing"
+    )
+
+
+@pytest.mark.parametrize(
+    ("filename", "job_id", "runner"),
+    [pytest.param(*lane, id=f"{lane[0]}:{lane[1]}") for lane in _paid_lanes()],
+)
+def test_a_paid_lane_declares_its_runner_on_one_line(
+    filename: str, job_id: str, runner: str
+) -> None:
+    """A folded scalar can keep the break the author meant to fold away.
+
+    Scenario: each Ubicloud job's `runs-on` as the YAML parser returns
+    it, before any whitespace is normalized.
+
+    Invariant: the value holds no line break. `>-` folds a continuation
+    into a space only while the continuation is indented no deeper than
+    the line it continues; indent it one level further and YAML treats it
+    as a more-indented block and keeps the newline, putting one inside
+    the expression. GitHub evaluates the broken value regardless, so a
+    green run is not evidence and nothing else here would notice: the
+    check below normalizes whitespace, which folds the break away exactly
+    as the author intended and exactly as YAML did not.
+    """
+    assert "\n" not in runner, (
+        f"{filename} job {job_id!r} declares its runner across a line break: "
+        f"{runner!r}. Keep a folded scalar's continuation at the same indent "
+        f"as the line it continues, or YAML keeps the break inside the "
+        f"expression"
     )
 
 
