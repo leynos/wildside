@@ -11,7 +11,7 @@
 
 use std::collections::VecDeque;
 use std::error::Error as StdError;
-use std::path::{Path as StdPath, PathBuf};
+use std::path::{Component, Path as StdPath, PathBuf};
 
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
@@ -22,7 +22,8 @@ use syn::visit::Visit;
 mod attributes;
 
 use attributes::{
-    AttributeCollector, render_attribute, render_path, suppressed_by, suppressed_in_tokens,
+    AttributeCollector, includes_in_tokens, render_attribute, render_path, suppressed_by,
+    suppressed_in_tokens,
 };
 
 pub(crate) type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
@@ -121,16 +122,29 @@ const INCLUDING_MACROS: [&str; 3] = ["include", "std::include", "core::include"]
 /// target took a prohibited call from one diagnostic to none.
 ///
 /// The rule is therefore about reachability rather than content: an
-/// `include!` is a finding unless its target is a string literal ending in
-/// `.rs`, because only then is the included source a file the scan already
-/// reads. Every `include!` in this workspace names `support/entrypoint.rs`
-/// literally, so the rule costs nothing today and closes the route.
+/// `include!` is a finding unless its target is a string literal naming a
+/// file the traversal already collects, which is what
+/// [`names_a_collected_source`] decides. Every `include!` in this workspace
+/// names a `.rs` file inside `backend/tests`, so the rule costs nothing today
+/// and closes the route.
 ///
 /// A computed target, such as the `include!(concat!(env!("OUT_DIR"), ...))`
 /// that build scripts use, is a finding too. That is not an accusation: it is
 /// the honest report that the scan cannot know what was included, and the
 /// remedy is to name the file.
-pub(crate) fn unreadable_includes(contents: &str) -> TestResult<Vec<String>> {
+///
+/// Macro bodies are searched as well as the syntax tree, for the reason the
+/// attribute walk gives: `syn` leaves a macro body opaque, so a
+/// `macro_rules!` arm expanding to an `include!` is a call the visitor never
+/// sees, and rustc parses its target on expansion all the same. Discovery
+/// happens in [`includes_in_tokens`]; the judgement of a discovered target is
+/// the one below, so the two passes cannot disagree about what is readable.
+///
+/// `including` is the file the targets are resolved against. It is the path
+/// `rust_sources` yields, relative to the workspace root, so a target that
+/// climbs out of [`SOURCE_ROOTS`] is visible as such without a filesystem
+/// call.
+pub(crate) fn unreadable_includes(contents: &str, including: &StdPath) -> TestResult<Vec<String>> {
     let parsed = syn::parse_file(contents)?;
     let mut collector = AttributeCollector::default();
     collector.visit_file(&parsed);
@@ -138,15 +152,22 @@ pub(crate) fn unreadable_includes(contents: &str) -> TestResult<Vec<String>> {
     Ok(collector
         .macros
         .iter()
-        .filter(|mac| INCLUDING_MACROS.contains(&render_path(&mac.path).as_str()))
-        .filter(|mac| !names_a_rust_file(&mac.tokens))
-        .map(|mac| format!("include!({})", mac.tokens))
+        .flat_map(|mac| {
+            let direct = INCLUDING_MACROS
+                .contains(&render_path(&mac.path).as_str())
+                .then(|| mac.tokens.clone());
+            direct
+                .into_iter()
+                .chain(includes_in_tokens(mac.tokens.clone()))
+        })
+        .filter(|arguments| !names_a_collected_source(arguments, including))
+        .map(|arguments| format!("include!({arguments})"))
         .collect())
 }
 
-/// Whether a macro's tokens are a string literal naming a `.rs` file.
+/// Whether a macro's tokens name a file the workspace traversal collects.
 ///
-/// Two decisions, and each closes a gap between this rule and the traversal
+/// Three decisions, and each closes a gap between this rule and the traversal
 /// it stands in for.
 ///
 /// The tokens are parsed as one `LitStr` and judged by their decoded value,
@@ -165,12 +186,65 @@ pub(crate) fn unreadable_includes(contents: &str) -> TestResult<Vec<String>> {
 /// and the rule would wave it through. Comparing an `OsStr` for equality is
 /// also case-sensitive without the text match Clippy's
 /// `case_sensitive_file_extension_comparisons` rejects.
-fn names_a_rust_file(tokens: &TokenStream) -> bool {
-    syn::parse2::<LitStr>(tokens.clone()).is_ok_and(|literal| {
-        StdPath::new(&literal.value())
-            .extension()
-            .is_some_and(|extension| extension == SOURCE_EXTENSION)
-    })
+///
+/// The extension alone is still not the whole claim. `rust_sources` walks
+/// [`SOURCE_ROOTS`] and nothing else, so `include!("../third_party/vendor.rs")`
+/// names a real `.rs` file the scan never reads, and an inner suppression at
+/// the top of that file reaches the including source unseen. The target is
+/// therefore required to be lexically inside the tree that includes it:
+/// resolved against the file that includes it and required to land inside
+/// [`SOURCE_ROOTS`]. A backslash is refused outright, being an ordinary
+/// character in a Unix file name and a separator on Windows. The resolution
+/// is by text rather than by the filesystem: canonicalizing would make the
+/// judgement depend on which files happen to exist on the machine running
+/// the scan, and a target that escapes the scanned tree is a finding whether
+/// or not the file it names exists today. Every `include!` in this workspace
+/// names `support/entrypoint.rs`, so the rule costs nothing here.
+fn names_a_collected_source(tokens: &TokenStream, including: &StdPath) -> bool {
+    syn::parse2::<LitStr>(tokens.clone())
+        .is_ok_and(|literal| is_collected_source(&literal.value(), including))
+}
+
+/// Whether one decoded `include!` target lies inside the scanned tree.
+///
+/// A backslash is refused outright. It is an ordinary character in a Unix
+/// file name and a separator on Windows, so a target carrying one means two
+/// different things on the two platforms and only one of them is checkable
+/// here.
+fn is_collected_source(target: &str, including: &StdPath) -> bool {
+    if target.contains('\\') {
+        return false;
+    }
+    let path = StdPath::new(target);
+    if !path
+        .extension()
+        .is_some_and(|extension| extension == SOURCE_EXTENSION)
+    {
+        return false;
+    }
+    let base = including.parent().unwrap_or_else(|| StdPath::new(""));
+    lexically_resolved(base, path)
+        .is_some_and(|resolved| SOURCE_ROOTS.iter().any(|root| resolved.starts_with(root)))
+}
+
+/// Join a target onto its including directory, resolving `.` and `..` by text.
+///
+/// No filesystem call is made. Resolving the path on disk would make the
+/// judgement depend on which files happen to exist, and a target that escapes
+/// the scanned tree is a finding whether or not it resolves today. A `..`
+/// that climbs above the including directory yields None, as does an absolute
+/// path or a Windows prefix: each names somewhere the traversal never walks.
+fn lexically_resolved(base: &StdPath, target: &StdPath) -> Option<PathBuf> {
+    let mut resolved = PathBuf::new();
+    for component in base.components().chain(target.components()) {
+        match component {
+            Component::Normal(part) => resolved.push(part),
+            Component::CurDir => {}
+            Component::ParentDir if resolved.pop() => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    Some(resolved)
 }
 
 /// Return every protected lint suppressed in one source file.

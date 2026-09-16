@@ -54,8 +54,8 @@ belong to other targets. It therefore names the package and each helper script
 that carries examples, in `PY_DOCTEST_PATHS`. A named list goes stale in
 silence, so `tests/workflow_contracts/doctest_collection_test.py` reads that
 variable out of the Makefile and fails if any file carrying an example lies
-outside it. Add a script with an example and the contract tells you to collect
-it.
+outside it. A script added with an example fails that contract until it is
+collected.
 
 ## Workflow pins and Dependabot
 
@@ -840,13 +840,30 @@ same `SOURCE_EXTENSION` constant the workspace traversal selects sources with,
 rather than by matching the text `.rs`, because those two disagree on
 `include!(".rs")`: the text ends with `.rs`, but a bare extension is a file
 stem with no extension at all, so the traversal would never collect it and the
-included source would go unread. Every `include!` here names
-`support/entrypoint.rs` literally, and `include_str!` and `include_bytes!` are
-untouched, since they embed a file as data rather than as source.
+included source would go unread. A third detail followed: the extension alone
+says nothing about where the file sits, so the target is resolved against the
+file that includes it and required to land inside the scanned roots. The
+resolution is by text, with no filesystem call. A `..` is followed rather than
+refused outright, because one that stays inside the roots still names a file
+the traversal collects and reporting it would be a false finding; what is
+refused is a `..` that climbs out of the roots, an absolute path, a Windows
+prefix, and a backslash, which is an ordinary character in a Unix file name
+and a separator on Windows. Every `include!` here names
+`support/entrypoint.rs`, so none of it costs anything today.
 
-The scan lives in four files. `environment_policy_source_scan.rs` holds the
+Macro bodies are searched for `include!` as well as for attributes, and for
+the same reason: `syn` leaves a macro body opaque, so an arm expanding to an
+`include!` is a call the syntax tree never shows, while rustc parses its
+target on expansion regardless. Discovery happens in the token walk and the
+judgement is the one above, so the two passes cannot disagree about what is
+readable. `include_str!` and `include_bytes!` remain untouched, since they
+embed a file as data rather than as source.
+
+The scan lives in five files. `environment_policy_source_scan.rs` holds the
 measurements, the mutation record and the three tests that read the
-workspace; `environment_policy_scan_cases.rs` holds the probe-driven cases;
+workspace; `environment_policy_scan_cases.rs` declares two case modules out
+of `environment_policy_scan_case_groups/`, one for the attribute judgement
+and one for the inclusion rule;
 `environment_policy_scan_properties.rs` generates the attribute space and
 checks the verdict against the rule; and `backend/tests/environment_policy_scan/`
 holds the reading and the attribute judgement. The probes are fixture files

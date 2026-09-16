@@ -180,6 +180,61 @@ pub(super) fn suppressed_in_tokens(tokens: TokenStream) -> Vec<(String, String)>
     found
 }
 
+/// Return the argument tokens of every `include!` inside a token stream.
+///
+/// The same reason the attribute walk above exists: `syn` leaves a macro body
+/// opaque, so a `macro_rules!` arm expanding to `include!("probe.rs.txt")` is
+/// a `Macro` node the visitor never sees. rustc parses that target as Rust on
+/// expansion, so an `#![allow(...)]` at its top silences the calls around it
+/// while a scan reading only the syntax tree's macro nodes finds nothing.
+///
+/// Only discovery happens here. Whether a discovered target is one the
+/// traversal already collects is the caller's judgement, stated once in
+/// [`super::names_a_collected_source`], so the two cannot drift apart.
+///
+/// The spellings are the same three the caller accepts, because `std::include!`
+/// and `core::include!` reach rustc identically. `include_str!` is not among
+/// them: the `!` must follow the last path segment, so the longer name is a
+/// different identifier and never matches.
+pub(super) fn includes_in_tokens(tokens: TokenStream) -> Vec<TokenStream> {
+    let trees: Vec<TokenTree> = tokens.into_iter().collect();
+    let mut found = Vec::new();
+
+    for index in 0..trees.len() {
+        if let TokenTree::Group(group) = &trees[index] {
+            found.extend(includes_in_tokens(group.stream()));
+        }
+        if let Some(arguments) = include_at(&trees, index) {
+            found.push(arguments);
+        }
+    }
+    found
+}
+
+/// Return an `include!` invocation's arguments when one starts at `index`.
+///
+/// A call is an identifier spelling the macro, optionally preceded by path
+/// segments, then `!`, then a delimited group. The identifier is unraw'd, so
+/// `r#include!` is the same call.
+fn include_at(trees: &[TokenTree], index: usize) -> Option<TokenStream> {
+    let TokenTree::Ident(ident) = &trees[index] else {
+        return None;
+    };
+    if ident.unraw() != "include" {
+        return None;
+    }
+    let TokenTree::Punct(punct) = trees.get(index.saturating_add(1))? else {
+        return None;
+    };
+    if punct.as_char() != '!' {
+        return None;
+    }
+    let TokenTree::Group(group) = trees.get(index.saturating_add(2))? else {
+        return None;
+    };
+    Some(group.stream())
+}
+
 /// Return the protected lints a forwarded suppression names at `index`.
 ///
 /// `macro_rules! forward { ($a:meta) => { #[$a] fn call() {...} } }` hides

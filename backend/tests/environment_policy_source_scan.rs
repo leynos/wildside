@@ -205,7 +205,7 @@ fn no_source_file_includes_an_unreadable_target() -> TestResult {
     for source_root in SOURCE_ROOTS {
         for (path, contents) in rust_sources(&root.join(source_root), source_root)? {
             let display = path.display();
-            let found = unreadable_includes(&contents)
+            let found = unreadable_includes(&contents, &path)
                 .map_err(|error| format!("{display} should parse as Rust: {error}"))?;
             for inclusion in found {
                 offences.push(format!("{display} includes {inclusion}"));
@@ -215,8 +215,8 @@ fn no_source_file_includes_an_unreadable_target() -> TestResult {
 
     assert!(
         offences.is_empty(),
-        "an include! target must be a string literal ending in .rs, or the \
-         scan cannot see what it brought in:\n{}",
+        "an include! target must be a string literal naming a .rs file inside \
+         the scanned roots, or the scan cannot see what it brought in:\n{}",
         offences.join("\n")
     );
     Ok(())

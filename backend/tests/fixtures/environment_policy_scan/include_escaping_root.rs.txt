@@ -1,0 +1,2 @@
+include!("../../third_party/vendor.rs");
+include!("/etc/vendor.rs");

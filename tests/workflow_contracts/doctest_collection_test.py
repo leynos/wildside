@@ -158,6 +158,25 @@ def test_the_target_asks_pytest_for_doctests(target: str) -> None:
     )
 
 
+def test_the_scripts_target_collects_the_variable_it_is_checked_against() -> None:
+    """The list this contract reads must be the list the recipe runs.
+
+    Scenario: `test-scripts` names the paths pytest collects.
+
+    Invariant: it names them by expanding `PY_DOCTEST_PATHS` rather than
+    by repeating their spellings. Without this the variable and the
+    recipe are two lists that happen to agree today: a path added to the
+    variable would satisfy the collection contract below, and the
+    Makefile tooling contract beside it, while the recipe went on
+    collecting the old set and the new examples ran nowhere.
+    """
+    assert "$(PY_DOCTEST_PATHS)" in _recipe("test-scripts"), (
+        "test-scripts must collect $(PY_DOCTEST_PATHS); a hard-coded list "
+        "would let the variable this contract reads drift from the paths "
+        "pytest is actually given"
+    )
+
+
 def test_every_file_with_an_example_is_collected() -> None:
     """A named collection list must name every file that needs it.
 
