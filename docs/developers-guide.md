@@ -27,8 +27,8 @@ All suites run through the same quality gateways:
 
 ### Python docstring examples
 
-Every `>>>` example in a Python module here is executed. `make
-test-workflow-contracts` and `make test-scripts` both pass
+Every `>>>` example in a Python module here is executed.
+`make test-workflow-contracts` and `make test-scripts` both pass
 `--doctest-modules`, so an example that states a result the code does not
 produce fails the suite that owns it.
 
@@ -36,10 +36,10 @@ This matters more than it sounds. Until the flag was added, all forty-three
 example lines in the repository were documentation nothing ran, and five of
 them were wrong: two claimed a double-quoted `repr` that Python has never
 produced, one continued from a `+SKIP` line and so raised `NameError`, one
-over-escaped its input until the function under demonstration returned an
-empty list, and one shelled out to `kubectl` against whatever host read it.
-An example is a claim about behaviour, and an unexecuted one is the only
-kind of claim in the repository that nothing can falsify.
+over-escaped its input until the function under demonstration returned an empty
+list, and one shelled out to `kubectl` against whatever host read it. An
+example is a claim about behaviour, and an unexecuted one is the only kind of
+claim in the repository that nothing can falsify.
 
 Thirteen examples are skipped rather than executed, each carrying an explicit
 `# doctest: +SKIP`. Skipping is for an example that would touch the world:
@@ -48,14 +48,13 @@ the whole example, not its first line, because a later line that uses a name
 the skipped line was to bind fails with `NameError` rather than being skipped
 with it.
 
-`make test-scripts` cannot simply collect `scripts`: `scripts/local_k8s.py`
-and `scripts/local_k8s/` share a name, and the `*_test.py` files beside them
-belong to other targets. It therefore names the package and each helper script
-that carries examples, in `PY_DOCTEST_PATHS`. A named list goes stale in
-silence, so `tests/workflow_contracts/doctest_collection_test.py` reads that
-variable out of the Makefile and fails if any file carrying an example lies
-outside it. A script added with an example fails that contract until it is
-collected.
+`make test-scripts` cannot simply collect `scripts`: `scripts/local_k8s.py` and
+`scripts/local_k8s/` share a name, and the `*_test.py` files beside them belong
+to other targets. It therefore names the package and each helper script that
+carries examples, in `PY_DOCTEST_PATHS`. A named list goes stale in silence, so
+`tests/workflow_contracts/doctest_collection_test.py` reads that variable out
+of the Makefile and fails if any file carrying an example lies outside it. A
+script added with an example fails that contract until it is collected.
 
 ## Workflow pins and Dependabot
 
@@ -806,8 +805,8 @@ Never suppress the policy with `allow`, in any of its forms. A crate-level
 `clippy::allow_attributes` does not fire on an inner attribute, so nothing else
 would notice. Naming the lint is not the only route: Clippy places
 `disallowed_methods` in the `style` group, so `clippy::style`, the wider
-`clippy::all`, and `warnings` each switch it off just as effectively, and any of
-them nested in a `cfg_attr` is honoured too. The source scan rejects all of
+`clippy::all`, and `warnings` each switch it off just as effectively, and any
+of them nested in a `cfg_attr` is honoured too. The source scan rejects all of
 them, wherever the attribute sits, and it protects the guard as well as the
 policy: `clippy::allow_attributes` and its companion live in the `restriction`
 group, so allowing that group would let an `allow` stand in for an `expect`
@@ -817,59 +816,58 @@ silent forever.
 
 An `expect` earns that exemption only while it is item-scoped. A crate-level
 `#![expect(clippy::disallowed_methods)]` suppresses every prohibited call in
-the crate and is fulfilled by the first one, so it never warns either; the
-scan reports it. The scan also normalizes raw identifiers, since
-`#![allow(clippy::r#style)]` names the same lint, and walks macro token
-streams to any depth, since a `macro_rules!` arm expanding to a module with an
-inner `allow` is invisible to both the syntax tree and Clippy's guard.
+the crate and is fulfilled by the first one, so it never warns either; the scan
+reports it. The scan also normalizes raw identifiers, since
+`#![allow(clippy::r#style)]` names the same lint, and walks macro token streams
+to any depth, since a `macro_rules!` arm expanding to a module with an inner
+`allow` is invisible to both the syntax tree and Clippy's guard.
 
-Two further routes were measured on 2026-09-14 and are closed. A
-`macro_rules!` arm writing `#[$attribute]` over a prohibited call, invoked as
-`forward!(allow(clippy::disallowed_methods))`, silences that call while
-neither half is a suppression on its own; the invocation's argument names the
-lint, so that is what the scan judges, and only when the lint is a protected
-one, which leaves ordinary attribute-forwarding macros untouched. And
-`include!` makes rustc parse its target as Rust whatever the extension, so an
-`allow` inside an included `.rs.txt` takes effect unseen. An `include!` is
-therefore a finding unless its target is a single string literal naming a file
-the scan already reads. Two details make that test mean what it says. The
-literal's decoded value is what is judged, not how it is written, so
-`r"support/entrypoint.rs"` and `"support/entrypoint\x2Ers"` are the same
-target and neither is a finding. And its extension is compared through the
-same `SOURCE_EXTENSION` constant the workspace traversal selects sources with,
-rather than by matching the text `.rs`, because those two disagree on
-`include!(".rs")`: the text ends with `.rs`, but a bare extension is a file
-stem with no extension at all, so the traversal would never collect it and the
-included source would go unread. A third detail followed: the extension alone
-says nothing about where the file sits, so the target is resolved against the
-file that includes it and required to land inside the scanned roots. The
-resolution is by text, with no filesystem call. A `..` is followed rather than
-refused outright, because one that stays inside the roots still names a file
-the traversal collects and reporting it would be a false finding; what is
-refused is a `..` that climbs out of the roots, an absolute path, a Windows
-prefix, and a backslash, which is an ordinary character in a Unix file name
-and a separator on Windows. Every `include!` here names
-`support/entrypoint.rs`, so none of it costs anything today.
+Two further routes were measured on 2026-09-14 and are closed. A `macro_rules!`
+arm writing `#[$attribute]` over a prohibited call, invoked as
+`forward!(allow(clippy::disallowed_methods))`, silences that call while neither
+half is a suppression on its own; the invocation's argument names the lint, so
+that is what the scan judges, and only when the lint is a protected one, which
+leaves ordinary attribute-forwarding macros untouched. And `include!` makes
+rustc parse its target as Rust whatever the extension, so an `allow` inside an
+included `.rs.txt` takes effect unseen. An `include!` is therefore a finding
+unless its target is a single string literal naming a file the scan already
+reads. Two details make that test mean what it says. The literal's decoded
+value is what is judged, not how it is written, so `r"support/entrypoint.rs"`
+and `"support/entrypoint\x2Ers"` are the same target and neither is a finding.
+And its extension is compared through the same `SOURCE_EXTENSION` constant the
+workspace traversal selects sources with, rather than by matching the text
+`.rs`, because those two disagree on `include!(".rs")`: the text ends with
+`.rs`, but a bare extension is a file stem with no extension at all, so the
+traversal would never collect it and the included source would go unread. A
+third detail followed: the extension alone says nothing about where the file
+sits, so the target is resolved against the file that includes it and required
+to land inside the scanned roots. The resolution is by text, with no filesystem
+call. A `..` is followed rather than refused outright, because one that stays
+inside the roots still names a file the traversal collects and reporting it
+would be a false finding; what is refused is a `..` that climbs out of the
+roots, an absolute path, a Windows prefix, and a backslash, which is an
+ordinary character in a Unix file name and a separator on Windows. Every
+`include!` here names `support/entrypoint.rs`, so none of it costs anything
+today.
 
-Macro bodies are searched for `include!` as well as for attributes, and for
-the same reason: `syn` leaves a macro body opaque, so an arm expanding to an
-`include!` is a call the syntax tree never shows, while rustc parses its
-target on expansion regardless. Discovery happens in the token walk and the
-judgement is the one above, so the two passes cannot disagree about what is
-readable. `include_str!` and `include_bytes!` remain untouched, since they
-embed a file as data rather than as source.
+Macro bodies are searched for `include!` as well as for attributes, and for the
+same reason: `syn` leaves a macro body opaque, so an arm expanding to an
+`include!` is a call the syntax tree never shows, while rustc parses its target
+on expansion regardless. Discovery happens in the token walk and the judgement
+is the one above, so the two passes cannot disagree about what is readable.
+`include_str!` and `include_bytes!` remain untouched, since they embed a file
+as data rather than as source.
 
 The scan lives in five files. `environment_policy_source_scan.rs` holds the
-measurements, the mutation record and the three tests that read the
-workspace; `environment_policy_scan_cases.rs` declares two case modules out
-of `environment_policy_scan_case_groups/`, one for the attribute judgement
-and one for the inclusion rule;
-`environment_policy_scan_properties.rs` generates the attribute space and
-checks the verdict against the rule; and `backend/tests/environment_policy_scan/`
-holds the reading and the attribute judgement. The probes are fixture files
-under `backend/tests/fixtures/environment_policy_scan/`, carrying the
-`.rs.txt` suffix so the scan does not read its own counterexamples as
-workspace sources.
+measurements, the mutation record and the three tests that read the workspace;
+`environment_policy_scan_cases.rs` declares two case modules out of
+`environment_policy_scan_case_groups/`, one for the attribute judgement and one
+for the inclusion rule; `environment_policy_scan_properties.rs` generates the
+attribute space and checks the verdict against the rule; and
+`backend/tests/environment_policy_scan/` holds the reading and the attribute
+judgement. The probes are fixture files under
+`backend/tests/fixtures/environment_policy_scan/`, carrying the `.rs.txt`
+suffix so the scan does not read its own counterexamples as workspace sources.
 
 ## Adding or changing behavioural tests
 
