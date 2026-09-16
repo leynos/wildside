@@ -72,6 +72,44 @@ _BAD_KEYS = st.one_of(
 _BAD_VALUES = st.sampled_from([{1, 2}, (1, 2), object(), b"bytes"])
 
 
+#: One level of nesting to bury an offending value under: either a list
+#: holding it at a drawn index among scalar siblings, or a mapping
+#: holding it under a drawn key among scalar siblings. The siblings are
+#: there so the walk has to reach past a value it accepts to find the
+#: one it must refuse.
+_LEVELS = st.one_of(
+    st.tuples(st.just("list"), st.lists(_SCALARS, max_size=2), st.integers(0, 3)),
+    st.tuples(st.just("mapping"), st.dictionaries(_KEYS, _SCALARS, max_size=2), _KEYS),
+)
+
+#: Bounded so the search spends its budget on shape rather than on size.
+_NESTINGS = st.lists(_LEVELS, max_size=4)
+
+
+def _buried(bad: object, nesting: list[tuple[str, typ.Any, typ.Any]]) -> object:
+    """Return ``bad`` wrapped in the drawn levels, outermost level first.
+
+    The depth is drawn rather than written down. A test that placed the
+    offending value at a path it spelled out would only ever exercise the
+    one level it named, so a walk that validated the levels above it and
+    trusted everything below would satisfy the property while leaving the
+    hole open. Every level is applied, so ``bad`` is always present.
+    """
+    node = bad
+    for kind, siblings, position in reversed(nesting):
+        if kind == "list":
+            entries = list(typ.cast("list[object]", siblings))
+            entries.insert(min(position, len(entries)), node)
+            node = entries
+        else:
+            node = {**typ.cast("dict[str, object]", siblings), position: node}
+    return node
+
+
+#: One unsupported value at a generated depth, in generated containers.
+_BURIED_BAD_VALUES = st.builds(_buried, _BAD_VALUES, _NESTINGS)
+
+
 def _identical(left: object, right: object) -> bool:
     """Return whether two decoded trees match in both shape and type.
 
@@ -156,18 +194,23 @@ def test_a_key_that_is_neither_text_nor_a_boolean_is_refused(
         docs._decoded({key: value}, "probe")
 
 
-@given(document=_DOCUMENTS, bad=_BAD_VALUES, key=_KEYS)
+@given(document=_DOCUMENTS, buried=_BURIED_BAD_VALUES, key=_KEYS)
 def test_a_value_outside_the_json_set_is_refused_at_any_depth(
-    document: object, bad: object, key: str
+    document: object, buried: object, key: str
 ) -> None:
     """Depth is not a hiding place for a value the walk cannot represent.
 
     Scenario: an arbitrary tree with one unsupported value placed beside
-    it, both inside a mapping, so the fault is never at the root.
+    it, both inside a mapping, so the fault is never at the root. The
+    offending value sits under generated list and mapping nesting rather
+    than at a path this test writes down, so the depth it is found at
+    varies from example to example.
 
-    Invariant: the walk fails. The alternative is a `JsonValue` the
-    annotation says cannot exist, which is the hole these parsers were
-    written to close.
+    Invariant: the walk fails, however deep the value is. The
+    alternative is a `JsonValue` the annotation says cannot exist, which
+    is the hole these parsers were written to close; a walk that checked
+    the first few levels and then trusted the rest would leave it open
+    while satisfying a property that only ever looked at those levels.
     """
     with pytest.raises(docs.DocumentShapeError):
-        docs._decoded({key: document, "offending": [bad]}, "probe")
+        docs._decoded({key: document, "offending": buried}, "probe")
