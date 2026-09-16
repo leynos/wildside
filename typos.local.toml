@@ -154,6 +154,8 @@ ignore = [
   "vg\\ \\.labelBkg\\{background\\-color:rgba\\(248\\.6666666666,\\ 25",
   "ws\\(\\(\\)\\ =>\\ resolveToken\\('\\{color\\.brand\\}',\\ null\\),\\ /tokens",
   "ws\\(\\(\\)\\ =>\\ resolveToken\\('\\{color\\.brand\\}',\\ null\\),\\ TypeErr",
+  # Inline code spans are masked; the shared dictionary does not mask them yet.
+  '`[^`\n]+`',
 ]
 
 [files]

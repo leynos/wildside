@@ -42,6 +42,8 @@ extend-ignore-re = [
     ":\\ Option<Result<SnapshotArtifacts,\\ SnapshotGenerationErro",
     ";opacity:0\\.7;background\\-color:hsl\\(80,\\ 100%,\\ 96\\.274509",
     "=\\ \\(\\|\\|\\ \\->\\ Result<SnapshotArtifacts,\\ SnapshotGenerationErro",
+    "Azure\\s+Architecture\\s+Center\\s*\\|\\s*Microsoft\\s+Learn\\b",
+    "GitHub\\s+Flavored\\s+Markdown\\b(?:\\s\\(GFM\\))?",
     "IwMjYtMDEtMDFUMDA6MDA6MDBaIiwiaWQi\",",
     "IwMjYtMDMtMjJUMTA6MzA6MDBaIiwiaWQiOiIxMTExMTExMS0x",
     "RepositoryError::query\\(\"catalog\\ failure\"\\)\\)\\);",
@@ -907,6 +909,10 @@ extend-ignore-re = [
 "equalizers" = "equalizers"
 "equalizes" = "equalizes"
 "equalizing" = "equalizing"
+"exercize" = "exercise"
+"exercized" = "exercised"
+"exercizes" = "exercises"
+"exercizing" = "exercising"
 "externalisable" = "externalizable"
 "externalisably" = "externalizably"
 "externalisation" = "externalization"
@@ -1850,6 +1856,7 @@ extend-ignore-re = [
 "organizers" = "organizers"
 "organizes" = "organizes"
 "organizing" = "organizing"
+"otherwize" = "otherwise"
 "oxendict" = "oxendict"
 "oxidisable" = "oxidizable"
 "oxidisably" = "oxidizably"
@@ -2171,6 +2178,10 @@ extend-ignore-re = [
 "quantizers" = "quantizers"
 "quantizes" = "quantizes"
 "quantizing" = "quantizing"
+"raize" = "raise"
+"raized" = "raised"
+"raizes" = "raises"
+"raizing" = "raising"
 "randomisable" = "randomizable"
 "randomisably" = "randomizably"
 "randomisation" = "randomization"
