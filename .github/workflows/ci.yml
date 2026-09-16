@@ -253,7 +253,7 @@ jobs:
       # ~/.cargo/bin, and the uv layers above, so the shared action must not
       # become a second owner of them.
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/setup-rust@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         with:
           cache-provider: external
           # The server is started from a `run:` step above; a second one
@@ -307,7 +307,7 @@ jobs:
       # distribution; replaces the former `cargo binstall merman-cli` and
       # bare `uv tool install nixie-cli` steps.
       - name: Install Nixie and Merman
-        uses: leynos/shared-actions/.github/actions/install-nixie@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/install-nixie@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         with:
           nixie-version: ${{ env.NIXIE_VERSION }}
           merman-version: ${{ env.MERMAN_VERSION }}
@@ -444,7 +444,7 @@ jobs:
         run: make lint-clippy
 
       - name: Install Whitaker
-        uses: leynos/shared-actions/.github/actions/install-whitaker@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/install-whitaker@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         with:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
@@ -688,7 +688,7 @@ jobs:
           # workflow one, so it is read here in the shell.
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
-          SHARED_ACTIONS_PIN: c6125f19593668cbfefd65a59c08cb7aefe90d93
+          SHARED_ACTIONS_PIN: c5a54701c8603a0fa756a6b34c49bc2af75a6c11
           # The Makefile pins pg-embed-setup-unpriv, whose pg_worker binary
           # lands in the cargo bin directory this archive carries.
           MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
@@ -751,7 +751,7 @@ jobs:
         run: bash scripts/start-compiler-cache.sh
 
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/setup-rust@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         with:
           cache-provider: external
           # The server is started from a `run:` step above; a second one
@@ -778,7 +778,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/generate-coverage@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -816,7 +816,7 @@ jobs:
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: github.event_name == 'pull_request' && env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         with:
           format: lcov
           mode: check
