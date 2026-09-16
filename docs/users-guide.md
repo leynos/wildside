@@ -148,17 +148,18 @@ submission is unavailable, the endpoint returns `503 Service Unavailable`.
 
 ### How long a key stays replayable
 
-An idempotency key is replayable until its record expires. `IDEMPOTENCY_TTL_HOURS`
-sets that window on the server, defaulting to 24 hours and clamped to between
-one hour and ten years, so a value outside that range is brought back to the
-nearest bound rather than rejected. Sending the same key after the window has
-passed starts a new request rather than replaying the old response.
+An idempotency key is replayable until its record expires.
+`IDEMPOTENCY_TTL_HOURS` sets that window on the server, defaulting to 24 hours
+and clamped to between one hour and ten years, so a value outside that range is
+brought back to the nearest bound rather than rejected. Sending the same key
+after the window has passed starts a new request rather than replaying the old
+response.
 
 The variable, its default, and its clamp are unchanged. Operators need do
 nothing. Where the server reads it moved in the change that introduced the
-environment-seam policy, from the domain layer to a configuration adapter;
-that is an internal Rust API move with no deployment or request-level effect,
-and the path mapping for in-repository callers is in
+environment-seam policy, from the domain layer to a configuration adapter; that
+is an internal Rust API move with no deployment or request-level effect, and
+the path mapping for in-repository callers is in
 [developers' guide](developers-guide.md).
 
 ## Users list pagination

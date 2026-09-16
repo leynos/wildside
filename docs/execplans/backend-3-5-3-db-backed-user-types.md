@@ -284,17 +284,17 @@ Use `backend/tests/support/embedded_postgres.rs` helpers and
 
 1. Run targeted suites before full gates.
 
-```bash
-set -o pipefail
-cargo nextest run -p backend --test diesel_profile_interests_adapters --no-fail-fast \
-  2>&1 | tee /tmp/3-5-3-profile-interests-rstest.out
+   ```bash
+   set -o pipefail
+   cargo nextest run -p backend --test diesel_profile_interests_adapters --no-fail-fast \
+     2>&1 | tee /tmp/3-5-3-profile-interests-rstest.out
 
-set -o pipefail
-cargo nextest run -p backend --test user_state_profile_interests_startup_modes_bdd --no-fail-fast \
-  2>&1 | tee /tmp/3-5-3-profile-interests-bdd.out
-```
+   set -o pipefail
+   cargo nextest run -p backend --test user_state_profile_interests_startup_modes_bdd --no-fail-fast \
+     2>&1 | tee /tmp/3-5-3-profile-interests-bdd.out
+   ```
 
-1. Documentation and closure.
+2. Documentation and closure.
 
 Update architecture design decisions to state the chosen adapter strategy and
 why. Then mark roadmap 3.5.3 `[x]` only.

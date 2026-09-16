@@ -64,7 +64,7 @@ jobs:
           # workflow one, so it is read here in the shell.
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
-          SHARED_ACTIONS_PIN: c6125f19593668cbfefd65a59c08cb7aefe90d93
+          SHARED_ACTIONS_PIN: c5a54701c8603a0fa756a6b34c49bc2af75a6c11
           # The Makefile pins pg-embed-setup-unpriv, whose pg_worker binary
           # lands in the cargo bin directory this archive carries.
           MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
@@ -118,7 +118,6 @@ jobs:
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
           restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
 
-
       # setup-rust runs with use-sccache: false because the sccache action it
       # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
       # clobbering the export above for every later step. The script explains
@@ -128,7 +127,7 @@ jobs:
         run: bash scripts/start-compiler-cache.sh
 
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/setup-rust@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         with:
           # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
           cache-provider: external
@@ -156,7 +155,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/generate-coverage@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -189,7 +188,7 @@ jobs:
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c6125f19593668cbfefd65a59c08cb7aefe90d93
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         with:
           # mode defaults to "upload"; CodeScene infers project 70675 from
           # the git remote, so no project-url is needed here. The PR check
@@ -239,7 +238,6 @@ jobs:
             ~/.theseus/postgresql
             ~/.cache/pg-embedded/binaries
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
-
 
       # Zero compile requests means the wrapper never engaged, which is a
       # failed integration rather than a cold cache.

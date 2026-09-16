@@ -54,8 +54,7 @@ cannot collapse those client failures into generic internal errors.
 - The cursor transport format remains opaque base64url JSON provided by
   `backend/crates/pagination`. Do not introduce a second cursor format.
 - Keep the current `/api/v1/users` response envelope from roadmap 4.2.1:
-  `{ "data": […], "limit": N, "links": { "self": …, "next": …,
-  "prev": … } }`.
+  `{ "data": […], "limit": N, "links": { "self": …, "next": …, "prev": … } }`.
 - Preserve current non-pagination error semantics: unauthenticated requests
   return `401`, repository connection failures return `503`, and unexpected
   query failures return `500` with the internal message redacted.
