@@ -464,10 +464,10 @@ overriding only the entry point, the TypeScript configuration and the project
 name. All three are exercised rather than one representative, because they are
 maintained separately: one can lose a key while the others keep it.
 
-A documented fixture passes and writes no files; the three defects in the
-table each fail with a diagnostic naming them; and clearing a key admits
-exactly its own defect while the other two keep failing. That last
-part is what ties each key to a defect rather than to an expectation of one.
+A documented fixture passes and writes no files; the three defects in the table
+each fail with a diagnostic naming them; and clearing a key admits exactly its
+own defect while the other two keep failing. That last part is what ties each
+key to a defect rather than to an expectation of one.
 
 #### Documenting an export
 
