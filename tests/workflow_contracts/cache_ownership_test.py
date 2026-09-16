@@ -211,13 +211,19 @@ def test_tool_cache_keys_carry_the_runner_image_identity(
 
 
 def test_actionlint_registers_every_managed_label_in_use() -> None:
-    """An unregistered label makes actionlint reject the workflow that uses it."""
+    """An unregistered label makes actionlint reject the workflow that uses it.
+
+    The labels are read through `runner_labels`, so a label named inside
+    an event-keyed expression is registered like any other. Reading the
+    expression's own text as a label would have left every label it names
+    unchecked while this assertion still passed.
+    """
     config = yaml.safe_load(inv.ACTIONLINT_CONFIG.read_text(encoding="utf-8"))
     registered = set(config["self-hosted-runner"]["labels"])
     used = {
-        job["runs-on"]
+        label
         for _, _, job in inv.iter_jobs()
-        if isinstance(job.get("runs-on"), str)
-        and job["runs-on"] not in inv.GITHUB_HOSTED_LABELS
+        for label in inv.runner_labels(job)
+        if label not in inv.GITHUB_HOSTED_LABELS
     }
     assert used <= registered, f"unregistered runner labels in use: {used - registered}"
