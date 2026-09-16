@@ -26,6 +26,9 @@ import typed_documents as docs
 from hypothesis import given
 from hypothesis import strategies as st
 
+if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
+    import collections.abc as cabc
+
 #: Keys a workflow or manifest plausibly carries. Restricted to a small
 #: alphabet so a counter-example reads as a key rather than as noise.
 _KEY_CHARS = "abcdefghijklmnopqrstuvwxyz-_."
@@ -74,24 +77,26 @@ def _identical(left: object, right: object) -> bool:
 
     Equality alone is too weak here: ``True == 1`` and ``0 == 0.0``, so a
     walk that turned a boolean into an integer would satisfy ``==`` while
-    changing what the document says. Mappings are compared pairwise in
-    iteration order rather than by key lookup, so a walk that reordered
-    a document is caught as well as one that changed it.
+    changing what the document says. Mappings are compared by their key
+    lists and then value by value, in iteration order, so a walk that
+    reordered a document is caught as well as one that changed it.
     """
     if type(left) is not type(right):
         return False
     if isinstance(left, list) and isinstance(right, list):
-        return len(left) == len(right) and all(
-            starmap(_identical, zip(left, right, strict=True))
+        return len(left) == len(right) and _identical_pairs(
+            zip(left, right, strict=True)
         )
     if isinstance(left, dict) and isinstance(right, dict):
-        return len(left) == len(right) and all(
-            left_key == right_key and _identical(left_value, right_value)
-            for (left_key, left_value), (right_key, right_value) in zip(
-                left.items(), right.items(), strict=True
-            )
+        return list(left) == list(right) and _identical_pairs(
+            zip(left.values(), right.values(), strict=True)
         )
     return left == right
+
+
+def _identical_pairs(pairs: cabc.Iterable[tuple[object, object]]) -> bool:
+    """Return whether every pair matches under :func:`_identical`."""
+    return all(starmap(_identical, pairs))
 
 
 @given(document=_DOCUMENTS)
