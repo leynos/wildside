@@ -76,6 +76,16 @@ def read_text(path: Path) -> str:
     ------
     RepositoryReadError
         If the file cannot be opened, or is not valid UTF-8.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> with tempfile.TemporaryDirectory() as name:
+    ...     path = Path(name) / "ci.yml"
+    ...     _ = path.write_text("jobs: {build: {steps: []}}", encoding="utf-8")
+    ...     read_text(path)
+    'jobs: {build: {steps: []}}'
     """
     try:
         return path.read_text(encoding="utf-8")
@@ -104,6 +114,17 @@ def parse_workflow(text: str, path: Path) -> Node | None:
     ------
     RepositoryReadError
         If the text is not valid YAML.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> parse_workflow("jobs: {build: {steps: []}}", Path("ci.yml"))
+    {'jobs': {'build': {'steps': []}}}
+
+    A file whose top level is not a mapping declares nothing:
+
+    >>> parse_workflow("", Path("empty.yml")) is None
+    True
     """
     try:
         parsed = yaml.safe_load(text)
@@ -131,6 +152,21 @@ def workflow_documents(directory: Path) -> dict[str, Node]:
     RepositoryReadError
         If the directory cannot be listed, if a file cannot be read, or
         if one is not valid YAML.
+
+    Examples
+    --------
+    Only the workflow extensions are read, so a neighbouring file is
+    left where it is:
+
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> with tempfile.TemporaryDirectory() as name:
+    ...     directory = Path(name)
+    ...     workflow = directory / "ci.yml"
+    ...     _ = workflow.write_text("jobs: {build: {steps: []}}", encoding="utf-8")
+    ...     _ = (directory / "notes.md").write_text("ignored", encoding="utf-8")
+    ...     workflow_documents(directory)
+    {'ci.yml': {'jobs': {'build': {'steps': []}}}}
     """
     documents: dict[str, Node] = {}
     for path in _workflow_paths(directory):
