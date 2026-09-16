@@ -1915,8 +1915,8 @@ declares no ceiling at all. The readings it rests on live in
 exercised on their own in `timeout_reading_test.py`,
 `lane_field_reading_test.py`, `repository_reading_test.py` and
 `timeout_property_test.py`. `lane_fields.py` is where every field a workflow
-declares is narrowed, so nothing above it reads a value the YAML loader has
-not been judged on.
+declares is narrowed, so nothing above it reads a value the YAML loader has not
+been judged on.
 
 `repository_reading.py` is the only module that opens a file. Everything above
 it takes text or parsed documents as an argument, so `coverage_jobs_of` is a
