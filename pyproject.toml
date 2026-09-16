@@ -21,11 +21,6 @@ target-version = "py313"
 extend-exclude = [
     ".rules",
     "docs",
-    # The shared spelling-rollout helper carries its own pinned, isolated
-    # Ruff gate (`make spelling-helper-test`), mirroring leynos/lading and
-    # leynos/prosidy-darn.
-    "scripts/typos_rollout_check.py",
-    "scripts/tests/test_typos_rollout_check.py",
 ]
 
 [tool.ruff.lint]
@@ -171,12 +166,10 @@ ignore-decorators = ["typing.overload", "typ.overload"]
 [tool.interrogate]
 ignore-overloaded-functions = true
 # Docstring coverage is enforced on the shipped helper code; the unit-test
-# suites are covered by Ruff's D rules instead. The spelling-rollout helper
-# has its own isolated gate (see [tool.ruff] extend-exclude).
+# suites are covered by Ruff's D rules instead.
 exclude = [
     "scripts/local_k8s/unittests",
     "scripts/tests",
-    "scripts/typos_rollout_check.py",
 ]
 
 [tool.ty.environment]
@@ -187,12 +180,6 @@ extra-paths = ["scripts"]
 python-version = "3.13"
 
 [tool.pylint.main]
-# The shared spelling-rollout helper has its own pinned Ruff and coverage
-# policy (mirrors leynos/lading).
-ignore = [
-    "typos_rollout_check.py",
-    "test_typos_rollout_check.py",
-]
 # Expand directory targets like scripts and tests even when a target is not
 # a package.
 recursive = true

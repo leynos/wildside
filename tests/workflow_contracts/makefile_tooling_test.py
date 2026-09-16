@@ -172,13 +172,6 @@ def test_lint_asyncapi_uses_pnpm_cli_runner(
 # A requirement's leading name, before any `==` pin or `>=` floor.
 _REQUIREMENT_NAME = re.compile(r"[A-Za-z0-9._-]+")
 
-# Gated separately by spelling-helper-test against its own pinned Ruff, so the
-# repository-wide Python gates must leave these sources alone.
-SPELLING_HELPER_SOURCES = (
-    "scripts/typos_rollout_check.py",
-    "scripts/tests/test_typos_rollout_check.py",
-)
-
 TYPECHECK_DEPENDENCIES = frozenset({
     "pytest",
     "pytest-mock",
@@ -319,9 +312,6 @@ def test_typecheck_python_materializes_a_venv_before_running_ty(
     assert all(source.endswith(".py") for source in sources)
     assert "scripts/local_k8s.py" in sources, (
         "the preview CLI must stay within the typecheck surface"
-    )
-    assert not set(sources) & set(SPELLING_HELPER_SOURCES), (
-        "the separately gated spelling helper must stay excluded"
     )
 
 
