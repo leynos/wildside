@@ -40,12 +40,22 @@ permissions: {}
 
 jobs:
   build:
-    runs-on: ubicloud-standard-8
-    # 90, matching the two coverage jobs. A cold sccache pays about 1.4 s to
-    # store each miss, and a run with no trunk generation to restore misses
-    # almost everything, so the first run on a new generation is the longest
-    # this job ever gets. 60 cancelled it mid compile-fail suite with every
-    # step passing, which loses the generation the next run would have read.
+    # Ubicloud runners are not available to a pull request from a fork, so a
+    # fork falls back to a GitHub-hosted runner and every other event keeps
+    # the managed one. `github.event.pull_request` is null outside a pull
+    # request, so a push to `main` and a manual dispatch both take the
+    # trusted arm rather than the fallback.
+    runs-on: >-
+      ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
+      || 'ubicloud-standard-8' }}
+    # 90, which is this job's own figure and no longer the coverage jobs':
+    # both of those went to 120 in #486 to clear the 5,400 s cargo watchdog,
+    # and this job has no watchdog to clear. A cold sccache pays about 1.4 s
+    # to store each miss, and a run with no trunk generation to restore
+    # misses almost everything, so the first run on a new generation is the
+    # longest this job ever gets. 60 cancelled it mid compile-fail suite with
+    # every step passing, which loses the generation the next run would have
+    # read.
     timeout-minutes: 90
     permissions:
       contents: read
@@ -645,7 +655,10 @@ jobs:
   # expensive coverage path.
   coverage:
     if: github.actor != 'dependabot[bot]' && github.event_name != 'push'
-    runs-on: ubicloud-standard-8
+    # The same fork fallback as `build`; see the comment there.
+    runs-on: >-
+      ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
+      || 'ubicloud-standard-8' }}
     # Above the 5,400 s cargo watchdog below plus the work either side of
     # the coverage step, which reached 59 s here and 522 s on the trunk
     # lane. At 90 minutes the ceiling equalled the watchdog exactly, so a

@@ -322,10 +322,22 @@ def test_reusable_callers_do_not_select_a_runner(filename: str, job_id: str) -> 
 def test_build_jobs_keep_their_reviewed_label_and_a_timeout(
     filename: str, job_id: str
 ) -> None:
-    """A job with no timeout can hold a managed runner until the platform cap."""
+    """A job with no timeout can hold a managed runner until the platform cap.
+
+    The label is read through `runner_labels`, because a paid lane a fork
+    can reach selects between two: the reviewed managed label and the
+    GitHub-hosted runner it falls back to. Both are checked, so neither
+    arm can be replaced with a label nobody reviewed.
+    """
     job = inv.load_workflow(filename)["jobs"][job_id]
-    assert job.get("runs-on") in inv.MANAGED_RUNNER_LABELS, (
-        f"{filename}:{job_id} must keep its reviewed managed-runner label"
+    labels = inv.runner_labels(job)
+    assert labels & inv.MANAGED_RUNNER_LABELS, (
+        f"{filename}:{job_id} must keep its reviewed managed-runner label, "
+        f"and selects {sorted(labels)}"
+    )
+    assert labels - inv.MANAGED_RUNNER_LABELS <= inv.GITHUB_HOSTED_LABELS, (
+        f"{filename}:{job_id} can select {sorted(labels)}, which includes a "
+        f"label that is neither the reviewed managed one nor GitHub-hosted"
     )
     assert isinstance(job.get("timeout-minutes"), int), (
         f"{filename}:{job_id} must declare timeout-minutes"

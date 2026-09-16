@@ -39,6 +39,11 @@ BUILD_JOBS = frozenset({
     ("coverage-main.yml", "coverage-upload"),
 })
 
+#: Every quoted label inside an event-keyed `runs-on` expression. The
+#: expression form exists so a pull request from a fork, which cannot
+#: obtain an Ubicloud runner, falls back to a GitHub-hosted one.
+_LABEL_LITERAL = re.compile(r"'([^']*)'")
+
 _CACHE_KEY_ASSIGNMENT = re.compile(
     r"printf '(?P<name>[A-Z0-9_]+)=(?P<prefix>[a-z0-9-]+?)-%s", re.MULTILINE
 )
@@ -59,6 +64,35 @@ def load_workflow(filename: str) -> dict[str, typ.Any]:
         message = f"{filename} must parse to a mapping"
         raise TypeError(message)
     return document
+
+
+def runner_labels(job: dict[str, typ.Any]) -> frozenset[str]:
+    """Return every runner label one job can select.
+
+    A ``runs-on`` is a bare label, a list of labels, or an expression
+    choosing between labels. The last is how a paid lane falls back for a
+    pull request from a fork, which cannot obtain an Ubicloud runner. A
+    reader that took the expression's text as a label would stop seeing
+    either of the two it actually names, and every contract built on it
+    would quietly start asserting nothing about that job.
+
+    Examples
+    --------
+    >>> runner_labels({"runs-on": "ubuntu-latest"}) == {"ubuntu-latest"}
+    True
+    >>> sorted(runner_labels({"runs-on": "${{ x && 'a' || 'b' }}"}))
+    ['a', 'b']
+    >>> runner_labels({"uses": "owner/repo/.github/workflows/w.yml@main"})
+    frozenset()
+    """
+    runner = job.get("runs-on")
+    if isinstance(runner, list):
+        return frozenset(str(entry) for entry in runner)
+    if not isinstance(runner, str):
+        return frozenset()
+    if "${{" in runner:
+        return frozenset(_LABEL_LITERAL.findall(runner))
+    return frozenset({runner})
 
 
 def workflow_filenames() -> list[str]:

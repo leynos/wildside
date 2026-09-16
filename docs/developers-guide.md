@@ -95,15 +95,49 @@ as a test assertion on the SHA string.
 ## CI runners, installers, and cache ownership
 
 Three rules govern the workflow estate. Contract tests in
-`tests/workflow_contracts/cache_ownership_test.py` and
-`tests/workflow_contracts/tool_installation_test.py` enforce all three, and
-they run through `make test-workflow-contracts`.
+`tests/workflow_contracts/cache_ownership_test.py`,
+`tests/workflow_contracts/tool_installation_test.py` and
+`tests/workflow_contracts/runner_placement_test.py` enforce all three, and they
+run through `make test-workflow-contracts`.
 
 ### Job placement
 
 Build and test work runs on the managed `ubicloud-standard-8` label: `ci.yml`'s
 `build` and `coverage` jobs, and `coverage-main.yml`'s `coverage-upload` job.
 Every managed job declares `timeout-minutes`.
+
+A pull request from a fork cannot obtain an Ubicloud runner, so a job that
+named one unconditionally would have no runner at all and would fail for a
+reason with nothing to do with the change under review. The two jobs in
+`ci.yml` therefore key their label on the event, falling back to a hosted
+runner for a fork and keeping the managed one for everything else:
+
+```yaml
+runs-on: >-
+  ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
+  || 'ubicloud-standard-8' }}
+```
+
+`github.event.pull_request` is null outside a pull request, so a push and a
+manual dispatch both take the trusted arm. GitHub-hosted minutes are free on a
+public repository, so the fallback costs only its own wall clock.
+
+`coverage-main.yml` is deliberately outside the rule. It fires on a push to
+`main`, which a fork cannot perform, so a fallback there would be a branch that
+can never be taken. `runner_placement_test.py` enforces that distinction rather
+than assuming it: it selects every Ubicloud lane in a workflow a fork can
+trigger, so giving `coverage-main.yml` a `pull_request` trigger makes its
+correct bare label a finding.
+
+Two details of that contract are worth knowing before editing a label. It
+parses the whole `runs-on` rather than searching it, because a substring test
+would pass on an expression that named the fork field and then ignored it, and
+on one with its two arms the wrong way round. And it rejects a line break in
+the value: `>-` folds a continuation into a space only while the continuation
+is indented no deeper than the line it continues, and indenting it further
+leaves a newline inside the expression. GitHub evaluates the broken value
+regardless, so a green run is not evidence that the label is well formed. Keep
+the continuation at the same indent as the line it continues.
 
 That `-8` shape is inherited rather than measured. It predates the managed
 runner work and no job here has yet been sampled for peak memory or disk, so
