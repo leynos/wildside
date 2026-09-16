@@ -149,26 +149,24 @@ each Rust job carries all three:
 - `sccache --zero-stats` before the build and `--show-stats` into the job
   summary afterwards.
 
-**Where the server starts decides which backend it uses**, and this is the
-part that is easy to get wrong. The server binds its backend once, at start.
+**Where the server starts decides which backend it uses**, and this is the part
+that is easy to get wrong. The server binds its backend once, at start.
 `setup-rust` with `use-sccache: true` starts one through
 `mozilla-actions/sccache-action`, and that action's last act is to write
-`ACTIONS_CACHE_SERVICE_V2=on` back to the environment file, along with
-GitHub's own results URL and token. That clobbers the credential export the
-job made earlier, both for the server it just started and for every step after
-it, so the objects go to GitHub rather than the managed store. Wildside's
-first attempt did exactly that: 14,480 compile requests, a plausible-looking
-`ghac` backend, and no objects in the managed cache at all. Calling
-`setup-rust` with `use-sccache: 'false'` keeps that step out of the job, and
-starting the server from a `run:` step means it reads the exported values as
-they were written. The start step fails the job if the resulting backend is
-not `ghac`.
+`ACTIONS_CACHE_SERVICE_V2=on` back to the environment file, along with GitHub's
+own results URL and token. That clobbers the credential export the job made
+earlier, both for the server it just started and for every step after it, so
+the objects go to GitHub rather than the managed store. Wildside's first
+attempt did exactly that: 14,480 compile requests, a plausible-looking `ghac`
+backend, and no objects in the managed cache at all. Calling `setup-rust` with
+`use-sccache: 'false'` keeps that step out of the job, and starting the server
+from a `run:` step means it reads the exported values as they were written. The
+start step fails the job if the resulting backend is not `ghac`.
 
-`SCCACHE_VERSION` feeds the key of every archive that carries
-`~/.local/bin`, which is where the script installs the binary. Bumping the pin
-without that would leave the warm archive valid and restore the old binary
-under the new pin, so the script would re-download on every run until an
-unrelated pin moved.
+`SCCACHE_VERSION` feeds the key of every archive that carries `~/.local/bin`,
+which is where the script installs the binary. Bumping the pin without that
+would leave the warm archive valid and restore the old binary under the new
+pin, so the script would re-download on every run until an unrelated pin moved.
 
 Read the statistics rather than assuming. Zero compile requests, or a cache
 location of local disk, means the wrapper never engaged; that is a failed
@@ -692,12 +690,12 @@ run and costs continuous-integration throughput.
 
 Use the smallest shape that fits the boundary:
 
-| Boundary                                       | Seam                                        | Example                                                     |
-| ---------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------- |
-| One setting, one consumer                      | Pass the value                              | `resolve_database_url` in `backend/src/bin/ingest_osm.rs`   |
-| A few names, one module                        | `impl Fn(&str) -> Option<String>` reader    | `bind_addr` in `backend/src/main.rs`                        |
-| Mocked across many tests, or expected to grow  | A trait plus a tiny process-backed adapter  | `SessionEnv`/`DefaultEnv`, `IdempotencyEnv`                 |
-| A spawned process                              | `Command::env_clear`, `env`, `env_remove`   | subprocess tests                                            |
+| Boundary                                      | Seam                                       | Example                                                   |
+| --------------------------------------------- | ------------------------------------------ | --------------------------------------------------------- |
+| One setting, one consumer                     | Pass the value                             | `resolve_database_url` in `backend/src/bin/ingest_osm.rs` |
+| A few names, one module                       | `impl Fn(&str) -> Option<String>` reader   | `bind_addr` in `backend/src/main.rs`                      |
+| Mocked across many tests, or expected to grow | A trait plus a tiny process-backed adapter | `SessionEnv`/`DefaultEnv`, `IdempotencyEnv`               |
+| A spawned process                             | `Command::env_clear`, `env`, `env_remove`  | subprocess tests                                          |
 
 *Seam shapes, and the boundary each one fits.*
 
@@ -708,12 +706,12 @@ reader that application composition injects.
 
 ### The composition-root exception
 
-A direct read may remain only at a genuine composition root. There are three:
-a binary's `main` path; the single reader a test binary composes its support
-tree with; and the one process-backed adapter behind an environment trait, such
-as `DefaultEnv` or `DefaultIdempotencyEnv`, which application composition
-injects and which domain and service code never reach for directly. Each must
-carry an item-scoped attribute naming why:
+A direct read may remain only at a genuine composition root. There are three: a
+binary's `main` path; the single reader a test binary composes its support tree
+with; and the one process-backed adapter behind an environment trait, such as
+`DefaultEnv` or `DefaultIdempotencyEnv`, which application composition injects
+and which domain and service code never reach for directly. Each must carry an
+item-scoped attribute naming why:
 
 ```rust
 #[expect(
@@ -1186,10 +1184,10 @@ Three notes for the next one, all learned here and reported upstream. cuprum
 program names in `Program` (leynos/concordat#154). `run_sync(echo=True)`
 mirrors a tool's output as it runs, which a gate needs; without it the output
 is captured and a long linter looks hung. And a `cmd-mox` shim occasionally
-stalls instead of returning, with the server logging `IPC received malformed
-JSON`; it ignores its own `CMOX_IPC_TIMEOUT` while it waits, so the symptom is
-a run that never finishes (leynos/cmd-mox#249). It is intermittent and appears
-under load rather than in any particular environment.
+stalls instead of returning, with the server logging
+`IPC received malformed JSON`; it ignores its own `CMOX_IPC_TIMEOUT` while it
+waits, so the symptom is a run that never finishes (leynos/cmd-mox#249). It is
+intermittent and appears under load rather than in any particular environment.
 `make test-lint-actions` uses a materialized virtual environment, which is
 where the suite has been stable, and `typecheck-python` already needs one, so
 the shape is not new.
@@ -1300,8 +1298,8 @@ the Makefile recipes described above.
 `.codescene/code-health-rules.json` narrows CodeScene's rules for parts of the
 repository where a default rule does not fit. Its schema is the one
 `cs docs code-health-rules-template` prints: a top-level `rule_sets` array,
-each entry naming a `matching_content_path`, and each rule named in prose with
-a `weight` between 0.0, which disables it, and 1.0, which is the default.
+each entry naming a `matching_content_path`, and each rule named in prose with a
+`weight` between 0.0, which disables it, and 1.0, which is the default.
 
 Validate a change before pushing it:
 
@@ -1309,9 +1307,9 @@ Validate a change before pushing it:
 cs rules-config validate
 ```
 
-That command needs no CodeScene licence, so it works on any checkout. It is
-the authoritative check, and it is worth running because the failure mode here
-is silent: a rule set CodeScene cannot read is skipped, the verdicts carry on
+That command needs no CodeScene licence, so it works on any checkout. It is the
+authoritative check, and it is worth running because the failure mode here is
+silent: a rule set CodeScene cannot read is skipped, the verdicts carry on
 without the override, and the only sign is a line on standard error that a
 passing run buries. This repository's own overrides sat unread that way from
 the pull request that added them until they were noticed by accident.
@@ -1323,8 +1321,8 @@ and add a tool to pin and install for no extra coverage. Do not add it to a
 gate target.
 
 `tests/workflow_contracts/codescene_rules_test.py` therefore holds the line
-where the gates run. It asserts the documented schema rather than merely that the
-file is JSON, requires every rule set to justify itself in
+where the gates run. It asserts the documented schema rather than merely that
+the file is JSON, requires every rule set to justify itself in
 `matching_content_path_doc`, and requires every `matching_content_path` to
 still match a file, since a glob left behind by a rename is an exemption that
 quietly stops applying.
@@ -1455,14 +1453,14 @@ indefensible fails the test suite instead of waiting for its expiry:
   repository-wide glob 11 resolution.
 - Entries that rest on one argument stand or fall together. The two
   `extract-zip` entries and the two Picomatch entries are each checked as a
-  group, so a ledger holding one of a pair fails rather than quietly keeping
-  an argument for one advisory that it discarded for the other.
+  group, so a ledger holding one of a pair fails rather than quietly keeping an
+  argument for one advisory that it discarded for the other.
 
 The questions these invariants ask of `bun.lock`, which versions of a package
 it resolves and which packages reach one, are answered by
-`tests/workflow_contracts/bun_lockfile.py`. Read the lockfile through it
-rather than by matching text, so that a new invariant asserts a dependency
-edge rather than the presence of a name.
+`tests/workflow_contracts/bun_lockfile.py`. Read the lockfile through it rather
+than by matching text, so that a new invariant asserts a dependency edge rather
+than the presence of a name.
 
 Failing there is the intended outcome of the fix landing: delete the entry and
 close its issue. When adding an exception, add the matching invariant and prove

@@ -241,7 +241,6 @@ jobs:
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
           restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
 
-
       # setup-rust runs with use-sccache: false because the sccache action it
       # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
       # clobbering the export above for every later step. The script explains
@@ -322,9 +321,7 @@ jobs:
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@8de2aa07cae85fd17c0b35642db70cf5495f1d25  # v24.0.0
         with:
-          globs: |
-            **/*.md
-            !**/node_modules/**
+          globs: '**/*.md'
 
       - name: Setup Helm
         # v4.3.1
@@ -409,6 +406,16 @@ jobs:
 
       - name: Python format check
         run: make check-fmt-python
+
+      - name: Install mdtablefix
+        # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
+        # first release with `--check` and `--git`.
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
+        with:
+          version: "0.6.0"
+
+      - name: Markdown format check
+        run: make check-fmt-markdown
 
       # Pylint runs on a uv-managed PyPy (downloaded on demand), mirroring
       # the pylint-pypy-shim setup in leynos/lading.
@@ -734,7 +741,6 @@ jobs:
             ~/.cache/pg-embedded/binaries
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
           restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
-
 
       # setup-rust runs with use-sccache: false because the sccache action it
       # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,

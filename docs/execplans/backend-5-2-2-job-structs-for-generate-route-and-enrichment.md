@@ -378,11 +378,12 @@ The minimum bar:
    contract.
 2. Add `GenerateRouteJob::v1(...)` and
    `GenerateRouteJob::try_from_submission(&RouteSubmissionRequest,
-   request_id, enqueued_at)` as infallible constructors. Each accepts typed
-   inputs and copies them into the job's V1 fields. HTTP deserialization rejects
-   null locations and preferences before this boundary; malformed persisted
-   envelopes are rejected during Serde decoding when a job is restored. Do not
-   reintroduce an untyped JSON validation seam.
+   request_id, enqueued_at)`
+   as infallible constructors. Each accepts typed inputs and copies them into
+   the job's V1 fields. HTTP deserialization rejects null locations and
+   preferences before this boundary; malformed persisted envelopes are rejected
+   during Serde decoding when a job is restored. Do not reintroduce an untyped
+   JSON validation seam.
 3. Add `rstest` unit tests covering:
    - Typed constructors accept well-formed route submissions and V1 payloads.
    - Round-trip through `serde_json::to_value` and back is the identity.
@@ -1167,25 +1168,25 @@ The plan ships in two PRs:
   took the extra `request_id`/`enqueued_at` parameters. The submission already
   carried a typed, validated `RouteSubmissionPayload`; retaining the explicit
   helper kept the DTO-to-job boundary visible without reintroducing an untyped
-  JSON conversion or an implicit `From` implementation. Date/Author:
-  2026-06-06 / planning agent.
+  JSON conversion or an implicit `From` implementation. Date/Author: 2026-06-06
+  / planning agent.
 
 - Decision: Build each V1 payload from a single struct argument rather than
   a positional constructor. `GenerateRouteJob::v1` takes the whole
   `GenerateRouteJobV1` (its fields are `pub`) and constructs the envelope
   directly. HTTP and persisted deserializers reject null required locations and
   an explicitly null preferences value before a typed job reaches a worker.
-  `EnrichmentJob::v1`
-  takes an `EnrichmentJobParams` struct whose `bounding_box` is already
-  validated and returns `Result<Self, EnrichmentJobBuildError>` for tag
-  validation. Rationale: passing a struct sidesteps the `too_many_arguments`
-  lint without a scoped clippy expectation, keeps call sites self-documenting
-  through named fields, and — for enrichment — lets the constructor own tag
-  validation without duplicating bounding-box validation. This supersedes the
-  earlier plan to keep positional constructors under a scoped
-  `too_many_arguments` expectation; no such expectation exists in the shipped
-  code. Date/Author: 2026-06-15 / implementation agent (revised 2026-07-26,
-  2026-08-02, and 2026-08-14 to match implementation).
+  `EnrichmentJob::v1` takes an `EnrichmentJobParams` struct whose
+  `bounding_box` is already validated and returns
+  `Result<Self, EnrichmentJobBuildError>` for tag validation. Rationale:
+  passing a struct sidesteps the `too_many_arguments` lint without a scoped
+  clippy expectation, keeps call sites self-documenting through named fields,
+  and — for enrichment — lets the constructor own tag validation without
+  duplicating bounding-box validation. This supersedes the earlier plan to keep
+  positional constructors under a scoped `too_many_arguments` expectation; no
+  such expectation exists in the shipped code. Date/Author: 2026-06-15 /
+  implementation agent (revised 2026-07-26, 2026-08-02, and 2026-08-14 to match
+  implementation).
 
 - Decision: Make `EnrichmentJobV1` fields private and hand-write the envelope
   `Deserialize` implementation. Persisted tags decode through a bounded
@@ -1301,16 +1302,15 @@ The plan ships in two PRs:
 Roadmap item 5.2.2 is complete. The backend has domain-owned, versioned job
 payloads for generate-route and enrichment work, pinned by unit, property,
 snapshot, in-memory behavioural, and PostgreSQL persisted-boundary coverage.
-Final evidence recorded on 2026-08-09 at approximately 22:15Z includes 4
-passing `job_structs_bdd` tests and 11 passing `job_structs_postgres_bdd` tests.
-All requested focused jobs, OSM, worker, Overpass, HTTP, and cache suites
-passed. `make check-fmt`, `make lint` with Whitaker clean, `make typecheck`,
+Final evidence recorded on 2026-08-09 at approximately 22:15Z includes 4 passing
+`job_structs_bdd` tests and 11 passing `job_structs_postgres_bdd` tests. All
+requested focused jobs, OSM, worker, Overpass, HTTP, and cache suites passed.
+`make check-fmt`, `make lint` with Whitaker clean, `make typecheck`,
 `make test`, `make markdownlint`, and `make nixie` all exited 0. Full nextest
 reported 1,453 passed and 4 skipped; additional suites reported 1, 90, 43, 15,
-and 107 passed. The `RouteQueue` port shape and typed
-`RouteSubmissionRequest` contract remain bounded at their documented seams,
-and the Apalis storage shape remains `serde_json::Value` for later
-worker/storage milestones.
+and 107 passed. The `RouteQueue` port shape and typed `RouteSubmissionRequest`
+contract remain bounded at their documented seams, and the Apalis storage shape
+remains `serde_json::Value` for later worker/storage milestones.
 
 The main future-facing decisions are now explicit in the code and docs: trace
 metadata stays deferred to 5.2.4, retry/dead-letter behaviour stays deferred to
@@ -1371,6 +1371,6 @@ passed the focused and repository-wide validation above.
   versions, and compatible producer/consumer rollout order. Historical
   milestone and decision entries remain unchanged.
 - 2026-08-09: Recorded the final focused, PostgreSQL-backed, repository-gate,
-  nextest, additional-suite, and CodeRabbit evidence from approximately
-  22:15Z; changed the plan status from `PENDING VALIDATION` to `COMPLETE`. No
+  nextest, additional-suite, and CodeRabbit evidence from approximately 22:15Z;
+  changed the plan status from `PENDING VALIDATION` to `COMPLETE`. No
   validation work remains for roadmap item 5.2.2.

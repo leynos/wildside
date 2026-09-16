@@ -118,7 +118,6 @@ jobs:
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
           restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
 
-
       # setup-rust runs with use-sccache: false because the sccache action it
       # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
       # clobbering the export above for every later step. The script explains
@@ -239,7 +238,6 @@ jobs:
             ~/.theseus/postgresql
             ~/.cache/pg-embedded/binaries
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
-
 
       # Zero compile requests means the wrapper never engaged, which is a
       # failed integration rather than a cold cache.

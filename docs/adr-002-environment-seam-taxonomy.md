@@ -71,12 +71,11 @@ A direct read may remain only at a genuine composition root: a binary's `main`
 path, the one reader a test binary composes its support tree with, or the
 single process-backed adapter behind an environment trait, composed at the
 application boundary and never reached from domain or service code. It must
-carry an item-scoped
-`#[expect(clippy::disallowed_methods, reason = "…")]` naming why the site is a
-root. Use `expect`, never `allow`: the expectation goes unfulfilled, and
-therefore warns, once the site is migrated, so the backlog removes itself
-instead of rotting. The sanctioned roots today are `process_env` in
-`backend/src/main.rs`, `database_url_from_process_env` in
+carry an item-scoped `#[expect(clippy::disallowed_methods, reason = "…")]`
+naming why the site is a root. Use `expect`, never `allow`: the expectation
+goes unfulfilled, and therefore warns, once the site is migrated, so the
+backlog removes itself instead of rotting. The sanctioned roots today are
+`process_env` in `backend/src/main.rs`, `database_url_from_process_env` in
 `backend/src/bin/ingest_osm.rs`, `workspace_dir_override` in
 `tools/architecture-lint/src/main.rs`, `process_env` in
 `backend/tests/support/test_env.rs`, and the two adapter implementations named

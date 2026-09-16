@@ -151,7 +151,7 @@ PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
 	cuprum==$(CUPRUM_VERSION) cmd-mox==$(CMD_MOX_VERSION)
 
 # Place one consolidated PHONY declaration near the top of the file
-.PHONY: all clean be fe fe-build openapi gen docker-up docker-down
+.PHONY: check-fmt-markdown all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
 .PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
@@ -160,6 +160,15 @@ PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
 .PHONY: lint-rust lint-clippy lint-whitaker lint-frontend lint-asyncapi lint-openapi lint-makefile
 .PHONY: lint-actions lint-architecture workspace-sync prepare-pg-worker
 .PHONY: lint-python typecheck-python check-fmt-python
+
+# `make fmt` and `make check-fmt` call mdtablefix directly. `--git` selects the
+# Markdown files Git tracks and `--include-untracked` adds the untracked files
+# Git does not ignore, so a new document is formatted before it is staged.
+# Both modes need mdtablefix 0.6.0 or later; CI pins the version at the
+# install-mdtablefix step.
+MDTABLEFIX ?= mdtablefix
+MDTABLEFIX_SELECT = --git --include-untracked
+MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
 
 workspace-sync:
 	./scripts/sync_workspace_members.py
@@ -210,7 +219,8 @@ local-k8s-logs:
 fmt: workspace-sync
 	cargo fmt --all
 	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
-	mdformat-all
+	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
+	@unset FORCE_COLOR; $(MDLINT) --fix "**/*.md"
 	$(RUFF) format
 	$(RUFF) check --select I --fix
 
@@ -486,8 +496,11 @@ $(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend
 $(RUFF) format --check
 endef
 
-check-fmt:
+check-fmt: check-fmt-markdown
 	$(CHECK_FMT_CMD)
+
+check-fmt-markdown:
+	$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 
 # Standalone Python formatting gate so CI can report it as a discrete step.
 check-fmt-python:
