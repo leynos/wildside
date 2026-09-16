@@ -137,7 +137,7 @@ PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
 # Place one consolidated PHONY declaration near the top of the file
 .PHONY: check-fmt-markdown all clean be fe fe-build openapi gen docker-up docker-down
 .PHONY: local-k8s-up local-k8s-down local-k8s-status local-k8s-logs
-.PHONY: fmt lint test test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions typecheck deps lockfile
+.PHONY: fmt lint docs-check test test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions typecheck deps lockfile
 .PHONY: lint-specs audit audit-node rust-audit
 .PHONY: check-fmt markdownlint markdownlint-docs mermaid-lint nixie yamllint
 .PHONY: spelling
@@ -159,7 +159,7 @@ MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
 workspace-sync:
 	./scripts/sync_workspace_members.py
 
-all: check-fmt lint test spelling
+all: check-fmt lint docs-check test spelling
 
 clean:
 	cargo clean --manifest-path backend/Cargo.toml
@@ -317,6 +317,16 @@ POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries
 export PG_PASSWORD
 export POSTGRESQL_RELEASES_URL
 
+
+# Zero-tolerance documentation gate: TypeDoc's notDocumented validation over
+# the frontend-pwa, packages/types, and packages/tokens surfaces (their
+# typedoc.json files). Emits no documentation artefacts.
+#
+# `deps` is a prerequisite because TypeDoc runs from the workspace install:
+# without it a clean checkout fails with a missing binary rather than a
+# documentation verdict.
+docs-check: deps
+	pnpm run docs:check
 
 test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
 
