@@ -129,3 +129,78 @@ def test_an_unreadable_workflow_fails_the_whole_reading(tmp_path: Path) -> None:
     assert caught.value.path == unreadable, (
         "the failure names the file it could not open"
     )
+
+
+def test_a_workflow_directory_that_is_not_there_is_not_an_empty_one(
+    tmp_path: Path,
+) -> None:
+    """A directory that cannot be listed is a fault, not a count of zero.
+
+    Scenario: the contract reads a workflow directory that does not
+    exist.
+
+    Invariant: `workflow_documents` raises and names the directory. This
+    is the failure with no symptom: every assertion in the timeout
+    contract is over the lanes the reading found, so a reading that
+    returned nothing would satisfy all of them and report a repository
+    whose workflows were never opened as one in perfect order.
+    """
+    absent = tmp_path / "workflows"
+
+    with pytest.raises(RepositoryReadError) as caught:
+        workflow_documents(absent)
+
+    assert caught.value.path == absent, (
+        "the failure names the directory it could not list, not a file"
+    )
+
+
+def test_a_workflow_directory_that_is_a_file_is_refused(tmp_path: Path) -> None:
+    """A path that is not a directory cannot hold workflows.
+
+    Scenario: the path given to the reading is an ordinary file.
+
+    Invariant: `workflow_documents` raises and names it. The mistake is
+    an easy one, a caller passing the workflow rather than the directory
+    holding it, and its quiet form reports every lane as absent.
+    """
+    not_a_directory = tmp_path / "ci.yml"
+    not_a_directory.write_text(MINIMAL_WORKFLOW, encoding="utf-8")
+
+    with pytest.raises(RepositoryReadError) as caught:
+        workflow_documents(not_a_directory)
+
+    assert caught.value.path == not_a_directory, (
+        "the failure names the path that was not a directory"
+    )
+
+
+@pytest.mark.skipif(
+    os.geteuid() == 0,
+    reason="root ignores the mode bits this case needs to make a directory unlistable",
+)
+def test_a_workflow_directory_that_cannot_be_listed_is_refused(
+    tmp_path: Path,
+) -> None:
+    """Permission to read the directory is part of reading it.
+
+    Scenario: the workflow directory exists and holds a workflow, but
+    its own mode bits forbid listing it.
+
+    Invariant: `workflow_documents` raises and names the directory. The
+    file inside is readable, so a reading that swallowed the enumeration
+    failure would report no lanes while the lane sat there on disk.
+    """
+    locked = tmp_path / "workflows"
+    locked.mkdir()
+    (locked / "ci.yml").write_text(MINIMAL_WORKFLOW, encoding="utf-8")
+    locked.chmod(0o000)
+    try:
+        with pytest.raises(RepositoryReadError) as caught:
+            workflow_documents(locked)
+    finally:
+        locked.chmod(0o755)
+
+    assert caught.value.path == locked, (
+        "the failure names the directory whose listing was refused"
+    )

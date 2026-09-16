@@ -20,6 +20,7 @@ module exists to prevent.
 from __future__ import annotations
 
 import typing as typ
+from fnmatch import fnmatch
 
 import yaml
 from lane_fields import Node, mapping_of
@@ -128,7 +129,8 @@ def workflow_documents(directory: Path) -> dict[str, Node]:
     Raises
     ------
     RepositoryReadError
-        If a file cannot be read, or is not valid YAML.
+        If the directory cannot be listed, if a file cannot be read, or
+        if one is not valid YAML.
     """
     documents: dict[str, Node] = {}
     for path in _workflow_paths(directory):
@@ -141,6 +143,14 @@ def workflow_documents(directory: Path) -> dict[str, Node]:
 def _workflow_paths(directory: Path) -> cabc.Sequence[Path]:
     """Return every workflow file in one directory, in name order.
 
+    The directory is enumerated with ``iterdir`` rather than matched
+    with ``glob``. ``Path.glob`` reports a directory that is missing,
+    that is not a directory, or that cannot be listed as an empty
+    result, and an empty result is indistinguishable from a repository
+    that declares no workflows. A contract whose every assertion is over
+    the lanes it found would then pass on a repository it never read,
+    which is the one outcome the boundary exists to prevent.
+
     Parameters
     ----------
     directory : Path
@@ -151,8 +161,21 @@ def _workflow_paths(directory: Path) -> cabc.Sequence[Path]:
     cabc.Sequence[Path]
         The matching paths, sorted by name so the reading is the same
         whatever order the filesystem offers them in.
+
+    Raises
+    ------
+    RepositoryReadError
+        If the directory cannot be listed, carrying the directory's own
+        path rather than a file's.
     """
-    found: list[Path] = []
-    for pattern in WORKFLOW_PATTERNS:
-        found.extend(directory.glob(pattern))
+    try:
+        entries = list(directory.iterdir())
+    except OSError as error:
+        message = f"{directory}: cannot be listed: {error}"
+        raise RepositoryReadError(message, path=directory) from error
+    found = [
+        entry
+        for entry in entries
+        if any(fnmatch(entry.name, pattern) for pattern in WORKFLOW_PATTERNS)
+    ]
     return sorted(found, key=lambda path: path.name)
