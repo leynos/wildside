@@ -26,6 +26,45 @@ All suites run through the same quality gateways:
 - `make audit`
 - `make test`
 
+### Where the backend suite runs in CI
+
+A pull request executes the backend test suite exactly once, in `ci.yml`'s
+`coverage` job, through the shared `generate-coverage` action. The `build` job
+in the same workflow ran it a second time until 2026-09-17; that step was
+deleted after the two selections were compared with
+`cargo nextest list --list-type full`:
+
+| Selection                                                                                 | Tests |
+| ----------------------------------------------------------------------------------------- | ----- |
+| `build`: backend manifest, `--all-targets --all-features`, compile-fail binaries excluded | 1643  |
+| `coverage`: workspace, `example-data metrics test-support`                                | 1788  |
+| In `build` alone                                                                          | 0     |
+
+The 1643 were a strict subset. The extra 145 are the `example-data`,
+`pagination` and `architecture-lint` workspace members, which the coverage
+action reaches because it appends `--workspace` to the manifest it detects.
+Neither invocation passed `--profile` and neither declared `NEXTEST_PROFILE` at
+step, job or workflow level, so both ran `profile.default` with its 60 s slow
+timeout and its `pg-embed` test group. That equality of profile is what makes
+the two runs comparable at all; a lane that named a profile would not have been
+removable on a test-list comparison alone.
+
+The compile-fail suites are the exception and always were. Neither run executed
+them: the deleted step excluded both binaries by name, and the coverage run
+never enables `trybuild-tests`. They run in the `build` job's
+`Compile-fail tests` step under plain `cargo test`, which the deletion left
+untouched.
+
+`tests/workflow_contracts/duplicate_test_lane_test.py` holds all of this: that
+the surviving lane is reachable on `pull_request` under the reviewed job
+condition and no step condition, that it keeps nextest and the three measured
+features, that no scope declares `NEXTEST_PROFILE`, and that the `build` job
+runs the two compile-fail commands and no other cargo test invocation. The
+profile scope walk lives in `tests/workflow_contracts/nextest_profile.py`; it
+decides by key membership rather than by value, because `NEXTEST_PROFILE: ""`
+and a valueless `NEXTEST_PROFILE:` are both declarations that mask an outer
+scope and the second parses to `None`.
+
 ### Python docstring examples
 
 Every `>>>` example in a Python module here is executed.
@@ -690,9 +729,11 @@ test usage remains coherent:
 
 Continuous Integration (CI) warms the `pg-embed-setup-unpriv` binary cache with
 `scripts/warm-pg-embedded-cache.sh` before running `cargo nextest`. Keep this
-warm-up step before `Rust tests`; it turns PostgreSQL binary acquisition into a
-short, explicit CI step instead of letting the first integration test perform a
-cold download inside `postgresql_embedded::setup()`.
+warm-up step ahead of every step that executes the Rust suite, which since
+2026-09-17 means the `Generate Rust coverage` step in `ci.yml`'s `coverage` job
+and the one in `coverage-main.yml`. It turns PostgreSQL binary acquisition into
+a short, explicit CI step instead of letting the first integration test perform
+a cold download inside `postgresql_embedded::setup()`.
 
 The CI cache step must include both binary-cache locations used by the two
 embedded PostgreSQL layers:
@@ -721,10 +762,11 @@ worker process.
 
 If CI reports `error decoding response body`, treat it as a likely download
 stall or timeout from `reqwest` rather than as JSON/body corruption. Check the
-`Cache PostgreSQL embedded binaries` and
+`Restore PostgreSQL embedded binaries` and
 `Warm PostgreSQL embedded binary cache` steps first, then verify that the
-`Rust tests` step is still exporting `PG_EMBEDDED_WORKER`, `GITHUB_TOKEN`, and
-`NEXTEST_TEST_THREADS=1`.
+failing `Generate Rust coverage` step is still exporting `PG_EMBEDDED_WORKER`,
+`GITHUB_TOKEN`, `PG_TEST_BACKEND`, `PG_PASSWORD`, `POSTGRESQL_VERSION` and
+`POSTGRESQL_RELEASES_URL`.
 
 ## Rust behavioural tests with `rstest-bdd` v0.5.0
 
@@ -838,9 +880,9 @@ Three pieces cooperate here:
 - **`PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are composed by the runner**,
   not by test code: the `test-rust` Make recipe passes them on the
   `cargo nextest run` command line (with `?=` defaults that an existing value
-  overrides), and the CI `Rust tests` and coverage steps set them in their
-  `env:` blocks. `backend/tests/environment_policy_contract.rs` fails if the
-  Make recipe stops doing so.
+  overrides), and the CI coverage steps set them in their `env:` blocks.
+  `backend/tests/environment_policy_contract.rs` fails if the Make recipe stops
+  doing so.
 
 ## Environment seams
 
