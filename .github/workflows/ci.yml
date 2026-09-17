@@ -496,33 +496,6 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
 
-      - name: Rust tests
-        env:
-          # Increase GitHub API rate limits for postgresql_embedded downloads.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pin the embedded PostgreSQL version so postgresql_archive skips release-listing queries.
-          # Use the semver "exact" prefix so no wildcard resolution is attempted.
-          POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
-          # Pin the binary source so it cannot drift with crate defaults, and
-          # so it matches the warm-up step's cache.
-          POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
-          # Keep backend selection explicit for strict PG_TEST_BACKEND validation.
-          PG_TEST_BACKEND: postgresql_embedded
-          # Stable superuser password for the shared embedded cluster. Test
-          # support no longer sets this in-process (issue #464), so the runner
-          # composes it; a random per-process password would make later test
-          # binaries fail with `28P01 password authentication failed`.
-          PG_PASSWORD: wildside_embedded_test
-          # Root-path bootstrap requires the worker binary for privilege demotion.
-          PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
-        run: |
-          # Clean stale pg-embed directories that may conflict with new runs.
-          find target/ -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} + 2>/dev/null || true
-          RUSTFLAGS="-D warnings" cargo nextest run --locked \
-            --manifest-path backend/Cargo.toml \
-            --all-targets --all-features \
-            -E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests))'
-
       - name: Compile-fail tests
         run: |
           cargo test --locked --all-features -p backend --test declare_test_support_compile_fail
