@@ -6,10 +6,18 @@ Split out of :mod:`duplicate_test_lane_test` when that module crossed the
 document and return what it declares, and the assertions stay with the
 tests that make them.
 
-One function opens a file, :func:`ci_workflow`, and it names the path it
-reads. Everything else is pure, so a contract that cannot read the
-workflow fails at the boundary that read it rather than several frames
-inside a query.
+One function opens a file, :func:`load_workflow`, and its caller names
+the path. Everything else takes a parsed document and is pure, so a
+contract that cannot read the workflow fails at the boundary that read
+it rather than several frames inside a query.
+
+The path is an argument rather than a module constant, and the queries
+take a document rather than fetching one. A query that reached for
+:data:`WORKFLOW_PATH` would make every call site's filesystem access
+invisible and every signature quietly fallible, which is exactly what
+:mod:`repository_reading` and :mod:`coverage_lanes` say in their own
+docstrings that they exist to prevent. :data:`WORKFLOW_PATH` is offered
+as data for a caller to pass, never read here.
 """
 
 from __future__ import annotations
@@ -21,6 +29,9 @@ import repository_reading as reading
 from timeout_budgets import COVERAGE_ACTION
 
 WORKFLOW_LABEL = "ci.yml"
+
+#: The job every "build job" contract here reads.
+BUILD_JOB = "build"
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / ".github" / "workflows" / WORKFLOW_LABEL
 )
@@ -38,23 +49,38 @@ class WorkflowShapeError(TypeError):
     """
 
 
-def ci_workflow() -> dict[str, object]:
-    """Return the parsed CI workflow.
+def load_workflow(path: Path) -> dict[str, object]:
+    """Return one parsed workflow document.
+
+    The only function here that touches the filesystem, and the caller
+    names the file it reads. Ordinarily that is
+    :data:`WORKFLOW_PATH`, passed by a fixture so the read happens once
+    per test and is visible in the test's own signature.
+
+    Parameters
+    ----------
+    path : Path
+        The workflow file to read.
 
     Returns
     -------
     dict[str, object]
-        The whole document, read at the one named filesystem boundary
-        the contract suite owns.
+        The whole document.
 
     Raises
     ------
+    repository_reading.RepositoryReadError
+        If the file cannot be read or is not valid YAML. Propagated
+        rather than translated: it already carries the path, which is
+        what an author needs, and wrapping it would hide the distinction
+        between a file that could not be read and one whose shape is
+        wrong.
     WorkflowShapeError
         If the file declares no mapping at its top level.
     """
-    parsed = reading.parse_workflow(reading.read_text(WORKFLOW_PATH), WORKFLOW_PATH)
+    parsed = reading.parse_workflow(reading.read_text(path), path)
     if parsed is None:
-        message = f"{WORKFLOW_LABEL} must declare a mapping at its top level"
+        message = f"{path}: must declare a mapping at its top level"
         raise WorkflowShapeError(message)
     return dict(parsed)
 
@@ -232,23 +258,28 @@ def cache_paths_of(step: dict[str, object]) -> list[str]:
     ]
 
 
-def build_job() -> dict[str, object]:
-    """Return the build job.
-
-    Returns
-    -------
-    dict[str, object]
-        The parsed job.
-    """
-    return job_named(ci_workflow(), "build")
-
-
-def build_steps() -> list[dict[str, object]]:
+def build_steps(document: dict[str, object]) -> list[dict[str, object]]:
     """Return the build job's steps.
+
+    The only named shortcut for a single job, because three contracts
+    want the same list. A matching `build_job` wrapper was removed: it
+    said no more than `job_named(document, BUILD_JOB)` and read as a
+    second, structurally identical helper.
+
+    Parameters
+    ----------
+    document : dict[str, object]
+        The parsed workflow.
 
     Returns
     -------
     list[dict[str, object]]
         The steps, in the order the job runs them.
+
+    Raises
+    ------
+    WorkflowShapeError
+        If the workflow declares no build job, or the job declares no
+        list of steps, or one entry of it is not a mapping.
     """
-    return steps_of(build_job(), "build")
+    return steps_of(job_named(document, BUILD_JOB), BUILD_JOB)

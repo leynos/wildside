@@ -54,6 +54,7 @@ from __future__ import annotations
 import ci_lane_reading as lanes
 import ci_step_predicates as does
 import nextest_profile as profiles
+import pytest
 
 #: The coverage job runs on pull requests and not for Dependabot. Pinned
 #: verbatim rather than merely required to be absent, so narrowing it to
@@ -96,7 +97,26 @@ COVERAGE_ACTOR_CLAUSE = "github.actor != 'dependabot[bot]'"
 DATABASE_CACHE_PATHS = ("~/.theseus/postgresql", "~/.cache/pg-embedded/binaries")
 
 
-def test_the_backend_suite_runs_in_a_coverage_lane_on_pull_request() -> None:
+@pytest.fixture(name="document")
+def fixture_document() -> dict[str, object]:
+    """Return `ci.yml`, parsed once per test.
+
+    The filesystem read lives here, named in every test's signature, so
+    no query below is quietly fallible or quietly file-touching. The
+    reader takes the path as an argument for the same reason; see
+    :mod:`ci_lane_reading`.
+
+    Returns
+    -------
+    dict[str, object]
+        The parsed workflow.
+    """
+    return lanes.load_workflow(lanes.WORKFLOW_PATH)
+
+
+def test_the_backend_suite_runs_in_a_coverage_lane_on_pull_request(
+    document: dict[str, object],
+) -> None:
     """One coverage step carries the whole backend suite on a pull request.
 
     Scenario: the build job no longer runs the suite, so a pull request's
@@ -106,7 +126,6 @@ def test_the_backend_suite_runs_in_a_coverage_lane_on_pull_request() -> None:
     condition of its own. A condition anywhere in that chain leaves the
     backend untested on a pull request with nothing red to show it.
     """
-    document = lanes.ci_workflow()
     assert "pull_request" in lanes.triggers_of(document), (
         f"{lanes.WORKFLOW_LABEL} must trigger on pull_request, or the backend suite "
         "runs on no pull request at all"
@@ -136,7 +155,9 @@ def test_the_backend_suite_runs_in_a_coverage_lane_on_pull_request() -> None:
     )
 
 
-def test_the_coverage_lane_selects_the_measured_superset() -> None:
+def test_the_coverage_lane_selects_the_measured_superset(
+    document: dict[str, object],
+) -> None:
     """The surviving lane runs the selection the deleted one was a subset of.
 
     Scenario: the deletion was justified by a measured test list, and
@@ -147,9 +168,9 @@ def test_the_coverage_lane_selects_the_measured_superset() -> None:
     which binaries run and how the embedded-Postgres suites are
     serialized.
     """
-    options = lanes.coverage_steps_of(lanes.job_named(lanes.ci_workflow(), "coverage"))[
-        0
-    ].get("with")
+    options = lanes.coverage_steps_of(lanes.job_named(document, "coverage"))[0].get(
+        "with"
+    )
     assert isinstance(options, dict), "the coverage step must declare inputs"
     assert options.get("use-cargo-nextest") == "true", (
         "the coverage step must run through nextest; .config/nextest.toml's "
@@ -163,7 +184,9 @@ def test_the_coverage_lane_selects_the_measured_superset() -> None:
     )
 
 
-def test_no_scope_declares_a_nextest_profile_for_the_coverage_lane() -> None:
+def test_no_scope_declares_a_nextest_profile_for_the_coverage_lane(
+    document: dict[str, object],
+) -> None:
     """The surviving lane runs profile.default, as the deleted step did.
 
     Scenario: both invocations ran without ``--profile`` and without
@@ -174,7 +197,6 @@ def test_no_scope_declares_a_nextest_profile_for_the_coverage_lane() -> None:
     profile from the one the subset was measured under, which is exactly
     the clause that makes a deletion unsafe elsewhere in the estate.
     """
-    document = lanes.ci_workflow()
     job = lanes.job_named(document, "coverage")
     declaration = profiles.declared_profile(
         document, job, lanes.coverage_steps_of(job)[0]
@@ -188,7 +210,9 @@ def test_no_scope_declares_a_nextest_profile_for_the_coverage_lane() -> None:
     )
 
 
-def test_the_build_job_runs_the_compile_fail_suites_unconditionally() -> None:
+def test_the_build_job_runs_the_compile_fail_suites_unconditionally(
+    document: dict[str, object],
+) -> None:
     """Compile-fail suites survive the deletion and cannot be skipped.
 
     Scenario: the compile-fail binaries were excluded from both
@@ -199,7 +223,7 @@ def test_the_build_job_runs_the_compile_fail_suites_unconditionally() -> None:
     `continue-on-error` at either scope runs it and discards the
     verdict, which is the same as not running it.
     """
-    job = lanes.build_job()
+    job = lanes.job_named(document, lanes.BUILD_JOB)
     assert "if" not in job, (
         "the build job must carry no condition; a skipped job runs no steps "
         "and leaves every step-level assertion here vacuous"
@@ -211,7 +235,7 @@ def test_the_build_job_runs_the_compile_fail_suites_unconditionally() -> None:
 
     compile_fail = [
         step
-        for step in lanes.steps_of(job, "build")
+        for step in lanes.steps_of(job, lanes.BUILD_JOB)
         if lanes.script_of(step) == COMPILE_FAIL_SCRIPT
     ]
     assert len(compile_fail) == 1, (
@@ -228,7 +252,9 @@ def test_the_build_job_runs_the_compile_fail_suites_unconditionally() -> None:
     )
 
 
-def test_every_build_step_running_the_suite_is_the_dependabot_lane() -> None:
+def test_every_build_step_running_the_suite_is_the_dependabot_lane(
+    document: dict[str, object],
+) -> None:
     """The build job runs the suite for Dependabot and for nobody else.
 
     Scenario: the coverage job excludes `dependabot[bot]` deliberately,
@@ -244,7 +270,7 @@ def test_every_build_step_running_the_suite_is_the_dependabot_lane() -> None:
     """
     suite_steps = [
         step
-        for step in lanes.build_steps()
+        for step in lanes.build_steps(document)
         if does.runs_the_suite(step) and lanes.script_of(step) != COMPILE_FAIL_SCRIPT
     ]
     assert suite_steps, (
@@ -262,7 +288,9 @@ def test_every_build_step_running_the_suite_is_the_dependabot_lane() -> None:
     )
 
 
-def test_the_two_lanes_conditions_are_complementary() -> None:
+def test_the_two_lanes_conditions_are_complementary(
+    document: dict[str, object],
+) -> None:
     """Exactly one lane runs the suite on any pull request.
 
     Scenario: this is the invariant whose absence let the suite nearly
@@ -275,7 +303,7 @@ def test_the_two_lanes_conditions_are_complementary() -> None:
     with both lanes excluding Dependabot, which is the state this
     repository nearly shipped.
     """
-    coverage_condition = lanes.job_named(lanes.ci_workflow(), "coverage").get("if")
+    coverage_condition = lanes.job_named(document, "coverage").get("if")
     assert COVERAGE_ACTOR_CLAUSE in str(coverage_condition), (
         f"the coverage job's condition {coverage_condition!r} must contain "
         f"{COVERAGE_ACTOR_CLAUSE!r}; the build lane's guard is written as its "
@@ -289,7 +317,9 @@ def test_the_two_lanes_conditions_are_complementary() -> None:
     )
 
 
-def test_the_build_jobs_test_tooling_belongs_to_the_dependabot_lane() -> None:
+def test_the_build_jobs_test_tooling_belongs_to_the_dependabot_lane(
+    document: dict[str, object],
+) -> None:
     """Tooling is acquired only where the suite that needs it runs.
 
     Scenario: the nextest install, the pg_worker install and the
@@ -299,7 +329,7 @@ def test_the_build_jobs_test_tooling_belongs_to_the_dependabot_lane() -> None:
     would creep back beside it.
     """
     acquisitions = [
-        step for step in lanes.build_steps() if does.acquires_test_tooling(step)
+        step for step in lanes.build_steps(document) if does.acquires_test_tooling(step)
     ]
     assert acquisitions, (
         "the Dependabot lane needs its test runner and database worker; "
@@ -314,7 +344,9 @@ def test_the_build_jobs_test_tooling_belongs_to_the_dependabot_lane() -> None:
     )
 
 
-def test_the_build_jobs_database_cache_belongs_to_the_dependabot_lane() -> None:
+def test_the_build_jobs_database_cache_belongs_to_the_dependabot_lane(
+    document: dict[str, object],
+) -> None:
     """The database archive is restored only where a database is started.
 
     Scenario: the embedded PostgreSQL cache serves the Dependabot lane
@@ -325,7 +357,7 @@ def test_the_build_jobs_database_cache_belongs_to_the_dependabot_lane() -> None:
     """
     restores = [
         step
-        for step in lanes.build_steps()
+        for step in lanes.build_steps(document)
         if set(lanes.cache_paths_of(step)) & set(DATABASE_CACHE_PATHS)
     ]
     unguarded = [
