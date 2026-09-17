@@ -75,12 +75,26 @@ coverage lane's reachability, features and profile; that the two lanes'
 conditions are complementary; that every build step which runs the suite,
 installs test tooling or restores a database archive carries the Dependabot
 guard; and that the compile-fail step cannot be skipped or have its verdict
-discarded at either job or step scope. `ci_lane_reading.py` reads the workflow
-for it, including the Make-target reader that distinguishes `make test-rust`
-from `make test-workflow-contracts` by whole target token. The profile scope
-walk is in `nextest_profile.py`; it decides by key membership rather than by
-value, because `NEXTEST_PROFILE: ""` and a valueless `NEXTEST_PROFILE:` are
-both declarations that mask an outer scope and the second parses to `None`.
+discarded at either job or step scope.
+
+Four modules support it, each answering one question:
+
+| Module                            | Question it answers                                                                                                        |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `ci_lane_reading.py`              | What does the workflow declare, and where? Jobs, steps, cache paths, and the one function that opens a file                |
+| `ci_step_predicates.py`           | What does this step *do*? Whether it runs the suite or acquires test tooling, including the whole-token Make-target reader |
+| `nextest_profile.py`              | Which scope declares `NEXTEST_PROFILE` for a step                                                                          |
+| `lane_predicate_property_test.py` | The invariants of the two readers above, generated against independent oracles                                             |
+
+`ci_lane_reading.py` takes its path and its documents as arguments and never
+reaches for a module constant, so no query is quietly fallible or quietly
+file-touching; the contract module loads `ci.yml` once through a fixture, which
+names the read in every test's signature. `ci_step_predicates.py` compares Make
+targets as whole tokens, so `make test-rust` is the Rust suite and
+`make test-workflow-contracts` is not. `nextest_profile.py` decides by key
+membership rather than by value, because `NEXTEST_PROFILE: ""` and a valueless
+`NEXTEST_PROFILE:` are both declarations that mask an outer scope and the
+second parses to `None`.
 
 ### Python docstring examples
 
@@ -746,11 +760,13 @@ test usage remains coherent:
 
 Continuous Integration (CI) warms the `pg-embed-setup-unpriv` binary cache with
 `scripts/warm-pg-embedded-cache.sh` before running `cargo nextest`. Keep this
-warm-up step ahead of every step that executes the Rust suite, which since
-2026-09-17 means the `Generate Rust coverage` step in `ci.yml`'s `coverage` job
-and the one in `coverage-main.yml`. It turns PostgreSQL binary acquisition into
-a short, explicit CI step instead of letting the first integration test perform
-a cold download inside `postgresql_embedded::setup()`.
+warm-up step ahead of every step that executes the Rust suite. Since 2026-09-17
+there are three: the `Generate Rust coverage` step in `ci.yml`'s `coverage`
+job, the one in `coverage-main.yml`, and `ci.yml`'s `build` job `Rust tests`
+step on the Dependabot lane, which consumes the warm-up guarded by the same
+`github.actor == 'dependabot[bot]'` condition. It turns PostgreSQL binary
+acquisition into a short, explicit CI step instead of letting the first
+integration test perform a cold download inside `postgresql_embedded::setup()`.
 
 The CI cache step must include both binary-cache locations used by the two
 embedded PostgreSQL layers:
@@ -781,9 +797,11 @@ If CI reports `error decoding response body`, treat it as a likely download
 stall or timeout from `reqwest` rather than as JSON/body corruption. Check the
 `Restore PostgreSQL embedded binaries` and
 `Warm PostgreSQL embedded binary cache` steps first, then verify that the
-failing `Generate Rust coverage` step is still exporting `PG_EMBEDDED_WORKER`,
-`GITHUB_TOKEN`, `PG_TEST_BACKEND`, `PG_PASSWORD`, `POSTGRESQL_VERSION` and
-`POSTGRESQL_RELEASES_URL`.
+failing suite step is still exporting `PG_EMBEDDED_WORKER`, `GITHUB_TOKEN`,
+`PG_TEST_BACKEND`, `PG_PASSWORD`, `POSTGRESQL_VERSION` and
+`POSTGRESQL_RELEASES_URL`. That step is `Generate Rust coverage` on a coverage
+lane and `Rust tests` on the Dependabot lane; both carry the same six
+variables, so a failure in either points at the same block.
 
 ## Rust behavioural tests with `rstest-bdd` v0.5.0
 
