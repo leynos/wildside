@@ -230,3 +230,25 @@ def cache_paths_of(step: dict[str, object]) -> list[str]:
         for line in declared.splitlines()
         if (stripped := line.strip()) and not stripped.startswith("#")
     ]
+
+
+def build_job() -> dict[str, object]:
+    """Return the build job.
+
+    Returns
+    -------
+    dict[str, object]
+        The parsed job.
+    """
+    return job_named(ci_workflow(), "build")
+
+
+def build_steps() -> list[dict[str, object]]:
+    """Return the build job's steps.
+
+    Returns
+    -------
+    list[dict[str, object]]
+        The steps, in the order the job runs them.
+    """
+    return steps_of(build_job(), "build")

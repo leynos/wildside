@@ -30,10 +30,13 @@ The ``POSTGRESQL_RELEASES_URL`` assertion caught a real gap when it was
 written: the ``Rust tests`` step pinned the release URL only in the cache
 warm-up step, so the test run itself was unpinned.
 
-The ``ci-rust-tests`` case was removed on 2026-09-17 with the step it named.
-Its 1643 tests were a strict subset of the ``ci-coverage`` lane's 1788, so no
-suite lost its settings; the two coverage lanes below are now every lane that
-executes the Rust suite, which is what this contract has to enumerate.
+On 2026-09-17 the ``ci-rust-tests`` case became ``ci-rust-tests-dependabot``.
+The step it names now carries ``github.actor == 'dependabot[bot]'``, the
+inverse of the actor clause the ``coverage`` job excludes, because a Dependabot
+pull request gets no coverage run and so would otherwise get no suite at all.
+Reachability is therefore asserted as the expected condition rather than as the
+absence of one: a step that must be skipped for most actors cannot be required
+to carry no condition, but it must carry exactly the one that was reviewed.
 """
 
 from __future__ import annotations
@@ -57,6 +60,7 @@ class Lane(typ.NamedTuple):
     step_name: str
     required_trigger: str
     job_condition: str | None
+    step_condition: str | None = None
 
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
@@ -73,6 +77,14 @@ THESEUS_RELEASES_URL = "https://github.com/theseus-rs/postgresql-binaries"
 COVERAGE_JOB_CONDITION = (
     "github.actor != 'dependabot[bot]' && github.event_name != 'push'"
 )
+
+# The build job's Rust suite runs on the lane the coverage job declines, so
+# its step carries the inverse actor clause. Pinned here for the same reason
+# the job condition above is: the settings are worthless on a step that never
+# runs, and this is the one step whose condition is load-bearing rather than
+# incidental. `duplicate_test_lane_test.py` owns the complementarity of the
+# two clauses; this contract only needs the step to be reachable for someone.
+DEPENDABOT_LANE_CONDITION = "github.actor == 'dependabot[bot]'"
 
 
 def _load(workflow: Path) -> dict[str, object]:
@@ -121,6 +133,17 @@ def _step(job: dict[str, object], step_name: str) -> dict[str, object]:
         pytest.param(
             Lane(
                 "ci.yml",
+                "build",
+                "Rust tests",
+                "pull_request",
+                None,
+                DEPENDABOT_LANE_CONDITION,
+            ),
+            id="ci-rust-tests-dependabot",
+        ),
+        pytest.param(
+            Lane(
+                "ci.yml",
                 "coverage",
                 "Generate Rust coverage",
                 "pull_request",
@@ -162,9 +185,10 @@ def test_the_rust_suite_receives_the_embedded_postgres_settings(lane: Lane) -> N
     )
 
     step = _step(job, lane.step_name)
-    assert "if" not in step, (
-        f"the {lane.step_name} step must carry no condition; one would let it "
-        "be skipped while its env block still reads correctly"
+    assert step.get("if") == lane.step_condition, (
+        f"the {lane.step_name} step's condition must be "
+        f"{lane.step_condition!r}; a changed or added condition can skip the "
+        "suite entirely while its env block still reads correctly"
     )
 
     env = step.get("env")
