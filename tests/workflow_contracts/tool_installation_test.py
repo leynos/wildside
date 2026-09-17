@@ -41,18 +41,16 @@ BUILD_INSTALLER_ORDER = (
     ("Install yamllint", "YAML lint"),
     ("Install workflow linters", "Workflow lint"),
     ("Install Whitaker", "Whitaker lint"),
-    # pg_worker now arrives through `cargo binstall`, which setup-rust
-    # installs, so the toolchain step is a hard prerequisite rather than a
-    # convention. The old `cargo install` needed only cargo itself.
-    ("Install Rust toolchain", "Install pg_worker binary"),
-    ("Restore PostgreSQL embedded binaries", "Warm PostgreSQL embedded binary cache"),
 )
 
-# Deleting the build job's `Rust tests` step (2026-09-17) removed the first
-# consumer of nextest and of pg_worker, so the two pairs naming it as their
-# consumer went with it. Nothing replaced them: the build job installs both
-# and runs neither, which `duplicate_test_lane_test.py` records and a
-# follow-up issue tracks.
+# Deleting the build job's `Rust tests` step (2026-09-17) took its four
+# prerequisites with it: the nextest install, the pg_worker install, the
+# PostgreSQL warm-up and that database cache's restore. Four pairs went with
+# them, and nothing replaced them, because the build job now acquires no test
+# tooling at all. `duplicate_test_lane_test.py` asserts that directly, which
+# is the stronger statement: an ordering rule only says an installer comes
+# before its consumer, and there is no longer a consumer to come before.
+# The coverage job keeps every one of those steps and its own ordering.
 
 _SHARED_ACTION_REFERENCE = re.compile(
     r"leynos/shared-actions/(?P<path>[^@\s]+)@(?P<ref>\S+)"

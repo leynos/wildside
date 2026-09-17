@@ -11,8 +11,11 @@ in the build job alone. The 145 extra were the `example-data`,
 coverage action reaches because it appends `--workspace` to the manifest
 it detects and the build job did not.
 
-The build job's step was therefore deleted, and these contracts hold the
-two facts that made the deletion safe rather than merely convenient:
+The build job's step was therefore deleted, and with it the four steps
+whose only consumer it was: the nextest install, the pg_worker install,
+the embedded PostgreSQL warm-up and that database cache's restore. These
+contracts hold the three facts that made the deletion safe rather than
+merely convenient:
 
 1. The surviving execution is reachable. It runs in a coverage lane, on
    `pull_request`, under no condition that can skip it, with the
@@ -24,6 +27,11 @@ two facts that made the deletion safe rather than merely convenient:
    the deleted step excluded both binaries by name, and the coverage
    run never enables `trybuild-tests`. They ran, and still run, in the
    build job's own `Compile-fail tests` step under plain `cargo test`.
+3. The build job acquires no test tooling and no database binaries. The
+   four steps that served the deleted suite are gone, and none of them
+   can come back by imitation: a job that installs a test runner or
+   restores a PostgreSQL archive is a job preparing to run the suite
+   again, whatever the step is called.
 
 The profile is asserted by absence rather than by value on purpose.
 Neither invocation passed `--profile` and neither declared
@@ -36,17 +44,8 @@ lane into a different run from the one that was measured.
 
 from __future__ import annotations
 
-import typing as typ
-from pathlib import Path
-
+import ci_lane_reading as lanes
 import nextest_profile as profiles
-import repository_reading as reading
-from timeout_budgets import COVERAGE_ACTION
-
-WORKFLOW_LABEL = "ci.yml"
-WORKFLOW_PATH = (
-    Path(__file__).resolve().parents[2] / ".github" / "workflows" / WORKFLOW_LABEL
-)
 
 #: The coverage job runs on pull requests and not for Dependabot. Pinned
 #: verbatim rather than merely required to be absent, so narrowing it to
@@ -71,128 +70,32 @@ COMPILE_FAIL_SCRIPT = (
     "cursor_trait_bound_compile_fail_tests\n"
 )
 
+#: Commands that acquire test tooling, each named as the command rather
+#: than as the tool. A step name is prose and an installed tool leaves no
+#: trace in the workflow; the command is the thing that has to be absent.
+TOOLING_COMMANDS = (
+    "make prepare-pg-worker",
+    "scripts/warm-pg-embedded-cache.sh",
+    "pg-embed-setup-unpriv",
+)
+
+#: The installer action, and the tool prefixes the build job must not ask
+#: it for. `taiki-e/install-action` names its tool in an input rather than
+#: in a script, so the script search above cannot see it.
+INSTALL_ACTION = "taiki-e/install-action"
+INSTALL_ACTION_DENIED = ("nextest",)
+
+#: Cache paths holding embedded PostgreSQL binaries. A job restoring one
+#: is a job preparing to start a database, which the build job no longer
+#: does. Both are real path entries; the `#`-prefixed lines in the same
+#: block scalar are the cache action's comments, not paths.
+DATABASE_CACHE_PATHS = ("~/.theseus/postgresql", "~/.cache/pg-embedded/binaries")
+
 #: Ways a step can execute the test suite. A step running any of these
 #: outside the compile-fail step would be a second execution of the work
 #: this change removed, which is the thing that must not come back
 #: unnoticed.
 TEST_INVOCATIONS = ("cargo nextest run", "cargo test")
-
-
-def _document() -> dict[str, object]:
-    """Return the parsed CI workflow.
-
-    Returns
-    -------
-    dict[str, object]
-        The whole document, read at the one named filesystem boundary
-        the contract suite owns.
-    """
-    parsed = reading.parse_workflow(reading.read_text(WORKFLOW_PATH), WORKFLOW_PATH)
-    assert parsed is not None, f"{WORKFLOW_LABEL} must declare a mapping at its top"
-    return dict(parsed)
-
-
-def _triggers(document: dict[str, object]) -> dict[str, object]:
-    """Return the workflow's ``on`` mapping.
-
-    YAML 1.1 parses a bare ``on`` key as the boolean ``True``, so the
-    document is keyed on either spelling depending on how it was
-    written.
-
-    Parameters
-    ----------
-    document : dict[str, object]
-        The parsed workflow.
-
-    Returns
-    -------
-    dict[str, object]
-        The triggers mapping.
-    """
-    raw = document.get(True, document.get("on"))
-    assert isinstance(raw, dict), f"{WORKFLOW_LABEL} must declare triggers as a mapping"
-    return typ.cast("dict[str, object]", raw)
-
-
-def _job(document: dict[str, object], job_name: str) -> dict[str, object]:
-    """Return one job's mapping.
-
-    Parameters
-    ----------
-    document : dict[str, object]
-        The parsed workflow.
-    job_name : str
-        The job's identifier.
-
-    Returns
-    -------
-    dict[str, object]
-        The job.
-    """
-    jobs = document.get("jobs")
-    assert isinstance(jobs, dict), f"{WORKFLOW_LABEL} must declare jobs"
-    job = jobs.get(job_name)
-    assert isinstance(job, dict), f"{WORKFLOW_LABEL} must declare the {job_name} job"
-    return typ.cast("dict[str, object]", job)
-
-
-def _steps(job: dict[str, object], job_name: str) -> list[dict[str, object]]:
-    """Return one job's steps, each checked to be a mapping.
-
-    Parameters
-    ----------
-    job : dict[str, object]
-        The parsed job.
-    job_name : str
-        The job's identifier, for the message.
-
-    Returns
-    -------
-    list[dict[str, object]]
-        The steps, in the order the job runs them.
-    """
-    steps = job.get("steps")
-    assert isinstance(steps, list), f"the {job_name} job must declare steps"
-    for index, step in enumerate(steps):
-        assert isinstance(step, dict), f"{job_name} step {index} must be a mapping"
-    return typ.cast("list[dict[str, object]]", steps)
-
-
-def _coverage_steps(job: dict[str, object]) -> list[dict[str, object]]:
-    """Return the steps in one job that invoke the shared coverage action.
-
-    Parameters
-    ----------
-    job : dict[str, object]
-        The parsed job.
-
-    Returns
-    -------
-    list[dict[str, object]]
-        The matching steps.
-    """
-    return [
-        step
-        for step in _steps(job, "coverage")
-        if COVERAGE_ACTION in str(step.get("uses", ""))
-    ]
-
-
-def _script(step: dict[str, object]) -> str | None:
-    """Return a step's whole ``run`` script when it has one.
-
-    Parameters
-    ----------
-    step : dict[str, object]
-        The parsed step.
-
-    Returns
-    -------
-    str or None
-        The script, or None when the step runs an action instead.
-    """
-    run = step.get("run")
-    return run if isinstance(run, str) else None
 
 
 def test_the_backend_suite_runs_in_a_coverage_lane_on_pull_request() -> None:
@@ -205,13 +108,13 @@ def test_the_backend_suite_runs_in_a_coverage_lane_on_pull_request() -> None:
     condition of its own. A condition anywhere in that chain leaves the
     backend untested on a pull request with nothing red to show it.
     """
-    document = _document()
-    assert "pull_request" in _triggers(document), (
-        f"{WORKFLOW_LABEL} must trigger on pull_request, or the backend suite "
+    document = lanes.ci_workflow()
+    assert "pull_request" in lanes.triggers_of(document), (
+        f"{lanes.WORKFLOW_LABEL} must trigger on pull_request, or the backend suite "
         "runs on no pull request at all"
     )
 
-    job = _job(document, "coverage")
+    job = lanes.job_named(document, "coverage")
     assert job.get("if") == COVERAGE_JOB_CONDITION, (
         f"the coverage job's condition must be {COVERAGE_JOB_CONDITION!r}; a "
         "changed condition can skip the only lane that runs the backend suite"
@@ -221,7 +124,7 @@ def test_the_backend_suite_runs_in_a_coverage_lane_on_pull_request() -> None:
         "own failure reports success whatever its tests found"
     )
 
-    steps = _coverage_steps(job)
+    steps = lanes.coverage_steps_of(job)
     assert len(steps) == 1, (
         f"expected exactly one coverage step in the coverage job, found {len(steps)}"
     )
@@ -246,7 +149,9 @@ def test_the_coverage_lane_selects_the_measured_superset() -> None:
     which binaries run and how the embedded-Postgres suites are
     serialized.
     """
-    options = _coverage_steps(_job(_document(), "coverage"))[0].get("with")
+    options = lanes.coverage_steps_of(lanes.job_named(lanes.ci_workflow(), "coverage"))[
+        0
+    ].get("with")
     assert isinstance(options, dict), "the coverage step must declare inputs"
     assert options.get("use-cargo-nextest") == "true", (
         "the coverage step must run through nextest; .config/nextest.toml's "
@@ -271,9 +176,11 @@ def test_no_scope_declares_a_nextest_profile_for_the_coverage_lane() -> None:
     profile from the one the subset was measured under, which is exactly
     the clause that makes a deletion unsafe elsewhere in the estate.
     """
-    document = _document()
-    job = _job(document, "coverage")
-    declaration = profiles.declared_profile(document, job, _coverage_steps(job)[0])
+    document = lanes.ci_workflow()
+    job = lanes.job_named(document, "coverage")
+    declaration = profiles.declared_profile(
+        document, job, lanes.coverage_steps_of(job)[0]
+    )
     assert declaration.is_absent(), (
         f"the {declaration.scope} scope declares "
         f"{profiles.PROFILE_VARIABLE}={declaration.value!r}; the coverage lane "
@@ -293,8 +200,10 @@ def test_the_build_job_runs_the_compile_fail_suites_and_nothing_else() -> None:
     invocation. The second half is what keeps the duplicate lane from
     coming back under another step name.
     """
-    steps = _steps(_job(_document(), "build"), "build")
-    compile_fail = [step for step in steps if _script(step) == COMPILE_FAIL_SCRIPT]
+    steps = lanes.steps_of(lanes.job_named(lanes.ci_workflow(), "build"), "build")
+    compile_fail = [
+        step for step in steps if lanes.script_of(step) == COMPILE_FAIL_SCRIPT
+    ]
     assert len(compile_fail) == 1, (
         "expected exactly one build step whose whole script is the two "
         f"compile-fail cargo test commands, found {len(compile_fail)}"
@@ -308,9 +217,88 @@ def test_the_build_job_runs_the_compile_fail_suites_and_nothing_else() -> None:
         step.get("name")
         for step in steps
         if step is not compile_fail[0]
-        and any(command in (_script(step) or "") for command in TEST_INVOCATIONS)
+        and any(
+            command in (lanes.script_of(step) or "") for command in TEST_INVOCATIONS
+        )
     ]
     assert others == [], (
         f"these build steps run the test suite again: {others}; a pull "
         "request's backend suite belongs in the coverage lane alone"
+    )
+
+
+def _build_steps() -> list[dict[str, object]]:
+    """Return the build job's steps.
+
+    Returns
+    -------
+    list[dict[str, object]]
+        The steps, in the order the job runs them.
+    """
+    return lanes.steps_of(lanes.job_named(lanes.ci_workflow(), "build"), "build")
+
+
+def test_the_build_job_runs_no_tooling_acquisition_command() -> None:
+    """No build step fetches the worker binary or warms the database.
+
+    Scenario: the deleted suite was the only consumer of the pg_worker
+    install and the PostgreSQL warm-up, so both went with it. Invariant:
+    no step runs either command. The commands are named rather than the
+    steps, because a step name is prose and renaming one must not
+    satisfy this.
+    """
+    acquisitions = [
+        (step.get("name"), command)
+        for step in _build_steps()
+        for command in TOOLING_COMMANDS
+        if command in (lanes.script_of(step) or "")
+    ]
+    assert acquisitions == [], (
+        f"these build steps acquire test tooling: {acquisitions}; the build "
+        "job runs no test suite, so a database worker or a warmed PostgreSQL "
+        "archive in it is either dead weight or a duplicate lane returning"
+    )
+
+
+def test_the_build_job_installs_no_test_runner() -> None:
+    """No build step asks the installer action for a test runner.
+
+    Scenario: `taiki-e/install-action` names its tool in an input rather
+    than in a script, so the command search above cannot see it.
+    Invariant: no step in the build job asks it for nextest. The
+    coverage lane's runner is chosen by the pinned shared action, and
+    nothing else in the repository runs nextest in CI.
+    """
+    installed = [
+        (step.get("name"), tool)
+        for step in _build_steps()
+        if INSTALL_ACTION in str(step.get("uses", ""))
+        for tool in INSTALL_ACTION_DENIED
+        if isinstance(options := step.get("with"), dict)
+        and str(options.get("tool", "")).startswith(tool)
+    ]
+    assert installed == [], (
+        f"these build steps install a test runner: {installed}; only the "
+        "coverage lane runs the suite, and the shared action chooses its own "
+        "nextest"
+    )
+
+
+def test_the_build_job_restores_no_database_binaries() -> None:
+    """No build cache step carries an embedded PostgreSQL archive.
+
+    Scenario: the database cache's restore served the deleted suite
+    alone. Invariant: no cache step in the build job lists either
+    archive path, including by appending one to a cache that has an
+    honest purpose. Only a job that starts a database needs them.
+    """
+    restores = [
+        (step.get("name"), path)
+        for step in _build_steps()
+        for path in lanes.cache_paths_of(step)
+        if path in DATABASE_CACHE_PATHS
+    ]
+    assert restores == [], (
+        f"these build cache steps carry embedded PostgreSQL binaries: "
+        f"{restores}; only a job that starts a database needs them"
     )

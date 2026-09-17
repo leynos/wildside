@@ -12,7 +12,6 @@ name: ci
   workflow_dispatch:
 
 env:
-  PG_VERSION: "16.10.0"
   # Tool pins. Every entry is a prebuilt, version-pinned distribution and
   # every entry feeds the shared tool cache key, so bumping one here
   # invalidates the archive that holds it.
@@ -23,7 +22,6 @@ env:
   BUN_VERSION: '1.2.21'
   CARGO_AUDIT_VERSION: '0.22.1'
   MERMAN_VERSION: '0.7.0'
-  NEXTEST_VERSION: '0.9.114'
   NIXIE_VERSION: '1.1.0'
   SCCACHE_VERSION: '0.17.0'
   SCCACHE_SHA256_X64: '67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006'
@@ -108,7 +106,6 @@ jobs:
             bun=${{ env.BUN_VERSION }}
             cargo-audit=${{ env.CARGO_AUDIT_VERSION }}
             merman=${{ env.MERMAN_VERSION }}
-            nextest=${{ env.NEXTEST_VERSION }}
             nixie=${{ env.NIXIE_VERSION }}
             sccache=${{ env.SCCACHE_VERSION }}
             uv=${{ env.UV_VERSION }}
@@ -116,10 +113,7 @@ jobs:
             yamllint=${{ env.YAMLLINT_VERSION }}
           # The Makefile pins every `uv tool run` version, so its digest owns
           # the repository-local uv layers, and dylint.toml selects the
-          # Whitaker suite the installer materializes. The Makefile also pins
-          # pg-embed-setup-unpriv, whose pg_worker binary now lands in the
-          # cargo bin directory this archive carries, so its digest owns that
-          # pin too.
+          # Whitaker suite the installer materializes.
           MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
           DYLINT_HASH: ${{ hashFiles('dylint.toml') }}
         run: |
@@ -168,8 +162,6 @@ jobs:
             printf 'BUN_CACHE_KEY=bun-v1-%s-%s\n' "$scope" "$BUN_HASH"
             printf 'TOOLS_CACHE_KEY=tools-v1-%s-%s\n' "$scope" "$TOOLS_HASH"
             printf 'CARGO_CACHE_KEY=cargo-v1-%s-%s\n' "$scope" "$CARGO_LOCK_HASH"
-            printf 'PG_EMBEDDED_CACHE_KEY=pg-embedded-v1-%s-%s\n' \
-              "$scope" "$PG_VERSION"
           } >>"$GITHUB_ENV"
           # uv shims and the downloaded actionlint land here. The runner
           # images already carry it, but making it explicit keeps the
@@ -224,9 +216,12 @@ jobs:
         with:
           path: |
             ~/.cargo/bin
-            # `cargo install --list`, which the pg_worker probe reads, lives
-            # here. Without it a warm job restores the binary but not the
-            # record of its version, and reinstalls on every run.
+            # Cargo's record of what `cargo binstall` has installed lives
+            # here. It travels with ~/.cargo/bin so a warm job cannot restore
+            # a binary without the record of its version. The pg_worker probe
+            # that first needed it moved to the coverage job with the step
+            # that ran it; cargo-audit's own `--version` probe does not read
+            # this file, but separating the two would let them disagree.
             ~/.cargo/.crates2.json
             ~/.cache/cargo-binstall
             ~/.cache/merman
@@ -240,16 +235,6 @@ jobs:
             .uv-tools
           key: ${{ env.TOOLS_CACHE_KEY }}
           restore-keys: tools-v1-${{ env.CACHE_SCOPE }}-
-
-      - name: Restore PostgreSQL embedded binaries
-        id: pg-embedded-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: |
-            ~/.theseus/postgresql
-            ~/.cache/pg-embedded/binaries
-          key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
-          restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
 
       # setup-rust runs with use-sccache: false because the sccache action it
       # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
@@ -468,31 +453,6 @@ jobs:
       - name: Architecture lint
         run: make lint-architecture
 
-      - name: Install nextest
-        uses: taiki-e/install-action@db22c42b5af88356329b9a8056bb2c2f026d5a10
-        with:
-          tool: nextest@${{ env.NEXTEST_VERSION }}
-          # Fail closed rather than compiling nextest from source.
-          fallback: none
-
-      - name: Install pg_worker binary
-        env:
-          # cargo-binstall resolves the release archive through the GitHub
-          # API, which is rate-limited hard when unauthenticated.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          make prepare-pg-worker
-
-      - name: Warm PostgreSQL embedded binary cache
-        env:
-          # Increase GitHub API rate limits for postgresql_embedded downloads.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pin the embedded PostgreSQL version so postgresql_archive skips release-listing queries.
-          # Use the semver "exact" prefix so no wildcard resolution is attempted.
-          POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
-          POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
-        run: bash scripts/warm-pg-embedded-cache.sh
-
       - name: Compile-fail tests
         run: |
           cargo test --locked --all-features -p backend --test declare_test_support_compile_fail
@@ -576,9 +536,12 @@ jobs:
         with:
           path: |
             ~/.cargo/bin
-            # `cargo install --list`, which the pg_worker probe reads, lives
-            # here. Without it a warm job restores the binary but not the
-            # record of its version, and reinstalls on every run.
+            # Cargo's record of what `cargo binstall` has installed lives
+            # here. It travels with ~/.cargo/bin so a warm job cannot restore
+            # a binary without the record of its version. The pg_worker probe
+            # that first needed it moved to the coverage job with the step
+            # that ran it; cargo-audit's own `--version` probe does not read
+            # this file, but separating the two would let them disagree.
             ~/.cargo/.crates2.json
             ~/.cache/cargo-binstall
             ~/.cache/merman
@@ -602,7 +565,6 @@ jobs:
           BUN_HIT: ${{ steps.bun-cache.outputs.cache-hit }}
           CARGO_HIT: ${{ steps.cargo-cache.outputs.cache-hit }}
           TOOLS_HIT: ${{ steps.tools-cache.outputs.cache-hit }}
-          PG_EMBEDDED_HIT: ${{ steps.pg-embedded-cache.outputs.cache-hit }}
         run: |
           set -euo pipefail
           {
@@ -615,8 +577,6 @@ jobs:
               "${CARGO_CACHE_KEY:-}" "${CARGO_HIT:-}"
             printf -- "- tools key: \`%s\` hit: \`%s\`\n" \
               "${TOOLS_CACHE_KEY:-}" "${TOOLS_HIT:-}"
-            printf -- "- pg-embedded key: \`%s\` hit: \`%s\`\n" \
-              "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Rust coverage for CodeScene. The changed-line gate runs immediately after
