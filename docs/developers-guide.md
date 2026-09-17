@@ -55,11 +55,25 @@ never enables `trybuild-tests`. They run in the `build` job's
 `Compile-fail tests` step under plain `cargo test`, which the deletion left
 untouched.
 
+Four steps went with it, because the deleted step was their only consumer: the
+nextest install, the pg_worker install, the embedded PostgreSQL warm-up and
+that database cache's restore, along with the cache key and the summary line
+that reported its hit. The nextest pin left the workflow's tool-pin block with
+them, since nothing in `ci.yml` installs nextest any more; the coverage lane's
+runner is chosen by the pinned shared action. The `coverage` job keeps its own
+copy of all four.
+
+Those four cost 4 to 6 s between them on a warm cache, so the saving is the
+deleted test step's roughly 210 s and not much else. They were removed because
+a job that installs a test runner and downloads a database it never starts
+invites the duplicate lane back, not to save time.
+
 `tests/workflow_contracts/duplicate_test_lane_test.py` holds all of this: that
 the surviving lane is reachable on `pull_request` under the reviewed job
 condition and no step condition, that it keeps nextest and the three measured
-features, that no scope declares `NEXTEST_PROFILE`, and that the `build` job
-runs the two compile-fail commands and no other cargo test invocation. The
+features, that no scope declares `NEXTEST_PROFILE`, that the `build` job runs
+the two compile-fail commands and no other cargo test invocation, and that the
+`build` job acquires no test tooling and restores no database binaries. The
 profile scope walk lives in `tests/workflow_contracts/nextest_profile.py`; it
 decides by key membership rather than by value, because `NEXTEST_PROFILE: ""`
 and a valueless `NEXTEST_PROFILE:` are both declarations that mask an outer
