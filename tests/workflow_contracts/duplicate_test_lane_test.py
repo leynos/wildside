@@ -1,4 +1,4 @@
-"""Contract tests for the single pull-request execution of the backend suite.
+"""Contract tests for where the backend suite runs on a pull request.
 
 Until 2026-09-17 a pull request ran the backend tests twice: `ci.yml`'s
 `build` job at `--all-features` on the backend manifest, and its
@@ -11,40 +11,48 @@ in the build job alone. The 145 extra were the `example-data`,
 coverage action reaches because it appends `--workspace` to the manifest
 it detects and the build job did not.
 
-The build job's step was therefore deleted, and with it the four steps
-whose only consumer it was: the nextest install, the pg_worker install,
-the embedded PostgreSQL warm-up and that database cache's restore. These
-contracts hold the three facts that made the deletion safe rather than
-merely convenient:
+The build job's step was therefore narrowed rather than deleted, and the
+distinction is the whole point of this module. The coverage job carries
+`github.actor != 'dependabot[bot]'`, deliberately, to keep dependency
+automerge off the expensive coverage path. Deleting the build job's step
+outright would have left a Dependabot pull request running no backend
+tests at all, then merging itself on green. A test-list comparison
+cannot see that: both lanes list the same tests on the event it measures,
+and the hole is in an actor clause rather than in a selection.
 
-1. The surviving execution is reachable. It runs in a coverage lane, on
-   `pull_request`, under no condition that can skip it, with the
-   features whose selection was the superset, through nextest, and under
-   the same nextest profile the deleted step ran under. Break any one of
-   those and the repository stops running the backend suite on a pull
-   request while every other gate stays green.
-2. The compile-fail suites still run. Neither lane ever executed them:
-   the deleted step excluded both binaries by name, and the coverage
-   run never enables `trybuild-tests`. They ran, and still run, in the
-   build job's own `Compile-fail tests` step under plain `cargo test`.
-3. The build job acquires no test tooling and no database binaries. The
-   four steps that served the deleted suite are gone, and none of them
-   can come back by imitation: a job that installs a test runner or
-   restores a PostgreSQL archive is a job preparing to run the suite
-   again, whatever the step is called.
+So the step and the four that serve it survive under the inverse guard,
+`github.actor == 'dependabot[bot]'`, and the contracts here hold four
+things:
+
+1. The coverage lane is reachable on `pull_request`, under the reviewed
+   job condition and with no condition on its step, running nextest with
+   the features whose selection was the measured superset, under the
+   nextest profile the comparison was made in.
+2. The two lanes' conditions are complementary. This is asserted between
+   them rather than by pinning each alone, because two conditions that
+   are each individually reasonable can still exclude the same actor from
+   both, which is the state this repository nearly shipped.
+3. Every build step that runs the suite, acquires test tooling or
+   restores a database archive carries the Dependabot guard. Unguarded,
+   any of them is the duplicate lane returning for every contributor.
+4. The compile-fail suites run for everyone, unconditionally, at both job
+   and step scope. Neither lane has ever executed them: the guarded step
+   excludes both binaries by name and the coverage run never enables
+   `trybuild-tests`.
 
 The profile is asserted by absence rather than by value on purpose.
 Neither invocation passed `--profile` and neither declared
 `NEXTEST_PROFILE` at any scope, so both ran `profile.default` with its
 60 s slow timeout and its `pg-embed` serialization group. Asserting that
 no scope declares the variable is what makes a later `NEXTEST_PROFILE`
-on the coverage job fail here rather than silently change the surviving
+on the coverage job fail here rather than silently turn the surviving
 lane into a different run from the one that was measured.
 """
 
 from __future__ import annotations
 
 import ci_lane_reading as lanes
+import ci_step_predicates as does
 import nextest_profile as profiles
 
 #: The coverage job runs on pull requests and not for Dependabot. Pinned
@@ -70,32 +78,22 @@ COMPILE_FAIL_SCRIPT = (
     "cursor_trait_bound_compile_fail_tests\n"
 )
 
-#: Commands that acquire test tooling, each named as the command rather
-#: than as the tool. A step name is prose and an installed tool leaves no
-#: trace in the workflow; the command is the thing that has to be absent.
-TOOLING_COMMANDS = (
-    "make prepare-pg-worker",
-    "scripts/warm-pg-embedded-cache.sh",
-    "pg-embed-setup-unpriv",
-)
+#: The guard on the build job's Dependabot test lane. It is the exact
+#: inverse of the actor clause in :data:`COVERAGE_JOB_CONDITION`, and the
+#: two are asserted against each other rather than each on its own: the
+#: hole this repository nearly shipped was a coverage lane that skipped
+#: an actor while the only other lane had been deleted.
+DEPENDABOT_GUARD = "github.actor == 'dependabot[bot]'"
 
-#: The installer action, and the tool prefixes the build job must not ask
-#: it for. `taiki-e/install-action` names its tool in an input rather than
-#: in a script, so the script search above cannot see it.
-INSTALL_ACTION = "taiki-e/install-action"
-INSTALL_ACTION_DENIED = ("nextest",)
+#: The actor clause the coverage job excludes, as it appears there.
+COVERAGE_ACTOR_CLAUSE = "github.actor != 'dependabot[bot]'"
 
-#: Cache paths holding embedded PostgreSQL binaries. A job restoring one
-#: is a job preparing to start a database, which the build job no longer
-#: does. Both are real path entries; the `#`-prefixed lines in the same
-#: block scalar are the cache action's comments, not paths.
+#: Cache paths holding embedded PostgreSQL binaries. A step restoring one
+#: is preparing to start a database, so it belongs to the Dependabot lane
+#: and carries that lane's guard. Both are real path entries; the
+#: `#`-prefixed lines in the same block scalar are the cache action's
+#: comments, not paths.
 DATABASE_CACHE_PATHS = ("~/.theseus/postgresql", "~/.cache/pg-embedded/binaries")
-
-#: Ways a step can execute the test suite. A step running any of these
-#: outside the compile-fail step would be a second execution of the work
-#: this change removed, which is the thing that must not come back
-#: unnoticed.
-TEST_INVOCATIONS = ("cargo nextest run", "cargo test")
 
 
 def test_the_backend_suite_runs_in_a_coverage_lane_on_pull_request() -> None:
@@ -190,19 +188,31 @@ def test_no_scope_declares_a_nextest_profile_for_the_coverage_lane() -> None:
     )
 
 
-def test_the_build_job_runs_the_compile_fail_suites_and_nothing_else() -> None:
-    """Compile-fail suites survive the deletion, and no test lane returns.
+def test_the_build_job_runs_the_compile_fail_suites_unconditionally() -> None:
+    """Compile-fail suites survive the deletion and cannot be skipped.
 
     Scenario: the compile-fail binaries were excluded from both
-    invocations by name, so they are the one thing the deleted step's
-    neighbourhood still owes. Invariant: the build job runs both
-    commands as one step's entire script, and runs no other cargo test
-    invocation. The second half is what keeps the duplicate lane from
-    coming back under another step name.
+    invocations by name, so the build job's own step is the only thing
+    that has ever run them. Invariant: it runs both commands as one
+    step's entire script, and neither the job nor the step can skip or
+    swallow it. A job-level condition skips the gate; a
+    `continue-on-error` at either scope runs it and discards the
+    verdict, which is the same as not running it.
     """
-    steps = lanes.steps_of(lanes.job_named(lanes.ci_workflow(), "build"), "build")
+    job = lanes.build_job()
+    assert "if" not in job, (
+        "the build job must carry no condition; a skipped job runs no steps "
+        "and leaves every step-level assertion here vacuous"
+    )
+    assert "continue-on-error" not in job, (
+        "the build job must not continue on error; a job that swallows its "
+        "own failure reports success whatever its steps found"
+    )
+
     compile_fail = [
-        step for step in steps if lanes.script_of(step) == COMPILE_FAIL_SCRIPT
+        step
+        for step in lanes.steps_of(job, "build")
+        if lanes.script_of(step) == COMPILE_FAIL_SCRIPT
     ]
     assert len(compile_fail) == 1, (
         "expected exactly one build step whose whole script is the two "
@@ -212,93 +222,117 @@ def test_the_build_job_runs_the_compile_fail_suites_and_nothing_else() -> None:
         "the compile-fail step must carry no condition; nothing else in the "
         "repository runs those two suites"
     )
-
-    others = [
-        step.get("name")
-        for step in steps
-        if step is not compile_fail[0]
-        and any(
-            command in (lanes.script_of(step) or "") for command in TEST_INVOCATIONS
-        )
-    ]
-    assert others == [], (
-        f"these build steps run the test suite again: {others}; a pull "
-        "request's backend suite belongs in the coverage lane alone"
+    assert "continue-on-error" not in compile_fail[0], (
+        "the compile-fail step must not continue on error; running the suites "
+        "and discarding the verdict is the same as not running them"
     )
 
 
-def _build_steps() -> list[dict[str, object]]:
-    """Return the build job's steps.
+def test_every_build_step_running_the_suite_is_the_dependabot_lane() -> None:
+    """The build job runs the suite for Dependabot and for nobody else.
 
-    Returns
-    -------
-    list[dict[str, object]]
-        The steps, in the order the job runs them.
+    Scenario: the coverage job excludes `dependabot[bot]` deliberately,
+    to keep dependency automerge off the expensive coverage path, so a
+    Dependabot pull request has no backend suite unless this job runs
+    one. Invariant: every build step that executes the suite carries the
+    Dependabot guard, and the compile-fail step, which runs for
+    everyone, is not one of them.
+
+    Both directions matter. An unguarded step here is the duplicate lane
+    returning for every contributor; a guard removed from the lane is a
+    Dependabot pull request merging with no tests run.
     """
-    return lanes.steps_of(lanes.job_named(lanes.ci_workflow(), "build"), "build")
+    suite_steps = [
+        step
+        for step in lanes.build_steps()
+        if does.runs_the_suite(step) and lanes.script_of(step) != COMPILE_FAIL_SCRIPT
+    ]
+    assert suite_steps, (
+        "the build job must run the backend suite on the Dependabot lane; "
+        "without it a Dependabot pull request runs no tests at all, because "
+        "the coverage job excludes that actor"
+    )
+    unguarded = [
+        step.get("name") for step in suite_steps if step.get("if") != DEPENDABOT_GUARD
+    ]
+    assert unguarded == [], (
+        f"these build steps run the suite outside the Dependabot lane: "
+        f"{unguarded}; each must carry {DEPENDABOT_GUARD!r} or it is the "
+        "duplicate lane returning for every pull request"
+    )
 
 
-def test_the_build_job_runs_no_tooling_acquisition_command() -> None:
-    """No build step fetches the worker binary or warms the database.
+def test_the_two_lanes_conditions_are_complementary() -> None:
+    """Exactly one lane runs the suite on any pull request.
 
-    Scenario: the deleted suite was the only consumer of the pg_worker
-    install and the PostgreSQL warm-up, so both went with it. Invariant:
-    no step runs either command. The commands are named rather than the
-    steps, because a step name is prose and renaming one must not
-    satisfy this.
+    Scenario: this is the invariant whose absence let the suite nearly
+    disappear for Dependabot. The coverage job excludes an actor; the
+    build job's lane includes exactly that actor. Invariant: the two
+    clauses are inverses, asserted against each other rather than each
+    pinned on its own, so narrowing either without the other fails here.
+
+    A contract that only pinned each condition separately would pass
+    with both lanes excluding Dependabot, which is the state this
+    repository nearly shipped.
+    """
+    coverage_condition = lanes.job_named(lanes.ci_workflow(), "coverage").get("if")
+    assert COVERAGE_ACTOR_CLAUSE in str(coverage_condition), (
+        f"the coverage job's condition {coverage_condition!r} must contain "
+        f"{COVERAGE_ACTOR_CLAUSE!r}; the build lane's guard is written as its "
+        "inverse and means nothing if the clause it inverts is gone"
+    )
+    inverse = COVERAGE_ACTOR_CLAUSE.replace("!=", "==")
+    assert inverse == DEPENDABOT_GUARD, (
+        f"the build lane's guard {DEPENDABOT_GUARD!r} must be the inverse of "
+        f"the coverage job's actor clause {COVERAGE_ACTOR_CLAUSE!r}; one actor "
+        "excluded from both lanes is an untested pull request"
+    )
+
+
+def test_the_build_jobs_test_tooling_belongs_to_the_dependabot_lane() -> None:
+    """Tooling is acquired only where the suite that needs it runs.
+
+    Scenario: the nextest install, the pg_worker install and the
+    PostgreSQL warm-up serve the Dependabot lane alone. Invariant: each
+    carries that lane's guard. An unguarded one is a normal pull request
+    paying for a database it never starts, and is how the deleted lane
+    would creep back beside it.
     """
     acquisitions = [
-        (step.get("name"), command)
-        for step in _build_steps()
-        for command in TOOLING_COMMANDS
-        if command in (lanes.script_of(step) or "")
+        step for step in lanes.build_steps() if does.acquires_test_tooling(step)
     ]
-    assert acquisitions == [], (
-        f"these build steps acquire test tooling: {acquisitions}; the build "
-        "job runs no test suite, so a database worker or a warmed PostgreSQL "
-        "archive in it is either dead weight or a duplicate lane returning"
+    assert acquisitions, (
+        "the Dependabot lane needs its test runner and database worker; "
+        "finding none means the lane cannot run"
+    )
+    unguarded = [
+        step.get("name") for step in acquisitions if step.get("if") != DEPENDABOT_GUARD
+    ]
+    assert unguarded == [], (
+        f"these build steps acquire test tooling outside the Dependabot lane: "
+        f"{unguarded}; each must carry {DEPENDABOT_GUARD!r}"
     )
 
 
-def test_the_build_job_installs_no_test_runner() -> None:
-    """No build step asks the installer action for a test runner.
+def test_the_build_jobs_database_cache_belongs_to_the_dependabot_lane() -> None:
+    """The database archive is restored only where a database is started.
 
-    Scenario: `taiki-e/install-action` names its tool in an input rather
-    than in a script, so the command search above cannot see it.
-    Invariant: no step in the build job asks it for nextest. The
-    coverage lane's runner is chosen by the pinned shared action, and
-    nothing else in the repository runs nextest in CI.
-    """
-    installed = [
-        (step.get("name"), tool)
-        for step in _build_steps()
-        if INSTALL_ACTION in str(step.get("uses", ""))
-        for tool in INSTALL_ACTION_DENIED
-        if isinstance(options := step.get("with"), dict)
-        and str(options.get("tool", "")).startswith(tool)
-    ]
-    assert installed == [], (
-        f"these build steps install a test runner: {installed}; only the "
-        "coverage lane runs the suite, and the shared action chooses its own "
-        "nextest"
-    )
-
-
-def test_the_build_job_restores_no_database_binaries() -> None:
-    """No build cache step carries an embedded PostgreSQL archive.
-
-    Scenario: the database cache's restore served the deleted suite
-    alone. Invariant: no cache step in the build job lists either
-    archive path, including by appending one to a cache that has an
-    honest purpose. Only a job that starts a database needs them.
+    Scenario: the embedded PostgreSQL cache serves the Dependabot lane
+    alone. Invariant: every build cache step listing either archive path
+    carries that lane's guard. Appending such a path to a cache with an
+    honest purpose is how the restore would return without a step of its
+    own to notice.
     """
     restores = [
-        (step.get("name"), path)
-        for step in _build_steps()
-        for path in lanes.cache_paths_of(step)
-        if path in DATABASE_CACHE_PATHS
+        step
+        for step in lanes.build_steps()
+        if set(lanes.cache_paths_of(step)) & set(DATABASE_CACHE_PATHS)
     ]
-    assert restores == [], (
-        f"these build cache steps carry embedded PostgreSQL binaries: "
-        f"{restores}; only a job that starts a database needs them"
+    unguarded = [
+        step.get("name") for step in restores if step.get("if") != DEPENDABOT_GUARD
+    ]
+    assert unguarded == [], (
+        f"these build cache steps carry embedded PostgreSQL binaries outside "
+        f"the Dependabot lane: {unguarded}; only a job that starts a database "
+        "needs them"
     )

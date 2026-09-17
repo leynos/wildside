@@ -28,56 +28,59 @@ All suites run through the same quality gateways:
 
 ### Where the backend suite runs in CI
 
-A pull request executes the backend test suite exactly once, in `ci.yml`'s
-`coverage` job, through the shared `generate-coverage` action. The `build` job
-in the same workflow ran it a second time until 2026-09-17; that step was
-deleted after the two selections were compared with
-`cargo nextest list --list-type full`:
+A pull request executes the backend test suite once. Which job runs it depends
+on who opened the pull request:
 
-| Selection                                                                                 | Tests |
-| ----------------------------------------------------------------------------------------- | ----- |
-| `build`: backend manifest, `--all-targets --all-features`, compile-fail binaries excluded | 1643  |
-| `coverage`: workspace, `example-data metrics test-support`                                | 1788  |
-| In `build` alone                                                                          | 0     |
+| Actor                 | Lane                                      | Selection                                                  |
+| --------------------- | ----------------------------------------- | ---------------------------------------------------------- |
+| Anyone but Dependabot | `ci.yml`'s `coverage` job                 | workspace, `example-data metrics test-support`, 1788 tests |
+| `dependabot[bot]`     | `ci.yml`'s `build` job, `Rust tests` step | backend manifest, `--all-features`, 1643 tests             |
 
-The 1643 were a strict subset. The extra 145 are the `example-data`,
+Both lanes ran on every pull request until 2026-09-17. The two selections were
+compared with `cargo nextest list --list-type full` under each invocation: the
+build job's 1643 tests were a strict subset of the coverage job's 1788, with
+nothing in the build job alone. The extra 145 are the `example-data`,
 `pagination` and `architecture-lint` workspace members, which the coverage
 action reaches because it appends `--workspace` to the manifest it detects.
-Neither invocation passed `--profile` and neither declared `NEXTEST_PROFILE` at
-step, job or workflow level, so both ran `profile.default` with its 60 s slow
+
+So the build job's step became redundant for everyone the coverage job runs
+for, and only for them. The coverage job carries
+`github.actor != 'dependabot[bot]'`, deliberately, to keep dependency automerge
+off the expensive coverage path. Deleting the build job's step outright would
+have left a Dependabot pull request running no backend tests at all and then
+merging itself on green. The step and the four that serve it therefore carry
+the inverse guard, `github.actor == 'dependabot[bot]'`, and run only on the
+lane the coverage job declines.
+
+**If you are removing a duplicate test lane elsewhere, this is the part to
+copy.** A test-list comparison cannot find a hole in an actor clause: both
+lanes list the same tests on the event you measured. Enumerate every condition
+on the lane you intend to keep, not just its triggers, and write the contract
+between the two conditions rather than pinning each alone. Two conditions that
+each look reasonable can still exclude the same actor from both.
+
+Neither invocation passes `--profile` and neither declares `NEXTEST_PROFILE` at
+step, job or workflow level, so both run `profile.default` with its 60 s slow
 timeout and its `pg-embed` test group. That equality of profile is what makes
-the two runs comparable at all; a lane that named a profile would not have been
-removable on a test-list comparison alone.
+the two runs comparable at all.
 
-The compile-fail suites are the exception and always were. Neither run executed
-them: the deleted step excluded both binaries by name, and the coverage run
+The compile-fail suites are the exception and always were. Neither run executes
+them: the guarded step excludes both binaries by name, and the coverage run
 never enables `trybuild-tests`. They run in the `build` job's
-`Compile-fail tests` step under plain `cargo test`, which the deletion left
-untouched.
+`Compile-fail tests` step under plain `cargo test`, unconditionally, for
+everyone.
 
-Four steps went with it, because the deleted step was their only consumer: the
-nextest install, the pg_worker install, the embedded PostgreSQL warm-up and
-that database cache's restore, along with the cache key and the summary line
-that reported its hit. The nextest pin left the workflow's tool-pin block with
-them, since nothing in `ci.yml` installs nextest any more; the coverage lane's
-runner is chosen by the pinned shared action. The `coverage` job keeps its own
-copy of all four.
-
-Those four cost 4 to 6 s between them on a warm cache, so the saving is the
-deleted test step's roughly 210 s and not much else. They were removed because
-a job that installs a test runner and downloads a database it never starts
-invites the duplicate lane back, not to save time.
-
-`tests/workflow_contracts/duplicate_test_lane_test.py` holds all of this: that
-the surviving lane is reachable on `pull_request` under the reviewed job
-condition and no step condition, that it keeps nextest and the three measured
-features, that no scope declares `NEXTEST_PROFILE`, that the `build` job runs
-the two compile-fail commands and no other cargo test invocation, and that the
-`build` job acquires no test tooling and restores no database binaries. The
-profile scope walk lives in `tests/workflow_contracts/nextest_profile.py`; it
-decides by key membership rather than by value, because `NEXTEST_PROFILE: ""`
-and a valueless `NEXTEST_PROFILE:` are both declarations that mask an outer
-scope and the second parses to `None`.
+`tests/workflow_contracts/duplicate_test_lane_test.py` holds all of it: the
+coverage lane's reachability, features and profile; that the two lanes'
+conditions are complementary; that every build step which runs the suite,
+installs test tooling or restores a database archive carries the Dependabot
+guard; and that the compile-fail step cannot be skipped or have its verdict
+discarded at either job or step scope. `ci_lane_reading.py` reads the workflow
+for it, including the Make-target reader that distinguishes `make test-rust`
+from `make test-workflow-contracts` by whole target token. The profile scope
+walk is in `nextest_profile.py`; it decides by key membership rather than by
+value, because `NEXTEST_PROFILE: ""` and a valueless `NEXTEST_PROFILE:` are
+both declarations that mask an outer scope and the second parses to `None`.
 
 ### Python docstring examples
 
