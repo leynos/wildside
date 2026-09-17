@@ -29,6 +29,11 @@ Mutation proofs, each reverted afterwards:
 The ``POSTGRESQL_RELEASES_URL`` assertion caught a real gap when it was
 written: the ``Rust tests`` step pinned the release URL only in the cache
 warm-up step, so the test run itself was unpinned.
+
+The ``ci-rust-tests`` case was removed on 2026-09-17 with the step it named.
+Its 1643 tests were a strict subset of the ``ci-coverage`` lane's 1788, so no
+suite lost its settings; the two coverage lanes below are now every lane that
+executes the Rust suite, which is what this contract has to enumerate.
 """
 
 from __future__ import annotations
@@ -113,10 +118,6 @@ def _step(job: dict[str, object], step_name: str) -> dict[str, object]:
 @pytest.mark.parametrize(
     "lane",
     [
-        pytest.param(
-            Lane("ci.yml", "build", "Rust tests", "pull_request", None),
-            id="ci-rust-tests",
-        ),
         pytest.param(
             Lane(
                 "ci.yml",

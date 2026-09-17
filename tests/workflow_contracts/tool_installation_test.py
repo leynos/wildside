@@ -41,14 +41,18 @@ BUILD_INSTALLER_ORDER = (
     ("Install yamllint", "YAML lint"),
     ("Install workflow linters", "Workflow lint"),
     ("Install Whitaker", "Whitaker lint"),
-    ("Install nextest", "Rust tests"),
     # pg_worker now arrives through `cargo binstall`, which setup-rust
     # installs, so the toolchain step is a hard prerequisite rather than a
     # convention. The old `cargo install` needed only cargo itself.
     ("Install Rust toolchain", "Install pg_worker binary"),
-    ("Install pg_worker binary", "Rust tests"),
     ("Restore PostgreSQL embedded binaries", "Warm PostgreSQL embedded binary cache"),
 )
+
+# Deleting the build job's `Rust tests` step (2026-09-17) removed the first
+# consumer of nextest and of pg_worker, so the two pairs naming it as their
+# consumer went with it. Nothing replaced them: the build job installs both
+# and runs neither, which `duplicate_test_lane_test.py` records and a
+# follow-up issue tracks.
 
 _SHARED_ACTION_REFERENCE = re.compile(
     r"leynos/shared-actions/(?P<path>[^@\s]+)@(?P<ref>\S+)"
