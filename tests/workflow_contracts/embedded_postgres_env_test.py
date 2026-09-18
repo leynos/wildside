@@ -52,7 +52,29 @@ class Lane(typ.NamedTuple):
     """One workflow lane that runs the Rust suite.
 
     Grouped into a single value so each case is named once and the test takes
-    one parameter rather than five positional ones.
+    one parameter rather than six positional ones.
+
+    Attributes
+    ----------
+    workflow_name : str
+        The workflow file the lane lives in, by name.
+    job_name : str
+        The job that carries the lane.
+    step_name : str
+        The step whose ``env`` block the contract reads, by its ``name``.
+    required_trigger : str
+        The event the lane depends on. The workflow has to declare it, or
+        the lane's settings are correct on a lane that never runs.
+    job_condition : str or None
+        The job's expected ``if``, verbatim, or None when the job must
+        carry no condition at all.
+    step_condition : str or None
+        The step's expected ``if``, verbatim, or None when the step must
+        carry no condition at all. None is the ordinary case: a step that
+        must run for everyone cannot carry a condition. A string is the
+        Dependabot lane, whose step must be skipped for most actors and so
+        must carry exactly the condition that was reviewed rather than
+        none.
     """
 
     workflow_name: str

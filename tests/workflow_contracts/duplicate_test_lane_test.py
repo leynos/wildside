@@ -39,6 +39,18 @@ things:
    and step scope. Neither lane has ever executed them: the guarded step
    excludes both binaries by name and the coverage run never enables
    `trybuild-tests`.
+5. The guarded lane's nextest filter is the whole expression that
+   excludes them. That assertion came back after this branch first
+   dropped it with the step it belonged to, and it is the half of the
+   previous point that is a property of the *surviving* lane rather than
+   of the compile-fail step.
+
+The Dependabot lane's tooling and cache guards are in
+`dependabot_lane_test.py`, and which actor and event reaches a lane at
+all is in `suite_lane_reachability_test.py`. Both were split out when
+this module crossed the 400-line limit the Python lint gate enforces.
+The pinned values the three share are in `lane_expectations.py`, with
+the reason each is pinned verbatim.
 
 The profile is asserted by absence rather than by value on purpose.
 Neither invocation passed `--profile` and neither declared
@@ -55,46 +67,16 @@ import ci_lane_reading as lanes
 import ci_step_predicates as does
 import nextest_profile as profiles
 import pytest
-
-#: The coverage job runs on pull requests and not for Dependabot. Pinned
-#: verbatim rather than merely required to be absent, so narrowing it to
-#: a push-only event or to `false` fails here.
-COVERAGE_JOB_CONDITION = (
-    "github.actor != 'dependabot[bot]' && github.event_name != 'push'"
+import shell_commands as shell
+from lane_expectations import (
+    COMPILE_FAIL_SCRIPT,
+    COVERAGE_ACTOR_CLAUSE,
+    COVERAGE_JOB_CONDITION,
+    DEPENDABOT_GUARD,
+    MEASURED_FEATURES,
+    NEXTEST_EXCLUSION,
+    NEXTEST_FILTER_OPTION,
 )
-
-#: The feature set whose test list was measured as the superset. Written
-#: as the single string the action receives, because that is what the
-#: workflow declares and what a reviewer has to compare against.
-MEASURED_FEATURES = "example-data metrics test-support"
-
-#: The build job's compile-fail step, whole. Both commands are asserted
-#: as the step's entire script: matching one line of a multiline script
-#: is satisfied by `if false; then <command>; fi`, and matching a
-#: substring is satisfied by `<command> || true`.
-COMPILE_FAIL_SCRIPT = (
-    "cargo test --locked --all-features -p backend --test "
-    "declare_test_support_compile_fail\n"
-    "cargo test --locked --features trybuild-tests -p pagination "
-    "cursor_trait_bound_compile_fail_tests\n"
-)
-
-#: The guard on the build job's Dependabot test lane. It is the exact
-#: inverse of the actor clause in :data:`COVERAGE_JOB_CONDITION`, and the
-#: two are asserted against each other rather than each on its own: the
-#: hole this repository nearly shipped was a coverage lane that skipped
-#: an actor while the only other lane had been deleted.
-DEPENDABOT_GUARD = "github.actor == 'dependabot[bot]'"
-
-#: The actor clause the coverage job excludes, as it appears there.
-COVERAGE_ACTOR_CLAUSE = "github.actor != 'dependabot[bot]'"
-
-#: Cache paths holding embedded PostgreSQL binaries. A step restoring one
-#: is preparing to start a database, so it belongs to the Dependabot lane
-#: and carries that lane's guard. Both are real path entries; the
-#: `#`-prefixed lines in the same block scalar are the cache action's
-#: comments, not paths.
-DATABASE_CACHE_PATHS = ("~/.theseus/postgresql", "~/.cache/pg-embedded/binaries")
 
 
 @pytest.fixture(name="document")
@@ -317,54 +299,48 @@ def test_the_two_lanes_conditions_are_complementary(
     )
 
 
-def test_the_build_jobs_test_tooling_belongs_to_the_dependabot_lane(
+def test_the_dependabot_lane_excludes_the_compile_fail_binaries(
     document: dict[str, object],
 ) -> None:
-    """Tooling is acquired only where the suite that needs it runs.
+    """The surviving suite lane still refuses the two compile-fail binaries.
 
-    Scenario: the nextest install, the pg_worker install and the
-    PostgreSQL warm-up serve the Dependabot lane alone. Invariant: each
-    carries that lane's guard. An unguarded one is a normal pull request
-    paying for a database it never starts, and is how the deleted lane
-    would creep back beside it.
+    Scenario: the compile-fail binaries are meant to fail to compile, so
+    running them through the ordinary suite turns a passing lane red.
+    Only the `Compile-fail tests` step has ever executed them, under
+    plain `cargo test`, where the failure is the expected result.
+    Invariant: the Dependabot lane invokes nextest with exactly the
+    filter expression that excludes both by binary name.
+
+    This assertion was deleted with the step it used to live on and is
+    restored here on the lane that survived. Its absence was not
+    covered by anything else: the contract on the compile-fail step
+    asserts what that step runs, and says nothing about what the suite
+    lane declines to run, so a filter widened to include either binary
+    would have passed every other case in this module.
+
+    The whole expression is asserted rather than the two names. A
+    contract asking only whether each name appears is satisfied by
+    `not (binary(a) | binary(b)) | binary(a)`, which names both and
+    excludes neither.
     """
-    acquisitions = [
-        step for step in lanes.build_steps(document) if does.acquires_test_tooling(step)
-    ]
-    assert acquisitions, (
-        "the Dependabot lane needs its test runner and database worker; "
-        "finding none means the lane cannot run"
-    )
-    unguarded = [
-        step.get("name") for step in acquisitions if step.get("if") != DEPENDABOT_GUARD
-    ]
-    assert unguarded == [], (
-        f"these build steps acquire test tooling outside the Dependabot lane: "
-        f"{unguarded}; each must carry {DEPENDABOT_GUARD!r}"
-    )
-
-
-def test_the_build_jobs_database_cache_belongs_to_the_dependabot_lane(
-    document: dict[str, object],
-) -> None:
-    """The database archive is restored only where a database is started.
-
-    Scenario: the embedded PostgreSQL cache serves the Dependabot lane
-    alone. Invariant: every build cache step listing either archive path
-    carries that lane's guard. Appending such a path to a cache with an
-    honest purpose is how the restore would return without a step of its
-    own to notice.
-    """
-    restores = [
+    suite_steps = [
         step
         for step in lanes.build_steps(document)
-        if set(lanes.cache_paths_of(step)) & set(DATABASE_CACHE_PATHS)
+        if does.runs_the_suite(step) and lanes.script_of(step) != COMPILE_FAIL_SCRIPT
     ]
-    unguarded = [
-        step.get("name") for step in restores if step.get("if") != DEPENDABOT_GUARD
+    assert len(suite_steps) == 1, (
+        f"expected exactly one build step running the suite, found "
+        f"{[step.get('name') for step in suite_steps]}"
+    )
+
+    filters = [
+        shell.option_value(command, NEXTEST_FILTER_OPTION)
+        for words in shell.command_words(lanes.script_of(suite_steps[0]) or "")
+        if shell.executable_name(command := shell.executed_command(words)) == "cargo"
     ]
-    assert unguarded == [], (
-        f"these build cache steps carry embedded PostgreSQL binaries outside "
-        f"the Dependabot lane: {unguarded}; only a job that starts a database "
-        "needs them"
+    assert filters == [NEXTEST_EXCLUSION], (
+        f"the Dependabot lane must run cargo with exactly "
+        f"{NEXTEST_FILTER_OPTION} {NEXTEST_EXCLUSION!r}; found {filters}. Both "
+        "binaries are meant to fail to compile, and only the Compile-fail "
+        "tests step expects that failure"
     )
