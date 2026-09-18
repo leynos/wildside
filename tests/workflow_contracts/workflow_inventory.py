@@ -109,11 +109,16 @@ def workflow_filenames() -> list[str]:
     )
 
 
-def triggers_of(filename: str) -> dict[str, typ.Any]:
-    """Return one workflow's ``on`` mapping.
+def triggers_of(filename: str) -> dict[object, object]:
+    """Return one workflow's ``on`` mapping, keyed by whatever YAML produced.
 
-    YAML 1.1 parses a bare ``on`` key as the boolean ``True``, so the document
-    is keyed on either spelling depending on how it was written.
+    The return type is object-keyed rather than string-keyed because the
+    boundary check here only establishes that the value is a mapping, and
+    claiming string keys without validating them would be a promise this
+    function does not keep. An event name really can arrive as a non-string:
+    YAML 1.1 parses a bare ``on`` key as the boolean ``True``, and the same
+    rule applies one level down, so ``on: {off: ...}`` keys the inner mapping
+    by ``False``. Callers narrow what they need.
 
     Examples
     --------

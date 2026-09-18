@@ -1544,9 +1544,17 @@ things made that the wrong place for it:
 
 - A CLI break stops every branch at once. The CodeScene CLI was unpinned in
   the shared action, and on 2026-09-16 a floating version broke Cobertura
-  parsing and reddened every branch in several repositories on the same day. On
-  the trunk lane that failure stops one run; on the pull-request lane it stops
-  all of them, and no branch can merge its way out.
+  parsing and reddened every branch in several repositories on the same
+  day.[^cs-cli] On the trunk lane that failure stops one run; on the
+  pull-request lane it stops all of them, and no branch can merge its way out.
+
+[^cs-cli]: [leynos/shared-actions#496](https://github.com/leynos/shared-actions/issues/496),
+    "Restore deterministic CodeScene coverage CLI installation", opened
+    2026-09-16, closed by
+    [leynos/shared-actions#504](https://github.com/leynos/shared-actions/pull/504)
+    which pins the CLI through a manifest and merged as `f68e8e2e` on
+    2026-09-17.
+
 - A fork cannot hold the secret. The step carried `env.CS_ACCESS_TOKEN != ''`
   so a forked pull request would skip it, which means the gate was never
   enforced for the contributors most likely to need it.

@@ -42,6 +42,7 @@ differently.
 from __future__ import annotations
 
 import pytest
+import shell_invocations as shell
 import workflow_inventory as inventory
 from document_strings import strings_in
 
@@ -64,6 +65,20 @@ CLI_SUBCOMMAND = "coverage"
 #: The workflow allowed to talk to CodeScene, and the event it does it on.
 PUBLISHER = "coverage-main.yml"
 PUBLISHER_EVENT = "push"
+
+#: The only branch whose coverage may advance the ratchet baseline. A
+#: push trigger without this would let a feature branch publish, and the
+#: baseline every pull request is then measured against would no longer
+#: be the trunk's.
+PUBLISHER_BRANCHES = ["main"]
+
+#: The upload mode, and the value the action assumes when the input is
+#: omitted. `coverage-main.yml` omits it, so a contract reading the input
+#: alone would find nothing; the effective mode is what publishes.
+#: Confirmed against `upload-codescene-coverage`'s `action.yml` at the
+#: pinned c5a54701, where `mode` is `required: false` with
+#: `default: upload`.
+UPLOAD_MODE = "upload"
 
 #: The action that produces coverage on both lanes.
 GENERATE_COVERAGE = "generate-coverage"
@@ -209,9 +224,12 @@ def test_no_pull_request_workflow_runs_a_cs_coverage_command(filename: str) -> N
 def _invokes_the_coverage_cli(command: str) -> bool:
     """Return whether one command runs the CodeScene coverage CLI.
 
-    Words are compared whole. A substring test would report a path such
-    as `scripts/cs-coverage-notes.md` and, worse, would miss nothing it
-    needs: the CLI is always spelled as its own word.
+    Both spellings are read, the standalone `cs-coverage` binary and the
+    `cs` binary's `coverage` subcommand, and each through
+    :func:`shell_invocations.invokes`, which resolves the executable past
+    assignments, transparent wrappers and a path prefix. Reading the
+    first word instead would return False for `env cs-coverage check`,
+    and a rule satisfied by a spelling is worked around by choosing it.
 
     Parameters
     ----------
@@ -222,24 +240,10 @@ def _invokes_the_coverage_cli(command: str) -> bool:
     -------
     bool
         True when the command invokes the CLI by either spelling.
-
-    Examples
-    --------
-    >>> _invokes_the_coverage_cli("cs-coverage check --format lcov")
-    True
-    >>> _invokes_the_coverage_cli("cs coverage upload")
-    True
-    >>> _invokes_the_coverage_cli("echo 'see the cs-coverage notes'")
-    False
-    >>> _invokes_the_coverage_cli("cargo llvm-cov --lcov")
-    False
     """
-    words = command.split()
-    if not words:
-        return False
-    if words[0] == COVERAGE_CLI:
-        return True
-    return words[0] == CLI_BINARY and len(words) > 1 and words[1] == CLI_SUBCOMMAND
+    return shell.invokes(command, COVERAGE_CLI) or shell.invokes(
+        command, CLI_BINARY, CLI_SUBCOMMAND
+    )
 
 
 def test_the_push_publisher_is_the_one_workflow_that_uploads() -> None:
@@ -260,12 +264,23 @@ def test_the_push_publisher_is_the_one_workflow_that_uploads() -> None:
         f"{PUBLISHER} must run on {PUBLISHER_EVENT}; it is the only lane that "
         "advances the coverage baseline the pull-request ratchet reads"
     )
+    push = triggers[PUBLISHER_EVENT]
+    assert isinstance(push, dict), (
+        f"{PUBLISHER}'s {PUBLISHER_EVENT} trigger must declare a mapping so it "
+        f"can name its branches, found {push!r}"
+    )
+    assert push.get("branches") == PUBLISHER_BRANCHES, (
+        f"{PUBLISHER}'s {PUBLISHER_EVENT} trigger must select exactly "
+        f"{PUBLISHER_BRANCHES}, found {push!r}; an unrestricted trigger lets a "
+        "feature branch advance the baseline, and every pull request is then "
+        "ratcheted against coverage that is not the trunk's"
+    )
     assert PUBLISHER not in inventory.pull_request_workflows(), (
         f"{PUBLISHER} holds the CodeScene secret, so it must never run on a "
         "pull request"
     )
     uploads = [
-        step.get("name")
+        step
         for _, job in inventory.workflow_jobs(PUBLISHER)
         for step in inventory.job_steps(job)
         if CODESCENE_ACTION_MARKER in inventory.step_action(step).lower()
@@ -275,6 +290,39 @@ def test_the_push_publisher_is_the_one_workflow_that_uploads() -> None:
         "ratchet compares every pull request against a baseline that nothing "
         "advances, and CodeScene sees no coverage for this repository at all"
     )
+    publishing = [step.get("name") for step in uploads if _uploads(step)]
+    assert publishing, (
+        f"{PUBLISHER} must call the CodeScene action in {UPLOAD_MODE!r} mode; "
+        f"{[step.get('name') for step in uploads]} calls it in another mode, "
+        "which sends no coverage and leaves the baseline unadvanced while "
+        "every other assertion here still passes"
+    )
+
+
+def _uploads(step: dict[str, object]) -> bool:
+    """Return whether a CodeScene step publishes rather than checks.
+
+    The effective mode is read, not the declared one. `mode` is optional
+    on `upload-codescene-coverage` and defaults to `upload`, and the
+    publisher omits it, so a contract requiring the literal input would
+    fail on a correct workflow and one reading only a present input
+    would pass on `mode: check`.
+
+    Parameters
+    ----------
+    step : dict[str, object]
+        A step already known to use a CodeScene action.
+
+    Returns
+    -------
+    bool
+        True when the step's effective mode is `upload`.
+    """
+    options = step.get("with")
+    declared = (
+        options.get("mode", UPLOAD_MODE) if isinstance(options, dict) else (UPLOAD_MODE)
+    )
+    return declared == UPLOAD_MODE
 
 
 def test_the_pull_request_lane_ratchets_against_the_publishers_baseline() -> None:

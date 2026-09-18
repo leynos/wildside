@@ -59,13 +59,18 @@ def strings_in(node: object) -> cabc.Iterator[str]:
     if isinstance(node, str):
         yield node
     elif isinstance(node, dict):
-        yield from _mapping_strings(node)
+        # `isinstance` narrows to an unparameterized dict, which the type
+        # checker will not accept against an invariant key type. The cast
+        # says only what the check established, that this is a mapping
+        # whose keys and values are unconstrained; `_mapping_strings`
+        # inspects every key before using it.
+        yield from _mapping_strings(typ.cast("cabc.Mapping[object, object]", node))
     elif isinstance(node, list):
         for item in node:
             yield from strings_in(item)
 
 
-def _mapping_strings(mapping: cabc.Mapping[typ.Any, typ.Any]) -> cabc.Iterator[str]:
+def _mapping_strings(mapping: cabc.Mapping[object, object]) -> cabc.Iterator[str]:
     """Yield every string in one mapping, its keys included.
 
     Split out of :func:`strings_in` rather than nested inside it. Walking
@@ -80,7 +85,7 @@ def _mapping_strings(mapping: cabc.Mapping[typ.Any, typ.Any]) -> cabc.Iterator[s
 
     Parameters
     ----------
-    mapping : collections.abc.Mapping[typing.Any, typing.Any]
+    mapping : collections.abc.Mapping[object, object]
         Any mapping from a parsed document.
 
     Yields
