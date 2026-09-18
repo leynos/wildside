@@ -41,13 +41,9 @@ differently.
 
 from __future__ import annotations
 
-import typing as typ
-
 import pytest
 import workflow_inventory as inventory
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+from document_strings import strings_in
 
 #: The *name* of the variable the CodeScene CLI authenticates with. This
 #: holds the identifier, never a value: the contract searches for the
@@ -77,57 +73,6 @@ GENERATE_COVERAGE = "generate-coverage"
 #: lane disagreeing with the publisher on any of these is comparing two
 #: different measurements and the comparison means nothing.
 BASELINE_INPUTS = ("language", "format", "output-path", "use-cargo-nextest", "features")
-
-
-def _strings(node: object) -> cabc.Iterator[str]:
-    """Yield every string in a parsed document, keys and values alike.
-
-    A secret reaches a workflow as an `env:` key, as a `${{ secrets.X }}`
-    value, or as an action input, and a contract that walked only one of
-    those would miss the others. YAML comments never reach here, so prose
-    about a banned form is not mistaken for the form.
-
-    Parameters
-    ----------
-    node : object
-        Any part of a parsed workflow.
-
-    Yields
-    ------
-    str
-        Each string found, at any depth.
-    """
-    if isinstance(node, str):
-        yield node
-    elif isinstance(node, dict):
-        yield from _mapping_strings(node)
-    elif isinstance(node, list):
-        for item in node:
-            yield from _strings(item)
-
-
-def _mapping_strings(mapping: cabc.Mapping[typ.Any, typ.Any]) -> cabc.Iterator[str]:
-    """Yield every string in one mapping, its keys included.
-
-    Split out of :func:`_strings` rather than nested inside it. Walking a
-    mapping needs both halves of each entry and walking a sequence needs
-    neither, and holding both shapes in one body was the nesting
-    CodeScene flagged when this module was written.
-
-    Parameters
-    ----------
-    mapping : collections.abc.Mapping[typing.Any, typing.Any]
-        Any mapping from a parsed workflow.
-
-    Yields
-    ------
-    str
-        Each string key, and each string anywhere in each value.
-    """
-    for key, value in mapping.items():
-        if isinstance(key, str):
-            yield key
-        yield from _strings(value)
 
 
 def _generate_coverage_inputs(filename: str) -> list[dict[str, object]]:
@@ -168,7 +113,9 @@ def test_no_pull_request_workflow_holds_the_codescene_credential(filename: str) 
     checking one of them is satisfied by the other two.
     """
     document = inventory.load_workflow(filename)
-    holders = [text for text in _strings(document) if CODESCENE_CREDENTIAL_NAME in text]
+    holders = [
+        text for text in strings_in(document) if CODESCENE_CREDENTIAL_NAME in text
+    ]
     assert holders == [], (
         f"{filename} runs on a pull request and names {CODESCENE_CREDENTIAL_NAME} in "
         f"{holders}; only {PUBLISHER} may hold it, because a gate that a fork "

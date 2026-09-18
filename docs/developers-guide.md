@@ -1570,6 +1570,23 @@ rather than only requiring the absences, is what stops the baseline being
 satisfied by deleting the upload entirely, which would leave the ratchet
 comparing every pull request against a baseline nothing advances.
 
+The credential search rests on `document_strings.py`, which walks a parsed
+document and yields every string at any depth, keys included. Keys matter
+because a credential reaches a step three ways, as an `env:` key, as a
+`${{ secrets.X }}` value and as an action input, and a walk returning values
+alone would find two of them. Non-string keys are skipped rather than coerced:
+YAML 1.1 turns a bare `on` into the boolean `True`, so a document really does
+carry them, and `str(True)` would put the word "True" into a credential search.
+
+`document_strings_property_test.py` generates bounded trees mixing scalars,
+lists, string-keyed and boolean-keyed mappings and empty containers, and
+compares the walk against a stack-based oracle. The comparison is on the
+sequence rather than on a set, because a walk that found every distinct string
+but collapsed duplicates would satisfy a set comparison while under-reporting
+which parts of a workflow name a credential. Six mutations are caught: keys
+dropped, keys coerced, key and value swapped in order, lists not descended, a
+non-string-keyed entry skipped whole, and duplicates collapsed.
+
 ### CodeScene rule overrides
 
 `.codescene/code-health-rules.json` narrows CodeScene's rules for parts of the
