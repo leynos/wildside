@@ -77,6 +77,12 @@ def load_workflow(path: Path) -> dict[str, object]:
         wrong.
     WorkflowShapeError
         If the file declares no mapping at its top level.
+
+    Examples
+    --------
+    >>> "jobs" in load_workflow(WORKFLOW_PATH)
+    True
+
     """
     parsed = reading.parse_workflow(reading.read_text(path), path)
     if parsed is None:
@@ -106,6 +112,17 @@ def triggers_of(document: dict[str, object]) -> dict[str, object]:
     ------
     WorkflowShapeError
         If the workflow declares no triggers mapping.
+
+    Examples
+    --------
+    >>> sorted(triggers_of({"on": {"push": None, "pull_request": None}}))
+    ['pull_request', 'push']
+
+    A bare `on` key parses to the boolean, and is found under it:
+
+    >>> triggers_of({True: {"push": None}})
+    {'push': None}
+
     """
     raw = document.get(True, document.get("on"))
     if not isinstance(raw, dict):
@@ -134,6 +151,16 @@ def job_named(document: dict[str, object], job_name: str) -> dict[str, object]:
     WorkflowShapeError
         If the workflow declares no such job, or declares it as
         something other than a mapping.
+
+    Examples
+    --------
+    >>> job_named({"jobs": {"build": {"runs-on": "ubuntu-latest"}}}, "build")
+    {'runs-on': 'ubuntu-latest'}
+    >>> job_named({"jobs": {"coverage": {}}}, "build")
+    Traceback (most recent call last):
+    ...
+    ci_lane_reading.WorkflowShapeError: ci.yml must declare the build job as a mapping
+
     """
     jobs = document.get("jobs")
     if not isinstance(jobs, dict):
@@ -166,6 +193,16 @@ def steps_of(job: dict[str, object], job_name: str) -> list[dict[str, object]]:
     WorkflowShapeError
         If the job declares no list of steps, or one entry of it is not
         a mapping.
+
+    Examples
+    --------
+    >>> steps_of({"steps": [{"run": "make lint"}]}, "build")
+    [{'run': 'make lint'}]
+    >>> steps_of({"steps": [{"run": "make lint"}, "make test"]}, "build")
+    Traceback (most recent call last):
+    ...
+    ci_lane_reading.WorkflowShapeError: build step 1 must be a mapping
+
     """
     steps = job.get("steps")
     if not isinstance(steps, list):
@@ -190,6 +227,18 @@ def coverage_steps_of(job: dict[str, object]) -> list[dict[str, object]]:
     -------
     list[dict[str, object]]
         The matching steps.
+
+    Examples
+    --------
+    >>> job = {
+    ...     "steps": [
+    ...         {"uses": "actions/checkout@v4"},
+    ...         {"uses": f"{COVERAGE_ACTION}@abc", "with": {"language": "rust"}},
+    ...     ]
+    ... }
+    >>> [step["with"] for step in coverage_steps_of(job)]
+    [{'language': 'rust'}]
+
     """
     return [
         step
@@ -210,6 +259,16 @@ def script_of(step: dict[str, object]) -> str | None:
     -------
     str or None
         The script, or None when the step runs an action instead.
+
+    Examples
+    --------
+    >>> script_of({"run": "make test-rust"})
+    'make test-rust'
+    >>> script_of({"uses": "actions/checkout@v4"}) is None
+    True
+    >>> script_of({"run": ["make", "test"]}) is None
+    True
+
     """
     run = step.get("run")
     return run if isinstance(run, str) else None
@@ -281,5 +340,11 @@ def build_steps(document: dict[str, object]) -> list[dict[str, object]]:
     WorkflowShapeError
         If the workflow declares no build job, or the job declares no
         list of steps, or one entry of it is not a mapping.
+
+    Examples
+    --------
+    >>> build_steps({"jobs": {"build": {"steps": [{"run": "make lint"}]}}})
+    [{'run': 'make lint'}]
+
     """
     return steps_of(job_named(document, BUILD_JOB), BUILD_JOB)

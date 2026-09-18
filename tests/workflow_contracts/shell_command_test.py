@@ -15,7 +15,7 @@ to say so:
   diagnostic `echo` or commented out, which is the regression the lane
   contracts exist to catch.
 - A false negative is loud. The lane contracts assert that the suite is
-  run *somewhere*, so a spelling the reader fails to recognise fails
+  run *somewhere*, so a spelling the reader fails to recognize fails
   those contracts rather than passing them vacuously.
 
 Step shapes are covered here too. `run` is absent on every step that

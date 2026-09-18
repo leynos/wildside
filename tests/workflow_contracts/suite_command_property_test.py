@@ -96,7 +96,7 @@ SCRIPTS = st.lists(COMMANDS, min_size=1, max_size=4).flatmap(
 
 
 #: Shell separators between commands, as one pattern. The implementation
-#: recognises them as operator tokens that `shlex` emits with
+#: recognizes them as operator tokens that `shlex` emits with
 #: `punctuation_chars`; this splits the raw text instead, so the two
 #: agree only when both are right rather than when both share a bug.
 #:
@@ -184,7 +184,7 @@ def _oracle_executed(words: list[str]) -> list[str]:
 def _strip_comment(line: str) -> str:
     """Return one line up to its first unquoted `#`.
 
-    A hand-written scanner rather than a call to :mod:`shlex`, because
+    A handwritten scanner rather than a call to :mod:`shlex`, because
     comment handling is where this oracle first disagreed with the
     implementation and an oracle that reached for the same library
     would have agreed with it wrongly. A `#` ends the line in a real

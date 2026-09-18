@@ -28,6 +28,7 @@ file that cannot be read fails at the boundary that read it.
 
 from __future__ import annotations
 
+import dataclasses as dc
 import typing as typ
 
 from lane_fields import Node, mapping_of
@@ -39,7 +40,8 @@ PROFILE_VARIABLE: typ.Final[str] = "NEXTEST_PROFILE"
 SCOPE_NAMES: typ.Final[tuple[str, ...]] = ("step", "job", "workflow")
 
 
-class ProfileDeclaration(typ.NamedTuple):
+@dc.dataclass(frozen=True, slots=True)
+class ProfileDeclaration:
     """Where ``NEXTEST_PROFILE`` is declared for one step, and as what.
 
     Attributes

@@ -35,7 +35,7 @@ from pathlib import PurePosixPath
 
 #: Shell tokens that end one command and begin another. `shlex` with
 #: `punctuation_chars` yields each of these as a token of its own, so
-#: they are recognised by equality rather than by searching the text.
+#: they are recognized by equality rather than by searching the text.
 COMMAND_SEPARATORS = frozenset({"&&", "||", "|", ";", ";;", "&", "(", ")"})
 
 #: Commands that hand their remaining words to another command. Each is
@@ -218,3 +218,43 @@ def executable_name(words: list[str]) -> str:
     """
     command = executed_command(words)
     return PurePosixPath(command[0]).name if command else ""
+
+
+def option_value(command: list[str], option: str) -> str | None:
+    """Return the value a command passes one option, or None.
+
+    Both spellings are read, `--opt value` and `--opt=value`, because a
+    contract that knew only one would report an option as absent when it
+    had merely been rewritten.
+
+    Parameters
+    ----------
+    command : list[str]
+        One command's words.
+    option : str
+        The option, including its leading dashes.
+
+    Returns
+    -------
+    str or None
+        The value, or None when the option is absent or is the command's
+        last word and so has no value after it.
+
+    Examples
+    --------
+    >>> option_value(["cargo", "nextest", "run", "-E", "not binary(x)"], "-E")
+    'not binary(x)'
+    >>> option_value(["cargo", "nextest", "run", "-E=not binary(x)"], "-E")
+    'not binary(x)'
+    >>> option_value(["cargo", "nextest", "run"], "-E") is None
+    True
+    >>> option_value(["cargo", "nextest", "run", "-E"], "-E") is None
+    True
+    """
+    joined = f"{option}="
+    for index, word in enumerate(command):
+        if word.startswith(joined):
+            return word[len(joined) :]
+        if word == option:
+            return command[index + 1] if index + 1 < len(command) else None
+    return None
