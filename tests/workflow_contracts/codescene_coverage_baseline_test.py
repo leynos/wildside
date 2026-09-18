@@ -99,6 +99,39 @@ def _generate_coverage_inputs(filename: str) -> list[dict[str, object]]:
     return found
 
 
+#: Every workflow that runs on a contributor's pull request, pinned. The
+#: three absence contracts below are parametrized over a discovered list,
+#: and a discovery that quietly returned fewer workflows would leave them
+#: passing while checking less. Pinning the set is what makes the count
+#: visible in a diff.
+EXPECTED_PULL_REQUEST_WORKFLOWS = ("ci.yml", "dependabot-automerge.yml")
+
+
+def test_every_pull_request_workflow_is_discovered() -> None:
+    """The absence contracts run against every pull-request workflow.
+
+    Scenario: the repository's six workflows, two of which run on a
+    contributor's pull request. Invariant: discovery finds exactly those
+    two.
+
+    This exists because of how the discovery can fail. YAML 1.1 parses a
+    bare `on` key as the boolean `True`, and `dependabot-automerge.yml`
+    spells it bare while `ci.yml` quotes it. A reader that looked only
+    under the string key would return `ci.yml` alone, every absence
+    contract below would still pass, and the workflow that runs with the
+    base repository's secrets on `pull_request_target` would be the one
+    nothing checked. Parametrizing over a discovered list means a
+    shrinking list shrinks the suite silently, so the list is pinned.
+    """
+    assert tuple(inventory.pull_request_workflows()) == (
+        EXPECTED_PULL_REQUEST_WORKFLOWS
+    ), (
+        "discovery must find every workflow triggered by pull_request or "
+        f"pull_request_target; expected {list(EXPECTED_PULL_REQUEST_WORKFLOWS)}, "
+        f"got {inventory.pull_request_workflows()}"
+    )
+
+
 @pytest.mark.parametrize("filename", inventory.pull_request_workflows())
 def test_no_pull_request_workflow_holds_the_codescene_credential(filename: str) -> None:
     """A workflow running on a pull request never sees the CodeScene secret.
