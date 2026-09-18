@@ -100,13 +100,34 @@ def _strings(node: object) -> cabc.Iterator[str]:
     if isinstance(node, str):
         yield node
     elif isinstance(node, dict):
-        for key, value in node.items():
-            if isinstance(key, str):
-                yield key
-            yield from _strings(value)
+        yield from _mapping_strings(node)
     elif isinstance(node, list):
         for item in node:
             yield from _strings(item)
+
+
+def _mapping_strings(mapping: cabc.Mapping[typ.Any, typ.Any]) -> cabc.Iterator[str]:
+    """Yield every string in one mapping, its keys included.
+
+    Split out of :func:`_strings` rather than nested inside it. Walking a
+    mapping needs both halves of each entry and walking a sequence needs
+    neither, and holding both shapes in one body was the nesting
+    CodeScene flagged when this module was written.
+
+    Parameters
+    ----------
+    mapping : collections.abc.Mapping[typing.Any, typing.Any]
+        Any mapping from a parsed workflow.
+
+    Yields
+    ------
+    str
+        Each string key, and each string anywhere in each value.
+    """
+    for key, value in mapping.items():
+        if isinstance(key, str):
+            yield key
+        yield from _strings(value)
 
 
 def _generate_coverage_inputs(filename: str) -> list[dict[str, object]]:
