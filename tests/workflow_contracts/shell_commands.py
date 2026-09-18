@@ -85,6 +85,39 @@ def _lex(line: str) -> list[str] | None:
         return None
 
 
+def _cut_at_operators(tokens: list[str]) -> list[list[str]]:
+    """Return one word list per command, cut at the shell operators.
+
+    Split out of :func:`command_words` rather than nested inside it. The
+    loop over lines and the loop over one line's tokens answer different
+    questions, and holding both at once was the nesting CodeScene flagged
+    when this module was first written.
+
+    Parameters
+    ----------
+    tokens : list[str]
+        One line's words and operator tokens.
+
+    Returns
+    -------
+    list[list[str]]
+        The commands, each as its words, with empty runs between two
+        adjacent operators dropped.
+    """
+    commands: list[list[str]] = []
+    current: list[str] = []
+    for token in tokens:
+        if token not in COMMAND_SEPARATORS:
+            current.append(token)
+            continue
+        if current:
+            commands.append(current)
+        current = []
+    if current:
+        commands.append(current)
+    return commands
+
+
 def command_words(script: str) -> list[list[str]]:
     r"""Return each command a script executes, as its words.
 
@@ -115,18 +148,8 @@ def command_words(script: str) -> list[list[str]]:
     commands: list[list[str]] = []
     for line in script.replace("\\\n", " ").splitlines():
         tokens = _lex(line)
-        if tokens is None:
-            continue
-        current: list[str] = []
-        for token in tokens:
-            if token in COMMAND_SEPARATORS:
-                if current:
-                    commands.append(current)
-                current = []
-            else:
-                current.append(token)
-        if current:
-            commands.append(current)
+        if tokens is not None:
+            commands += _cut_at_operators(tokens)
     return commands
 
 
