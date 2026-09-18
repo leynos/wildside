@@ -26,6 +26,113 @@ All suites run through the same quality gateways:
 - `make audit`
 - `make test`
 
+### Where the backend suite runs in CI
+
+A pull request executes the backend test suite once. Which job runs it depends
+on who opened the pull request:
+
+| Actor                 | Lane                                      | Selection                                                  |
+| --------------------- | ----------------------------------------- | ---------------------------------------------------------- |
+| Anyone but Dependabot | `ci.yml`'s `coverage` job                 | workspace, `example-data metrics test-support`, 1788 tests |
+| `dependabot[bot]`     | `ci.yml`'s `build` job, `Rust tests` step | backend manifest, `--all-features`, 1643 tests             |
+
+Both lanes ran on every pull request until 2026-09-17. The two selections were
+compared with `cargo nextest list --list-type full` under each invocation: the
+build job's 1643 tests were a strict subset of the coverage job's 1788, with
+nothing in the build job alone. The extra 145 are the `example-data`,
+`pagination` and `architecture-lint` workspace members, which the coverage
+action reaches because it appends `--workspace` to the manifest it detects.
+
+So the build job's step became redundant for everyone the coverage job runs
+for, and only for them. The coverage job carries
+`github.actor != 'dependabot[bot]'`, deliberately, to keep dependency automerge
+off the expensive coverage path. Deleting the build job's step outright would
+have left a Dependabot pull request running no backend tests at all and then
+merging itself on green. The step and the four that serve it therefore carry
+the inverse guard, `github.actor == 'dependabot[bot]'`, and run only on the
+lane the coverage job declines.
+
+**When removing a duplicate test lane elsewhere, copy this contract.** A
+test-list comparison cannot find a hole in an actor clause: both lanes list the
+same tests on the event measured. Enumerate every condition on the lane to be
+kept, not just its triggers, and write the contract between the two conditions
+rather than pinning each alone. Two conditions that each look reasonable can
+still exclude the same actor from both.
+
+Neither invocation passes `--profile` and neither declares `NEXTEST_PROFILE` at
+step, job or workflow level, so both run `profile.default` with its 60 s slow
+timeout and its `pg-embed` test group. That equality of profile is what makes
+the two runs comparable at all.
+
+The compile-fail suites are the exception and always were. Neither run executes
+them: the guarded step excludes both binaries by name, and the coverage run
+never enables `trybuild-tests`. They run in the `build` job's
+`Compile-fail tests` step under plain `cargo test`, unconditionally, for
+everyone.
+
+`tests/workflow_contracts/duplicate_test_lane_test.py` holds all of it: the
+coverage lane's reachability, features, and profile; that the two lanes'
+conditions are complementary; that every build step which runs the suite,
+installs test tooling or restores a database archive carries the Dependabot
+guard; and that the compile-fail step cannot be skipped or have its verdict
+discarded at either job or step scope.
+
+Four reader modules support it, each answering one question:
+
+| Module                  | Question it answers                                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ci_lane_reading.py`    | What does the workflow declare, and where? Jobs, steps, cache paths, and the one function that opens a file                  |
+| `shell_commands.py`     | What does this script *execute*? Commands cut at shell operators, with comments, quoting, assignments, and wrappers resolved |
+| `ci_step_predicates.py` | What does this step *do*? Whether it runs the suite or acquires test tooling                                                 |
+| `nextest_profile.py`    | Which scope declares `NEXTEST_PROFILE` for a step                                                                            |
+
+`ci_lane_reading.py` takes its path and its documents as arguments and never
+reaches for a module constant, so no query is quietly fallible or quietly
+file-touching; the contract module loads `ci.yml` once through a fixture, which
+names the read in every test's signature. `ci_step_predicates.py` compares Make
+targets as whole tokens, so `make test-rust` is the Rust suite and
+`make test-workflow-contracts` is not. `nextest_profile.py` decides by key
+membership rather than by value, because `NEXTEST_PROFILE: ""` and a valueless
+`NEXTEST_PROFILE:` are both declarations that mask an outer scope and the
+second parses to `None`.
+
+### Read a command, not the text around it
+
+`shell_commands.py` is the answer to a defect this branch shipped and the
+review caught. The predicates matched `cargo test` as a substring and treated
+any whitespace-delimited `make` word as an invocation, so `# cargo test`,
+`echo cargo test` and `grep "cargo test"` all reported that a step ran the
+backend suite.
+
+That direction is the dangerous one, and it is worth stating why. The lane
+contract asserts that some build step runs the suite. Under a text search that
+assertion is satisfied by a commented-out command, so the contract stays green
+through exactly the regression it exists to catch. The opposite error is safe:
+a spelling the reader fails to recognize makes the same contract fail loudly,
+because it then finds no lane at all.
+
+So a command is read at its executable position. Continuations are joined, each
+line is lexed with `shlex` so quoting and `#` comments are honoured, the words
+are cut at the operators that end one command, and leading `NAME=value`
+assignments and transparent wrappers are peeled away. `env`, `timeout`, `nice`
+and the rest are transparent; `echo`, `printf` and `grep` are not, and that
+distinction is the whole reader.
+
+Four test modules cover it, and the division between them is deliberate:
+
+| Module                            | What it covers                                                                                                                                                   |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `suite_command_property_test.py`  | Generated scripts, compared against an oracle with its own tokenizer and its own restated constants                                                              |
+| `shell_command_test.py`           | The spellings a generator has to be told about one at a time: comments, `echo`, quoting, wrappers, path-qualified executables, and steps with no readable script |
+| `lane_predicate_property_test.py` | The `NEXTEST_PROFILE` scope walk, against a list-walking oracle                                                                                                  |
+| `ci_lane_reading_test.py`         | Every `WorkflowShapeError` path, which the lane contracts never reach                                                                                            |
+
+The oracle earned its independence immediately. Its first version split a
+script into commands before removing comments, and disagreed with the reader on
+`# make test && make test`, where the `#` takes the rest of the line including
+the `&&`. The reader was right. An oracle that had reused the reader's
+tokenizer would have agreed with it and reported nothing.
+
 ### Python docstring examples
 
 Every `>>>` example in a Python module here is executed.
@@ -690,9 +797,13 @@ test usage remains coherent:
 
 Continuous Integration (CI) warms the `pg-embed-setup-unpriv` binary cache with
 `scripts/warm-pg-embedded-cache.sh` before running `cargo nextest`. Keep this
-warm-up step before `Rust tests`; it turns PostgreSQL binary acquisition into a
-short, explicit CI step instead of letting the first integration test perform a
-cold download inside `postgresql_embedded::setup()`.
+warm-up step ahead of every step that executes the Rust suite. Since 2026-09-17
+there are three: the `Generate Rust coverage` step in `ci.yml`'s `coverage`
+job, the one in `coverage-main.yml`, and `ci.yml`'s `build` job `Rust tests`
+step on the Dependabot lane, which consumes the warm-up guarded by the same
+`github.actor == 'dependabot[bot]'` condition. It turns PostgreSQL binary
+acquisition into a short, explicit CI step instead of letting the first
+integration test perform a cold download inside `postgresql_embedded::setup()`.
 
 The CI cache step must include both binary-cache locations used by the two
 embedded PostgreSQL layers:
@@ -721,10 +832,13 @@ worker process.
 
 If CI reports `error decoding response body`, treat it as a likely download
 stall or timeout from `reqwest` rather than as JSON/body corruption. Check the
-`Cache PostgreSQL embedded binaries` and
+`Restore PostgreSQL embedded binaries` and
 `Warm PostgreSQL embedded binary cache` steps first, then verify that the
-`Rust tests` step is still exporting `PG_EMBEDDED_WORKER`, `GITHUB_TOKEN`, and
-`NEXTEST_TEST_THREADS=1`.
+failing suite step is still exporting `PG_EMBEDDED_WORKER`, `GITHUB_TOKEN`,
+`PG_TEST_BACKEND`, `PG_PASSWORD`, `POSTGRESQL_VERSION` and
+`POSTGRESQL_RELEASES_URL`. That step is `Generate Rust coverage` on a coverage
+lane and `Rust tests` on the Dependabot lane; both carry the same six
+variables, so a failure in either points at the same block.
 
 ## Rust behavioural tests with `rstest-bdd` v0.5.0
 
@@ -838,9 +952,9 @@ Three pieces cooperate here:
 - **`PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are composed by the runner**,
   not by test code: the `test-rust` Make recipe passes them on the
   `cargo nextest run` command line (with `?=` defaults that an existing value
-  overrides), and the CI `Rust tests` and coverage steps set them in their
-  `env:` blocks. `backend/tests/environment_policy_contract.rs` fails if the
-  Make recipe stops doing so.
+  overrides), and the CI coverage steps set them in their `env:` blocks.
+  `backend/tests/environment_policy_contract.rs` fails if the Make recipe stops
+  doing so.
 
 ## Environment seams
 
