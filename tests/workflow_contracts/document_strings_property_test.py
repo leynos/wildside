@@ -22,10 +22,14 @@ appearing twice is exactly the case the contract cares about.
 from __future__ import annotations
 
 import string
+import typing as typ
 
 from document_strings import strings_in
 from hypothesis import given
 from hypothesis import strategies as st
+
+if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
+    import collections.abc as cabc
 
 #: Keys a workflow plausibly carries, from a small alphabet so a
 #: counter-example reads as a key rather than as noise.
@@ -88,15 +92,41 @@ def _oracle(root: object) -> list[str]:
         if isinstance(node, str):
             found.append(node)
         elif isinstance(node, dict):
-            children: list[object] = []
-            for key, value in node.items():
-                if isinstance(key, str):
-                    children.append(key)
-                children.append(value)
-            pending.extend(reversed(children))
+            pending.extend(reversed(_mapping_children(node)))
         elif isinstance(node, list):
             pending.extend(reversed(node))
     return found
+
+
+def _mapping_children(mapping: cabc.Mapping[typ.Any, typ.Any]) -> list[object]:
+    """Return one mapping's children in visit order, string keys included.
+
+    Split out of :func:`_oracle` rather than nested inside it, which is
+    the same seam the implementation has and the same reason: building a
+    mapping's children needs both halves of each entry and a sequence's
+    needs neither.
+
+    Independence is unaffected. What makes this oracle independent is
+    the mechanism, an explicit stack against a recursion, not the number
+    of functions it is written in, and no code is shared with what it
+    checks.
+
+    Parameters
+    ----------
+    mapping : collections.abc.Mapping[typing.Any, typing.Any]
+        One mapping from a generated document.
+
+    Returns
+    -------
+    list[object]
+        Each string key followed by its value, in iteration order.
+    """
+    children: list[object] = []
+    for key, value in mapping.items():
+        if isinstance(key, str):
+            children.append(key)
+        children.append(value)
+    return children
 
 
 @given(document=_DOCUMENTS)
