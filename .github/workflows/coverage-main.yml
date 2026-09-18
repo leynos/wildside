@@ -193,9 +193,10 @@ jobs:
         if: env.CS_ACCESS_TOKEN != ''
         uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         with:
-          # mode defaults to "upload"; CodeScene infers project 70675 from
-          # the git remote, so no project-url is needed here. The PR check
-          # supplies it explicitly because `mode: check` requires it.
+          # mode defaults to "upload", which is the only mode this estate
+          # uses: under CV-005 no pull-request lane talks to CodeScene, so
+          # `mode: check` has no caller. CodeScene infers project 70675
+          # from the git remote, so no project-url is needed.
           format: lcov
           access-token: ${{ env.CS_ACCESS_TOKEN }}
           installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
