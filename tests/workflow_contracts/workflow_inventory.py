@@ -109,6 +109,50 @@ def workflow_filenames() -> list[str]:
     )
 
 
+def triggers_of(filename: str) -> dict[str, typ.Any]:
+    """Return one workflow's ``on`` mapping.
+
+    YAML 1.1 parses a bare ``on`` key as the boolean ``True``, so the document
+    is keyed on either spelling depending on how it was written.
+
+    Examples
+    --------
+    >>> "pull_request" in triggers_of("ci.yml")
+    True
+    >>> "pull_request" in triggers_of("coverage-main.yml")
+    False
+    """
+    document = load_workflow(filename)
+    raw = document.get(True, document.get("on"))
+    if not isinstance(raw, dict):
+        message = f"{filename} must declare its triggers as a mapping"
+        raise TypeError(message)
+    return raw
+
+
+#: The events that make a workflow run on a contributor's pull request.
+#: ``pull_request_target`` counts: it runs with the base repository's secrets,
+#: which is the reason a secret on it matters more rather than less.
+PULL_REQUEST_EVENTS = frozenset({"pull_request", "pull_request_target"})
+
+
+def pull_request_workflows() -> list[str]:
+    """Return the workflows that run on a pull request.
+
+    Examples
+    --------
+    >>> "ci.yml" in pull_request_workflows()
+    True
+    >>> "coverage-main.yml" in pull_request_workflows()
+    False
+    """
+    return [
+        filename
+        for filename in workflow_filenames()
+        if PULL_REQUEST_EVENTS & set(triggers_of(filename))
+    ]
+
+
 def workflow_jobs(filename: str) -> list[tuple[str, dict[str, typ.Any]]]:
     """Return one workflow's ``(job_id, job)`` pairs.
 

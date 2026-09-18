@@ -8,11 +8,12 @@ from pathlib import Path
 import pytest
 import typed_documents as docs
 
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
 WORKFLOW_LABEL = "ci.yml"
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / ".github" / "workflows" / WORKFLOW_LABEL
 )
-SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _assert_pinned_to_full_sha(uses: object, expected_path: str) -> None:
@@ -21,6 +22,9 @@ def _assert_pinned_to_full_sha(uses: object, expected_path: str) -> None:
     Dependabot owns shared-action SHA bumps, so the contract asserts the pin's
     shape rather than its current value. Hard-coding the SHA would fail the
     suite on every routine bump.
+
+    Three other contract modules import this, so it stays here even though
+    this module's own last caller went with the CodeScene changed-line gate.
     """
     assert isinstance(uses, str), f"expected a 'uses' string, got {uses!r}"
     path, separator, ref = uses.partition("@")
@@ -208,14 +212,19 @@ def test_build_runs_the_typedoc_documentation_gate() -> None:
     _assert_gate_runs_unconditionally("build", "make docs-check")
 
 
-def test_codescene_check_immediately_follows_coverage_generation() -> None:
-    """The changed-line gate consumes the LCOV report produced just before it."""
-    steps = _load_steps()
-    generation = _find_step(steps, "Generate Rust coverage")
-    check = _find_step(steps, "Check coverage against CodeScene gates")
-    assert steps.index(check) == steps.index(generation) + 1, (
-        "the CodeScene check must immediately follow coverage generation"
-    )
+def test_coverage_generation_forces_rust_only_ratcheted_lcov() -> None:
+    """The pull-request lane produces the report the ratchet compares.
+
+    This used to assert the ordering of the CodeScene changed-line gate
+    against the generation step that fed it. That gate is gone from the
+    pull-request lane under CV-005, and `codescene_coverage_baseline_test.py`
+    now holds its absence. What survives is the half that was never about
+    CodeScene: the inputs deciding which number is produced, pinned
+    verbatim, because the publisher writes the ratchet baseline from the
+    same set and a lane that drifts from it compares two different
+    measurements.
+    """
+    generation = _find_step(_load_steps(), "Generate Rust coverage")
     assert generation.get("with") == {
         "language": "rust",
         "output-path": "lcov.info",
@@ -224,28 +233,7 @@ def test_codescene_check_immediately_follows_coverage_generation() -> None:
         "features": "example-data metrics test-support",
         "with-ratchet": "true",
         "cache-provider": "external",
-    }, "coverage generation must force Rust-only LCOV via language: rust"
-
-
-def test_codescene_check_uses_the_guarded_project_contract() -> None:
-    """The CodeScene check is fork-safe and targets Wildside's project."""
-    check = _find_step(_load_steps(), "Check coverage against CodeScene gates")
-    assert check.get("env") == {"CS_ACCESS_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"}, (
-        "the CodeScene token must remain scoped to the check step"
-    )
-    assert check.get("if") == (
-        "github.event_name == 'pull_request' && env.CS_ACCESS_TOKEN != ''"
-    ), "the CodeScene check must skip pull requests without the secret"
-    _assert_pinned_to_full_sha(
-        check.get("uses"),
-        "leynos/shared-actions/.github/actions/upload-codescene-coverage",
-    )
-    assert check.get("with") == {
-        "format": "lcov",
-        "mode": "check",
-        "project-url": "https://api.codescene.io/v2/projects/70675",
-        "access-token": "${{ env.CS_ACCESS_TOKEN }}",
-    }, "the CodeScene check must pass the canonical project and check-mode inputs"
+    }, "coverage generation must force Rust-only ratcheted LCOV"
 
 
 def test_compile_fail_binaries_bypass_nextest() -> None:
