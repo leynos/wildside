@@ -42,7 +42,15 @@ USES_RE = re.compile(
 #: PostgreSQL version pin so the baseline skips postgresql_archive's
 #: rate-limited release-listing query (keep aligned with ci.yml's
 #: PG_VERSION).
+#:
+#: `allow-no-mutants` is stated rather than inherited. From shared-actions
+#: a5765019 it defaults to false, which turns a run that enumerated no
+#: mutants from a silent pass into a failure; cargo-mutants exits 0 either
+#: way, so the distinction is invisible without it. True preserves the
+#: behaviour this lane had before that pin moved. Removing it tightens the
+#: lane deliberately and belongs to whoever owns it, not to a repin.
 EXPECTED_WITH = {
+    "allow-no-mutants": True,
     "paths": "backend/,crates/,tools/",
     "exclude-globs": (
         "backend/src/test_support.rs,"
