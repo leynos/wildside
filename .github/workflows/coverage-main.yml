@@ -198,7 +198,6 @@ jobs:
           # supplies it explicitly because `mode: check` requires it.
           format: lcov
           access-token: ${{ env.CS_ACCESS_TOKEN }}
-          installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
 
       # Trunk is the only cache writer. Every save below is this key's sole
       # owner, so a pull request restores a generation that exactly one job
