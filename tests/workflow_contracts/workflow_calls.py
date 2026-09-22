@@ -1,0 +1,194 @@
+"""Follows reusable-workflow calls, so a lane is read as a closure.
+
+A workflow declaring only `workflow_call` has no trigger a pull request
+intersects, yet it runs on every pull request whose workflow calls it,
+and `secrets: inherit` hands it the caller's secrets. A contract that
+enumerates workflows by trigger alone cannot see it, so every absence
+built on that enumeration passes over it while it does the forbidden
+thing. episodic measured exactly that: a called probe curling the
+CodeScene project API with an inherited token passed every clause.
+
+A call is local when its reference, less a leading `./`, names a file
+directly under `.github/workflows/`. The shape is matched rather than a
+list of spellings, so a spelling nobody listed is not silently read as a
+call to another repository. A call to another repository is not
+followed, because its content is not in this tree; which secrets may be
+handed to one is the contract's question, answered with
+:func:`inherits_into_other_repositories`.
+
+Everything here reads parsed documents keyed by file name, so the
+contracts can drive shapes the repository does not have.
+"""
+
+from __future__ import annotations
+
+import typing as typ
+
+if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
+    import collections.abc as cabc
+
+#: Where GitHub looks for a same-repository reusable workflow. It does not
+#: look in subdirectories.
+WORKFLOWS_PREFIX: typ.Final[str] = ".github/workflows/"
+
+#: The `secrets:` value that forwards every secret the caller holds.
+INHERIT_ALL_SECRETS: typ.Final[str] = "inherit"
+
+
+def _as_mapping(value: object) -> cabc.Mapping[object, object]:
+    """Return ``value`` as a mapping, or an empty one when it is not one."""
+    # The cast says only what the check established: a mapping whose keys
+    # and values are unconstrained, which is how every caller treats it.
+    if isinstance(value, dict):
+        return typ.cast("cabc.Mapping[object, object]", value)
+    return {}
+
+
+class UnresolvedWorkflowCallError(LookupError):
+    """Raised when a local call names a workflow the reading does not hold.
+
+    The closure cannot vouch for a workflow it never read, so a call it
+    cannot resolve fails the reading rather than dropping out of the lane.
+    """
+
+
+def local_workflow_name(reference: str) -> str | None:
+    """Return the workflow file a same-repository call names, or None.
+
+    Parameters
+    ----------
+    reference : str
+        A job's `uses:` value.
+
+    Returns
+    -------
+    str or None
+        The workflow's file name when the reference, less a leading
+        `./`, names a file directly under `.github/workflows/`.
+
+    Examples
+    --------
+    >>> local_workflow_name("./.github/workflows/release.yml")
+    'release.yml'
+    >>> local_workflow_name("owner/repo/.github/workflows/release.yml@main") is None
+    True
+    """
+    path = reference.removeprefix("./")
+    if not path.startswith(WORKFLOWS_PREFIX):
+        return None
+    name = path.removeprefix(WORKFLOWS_PREFIX)
+    return name if name and "/" not in name else None
+
+
+def called_workflows(document: cabc.Mapping[str, object]) -> list[tuple[str, str]]:
+    """Return the job name and reference of every reusable-workflow call.
+
+    Only a job calls a reusable workflow; a step's `uses:` names an
+    action and is not read here.
+
+    Parameters
+    ----------
+    document : Mapping[str, object]
+        One parsed workflow.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        One entry per job whose `uses:` is a string, in declaration order.
+
+    Examples
+    --------
+    >>> called_workflows({"jobs": {"call": {"uses": "./.github/workflows/x.yml"}}})
+    [('call', './.github/workflows/x.yml')]
+    """
+    jobs = _as_mapping(document.get("jobs"))
+    return [
+        (str(name), uses)
+        for name, job in jobs.items()
+        if isinstance(uses := _as_mapping(job).get("uses"), str)
+    ]
+
+
+def reachable_workflows(
+    documents: cabc.Mapping[str, cabc.Mapping[str, object]],
+    entries: cabc.Iterable[str],
+) -> frozenset[str]:
+    """Return the entry workflows and every workflow they call, transitively.
+
+    Parameters
+    ----------
+    documents : Mapping[str, Mapping[str, object]]
+        Every workflow, keyed by file name.
+    entries : Iterable[str]
+        The file names the traversal starts from.
+
+    Returns
+    -------
+    frozenset[str]
+        The file names reached.
+
+    Raises
+    ------
+    UnresolvedWorkflowCallError
+        If an entry or a local call names a file `documents` does not hold.
+
+    Examples
+    --------
+    >>> call = {"jobs": {"call": {"uses": "./.github/workflows/b.yml"}}}
+    >>> sorted(reachable_workflows({"a.yml": call, "b.yml": {}}, ["a.yml"]))
+    ['a.yml', 'b.yml']
+    """
+    pending = list(entries)
+    reached: set[str] = set()
+    while pending:
+        current = pending.pop()
+        if current in reached:
+            continue
+        if current not in documents:
+            message = f"{current} is called or named but was not read"
+            raise UnresolvedWorkflowCallError(message)
+        reached.add(current)
+        pending.extend(_local_calls(documents[current]) - reached)
+    return frozenset(reached)
+
+
+def _local_calls(document: cabc.Mapping[str, object]) -> frozenset[str]:
+    """Return the file names of the same-repository workflows one calls."""
+    names = (local_workflow_name(ref) for _, ref in called_workflows(document))
+    return frozenset(name for name in names if name is not None)
+
+
+def inherits_into_other_repositories(
+    document: cabc.Mapping[str, object],
+) -> list[str]:
+    """Return the jobs that hand every secret to another repository's workflow.
+
+    A local call passing `secrets: inherit` is not listed: the closure
+    reads its callee, so whatever that workflow does with a secret is
+    checked there. A call to another repository cannot be read, so
+    inheriting into one hands the credential to code no contract sees.
+
+    Parameters
+    ----------
+    document : Mapping[str, object]
+        One parsed workflow.
+
+    Returns
+    -------
+    list[str]
+        The offending job names, in declaration order.
+
+    Examples
+    --------
+    >>> remote = {"uses": "owner/repo/.github/workflows/x.yml@v1", "secrets": "inherit"}
+    >>> local = {"uses": "./.github/workflows/x.yml", "secrets": "inherit"}
+    >>> inherits_into_other_repositories({"jobs": {"a": remote, "b": local}})
+    ['a']
+    """
+    jobs = _as_mapping(document.get("jobs"))
+    return [
+        name
+        for name, reference in called_workflows(document)
+        if local_workflow_name(reference) is None
+        and _as_mapping(jobs.get(name)).get("secrets") == INHERIT_ALL_SECRETS
+    ]

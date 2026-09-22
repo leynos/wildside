@@ -1766,6 +1766,37 @@ which parts of a workflow name a credential. Six mutations are caught: keys
 dropped, keys coerced, key and value swapped in order, lists not descended, a
 non-string-keyed entry skipped whole, and duplicates collapsed.
 
+Three more routes around those absences are closed in
+`codescene_closure_test.py`. First, the set the absences are parametrized over
+is a closure, not a trigger list. A workflow declaring only `workflow_call`
+runs on every pull request whose workflow calls it, and `secrets: inherit`
+hands it the credential, so `workflow_inventory.pull_request_workflows` starts
+from the workflows a pull-request event triggers and follows job-level `uses:`
+calls transitively through `workflow_calls.py`. A call is local when the
+reference, less a leading `./`, names a file directly under
+`.github/workflows/`. The shape is matched rather than a list of spellings, and
+a local call naming a workflow that was not read fails the reading rather than
+dropping out of the lane. Second, the CodeScene host `codescene.io`, in any
+case, may not appear in a pull-request workflow, because a step can curl the
+service naming neither the action, the CLI nor the credential. Third,
+`secrets: inherit` on a call to another repository's workflow is refused,
+because that callee is not in this tree; the same forwarding to a local
+workflow is allowed, because the closure reads the callee and holds it to every
+absence here.
+
+Two readers carry all of this. `workflow_inventory.triggers_of` reads the
+triggers as a name, a list or a mapping, under the string `on` key and the
+boolean `True` YAML 1.1 makes of a bare `on`; a mapping-only reader would drop
+`on: [push, pull_request]` from the pull-request set. And every contract loads
+workflows through `strict_yaml.py`, a safe loader that refuses a mapping
+repeating a key. PyYAML otherwise keeps the last of two `runs-on` keys without
+a word, so a paid label in the discarded half reads as hosted. GitHub rejects
+such a workflow anyway, so refusing it costs nothing.
+
+The publisher's upload condition is asserted whole, by equality, so appending
+`|| github.event_name == 'workflow_dispatch'` fails it without any clause
+splitting the expression on `&&`.
+
 ### CodeScene rule overrides
 
 `.codescene/code-health-rules.json` narrows CodeScene's rules for parts of the

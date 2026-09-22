@@ -22,6 +22,7 @@ from __future__ import annotations
 import typing as typ
 from fnmatch import fnmatch
 
+import strict_yaml
 import yaml
 from lane_fields import Node, mapping_of
 
@@ -127,7 +128,7 @@ def parse_workflow(text: str, path: Path) -> Node | None:
     True
     """
     try:
-        parsed = yaml.safe_load(text)
+        parsed = strict_yaml.load(text)
     except yaml.YAMLError as error:
         message = f"{path}: is not valid YAML: {error}"
         raise RepositoryReadError(message, path=path) from error

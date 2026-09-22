@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import typing as typ
 
-import yaml
+import strict_yaml
 
 if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
     from pathlib import Path
@@ -208,7 +208,7 @@ def load_json_document(path: Path, label: str) -> dict[str, JsonValue]:
 
 def load_yaml_document(path: Path, label: str) -> dict[str, JsonValue]:
     """Return a YAML file as a checked mapping."""
-    decoded = _decoded(yaml.safe_load(path.read_text(encoding="utf-8")), label)
+    decoded = _decoded(strict_yaml.load(path.read_text(encoding="utf-8")), label)
     return as_mapping(decoded, label)
 
 

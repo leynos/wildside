@@ -6,7 +6,7 @@ import typing as typ
 from pathlib import Path
 
 import pytest
-import yaml
+import strict_yaml
 from ci_workflow_test import _assert_pinned_to_full_sha
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -17,7 +17,7 @@ MAKEFILE_PATH = REPOSITORY_ROOT / "Makefile"
 def _build_steps() -> list[dict[str, object]]:
     """Return the steps from the CI build job."""
     workflow = typ.cast(
-        "object", yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+        "object", strict_yaml.load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     )
     match workflow:
         case {"jobs": dict() as jobs}:
@@ -91,7 +91,7 @@ def test_ci_installs_pinned_renderers_before_running_nixie() -> None:
 def test_ci_pins_the_renderer_versions_the_estate_reviewed() -> None:
     """The workflow environment carries the reviewed renderer pins."""
     workflow = typ.cast(
-        "object", yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+        "object", strict_yaml.load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     )
     match workflow:
         case {"env": dict() as environment}:

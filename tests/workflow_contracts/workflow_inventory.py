@@ -11,7 +11,8 @@ import re
 import typing as typ
 from pathlib import Path
 
-import yaml
+import strict_yaml
+import workflow_calls
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -59,7 +60,7 @@ def load_workflow(filename: str) -> dict[str, typ.Any]:
     >>> sorted(workflow["jobs"])
     ['build', 'coverage']
     """
-    document = yaml.safe_load((WORKFLOWS_DIR / filename).read_text(encoding="utf-8"))
+    document = strict_yaml.load((WORKFLOWS_DIR / filename).read_text(encoding="utf-8"))
     if not isinstance(document, dict):
         message = f"{filename} must parse to a mapping"
         raise TypeError(message)
@@ -110,7 +111,7 @@ def workflow_filenames() -> list[str]:
 
 
 def triggers_of(document: dict[str, typ.Any]) -> dict[object, object]:
-    """Return one parsed workflow's ``on`` mapping.
+    """Return one parsed workflow's triggers as a mapping.
 
     Takes a parsed document rather than a filename, so the call site shows
     where the file was read. A query that opened a file behind a name
@@ -127,6 +128,14 @@ def triggers_of(document: dict[str, typ.Any]) -> dict[object, object]:
     one level down keys ``off`` as ``False``. Callers narrow what they
     need.
 
+    GitHub accepts the triggers in three forms, and all three are read: a
+    single event name, a list of names, and a mapping of names to their
+    filters. The first two carry no filters, so each event maps to None.
+    A reader that knew only the mapping would read ``on: [push,
+    pull_request]`` as nothing, or as one key naming both, and a pull
+    request workflow written that way would escape every contract
+    parametrized over the pull-request set.
+
     Parameters
     ----------
     document : dict[str, typing.Any]
@@ -140,8 +149,8 @@ def triggers_of(document: dict[str, typ.Any]) -> dict[object, object]:
     Raises
     ------
     TypeError
-        If the document declares no triggers mapping, under either
-        spelling of the ``on`` key.
+        If the document declares its triggers in none of the three forms,
+        under either spelling of the ``on`` key.
 
     Examples
     --------
@@ -151,12 +160,21 @@ def triggers_of(document: dict[str, typ.Any]) -> dict[object, object]:
     False
     >>> triggers_of({True: {"push": None}})
     {'push': None}
+    >>> triggers_of({"on": "pull_request"})
+    {'pull_request': None}
+    >>> triggers_of({True: ["push", "pull_request"]})
+    {'push': None, 'pull_request': None}
     """
-    raw = document.get(True, document.get("on"))
-    if not isinstance(raw, dict):
-        message = "a workflow must declare its triggers as a mapping"
-        raise TypeError(message)
-    return raw
+    match document.get(True, document.get("on")):
+        case str() as event:
+            return {event: None}
+        case list() as events:
+            return dict.fromkeys(events)
+        case dict() as mapping:
+            return mapping
+        case _:
+            message = "a workflow must declare its triggers as a name, list or mapping"
+            raise TypeError(message)
 
 
 #: The events that make a workflow run on a contributor's pull request.
@@ -166,7 +184,12 @@ PULL_REQUEST_EVENTS = frozenset({"pull_request", "pull_request_target"})
 
 
 def pull_request_workflows() -> list[str]:
-    """Return the workflows that run on a pull request.
+    """Return the workflows that run on a pull request, calls included.
+
+    The set is a closure, not a trigger list: a workflow declaring only
+    ``workflow_call`` runs on every pull request whose workflow calls it,
+    so the workflows triggered by a pull-request event are the entries
+    and :mod:`workflow_calls` follows their local calls transitively.
 
     This one reads the filesystem, and its name says so: it answers a
     question about the repository's workflows rather than about a document
@@ -186,11 +209,14 @@ def pull_request_workflows() -> list[str]:
     >>> "coverage-main.yml" in pull_request_workflows()
     False
     """
-    return [
+    documents = {filename: load_workflow(filename) for filename in workflow_filenames()}
+    entries = [
         filename
-        for filename in workflow_filenames()
-        if PULL_REQUEST_EVENTS & set(triggers_of(load_workflow(filename)))
+        for filename, document in documents.items()
+        if PULL_REQUEST_EVENTS & set(triggers_of(document))
     ]
+    reached = workflow_calls.reachable_workflows(documents, entries)
+    return [filename for filename in documents if filename in reached]
 
 
 def workflow_jobs(filename: str) -> list[tuple[str, dict[str, typ.Any]]]:

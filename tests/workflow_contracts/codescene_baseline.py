@@ -26,6 +26,12 @@ CODESCENE_CREDENTIAL_NAME = "CS_ACCESS_TOKEN"
 #: than on a pin, so a repin does not silently reintroduce the step.
 CODESCENE_ACTION_MARKER = "codescene"
 
+#: The service's host. Matched case-insensitively, because DNS names are,
+#: and kept apart from the credential and action checks: a step can reach
+#: the project API by curling it, naming neither the action, the CLI nor
+#: the credential.
+CODESCENE_HOST = "codescene.io"
+
 #: The CLI, in both spellings: the standalone `cs-coverage` binary the
 #: shared action installs, and the `cs` binary's `coverage` subcommand.
 COVERAGE_CLI = "cs-coverage"
