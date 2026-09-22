@@ -12,6 +12,7 @@ import re
 import typing as typ
 
 import pytest
+import runner_shapes
 import workflow_inventory as inv
 import yaml
 
@@ -223,7 +224,7 @@ def test_actionlint_registers_every_managed_label_in_use() -> None:
     used = {
         label
         for _, _, job in inv.iter_jobs()
-        for label in inv.runner_labels(job)
+        for label in runner_shapes.runner_labels(job)
         if label not in inv.GITHUB_HOSTED_LABELS
     }
     assert used <= registered, f"unregistered runner labels in use: {used - registered}"

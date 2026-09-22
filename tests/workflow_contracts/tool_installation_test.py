@@ -12,6 +12,7 @@ import re
 import typing as typ
 
 import pytest
+import runner_shapes
 import workflow_inventory as inv
 
 #: `cargo binstall` compiles from source unless the strategy list forbids it.
@@ -309,8 +310,11 @@ def test_required_tool_setup_precedes_first_use(installer: str, first_use: str) 
 def test_non_build_jobs_stay_github_hosted(filename: str, job_id: str) -> None:
     """Scheduled and API-bound work keeps its GitHub-hosted placement."""
     job = inv.load_workflow(filename)["jobs"][job_id]
-    assert job.get("runs-on") in inv.GITHUB_HOSTED_LABELS, (
-        f"{filename}:{job_id} must stay on a GitHub-hosted runner"
+    labels = runner_shapes.runner_labels(job)
+    assert labels, f"{filename}:{job_id} must name a GitHub-hosted runner"
+    assert labels <= inv.GITHUB_HOSTED_LABELS, (
+        f"{filename}:{job_id} must stay on a GitHub-hosted runner, and can "
+        f"select {sorted(labels)}"
     )
 
 
@@ -336,7 +340,7 @@ def test_build_jobs_keep_their_reviewed_label_and_a_timeout(
     arm can be replaced with a label nobody reviewed.
     """
     job = inv.load_workflow(filename)["jobs"][job_id]
-    labels = inv.runner_labels(job)
+    labels = runner_shapes.runner_labels(job)
     assert labels & inv.MANAGED_RUNNER_LABELS, (
         f"{filename}:{job_id} must keep its reviewed managed-runner label, "
         f"and selects {sorted(labels)}"
