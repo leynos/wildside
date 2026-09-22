@@ -263,6 +263,26 @@ callee chooses the runner and the caller must not override it.
 Register any new managed label in `.github/actionlint.yaml`, and check required
 status-check contexts before changing a label that appears in a matrix job name.
 
+### Mutation testing
+
+`mutation-testing.yml` runs daily and on dispatch, as a thin caller of the
+shared `mutation-cargo.yml` reusable workflow. Its `detect` job looks for
+changed Rust source under the configured paths. The `mutants` job runs only when
+`detect` finds some, so a window with no Rust changes shows `mutants` and
+`summarize` as skipped, which is expected and green.
+
+When `mutants` does run, an empty mutant set fails the lane. The caller leaves
+`allow-no-mutants` at the shared workflow's default of false, because
+`cargo-mutants` exits 0 whether it enumerated a thousand mutants or none. A
+change that touches the configured paths but mutates nothing in them would
+otherwise report a green lane having tested nothing. So a skipped `mutants` job
+means no Rust changed, and a failed one with no mutants means the paths or
+exclusions need attention.
+
+`tests/workflow_contracts/mutation_testing_test.py` compares the caller's whole
+`with` block for equality. Restoring `allow-no-mutants: true`, or writing the
+default out as `false`, both fail it.
+
 ### Installers
 
 CI installs prebuilt, version-pinned distributions. A tool installer that
