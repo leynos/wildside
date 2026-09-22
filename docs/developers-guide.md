@@ -1563,8 +1563,29 @@ The protection is not lost. `generate-coverage` runs with `with-ratchet: true`
 on both lanes, so a pull request that lowers coverage fails on the ratchet with
 no CodeScene round trip.
 
-`tests/workflow_contracts/codescene_coverage_baseline_test.py` holds the shape.
-It asserts the three absences on every workflow that runs on `pull_request` or
+Two further rules protect the baseline itself, and both exist because a
+publisher that runs is not the same as a publisher that publishes the right
+thing.
+
+The upload step is guarded on `github.ref == 'refs/heads/main'` as well as on
+the token. That clause is not redundant with the `push` branch filter.
+`workflow_dispatch` is mandatory on this workflow, because merges made by the
+automerge workflow's token do not fire push events, and a dispatch runs from
+whichever branch it was started on. Without the ref clause a dispatch from a
+feature branch uploads that branch's coverage as the trunk's, and it becomes
+the baseline every pull request is ratcheted against. Nothing looks wrong: the
+upload succeeds.
+
+The workflow declares a concurrency group and does not cancel a run in
+progress. The baseline is a single value later runs read, so two publishers
+writing at once is a lost update decided by runner scheduling.
+`cancel-in-progress` is false deliberately: cancelling a publisher abandons a
+baseline write half done, which is the same lost update arrived at on purpose.
+A pull-request lane may cancel itself; a trunk publisher may not.
+
+`tests/workflow_contracts/codescene_coverage_baseline_test.py` holds the
+absences and `codescene_publisher_test.py` holds what the publisher must do. It
+asserts the three absences on every workflow that runs on `pull_request` or
 `pull_request_target`, that the publisher runs on push and is not itself a
 pull-request workflow and does upload, and that both lanes ratchet against the
 same measurement. Each assertion was proved by putting the element it forbids

@@ -44,50 +44,18 @@ from __future__ import annotations
 import pytest
 import shell_invocations as shell
 import workflow_inventory as inventory
+from codescene_baseline import (
+    BASELINE_INPUTS,
+    CLI_BINARY,
+    CLI_SUBCOMMAND,
+    CODESCENE_ACTION_MARKER,
+    CODESCENE_CREDENTIAL_NAME,
+    COVERAGE_CLI,
+    EXPECTED_PULL_REQUEST_WORKFLOWS,
+    GENERATE_COVERAGE,
+    PUBLISHER,
+)
 from document_strings import strings_in
-
-#: The *name* of the variable the CodeScene CLI authenticates with. This
-#: holds the identifier, never a value: the contract searches for the
-#: name because both the `env:` key and the `secrets.` reference spell it
-#: identically, and either one puts the credential on the lane.
-CODESCENE_CREDENTIAL_NAME = "CS_ACCESS_TOKEN"
-
-#: Any action under a path naming CodeScene. Matched on the path rather
-#: than on a pin, so a repin does not silently reintroduce the step.
-CODESCENE_ACTION_MARKER = "codescene"
-
-#: The CLI, in both spellings: the standalone `cs-coverage` binary the
-#: shared action installs, and the `cs` binary's `coverage` subcommand.
-COVERAGE_CLI = "cs-coverage"
-CLI_BINARY = "cs"
-CLI_SUBCOMMAND = "coverage"
-
-#: The workflow allowed to talk to CodeScene, and the event it does it on.
-PUBLISHER = "coverage-main.yml"
-PUBLISHER_EVENT = "push"
-
-#: The only branch whose coverage may advance the ratchet baseline. A
-#: push trigger without this would let a feature branch publish, and the
-#: baseline every pull request is then measured against would no longer
-#: be the trunk's.
-PUBLISHER_BRANCHES = ["main"]
-
-#: The upload mode, and the value the action assumes when the input is
-#: omitted. `coverage-main.yml` omits it, so a contract reading the input
-#: alone would find nothing; the effective mode is what publishes.
-#: Confirmed against `upload-codescene-coverage`'s `action.yml` at the
-#: pinned c5a54701, where `mode` is `required: false` with
-#: `default: upload`.
-UPLOAD_MODE = "upload"
-
-#: The action that produces coverage on both lanes.
-GENERATE_COVERAGE = "generate-coverage"
-
-#: The inputs that decide which coverage number is produced. The ratchet
-#: compares a pull request against a baseline the publisher wrote, so a
-#: lane disagreeing with the publisher on any of these is comparing two
-#: different measurements and the comparison means nothing.
-BASELINE_INPUTS = ("language", "format", "output-path", "use-cargo-nextest", "features")
 
 
 def _generate_coverage_inputs(filename: str) -> list[dict[str, object]]:
@@ -112,14 +80,6 @@ def _generate_coverage_inputs(filename: str) -> list[dict[str, object]]:
             options = step.get("with")
             found.append(options if isinstance(options, dict) else {})
     return found
-
-
-#: Every workflow that runs on a contributor's pull request, pinned. The
-#: three absence contracts below are parametrized over a discovered list,
-#: and a discovery that quietly returned fewer workflows would leave them
-#: passing while checking less. Pinning the set is what makes the count
-#: visible in a diff.
-EXPECTED_PULL_REQUEST_WORKFLOWS = ("ci.yml", "dependabot-automerge.yml")
 
 
 def test_every_pull_request_workflow_is_discovered() -> None:
@@ -244,85 +204,6 @@ def _invokes_the_coverage_cli(command: str) -> bool:
     return shell.invokes(command, COVERAGE_CLI) or shell.invokes(
         command, CLI_BINARY, CLI_SUBCOMMAND
     )
-
-
-def test_the_push_publisher_is_the_one_workflow_that_uploads() -> None:
-    """Coverage reaches CodeScene from the trunk, and only from there.
-
-    Scenario: the publisher workflow. Invariant: it runs on a push, it is
-    not a pull-request workflow, and it calls a CodeScene action.
-
-    All three clauses are load-bearing together. Without the last, the
-    baseline could be satisfied by deleting the upload entirely, which
-    would leave CodeScene with no coverage data at all and the ratchet
-    comparing pull requests against a baseline nothing advances. Without
-    the second, the publisher could acquire a `pull_request` trigger and
-    put the secret back on every pull request by another door.
-    """
-    triggers = inventory.triggers_of(PUBLISHER)
-    assert PUBLISHER_EVENT in triggers, (
-        f"{PUBLISHER} must run on {PUBLISHER_EVENT}; it is the only lane that "
-        "advances the coverage baseline the pull-request ratchet reads"
-    )
-    push = triggers[PUBLISHER_EVENT]
-    assert isinstance(push, dict), (
-        f"{PUBLISHER}'s {PUBLISHER_EVENT} trigger must declare a mapping so it "
-        f"can name its branches, found {push!r}"
-    )
-    assert push.get("branches") == PUBLISHER_BRANCHES, (
-        f"{PUBLISHER}'s {PUBLISHER_EVENT} trigger must select exactly "
-        f"{PUBLISHER_BRANCHES}, found {push!r}; an unrestricted trigger lets a "
-        "feature branch advance the baseline, and every pull request is then "
-        "ratcheted against coverage that is not the trunk's"
-    )
-    assert PUBLISHER not in inventory.pull_request_workflows(), (
-        f"{PUBLISHER} holds the CodeScene secret, so it must never run on a "
-        "pull request"
-    )
-    uploads = [
-        step
-        for _, job in inventory.workflow_jobs(PUBLISHER)
-        for step in inventory.job_steps(job)
-        if CODESCENE_ACTION_MARKER in inventory.step_action(step).lower()
-    ]
-    assert uploads, (
-        f"{PUBLISHER} must call a CodeScene action; with no publisher the "
-        "ratchet compares every pull request against a baseline that nothing "
-        "advances, and CodeScene sees no coverage for this repository at all"
-    )
-    publishing = [step.get("name") for step in uploads if _uploads(step)]
-    assert publishing, (
-        f"{PUBLISHER} must call the CodeScene action in {UPLOAD_MODE!r} mode; "
-        f"{[step.get('name') for step in uploads]} calls it in another mode, "
-        "which sends no coverage and leaves the baseline unadvanced while "
-        "every other assertion here still passes"
-    )
-
-
-def _uploads(step: dict[str, object]) -> bool:
-    """Return whether a CodeScene step publishes rather than checks.
-
-    The effective mode is read, not the declared one. `mode` is optional
-    on `upload-codescene-coverage` and defaults to `upload`, and the
-    publisher omits it, so a contract requiring the literal input would
-    fail on a correct workflow and one reading only a present input
-    would pass on `mode: check`.
-
-    Parameters
-    ----------
-    step : dict[str, object]
-        A step already known to use a CodeScene action.
-
-    Returns
-    -------
-    bool
-        True when the step's effective mode is `upload`.
-    """
-    options = step.get("with")
-    declared = (
-        options.get("mode", UPLOAD_MODE) if isinstance(options, dict) else (UPLOAD_MODE)
-    )
-    return declared == UPLOAD_MODE
 
 
 def test_the_pull_request_lane_ratchets_against_the_publishers_baseline() -> None:
