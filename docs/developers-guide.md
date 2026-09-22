@@ -1584,15 +1584,26 @@ baseline write half done, which is the same lost update arrived at on purpose.
 A pull-request lane may cancel itself; a trunk publisher may not.
 
 `tests/workflow_contracts/codescene_coverage_baseline_test.py` holds the
-absences and `codescene_publisher_test.py` holds what the publisher must do. It
-asserts the three absences on every workflow that runs on `pull_request` or
-`pull_request_target`, that the publisher runs on push and is not itself a
-pull-request workflow and does upload, and that both lanes ratchet against the
-same measurement. Each assertion was proved by putting the element it forbids
-back: the credential, the action, and the CLI in both its spellings. Two cases
-are expected to pass and do, a comment naming the CLI and a step merely named
-after CodeScene, because a contract that flagged those would be matching prose
-rather than behaviour.
+absences and `codescene_publisher_test.py` holds what the publisher must do.
+
+Two readings make those contracts mean what they say. The publisher check scans
+every workflow in the directory rather than the pull-request ones, because a
+scheduled, dispatch-only or release workflow can hold the credential and upload
+without any trigger the pull-request contracts inspect, and whatever it uploads
+becomes the baseline. And `shell_invocations.py` splits a `run:` line into
+commands before reading any of them, then peels assignments and wrappers
+including the options that take an operand. Without the split,
+`echo preparing && cs-coverage check` runs the CLI while the contract reports
+nothing; without the operand arity, `sudo -u runner cs-coverage check` reads
+`runner` as the executable and does the same. It asserts the three absences on
+every workflow that runs on `pull_request` or `pull_request_target`, that the
+publisher runs on push and is not itself a pull-request workflow and does
+upload, and that both lanes ratchet against the same measurement. Each
+assertion was proved by putting the element it forbids back: the credential,
+the action, and the CLI in both its spellings. Two cases are expected to pass
+and do, a comment naming the CLI and a step merely named after CodeScene,
+because a contract that flagged those would be matching prose rather than
+behaviour.
 
 The last clause is the one worth keeping. Requiring a publisher that uploads,
 rather than only requiring the absences, is what stops the baseline being

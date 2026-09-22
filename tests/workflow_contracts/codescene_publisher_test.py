@@ -15,9 +15,13 @@ quietly and protects nothing.
 
 from __future__ import annotations
 
+import shell_invocations as shell
 import workflow_inventory as inventory
 from codescene_baseline import (
+    CLI_BINARY,
+    CLI_SUBCOMMAND,
     CODESCENE_ACTION_MARKER,
+    COVERAGE_CLI,
     PUBLISHER,
     PUBLISHER_BRANCHES,
     PUBLISHER_CONCURRENCY_GROUP,
@@ -66,7 +70,7 @@ def test_the_push_publisher_is_the_one_workflow_that_uploads() -> None:
     the second, the publisher could acquire a `pull_request` trigger and
     put the secret back on every pull request by another door.
     """
-    triggers = inventory.triggers_of(PUBLISHER)
+    triggers = inventory.triggers_of(inventory.load_workflow(PUBLISHER))
     assert PUBLISHER_EVENT in triggers, (
         f"{PUBLISHER} must run on {PUBLISHER_EVENT}; it is the only lane that "
         "advances the coverage baseline the pull-request ratchet reads"
@@ -169,4 +173,66 @@ def test_the_publisher_serializes_its_baseline_writes() -> None:
         f"{concurrency.get('cancel-in-progress')!r}; cancelling a publisher "
         "abandons a baseline write half done, which is the lost update the "
         "group exists to prevent"
+    )
+
+
+def _codescene_steps(filename: str) -> list[str]:
+    """Return the steps in one workflow that can reach CodeScene.
+
+    Both routes are read, because either one publishes: a step using a
+    CodeScene action, and a step whose script invokes the CLI.
+
+    Parameters
+    ----------
+    filename : str
+        The workflow file's name.
+
+    Returns
+    -------
+    list[str]
+        One label per matching step, as `job/step`.
+    """
+    found = [
+        f"{job_id}/{step.get('name', inventory.step_action(step))}"
+        for job_id, job in inventory.workflow_jobs(filename)
+        for step in inventory.job_steps(job)
+        if CODESCENE_ACTION_MARKER in inventory.step_action(step).lower()
+    ]
+    found += [
+        f"{job_id}/{step_name}: {command}"
+        for name, job_id, step_name, command in inventory.iter_step_commands()
+        if name == filename
+        and (
+            shell.invokes(command, COVERAGE_CLI)
+            or shell.invokes(command, CLI_BINARY, CLI_SUBCOMMAND)
+        )
+    ]
+    return found
+
+
+def test_no_other_workflow_can_reach_codescene() -> None:
+    """One workflow in the repository publishes, and the rest cannot.
+
+    Scenario: every workflow in `.github/workflows`, not only the ones
+    that run on a pull request. Invariant: the publisher is the only one
+    with a step that can reach CodeScene by either route.
+
+    The absence contracts beside this one are parametrized over
+    pull-request workflows, so they say nothing at all about a scheduled,
+    dispatch-only or release workflow. Such a workflow can hold the
+    credential and upload, and the coverage it uploads becomes the
+    baseline every pull request is ratcheted against, with no trigger
+    this repository's other contracts inspect. Scanning the whole
+    directory is the only reading that closes that.
+    """
+    publishers = {
+        filename: _codescene_steps(filename)
+        for filename in inventory.workflow_filenames()
+    }
+    reaching = {name: steps for name, steps in publishers.items() if steps}
+    assert set(reaching) == {PUBLISHER}, (
+        f"only {PUBLISHER} may reach CodeScene; these workflows also can: "
+        f"{ {k: v for k, v in reaching.items() if k != PUBLISHER} }. Any of "
+        "them can advance the baseline every pull request is ratcheted "
+        "against, and none of them is covered by the pull-request contracts"
     )

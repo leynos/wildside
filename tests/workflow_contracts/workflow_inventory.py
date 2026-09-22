@@ -109,28 +109,52 @@ def workflow_filenames() -> list[str]:
     )
 
 
-def triggers_of(filename: str) -> dict[object, object]:
-    """Return one workflow's ``on`` mapping, keyed by whatever YAML produced.
+def triggers_of(document: dict[str, typ.Any]) -> dict[object, object]:
+    """Return one parsed workflow's ``on`` mapping.
+
+    Takes a parsed document rather than a filename, so the call site shows
+    where the file was read. A query that opened a file behind a name
+    would make every caller's filesystem access invisible and every
+    signature quietly fallible, which is the convention
+    :mod:`repository_reading` and :mod:`coverage_lanes` state in their own
+    docstrings that they exist to protect.
 
     The return type is object-keyed rather than string-keyed because the
-    boundary check here only establishes that the value is a mapping, and
-    claiming string keys without validating them would be a promise this
-    function does not keep. An event name really can arrive as a non-string:
-    YAML 1.1 parses a bare ``on`` key as the boolean ``True``, and the same
-    rule applies one level down, so ``on: {off: ...}`` keys the inner mapping
-    by ``False``. Callers narrow what they need.
+    check here establishes only that the value is a mapping, and claiming
+    string keys without validating them would be a promise this function
+    does not keep. An event name really can arrive as a non-string: YAML
+    1.1 parses a bare ``on`` key as the boolean ``True``, and the same rule
+    one level down keys ``off`` as ``False``. Callers narrow what they
+    need.
+
+    Parameters
+    ----------
+    document : dict[str, typing.Any]
+        A parsed workflow, as :func:`load_workflow` returns it.
+
+    Returns
+    -------
+    dict[object, object]
+        The triggers mapping, keyed by whatever YAML produced.
+
+    Raises
+    ------
+    TypeError
+        If the document declares no triggers mapping, under either
+        spelling of the ``on`` key.
 
     Examples
     --------
-    >>> "pull_request" in triggers_of("ci.yml")
+    >>> "pull_request" in triggers_of(load_workflow("ci.yml"))
     True
-    >>> "pull_request" in triggers_of("coverage-main.yml")
+    >>> "pull_request" in triggers_of(load_workflow("coverage-main.yml"))
     False
+    >>> triggers_of({True: {"push": None}})
+    {'push': None}
     """
-    document = load_workflow(filename)
     raw = document.get(True, document.get("on"))
     if not isinstance(raw, dict):
-        message = f"{filename} must declare its triggers as a mapping"
+        message = "a workflow must declare its triggers as a mapping"
         raise TypeError(message)
     return raw
 
@@ -144,6 +168,17 @@ PULL_REQUEST_EVENTS = frozenset({"pull_request", "pull_request_target"})
 def pull_request_workflows() -> list[str]:
     """Return the workflows that run on a pull request.
 
+    This one reads the filesystem, and its name says so: it answers a
+    question about the repository's workflows rather than about a document
+    handed to it, so there is no call site that could name the files for
+    it. Every other query here stays pure.
+
+    Returns
+    -------
+    list[str]
+        The filenames, in the order :func:`workflow_filenames` yields
+        them.
+
     Examples
     --------
     >>> "ci.yml" in pull_request_workflows()
@@ -154,7 +189,7 @@ def pull_request_workflows() -> list[str]:
     return [
         filename
         for filename in workflow_filenames()
-        if PULL_REQUEST_EVENTS & set(triggers_of(filename))
+        if PULL_REQUEST_EVENTS & set(triggers_of(load_workflow(filename)))
     ]
 
 

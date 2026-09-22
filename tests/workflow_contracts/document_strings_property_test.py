@@ -89,16 +89,29 @@ def _oracle(root: object) -> list[str]:
     pending: list[object] = [root]
     while pending:
         node = pending.pop()
-        if isinstance(node, str):
-            found.append(node)
-        elif isinstance(node, dict):
-            pending.extend(reversed(_mapping_children(node)))
-        elif isinstance(node, list):
-            pending.extend(reversed(node))
+        match node:
+            case str() as text:
+                found.append(text)
+            case dict() as mapping:
+                # Same cast as the walk's, for the same reason: the
+                # pattern narrows to an unparameterized dict, which the
+                # type checker will not accept against an invariant key
+                # type. `_mapping_children` inspects every key.
+                pending.extend(
+                    reversed(
+                        _mapping_children(
+                            typ.cast("cabc.Mapping[object, object]", mapping)
+                        )
+                    )
+                )
+            case list() as items:
+                pending.extend(reversed(items))
+            case _:
+                continue
     return found
 
 
-def _mapping_children(mapping: cabc.Mapping[typ.Any, typ.Any]) -> list[object]:
+def _mapping_children(mapping: cabc.Mapping[object, object]) -> list[object]:
     """Return one mapping's children in visit order, string keys included.
 
     Split out of :func:`_oracle` rather than nested inside it, which is
@@ -113,7 +126,7 @@ def _mapping_children(mapping: cabc.Mapping[typ.Any, typ.Any]) -> list[object]:
 
     Parameters
     ----------
-    mapping : collections.abc.Mapping[typing.Any, typing.Any]
+    mapping : collections.abc.Mapping[object, object]
         One mapping from a generated document.
 
     Returns

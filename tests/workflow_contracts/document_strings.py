@@ -56,18 +56,23 @@ def strings_in(node: object) -> cabc.Iterator[str]:
     >>> list(strings_in("bare"))
     ['bare']
     """
-    if isinstance(node, str):
-        yield node
-    elif isinstance(node, dict):
-        # `isinstance` narrows to an unparameterized dict, which the type
-        # checker will not accept against an invariant key type. The cast
-        # says only what the check established, that this is a mapping
-        # whose keys and values are unconstrained; `_mapping_strings`
-        # inspects every key before using it.
-        yield from _mapping_strings(typ.cast("cabc.Mapping[object, object]", node))
-    elif isinstance(node, list):
-        for item in node:
-            yield from strings_in(item)
+    # The cast in the mapping arm says only what the pattern established,
+    # that this is a mapping whose keys and values are unconstrained: the
+    # narrowed type is an unparameterized dict, which the type checker will
+    # not accept against an invariant key type. `_mapping_strings` inspects
+    # every key before using it.
+    match node:
+        case str() as text:
+            yield text
+        case dict() as mapping:
+            yield from _mapping_strings(
+                typ.cast("cabc.Mapping[object, object]", mapping)
+            )
+        case list() as items:
+            for item in items:
+                yield from strings_in(item)
+        case _:
+            return
 
 
 def _mapping_strings(mapping: cabc.Mapping[object, object]) -> cabc.Iterator[str]:
