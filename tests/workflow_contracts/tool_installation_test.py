@@ -50,6 +50,12 @@ BUILD_INSTALLER_ORDER = (
     ("Restore PostgreSQL embedded binaries", "Warm PostgreSQL embedded binary cache"),
 )
 
+# Since 2026-09-17 the five steps above from `Install nextest` onwards run only
+# on the Dependabot lane, guarded by `github.actor == 'dependabot[bot]'`. The
+# ordering they assert is unchanged: all five carry the same guard, so they are
+# present or absent together and an installer still precedes its consumer
+# whenever either runs. `duplicate_test_lane_test.py` owns the guard itself.
+
 _SHARED_ACTION_REFERENCE = re.compile(
     r"leynos/shared-actions/(?P<path>[^@\s]+)@(?P<ref>\S+)"
 )

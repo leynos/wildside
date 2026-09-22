@@ -29,6 +29,14 @@ Mutation proofs, each reverted afterwards:
 The ``POSTGRESQL_RELEASES_URL`` assertion caught a real gap when it was
 written: the ``Rust tests`` step pinned the release URL only in the cache
 warm-up step, so the test run itself was unpinned.
+
+On 2026-09-17 the ``ci-rust-tests`` case became ``ci-rust-tests-dependabot``.
+The step it names now carries ``github.actor == 'dependabot[bot]'``, the
+inverse of the actor clause the ``coverage`` job excludes, because a Dependabot
+pull request gets no coverage run and so would otherwise get no suite at all.
+Reachability is therefore asserted as the expected condition rather than as the
+absence of one: a step that must be skipped for most actors cannot be required
+to carry no condition, but it must carry exactly the one that was reviewed.
 """
 
 from __future__ import annotations
@@ -44,7 +52,29 @@ class Lane(typ.NamedTuple):
     """One workflow lane that runs the Rust suite.
 
     Grouped into a single value so each case is named once and the test takes
-    one parameter rather than five positional ones.
+    one parameter rather than six positional ones.
+
+    Attributes
+    ----------
+    workflow_name : str
+        The workflow file the lane lives in, by name.
+    job_name : str
+        The job that carries the lane.
+    step_name : str
+        The step whose ``env`` block the contract reads, by its ``name``.
+    required_trigger : str
+        The event the lane depends on. The workflow has to declare it, or
+        the lane's settings are correct on a lane that never runs.
+    job_condition : str or None
+        The job's expected ``if``, verbatim, or None when the job must
+        carry no condition at all.
+    step_condition : str or None
+        The step's expected ``if``, verbatim, or None when the step must
+        carry no condition at all. None is the ordinary case: a step that
+        must run for everyone cannot carry a condition. A string is the
+        Dependabot lane, whose step must be skipped for most actors and so
+        must carry exactly the condition that was reviewed rather than
+        none.
     """
 
     workflow_name: str
@@ -52,6 +82,7 @@ class Lane(typ.NamedTuple):
     step_name: str
     required_trigger: str
     job_condition: str | None
+    step_condition: str | None = None
 
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
@@ -68,6 +99,14 @@ THESEUS_RELEASES_URL = "https://github.com/theseus-rs/postgresql-binaries"
 COVERAGE_JOB_CONDITION = (
     "github.actor != 'dependabot[bot]' && github.event_name != 'push'"
 )
+
+# The build job's Rust suite runs on the lane the coverage job declines, so
+# its step carries the inverse actor clause. Pinned here for the same reason
+# the job condition above is: the settings are worthless on a step that never
+# runs, and this is the one step whose condition is load-bearing rather than
+# incidental. `duplicate_test_lane_test.py` owns the complementarity of the
+# two clauses; this contract only needs the step to be reachable for someone.
+DEPENDABOT_LANE_CONDITION = "github.actor == 'dependabot[bot]'"
 
 
 def _load(workflow: Path) -> dict[str, object]:
@@ -114,8 +153,15 @@ def _step(job: dict[str, object], step_name: str) -> dict[str, object]:
     "lane",
     [
         pytest.param(
-            Lane("ci.yml", "build", "Rust tests", "pull_request", None),
-            id="ci-rust-tests",
+            Lane(
+                "ci.yml",
+                "build",
+                "Rust tests",
+                "pull_request",
+                None,
+                DEPENDABOT_LANE_CONDITION,
+            ),
+            id="ci-rust-tests-dependabot",
         ),
         pytest.param(
             Lane(
@@ -161,10 +207,23 @@ def test_the_rust_suite_receives_the_embedded_postgres_settings(lane: Lane) -> N
     )
 
     step = _step(job, lane.step_name)
-    assert "if" not in step, (
-        f"the {lane.step_name} step must carry no condition; one would let it "
-        "be skipped while its env block still reads correctly"
-    )
+    if lane.step_condition is None:
+        # Key absence, not a null value. `yaml.safe_load` turns `if: null`
+        # into `None`, so comparing against `None` accepts a step that
+        # declares a condition and leaves it empty. GitHub reads an empty
+        # `if` as false and skips the step, so the two spellings mean
+        # opposite things and only one of them is this lane.
+        assert "if" not in step, (
+            f"the {lane.step_name} step must declare no condition at all; it "
+            f"declares if={step.get('if')!r}, and an empty condition skips "
+            "the step while its env block still reads correctly"
+        )
+    else:
+        assert step.get("if") == lane.step_condition, (
+            f"the {lane.step_name} step's condition must be "
+            f"{lane.step_condition!r}; a changed or added condition can skip "
+            "the suite entirely while its env block still reads correctly"
+        )
 
     env = step.get("env")
     assert isinstance(env, dict), f"the {lane.step_name!r} step must declare env"
