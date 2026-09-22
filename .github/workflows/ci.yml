@@ -11,6 +11,14 @@ name: ci
     branches: [main]
   workflow_dispatch:
 
+# A second push to a pull request supersedes the run already in flight, which
+# otherwise charges a full set of minutes for a result nobody reads. Pushes to
+# main, dispatches and schedules share the group and are never cancelled: they
+# are the cache writers and the published record.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   NEXTEST_VERSION: '0.9.114'
   PG_VERSION: "16.10.0"
