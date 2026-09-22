@@ -78,9 +78,16 @@ def evaluate(expression: str | None, context: dict[str, str]) -> bool:
     """
     if expression is None:
         return True
-    return all(
+    # Every term is evaluated before any result is combined. `all()` over a
+    # generator stops at the first false comparison, so a later term outside
+    # the grammar would never reach `_holds` and never raise, and a lane
+    # guarded by an expression this evaluator cannot read would be reported
+    # as simply not running. That is the failure the raise exists to
+    # prevent, so the short circuit has to go.
+    verdicts = [
         _holds(term.strip(), context, expression) for term in expression.split("&&")
-    )
+    ]
+    return all(verdicts)
 
 
 def _holds(term: str, context: dict[str, str], whole: str) -> bool:

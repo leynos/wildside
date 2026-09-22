@@ -952,9 +952,14 @@ Three pieces cooperate here:
 - **`PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are composed by the runner**,
   not by test code: the `test-rust` Make recipe passes them on the
   `cargo nextest run` command line (with `?=` defaults that an existing value
-  overrides), and the CI coverage steps set them in their `env:` blocks.
-  `backend/tests/environment_policy_contract.rs` fails if the Make recipe stops
-  doing so.
+  overrides), and in CI every step that runs the suite sets them in its `env:`
+  block. That is the coverage steps in `ci.yml` and `coverage-main.yml`, and
+  also `ci.yml`'s guarded `Rust tests` step, which is the Dependabot lane's
+  only backend run and so the only producer of these values on a Dependabot
+  pull request. `backend/tests/environment_policy_contract.rs` fails if the
+  Make recipe stops doing so, and
+  `tests/workflow_contracts/embedded_postgres_env_test.py` fails if any of
+  those steps does.
 
 ## Environment seams
 

@@ -207,11 +207,23 @@ def test_the_rust_suite_receives_the_embedded_postgres_settings(lane: Lane) -> N
     )
 
     step = _step(job, lane.step_name)
-    assert step.get("if") == lane.step_condition, (
-        f"the {lane.step_name} step's condition must be "
-        f"{lane.step_condition!r}; a changed or added condition can skip the "
-        "suite entirely while its env block still reads correctly"
-    )
+    if lane.step_condition is None:
+        # Key absence, not a null value. `yaml.safe_load` turns `if: null`
+        # into `None`, so comparing against `None` accepts a step that
+        # declares a condition and leaves it empty. GitHub reads an empty
+        # `if` as false and skips the step, so the two spellings mean
+        # opposite things and only one of them is this lane.
+        assert "if" not in step, (
+            f"the {lane.step_name} step must declare no condition at all; it "
+            f"declares if={step.get('if')!r}, and an empty condition skips "
+            "the step while its env block still reads correctly"
+        )
+    else:
+        assert step.get("if") == lane.step_condition, (
+            f"the {lane.step_name} step's condition must be "
+            f"{lane.step_condition!r}; a changed or added condition can skip "
+            "the suite entirely while its env block still reads correctly"
+        )
 
     env = step.get("env")
     assert isinstance(env, dict), f"the {lane.step_name!r} step must declare env"

@@ -273,3 +273,10 @@ def test_an_unevaluable_condition_stops_the_contract() -> None:
         conditions.evaluate("success() || github.actor == 'octocat'", context)
     with pytest.raises(conditions.ConditionSyntaxError, match="no value for"):
         conditions.evaluate("github.ref == 'refs/heads/main'", context)
+
+    # An unsupported term *after* a false one. This is the case a
+    # short-circuiting `all()` never reaches: it would answer False, and the
+    # lane would be reported as simply not running rather than as guarded by
+    # an expression nothing here can read.
+    with pytest.raises(conditions.ConditionSyntaxError, match="outside the grammar"):
+        conditions.evaluate("github.actor == 'nobody' && success()", context)
