@@ -32,9 +32,20 @@ PULL_REQUEST_TRIGGER: typ.Final = "pull_request"
 #: the contract requires the guarded expression, not a truthy setting.
 CANCEL_IN_PROGRESS: typ.Final = "${{ github.event_name == 'pull_request' }}"
 
-#: A group keyed on the run identifier is unique per run, so it
-#: serializes nothing and can never cancel a predecessor.
-RUN_ID_EXPRESSION: typ.Final = "github.run_id"
+#: The only accepted concurrency group, compared whole after whitespace is
+#: normalized. It must carry both identities. Without the workflow, two
+#: workflows on one pull request cancel each other. Without the pull request,
+#: one pull request cancels another's run: a constant such as ``ci``, or
+#: ``${{ github.workflow }}`` alone, puts every pull request in one group. A
+#: per-run key such as ``github.run_id`` or ``github.sha`` serializes nothing
+#: and never cancels a predecessor. The ``github.ref`` fallback keys a push or
+#: a dispatch by its branch, since those events carry no pull-request number.
+#: Equality rather than a list of required fragments, because a fragment test
+#: accepts a group that names the pull request only inside a different
+#: expression.
+GROUP_EXPRESSION: typ.Final = (
+    "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+)
 
 
 class WorkflowShapeError(AssertionError):
@@ -204,8 +215,8 @@ def _group_violations(group: object) -> list[str]:
     """
     if not isinstance(group, str) or not group.strip():
         return ["declares no concurrency group"]
-    if RUN_ID_EXPRESSION in group:
-        return [f"keys its concurrency group on {RUN_ID_EXPRESSION}"]
+    if " ".join(group.split()) != GROUP_EXPRESSION:
+        return [f"keys its concurrency group on {group!r} and not {GROUP_EXPRESSION}"]
     return []
 
 

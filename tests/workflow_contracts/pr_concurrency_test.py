@@ -9,8 +9,9 @@ The sweep below reads the repository's own workflows. The cases after
 it drive the readers directly with synthetic documents, because a rule
 parametrized over files that already conform passes whether or not it
 discriminates: the synthetic cases are what prove it rejects a missing
-line, a literal ``true`` that would cancel a push to main, and a group
-keyed on the run identifier that serializes nothing.
+line, a literal ``true`` that would cancel a push to main, a group
+shared across pull requests, and a group keyed per run that serializes
+nothing.
 
 Run via ``make test-workflow-contracts``.
 """
@@ -20,6 +21,7 @@ import typing as typ
 import pytest
 from pr_concurrency_support import (
     CANCEL_IN_PROGRESS,
+    GROUP_EXPRESSION,
     WorkflowShapeError,
     concurrency_violations,
     is_pull_request_startable,
@@ -45,7 +47,7 @@ def _document(**concurrency: object) -> dict[str, object]:
     return {"on": {"pull_request": None}, "concurrency": dict(concurrency)}
 
 
-GROUP: typ.Final = "${{ github.workflow }}-${{ github.event.pull_request.number }}"
+GROUP: typ.Final = GROUP_EXPRESSION
 CONFORMING: typ.Final = _document(
     group=GROUP, **{"cancel-in-progress": CANCEL_IN_PROGRESS}
 )
@@ -106,13 +108,29 @@ def test_the_conforming_shape_is_accepted() -> None:
             "cancel-in-progress to 'true'",
             id="quoted-true",
         ),
-        pytest.param(
-            _document(
-                group="ci-${{ github.run_id }}",
-                **{"cancel-in-progress": CANCEL_IN_PROGRESS},
-            ),
-            "github.run_id",
-            id="run-id-group",
+        *(
+            pytest.param(
+                _document(group=group, **{"cancel-in-progress": CANCEL_IN_PROGRESS}),
+                f"group on {group!r}",
+                id=case,
+            )
+            for case, group in (
+                ("constant-group", "ci"),
+                ("workflow-only-group", "${{ github.workflow }}"),
+                (
+                    "pull-request-only-group",
+                    "${{ github.event.pull_request.number || github.ref }}",
+                ),
+                ("run-id-group", "ci-${{ github.run_id }}"),
+                ("sha-group", "${{ github.workflow }}-${{ github.sha }}"),
+                (
+                    "number-only-in-another-expression",
+                    (
+                        "${{ github.workflow }}-${{ format('{0}', "
+                        "github.event.pull_request.number) }}"
+                    ),
+                ),
+            )
         ),
         pytest.param(
             _document(**{"cancel-in-progress": CANCEL_IN_PROGRESS}),
