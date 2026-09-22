@@ -1,11 +1,12 @@
 name: Coverage (main)
 
 # CodeScene accepts `cs-coverage upload` only for analysed branches, so
-# main-branch coverage is uploaded here on push. Pull requests generate
-# coverage and enforce changed-line gates in ci.yml's `coverage` job. This
-# workflow also advances the coverage ratchet baseline: caches saved on main
-# are readable by every pull-request run, so the baseline written here is the
-# one PR ratchet checks compare against.
+# main-branch coverage is uploaded here on push. Under CV-005 this is the one
+# workflow in the repository that talks to CodeScene at all: pull requests
+# generate coverage in ci.yml's `coverage` job and ratchet it, and reach
+# CodeScene not at all. This workflow advances the baseline they ratchet
+# against: caches saved on main are readable by every pull-request run, so the
+# baseline written here is the one those checks compare against.
 #
 # This job is the single writer of the Cargo registry, coverage-tool,
 # PostgreSQL embedded, and pg_worker cache keys. ci.yml restores all four and
@@ -19,6 +20,16 @@ name: Coverage (main)
   push:
     branches: [main]
   workflow_dispatch:
+
+# The baseline is a single value that later runs read, so two publishers
+# writing it at once is a lost update: whichever finishes second wins, and
+# which one that is depends on runner scheduling. Serialize instead.
+# `cancel-in-progress` is false deliberately. Cancelling a publisher abandons
+# a baseline write half done, which is the failure this block exists to
+# prevent; a pull-request lane may cancel itself, a trunk publisher may not.
+concurrency:
+  group: coverage-main-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -190,12 +201,18 @@ jobs:
       - name: Upload coverage data to CodeScene
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
-        if: env.CS_ACCESS_TOKEN != ''
+        # The ref clause is not redundant with the push filter above.
+        # `workflow_dispatch` is mandatory here, and a dispatch can be run
+        # from any branch, so without this a feature branch's coverage would
+        # be uploaded as the trunk's and become the baseline every pull
+        # request is ratcheted against.
+        if: env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main'
         uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
         with:
-          # mode defaults to "upload"; CodeScene infers project 70675 from
-          # the git remote, so no project-url is needed here. The PR check
-          # supplies it explicitly because `mode: check` requires it.
+          # mode defaults to "upload", which is the only mode this estate
+          # uses: under CV-005 no pull-request lane talks to CodeScene, so
+          # `mode: check` has no caller. CodeScene infers project 70675
+          # from the git remote, so no project-url is needed.
           format: lcov
           access-token: ${{ env.CS_ACCESS_TOKEN }}
 

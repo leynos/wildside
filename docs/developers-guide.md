@@ -1530,6 +1530,103 @@ Contract tests in `tests/workflow_contracts/` protect this configuration,
 including the immutable shared-action pins, alongside the Python gate steps and
 the Makefile recipes described above.
 
+### Where the coverage gate runs
+
+CodeScene sees this repository's coverage from the trunk, never from a pull
+request. `coverage-main.yml` runs on a push to `main`, generates ratcheted
+coverage and uploads it; `ci.yml`'s `coverage` job generates the same
+measurement on a pull request and ratchets it against the baseline that
+publisher advanced. No pull-request workflow calls a CodeScene action, runs a
+`cs-coverage` command, or receives `CS_ACCESS_TOKEN`.
+
+A pull-request lane used to run CodeScene's changed-line gate directly. Two
+things made that the wrong place for it:
+
+- A CLI break stops every branch at once. The CodeScene CLI was unpinned in
+  the shared action, and on 2026-09-16 a floating version broke Cobertura
+  parsing and reddened every branch in several repositories on the same
+  day.[^cs-cli] On the trunk lane that failure stops one run; on the
+  pull-request lane it stops all of them, and no branch can merge its way out.
+
+[^cs-cli]: [leynos/shared-actions#496](https://github.com/leynos/shared-actions/issues/496),
+    "Restore deterministic CodeScene coverage CLI installation", opened
+    2026-09-16, closed by
+    [leynos/shared-actions#504](https://github.com/leynos/shared-actions/pull/504)
+    which pins the CLI through a manifest and merged as `f68e8e2e` on
+    2026-09-17.
+
+- A fork cannot hold the secret. The step carried `env.CS_ACCESS_TOKEN != ''`
+  so a forked pull request would skip it, which means the gate was never
+  enforced for the contributors most likely to need it.
+
+The protection is not lost. `generate-coverage` runs with `with-ratchet: true`
+on both lanes, so a pull request that lowers coverage fails on the ratchet with
+no CodeScene round trip.
+
+Two further rules protect the baseline itself, and both exist because a
+publisher that runs is not the same as a publisher that publishes the right
+thing.
+
+The upload step is guarded on `github.ref == 'refs/heads/main'` as well as on
+the token. That clause is not redundant with the `push` branch filter.
+`workflow_dispatch` is mandatory on this workflow, because merges made by the
+automerge workflow's token do not fire push events, and a dispatch runs from
+whichever branch it was started on. Without the ref clause a dispatch from a
+feature branch uploads that branch's coverage as the trunk's, and it becomes
+the baseline every pull request is ratcheted against. Nothing looks wrong: the
+upload succeeds.
+
+The workflow declares a concurrency group and does not cancel a run in
+progress. The baseline is a single value later runs read, so two publishers
+writing at once is a lost update decided by runner scheduling.
+`cancel-in-progress` is false deliberately: cancelling a publisher abandons a
+baseline write half done, which is the same lost update arrived at on purpose.
+A pull-request lane may cancel itself; a trunk publisher may not.
+
+`tests/workflow_contracts/codescene_coverage_baseline_test.py` holds the
+absences and `codescene_publisher_test.py` holds what the publisher must do.
+
+Two readings make those contracts mean what they say. The publisher check scans
+every workflow in the directory rather than the pull-request ones, because a
+scheduled, dispatch-only or release workflow can hold the credential and upload
+without any trigger the pull-request contracts inspect, and whatever it uploads
+becomes the baseline. And `shell_invocations.py` splits a `run:` line into
+commands before reading any of them, then peels assignments and wrappers
+including the options that take an operand. Without the split,
+`echo preparing && cs-coverage check` runs the CLI while the contract reports
+nothing; without the operand arity, `sudo -u runner cs-coverage check` reads
+`runner` as the executable and does the same. It asserts the three absences on
+every workflow that runs on `pull_request` or `pull_request_target`, that the
+publisher runs on push and is not itself a pull-request workflow and does
+upload, and that both lanes ratchet against the same measurement. Each
+assertion was proved by putting the element it forbids back: the credential,
+the action, and the CLI in both its spellings. Two cases are expected to pass
+and do, a comment naming the CLI and a step merely named after CodeScene,
+because a contract that flagged those would be matching prose rather than
+behaviour.
+
+The last clause is the one worth keeping. Requiring a publisher that uploads,
+rather than only requiring the absences, is what stops the baseline being
+satisfied by deleting the upload entirely, which would leave the ratchet
+comparing every pull request against a baseline nothing advances.
+
+The credential search rests on `document_strings.py`, which walks a parsed
+document and yields every string at any depth, keys included. Keys matter
+because a credential reaches a step three ways, as an `env:` key, as a
+`${{ secrets.X }}` value and as an action input, and a walk returning values
+alone would find two of them. Non-string keys are skipped rather than coerced:
+YAML 1.1 turns a bare `on` into the boolean `True`, so a document really does
+carry them, and `str(True)` would put the word "True" into a credential search.
+
+`document_strings_property_test.py` generates bounded trees mixing scalars,
+lists, string-keyed and boolean-keyed mappings and empty containers, and
+compares the walk against a stack-based oracle. The comparison is on the
+sequence rather than on a set, because a walk that found every distinct string
+but collapsed duplicates would satisfy a set comparison while under-reporting
+which parts of a workflow name a credential. Six mutations are caught: keys
+dropped, keys coerced, key and value swapped in order, lists not descended, a
+non-string-keyed entry skipped whole, and duplicates collapsed.
+
 ### CodeScene rule overrides
 
 `.codescene/code-health-rules.json` narrows CodeScene's rules for parts of the

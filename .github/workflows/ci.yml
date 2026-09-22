@@ -33,9 +33,12 @@ env:
   YAMLLINT_VERSION: '1.35.1'
 
 # Default GITHUB_TOKEN to no access; each job re-grants only what it needs.
-# Both jobs only read repository contents — the token's sole runtime use is
-# raising GitHub API rate limits for public postgresql_embedded downloads, and
-# the CodeScene upload authenticates with its own CS_ACCESS_TOKEN.
+# Both jobs only read repository contents. The token is granted to steps for
+# two rate-limited GitHub API reads, never for write access: cargo-binstall's
+# release lookup in `Install pg_worker binary`, and the public
+# postgresql_embedded downloads in the cache warm-up and the test steps.
+# No job here holds a CodeScene secret; coverage-main.yml is the only
+# workflow that uploads to CodeScene.
 permissions: {}
 
 jobs:
@@ -646,13 +649,14 @@ jobs:
               "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Rust coverage for CodeScene. The changed-line gate runs immediately after
-  # generation when CS_ACCESS_TOKEN is available; the explicit token guard
-  # lets forked pull requests skip the secret-dependent step safely.
-  # coverage-main.yml uploads main-branch coverage and advances the ratchet
-  # baseline that pull-request runs compare against, so this job is skipped on
-  # push. It also skips Dependabot so dependency automerge stays off the
-  # expensive coverage path.
+  # Rust coverage. This lane generates coverage and ratchets it against the
+  # baseline; it talks to CodeScene not at all. A pull-request lane that ran
+  # the CodeScene changed-line gate needed the CLI, a secret and a parse step
+  # on every pull request, and a CLI break there stopped every branch in the
+  # estate at once. coverage-main.yml uploads main-branch coverage and
+  # advances the ratchet baseline this job compares against, so this job is
+  # skipped on push. It also skips Dependabot so dependency automerge stays
+  # off the expensive coverage path.
   coverage:
     if: github.actor != 'dependabot[bot]' && github.event_name != 'push'
     # The same fork fallback as `build`; see the comment there.
@@ -684,9 +688,6 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
           persist-credentials: false
-          # `cs-coverage check` diffs against the pull-request merge base, so
-          # fetch the full history used by the active changed-line gate.
-          fetch-depth: 0
 
       # Ubicloud publishes its local cache proxy to action steps, not to plain
       # `run:` steps, so sccache's GitHub Actions backend sees no credentials
@@ -834,17 +835,6 @@ jobs:
           with-ratchet: 'true'
           # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
           cache-provider: external
-      - name: Check coverage against CodeScene gates
-        env:
-          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
-        if: github.event_name == 'pull_request' && env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
-        with:
-          format: lcov
-          mode: check
-          project-url: https://api.codescene.io/v2/projects/70675
-          access-token: ${{ env.CS_ACCESS_TOKEN }}
-
       # Zero compile requests means the wrapper never engaged, which is a
       # failed integration rather than a cold cache.
       - name: Record compiler-cache effectiveness
