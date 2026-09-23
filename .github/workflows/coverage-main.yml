@@ -36,7 +36,7 @@ permissions:
 
 jobs:
   coverage-upload:
-    runs-on: ubicloud-standard-8
+    runs-on: ubicloud-standard-4
     # Above the 5,400 s cargo watchdog below plus the work either side of
     # the coverage step, which reached 522 s on run 33921794186. At 90
     # minutes the ceiling equalled the watchdog exactly.
@@ -55,6 +55,12 @@ jobs:
       SCCACHE_GHA_ENABLED: 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
+
+      # Peak memory and minimum free disk are the two figures a runner shape
+      # is judged on, and nothing else in the job reports them. The script
+      # lives in the repository, so it can start only after the checkout.
+      - name: Start resource sampler
+        run: ./scripts/ci-resource-sampler.sh start
 
       # Ubicloud publishes its local cache proxy to action steps, not to plain
       # `run:` steps, so sccache's GitHub Actions backend sees no credentials
@@ -298,3 +304,8 @@ jobs:
             printf -- "- pg-embedded key: \`%s\` hit: \`%s\`\n" \
               "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # always(): a job its shape kills is the one whose peak explains why.
+      - name: Report resource peaks
+        if: always()
+        run: ./scripts/ci-resource-sampler.sh report

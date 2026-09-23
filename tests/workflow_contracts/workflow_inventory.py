@@ -29,7 +29,7 @@ CACHE_ACTION_PATHS = ("actions/cache", "actions/cache/restore", "actions/cache/s
 
 #: Managed-runner labels this repository intends to use. Every label here must
 #: also be registered with actionlint.
-MANAGED_RUNNER_LABELS = frozenset({"ubicloud-standard-8"})
+MANAGED_RUNNER_LABELS = frozenset({"ubicloud-standard-4"})
 GITHUB_HOSTED_LABELS = frozenset({"ubuntu-latest"})
 
 #: Jobs that build or test the product. Everything else is administrative,

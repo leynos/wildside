@@ -58,7 +58,7 @@ jobs:
     # trusted arm rather than the fallback.
     runs-on: >-
       ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
-      || 'ubicloud-standard-8' }}
+      || 'ubicloud-standard-4' }}
     # 90, which is this job's own figure and no longer the coverage jobs':
     # both of those went to 120 in #486 to clear the 5,400 s cargo watchdog,
     # and this job has no watchdog to clear. A cold sccache pays about 1.4 s
@@ -80,6 +80,12 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      # Peak memory and minimum free disk are the two figures a runner shape
+      # is judged on, and nothing else in the job reports them. The script
+      # lives in the repository, so it can start only after the checkout.
+      - name: Start resource sampler
+        run: ./scripts/ci-resource-sampler.sh start
 
       # Ubicloud publishes its local cache proxy to action steps, not to plain
       # `run:` steps, so sccache's GitHub Actions backend sees no credentials
@@ -667,6 +673,11 @@ jobs:
               "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # always(): a job its shape kills is the one whose peak explains why.
+      - name: Report resource peaks
+        if: always()
+        run: ./scripts/ci-resource-sampler.sh report
+
   # Rust coverage. This lane generates coverage and ratchets it against the
   # baseline; it talks to CodeScene not at all. A pull-request lane that ran
   # the CodeScene changed-line gate needed the CLI, a secret and a parse step
@@ -680,7 +691,7 @@ jobs:
     # The same fork fallback as `build`; see the comment there.
     runs-on: >-
       ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
-      || 'ubicloud-standard-8' }}
+      || 'ubicloud-standard-4' }}
     # Above the 5,400 s cargo watchdog below plus the work either side of
     # the coverage step, which reached 59 s here and 522 s on the trunk
     # lane. At 90 minutes the ceiling equalled the watchdog exactly, so a
@@ -706,6 +717,12 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
           persist-credentials: false
+
+      # Peak memory and minimum free disk are the two figures a runner shape
+      # is judged on, and nothing else in the job reports them. The script
+      # lives in the repository, so it can start only after the checkout.
+      - name: Start resource sampler
+        run: ./scripts/ci-resource-sampler.sh start
 
       # Ubicloud publishes its local cache proxy to action steps, not to plain
       # `run:` steps, so sccache's GitHub Actions backend sees no credentials
@@ -893,3 +910,8 @@ jobs:
             printf -- "- pg-embedded key: \`%s\` hit: \`%s\`\n" \
               "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # always(): a job its shape kills is the one whose peak explains why.
+      - name: Report resource peaks
+        if: always()
+        run: ./scripts/ci-resource-sampler.sh report
