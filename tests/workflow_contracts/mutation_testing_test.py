@@ -19,7 +19,7 @@ import re
 import typing as typ
 from pathlib import Path
 
-import yaml
+import strict_yaml
 
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2]
@@ -75,7 +75,7 @@ EXPECTED_WITH = {
 
 def _load() -> dict[str, object]:
     """Parse the workflow file."""
-    return yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    return strict_yaml.load(WORKFLOW_PATH.read_text(encoding="utf-8"))
 
 
 def _triggers(workflow: dict[str, object]) -> dict[str, object]:

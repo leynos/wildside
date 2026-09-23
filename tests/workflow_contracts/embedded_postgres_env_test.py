@@ -45,7 +45,7 @@ import typing as typ
 from pathlib import Path
 
 import pytest
-import yaml
+import strict_yaml
 
 
 class Lane(typ.NamedTuple):
@@ -111,7 +111,7 @@ DEPENDABOT_LANE_CONDITION = "github.actor == 'dependabot[bot]'"
 
 def _load(workflow: Path) -> dict[str, object]:
     """Parse a workflow file."""
-    document = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    document = strict_yaml.load(workflow.read_text(encoding="utf-8"))
     assert isinstance(document, dict), f"{workflow.name} must parse as a mapping"
     return typ.cast("dict[str, object]", document)
 

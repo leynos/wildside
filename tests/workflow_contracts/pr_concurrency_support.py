@@ -15,6 +15,7 @@ passes whether or not it works.
 import typing as typ
 from pathlib import Path
 
+import strict_yaml
 import yaml
 
 ROOT: typ.Final = Path(__file__).resolve().parents[2]
@@ -279,7 +280,7 @@ def _parse(path: Path) -> dict[str, object]:
         If the document does not parse to a mapping.
     """
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        document = strict_yaml.load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as error:
         raise UnparsableWorkflowError(path.name) from error
     if not isinstance(document, dict):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import typing as typ
 from pathlib import Path
 
-import yaml
+import strict_yaml
 from ci_workflow_test import _assert_pinned_to_full_sha
 
 WORKFLOW_PATH = (
@@ -22,7 +22,7 @@ UPLOAD_CODESCENE_PATH = (
 
 def _load_steps(job_name: str = "coverage-upload") -> list[dict[str, object]]:
     """Parse and return the steps for one workflow job."""
-    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    workflow = strict_yaml.load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     jobs = workflow.get("jobs")
     assert isinstance(jobs, dict), "the coverage workflow must declare jobs"
     job = jobs.get(job_name)
