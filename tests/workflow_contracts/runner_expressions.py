@@ -26,8 +26,8 @@ if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
 #: label a concatenation this reader does not evaluate, so it must not match.
 _EXPRESSION = re.compile(r"\$\{\{(?P<body>.*)\}\}", re.DOTALL)
 
-#: A single-quoted label, the only operand accepted as a result.
-_LABEL = re.compile(r"'(?P<label>[^']*)'")
+#: A single-quoted, non-empty label, the only operand accepted as a result.
+_LABEL = re.compile(r"'(?P<label>[^']+)'")
 
 
 def expression_labels(runner: str) -> frozenset[str] | None:
@@ -106,11 +106,18 @@ def split_top_level(text: str, operator: str) -> list[str]:
 
 def _top_level_indices(text: str) -> cabc.Iterator[int]:
     """Yield each index outside quotes at parenthesis depth zero."""
+    for index, (quoted, depth) in enumerate(_scan_states(text)):
+        if not quoted and depth == 0:
+            yield index
+
+
+def _scan_states(text: str) -> cabc.Iterator[tuple[bool, int]]:
+    """Yield, per character, whether it is quoted and the bracket depth after it.
+
+    A quote character counts as quoted, so it is never a top-level index.
+    """
     quoted, depth = False, 0
-    for index, char in enumerate(text):
-        if char == "'":
-            quoted = not quoted
-        elif not quoted:
-            depth += {"(": 1, ")": -1}.get(char, 0)
-            if depth == 0:
-                yield index
+    for char in text:
+        quoted ^= char == "'"
+        depth += 0 if quoted else {"(": 1, ")": -1}.get(char, 0)
+        yield quoted or char == "'", depth

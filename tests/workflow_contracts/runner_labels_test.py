@@ -93,6 +93,8 @@ def test_a_job_without_a_runner_yields_nothing() -> None:
         ),
         pytest.param("runner-${{ 'a' }}", id="text-around-the-expression"),
         pytest.param("", id="empty-label"),
+        pytest.param("${{ '' }}", id="empty-quoted-label"),
+        pytest.param("${{ x && '' || 'ubuntu-latest' }}", id="empty-quoted-result"),
         pytest.param(["ubuntu-latest", " "], id="blank-list-entry"),
         pytest.param(
             "${{ a && (b && 'ubicloud-standard-8') || 'ubuntu-latest' }}",
