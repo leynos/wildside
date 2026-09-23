@@ -9,13 +9,14 @@ placement contract while it bills. The same holds for a repeated
 happened to keep. GitHub itself rejects such a workflow, so the reader
 refusing it too costs nothing.
 
-Keys are compared as PyYAML constructs them, which is YAML 1.1, and that
-leaves one disagreement with GitHub standing. A bare `on` and a quoted
-`"on"` construct to `True` and `"on"`, two different keys, so a workflow
-declaring both still loads, and `workflow_inventory.triggers_of` reads the
-`True` entry only, where GitHub treats the two spellings as one key.
-Closing that is a behaviour change for a separate decision, not a
-docstring correction.
+A key is also compared by the text it is written with, because PyYAML
+resolves YAML 1.1 and GitHub does not. A bare `on` constructs to `True`
+here and a quoted `"on"` to `"on"`, two different keys to PyYAML, while
+GitHub reads both as `on` and merges them into one trigger mapping. A
+reader then sees only one half, and `workflow_inventory.triggers_of`
+reads the `True` entry alone. So two keys written with the same text are
+a repeat whatever they construct to, and a workflow declaring both
+spellings of `on` is refused.
 
 Every contract reading a workflow goes through :func:`load`. Nothing here
 knows what a workflow is.
@@ -40,10 +41,11 @@ class _StrictLoader(yaml.SafeLoader):
         """Build a mapping, failing on the first repeated key.
 
         The check runs before the base constructor, which would collapse
-        the repetition. Keys are compared as constructed under YAML 1.1,
-        so a bare `on` and a bare `true` are the same key (both `True`) and
-        are refused as a repeat, while a bare `on` and a quoted `"on"` are
-        different keys (`True` and `"on"`) and both survive.
+        the repetition. Two keys are a repeat when they construct to the
+        same value under YAML 1.1, as a bare `on` and a bare `true` do
+        (both `True`), or when they are written with the same scalar text,
+        as a bare `on` and a quoted `"on"` are, which GitHub reads as one
+        key.
 
         Parameters
         ----------
@@ -69,11 +71,19 @@ class _StrictLoader(yaml.SafeLoader):
             # its own message; it cannot be a repeat this check could see.
             if not isinstance(key, cabc.Hashable):
                 continue
-            if key in seen:
-                message = f"found the key {key!r} twice in one mapping"
+            identities = {("value", key), *_written_text(key_node)}
+            if identities & seen:
+                message = f"found the key {key_node.value!r} twice in one mapping"
                 raise ConstructorError(None, None, message, key_node.start_mark)
-            seen.add(key)
+            seen |= identities
         return super().construct_mapping(node, deep=deep)
+
+
+def _written_text(key_node: yaml.Node) -> set[tuple[str, object]]:
+    """Return a scalar key's identity as written, or nothing for another node."""
+    if isinstance(key_node, yaml.ScalarNode):
+        return {("text", key_node.value)}
+    return set()
 
 
 def load(text: str) -> typ.Any:  # noqa: ANN401 - the same contract as yaml.safe_load.

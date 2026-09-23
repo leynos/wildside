@@ -262,6 +262,33 @@ def test_a_repeated_key_is_refused(
         inventory.load_workflow("ci.yml")
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param('on: push\n"on": pull_request\n', id="bare-then-quoted"),
+        pytest.param("'on': push\non: pull_request\n", id="quoted-then-bare"),
+    ],
+)
+def test_both_spellings_of_on_are_refused(source: str) -> None:
+    """A workflow declaring a bare `on` and a quoted `"on"` fails to load.
+
+    PyYAML constructs them as two keys, `True` and `"on"`; GitHub reads both
+    as `on` and merges them. A trigger reader that saw one half would be
+    blind to the other, so the pull-request set could drop a workflow whose
+    `pull_request` trigger sat in the unread half.
+    """
+    with pytest.raises(yaml.YAMLError, match="'on'"):
+        strict_yaml.load(source + "jobs: {}\n")
+
+
+def test_one_spelling_of_on_beside_other_keys_loads() -> None:
+    """Keys written differently are not a repeat, whatever they construct to."""
+    document = strict_yaml.load('"on": push\njobs: {}\nname: ci\n')
+    assert document == {"on": "push", "jobs": {}, "name": "ci"}, (
+        f"distinct keys must survive the strict loader, got {document!r}"
+    )
+
+
 def test_an_unprefixed_local_call_is_refused() -> None:
     """A workflow-directory reference with neither documented prefix fails.
 

@@ -1792,7 +1792,11 @@ boolean `True` YAML 1.1 makes of a bare `on`; a mapping-only reader would drop
 workflows through `strict_yaml.py`, a safe loader that refuses a mapping
 repeating a key. PyYAML otherwise keeps the last of two `runs-on` keys without
 a word, so a paid label in the discarded half reads as hosted. GitHub rejects
-such a workflow anyway, so refusing it costs nothing.
+such a workflow anyway, so refusing it costs nothing. Two keys written with the
+same text are a repeat too, whatever PyYAML constructs them to. A bare `on:`
+and a quoted `"on":` become `True` and `"on"` under YAML 1.1, but GitHub reads
+both as `on` and merges them, and a reader that saw one half would be blind to
+the other.
 
 The publisher's upload condition is asserted whole, by equality, so appending
 `|| github.event_name == 'workflow_dispatch'` fails it without any clause
