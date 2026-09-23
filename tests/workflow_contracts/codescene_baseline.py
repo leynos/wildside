@@ -53,8 +53,21 @@ PUBLISHER_BRANCHES = ["main"]
 #: the push branch filter: `workflow_dispatch` is mandatory on this
 #: workflow and a dispatch runs from whichever branch it was started on.
 PUBLISHER_UPLOAD_CONDITION = (
-    "env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main'"
+    "steps.codescene_token.outputs.available == 'true' "
+    "&& github.ref == 'refs/heads/main'"
 )
+
+#: The step that says whether the token exists, and its one command. The
+#: token stays out of every `env` on the publisher job, because the upload
+#: is a composite action whose nested steps inherit the calling step's
+#: environment; this step publishes a boolean instead.
+AVAILABILITY_STEP_ID = "codescene_token"
+AVAILABILITY_COMMAND = (
+    'echo "available=${{ secrets.CS_ACCESS_TOKEN != \'\' }}" >> "$GITHUB_OUTPUT"'
+)
+
+#: The upload's `access-token`, taken straight from the secret.
+UPLOAD_CREDENTIAL_INPUT = "${{ secrets.CS_ACCESS_TOKEN }}"
 
 #: The concurrency group the publisher serializes on, and the setting
 #: that must not be true. Cancelling a publisher abandons a baseline

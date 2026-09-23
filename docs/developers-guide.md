@@ -1723,19 +1723,33 @@ thing.
 
 The upload step is guarded on `github.ref == 'refs/heads/main'` as well as on
 the token. That clause is not redundant with the `push` branch filter.
-`workflow_dispatch` is mandatory on this workflow, because merges made by the
-automerge workflow's token do not fire push events, and a dispatch runs from
-whichever branch it was started on. Without the ref clause a dispatch from a
-feature branch uploads that branch's coverage as the trunk's, and it becomes
-the baseline every pull request is ratcheted against. Nothing looks wrong: the
-upload succeeds.
+`workflow_dispatch` is mandatory on this workflow, because a merge made by the
+Dependabot automerge workflow's token fires no push event (see
+[shared-actions issue 518](https://github.com/leynos/shared-actions/issues/518)),
+and a dispatch runs from whichever branch it was started on. Without the ref
+clause a dispatch from a feature branch uploads that branch's coverage as the
+trunk's, and it becomes the baseline every pull request is ratcheted against.
+Nothing looks wrong: the upload succeeds.
 
-The workflow declares a concurrency group and does not cancel a run in
-progress. The baseline is a single value later runs read, so two publishers
-writing at once is a lost update decided by runner scheduling.
-`cancel-in-progress` is false deliberately: cancelling a publisher abandons a
-baseline write half done, which is the same lost update arrived at on purpose.
-A pull-request lane may cancel itself; a trunk publisher may not.
+The token itself stays out of every `env` on the publisher job. A
+`Check CodeScene token availability` step publishes only
+`available=${{ secrets.CS_ACCESS_TOKEN != '' }}` to its outputs, the upload's
+condition reads that output, and the upload takes the token directly as
+`access-token: ${{ secrets.CS_ACCESS_TOKEN }}`. The upload is a composite
+action, and a composite action's nested steps inherit the calling step's
+environment, so a token placed in the step's `env` reached every one of them.
+
+The workflow declares the concurrency group `coverage-main-${{ github.ref }}`
+and does not cancel a run in progress. The baseline is a single value later
+runs read, so two publishers writing at once is a lost update decided by runner
+scheduling. `cancel-in-progress` is false deliberately: cancelling a publisher
+abandons a baseline write half done, which is the same lost update arrived at
+on purpose. A pull-request lane may cancel itself; a trunk publisher may not.
+One consequence of queueing is worth knowing. A group holds one pending run,
+and a newer run replaces it, so a dispatch that arrives while a push waits
+replaces that push. The dispatch uploads, but the coverage action saves the
+baseline only on a push, so the baseline stays one commit behind until the next
+push to `main`.
 
 `tests/workflow_contracts/codescene_coverage_baseline_test.py` holds the
 absences and `codescene_publisher_test.py` holds what the publisher must do.
