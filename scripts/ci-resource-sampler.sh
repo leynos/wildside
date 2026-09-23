@@ -120,6 +120,11 @@ report_sampler() {
   printf 'resource sampler: peak memory used %s MiB of %s MiB\n' \
     "${peak_mib}" "${total_mib}"
   printf 'resource sampler: minimum free disk %s MiB\n' "${free_mib}"
+  # The same figures as an annotation, which the checks API returns. The step
+  # summary is not reachable through the API, and reading a sizing decision
+  # should not require downloading the job's log.
+  printf '::notice title=Resource sampler (%s)::peak memory used %s MiB of %s MiB; minimum free disk %s MiB\n' \
+    "${GITHUB_JOB:-job}" "${peak_mib}" "${total_mib}" "${free_mib}"
   df -h .
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     {
