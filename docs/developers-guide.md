@@ -1749,7 +1749,10 @@ One consequence of queueing is worth knowing. A group holds one pending run,
 and a newer run replaces it, so a dispatch that arrives while a push waits
 replaces that push. The dispatch uploads, but the coverage action saves the
 baseline only on a push, so the baseline stays one commit behind until the next
-push to `main`.
+push to `main`. This reasoning covers triggered runs, a push or a dispatch. A
+manual "Re-run jobs" on an older `main` run is an operator action rather than a
+trigger: it keeps that run's commit, so it republishes that commit's coverage
+and baseline until the next push supersedes them.
 
 `tests/workflow_contracts/codescene_coverage_baseline_test.py` holds the
 absences and `codescene_publisher_test.py` holds what the publisher must do.
