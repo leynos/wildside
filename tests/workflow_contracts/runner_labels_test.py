@@ -28,6 +28,14 @@ import runner_shapes
             {"ubuntu-latest", "ubicloud-standard-8"},
             id="expression",
         ),
+        pytest.param(
+            "${{ 'ubuntu-latest' }}", {"ubuntu-latest"}, id="literal-expression"
+        ),
+        pytest.param(
+            "${{ a && 'x' || b && 'y' || 'z' }}",
+            {"x", "y", "z"},
+            id="chained-fallbacks",
+        ),
         pytest.param(["self-hosted", "linux"], {"self-hosted", "linux"}, id="list"),
         pytest.param(
             {"labels": "ubicloud-standard-8"}, {"ubicloud-standard-8"}, id="labels-text"
@@ -78,15 +86,22 @@ def test_a_job_without_a_runner_yields_nothing() -> None:
         pytest.param({"labels": 8}, id="labels-a-number"),
         pytest.param({"group": ""}, id="empty-group"),
         pytest.param("${{ matrix.os }}", id="expression-naming-no-label"),
+        pytest.param("${{ matrix.os || 'ubuntu-latest' }}", id="dynamic-first-operand"),
+        pytest.param("${{ x && matrix.os || 'ubuntu-latest' }}", id="dynamic-result"),
+        pytest.param(
+            "${{ x && 'ubicloud-standard-8' }}", id="condition-can-be-the-result"
+        ),
+        pytest.param("runner-${{ 'a' }}", id="text-around-the-expression"),
     ],
 )
 def test_an_unmodelled_shape_is_refused(runner: object) -> None:
     """A shape outside the three forms fails loudly instead of reading as empty.
 
     An empty reading is what a job with no runner looks like, so every
-    placement contract would pass over the job. `${{ matrix.os }}` is
-    refused for the same reason: the reader cannot resolve the matrix, and
-    naming no label is not the same as selecting none.
+    placement contract would pass over the job. An expression is refused
+    whenever any result it can take is not a quoted label:
+    `${{ matrix.os || 'ubuntu-latest' }}` names one label and may select
+    another, and reading the literal alone would hide the paid one.
     """
     with pytest.raises(runner_shapes.UnreadableRunnerError):
         runner_shapes.runner_labels({"runs-on": runner})

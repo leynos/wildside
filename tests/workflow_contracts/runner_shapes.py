@@ -19,6 +19,10 @@ import typing as typ
 #: obtain an Ubicloud runner, falls back to a GitHub-hosted one.
 _LABEL_LITERAL = re.compile(r"'([^']*)'")
 
+#: A whole ``runs-on`` expression. Text around the braces would make the
+#: label a concatenation this reader does not evaluate, so it must not match.
+_EXPRESSION = re.compile(r"\$\{\{(?P<body>.*)\}\}", re.DOTALL)
+
 
 class UnreadableRunnerError(ValueError):
     """Raised when a job's ``runs-on`` is a shape the reader does not model.
@@ -97,13 +101,59 @@ def runner_labels(job: dict[str, typ.Any]) -> frozenset[str]:
 
 
 def _labels_in(runner: str) -> frozenset[str]:
-    """Return the labels one ``runs-on`` string names, refusing an opaque one."""
+    """Return the labels one ``runs-on`` string names, refusing an opaque one.
+
+    An expression is read as GitHub evaluates it. `||` returns its first
+    truthy operand and `&&` its last, so each top-level disjunct can yield
+    only its final conjunct. Every such result must be a quoted label. The
+    last disjunct must be a bare label, because a falsy condition there would
+    itself be the result. Anything else could select a label no literal
+    names: in ``${{ matrix.os || 'ubuntu-latest' }}``, ``matrix.os`` may be a
+    paid label. So it is refused, not read as the literals it happens to
+    contain.
+    """
     if "${{" not in runner:
         return frozenset({runner})
-    labels = frozenset(_LABEL_LITERAL.findall(runner))
-    if not labels:
+    expression = _EXPRESSION.fullmatch(runner.strip())
+    if expression is None:
         raise _unreadable(runner)
-    return labels
+    disjuncts = [
+        _split_top_level(part, "&&")
+        for part in _split_top_level(expression["body"], "||")
+    ]
+    if len(disjuncts[-1]) != 1:
+        raise _unreadable(runner)
+    results = [_LABEL_LITERAL.fullmatch(conjuncts[-1]) for conjuncts in disjuncts]
+    if not all(results):
+        raise _unreadable(runner)
+    return frozenset(result.group(1) for result in results if result is not None)
+
+
+def _split_top_level(text: str, operator: str) -> list[str]:
+    """Split on ``operator`` outside quoted literals and parentheses, stripped."""
+    parts: list[str] = []
+    start, depth, quoted, index = 0, 0, False, 0
+    while index < len(text):
+        char = text[index]
+        if char == "'":
+            quoted = not quoted
+        elif not quoted and char in "()":
+            depth += 1 if char == "(" else -1
+        elif _is_operator_at(
+            text, index, operator, top_level=not quoted and depth == 0
+        ):
+            parts.append(text[start:index])
+            index += len(operator)
+            start = index
+            continue
+        index += 1
+    parts.append(text[start:])
+    return [part.strip() for part in parts]
+
+
+def _is_operator_at(text: str, index: int, operator: str, *, top_level: bool) -> bool:
+    """Return whether ``operator`` starts at ``index`` at the top level."""
+    return top_level and text.startswith(operator, index)
 
 
 def _labels_of_each(runners: object) -> frozenset[str]:
