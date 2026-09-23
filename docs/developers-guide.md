@@ -268,12 +268,15 @@ Every placement contract reads a job's labels through
 forms GitHub accepts: a label or an expression naming labels, a list of those,
 and a mapping with `group`, `labels` or both, with a group reported as
 `group:<name>`. It refuses anything else, including an expression naming no
-label such as `${{ matrix.os }}`, with `UnreadableRunnerError`. An empty result
-is what a reusable-workflow caller with no `runs-on` looks like. A reader that
-returned it for a shape it did not model would hide a paid label from every
-placement contract, which is what the old reader did for the mapping form.
-Extend the reader, with a case in `runner_labels_test.py`, before using a new
-shape.
+label such as `${{ matrix.os }}`, with `UnreadableRunnerError`. An expression
+is read by `runner_expressions.py` the way GitHub evaluates it, and every
+result it can take must be a quoted label, so
+`${{ matrix.os || 'ubuntu-latest' }}` is refused rather than read as
+`ubuntu-latest`. An empty result is what a reusable-workflow caller with no
+`runs-on` looks like. A reader that returned it for a shape it did not model
+would hide a paid label from every placement contract, which is what the old
+reader did for the mapping form. Extend the reader, with a case in
+`runner_labels_test.py`, before using a new shape.
 
 ### Mutation testing
 
