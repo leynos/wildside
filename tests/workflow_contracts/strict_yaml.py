@@ -7,8 +7,15 @@ a paid label in the discarded half, read as hosted, and pass every
 placement contract while it bills. The same holds for a repeated
 `secrets`, `if` or `env`: the contract asserts on whichever value PyYAML
 happened to keep. GitHub itself rejects such a workflow, so the reader
-refusing it too costs nothing and removes the only place the two could
-disagree.
+refusing it too costs nothing.
+
+Keys are compared as PyYAML constructs them, which is YAML 1.1, and that
+leaves one disagreement with GitHub standing. A bare `on` and a quoted
+`"on"` construct to `True` and `"on"`, two different keys, so a workflow
+declaring both still loads, and `workflow_inventory.triggers_of` reads the
+`True` entry only, where GitHub treats the two spellings as one key.
+Closing that is a behaviour change for a separate decision, not a
+docstring correction.
 
 Every contract reading a workflow goes through :func:`load`. Nothing here
 knows what a workflow is.
@@ -33,8 +40,10 @@ class _StrictLoader(yaml.SafeLoader):
         """Build a mapping, failing on the first repeated key.
 
         The check runs before the base constructor, which would collapse
-        the repetition. Keys are compared as constructed, so `on` and
-        `"on"` are the same key while `on` and `true` are not.
+        the repetition. Keys are compared as constructed under YAML 1.1,
+        so a bare `on` and a bare `true` are the same key (both `True`) and
+        are refused as a repeat, while a bare `on` and a quoted `"on"` are
+        different keys (`True` and `"on"`) and both survive.
 
         Parameters
         ----------
