@@ -29,6 +29,7 @@ import re
 import typing as typ
 
 import pytest
+import runner_shapes
 import workflow_inventory as inv
 
 #: The expression field that is true only for a pull request from a fork.
@@ -82,13 +83,20 @@ def _reachable_by_a_fork(filename: str) -> bool:
 
 
 def _runner_text(job: dict[str, typ.Any]) -> str:
-    """Return a job's `runs-on` as one string, whatever shape it has."""
+    """Return a job's `runs-on` as one string, whatever shape it has.
+
+    A string comes back exactly as YAML produced it, so the line-break
+    check sees any break the scalar kept. Every other form is rendered
+    from the labels `runner_labels` reads out of it. None of those forms
+    can be the event-keyed expression, so the fallback contract fails on
+    such a lane rather than never seeing it. It used to come back empty
+    for a mapping, which hid a paid label in `labels:` from every case
+    here.
+    """
     runner = job.get("runs-on")
     if isinstance(runner, str):
         return runner
-    if isinstance(runner, list):
-        return " ".join(str(entry) for entry in runner)
-    return ""
+    return " ".join(sorted(runner_shapes.runner_labels(job)))
 
 
 def _paid_lanes() -> list[tuple[str, str, str]]:
@@ -96,7 +104,11 @@ def _paid_lanes() -> list[tuple[str, str, str]]:
     return [
         (filename, job_id, _runner_text(job))
         for filename, job_id, job in inv.iter_jobs()
-        if UBICLOUD_PREFIX in _runner_text(job) and _reachable_by_a_fork(filename)
+        if any(
+            label.startswith(UBICLOUD_PREFIX)
+            for label in runner_shapes.runner_labels(job)
+        )
+        and _reachable_by_a_fork(filename)
     ]
 
 
