@@ -1775,10 +1775,11 @@ from the workflows a pull-request event triggers and follows job-level `uses:`
 calls transitively through `workflow_calls.py`. A call is local when the
 reference, less one of the two same-repository prefixes GitHub documents, `./`
 or the self-repository `$/` that GitHub.com recommends, names a file directly
-under `.github/workflows/`. A local call naming a workflow that was not read
-fails the reading rather than dropping out of the lane. Second, the CodeScene
-host `codescene.io`, in any case, may not appear in a pull-request workflow,
-because a step can curl the service naming neither the action, the CLI nor the
+under `.github/workflows/`. A reference naming that directory with neither
+prefix is refused, as is a local call naming a workflow that was not read,
+rather than dropping out of the lane. Second, the CodeScene host
+`codescene.io`, in any case, may not appear in a pull-request workflow, because
+a step can curl the service naming neither the action, the CLI nor the
 credential. Third, `secrets: inherit` on a call to another repository's
 workflow is refused, because that callee is not in this tree; the same
 forwarding to a local workflow is allowed, because the closure reads the callee

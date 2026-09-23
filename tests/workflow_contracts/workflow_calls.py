@@ -25,6 +25,7 @@ contracts can drive shapes the repository does not have.
 from __future__ import annotations
 
 import typing as typ
+from pathlib import PurePosixPath
 
 if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
     import collections.abc as cabc
@@ -32,6 +33,7 @@ if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
 #: Where GitHub looks for a same-repository reusable workflow. It does not
 #: look in subdirectories.
 WORKFLOWS_PREFIX: typ.Final[str] = ".github/workflows/"
+WORKFLOWS_DIRECTORY: typ.Final[PurePosixPath] = PurePosixPath(".github/workflows")
 
 #: The prefixes GitHub documents for a same-repository call.
 SELF_REPOSITORY_PREFIXES: typ.Final[tuple[str, ...]] = ("./", "$/")
@@ -71,6 +73,13 @@ def local_workflow_name(reference: str) -> str | None:
         The workflow's file name when the reference, less a leading
         `./` or `$/`, names a file directly under `.github/workflows/`.
 
+    Raises
+    ------
+    UnresolvedWorkflowCallError
+        If the reference names `.github/workflows/` with neither prefix,
+        a form GitHub does not document. Reading it as another
+        repository's call would drop its callee from the lane silently.
+
     Examples
     --------
     >>> local_workflow_name("./.github/workflows/release.yml")
@@ -80,18 +89,16 @@ def local_workflow_name(reference: str) -> str | None:
     >>> local_workflow_name("owner/repo/.github/workflows/release.yml@main") is None
     True
     """
-    path = next(
-        (
-            reference.removeprefix(prefix)
-            for prefix in SELF_REPOSITORY_PREFIXES
-            if reference.startswith(prefix)
-        ),
-        reference,
+    prefix = next(
+        (p for p in SELF_REPOSITORY_PREFIXES if reference.startswith(p)), None
     )
-    if not path.startswith(WORKFLOWS_PREFIX):
+    if prefix is None:
+        if reference.startswith(WORKFLOWS_PREFIX):
+            message = f"{reference} names a local workflow without `./` or `$/`"
+            raise UnresolvedWorkflowCallError(message)
         return None
-    name = path.removeprefix(WORKFLOWS_PREFIX)
-    return name if name and "/" not in name else None
+    path = PurePosixPath(reference.removeprefix(prefix))
+    return path.name if path.parent == WORKFLOWS_DIRECTORY else None
 
 
 def called_workflows(document: cabc.Mapping[str, object]) -> list[tuple[str, str]]:

@@ -123,7 +123,6 @@ def test_no_pull_request_workflow_inherits_into_another_repository(
     [
         "./.github/workflows/probe.yml",
         "$/.github/workflows/probe.yml",
-        ".github/workflows/probe.yml",
     ],
 )
 def test_the_lane_follows_calls_to_the_probe(
@@ -189,7 +188,6 @@ def test_an_unresolved_local_call_fails_the_reading(
     ("reference", "expected"),
     [
         ("./.github/workflows/release.yml", "release.yml"),
-        (".github/workflows/release.yml", "release.yml"),
         ("$/.github/workflows/release.yml", "release.yml"),
         ("$/.github/workflows/nested/release.yml", None),
         ("./.github/workflows/nested/release.yml", None),
@@ -262,3 +260,14 @@ def test_a_repeated_key_is_refused(
     _tree(tmp_path, monkeypatch, ci_yml=doubled)
     with pytest.raises(yaml.YAMLError, match="runs-on"):
         inventory.load_workflow("ci.yml")
+
+
+def test_an_unprefixed_local_call_is_refused() -> None:
+    """A workflow-directory reference with neither documented prefix fails.
+
+    GitHub documents `./` and `$/` for a same-repository call. Reading a
+    bare `.github/workflows/` reference as another repository's call would
+    drop its callee from the lane in silence.
+    """
+    with pytest.raises(UnresolvedWorkflowCallError, match="without"):
+        local_workflow_name(".github/workflows/release.yml")
