@@ -209,9 +209,10 @@ run through `make test-workflow-contracts`.
 
 ### Job placement
 
-Build and test work runs on the managed `ubicloud-standard-8` label: `ci.yml`'s
+Build and test work runs on the managed `ubicloud-standard-4` label: `ci.yml`'s
 `build` and `coverage` jobs, and `coverage-main.yml`'s `coverage-upload` job.
-Every managed job declares `timeout-minutes`.
+Every managed job declares `timeout-minutes`. "Runner shapes" below records why
+the shape is four vCPU and how that was measured.
 
 A pull request from a fork cannot obtain an Ubicloud runner, so a job that
 named one unconditionally would have no runner at all and would fail for a
@@ -222,7 +223,7 @@ runner for a fork and keeping the managed one for everything else:
 ```yaml
 runs-on: >-
   ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
-  || 'ubicloud-standard-8' }}
+  || 'ubicloud-standard-4' }}
 ```
 
 `github.event.pull_request` is null outside a pull request, so a push and a
@@ -246,11 +247,54 @@ leaves a newline inside the expression. GitHub evaluates the broken value
 regardless, so a green run is not evidence that the label is well formed. Keep
 the continuation at the same indent as the line it continues.
 
-That `-8` shape is inherited rather than measured. It predates the managed
-runner work and no job here has yet been sampled for peak memory or disk, so
-there is no evidence for or against a smaller shape. Add a sampler to the two
-Rust jobs and read it before proposing a change; the default elsewhere in the
-estate is `ubicloud-standard-2`, with `-4` only on measured disk evidence.
+### Runner shapes
+
+All three managed jobs ran on `ubicloud-standard-8` until September 2026. That
+shape was inherited rather than measured: it predated the managed-runner work,
+and no job had been sampled for peak memory or disk. It was the estate's last
+standard-8 workload, at about 132 minutes a day, and standard-8 costs twice the
+standard-4 rate per minute.
+
+The move to `ubicloud-standard-4` was measured, not projected. The baseline is
+the successful runs on `ubicloud-standard-8` from 18 to 23 September, read from
+the Actions jobs API; the standard-4 figures come from the pull request that
+made the move, with the resource sampler running on the proposed shape.
+
+| Job                                   | Before | After | Standard-8 wall time (median)   | Standard-4 wall time               |
+| ------------------------------------- | ------ | ----- | ------------------------------- | ---------------------------------- |
+| `ci.yml` `build`                      | s8     | s4    | 979 s over 21 pull-request runs | 1,228 s and 1,387 s (×1.25, ×1.42) |
+| `ci.yml` `coverage`                   | s8     | s4    | 508 s over 21 pull-request runs | 912 s and 529 s (×1.80, ×1.04)     |
+| `coverage-main.yml` `coverage-upload` | s8     | s4    | 337 s over 6 trunk pushes       | 494 s and 455 s (×1.47, ×1.35)     |
+
+Two runs per job on standard-4, pull-request runs for `build` and `coverage`
+and dispatches for `coverage-upload`. Averaged, each job took about 1.4 times
+its standard-8 median, inside the 1.5 bound the trial set, so the jobs cost
+about 0.7 of the standard-8 money for about 40 per cent more wall time. The
+slowdown sits in the steps that compile: in the slower `build` run, Whitaker
+lint took 339 s against a 3.6-minute standard-8 median and the compile-fail
+suite 376 s against 3.0 minutes. The two `coverage` runs differ by 383 s on the
+same commit range, so its figure is the least settled. Peaks leave ample
+headroom: at most 3,115 MiB of 15,991 MiB memory in use, and at least 67,235
+MiB of disk free.
+
+Each of the three jobs runs `scripts/ci-resource-sampler.sh`: it starts after
+the checkout, samples memory in use (total minus available, since page cache is
+reclaimable) and the free space on the workspace volume every ten seconds, and
+reports both with `if: always()` as the job's last step, so a job its shape
+kills still reports the peak that explains it. The figures appear in the job's
+step summary. Peaks belong to the shape, because Cargo scales its parallelism
+with the processor count, so read them from a run on the shape in question.
+Keep the sampler out of any job whose output is a timing.
+
+`tests/workflow_contracts/runner_sizing_test.py` names each job's shape. The
+registry contracts cannot do that job: they only require the workflows,
+`.github/actionlint.yaml` and `MANAGED_RUNNER_LABELS` to agree, so moving all
+three back to `ubicloud-standard-8` together satisfies them exactly and doubles
+the rate with nothing to notice. The sizing table fails in both directions: a
+managed job with no entry, and an entry with no job. It also requires the
+sampler's start after the checkout and its `always()` report as the last step.
+Resizing a job means editing that table and this section together, with a run
+on the proposed shape as the evidence.
 
 Everything else stays on GitHub-hosted `ubuntu-latest`. Scheduled, delayed,
 metadata, label, review-bot, and release-orchestration work sits off the
