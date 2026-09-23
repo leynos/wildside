@@ -206,10 +206,20 @@ def inherits_into_other_repositories(
     >>> inherits_into_other_repositories({"jobs": {"a": remote, "b": local}})
     ['a']
     """
+    # Each job is read under its own key, not the name `called_workflows`
+    # reports. A bare `on:` job key parses to `True`, which that name renders
+    # as "True", and a lookup by the rendered name would miss the job.
     jobs = _as_mapping(document.get("jobs"))
     return [
-        name
-        for name, reference in called_workflows(document)
-        if local_workflow_name(reference) is None
-        and _as_mapping(jobs.get(name)).get("secrets") == INHERIT_ALL_SECRETS
+        str(name) for name, job in jobs.items() if _inherits_elsewhere(_as_mapping(job))
     ]
+
+
+def _inherits_elsewhere(job: cabc.Mapping[object, object]) -> bool:
+    """Return whether one job passes every secret to another repository."""
+    uses = job.get("uses")
+    return (
+        isinstance(uses, str)
+        and local_workflow_name(uses) is None
+        and job.get("secrets") == INHERIT_ALL_SECRETS
+    )

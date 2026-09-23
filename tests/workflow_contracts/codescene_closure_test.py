@@ -219,6 +219,25 @@ def test_inheriting_into_another_repository_is_reported() -> None:
     )
 
 
+def test_a_boolean_job_key_is_still_checked_for_inherit() -> None:
+    """Report a cross-repository inherit under a job keyed by a bare `on`.
+
+    YAML 1.1 parses the bare key as `True`. The job must still be read under
+    that key; looking it up by its rendered name, "True", would miss it.
+    """
+    document = strict_yaml.load(
+        '"on": pull_request\n'
+        "jobs:\n"
+        "  on:\n"
+        "    uses: leynos/shared-actions/.github/workflows/x.yml@abc123\n"
+        "    secrets: inherit\n"
+    )
+    assert isinstance(document, dict), "the workflow must parse to a mapping"
+    assert inherits_into_other_repositories(document) == ["True"], (
+        "a cross-repository inherit under a boolean job key must be reported"
+    )
+
+
 @pytest.mark.parametrize(
     "source",
     [
