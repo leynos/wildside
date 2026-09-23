@@ -263,6 +263,18 @@ callee chooses the runner and the caller must not override it.
 Register any new managed label in `.github/actionlint.yaml`, and check required
 status-check contexts before changing a label that appears in a matrix job name.
 
+Every placement contract reads a job's labels through
+`tests/workflow_contracts/runner_shapes.py`. It models the three `runs-on`
+forms GitHub accepts: a label or an expression naming labels, a list of those,
+and a mapping with `group`, `labels` or both, with a group reported as
+`group:<name>`. It refuses anything else, including an expression naming no
+label such as `${{ matrix.os }}`, with `UnreadableRunnerError`. An empty result
+is what a reusable-workflow caller with no `runs-on` looks like. A reader that
+returned it for a shape it did not model would hide a paid label from every
+placement contract, which is what the old reader did for the mapping form.
+Extend the reader, with a case in `runner_labels_test.py`, before using a new
+shape.
+
 ### Mutation testing
 
 `mutation-testing.yml` runs daily and on dispatch, as a thin caller of the
