@@ -119,7 +119,12 @@ def test_no_pull_request_workflow_inherits_into_another_repository(
 
 
 @pytest.mark.parametrize(
-    "reference", ["./.github/workflows/probe.yml", ".github/workflows/probe.yml"]
+    "reference",
+    [
+        "./.github/workflows/probe.yml",
+        "$/.github/workflows/probe.yml",
+        ".github/workflows/probe.yml",
+    ],
 )
 def test_the_lane_follows_calls_to_the_probe(
     reference: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -185,6 +190,8 @@ def test_an_unresolved_local_call_fails_the_reading(
     [
         ("./.github/workflows/release.yml", "release.yml"),
         (".github/workflows/release.yml", "release.yml"),
+        ("$/.github/workflows/release.yml", "release.yml"),
+        ("$/.github/workflows/nested/release.yml", None),
         ("./.github/workflows/nested/release.yml", None),
         ("./.github/actions/setup", None),
         ("leynos/wildside/.github/workflows/release.yml@main", None),

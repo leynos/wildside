@@ -8,10 +8,12 @@ built on that enumeration passes over it while it does the forbidden
 thing. episodic measured exactly that: a called probe curling the
 CodeScene project API with an inherited token passed every clause.
 
-A call is local when its reference, less a leading `./`, names a file
-directly under `.github/workflows/`. The shape is matched rather than a
-list of spellings, so a spelling nobody listed is not silently read as a
-call to another repository. A call to another repository is not
+A call is local when its reference, less one of the two same-repository
+prefixes GitHub documents, names a file directly under
+`.github/workflows/`. The prefixes are `./`, which is workspace-relative,
+and `$/`, the self-repository form GitHub.com recommends; a reader
+knowing only one drops callers written the other way. A call to another
+repository is not
 followed, because its content is not in this tree; which secrets may be
 handed to one is the contract's question, answered with
 :func:`inherits_into_other_repositories`.
@@ -30,6 +32,9 @@ if typ.TYPE_CHECKING:  # pragma: no cover - annotations only.
 #: Where GitHub looks for a same-repository reusable workflow. It does not
 #: look in subdirectories.
 WORKFLOWS_PREFIX: typ.Final[str] = ".github/workflows/"
+
+#: The prefixes GitHub documents for a same-repository call.
+SELF_REPOSITORY_PREFIXES: typ.Final[tuple[str, ...]] = ("./", "$/")
 
 #: The `secrets:` value that forwards every secret the caller holds.
 INHERIT_ALL_SECRETS: typ.Final[str] = "inherit"
@@ -64,16 +69,25 @@ def local_workflow_name(reference: str) -> str | None:
     -------
     str or None
         The workflow's file name when the reference, less a leading
-        `./`, names a file directly under `.github/workflows/`.
+        `./` or `$/`, names a file directly under `.github/workflows/`.
 
     Examples
     --------
     >>> local_workflow_name("./.github/workflows/release.yml")
     'release.yml'
+    >>> local_workflow_name("$/.github/workflows/release.yml")
+    'release.yml'
     >>> local_workflow_name("owner/repo/.github/workflows/release.yml@main") is None
     True
     """
-    path = reference.removeprefix("./")
+    path = next(
+        (
+            reference.removeprefix(prefix)
+            for prefix in SELF_REPOSITORY_PREFIXES
+            if reference.startswith(prefix)
+        ),
+        reference,
+    )
     if not path.startswith(WORKFLOWS_PREFIX):
         return None
     name = path.removeprefix(WORKFLOWS_PREFIX)
