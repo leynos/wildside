@@ -98,6 +98,8 @@ def _labels_in(runner: str) -> frozenset[str]:
     An expression is read by :func:`runner_expressions.expression_labels`,
     which answers None when any result it can take is not a quoted label.
     """
+    if not runner.strip():
+        raise _unreadable(runner)
     if "${{" not in runner:
         return frozenset({runner})
     labels = expression_labels(runner)

@@ -92,6 +92,12 @@ def test_a_job_without_a_runner_yields_nothing() -> None:
             "${{ x && 'ubicloud-standard-8' }}", id="condition-can-be-the-result"
         ),
         pytest.param("runner-${{ 'a' }}", id="text-around-the-expression"),
+        pytest.param("", id="empty-label"),
+        pytest.param(["ubuntu-latest", " "], id="blank-list-entry"),
+        pytest.param(
+            "${{ a && (b && 'ubicloud-standard-8') || 'ubuntu-latest' }}",
+            id="nested-group-as-result",
+        ),
     ],
 )
 def test_an_unmodelled_shape_is_refused(runner: object) -> None:
