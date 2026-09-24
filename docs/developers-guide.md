@@ -1745,14 +1745,18 @@ runs read, so two publishers writing at once is a lost update decided by runner
 scheduling. `cancel-in-progress` is false deliberately: cancelling a publisher
 abandons a baseline write half done, which is the same lost update arrived at
 on purpose. A pull-request lane may cancel itself; a trunk publisher may not.
-One consequence of queueing is worth knowing. A group holds one pending run,
-and a newer run replaces it, so a dispatch that arrives while a push waits
-replaces that push. The dispatch uploads, but the coverage action saves the
-baseline only on a push, so the baseline stays one commit behind until the next
-push to `main`. This reasoning covers triggered runs, a push or a dispatch. A
-manual "Re-run jobs" on an older `main` run is an operator action rather than a
-trigger: it keeps that run's commit, so it republishes that commit's coverage
-and baseline until the next push supersedes them.
+One consequence of queueing is worth knowing. Runs in the group never overlap,
+and a newer trigger replaces an older pending run. GitHub does not promise to
+start runs in trigger order, so the workflow makes no commit-order promise
+either. CodeScene coverage and the ratchet baseline are published differently.
+Every run on `main` uploads coverage to CodeScene, but the coverage action
+saves the ratchet baseline only on a push, under a cache key naming the run. A
+dispatch therefore uploads coverage but leaves the ratchet baseline where the
+last completed push left it, and how far that trails `main` depends on how many
+pushes were replaced while runs waited. A manual "Re-run jobs" on an older
+`main` run keeps its `github.run_id`, so it republishes that commit's CodeScene
+coverage but cannot replace a ratchet baseline already saved under that run's
+key. Only a later push to `main` publishes a newer ratchet baseline.
 
 `tests/workflow_contracts/codescene_coverage_baseline_test.py` holds the
 absences and `codescene_publisher_test.py` holds what the publisher must do.
