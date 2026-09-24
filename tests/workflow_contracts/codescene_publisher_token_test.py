@@ -45,6 +45,30 @@ def _publisher_steps() -> list[dict[str, typ.Any]]:
     ]
 
 
+def _upload_job_steps() -> list[dict[str, typ.Any]]:
+    """Return the steps of the one publisher job that uploads to CodeScene.
+
+    The upload reads `steps.<id>.outputs.available`, which resolves only
+    inside the job that ran the check. A check in any other job leaves the
+    output unset and the upload skipping silently, so the check is looked for
+    in the upload's own job and nowhere else.
+    """
+    jobs = [
+        steps
+        for steps in (
+            inventory.job_steps(job) for _, job in inventory.workflow_jobs(PUBLISHER)
+        )
+        if any(
+            CODESCENE_ACTION_MARKER in inventory.step_action(step).lower()
+            for step in steps
+        )
+    ]
+    assert len(jobs) == 1, (
+        f"{PUBLISHER} must upload from exactly one job, found {len(jobs)}"
+    )
+    return jobs[0]
+
+
 def _token_check(steps: cabc.Sequence[dict[str, typ.Any]]) -> dict[str, typ.Any]:
     """Return the one step carrying the token-check id."""
     checks = [step for step in steps if step.get("id") == AVAILABILITY_STEP_ID]
@@ -73,7 +97,7 @@ def test_the_check_step_publishes_availability_and_nothing_else() -> None:
     condition was false, and the upload would read that as unavailable. An
     `env` on it would put the token back into an environment.
     """
-    check = _token_check(_publisher_steps())
+    check = _token_check(_upload_job_steps())
     assert str(check.get("run", "")).strip() == AVAILABILITY_COMMAND, (
         f"the check step must run exactly {AVAILABILITY_COMMAND!r}, got "
         f"{check.get('run')!r}"
@@ -83,8 +107,8 @@ def test_the_check_step_publishes_availability_and_nothing_else() -> None:
 
 
 def test_the_check_precedes_the_upload() -> None:
-    """Publish the availability before the step that reads it."""
-    steps = _publisher_steps()
+    """Publish the availability in the upload's job, before the upload."""
+    steps = _upload_job_steps()
     assert steps.index(_token_check(steps)) < steps.index(_upload(steps)), (
         "the token check must run before the upload that reads its output"
     )
