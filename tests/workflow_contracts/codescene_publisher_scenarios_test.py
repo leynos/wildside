@@ -70,23 +70,66 @@ def _published_availability(tmp_path: Path, *, has_token: bool) -> str:
     return outputs["available"]
 
 
+class Scenario(typ.NamedTuple):
+    """One run the publisher can meet, and whether it should upload."""
+
+    has_token: bool
+    event_name: str
+    ref: str
+    uploads: bool
+
+
+BRANCH = "refs/heads/feature"
+
+
 @pytest.mark.parametrize(
-    ("has_token", "event_name", "ref", "uploads"),
+    "scenario",
     [
-        pytest.param(True, "push", TRUNK, True, id="push-to-main"),
-        pytest.param(True, "workflow_dispatch", TRUNK, True, id="dispatch-main"),
-        pytest.param(False, "push", TRUNK, False, id="no-token"),
-        pytest.param(False, "workflow_dispatch", TRUNK, False, id="no-token-dispatch"),
         pytest.param(
-            True, "workflow_dispatch", "refs/heads/feature", False, id="dispatch-branch"
+            Scenario(has_token=True, event_name="push", ref=TRUNK, uploads=True),
+            id="push-to-main",
         ),
         pytest.param(
-            False, "workflow_dispatch", "refs/heads/feature", False, id="none"
+            Scenario(
+                has_token=True, event_name="workflow_dispatch", ref=TRUNK, uploads=True
+            ),
+            id="dispatch-main",
+        ),
+        pytest.param(
+            Scenario(has_token=False, event_name="push", ref=TRUNK, uploads=False),
+            id="no-token",
+        ),
+        pytest.param(
+            Scenario(
+                has_token=False,
+                event_name="workflow_dispatch",
+                ref=TRUNK,
+                uploads=False,
+            ),
+            id="no-token-dispatch",
+        ),
+        pytest.param(
+            Scenario(
+                has_token=True,
+                event_name="workflow_dispatch",
+                ref=BRANCH,
+                uploads=False,
+            ),
+            id="dispatch-branch",
+        ),
+        pytest.param(
+            Scenario(
+                has_token=False,
+                event_name="workflow_dispatch",
+                ref=BRANCH,
+                uploads=False,
+            ),
+            id="none",
         ),
     ],
 )
 def test_the_publisher_uploads_only_with_a_token_on_main(
-    tmp_path: Path, *, has_token: bool, event_name: str, ref: str, uploads: bool
+    tmp_path: Path, scenario: Scenario
 ) -> None:
     """Upload exactly when the token exists and the run is on `main`.
 
@@ -96,13 +139,14 @@ def test_the_publisher_uploads_only_with_a_token_on_main(
     upload = _publisher_step(
         lambda step: CODESCENE_ACTION_MARKER in inventory.step_action(step).lower()
     )
+    available = _published_availability(tmp_path, has_token=scenario.has_token)
     context = {
-        "event_name": event_name,
-        "ref": ref,
-        AVAILABILITY_OUTPUT: _published_availability(tmp_path, has_token=has_token),
+        "event_name": scenario.event_name,
+        "ref": scenario.ref,
+        AVAILABILITY_OUTPUT: available,
     }
     decided = conditions.evaluate(upload.get("if"), context)
-    assert decided is uploads, (
-        f"with token={has_token}, {event_name} on {ref}: expected upload={uploads}, "
-        f"the workflow decides {decided}"
+    assert decided is scenario.uploads, (
+        f"{scenario}: expected upload={scenario.uploads}, the workflow decides "
+        f"{decided}"
     )
