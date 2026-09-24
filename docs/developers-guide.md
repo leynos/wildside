@@ -1759,7 +1759,14 @@ coverage but cannot replace a ratchet baseline already saved under that run's
 key. Only a later push to `main` publishes a newer ratchet baseline.
 
 `tests/workflow_contracts/codescene_coverage_baseline_test.py` holds the
-absences and `codescene_publisher_test.py` holds what the publisher must do.
+absences and `codescene_publisher_test.py` holds what the publisher must do. And
+`codescene_publisher_scenarios_test.py` runs the decision rather than reading
+it. It executes the check step's own script with its secret expression rendered
+as GitHub renders it, then evaluates the upload's declared `if:` through
+`github_conditions.py` for each token, event and ref. So the upload happens
+exactly when the token exists and the run is on `main`, and an absent token
+skips it rather than failing. `github_conditions.py` reads
+`steps.<id>.outputs.<name>` references as well as `github` fields for this.
 
 Two readings make those contracts mean what they say. The publisher check scans
 every workflow in the directory rather than the pull-request ones, because a
