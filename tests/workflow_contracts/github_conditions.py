@@ -9,8 +9,9 @@ this event, does the suite run anywhere". That question needs the
 expressions evaluated rather than compared.
 
 The grammar here is deliberately tiny: `&&`-joined comparisons of a
-`github.<field>` reference against a single-quoted literal, with `==` or
-`!=`. That is exactly what the three lanes use. Anything else raises,
+`github.<field>` or `steps.<id>.outputs.<name>` reference against a
+single-quoted literal, with `==` or `!=`. That is exactly what the three
+lanes and the CodeScene publisher's upload use. Anything else raises,
 and raising is the point. A partial evaluator that returned False for an
 expression it could not parse would report a lane as unreachable and
 make the very contract that depends on it pass for the wrong reason, so
@@ -25,8 +26,13 @@ from __future__ import annotations
 import re
 
 #: One comparison: a context reference, an operator, a quoted literal.
+#: A `github` field is keyed by its bare name, as `actor`; a step output by
+#: its whole reference, as `steps.check.outputs.available`, since two steps
+#: can publish outputs of the same name.
 _COMPARISON = re.compile(
-    r"\Agithub\.(?P<field>[a-z_]+)\s*(?P<operator>==|!=)\s*'(?P<literal>[^']*)'\Z"
+    r"\A(?:github\.(?P<field>[a-z_]+)"
+    r"|(?P<output>steps\.[A-Za-z_][A-Za-z0-9_-]*\.outputs\.[A-Za-z_][A-Za-z0-9_-]*))"
+    r"\s*(?P<operator>==|!=)\s*'(?P<literal>[^']*)'\Z"
 )
 
 
@@ -49,8 +55,9 @@ def evaluate(expression: str | None, context: dict[str, str]) -> bool:
         The condition, or None for a job or step that declares none.
         GitHub runs an unconditional step, so None is True.
     context : dict[str, str]
-        The `github` fields the expression may reference, such as
-        `actor` and `event_name`.
+        The values the expression may reference: `github` fields by bare
+        name, such as `actor` and `event_name`, and step outputs by their
+        whole reference, such as `steps.check.outputs.available`.
 
     Returns
     -------
@@ -61,7 +68,7 @@ def evaluate(expression: str | None, context: dict[str, str]) -> bool:
     ------
     ConditionSyntaxError
         If the expression is outside the supported grammar, or names a
-        `github` field the context does not supply.
+        value the context does not supply.
 
     Examples
     --------
@@ -75,6 +82,11 @@ def evaluate(expression: str | None, context: dict[str, str]) -> bool:
     False
     >>> evaluate(None, context)
     True
+    >>> evaluate(
+    ...     "steps.check.outputs.available == 'true'",
+    ...     {"steps.check.outputs.available": "false"},
+    ... )
+    False
     """
     if expression is None:
         return True
@@ -98,7 +110,7 @@ def _holds(term: str, context: dict[str, str], whole: str) -> bool:
     term : str
         One `&&`-separated comparison.
     context : dict[str, str]
-        The `github` fields available.
+        The `github` fields and step outputs available.
     whole : str
         The expression the term came from, for the message.
 
@@ -110,24 +122,26 @@ def _holds(term: str, context: dict[str, str], whole: str) -> bool:
     Raises
     ------
     ConditionSyntaxError
-        If the term is not a supported comparison, or references a field
+        If the term is not a supported comparison, or references a value
         the context does not supply.
     """
     match = _COMPARISON.match(term)
     if match is None:
         message = (
             f"{whole!r}: the term {term!r} is outside the grammar these "
-            "contracts evaluate, which is `&&`-joined `github.<field>` "
-            "comparisons against single-quoted literals"
+            "contracts evaluate, which is `&&`-joined `github.<field>` or "
+            "`steps.<id>.outputs.<name>` comparisons against single-quoted "
+            "literals"
         )
         raise ConditionSyntaxError(message)
-    field = match["field"]
-    if field not in context:
+    key = match["field"] or match["output"]
+    if key not in context:
+        reference = f"github.{key}" if match["field"] else key
         message = (
-            f"{whole!r}: no value for github.{field}; the contract must "
-            "supply every field its lanes' conditions reference"
+            f"{whole!r}: no value for {reference}; the contract must "
+            "supply every value its conditions reference"
         )
         raise ConditionSyntaxError(message)
     if match["operator"] == "==":
-        return context[field] == match["literal"]
-    return context[field] != match["literal"]
+        return context[key] == match["literal"]
+    return context[key] != match["literal"]

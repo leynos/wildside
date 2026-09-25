@@ -198,15 +198,21 @@ jobs:
           features: example-data metrics test-support
           with-ratchet: 'true'
           cache-provider: external
+      - name: Check CodeScene token availability
+        # Publishes whether the token exists, and nothing else. The token
+        # stays out of every `env` on this job: the upload is a composite
+        # action, and a composite action's nested steps inherit the calling
+        # step's environment, so a token placed there reaches every one of
+        # them. A fork's push has no secrets, so this reads false there.
+        id: codescene_token
+        run: echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
       - name: Upload coverage data to CodeScene
-        env:
-          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         # The ref clause is not redundant with the push filter above.
         # `workflow_dispatch` is mandatory here, and a dispatch can be run
         # from any branch, so without this a feature branch's coverage would
         # be uploaded as the trunk's and become the baseline every pull
         # request is ratcheted against.
-        if: env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main'
+        if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
         uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
         with:
           # mode defaults to "upload", which is the only mode this estate
@@ -214,7 +220,7 @@ jobs:
           # `mode: check` has no caller. CodeScene infers project 70675
           # from the git remote, so no project-url is needed.
           format: lcov
-          access-token: ${{ env.CS_ACCESS_TOKEN }}
+          access-token: ${{ secrets.CS_ACCESS_TOKEN }}
 
       # Trunk is the only cache writer. Every save below is this key's sole
       # owner, so a pull request restores a generation that exactly one job
