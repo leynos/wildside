@@ -1563,9 +1563,9 @@ fragment, and the ordering is testable without a shell.
 
 `scripts/tests/test_lint_actions.py` places a failing tool first, a failing
 tool last, and no failing tool at all, using `cmd-mox` for the executables.
-`tests/workflow_contracts/makefile_tooling_test.py` asserts the recipe still
-runs one command, carries the yamllint pin, and contains no `while`, `;`, `&&`
-or `||`, since any of those reintroduces the defect.
+`tests/workflow_contracts/makefile_lint_actions_test.py` asserts the recipe
+still runs one command, carries the yamllint pin, and contains no `while`, `;`,
+`&&` or `||`, since any of those reintroduces the defect.
 
 This is the repository's first cuprum script. The scripting standards name
 cuprum as the process runner and carry a plumbum-to-cuprum migration section,
@@ -1643,8 +1643,11 @@ duplicating it elsewhere.
 
 - `make check-fmt-python` verifies Ruff formatting without rewriting files.
 - `make lint-python` runs three tiers: Ruff for style and correctness,
-  interrogate for docstring coverage over `scripts/`, and Pylint over
-  `scripts/` and `tests/`.
+  interrogate for docstring coverage over `scripts/`, and a pinned Pylint on
+  uv-managed PyPy 3.12 over `scripts/` and `tests/`. `syntax-error` stays
+  enabled, so a module PyPy cannot parse fails the lint rather than being
+  skipped. CI pins uv at 0.12.19 or later, the first release that ships PyPy
+  3.12.
 - `make typecheck-python` creates or reuses `.venv`, installs the declared
   typecheck dependencies into it, then runs ty against the configured Python
   sources. ty needs a real environment on disk to resolve imports, because the
