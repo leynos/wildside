@@ -98,13 +98,13 @@ TY_VERSION ?= 0.0.59
 # [tool.ty.environment] python-version in pyproject.toml.
 PY_TYPECHECK_VERSION ?= 3.13
 INTERROGATE_VERSION ?= 1.7.0
-# Pylint runs on PyPy via the pylint-pypy shim for speed, mirroring
-# leynos/lading; uv downloads a managed PyPy when none is installed.
-PYLINT_PYTHON ?= pypy
+# Pylint runs on PyPy for speed; uv downloads the managed PyPy 3.12 when none
+# is installed. The minor version is pinned so a new PyPy release cannot change
+# the parsed grammar without a commit here.
+PYLINT_PYTHON ?= pypy@3.12
+PYLINT_VERSION ?= 4.0.9
 PYLINT_TARGETS ?= scripts tests
-PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
-PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
-PYLINT = uv tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
+PYLINT = uv tool run --managed-python --python $(PYLINT_PYTHON) --from 'pylint==$(PYLINT_VERSION)' pylint
 PY_SOURCES := $(sort $(shell find scripts tests -type f -name '*.py' -print))
 # Test-dependency pins shared by typecheck-python and test-scripts so both
 # resolve the same interpreter-visible packages; bump them together. PyYAML
