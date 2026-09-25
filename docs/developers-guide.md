@@ -1727,11 +1727,17 @@ the token. That clause is not redundant with the `push` branch filter.
 Dependabot automerge workflow's token fires no push event (see
 [shared-actions issue 518](https://github.com/leynos/shared-actions/issues/518)),
 and a dispatch runs from whichever branch it was started on. Without the ref
-clause a dispatch from a feature branch uploads that branch's coverage as the
-trunk's, and it becomes the baseline every pull request is ratcheted against.
-Nothing looks wrong: the upload succeeds.
+clause a dispatch from a feature branch uploads that branch's coverage to
+CodeScene as the trunk's, and CodeScene then measures pull requests against it.
+Nothing looks wrong: the upload succeeds. The ratchet baseline is not at risk
+from the same dispatch, because the coverage action saves it only on a push to
+`main`.
 
-The token itself stays out of every `env` on the publisher job. A
+No `env` that the publisher workflow declares holds the token, whether at
+workflow, job or step level. The token still enters one environment: the pinned
+action binds `CS_ACCESS_TOKEN` from its `access-token` input in the `env` of
+its own upload step, where `cs-coverage` reads it, and of its gate-check step,
+which `mode: upload` skips. Only that nested step sees the token. A
 `Check CodeScene token availability` step publishes only
 `available=${{ secrets.CS_ACCESS_TOKEN != '' }}` to its outputs, the upload's
 condition reads that output, and the upload takes the token directly as
