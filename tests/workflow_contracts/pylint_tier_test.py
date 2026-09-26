@@ -16,6 +16,7 @@ import shlex
 import shutil
 import subprocess  # noqa: S404  # The end-to-end test drives Make.
 import tomllib
+import typing as typ
 from pathlib import Path
 
 import pytest
@@ -163,12 +164,12 @@ def test_configured_pylint_fails_on_an_unparsable_module(tmp_path: Path) -> None
 _MINIMUM_UV_FOR_PYPY_312: tuple[int, ...] = (0, 12, 19)
 
 
-def _ci_workflow() -> dict[str, object]:
+def _ci_workflow() -> dict[str, typ.Any]:
     """Load the CI workflow with the repository's strict YAML reader.
 
     Returns
     -------
-    dict[str, object]
+    dict[str, typing.Any]
         The parsed workflow document.
     """
     path = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
