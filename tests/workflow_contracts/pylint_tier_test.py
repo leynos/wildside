@@ -19,6 +19,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+import strict_yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE_PATH = _REPO_ROOT / "Makefile"
@@ -155,3 +156,45 @@ def test_configured_pylint_fails_on_an_unparsable_module(tmp_path: Path) -> None
     assert passed.returncode == 0, (
         f"a clean module must pass the tier: {passed.stdout}{passed.stderr}"
     )
+
+
+#: The first uv release that ships PyPy 3.12; an older uv cannot resolve
+#: `pypy@3.12`, so the Pylint gate would fail to start in CI.
+_MINIMUM_UV_FOR_PYPY_312: tuple[int, ...] = (0, 12, 19)
+
+
+def _ci_workflow() -> dict[str, object]:
+    """Load the CI workflow with the repository's strict YAML reader.
+
+    Returns
+    -------
+    dict[str, object]
+        The parsed workflow document.
+    """
+    path = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
+    return strict_yaml.load(path.read_text(encoding="utf-8"))
+
+
+def test_ci_installs_a_uv_that_ships_pypy_312() -> None:
+    """CI must install a uv new enough to resolve the pinned PyPy 3.12.
+
+    Every `setup-uv` step must take its version from the workflow's
+    `UV_VERSION`, and that value must be 0.12.19 or later.
+    """
+    workflow = _ci_workflow()
+    version = str(workflow["env"]["UV_VERSION"])
+    parsed = tuple(int(part) for part in version.split("."))
+    assert parsed >= _MINIMUM_UV_FOR_PYPY_312, (
+        f"UV_VERSION {version} predates uv 0.12.19, which first ships PyPy 3.12"
+    )
+    setup_steps = [
+        step
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if "astral-sh/setup-uv@" in str(step.get("uses", ""))
+    ]
+    assert setup_steps, "the CI workflow must install uv with setup-uv"
+    for step in setup_steps:
+        assert step.get("with", {}).get("version") == "${{ env.UV_VERSION }}", (
+            f"setup-uv must install the pinned UV_VERSION: {step}"
+        )
