@@ -36,7 +36,8 @@ env:
   SCCACHE_VERSION: '0.17.0'
   SCCACHE_SHA256_X64: '67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006'
   SCCACHE_SHA256_ARM64: '821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77'
-  UV_VERSION: '0.12.9'
+  # 0.12.19 is the first uv that ships PyPy 3.12, which the Pylint gate pins.
+  UV_VERSION: '0.12.19'
   WHITAKER_INSTALLER_VERSION: '0.2.7'
   YAMLLINT_VERSION: '1.35.1'
 
@@ -441,8 +442,8 @@ jobs:
       - name: Markdown format check
         run: make check-fmt-markdown
 
-      # Pylint runs on a uv-managed PyPy (downloaded on demand), mirroring
-      # the pylint-pypy-shim setup in leynos/lading.
+      # Pylint runs on a uv-managed PyPy 3.12 (downloaded on demand), as a
+      # pinned uv tool.
       - name: Python lint
         run: make lint-python
 
