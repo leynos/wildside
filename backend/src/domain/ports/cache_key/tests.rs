@@ -11,6 +11,7 @@ use super::{
 };
 use rstest::rstest;
 
+mod dense_boundary;
 mod properties;
 
 #[rstest]
