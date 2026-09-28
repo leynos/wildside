@@ -128,7 +128,7 @@ def test_nixie_stops_before_validation_without_merman(
     completed = _run_make("nixie", env)
 
     assert completed.returncode != 0
-    assert _read_invocations(log_path) == []
+    assert not _read_invocations(log_path)
 
 
 def test_lint_asyncapi_uses_pnpm_cli_runner(
