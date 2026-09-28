@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -1082,10 +1082,10 @@ floating-point precision and both bounded feasibility runs timed out.
   (125 files, 0 errors), and Nixie 29. Final closeout gates passed: check-fmt
   36, Markdown lint 32 (125 files, 0 errors), and Nixie 31. Their logs have the
   project/branch prefix and these suffixes. Stage E document commits: `14d4aa4`,
-  `0797119`, `b73730c`, `5de8b0a`, and `1be2bf0`. The roadmap item is checked
-  in the Stage E closeout and is currently unchecked while hosted-check
-  remediation remains open.
-- [ ] Hosted-check remediation: PR #458's terminal CodeScene check reported a
+  `0797119`, `b73730c`, `5de8b0a`, and `1be2bf0`. Roadmap item 5.1.4a was
+  checked at Stage E, unchecked during hosted-check remediation, and restored
+  after the new CodeScene check passed.
+- [x] Hosted-check remediation: PR #458's terminal CodeScene check reported a
   Complex Method advisory (complexity 9) for `observe_payload_features` in
   `backend/src/domain/ports/cache_key/tests/properties/strategy_coverage.rs`.
   The helper has been split into focused coordinate, array, and theme-array
@@ -1097,9 +1097,20 @@ floating-point precision and both bounded feasibility runs timed out.
   current unchecked roadmap status; that wording is now explicit. The next
   docs-only gates passed (check-fmt 45 files, Markdown lint 125 files/0 errors,
   Nixie all diagrams valid), and CodeRabbit review 23 returned no concerns.
-  The source/plan/roadmap remediation commit and a fresh terminal hosted-check
-  result remain before restoring COMPLETE. Logs use the project/branch prefix
-  and suffix `docs-status-followup`.
+  Final status wording and closeout gates passed: check-fmt 45 files, Markdown
+  lint 125 files/0 errors, and Nixie all diagrams valid. Final CodeRabbit
+  review 24 returned no findings on retry after one transient WebSocket
+  connection error (not a rate limit). The remediation was committed as
+  `977206e` and published to PR #458. The remote branch and live
+  PR head matched `977206e84e5c0646a87d9e170a38e40972ab4d2d`; terminal hosted
+  CodeScene and Gecko checks passed, with no failed or pending checks. The
+  hosted CodeRabbit check was skipped because the PR is draft (local review 24
+  completed cleanly); Kody and the `dependabot-automerge` workflow were also
+  skipped. CodeScene result:
+  <https://codescene.io/projects/70675/delta/results/7724390>. Monitoring bundle:
+  `/tmp/actions-leynos-wildside-pr458-DEzW4l`. Logs use the project/branch
+  prefix and suffixes `docs-status-followup`, `docs-closeout`, and
+  `docs-status-final`.
 
 ## Surprises & discoveries
 
@@ -1108,8 +1119,10 @@ floating-point precision and both bounded feasibility runs timed out.
   property-observation behaviour has been decomposed into coordinate, array,
   and theme-array helpers without changing its traversal or feature predicates.
   Local CodeScene review now reports health 10.0 with no finding; the repository
-  rules file still produces the existing CLI parse warning. The hosted check
-  must be rerun against the remediation commit before this plan can close.
+  rules file still produces the existing CLI parse warning. The hosted
+  CodeScene check passed on `977206e` after publication; its result is linked
+  in `Progress`. The hosted CodeRabbit check was skipped by draft status, while
+  the requested local CodeRabbit review completed with no findings.
 
 - Observation: the first Stage B gate pass exposed a rustfmt diff in the
   extracted test module, although `make check-fmt` continued to later format
@@ -1348,9 +1361,16 @@ floating-point precision and both bounded feasibility runs timed out.
 
 ## Outcomes & retrospective
 
-To be completed as milestones land. Candidate follow-up to assess at close:
-evaluate a verifier with explicit IEEE-754 support for LEM-1; no Kani harness
-or CI wiring is planned for this change.
+The property suite, coordinate admission fix, supporting documentation, and
+validation evidence are complete. The hosted CodeScene finding was resolved by
+splitting feature observation into focused helpers; the hosted check passed on
+the remediation commit. The design-panel and review findings were resolved,
+and final CodeRabbit review 24 returned no concerns. The hosted
+CodeRabbit check remains skipped by the draft-PR policy; Kody and the
+automerge workflow also skipped without failed jobs.
+
+Follow-up: evaluate a verifier with explicit IEEE-754 support for LEM-1. No
+Kani harness or CI wiring is planned for this change.
 
 ## Artefacts and notes
 
@@ -1534,8 +1554,9 @@ The NC-2 and NC-4 transcripts above show one filtered-in target test per run,
 both failing under the injected mutation and passing after the narrow revert.
 Stage E documentation was committed as five focused changes. Roadmap item
 5.1.4a was checked at Stage E, when the implementation and validation
-obligations in this plan were complete. It is currently unchecked while the
-hosted CodeScene remediation remains open.
+obligations in this plan were complete. It was unchecked while the hosted
+CodeScene remediation remained open, then restored to checked after the
+remediation passed on `977206e`.
 
 ______________________________________________________________________
 
