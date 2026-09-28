@@ -1101,16 +1101,18 @@ floating-point precision and both bounded feasibility runs timed out.
   lint 125 files/0 errors, and Nixie all diagrams valid. Final CodeRabbit
   review 24 returned no findings on retry after one transient WebSocket
   connection error (not a rate limit). The remediation was committed as
-  `977206e` and published to PR #458. The remote branch and live
-  PR head matched `977206e84e5c0646a87d9e170a38e40972ab4d2d`; terminal hosted
-  CodeScene and Gecko checks passed, with no failed or pending checks. The
-  hosted CodeRabbit check was skipped because the PR is draft (local review 24
-  completed cleanly); Kody and the `dependabot-automerge` workflow were also
-  skipped. CodeScene result:
-  <https://codescene.io/projects/70675/delta/results/7724390>. Monitoring bundle:
-  `/tmp/actions-leynos-wildside-pr458-DEzW4l`. Logs use the project/branch
-  prefix and suffixes `docs-status-followup`, `docs-closeout`, and
-  `docs-status-final`.
+  `977206e` and published to PR #458. Its terminal hosted CodeScene check
+  passed. After the documentation closeout commit `71cd8e4`, the live PR head
+  and remote branch both matched
+  `71cd8e4d823f4e01ccf2c0e3c22c1a10240e09db`; terminal hosted CodeScene and
+  Gecko checks passed, with no failed or pending checks. The final CodeScene
+  result is
+  <https://codescene.io/projects/70675/delta/results/7724509>. Hosted CodeRabbit
+  was skipped because the PR is draft (local review 24 completed cleanly); Kody
+  and the `dependabot-automerge` workflow were also skipped. Monitoring bundle:
+  `/tmp/actions-final-leynos-wildside-pr458-SSFJu0`. Logs use the project/branch
+  prefix and suffixes `docs-status-followup`, `docs-closeout`,
+  `docs-status-final`, and `final-closeout-retry`.
 
 ## Surprises & discoveries
 
