@@ -17,6 +17,7 @@ The test suite combines unit, integration, and behavioural tests:
   as embedded PostgreSQL.
 - Behavioural tests describe user-visible flows in Gherkin features and bind
   them to Rust step definitions.
+- Property tests exercise domain invariants across generated inputs and values.
 
 All suites run through the same quality gateways:
 
@@ -34,6 +35,21 @@ each ±180-degree boundary. That finite slice is regression evidence; it does
 not prove the full admitted domain. Bounded Kani spikes for a JSON-number
 wrapper and the scalar rounding kernel exceeded 30 minutes without a verdict.
 The ExecPlan records their logs, resource measurements, and the full argument.
+
+### Rust property-testing conventions
+
+- Keep property tests in `tests/properties.rs` and group them in child modules
+  by invariant.
+- Write strategies as free functions that compose valid values. Do not filter
+  structural constraints with `prop_assume!` or narrow a generator to avoid a
+  counter-example.
+- Use `prop_assert*` assertions in property bodies. Commit
+  `proptest-regressions/` files, and prune them only when a property's expected
+  outcome changes.
+- Promote shrunk failures to named `rstest` cases. Run scoped
+  `cargo mutants --file` checks to detect vacuous properties.
+- Record floating-point proof limits and finite-test fallbacks with the test
+  guidance, as in the cache-key ExecPlan.
 
 ## Workflow pins and Dependabot
 
