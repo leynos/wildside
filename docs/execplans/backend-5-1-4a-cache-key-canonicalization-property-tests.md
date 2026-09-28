@@ -1057,10 +1057,30 @@ floating-point precision and both bounded feasibility runs timed out.
   suffixes: check-fmt 30, lint 21, cache-key 18, backend doctests 16, test 18,
   typecheck 17, Markdown lint 26, nixie 25. Review log:
   `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-19.out`.
-  Stage D commit is pending.
-- [ ] EP-M4 / Stage E: TODO removal, roadmap 5.1.4a entry ticked,
-  architecture doc (admission bound and variant), developers-guide bullet and
-  subsection, second MUT-1 run, gates green.
+  Commit: `5072411`.
+- [x] EP-M4 / Stage E: obsolete property-test TODO lines were removed from
+  `cache_key/tests.rs` with the C2 property implementation; the module now
+  describes the implemented suite.
+- [x] EP-M4 / Stage E: the roadmap entry, architecture admission contract and
+  error variants, developers' guide property-testing conventions, and property
+  module exclusions are implemented. The second MUT-1 run completed with 33
+  mutants: 30 caught, 3 unviable, 0 missed, and 0 timed out. The unviable
+  replacements erased typed-returning functions with `Ok(Default::default())`
+  and failed compilation. The unmutated baseline passed. Full sequential gates
+  passed: check-fmt 32, lint 22 (nested Clippy and Whitaker clean), cache-key
+  19 (48 passed), backend doctests 17 (160 passed, 96 ignored), test 19,
+  typecheck 18, Markdown lint 28 (125 files, 0 errors), and Nixie 27. Logs:
+  `/tmp/mutants-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-2.out`,
+  `/tmp/mutants-full-e1abce79-stage-e-20260928.out`, and gate logs with the
+  suffixes above. CodeRabbit review 20 returned zero findings and no rate
+  limit; log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-20.out`.
+  The subsequent documentation-only gates also passed: check-fmt 33, Markdown
+  lint 29 (125 files, 0 errors), and Nixie 28. Their logs are under `/tmp` with
+  the project/branch prefix and these suffixes. A second documentation-only run
+  passed after formatting this review record: check-fmt 34, Markdown lint 30
+  (125 files, 0 errors), and Nixie 29. The roadmap item stays unchecked until
+  the plan reaches COMPLETE.
 
 ## Surprises & discoveries
 
@@ -1395,11 +1415,14 @@ Stage C2 red evidence (before the source fix):
 - NC-2 changed `COORDINATE_PRECISION_FACTOR` to `1_000_000.0`; the
   same-grid property failed after zero successes with coordinates
   `-2.1262886517803015e-5` and `-1.8737113482196984e-5`. Restoring the constant
-  made the property pass. Logs: `/tmp/nc2-wildside-backend-5-1-4a.out` and
+  made the property pass. The injected run executed one test and failed with
+  810 filtered out; the reverted run passed one test with the same 810 filtered
+  out. Logs: `/tmp/nc2-wildside-backend-5-1-4a.out` and
   `/tmp/nc2-reverted-wildside-backend-5-1-4a.out`.
 - NC-4 appended `!` to normalized strings; V-4 failed after nine successes
-  on `{"themes":["theme-0"]}`. Restoring the source made V-4 pass. Logs:
-  `/tmp/nc4-wildside-backend-5-1-4a.out` and
+  on `{"themes":["theme-0"]}`. The injected run executed one test and failed
+  with 810 filtered out; restoring the source made V-4 pass with the same 810
+  filtered out. Logs: `/tmp/nc4-wildside-backend-5-1-4a.out` and
   `/tmp/nc4-reverted-wildside-backend-5-1-4a.out`. Pre- and post-control
   worktree diffs are identical; the index diffs are both empty.
 - The first MUT-1 pass tested 31 mutants in 42 minutes: 24 were caught, 3
@@ -1454,9 +1477,30 @@ Stage C2 red evidence (before the source fix):
   The first lint run required an inner module-purpose doc comment in the new
   test module; adding it cleared Whitaker, and the next complete gate sequence
   and CodeRabbit review both passed.
+- Observation: the first EP-M4 MUT-1 attempt used `cargo-mutants`' default
+  temporary directory under `/tmp` and allocated 22 GiB before evaluating any
+  individual mutant. It was stopped after 929 seconds with exit status 101;
+  only the unmutated baseline passed, so this is not mutation evidence. Its
+  partial report directory is preserved at
+  `/tmp/mutants-partial-e1abce79-stage-e-20260928.out`. Local source inspection
+  shows `tempfile::Builder::tempdir()` follows `std::env::temp_dir()`. The
+  retry set `TMPDIR=/home/leynos/.cache/cargo-mutants-stage-e`, outside `/tmp`,
+  while retaining Cargo's shared default cache. It completed in 2,380 seconds
+  with exit 0: 33 mutants tested, 30 caught, 3 unviable, 0 missed, and 0 timed
+  out. The unviable cases were `for_route_request` at line 70,
+  `hash_route_request_value` at line 133, and `round_coordinate` at line 207;
+  replacing each typed return with `Ok(Default::default())` failed to compile.
+  The baseline passed. The command log is
+  `/tmp/mutants-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-2.out`;
+  the machine-readable report was archived at
+  `/tmp/mutants-full-e1abce79-stage-e-20260928.out`.
 
-Still to record: the MUT-1 kill lists (Stage C2 and EP-M4), and the NC-2/NC-4
-transcripts with their filtered-in counts.
+The Stage C2 MUT-1 records above preserve the four initial survivors and their
+subsequent kills; the EP-M4 report records every caught and unviable mutant.
+The NC-2 and NC-4 transcripts above show one filtered-in target test per run,
+both failing under the injected mutation and passing after the narrow revert.
+Remaining closeout work is to commit the Stage E documents as separate changes,
+then mark the roadmap item and plan complete in the final closeout.
 
 ______________________________________________________________________
 
