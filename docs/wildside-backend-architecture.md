@@ -1576,7 +1576,10 @@ before invoking a port. Canonical examples include:
   normalization inside the domain layer. The outbound adapter
   (`backend/src/outbound/cache/redis_route_cache.rs`, type `RedisRouteCache`)
   only stores and retrieves pre-derived `RouteCacheKey` values; handlers and
-  the Redis adapter never canonicalize payloads themselves.
+  the Redis adapter never canonicalize payloads themselves. Derivation can
+  return `CoordinateOutOfRange` when a coordinate-keyed number exceeds the
+  supported magnitude and `RoundedCoordinateNotRepresentable` if the rounded
+  number cannot be represented as JSON.
 - `LoginCredentials` — trims usernames, zeroizes passwords via the `zeroize`
   crate, and exposes `LoginCredentials::try_from_parts` so `POST /api/v1/login`
   handlers never poke at DTO fields directly.
@@ -1945,7 +1948,12 @@ Wildside uses a three-layer data strategy to keep POI coverage fresh:
    TTL. Rotate the namespace (`v2`, `v3`, …) whenever schema or engine changes
    invalidate cached content. The canonicalization seam lives in
    `backend/src/domain/ports/cache_key.rs`, which performs the array sorting
-   and coordinate rounding before hashing;
+   and coordinate rounding before hashing. Coordinate-keyed numbers with
+   magnitude above 180 are rejected with `CoordinateOutOfRange`; within that
+   bound, rounding is a projection under LEM-1, not geographic validation. The
+   contract is supported by a hand proof, example-based and property-based
+   tests, the dense-boundary regression, and the scoped mutation check in
+   `backend/src/domain/ports/cache_key/`;
    `backend/src/outbound/cache/redis_route_cache.rs` only persists the derived
    key and never re-canonicalizes payloads.
 
