@@ -4,7 +4,7 @@ use proptest::prelude::*;
 use serde_json::json;
 
 use super::super::super::ROUNDED_COORDINATE_KEYS;
-use super::strategies::{divergent_cells, grid_cell_pair};
+use super::strategies::{distinct_integer_pair, divergent_cells, grid_cell_pair};
 use crate::domain::ports::RouteCacheKey;
 
 const COORDINATE_SCALE: f64 = 100_000.0;
@@ -58,5 +58,18 @@ proptest! {
         prop_assert!(first_key.is_ok(), "in-range coordinate: {:?}", first_key.as_ref().err());
         prop_assert!(second_key.is_ok(), "in-range coordinate: {:?}", second_key.as_ref().err());
         prop_assert_ne!(first_key.ok(), second_key.ok());
+    }
+
+    #[test]
+    fn distinct_integer_coordinates_do_not_collapse(
+        (first_integer, second_integer) in distinct_integer_pair(),
+    ) {
+        let first_key = RouteCacheKey::for_route_request(&serde_json::json!({"lat": first_integer}));
+        let second_key = RouteCacheKey::for_route_request(&serde_json::json!({"lat": second_integer}));
+
+        prop_assert!(
+            first_key.is_err() || second_key.is_err() || first_key != second_key,
+            "distinct integer coordinates must be rejected or derive distinct keys: {first_integer:?}, {second_integer:?} => {first_key:?}, {second_key:?}"
+        );
     }
 }

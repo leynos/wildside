@@ -1,7 +1,7 @@
 //! Domain cache key type and route-request derivation shared by route cache
 //! adapters.
 
-use serde_json::{Number, Value};
+use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -9,6 +9,7 @@ use crate::domain::idempotency::{PayloadHash, PayloadHashError};
 
 const ROUTE_CACHE_NAMESPACE: &str = "route:v1";
 const COORDINATE_PRECISION_FACTOR: f64 = 100_000.0;
+const MAX_COORDINATE_MAGNITUDE: f64 = 180.0;
 const SORTED_ARRAY_KEYS: &[&str] = &["themes", "themeIds", "interestThemeIds"];
 const ROUNDED_COORDINATE_KEYS: &[&str] = &["lat", "lng", "lon", "latitude", "longitude"];
 
@@ -34,6 +35,7 @@ impl RouteCacheKey {
     /// The derivation normalizes semantically equivalent route requests so the
     /// cache can be shared across reordered themes, reordered object keys, and
     /// coordinate noise that disappears after rounding to five decimal places.
+    /// Coordinates in rounded fields must be within -180 to 180 degrees.
     ///
     /// # Example
     ///
@@ -57,6 +59,13 @@ impl RouteCacheKey {
     /// assert_eq!(first_key, second_key);
     /// assert!(first_key.as_str().starts_with("route:v1:"));
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RouteCacheKeyDerivationError::CoordinateOutOfRange`] when a
+    /// coordinate in a rounded field is outside the supported range. It can
+    /// also return a hashing or key-validation error if canonical derivation
+    /// fails.
     pub fn for_route_request(payload: &Value) -> Result<Self, RouteCacheKeyDerivationError> {
         let hash = hash_route_request_value(payload)?.to_hex();
 
@@ -109,13 +118,19 @@ pub enum RouteCacheKeyDerivationError {
     /// The canonical payload could not be hashed.
     #[error(transparent)]
     Hash(#[from] PayloadHashError),
+    /// A route coordinate was outside the supported latitude/longitude range.
+    #[error("coordinate field '{key}' must be between -180 and 180; got {value}")]
+    CoordinateOutOfRange { key: String, value: Number },
+    /// Rounding unexpectedly produced a value that JSON cannot represent.
+    #[error("rounded coordinate in field '{key}' is not a finite JSON number: {value}")]
+    RoundedCoordinateNotRepresentable { key: String, value: Number },
     /// The generated cache key failed validation.
     #[error(transparent)]
     Validation(RouteCacheKeyValidationError),
 }
 
-fn hash_route_request_value(value: &Value) -> Result<PayloadHash, PayloadHashError> {
-    let normalized = normalize_route_request_value(value, None);
+fn hash_route_request_value(value: &Value) -> Result<PayloadHash, RouteCacheKeyDerivationError> {
+    let normalized = normalize_route_request_value(value, None)?;
     let json_bytes =
         serde_json::to_vec(&normalized).map_err(|err| PayloadHashError::Serialization {
             message: err.to_string(),
@@ -125,59 +140,89 @@ fn hash_route_request_value(value: &Value) -> Result<PayloadHash, PayloadHashErr
     Ok(PayloadHash::from_bytes(hash_bytes))
 }
 
-fn normalize_route_request_value(value: &Value, current_key: Option<&str>) -> Value {
+fn normalize_route_request_value(
+    value: &Value,
+    current_key: Option<&str>,
+) -> Result<Value, RouteCacheKeyDerivationError> {
     match value {
-        Value::Object(map) => {
-            let mut entries: Vec<_> = map.iter().collect();
-            entries.sort_by_key(|(key, _)| key.as_str());
-
-            let normalized = entries
-                .into_iter()
-                .map(|(key, child)| {
-                    (
-                        key.clone(),
-                        normalize_route_request_value(child, Some(key.as_str())),
-                    )
-                })
-                .collect();
-
-            Value::Object(normalized)
-        }
-        Value::Array(items) => {
-            let mut normalized: Vec<Value> = items
-                .iter()
-                .map(|item| normalize_route_request_value(item, None))
-                .collect();
-
-            if should_sort_array(current_key) && normalized.iter().all(Value::is_string) {
-                normalized.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
-            }
-
-            Value::Array(normalized)
-        }
-        Value::Number(number) if should_round_coordinate(current_key) => {
-            Value::Number(round_coordinate(number))
-        }
-        other => other.clone(),
+        Value::Object(map) => normalize_object(map),
+        Value::Array(items) => normalize_array(items, current_key),
+        Value::Number(number) => normalize_number(number, current_key),
+        other => Ok(other.clone()),
     }
+}
+
+fn normalize_object(map: &Map<String, Value>) -> Result<Value, RouteCacheKeyDerivationError> {
+    let mut entries: Vec<_> = map.iter().collect();
+    entries.sort_by_key(|(key, _)| key.as_str());
+
+    let normalized = entries
+        .into_iter()
+        .map(|(key, child)| {
+            Ok((
+                key.clone(),
+                normalize_route_request_value(child, Some(key.as_str()))?,
+            ))
+        })
+        .collect::<Result<_, RouteCacheKeyDerivationError>>()?;
+
+    Ok(Value::Object(normalized))
+}
+
+fn normalize_array(
+    items: &[Value],
+    current_key: Option<&str>,
+) -> Result<Value, RouteCacheKeyDerivationError> {
+    let mut normalized: Vec<Value> = items
+        .iter()
+        .map(|item| normalize_route_request_value(item, None))
+        .collect::<Result<_, RouteCacheKeyDerivationError>>()?;
+    sort_normalized_array(current_key, &mut normalized);
+
+    Ok(Value::Array(normalized))
+}
+
+fn sort_normalized_array(current_key: Option<&str>, values: &mut [Value]) {
+    if should_sort_array(current_key) && values.iter().all(Value::is_string) {
+        values.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+    }
+}
+
+fn normalize_number(
+    number: &Number,
+    current_key: Option<&str>,
+) -> Result<Value, RouteCacheKeyDerivationError> {
+    if let Some(key) = current_key.filter(|key| ROUNDED_COORDINATE_KEYS.contains(key)) {
+        return round_coordinate(key, number).map(Value::Number);
+    }
+
+    Ok(Value::Number(number.clone()))
 }
 
 fn should_sort_array(current_key: Option<&str>) -> bool {
     current_key.is_some_and(|key| SORTED_ARRAY_KEYS.contains(&key))
 }
 
-fn should_round_coordinate(current_key: Option<&str>) -> bool {
-    current_key.is_some_and(|key| ROUNDED_COORDINATE_KEYS.contains(&key))
-}
-
-fn round_coordinate(number: &Number) -> Number {
+fn round_coordinate(key: &str, number: &Number) -> Result<Number, RouteCacheKeyDerivationError> {
     let Some(value) = number.as_f64() else {
-        return number.clone();
+        return Ok(number.clone());
     };
+
+    if value.abs() > MAX_COORDINATE_MAGNITUDE {
+        return Err(RouteCacheKeyDerivationError::CoordinateOutOfRange {
+            key: key.to_owned(),
+            value: number.clone(),
+        });
+    }
 
     let canonical = round_coordinate_value(value);
 
-    Number::from_f64(canonical).unwrap_or_else(|| number.clone())
+    Number::from_f64(canonical).ok_or_else(|| {
+        RouteCacheKeyDerivationError::RoundedCoordinateNotRepresentable {
+            key: key.to_owned(),
+            value: number.clone(),
+        }
+    })
 }
 
 /// Round to five decimal places and canonicalize signed zero.
