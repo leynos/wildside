@@ -95,9 +95,12 @@ Key locations:
   - Numbers whose immediate containing key is one of `ROUNDED_COORDINATE_KEYS`
     (`lat`, `lng`, `lon`, `latitude`, `longitude`) are rounded to five decimal
     places via `(value * 100_000.0).round() / 100_000.0` in the private
-    `round_coordinate` (lines 173–182); a result equal to zero is
-    canonicalized to positive zero. When `Number::from_f64` on the rounded
-    result fails, the original number is kept (reachable — see defect D-2).
+    `round_coordinate`; a result equal to zero is canonicalized to positive
+    zero. Before multiplication, values with magnitude above 180 are rejected
+    with `CoordinateOutOfRange`, avoiding the overflow in defect D-2. If
+    `Number::from_f64` cannot represent the rounded result, derivation returns
+    `RoundedCoordinateNotRepresentable` rather than retaining the original
+    number.
   - Values under coordinate keys that are not numbers (strings, objects,
     arrays, booleans, null) pass through untouched.
 - Callers: `rg for_route_request backend/src` finds no production caller;
@@ -159,10 +162,13 @@ an obligation below and is fixed by this plan, not excluded):
   exceeds roughly 2^51, the divide-back step is no longer exact enough for a
   second rounding pass to land on the same integer, so
   `normalize(normalize(v)) != normalize(v)` — a counter-example to V-4.
-- D-2 (rounding silently skipped): for finite `|value|` above roughly
-  1.8e303 the multiply overflows to infinity, `Number::from_f64(inf)` returns
-  `None`, and the original number passes through unrounded — a counter-example
-  to V-2 (two values that "round alike" keep distinct keys).
+- D-2 (overflowing coordinates bypass admission): for finite `|value|` above
+  roughly 1.8e303 the multiply overflows to infinity, `Number::from_f64(inf)`
+  returns `None`, and the original number passes through. This witnesses that
+  the old implementation accepts coordinates outside the new ±180 contract. It
+  is not a V-2 equivalence counter-example: the binary64 ULP at this magnitude
+  is about 3.05e287, so distinct representable values cannot share a
+  five-decimal grid cell.
 - D-3 (distinct integers collapse): integer coordinates beyond 2^53 are
   lossily cast by `as_f64`, so distinct `i64`/`u64` coordinate values map to
   one key — a counter-example to V-3/V-8 divergence.
@@ -197,12 +203,15 @@ hygiene).
   is deployed, so this is a design-hygiene constraint rather than a migration
   one; if a future fix genuinely needs to change in-range keys, that is an
   escalation, and the namespace would move to `route:v2`.)
-- The permitted public-interface change is exactly one new variant,
+- The permitted public-interface additions are the two new variants:
   `RouteCacheKeyDerivationError::CoordinateOutOfRange { key: String, value:
-  String }`,
-  where `value` is the JSON number's textual form (an `f64` field would break
-  the enum's `Eq` derive). Private function signatures inside `cache_key.rs`
-  may change freely.
+  serde_json::Number }`
+  and
+  `RouteCacheKeyDerivationError::RoundedCoordinateNotRepresentable { key:
+  String, value: serde_json::Number }`.
+  `serde_json::Number` preserves the enum's `Eq` derive; a plain `f64` field
+  would not. Private function signatures inside `cache_key.rs` may change
+  freely.
 - Keep the canonicalization seam and its coordinate-domain policy in the
   domain; do not move logic into
   `backend/src/outbound/cache/redis_route_cache.rs` or test through the Redis
@@ -235,9 +244,9 @@ hygiene).
 
 - Scope: more than 12 files touched, or more than 80 net non-test production
   lines, means stop and escalate.
-- Interface: any public API change other than the single
-  `CoordinateOutOfRange` variant, or making a private item `pub`, means stop
-  and escalate.
+- Interface: any public API change other than the two
+  `RouteCacheKeyDerivationError` variants declared above, or making a private
+  item `pub`, means stop and escalate.
 - Canonical form: any fix that would change the key of an in-range request
   (V-9 or an existing example test turning red) means stop and escalate.
 - Dependencies: any new crate requirement means stop and escalate.
@@ -468,9 +477,10 @@ number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
   shape). Artefact: same file, `coordinates_in_one_grid_cell_share_a_key`.
   Non-vacuity: offsets include nonzero values of both signs; manual negative
   control NC-2 (change `COORDINATE_PRECISION_FACTOR` to `1_000_000.0`) must
-  fail this property. Before Stage C2, a D-2 witness (two distinct finite
-  values above 1.8e303 under `lat`) must be shown failing as a promoted example
-  — the red evidence for D-2.
+  fail this property. Before Stage C2, explicit D-2 cases at `1.8e303` and
+  `1.9e303` under `lat` must fail the admission assertion. Those cases exercise
+  the overflow path and the old acceptance behaviour; they do not claim that
+  these values round to the same cell.
 - Obligation V-3 (coordinate divergence): payloads identical except for
   coordinate leaves in different grid cells yield different keys; and two
   distinct JSON integers under a coordinate key either yield different keys or
@@ -502,7 +512,9 @@ number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
   round branches and out-of-range coordinates; manual negative control NC-4
   (append a constant to every string during normalization) must fail
   idempotence. Before Stage C2 this property is expected to fail with a D-1
-  counter-example — its shrunk input is the red evidence for D-1.
+  counter-example. The default randomized run did not reach that failure, so
+  D-1's exact witness is also a named `rstest` that directly checks the
+  non-idempotent normalization before the fix.
 - Obligation V-5 (derivation totality and key format): for every generated
   payload, derivation never panics and returns either `Ok(key)` whose string
   matches `^route:v1:[0-9a-f]{64}$` (checked with explicit character-class
@@ -548,11 +560,11 @@ number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
   rejection properties. Without this, a normalizer that dropped or rewrote
   non-special fields would pass V-1, V-4, V-5, and V-6. Method: property test;
   the strategy picks a payload and one edit whose changed-ness is guaranteed by
-  construction (appending a suffix to a string; inserting under a key name the
-  generator never otherwise emits). Artefact: same file,
-  `edited_leaves_produce_distinct_keys`. Non-vacuity: rests on AXM-1/AXM-4; the
-  mutation gate must kill identity-erasing mutants (e.g. the object branch
-  returning `Value::Null`).
+  construction (appending a suffix to a string; flipping `true` to `false`;
+  inserting a `fresh-*` key into a content object whose only initial key is
+  `sample`). Artefact: same file, `edited_leaves_produce_distinct_keys`.
+  Non-vacuity: rests on AXM-1/AXM-4; the mutation gate must kill
+  identity-erasing mutants (e.g. the object branch returning `Value::Null`).
 - Obligation V-9 (digest algorithm known-answer): one fixed, in-range
   payload maps to a precomputed `route:v1:<expected 64-hex SHA-256>` string,
   computed once from the canonical bytes with an independent tool (`sha256sum`)
@@ -707,12 +719,13 @@ so no file approaches the repository's 400-line limit.
 Stage C2 (counter-example-driven fixes; red then green in one commit):
 
 1. Red: add full-domain `coordinate_number()` and `route_payload()` strategies,
-   then add V-4 and V-5 over that payload strategy, the D-2 witness example,
-   and the integer arm of V-3. Run the focused suite and record each shrunk
-   counter-example (expected: D-1 from V-4, D-2 from the witness, D-3 from
-   V-3's integer arm) in `Artefacts and notes`. Any counter-example not in
-   D-1..D-3 is added to `Surprises & Discoveries` and handled under the same
-   discipline.
+   then add V-4 and V-5 over that payload strategy, the explicit D-2 overflow
+   cases, and the integer arm of V-3. Run the focused suite and record the
+   counter-examples (D-1 from its direct idempotence case and D-3 from V-3)
+   plus the failing D-2 case values and returned keys in `Artefacts and notes`.
+   The broad V-4 random run may miss the narrow D-1 rounding defect; if so,
+   retain the direct named witness. Any counter-example not in D-1..D-3 is
+   added to `Surprises & Discoveries` and handled under the same discipline.
 2. Promote each shrunk counter-example to a named `rstest` case in
    `tests.rs` (these, too, fail at this point).
 3. Green: in `cache_key.rs`, add `MAX_COORDINATE_MAGNITUDE: f64 = 180.0`;
@@ -721,12 +734,12 @@ Stage C2 (counter-example-driven fixes; red then green in one commit):
    `|as_f64()| > MAX_COORDINATE_MAGNITUDE` with `CoordinateOutOfRange` (the
    check is exact for integers too: every integer the lossy cast distorts is
    far above 180); thread the `Result` through `normalize_route_request_value`
-   and `hash_route_request_value` with `?`; drop the now-unreachable `from_f64`
-   fallback in favour of an `expect` whose message cites LEM-1, or keep a typed
-   fallback if the workspace's `missing_panics_doc`/`expect_used` lints make
-   that cleaner (record which in `Decision Log`). Add the
-   `CoordinateOutOfRange` variant with a `#[error(...)]` message naming key and
-   value, and extend the `for_route_request` rustdoc with an `# Errors` section.
+   and `hash_route_request_value` with `?`; replace the `from_f64` fallback
+   with a typed `RoundedCoordinateNotRepresentable` error because the workspace
+   denies `expect_used`. Add both `CoordinateOutOfRange` and
+   `RoundedCoordinateNotRepresentable` variants with `serde_json::Number` value
+   fields and `#[error(...)]` messages naming key and value, and extend the
+   `for_route_request` rustdoc with an `# Errors` section.
 4. Add V-10 (property, boundary table, snapshot) and the statistics guard.
 5. Re-run the focused suite: all green, V-9 and every pre-existing example
    test unchanged. Prune any regression seeds whose expected outcome the fix
@@ -826,9 +839,9 @@ given in `Verification plan`.
   in the named functions; boundary test passes; Kani spike transcripts
   explicitly show no proof verdict. Conformance check: in-range keys
   byte-identical (V-9 and pre-existing examples green without edits); the only
-  public change is the new variant. Compatibility decision: the new variant is
-  an additive public change with no consumers; no deprecation needed. Recovery:
-  revert the fix and fallback-test commits to return to EP-M2.
+  public changes are the two new error variants. Compatibility decision: both
+  variants are additive public changes with no consumers; no deprecation is
+  needed. Recovery: revert the fix and fallback-test commits to return to EP-M2.
 - EP-M4 (documentation, roadmap, TODO removal). Outcome: TODO gone, roadmap
   item 5.1.4a present and ticked, architecture and developers' guides updated,
   second MUT-1 run recorded, all gates green. Acceptance evidence:
@@ -906,18 +919,20 @@ Acceptance is behavioural:
 
 1. Before Stage C1, `cargo test -p backend --lib cache_key::tests::properties`
    reports zero matching tests (module absent). After Stage C2 it reports the
-   nine named properties plus the statistics guard, all passing, and
+   ten named properties plus the statistics guard, all passing, and
    `cache_key::tests` additionally reports the `-0.0`, known-answer,
    boundary-table, and promoted counter-example cases.
-2. Red evidence for each fix: the Stage C2 transcripts show V-4 failing
-   with a D-1 input (expected shape below), the D-2 witness failing, and V-3's
-   integer arm failing with a D-3 pair, each with a nonzero filtered-in test
-   count; after the fix the same tests pass and the promoted cases assert
+2. Red evidence for each fix: the Stage C2 transcripts show the named D-1
+   idempotence case failing, both D-2 overflow cases failing admission, and
+   V-3's integer arm failing with a D-3 pair, each with a nonzero filtered-in
+   test count; after the fix the same tests pass and the promoted cases assert
    `CoordinateOutOfRange`.
 
    ```plaintext
    Test failed: assertion failed: `(left == right)` ...
-   minimal failing input: value = {"lat": <shrunk magnitude above ~2e10>}
+   input: coordinate = -42389709114.565025
+   left:  {"lat": -42389709114.56504}
+   right: {"lat": -42389709114.56503}
    test result: FAILED. 0 passed; 1 failed
    ```
 
@@ -950,14 +965,17 @@ disposition are retained in this plan.
 
 ## Interfaces and dependencies
 
-Public interface change (the only one):
+Public interface additions (the only additions):
 
 ```rust
 pub enum RouteCacheKeyDerivationError {
     // existing: Hash(PayloadHashError), Validation(RouteCacheKeyValidationError)
     /// A coordinate-keyed number exceeds the admitted magnitude of 180.
-    #[error("route request coordinate `{key}` is out of range: {value}")]
-    CoordinateOutOfRange { key: String, value: String },
+    #[error("coordinate field '{key}' must be between -180 and 180; got {value}")]
+    CoordinateOutOfRange { key: String, value: serde_json::Number },
+    /// Rounding unexpectedly produced a value that JSON cannot represent.
+    #[error("rounded coordinate in field '{key}' is not a finite JSON number: {value}")]
+    RoundedCoordinateNotRepresentable { key: String, value: serde_json::Number },
 }
 ```
 
@@ -991,12 +1009,42 @@ floating-point precision and both bounded feasibility runs timed out.
   review completed with no findings.
 - [x] EP-M2 / Stage C1: themed property modules and strategies; V-9 pinned
   against unmodified code; focused suite has 26 passing tests; full repository
-  gates passed and final CodeRabbit review reported no findings.
-- [ ] EP-M3 / Stage C2: D-1..D-3 red transcripts recorded.
-- [ ] EP-M3 / Stage C2: counter-examples promoted to `rstest` cases.
-- [ ] EP-M3 / Stage C2: `CoordinateOutOfRange` fix; V-4, V-5, V-10,
-  full-domain V-3, statistics guard green; V-9 unchanged.
-- [ ] EP-M3: NC-2, NC-4 transcripts; MUT-1 kill list.
+  gates passed and final CodeRabbit review reported no findings. Commit:
+  `d4a3128`.
+- [x] EP-M3 / Stage C2: D-1..D-3 red transcripts recorded.
+- [x] EP-M3 / Stage C2: counter-examples promoted to `rstest` cases.
+- [x] EP-M3 / Stage C2: `CoordinateOutOfRange` fix; V-4, V-5, V-10,
+  full-domain V-3, and statistics guard green; V-9 unchanged. Focused cache-key
+  suite: 47 passed, 766 filtered out.
+- [x] EP-M3: NC-2 and NC-4 failed their intended properties, passed again
+  after narrow reversions, and left no temporary mutation in the source diff.
+- [x] EP-M3: MUT-1 kill list has no survivors; 28 caught and 3 unviable.
+- [x] EP-M3 / Stage C2: all deterministic gates passed, including 47 focused
+  cache-key tests, 1,509 Nextest tests (4 skipped), backend doctests, compile-
+  fail, workflow-contract, Python, TypeScript, typecheck, Markdown lint, and
+  Mermaid validation. Final CodeRabbit review reported no findings. Gate log
+  suffixes: check-fmt 21, lint 15, cache-key 14, backend docs 12, test 14,
+  typecheck 13, Markdown lint 19, nixie 19. Review log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-15.out`.
+- [x] EP-M3 / Stage C2: CodeRabbit review 16 found that V-8 generated only
+  string-value edits although the obligation also covers boolean flips and
+  fresh-key insertions. The strategy now generates all three forms, and the
+  fixed-seed guard checks each. Both duplicate findings are recorded at
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-16.out`;
+  the first lint rerun then caught invalid `prop_assert_ne!` capture syntax
+  and an unused enum import, both fixed. The subsequent deterministic gate run
+  passed; review 17 then requested specific failure messages for all four
+  accepted/rejected digest assertions. Those messages are now present, and the
+  post-fix gates and review are recorded below.
+- [x] EP-M3 / Stage C2: Review 17's digest assertion diagnostic finding is
+  fixed with distinct messages for valid lowercase hex, uppercase hex, invalid
+  characters, and short digests. Finding and gate log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-17.out`.
+  The post-fix deterministic gates all passed: check-fmt 25, lint 19,
+  cache-key 17, backend doctests 15, test 17, typecheck 16, Markdown lint 22,
+  and nixie 22. CodeRabbit review 18 found no concerns and was not
+  rate-limited. Review log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-18.out`.
 - [ ] EP-M3 / Stage D: dense boundary-slice test and written Kani disposition.
 - [ ] EP-M4 / Stage E: TODO removal, roadmap 5.1.4a entry ticked,
   architecture doc (admission bound and variant), developers-guide bullet and
@@ -1095,15 +1143,23 @@ floating-point precision and both bounded feasibility runs timed out.
   is `BTreeMap`-backed, so key order is normalized before the code under test
   runs. Impact: the plan replaces that clause with the idempotence property
   (V-4) and a documented exclusion.
-- Observation: three coordinate-rounding defects exist at magnitudes no real
-  coordinate occupies (D-1 idempotence failure above ~2^51 / 10^5; D-2 rounding
-  skipped on multiply overflow above ~1.8e303; D-3 distinct integers beyond
-  2^53 collapsing). Evidence: pinned `serde_json-1.0.150/src/number.rs` lines
-  162–171; `round_coordinate` arithmetic at `cache_key.rs:173–182`; IEEE-754
-  error analysis in LEM-1. Impact: first revision bounded generators to
-  ±1,000,000 to avoid them. Revised (see `Decision Log`): because no production
-  path uses the derivation, these are fixed at the source with an admission
-  bound and proved correct inside it, and generators now span the full domain.
+- Observation: the three discovered defects occur at values a real
+  coordinate should never carry: D-1 idempotence failure above roughly 2^51 /
+  10^5, D-2 multiplication overflow above roughly 1.8e303, and D-3 distinct
+  integers beyond 2^53 collapsing. The first revision bounded generators to
+  ±1,000,000, which hid these defects. Because the derivation has no production
+  callers, the revised decision fixes admission at ±180 and keeps generators
+  over the full finite numeric domain.
+- Observation: D-2's original V-2 characterization was too strong. At
+  `1.8e303`, Python's IEEE-754 `math.ulp` reports approximately `3.04541e287`,
+  while multiplying by 100,000 overflows to infinity. Distinct representable
+  values at that magnitude therefore cannot occupy the same five-decimal cell.
+  D-2 remains a direct witness that the old implementation accepts a coordinate
+  after taking the overflow fallback; the revised example asserts rejection
+  under the ±180 admission contract. Evidence: `/tmp` Python experiment
+  (`math.ulp(1.8e303) == 3.04541e287` and `math.isinf(1.8e303 * 100_000.0)` is
+  true), pinned `serde_json-1.0.150/src/number.rs` lines 162–171, and LEM-1.
+  The rounding arithmetic is at `cache_key.rs:173–182`.
 - Observation (design panel): no existing or previously planned test would
   fail if the hash algorithm or pre-hash serialization were swapped —
   `cache_key.rs` calls `Sha256::digest` directly and the example tests check
@@ -1146,6 +1202,17 @@ floating-point precision and both bounded feasibility runs timed out.
   inbound boundary. The uniform ±180 bound is the smallest rule under which
   LEM-1 holds with a wide margin and every in-range key is unchanged.
   Date/Author: 2026-09-28, planning agent.
+- Decision: use the D-2 overflow cases as direct admission-contract witnesses,
+  not as V-2 equivalent-value pairs. Rationale: the binary64 ULP above
+  `1.8e303` is about `3.05e287`, far larger than the five-decimal grid, so two
+  distinct representable values cannot round to the same cell there. The
+  planned ±180 rejection remains unchanged. Date/Author: 2026-09-28,
+  implementation agent.
+- Decision: return `RoundedCoordinateNotRepresentable` if bounded rounding
+  cannot be represented as a JSON number. Rationale: the crate denies
+  `expect_used`; this typed fallback preserves the proof-backed normal path
+  without a panic or the old silent unrounded fallback. Date/Author:
+  2026-09-28, implementation agent.
 - Decision: decline a Kani harness for LEM-1 in this change and support the
   claim with its hand proof, generated properties, and a dense boundary-slice
   regression. Rationale: the installed Kani guidance says floating-point
@@ -1282,10 +1349,97 @@ about 131 MiB; system memory remained below the limit. Log:
 proof evidence. Both attempts were stopped by their own foreground command at
 the plan's 30-minute limit.
 
-Still to record: the V-9 constant and the command that produced it; the
-D-1..D-3 red transcripts with shrunk inputs; the MUT-1 kill lists (Stage C2 and
-EP-M4); the NC-2/NC-4 transcripts with their filtered-in counts; and the dense
-boundary-slice test result.
+Stage C2 red evidence (before the source fix):
+
+- D-1: `normalization_is_idempotent_for_large_counterexample` failed for
+  `lat = -42389709114.565025`. The first normalization produced
+  `-42389709114.56503`; the second produced `-42389709114.56504`. Log:
+  `/tmp/test-red-d1-idempotence-wildside-backend-5-1-4a.out`.
+- V-5: `derived_keys_match_route_v1_format` expected rejection but received a
+  key for the shrunk payload `{"themes":{"lat":-181}}`. Log:
+  `/tmp/test-red-v5-wildside-backend-5-1-4a.out`.
+- D-2: the named `1.8e303` and `1.9e303` cases both returned keys instead of
+  admission errors. The returned digests were
+  `ccffdc2c649ae4082a5b0f6e8f7659df982f665d0f390b4b778810da7b98b105` and
+  `3c49fa1b78732beb3ed88a2fa6e19a50f6c26739941004a4458e9db7b6dfa663`. Log:
+  `/tmp/test-red-d2-wildside-backend-5-1-4a.out`.
+- D-3: V-3 shrank to adjacent integers `1514566008529973632` and
+  `1514566008529973633`; both returned digest
+  `cbb5acf3e14d4d49e81c58993dd82032320954722b40bfd7be666314ddabb69e`. Log:
+  `/tmp/test-red-d3-wildside-backend-5-1-4a.out`. The promoted named `rstest`
+  reproduces the same collision at
+  `/tmp/test-red-d3-example-wildside-backend-5-1-4a.out`.
+- The first two default-seed runs of the broad V-4 property passed despite its
+  full-domain generator. The direct D-1 `rstest` above is therefore the
+  reproducible red witness; V-4 remains the general relational property.
+- The initial fixed-seed statistics guard reached fractional and out-of-range
+  coordinates but no sortable theme array. Adding an explicit theme-array entry
+  to the recursive payload strategy made the same 512 samples cover all three
+  required classes. The guard passes with seed `0x51042a`. Log:
+  `/tmp/test-strategy-coverage-wildside-backend-5-1-4a.out`.
+- After the source fix, all 47 focused cache-key tests passed, including the
+  V-10 table, snapshot, and property. Log:
+  `/tmp/test-cache-key-wildside-backend-5-1-4a-c2-v10.out`.
+- NC-2 changed `COORDINATE_PRECISION_FACTOR` to `1_000_000.0`; the
+  same-grid property failed after zero successes with coordinates
+  `-2.1262886517803015e-5` and `-1.8737113482196984e-5`. Restoring the constant
+  made the property pass. Logs: `/tmp/nc2-wildside-backend-5-1-4a.out` and
+  `/tmp/nc2-reverted-wildside-backend-5-1-4a.out`.
+- NC-4 appended `!` to normalized strings; V-4 failed after nine successes
+  on `{"themes":["theme-0"]}`. Restoring the source made V-4 pass. Logs:
+  `/tmp/nc4-wildside-backend-5-1-4a.out` and
+  `/tmp/nc4-reverted-wildside-backend-5-1-4a.out`. Pre- and post-control
+  worktree diffs are identical; the index diffs are both empty.
+- The first MUT-1 pass tested 31 mutants in 42 minutes: 24 were caught, 3
+  were unviable, and 4 survived. Survivors were the two constant replacements
+  for `RouteCacheKey::as_ref`, `is_lowercase_hex_digest -> true`, and the `&&`
+  to `||` mutation in that digest validator. The misses showed that the suite
+  did not directly test those accessor and validation contracts. The
+  machine-readable report was copied to
+  `/tmp/mutants-wildside-backend-5-1-4a-c2-first`; the command transcript is
+  `/tmp/mutants-wildside-backend-5-1-4a-c2.out`.
+- Added direct tests for `AsRef<str>` and lowercase digest validation in
+  response. The expanded focused suite passes 47 tests, with 766 filtered out.
+  Log: `/tmp/test-cache-key-wildside-backend-5-1-4a-c2-mutant-tests.out`.
+- The survivor-only MUT-1 iteration caught all four previously missed
+  mutations. Combined with the first pass, the 31-mutant scope has 28 caught, 3
+  unviable, and zero survivors. Logs:
+  `/tmp/mutants-wildside-backend-5-1-4a-c2.out` and
+  `/tmp/mutants-wildside-backend-5-1-4a-c2-iterate.out`. Machine-readable
+  reports are under `/tmp/mutants-wildside-backend-5-1-4a-c2-first-worktree`,
+  `/tmp/mutants-wildside-backend-5-1-4a-c2-iterate-first-run`, and
+  `/tmp/mutants-wildside-backend-5-1-4a-c2-iterate`.
+- Proptest seed files created by the red witnesses and negative controls were
+  removed after their cases were promoted or the controls were reverted; no
+  `backend/proptest-regressions/` files remain.
+- Observation: the first full Stage C2 gate pass confirmed formatting, then
+  stopped at `make lint`. Clippy requested consistent fractional digit grouping
+  in the large-coordinate strategy, and Whitaker identified clustered
+  conditionals in `normalize_route_request_value`. The normalization dispatch
+  now delegates object, array, and number cases to purpose-specific helpers.
+  The next full sequential pass passed every deterministic gate. CodeRabbit
+  reported duplicate stale error-contract declarations, which were corrected
+  along with a stale normalization-summary sentence. The final full pass passed
+  all deterministic gates and the final CodeRabbit review found no concerns.
+- Observation: after recording the clean C2 review, CodeRabbit identified a
+  gap between V-8's three stated edit forms and its string-only strategy. The
+  strategy now preserves string edits, adds a true-to-false boolean flip, and
+  inserts a fresh key under `generated.payload.content`; the fixed-seed guard
+  will prove all three branches are exercised. The first lint pass on that
+  extension caught a formatting-argument error in `prop_assert_ne!` and an
+  unused import; both are fixed before the next gate run.
+- Observation: CodeRabbit review 17 asked the four direct digest-validator
+  assertions to explain their expected result on failure. Each accepted or
+  rejected input now has a distinct diagnostic message. All deterministic gates
+  passed afterwards, and review 18 returned no findings.
+- Observation: the ExecPlan closeout lint caught American `afterward`; the text
+  now uses British `afterwards`. The follow-up formatting, Markdown lint, and
+  Mermaid gates passed. Logs: check-fmt 27, Markdown lint 24 (125 files, zero
+  errors), and nixie 23; the initial spelling failure is in Markdown lint 23.
+
+Still to record: the MUT-1 kill lists (Stage C2 and EP-M4); the NC-2/NC-4
+transcripts with their filtered-in counts; and the dense boundary-slice test
+result.
 
 ______________________________________________________________________
 
@@ -1316,12 +1470,19 @@ each ±180 boundary. The developers' guide will state this limitation and
 disposition explicitly.
 
 Revision note (2026-09-28): post-gate CodeRabbit reviews identified that V-8
-must vary a generated string leaf under `generated.payload.content`, keeping
-the random sample and sibling fields constant; the pre-commit guard must
-include staged changes; and the workflow contract test should report recorded
-invocations on failure. The property, guard, assertion diagnostic, and module
-references now reflect those findings. All deterministic gates passed on the
-final staged C1 patch, and CodeRabbit reported no remaining concerns. C2's
+must vary one generated leaf under `generated.payload.content`, while keeping
+the random sample and sibling fields constant. The strategy covers string
+changes, boolean flips, and fresh-key insertion, and the fixed-seed guard
+checks all three forms. The same reviews required the pre-commit guard to
+include staged changes and the workflow contract test to report recorded
+invocations on failure. Those changes passed the final staged C1 gates and
+review; a later C2 review required the additional V-8 edit forms.
+
+Revision note (2026-09-28): during Stage C2 setup, corrected D-2's red-test
+classification. The overflowing values remain direct rejection cases for the
+±180 admission rule; IEEE-754 spacing means they cannot demonstrate a
+five-decimal equivalence collision as originally described. D-1 and D-3 remain
+the normalization-idempotence and integer-collision witnesses. The production
 scope is unchanged.
 
 Revision note (2026-08-16): revised after the six-lens design panel review.

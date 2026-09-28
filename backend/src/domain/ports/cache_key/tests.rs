@@ -1,7 +1,5 @@
 //! Validates cache key parsing, canonicalization, and whitespace
 //! constraints.
-//! TODO: Add property-based tests for canonicalization invariants across
-//! generated key ordering, theme arrays, and coordinate rounding cases.
 use insta::assert_snapshot;
 use serde_json::json;
 
@@ -9,7 +7,7 @@ use crate::domain::idempotency::PayloadHashError;
 
 use super::{
     ROUNDED_COORDINATE_KEYS, RouteCacheKey, RouteCacheKeyDerivationError,
-    RouteCacheKeyValidationError, SORTED_ARRAY_KEYS,
+    RouteCacheKeyValidationError, SORTED_ARRAY_KEYS, is_lowercase_hex_digest,
 };
 use rstest::rstest;
 
@@ -36,6 +34,39 @@ fn cache_key_accepts_clean_input() {
     let key = RouteCacheKey::new("route:user:1").expect("valid key");
     assert_eq!(key.as_str(), "route:user:1");
     assert_eq!(key.to_string(), "route:user:1");
+}
+
+#[test]
+fn route_cache_key_as_ref_exposes_underlying_key() {
+    let key = RouteCacheKey::new("route:user:1").expect("valid key");
+    let underlying_key: &str = key.as_ref();
+
+    assert_eq!(underlying_key, "route:user:1");
+}
+
+#[test]
+fn route_digest_validation_requires_lowercase_hex() {
+    let lowercase_hex = "a".repeat(64);
+    let uppercase_hex = "A".repeat(64);
+    let invalid_character = format!("{}g", "a".repeat(63));
+    let short_digest = "a".repeat(63);
+
+    assert!(
+        is_lowercase_hex_digest(&lowercase_hex),
+        "64-character lowercase hexadecimal digests should be accepted"
+    );
+    assert!(
+        !is_lowercase_hex_digest(&uppercase_hex),
+        "uppercase hexadecimal characters should be rejected"
+    );
+    assert!(
+        !is_lowercase_hex_digest(&invalid_character),
+        "non-hexadecimal characters should be rejected"
+    );
+    assert!(
+        !is_lowercase_hex_digest(&short_digest),
+        "digests shorter than 64 characters should be rejected"
+    );
 }
 
 #[test]
@@ -116,6 +147,22 @@ fn route_cache_error_messages_match_snapshots() {
         .to_string(),
         @"route cache key digest must be a 64-character lowercase hex string"
     );
+    assert_snapshot!(
+        RouteCacheKeyDerivationError::CoordinateOutOfRange {
+            key: "lat".to_owned(),
+            value: 181.into(),
+        }
+        .to_string(),
+        @"coordinate field 'lat' must be between -180 and 180; got 181"
+    );
+    assert_snapshot!(
+        RouteCacheKeyDerivationError::RoundedCoordinateNotRepresentable {
+            key: "lat".to_owned(),
+            value: 181.into(),
+        }
+        .to_string(),
+        @"rounded coordinate in field 'lat' is not a finite JSON number: 181"
+    );
 }
 
 #[rstest]
@@ -173,6 +220,104 @@ fn route_request_key_rounds_documented_coordinate_fields(
     let second_key = RouteCacheKey::for_route_request(&second).expect("second route key");
 
     assert_eq!(first_key, second_key);
+}
+
+#[rstest]
+#[case(1.8e303)]
+#[case(1.9e303)]
+fn route_request_rejects_rounding_overflow_coordinate(#[case] coordinate: f64) {
+    let payload = json!({"lat": coordinate});
+    let result = RouteCacheKey::for_route_request(&payload);
+
+    assert!(
+        matches!(
+            &result,
+            Err(RouteCacheKeyDerivationError::CoordinateOutOfRange { key, .. }) if key == "lat"
+        ),
+        "expected admission rejection for {coordinate}; got {result:?}"
+    );
+}
+
+#[rstest]
+#[case(-42_389_709_114.565025)]
+fn large_idempotence_counterexample_is_rejected(#[case] coordinate: f64) {
+    let payload = json!({"lat": coordinate});
+    let result = RouteCacheKey::for_route_request(&payload);
+
+    assert!(
+        matches!(
+            &result,
+            Err(RouteCacheKeyDerivationError::CoordinateOutOfRange { key, .. }) if key == "lat"
+        ),
+        "expected idempotence counterexample to be rejected; got {result:?}"
+    );
+}
+
+#[rstest]
+#[case(1_514_566_008_529_973_632_i64, 1_514_566_008_529_973_633_i64)]
+fn route_request_rejects_or_distinguishes_colliding_integer_coordinates(
+    #[case] first_coordinate: i64,
+    #[case] second_coordinate: i64,
+) {
+    let first_payload = json!({"lat": first_coordinate});
+    let second_payload = json!({"lat": second_coordinate});
+    let first_key = RouteCacheKey::for_route_request(&first_payload);
+    let second_key = RouteCacheKey::for_route_request(&second_payload);
+
+    let first_error = first_key.expect_err("first large integer coordinate rejected");
+    let second_error = second_key.expect_err("second large integer coordinate rejected");
+
+    assert_eq!(
+        first_error,
+        RouteCacheKeyDerivationError::CoordinateOutOfRange {
+            key: "lat".to_owned(),
+            value: first_coordinate.into(),
+        }
+    );
+    assert_eq!(
+        second_error,
+        RouteCacheKeyDerivationError::CoordinateOutOfRange {
+            key: "lat".to_owned(),
+            value: second_coordinate.into(),
+        }
+    );
+}
+
+#[rstest]
+#[case(json!(180), true)]
+#[case(json!(-180), true)]
+#[case(json!(180.0), true)]
+#[case(json!(180.000001), false)]
+#[case(json!(-180.000001), false)]
+#[case(json!(i64::MAX), false)]
+#[case(json!(u64::MAX), false)]
+#[case(json!(1.0e308), false)]
+#[case(json!(f64::from_bits(1)), true)]
+fn coordinate_bound_is_inclusive(#[case] coordinate: serde_json::Value, #[case] is_admitted: bool) {
+    let payload = json!({"lat": coordinate.clone()});
+    let result = RouteCacheKey::for_route_request(&payload);
+
+    assert_eq!(result.is_ok(), is_admitted, "coordinate: {coordinate}");
+    if !is_admitted {
+        match result {
+            Err(RouteCacheKeyDerivationError::CoordinateOutOfRange { key, value }) => {
+                assert_eq!(key, "lat");
+                assert_eq!(serde_json::Value::Number(value), coordinate);
+            }
+            other => panic!("expected CoordinateOutOfRange, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn coordinate_out_of_range_error_matches_snapshot() {
+    let error = RouteCacheKey::for_route_request(&json!({"lat": 180.000001}))
+        .expect_err("coordinate just outside the bound is rejected");
+
+    assert_snapshot!(
+        error.to_string(),
+        @"coordinate field 'lat' must be between -180 and 180; got 180.000001"
+    );
 }
 
 #[test]

@@ -2,5 +2,7 @@
 
 mod canonical_arrays;
 mod coordinates;
+mod normalization;
 mod single_leaf_edits;
 mod strategies;
+mod strategy_coverage;
