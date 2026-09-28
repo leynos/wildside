@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -1079,8 +1079,11 @@ floating-point precision and both bounded feasibility runs timed out.
   lint 29 (125 files, 0 errors), and Nixie 28. Their logs are under `/tmp` with
   the project/branch prefix and these suffixes. A second documentation-only run
   passed after formatting this review record: check-fmt 34, Markdown lint 30
-  (125 files, 0 errors), and Nixie 29. The roadmap item stays unchecked until
-  the plan reaches COMPLETE.
+  (125 files, 0 errors), and Nixie 29. Final closeout gates passed: check-fmt
+  36, Markdown lint 32 (125 files, 0 errors), and Nixie 31. Their logs have the
+  project/branch prefix and these suffixes. Stage E document commits: `14d4aa4`,
+  `0797119`, `b73730c`, `5de8b0a`, and `1be2bf0`. The roadmap item is checked
+  in the final closeout.
 
 ## Surprises & discoveries
 
@@ -1499,8 +1502,9 @@ The Stage C2 MUT-1 records above preserve the four initial survivors and their
 subsequent kills; the EP-M4 report records every caught and unviable mutant.
 The NC-2 and NC-4 transcripts above show one filtered-in target test per run,
 both failing under the injected mutation and passing after the narrow revert.
-Remaining closeout work is to commit the Stage E documents as separate changes,
-then mark the roadmap item and plan complete in the final closeout.
+Stage E documentation was committed as five focused changes. Roadmap item
+5.1.4a is checked, and the implementation and validation obligations in this
+plan are complete.
 
 ______________________________________________________________________
 
