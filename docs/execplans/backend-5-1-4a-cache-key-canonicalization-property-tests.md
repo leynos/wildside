@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -38,15 +38,20 @@ input domain is a production defect to be fixed, not an input region to be
 fenced off by narrowing the generator.** Planning has already found three such
 defects in coordinate rounding (see `Surprises & Discoveries`); this plan fixes
 them by bounding the admitted coordinate magnitude in the domain canonicalizer,
-rejecting out-of-range coordinates with a typed error, and proving the rounding
-step is a projection on the admitted domain.
+rejecting out-of-range coordinates with a typed error, and establishing the
+rounding projection property with a hand proof, generated properties, and an
+exhaustive test over a dense representable-float slice near the bound. The
+planned Kani proof was evaluated and declined: the installed guidance says it
+does not model floating-point precision, and both 30-minute spikes stalled
+before a verdict.
 
 The observable outcome for a developer is: `cargo test -p backend cache_key`
 runs the new property suite over the full finite JSON number domain; each
 property demonstrably fails when the canonicalization logic is broken
-(mutation-testing and seeded-fault evidence is recorded below); a Kani harness
-proves rounding idempotence for every admitted `f64`; route requests whose
-coordinate-keyed numbers exceed ±180 in magnitude fail key derivation with
+(mutation-testing and seeded-fault evidence is recorded below); LEM-1 is
+supported by its written arithmetic argument, full-domain generated properties,
+and a dense boundary-slice regression; route requests whose coordinate-keyed
+numbers exceed ±180 in magnitude fail key derivation with
 `RouteCacheKeyDerivationError::CoordinateOutOfRange` instead of producing
 silently wrong keys; and the TODO comment is gone. Cache keys for in-range
 requests are byte-for-byte unchanged.
@@ -179,12 +184,13 @@ hygiene).
 ## Constraints
 
 - Production edits in `backend/src/domain/ports/cache_key.rs` are limited to:
-  the mechanical test-module split; removal of the TODO comment; and fixes for
-  counter-examples to the obligations in `Verification plan` (the known defects
-  D-1..D-3 and any further counter-example found inside the generator domain).
-  Every production fix must be preceded by a recorded failing property or
-  example (red), then land together with that test passing (green) in one
-  commit.
+  the mechanical test-module split; the private scalar extraction into
+  `round_coordinate_value` for direct boundary-slice testing; removal of the
+  TODO comment; and fixes for counter-examples to the obligations in
+  `Verification plan` (the known defects D-1..D-3 and any further
+  counter-example found inside the generator domain). Every production fix must
+  be preceded by a recorded failing property or example (red), then land
+  together with that test passing (green) in one commit.
 - A production fix must not change the canonical bytes, and hence the cache
   key, of any request whose coordinate-keyed numbers are all within ±180. The
   known-answer test V-9 and the existing example tests enforce this. (No cache
@@ -204,15 +210,14 @@ hygiene).
 - No new crate dependencies (dev or production). Use the existing
   `proptest`, `rstest`, `insta`, and `pretty_assertions` dev-dependencies;
   `cargo-mutants` and `cargo-kani` are installed developer tools, not Cargo
-  dependencies. Declaring `cfg(kani)` via the workspace `unexpected_cfgs` lint's
-  `check-cfg` list is permitted.
+  dependencies. Kani is evaluated for LEM-1 but not used because its installed
+  guidance excludes floating-point precision and the bounded spikes timed out.
 - Respect the repository's 400-line file limit (`AGENTS.md`): after the
-  split, `cache_key.rs`, `cache_key/tests.rs`, the property module, and the
-  proof module must each stay under 400 lines. Contingency: if
-  `tests/properties.rs` approaches the limit, split it into a
-  `tests/properties/` directory (`strategies.rs` for generators, sibling files
-  per invariant group), following the `enrichment/tests/bounding_box.rs`
-  themed-file precedent.
+  split, `cache_key.rs`, `cache_key/tests.rs`, and property modules must each
+  stay under 400 lines. Contingency: if `tests/properties.rs` approaches the
+  limit, split it into a `tests/properties/` directory (`strategies.rs` for
+  generators, sibling files per invariant group), following the
+  `enrichment/tests/bounding_box.rs` themed-file precedent.
 - Existing tests (unit, snapshot, doctest, BDD) must continue to pass
   unmodified apart from the mechanical relocation of the unit-test module.
 - Property bodies must use `prop_assert!`/`prop_assert_eq!`/`prop_assert_ne!`
@@ -242,9 +247,11 @@ hygiene).
   escalate. Two failed fix attempts on the same counter-example also trigger
   escalation.
 - Kani: if the harness cannot be built against the `backend` crate, or does
-  not complete within 30 minutes or 16 GB of memory, stop the Kani stage,
-  record the failure mode, and escalate with the options in `Risks` (the hand
-  proof LEM-1 and the full-domain property remain in force).
+  not complete within 30 minutes or 16 GB of memory, stop Kani work and record
+  the failure mode. The wrapper and isolated-kernel spikes both met this limit;
+  Kani is declined for this floating-point claim. The hand proof LEM-1 and the
+  full-domain properties remain in force, with a deterministic dense boundary
+  slice added as the measured fallback.
 - Runtime: if the property suite adds more than 30 seconds to
   `cargo test -p backend --lib` on the development machine, reduce case counts
   or generator depth and record the decision. (Panel arithmetic estimates well
@@ -268,16 +275,6 @@ hygiene).
   integer-grid serialization) are recorded in `Decision Log` together with why
   they were rejected. Reversing the policy is a local change behind the same
   private function.
-- Risk: Kani cannot build or solve the harness in reasonable time (the
-  `backend` crate has a large dependency graph, and bit-precise `f64`
-  multiply/round/divide chains are expensive for CBMC). Severity: medium.
-  Likelihood: medium. Mitigation: Stage A runs a throwaway spike first. Kani
-  only generates code reachable from the harness, and `round_coordinate` is
-  pure arithmetic, so the build is expected to be feasible; if not, the
-  fallback options for escalation are (a) a unit-level check over every `f64`
-  in a dense slice near the magnitude bound, backed by LEM-1's hand proof, or
-  (b) moving the rounding arithmetic into a dependency-free module the harness
-  can target.
 - Risk: floating-point subtlety makes the divergence property flaky.
   Severity: low. Likelihood: low. Mitigation: derive both coordinates in a pair
   from one integer grid cell with offsets capped at ±0.49 grid units, so
@@ -301,6 +298,13 @@ hygiene).
   now rejected rather than rounded). Severity: low. Likelihood: medium.
   Mitigation: re-validate and prune regression seeds in the same commit as any
   fix; promoted `rstest` cases remain the durable record.
+- Risk: no machine proof is available for LEM-1 with the installed Kani tool.
+  Severity: medium. Likelihood: confirmed. Evidence: its local skill says
+  floating-point precision is not modelled, and wrapper and isolated-kernel
+  spikes each exceeded 30 minutes without a verdict. Mitigation: do not land or
+  claim an unsupported Kani proof; retain the hand argument, generated full-
+  domain properties, and deterministic dense-slice regression. Revisit with a
+  verifier that explicitly supports the required IEEE-754 operations.
 
 ## Conformance basis
 
@@ -346,7 +350,7 @@ ARCH-CACHEKEY-CONTRACT -> RM-5.1.4a -> EP-M2, EP-M3
        coordinate_bound_is_inclusive,                 (V-10 boundary)
        <promoted D-1..D-3 regression cases> }
 ARCH-CACHEKEY-COORD-DOMAIN -> EP-M3
-  -> cache_key::proofs::round_coordinate_is_a_projection (LEM-1, Kani)
+  -> cache_key::tests::dense_rounding_slice_near_coordinate_bound (LEM-1 fallback)
 ARCH-CACHEKEY-OWNERSHIP -> EP-M1 -> module split keeps tests inside the
   domain port module (no adapter involvement)
 ```
@@ -356,7 +360,8 @@ ARCH-CACHEKEY-OWNERSHIP -> EP-M1 -> module split keeps tests inside the
 The work verifies existing invariants over generated input ranges and, because
 the fixes introduce one new contractual rule (the coordinate admission bound)
 and one lemma the rule exists to make true (rounding is a projection on the
-admitted domain), adds an exhaustive machine check of that lemma.
+admitted domain), backed by a hand proof, generated properties, and the dense
+boundary-slice regression described below.
 
 Method selection:
 
@@ -364,16 +369,18 @@ Method selection:
   (arbitrary JSON payloads, permutations, all finite numbers) is far too large
   to enumerate, and the invariants are relational (pairs of payloads), which
   proptest expresses directly.
-- Kani carries LEM-1. The lemma quantifies over a single `f64`, a finite
-  domain of at most 2^64 values, so bounded model checking with CBMC's
-  bit-precise IEEE-754 semantics is an *exhaustive* proof, not a sample. Verus
-  was considered and rejected for LEM-1: its support for reasoning about
-  IEEE-754 floating-point arithmetic is too limited to state the rounding
-  behaviour without axiomatizing exactly the facts being proved, which would
-  make the proof a restatement. Kani was considered and rejected for
-  `is_lowercase_hex_digest` (a two-line character-class check pinned by V-5 and
-  the mutation gate; a harness would restate it) and for the payload-level
-  properties (unbounded recursive structures).
+- LEM-1 carries a written arithmetic argument. Kani and Verus were assessed
+  for this finite `f64` claim, but neither provides suitable evidence in this
+  environment: the installed Kani guidance says floating-point precision is not
+  modelled and two Kani spikes exceeded 30 minutes without a verdict; Verus has
+  limited IEEE-754 reasoning and would require axiomatizing the rounding facts
+  under test. The claim is therefore supported by the hand derivation,
+  full-domain generated properties, and an exhaustive test of all representable
+  values in a fixed 100,000-ULP slice inside each ±180 boundary. This slice is
+  a regression check, not a proof over the whole domain. Kani is also not used
+  for `is_lowercase_hex_digest` (a two-line character-class check pinned by V-5
+  and the mutation gate) or payload-level properties (unbounded recursive
+  structures).
 - Loom and state-machine testing are inapplicable (no concurrency, no state).
 
 Axioms (external interfaces treated as correct, not verified here):
@@ -392,38 +399,39 @@ Axioms (external interfaces treated as correct, not verified here):
 - AXM-4: `serde_json` float formatting (ryu, shortest round-trip) is
   injective on distinct finite `f64` values — distinct floats serialize to
   distinct byte strings.
-- AXM-5: Rust `f64` arithmetic (`*`, `/`, `round`) is IEEE-754 binary64
-  with round-to-nearest-even for `*` and `/`, and `round` rounds half away from
-  zero; Kani/CBMC model these semantics bit-precisely.
+- AXM-5: Rust `f64` arithmetic (`*`, `/`, `round`) follows IEEE-754 binary64
+  semantics: multiplication and division round to nearest-even, while `round`
+  rounds half away from zero. This is an assumption of the hand proof; Kani
+  runs here do not validate it.
 
 Lemma LEM-1 (rounding is a projection on the admitted domain). Let
 `MAX_COORDINATE_MAGNITUDE = 180.0` and `P = 100_000.0`. For every finite `f64`
 `x` with `|x| <= 180`, define `n = round(x * P)` and
 `r = canonical_zero(n / P)` (the current `round_coordinate` arithmetic). Then
 (a) `|r| <= 180`, so `r` is itself admitted; (b) `round(r * P) == n`; and hence
-(c) `round_coordinate(r) == r` bit-for-bit. Hand proof (recorded so the Kani
-result has an independent argument): `P` is exactly representable.
-`|x * P| <= 1.8e7 < 2^25`, so `n` is an integer with `|n| < 2^25`, exactly
-representable. Division gives `n / P = (n / 10^5)(1 + d1)` with
-`|d1| <= 2^-53`; multiplying back gives `(n / P) * P = n (1 + d1)(1 + d2)` with
-`|d2| <= 2^-53`, so the error from `n` is at most
-`|n| * (2^-52 + 2^-106) < 2^25 * 2^-51.9 < 2^-26`, far below the `1/2` needed
-for `round` to return `n`; that is (b). Since `|n| <= 1.8e7` exactly (rounding
-cannot overshoot the integer `1.8e7`), `|n / P| <= 180` after correctly rounded
-division; that is (a). The zero case: `n == 0` gives `r == +0.0` by the
-canonical-zero step, and `round(+0.0 * P) == 0`. (c) follows because `r` is a
-function of `n` alone. A corollary used by V-3: `n` is recoverable from `r` by
-(b), so distinct grid cells give distinct `r` and, by AXM-4, distinct bytes.
-Method: Kani harness `round_coordinate_is_a_projection` asserting (a), (b), and
-(c) for `kani::any::<f64>()` under
-`kani::assume(x.is_finite() && x.abs() <= 180.0)`. Artefact:
-`backend/src/domain/ports/cache_key/proofs.rs` (`#[cfg(kani)]`). Evidence:
-`cargo kani -p backend --harness round_coordinate_is_a_projection` reporting
-`VERIFICATION:- SUCCESSFUL`. Non-vacuity: the harness also runs with the bound
-temporarily widened to `1e12` (manual control NC-5) and must report a
-counter-example, proving the assumption is load-bearing and the assertions are
-not trivially true; and a `kani::cover!` on `n != 0` confirms the non-zero
-branch is reachable.
+(c) `round_coordinate(r) == r` bit-for-bit. Hand proof: `P` is exactly
+representable. `|x * P| <= 1.8e7 < 2^25`, so `n` is an integer with
+`|n| < 2^25`, exactly representable. Division gives
+`n / P = (n / 10^5)(1 + d1)` with `|d1| <= 2^-53`; multiplying back gives
+`(n / P) * P = n (1 + d1)(1 + d2)` with `|d2| <= 2^-53`, so the error from `n`
+is at most `|n| * (2^-52 + 2^-106) < 2^25 * 2^-51.9 < 2^-26`, far below the
+`1/2` needed for `round` to return `n`; that is (b). Since `|n| <= 1.8e7`
+exactly (rounding cannot overshoot the integer `1.8e7`), `|n / P| <= 180` after
+correctly rounded division; that is (a). The zero case: `n == 0` gives
+`r == +0.0` by the canonical-zero step, and `round(+0.0 * P) == 0`. (c) follows
+because `r` is a function of `n` alone. A corollary used by V-3: `n` is
+recoverable from `r` by (b), so distinct grid cells give distinct `r` and, by
+AXM-4, distinct bytes. Method: hand proof plus
+`dense_rounding_slice_near_coordinate_bound`, which enumerates all representable
+`f64` values in the 100,000-ULP interval immediately inside each of `-180.0`
+and `180.0`, asserting (a), (b), and (c). This is an exhaustive regression
+check for those intervals, not a machine proof over all admitted `f64` values.
+Full-domain `proptest` properties exercise generated finite values; the hand
+proof carries the remaining domain argument. No Kani harness is landed: both the
+`Number` wrapper spike and the isolated scalar kernel exceeded 30 minutes, and
+the installed Kani guidance says it does not model floating-point precision.
+Logs and resource measurements are recorded in `Artefacts and notes`; the
+written disposition is in `docs/developers-guide.md`.
 
 Obligations. Each is exercised through the public entry point
 `RouteCacheKey::for_route_request` unless stated; `normalize` refers to the
@@ -466,9 +474,12 @@ number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
   coordinate leaves in different grid cells yield different keys; and two
   distinct JSON integers under a coordinate key either yield different keys or
   are rejected (never silently collide). Method: property test; one generator
-  draws `cell` and a nonzero `delta: i64`, using `cell` and `cell + delta`
-  clamped to the admitted range; a second arm draws arbitrary distinct `i64`/
-  `u64` pairs. Artefact: same file,
+  draws `cell` in `-18_000_000..=18_000_000` and a nonzero `delta` in
+  `-36_000_000..=-1` or `1..=36_000_000`. It clamps `cell + delta` into the
+  admitted range; if that yields `cell` again, it selects the adjacent in-range
+  cell (`cell + 1`, except at the maximum where it selects `cell - 1`). Thus
+  every generated pair is distinct without filtering. A second arm draws
+  arbitrary distinct `i64`/`u64` pairs. Artefact: same file,
   `coordinates_in_distinct_grid_cells_diverge`. Non-vacuity: rests on LEM-1's
   corollary, AXM-1, and AXM-4; the mutation gate must kill "`round_coordinate`
   returns a constant" mutants. The integer arm is the red evidence for D-3
@@ -603,15 +614,20 @@ Standing non-vacuity mechanisms (in the committed suite, not one-off):
   transcripts.
 
 - Manual negative controls (only what mutants cannot generate): NC-2
-  (constant change to `COORDINATE_PRECISION_FACTOR`), NC-4 (string-append
-  inside normalization), and NC-5 (widen the Kani assumption to `1e12`).
-  Procedure: apply the mutation, run the focused property or harness and record
-  the failure into `Artefacts and notes` including the filtered-in test count
-  (a transcript showing zero filtered-in tests is vacuous and must be treated
-  as a failed control), then revert with `git checkout -- <file>` and confirm
-  `git diff --exit-code -- <file>` before re-running to green. The property
-  module's doc comment points at this ExecPlan as the record of the
-  negative-control evidence.
+  (constant change to `COORDINATE_PRECISION_FACTOR`) and NC-4 (string-append
+  inside normalization). Procedure: apply the mutation, run the focused
+  property or harness and record the failure into `Artefacts and notes`
+  including the filtered-in test count (a transcript showing zero filtered-in
+  tests is vacuous and must be treated as a failed control). Before applying a
+  control, record the intended worktree and index diffs for the file. Apply and
+  reverse only the narrow temporary edit: restore the precision constant for
+  NC-2, and remove only the injected string-append for NC-4. Never use
+  whole-file checkout/restore or reverse the complete file diff, since that can
+  discard the uncommitted Stage C2 fix. After reversal, confirm the temporary
+  mutation is absent, the recorded Stage C2 diff remains in the worktree/index,
+  and `git diff --check` passes before rerunning the focused property to green.
+  The property module's doc comment points at this ExecPlan as the record of
+  the negative-control evidence.
 
 Deliberately not verified, with rationale:
 
@@ -635,18 +651,16 @@ Deliberately not verified, with rationale:
 
 ## Plan of work
 
-Stage A (no code changes, plus one throwaway spike): confirm the recon findings
-still hold (`leta show normalize_route_request_value`,
+Stage A (reconnaissance plus Kani feasibility spikes): confirm the recon
+findings still hold (`leta show normalize_route_request_value`,
 `leta show round_coordinate`; `cargo tree -p backend -i serde_json`
 re-confirming no `preserve_order`; `rg for_route_request backend/src`
 re-confirming no production caller). Record the pre-split baseline test count
 from a fresh `cargo test -p backend --lib cache_key` run (expected eighteen
-cases; record the actual number in `Artefacts and notes`). Run the Kani spike:
-a scratch `#[cfg(kani)]` harness calling today's `round_coordinate` with the
-±180 assumption, run once, and discard with
-`git checkout -- backend/src/domain/ports/cache_key.rs`. Record build time,
-solve time, and verdict; this decides whether Stage D proceeds as planned or
-escalates per `Tolerances`.
+cases; record the actual number in `Artefacts and notes`). The wrapper and
+scalar-kernel Kani spikes both exceeded 30 minutes without a verdict. Record
+their transcripts, then proceed with the documented hand-proof and dense-slice
+fallback; do not add a Kani harness or claim a machine proof.
 
 Stage B (mechanical split, first plateau):
 
@@ -715,18 +729,20 @@ Stage C2 (counter-example-driven fixes; red then green in one commit):
    `git status --porcelain` inspected for `proptest-regressions/` files. Commit
    test and fix together (EP-M3).
 
-Stage D (LEM-1 machine proof):
+Stage D (LEM-1 fallback evidence):
 
-1. Declare `cfg(kani)` in the root `Cargo.toml` by adding an
-   `unexpected_cfgs` entry with `check-cfg = ['cfg(kani)']` under
-   `[workspace.lints.rust]` (matching the existing lint-level conventions
-   there; use `deny` if that is the house level for the table).
-2. Create `backend/src/domain/ports/cache_key/proofs.rs`, declared in
-   `cache_key.rs` as `#[cfg(kani)] mod proofs;`, containing
-   `round_coordinate_is_a_projection` per LEM-1, plus a `kani::cover!` for the
-   non-zero branch.
-3. Run the harness; run NC-5; record both transcripts.
-4. Commit (part of EP-M3's plateau; separate commit).
+1. Do not add `cfg(kani)`, a proof module, or a passing-proof claim. Record the
+   two bounded Kani spike transcripts and their resource measurements.
+2. Add a deterministic test that visits every representable `f64` in 100,000
+   adjacent bit patterns inside each of the `-180.0` and `180.0` boundaries.
+   Assert the rounded result remains admitted, maps back to the original
+   integer grid cell, and is bit-for-bit idempotent.
+3. Keep the full-domain `proptest` properties and LEM-1 hand argument. State
+   plainly that the boundary test is finite regression evidence and does not
+   replace a machine proof over the admitted domain.
+4. Document the Kani limitation and this verification choice in
+   `docs/developers-guide.md`, then commit the fallback test and disposition in
+   the EP-M3 plateau.
 
 Stage E (documentation and closure):
 
@@ -744,9 +760,10 @@ Stage E (documentation and closure):
    ARCH-CACHEKEY-COORD-DOMAIN — coordinate-keyed numbers above 180 in magnitude
    are rejected with `CoordinateOutOfRange` because rounding is only a
    projection (LEM-1) inside that bound — and note that the contract is
-   enforced by example-based, property-based, mutation-tested, and Kani-proved
-   coverage under `backend/src/domain/ports/cache_key/`. Also list the new
-   error variant where the domain-model section describes `RouteCacheKey`.
+   supported by the hand proof, example-based, property-based, dense-boundary,
+   and mutation-tested coverage under `backend/src/domain/ports/cache_key/`.
+   Also list the new error variant where the domain-model section describes
+   `RouteCacheKey`.
 4. `docs/developers-guide.md`: (a) add a property-testing bullet to the
    "Testing strategy" list at the top; (b) a short subsection under testing
    conventions recording: property modules live in `tests/properties.rs` child
@@ -755,21 +772,24 @@ Stage E (documentation and closure):
    use `prop_assert*`; `proptest-regressions/` files are committed and pruned
    when a property's expected outcome changes; shrunk failures are promoted to
    named `rstest` cases; scoped `cargo mutants --file` runs are the standing
-   non-vacuity check; and Kani harnesses live in `#[cfg(kani)] mod proofs;`
-   child modules run with `cargo kani -p backend --harness <name>`.
+   non-vacuity check; and this plan's Kani limitation and fallback are recorded
+   with the testing guidance.
 5. `docs/users-guide.md`: no change — no user-visible behaviour change (no
    production path calls the derivation yet); recorded in `Decision Log`.
 
 Test-framework applicability, per the repository brief: `rstest` carries the
 example-shaped checks (statistics-guard harness, `-0.0` literal, known-answer
 digest, boundary table, promoted counter-examples); `proptest` carries the
-payload invariants; `kani` carries LEM-1; `insta` snapshots the new error
-message (consistent with the module's existing error snapshots); `googletest`
-is not a dependency of this crate (see `Decision Log`); no new `rstest-bdd`
-scenario is added because no externally observable workflow changes (the
-existing Redis BDD scenario covers the end-to-end contract with in-range
-coordinates, which this plan leaves byte-identical); `verus` is unsuitable for
-the float lemma, for the reasons given in `Verification plan`.
+payload invariants; LEM-1 is supported by its hand proof, generated properties,
+and dense boundary-slice regression, while Kani was evaluated and declined
+because it produced no verdict and its installed guidance excludes floating-
+point precision; `insta` snapshots the new error message (consistent with the
+module's existing error snapshots); `googletest` is not a dependency of this
+crate (see `Decision Log`); no new `rstest-bdd` scenario is added because no
+externally observable workflow changes (the existing Redis BDD scenario covers
+the end-to-end contract with in-range coordinates, which this plan leaves
+byte-identical); `verus` is unsuitable for the float lemma, for the reasons
+given in `Verification plan`.
 
 ## Milestones and plateaus
 
@@ -786,17 +806,18 @@ the float lemma, for the reasons given in `Verification plan`.
   reports the expected test count (assert via `grep 'test result: ok'` on the
   tee'd log under `set -o pipefail`; zero matched tests is a failure).
   Recovery: additive; revert restores EP-M1.
-- EP-M3 (counter-examples fixed and LEM-1 proved). Outcome: red transcripts
-  for D-1..D-3 recorded; `CoordinateOutOfRange` fix landed with V-4, V-5, V-10,
-  full-domain V-3, promoted regression cases, and the statistics guard; V-9
-  unchanged; NC-2/NC-4 and MUT-1 recorded; Kani harness
-  `VERIFICATION:- SUCCESSFUL` and NC-5 counter-example recorded. Acceptance
-  evidence: focused suite green; MUT-1 kill list with no survivors in the named
-  functions; Kani transcripts. Conformance check: in-range keys byte-identical
-  (V-9 and pre-existing examples green without edits); the only public change
-  is the new variant. Compatibility decision: the new variant is an additive
-  public change with no consumers; no deprecation needed. Recovery: revert the
-  fix commit and the Kani commit to return to EP-M2.
+- EP-M3 (counter-examples fixed and LEM-1 fallback evidence). Outcome: red
+  transcripts for D-1..D-3 recorded; `CoordinateOutOfRange` fix landed with
+  V-4, V-5, V-10, full-domain V-3, promoted regression cases, and the
+  statistics guard; V-9 unchanged; NC-2/NC-4 and MUT-1 recorded; dense
+  boundary-slice regression and documented Kani disposition recorded.
+  Acceptance evidence: focused suite green; MUT-1 kill list with no survivors
+  in the named functions; boundary test passes; Kani spike transcripts
+  explicitly show no proof verdict. Conformance check: in-range keys
+  byte-identical (V-9 and pre-existing examples green without edits); the only
+  public change is the new variant. Compatibility decision: the new variant is
+  an additive public change with no consumers; no deprecation needed. Recovery:
+  revert the fix and fallback-test commits to return to EP-M2.
 - EP-M4 (documentation, roadmap, TODO removal). Outcome: TODO gone, roadmap
   item 5.1.4a present and ticked, architecture and developers' guides updated,
   second MUT-1 run recorded, all gates green. Acceptance evidence:
@@ -823,11 +844,9 @@ cargo tree -p backend -i serde_json | head -20   # expect no indexmap parent
 rg -n for_route_request backend/src               # expect only cache_key.rs
 cargo test -p backend --lib cache_key 2>&1 | tee /tmp/test-wildside-b514a-baseline.out
 grep 'test result:' /tmp/test-wildside-b514a-baseline.out   # record count (expected 18)
-# Kani spike (scratch harness, then discard)
-cargo kani -p backend --harness round_coordinate_is_a_projection 2>&1 \
-  | tee /tmp/kani-wildside-b514a-spike.out
-git checkout -- backend/src/domain/ports/cache_key.rs
-git diff --exit-code -- backend/src/domain/ports/cache_key.rs
+# Kani spikes (both timed out before a verdict; no harness is retained)
+# Wrapper transcript: /tmp/kani-wildside-b514a-spike-ldpath.out
+# Scalar-kernel transcript: /tmp/kani-wildside-b514a-kernel-spike.out
 
 # Stage B
 cargo test -p backend --lib cache_key 2>&1 | tee /tmp/test-wildside-b514a-m1.out
@@ -852,9 +871,7 @@ git diff -- backend/src/domain/ports/cache_key.rs   # only the planned fix
 git status --porcelain                              # inspect proptest-regressions
 
 # Stage D
-cargo kani -p backend --harness round_coordinate_is_a_projection 2>&1 \
-  | tee /tmp/kani-wildside-b514a.out
-grep 'VERIFICATION:- SUCCESSFUL' /tmp/kani-wildside-b514a.out
+# Run dense_rounding_slice_near_coordinate_bound with the focused suite.
 
 # Stage E / gates (delegate to scrutineer; sequential)
 make check-fmt 2>&1 | tee /tmp/check-fmt-wildside-b514a.out
@@ -895,8 +912,8 @@ Acceptance is behavioural:
 
 3. Non-vacuity evidence: the MUT-1 transcript shows the expected mutant
    kills; NC-2 and NC-4 fail their target properties while applied and pass
-   after a verified-clean revert; the Kani harness reports
-   `VERIFICATION:- SUCCESSFUL` and NC-5 reports a counter-example.
+   after a verified-clean revert; the dense boundary-slice test covers every
+   representable value in its documented ULP intervals.
 4. In-range stability: V-9 and every pre-existing example test pass without
    edits across the fix commit.
 5. `make check-fmt`, `make lint`, and `make test` logs show no findings
@@ -914,9 +931,11 @@ command is safe. If a property fails intermittently, the committed
 replay first). Prune regression seeds in the same commit as any fix that
 changes their expected outcome. Rollback at any plateau is `git revert` of that
 stage's commit; no data, schema, or wire format is touched (no cache is
-deployed). Manual negative controls and the Kani spike are bracketed by
-`git checkout -- <file>` plus `git diff --exit-code -- <file>`, so an
-interrupted run is recovered by running those two commands.
+deployed). Recover an interrupted negative control using the mutation-specific
+procedure under `Verification plan`: reverse only its temporary edit, confirm
+it is absent, and verify any Stage C2 diff remains. Never restore the whole
+file. Temporary Kani harnesses were removed; their logs and no-proof
+disposition are retained in this plan.
 
 ## Interfaces and dependencies
 
@@ -935,9 +954,9 @@ Private changes in `cache_key.rs`: `MAX_COORDINATE_MAGNITUDE: f64 = 180.0`;
 `round_coordinate`, `normalize_route_request_value`, and
 `hash_route_request_value` become fallible.
 
-The test and proof modules consume `RouteCacheKey`,
-`RouteCacheKeyDerivationError`, `RouteCacheKeyValidationError`, and the private
-items `normalize_route_request_value`, `round_coordinate`, `SORTED_ARRAY_KEYS`,
+The test modules consume `RouteCacheKey`, `RouteCacheKeyDerivationError`,
+`RouteCacheKeyValidationError`, and the private items
+`normalize_route_request_value`, `round_coordinate`, `SORTED_ARRAY_KEYS`,
 `ROUNDED_COORDINATE_KEYS`, `COORDINATE_PRECISION_FACTOR`, and
 `MAX_COORDINATE_MAGNITUDE` via the `super::` chain (matching the
 `apalis_route_queue` precedent).
@@ -945,15 +964,20 @@ items `normalize_route_request_value`, `round_coordinate`, `SORTED_ARRAY_KEYS`,
 Dependencies: dev-dependencies already present — `proptest = "1"`,
 `rstest = "0.26"`, `insta`, `serde_json` (`json!` macro), `pretty_assertions`.
 Developer tooling: `cargo-mutants` (also run nightly by
-`.github/workflows/mutation-testing.yml`) and `cargo-kani` 0.67. Wiring Kani
-into CI is out of scope for 5.1.4a and is recorded as a follow-up in
-`Outcomes & Retrospective` if the harness proves stable.
+`.github/workflows/mutation-testing.yml`) and `cargo-kani` 0.67. Kani is not
+wired into CI or used for LEM-1 because its installed guidance excludes
+floating-point precision and both bounded feasibility runs timed out.
 
 ## Progress
 
-- [ ] Stage A: re-confirm recon facts; record baseline test count; Kani
-  spike verdict recorded.
-- [ ] EP-M1 / Stage B: split `cache_key.rs` tests into `cache_key/tests.rs`.
+- [x] Stage A: dependency and caller facts reconfirmed; wrapper and
+  scalar-kernel Kani spikes reached CBMC but exceeded 30 minutes. No proof is
+  claimed; the hand-proof and dense-slice fallback is recorded.
+- [x] Stage A: capture the baseline focused test count (18 passed, 0 failed,
+  766 filtered out).
+- [x] EP-M1 / Stage B: split `cache_key.rs` tests into `cache_key/tests.rs`;
+  extraction is formatted, source and docs gates passed, and final CodeRabbit
+  review completed with no findings.
 - [ ] EP-M2 / Stage C1: strategies; V-9 constant pinned against unmodified
   code; V-1, V-2/V-3 in-range, V-6, V-7, V-8 green.
 - [ ] EP-M3 / Stage C2: D-1..D-3 red transcripts recorded.
@@ -961,13 +985,66 @@ into CI is out of scope for 5.1.4a and is recorded as a follow-up in
 - [ ] EP-M3 / Stage C2: `CoordinateOutOfRange` fix; V-4, V-5, V-10,
   full-domain V-3, statistics guard green; V-9 unchanged.
 - [ ] EP-M3: NC-2, NC-4 transcripts; MUT-1 kill list.
-- [ ] EP-M3 / Stage D: Kani harness successful; NC-5 counter-example.
+- [ ] EP-M3 / Stage D: dense boundary-slice test and written Kani disposition.
 - [ ] EP-M4 / Stage E: TODO removal, roadmap 5.1.4a entry ticked,
   architecture doc (admission bound and variant), developers-guide bullet and
   subsection, second MUT-1 run, gates green.
 
 ## Surprises & discoveries
 
+- Observation: the first Stage B gate pass exposed a rustfmt diff in the
+  extracted test module, although `make check-fmt` continued to later format
+  checks and returned success. `make fmt` has now formatted the module; Stage B
+  must repeat `make check-fmt` on the clean result. The same pass found a
+  pre-existing Pylint C1803 simplification in
+  `tests/workflow_contracts/makefile_tooling_test.py`; the assertion was
+  simplified without changing its meaning so the required repository lint gate
+  can complete. Evidence is in the first gate logs under `/tmp`.
+- Observation: the first Stage B CodeRabbit review found that the framework
+  applicability summary still said Kani carried LEM-1 and the scalar rounding
+  helper lacked documentation. The summary now records the hand proof,
+  generated properties, and dense boundary-slice regression; the helper now
+  documents five-decimal rounding and signed-zero canonicalization.
+- Observation: the next review found that V-3's clamped delta could select the
+  original cell again; its generator now substitutes an adjacent admitted cell
+  in that case. An older revision note also still described the Kani harness as
+  current, so it now records that Kani was declined and the
+  hand-proof/generated-property/bounded-regression fallback applies. CodeRabbit
+  also reported a missing test-module path while `cache_key/tests.rs` was
+  untracked; the review patch view omitted that file. It was staged for
+  subsequent reviews, and the comment did not recur.
+- Observation: the fourth review found that the NC-2/NC-4 recovery instructions
+  could discard a later uncommitted Stage C2 fix by checking out a whole file.
+  The procedure now records the intended diffs and applies or reverses only the
+  temporary mutation, then verifies that the mutation is gone and the Stage C2
+  diff remains before rerunning the green property.
+- Observation: final Stage B review found no remaining concerns after the
+  recovery procedure and its general rollback cross-reference were corrected.
+  The docs-only gates and `coderabbit review --agent` both passed on the
+  complete four-file staged change.
+- Observation: local Kani guidance conflicts with LEM-1's model assumption.
+  Evidence: `kani/SKILL.md` says Kani does not model floating-point precision;
+  the plan's AXM-5 assumes bit-precise floating-point semantics. Impact: the
+  Stage A spike must demonstrate that the installed `cargo-kani` actually
+  supports the operations and assertions used here before the proof stage can
+  proceed. A successful run that treats operations imprecisely is not proof
+  evidence.
+- Observation: the first Kani spike stopped in a dependency build script
+  because `kani-compiler` could not load its bundled LLVM shared library.
+  Evidence: `/tmp/kani-wildside-b514a-spike.out` and
+  `/tmp/kani-wildside-b514a-spike-retry.out`; both ended before harness
+  compilation. `prover-tools kani install --version 0.67.0 --repo-root .`
+  restored the bundled library, and direct execution of
+  `kani-compiler --version` succeeds; exporting the Kani toolchain library path
+  lets Cargo's build scripts reach CBMC. The wrapper harness then exceeded the
+  30-minute feasibility limit: 189 VCCs, 15 remaining after simplification, two
+  intermediate satisfiable results, then a stall in the third reduction at
+  30m12s. Impact: no proof result is claimed; the next spike targets the pure
+  scalar kernel.
+- Observation: Kani's project-integration guidance requires either a harness
+  inventory or a written disposition when a requested harness is declined.
+  Impact: no unsupported harness will be committed; Stage E will document the
+  measured tool limitation and the test-based fallback in the developers' guide.
 - Observation: object key-order invariance — the headline "generated key
   ordering" clause of the original TODO — is untestable in this build. Evidence:
   `Cargo.lock` shows `serde_json` 1.0.150 without `indexmap`; `Value::Object`
@@ -994,7 +1071,7 @@ into CI is out of scope for 5.1.4a and is recorded as a follow-up in
   cargo-mutants over `backend/`, making hand-scripted mutation controls mostly
   redundant. Evidence: `.github/workflows/mutation-testing.yml`;
   `cargo-mutants` 27.x installed locally. Impact: manual controls reduced to
-  the mutation shapes cargo-mutants does not generate (NC-2, NC-4, NC-5).
+  the mutation shapes cargo-mutants does not generate (NC-2 and NC-4).
 - Observation: `RouteCacheKey::for_route_request` has no production caller.
   Evidence: `rg for_route_request backend/src` matches only `cache_key.rs`; the
   BDD test is the sole external user. Impact: counter-examples are treated as
@@ -1025,11 +1102,21 @@ into CI is out of scope for 5.1.4a and is recorded as a follow-up in
   inbound boundary. The uniform ±180 bound is the smallest rule under which
   LEM-1 holds with a wide margin and every in-range key is unchanged.
   Date/Author: 2026-09-28, planning agent.
-- Decision: prove LEM-1 with Kani, not Verus.
-  Rationale: LEM-1 is a statement about bit-precise IEEE-754 behaviour of a
-  single `f64`; Kani/CBMC decide it exhaustively, whereas Verus would need the
-  float facts axiomatized, restating the claim. A hand proof is recorded
-  alongside as an independent argument. Date/Author: 2026-09-28, planning agent.
+- Decision: decline a Kani harness for LEM-1 in this change and support the
+  claim with its hand proof, generated properties, and a dense boundary-slice
+  regression. Rationale: the installed Kani guidance says floating-point
+  precision is not modelled; the wrapper and isolated-kernel spikes each
+  exceeded 30 minutes without a verdict (details in `Artefacts and notes`). A
+  green result would not establish the requested IEEE-754 claim. This is the
+  documented written disposition required by the Kani project-integration
+  guidance; revisit with a verifier that explicitly supports these operations.
+  Date/Author: 2026-09-28, implementation agent.
+- Decision: isolate the existing scalar rounding expression in the private
+  `round_coordinate_value` function so the dense boundary-slice test can call
+  the exact operation without constructing `serde_json::Number` values.
+  Repository search found no equivalent helper. The helper remains local to
+  `cache_key.rs` and has no independent reuse contract or public interface.
+  Date/Author: 2026-09-28, implementation agent.
 - Decision: verify payload-level invariants with `proptest`, plus `rstest`
   examples and a scoped `cargo-mutants` gate. Rationale: the payload domain is
   unbounded and recursive; property tests with mutation-gate non-vacuity
@@ -1073,19 +1160,65 @@ into CI is out of scope for 5.1.4a and is recorded as a follow-up in
   their expected outcome. Rationale: proptest failure-persistence convention;
   stale seeds would keep CI red or silently stop testing the original
   counter-example. Date/Author: 2026-09-28, planning agent.
+- Implementation constraint: the Kani skill requires written justification
+  when a requested harness is declined. Stage E will document why this verifier
+  cannot substantiate LEM-1 and the chosen test fallback. Source: local `kani`
+  skill, `Project integration`.
 
 ## Outcomes & retrospective
 
 To be completed as milestones land. Candidate follow-up to assess at close:
-wiring `cargo kani` into CI if the harness proves stable and fast.
+evaluate a verifier with explicit IEEE-754 support for LEM-1; no Kani harness
+or CI wiring is planned for this change.
 
 ## Artefacts and notes
 
-To be populated during implementation: the Stage A baseline test count and Kani
-spike verdict; the V-9 constant and the command that produced it; the D-1..D-3
-red transcripts with shrunk inputs; the MUT-1 kill lists (Stage C2 and EP-M4);
-the NC-2/NC-4/NC-5 transcripts with their filtered-in counts; the Kani success
-transcript with solve time.
+Stage A baseline, captured at `4bb8187860ddefcb74d3460b439952772bc011e4`:
+`cargo test -p backend --lib cache_key` passed 18 tests, with 766 filtered out,
+in 886 seconds. The full output is
+`/tmp/test-wildside-backend-5-1-4a-cache-key-canonicalization-property-tests.out`.
+The run waited for the shared Cargo package-cache and build-directory locks;
+neither was bypassed.
+
+Stage B validation: the final full gate pass succeeded: `make check-fmt`,
+`make lint`, focused cache-key tests (18 passed, 766 filtered), backend
+doctests (160 passed, 96 ignored), `make test` (1,480 nextest passed, 4
+skipped; 1 trybuild and 107 Python tests passed), `make typecheck`,
+`make markdownlint` (125 files), and `make nixie`. The final staged docs-only
+revalidation also passed formatting, Markdown lint (125 files, no errors), and
+Mermaid validation. CodeRabbit reviewed all four staged paths and reported no
+findings. Gate logs are under `/tmp` with the branch suffix
+`backend-5-1-4a-cache-key-canonicalization-property-tests`; the final review
+log is
+`/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-4.out`.
+
+Dependency confirmation: `cargo tree -p backend -e features -i serde_json` shows
+`serde_json` 1.0.150 with `default`, `raw_value`, and `std`, without
+`preserve_order`. Caller search (`rg -n for_route_request backend/src`) finds
+only the implementation and its local tests; CodeGraph finds the same local
+test callers and the behavioural test's `derive_equivalent_keys` step.
+
+The wrapper-harness Kani spike reached CBMC with
+`LD_LIBRARY_PATH=/home/leynos/.kani/kani-0.67.0/toolchain/lib`, then exceeded
+30m12s without a verdict. Its transcript reports 189 VCCs, 15 after
+simplification, two intermediate satisfiable results, and a third propositional
+reduction still running at the cutoff. RSS was about 83 MiB and system memory
+remained below the 16 GB limit. Log:
+`/tmp/kani-wildside-b514a-spike-ldpath.out`.
+
+The isolated scalar-kernel spike passed
+`prover-tools kani check-version --repo-root . --expected-version 0.67.0`, then
+exceeded 30m05s without a verdict. It reduced the model to 8 VCCs; two solver
+reductions reported SAT, and the third remained active at the cutoff. RSS was
+about 131 MiB; system memory remained below the limit. Log:
+`/tmp/kani-wildside-b514a-kernel-spike.out`. These intermediate results are not
+proof evidence. Both attempts were stopped by their own foreground command at
+the plan's 30-minute limit.
+
+Still to record: the V-9 constant and the command that produced it; the
+D-1..D-3 red transcripts with shrunk inputs; the MUT-1 kill lists (Stage C2 and
+EP-M4); the NC-2/NC-4 transcripts with their filtered-in counts; and the dense
+boundary-slice test result.
 
 ______________________________________________________________________
 
@@ -1098,13 +1231,22 @@ overflow, D-3 large-integer collapse) are now fixed at the source by a uniform
 variant, instead of being hidden by a ±1,000,000 generator bound. Generators
 now span the full finite `f64` and `i64`/`u64` domains; V-4 and V-5 are
 restated over that domain, V-3 gains an integer-collision arm, and V-10
-(admission bound) is added. The rounding step's projection property is stated
-as lemma LEM-1 with a hand proof and an exhaustive Kani harness (Verus rejected
-for float reasoning). Stages were restructured into C1 (properties green
-today), C2 (red transcripts, then fix), D (Kani), and E (docs); milestones
-gained EP-M4. Tolerances now permit counter-example fixes within interface and
-canonical-form limits, and V-9 is pinned before any fix so it guards in-range
-key stability.
+(admission bound) is added. LEM-1 is supported by its hand proof, generated
+properties, and the bounded boundary-slice regression; the proposed Kani
+harness was declined after the feasibility spikes produced no verdict (see the
+following revision note). Stages were restructured into C1 (properties green
+today), C2 (red transcripts, then fix), D (bounded regression), and E (docs);
+milestones gained EP-M4. Tolerances now permit counter-example fixes within
+interface and canonical-form limits, and V-9 is pinned before any fix so it
+guards in-range key stability.
+
+Revision note (2026-09-28): Stage A's wrapper and isolated-kernel Kani spikes
+both reached CBMC but exceeded 30 minutes without a verdict. The installed Kani
+guidance also excludes floating-point precision. Stage D now declines a Kani
+claim and instead requires LEM-1's hand derivation, the existing full-domain
+generated properties, and an exhaustive check of a 100,000-ULP slice inside
+each ±180 boundary. The developers' guide will state this limitation and
+disposition explicitly.
 
 Revision note (2026-08-16): revised after the six-lens design panel review.
 Added V-8 and V-9; corrected the `canonicalize_and_hash` and
