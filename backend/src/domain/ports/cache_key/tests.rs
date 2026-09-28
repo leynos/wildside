@@ -13,6 +13,8 @@ use super::{
 };
 use rstest::rstest;
 
+mod properties;
+
 #[rstest]
 #[case("")]
 #[case("   ")]
@@ -57,6 +59,33 @@ fn route_request_key_has_expected_namespace_and_hash_shape() {
             .all(|character| character.is_ascii_hexdigit())
     );
     assert_eq!(digest, digest.to_ascii_lowercase());
+}
+
+#[test]
+fn route_request_key_matches_known_sha256_digest() {
+    // Independent digest of the compact normalized JSON, computed with:
+    // `printf '%s' '{"origin":{"lat":51.5,"lng":-0.1},"preferences":{"interestThemeIds":["art","history"]}}' | sha256sum`
+    let payload = json!({
+        "origin": {"lat": 51.5, "lng": -0.1},
+        "preferences": {"interestThemeIds": ["history", "art"]},
+    });
+
+    let key = RouteCacheKey::for_route_request(&payload).expect("route key");
+
+    assert_eq!(
+        key.as_str(),
+        "route:v1:064a4c57f3b53c1461a025298f66a1393b7b3a0c19cfe19c5297c063c7d06be9"
+    );
+}
+
+#[test]
+fn negative_zero_coordinate_collapses_to_zero() {
+    let negative_zero = RouteCacheKey::for_route_request(&json!({"lat": -0.0}))
+        .expect("negative-zero coordinate key");
+    let positive_zero = RouteCacheKey::for_route_request(&json!({"lat": 0.0}))
+        .expect("positive-zero coordinate key");
+
+    assert_eq!(negative_zero, positive_zero);
 }
 
 #[test]
