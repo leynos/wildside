@@ -71,7 +71,7 @@ semantically equivalent requests share one cache entry.
 
 Key locations:
 
-- `backend/src/domain/ports/cache_key.rs` (377 lines) — the canonicalization
+- `backend/src/domain/ports/cache_key.rs` (215 lines) — the canonicalization
   seam. `RouteCacheKey::for_route_request(payload: &serde_json::Value)`
   normalizes the payload via the private `normalize_route_request_value`,
   hashes the compact serialization of the normalized value with
@@ -79,9 +79,9 @@ Key locations:
   lines 117–126; `crate::domain::idempotency::PayloadHash` is used only as a
   byte container via `from_bytes`/`to_hex` — `canonicalize_and_hash` from the
   idempotency module is **not** called on this path), and formats
-  `route:v1:<hex digest>`. The inline `#[cfg(test)] mod tests` (lines 192–377)
-  holds nine `rstest`/`insta` test functions, which expand to eighteen test
-  cases under `rstest` parameterization.
+  `route:v1:<hex digest>`. Its `#[cfg(test)] mod tests` declaration (line 215)
+  resolves to `backend/src/domain/ports/cache_key/tests.rs`; property modules
+  live under `backend/src/domain/ports/cache_key/tests/properties/`.
 - Normalization semantics (from the current implementation):
   - Object entries are collected and explicitly sorted by key at every depth.
   - Arrays whose immediate containing object key is one of `SORTED_ARRAY_KEYS`
@@ -457,19 +457,20 @@ number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
   except that a coordinate leaf carries different values which round to the
   same five-decimal grid cell yield the same key. Pairs are constructed from
   one integer grid cell: draw `cell: i64` in `-18_000_000..=18_000_000` (the
-  full admitted range) and two offsets in ±0.49 of one grid unit, giving
-  `(cell as f64 + offset) / 100_000.0`, clamped into ±180 only at the two
-  extreme cells where an offset would step outside. Values are emitted both as
-  floats and, when the offset is zero, as JSON integers where exact (so `51` and
-  `51.0` are exercised as equal). Method: one property test whose body
-  iterates over each key in `ROUNDED_COORDINATE_KEYS` and two shapes (top
-  level; inside an object inside an array, the `waypoints` shape). Artefact:
-  same file, `coordinates_in_one_grid_cell_share_a_key`. Non-vacuity: offsets
-  include nonzero values of both signs; manual negative control NC-2 (change
-  `COORDINATE_PRECISION_FACTOR` to `1_000_000.0`) must fail this property.
-  Before Stage C2, a D-2 witness (two distinct finite values above 1.8e303 under
-  `lat`) must be shown failing as a promoted example — the red evidence for
-  D-2.
+  full admitted range) and one offset magnitude in `0.01..0.49` grid units,
+  then use its negative and positive forms. This guarantees distinct inputs
+  without filtering. Convert with `(cell as f64 + offset) / 100_000.0`, clamped
+  into ±180 only at the two extreme cells where an offset would step outside. A
+  companion arm compares exact in-range whole coordinates represented as JSON
+  integers and floats (so `51` and `51.0` are exercised as equal). Method: one
+  property test whose body iterates over each key in `ROUNDED_COORDINATE_KEYS`
+  and two shapes (top level; inside an object inside an array, the `waypoints`
+  shape). Artefact: same file, `coordinates_in_one_grid_cell_share_a_key`.
+  Non-vacuity: offsets include nonzero values of both signs; manual negative
+  control NC-2 (change `COORDINATE_PRECISION_FACTOR` to `1_000_000.0`) must
+  fail this property. Before Stage C2, a D-2 witness (two distinct finite
+  values above 1.8e303 under `lat`) must be shown failing as a promoted example
+  — the red evidence for D-2.
 - Obligation V-3 (coordinate divergence): payloads identical except for
   coordinate leaves in different grid cells yield different keys; and two
   distinct JSON integers under a coordinate key either yield different keys or
@@ -541,14 +542,17 @@ number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
 - Obligation V-8 (single-leaf divergence — general injectivity guard):
   editing exactly one non-canonicalized leaf of a generated, successfully
   derived payload (changing a string value to a distinct string, flipping a
-  boolean, or inserting a fresh key) changes the key. Without this, a
-  normalizer that dropped or rewrote non-special fields would pass V-1, V-4,
-  V-5, and V-6. Method: property test; the strategy picks a payload and one
-  edit whose changed-ness is guaranteed by construction (appending a suffix to
-  a string; inserting under a key name the generator never otherwise emits).
-  Artefact: same file, `edited_leaves_produce_distinct_keys`. Non-vacuity:
-  rests on AXM-1/AXM-4; the mutation gate must kill identity-erasing mutants
-  (e.g. the object branch returning `Value::Null`).
+  boolean, or inserting a fresh key) changes the key. Its payload strategy
+  keeps every coordinate number within ±180 so both derivations succeed,
+  independently of the unrestricted payload strategy used for Stage C2
+  rejection properties. Without this, a normalizer that dropped or rewrote
+  non-special fields would pass V-1, V-4, V-5, and V-6. Method: property test;
+  the strategy picks a payload and one edit whose changed-ness is guaranteed by
+  construction (appending a suffix to a string; inserting under a key name the
+  generator never otherwise emits). Artefact: same file,
+  `edited_leaves_produce_distinct_keys`. Non-vacuity: rests on AXM-1/AXM-4; the
+  mutation gate must kill identity-erasing mutants (e.g. the object branch
+  returning `Value::Null`).
 - Obligation V-9 (digest algorithm known-answer): one fixed, in-range
   payload maps to a precomputed `route:v1:<expected 64-hex SHA-256>` string,
   computed once from the canonical bytes with an independent tool (`sha256sum`)
@@ -674,19 +678,24 @@ Stage B (mechanical split, first plateau):
 
 Stage C1 (properties that hold today; commit green): add
 `backend/src/domain/ports/cache_key/tests/properties.rs`, declared via
-`mod properties;` in `tests.rs`.
+`mod properties;` in `tests.rs`. Keep the module root small and split
+strategies and invariant groups into themed children under `tests/properties/`
+so no file approaches the repository's 400-line limit.
 
-1. Strategy helpers: `theme_array()` (small-alphabet string vectors),
-   `grid_cell_pair()` (integer cell plus two in-cell offsets, cap ±0.49),
-   `divergent_cells()` (cell plus nonzero delta), `coordinate_number()` (full
-   finite `f64` plus full `i64`/`u64`, with an in-range-weighted arm),
-   `route_payload()` (recursive JSON via `prop_recursive`, key names biased
-   toward the special keys, coordinate leaves from `coordinate_number()`), a
-   `rotate_by_one` helper for V-6, and a single-edit generator for V-8. Free
-   functions returning `impl Strategy<Value = T>`, matching the
-   `generate_route/tests.rs` house style; no `prop_compose!` (no repository
-   precedent). Property names deliberately omit the `route_request_key_` prefix
-   used by the example tests — the `properties` module path disambiguates.
+1. Strategy helpers in `tests/properties/strategies.rs`: `theme_array()`
+   (small-alphabet string vectors), `grid_cell_pair()` (integer cell plus one
+   nonzero offset magnitude used with both signs, below 0.49),
+   `divergent_cells()` (cell plus nonzero delta), `admitted_route_payload()`
+   for V-8 (recursive JSON with coordinate leaves bounded to the admitted
+   domain), `payload_pair_with_single_leaf_edit()` for V-8 (vary one generated
+   string leaf under `generated.payload.content`, holding the sibling edits
+   fixed), and `rotate_by_one` for V-6. Add the unrestricted
+   `coordinate_number()` and `route_payload()` strategies in Stage C2 for its
+   full-domain properties. Free functions returning `impl Strategy<Value = T>`,
+   matching the `generate_route/tests.rs` house style; no `prop_compose!` (no
+   repository precedent). Property names deliberately omit the
+   `route_request_key_` prefix used by the example tests — the `properties`
+   module path disambiguates.
 2. Compute and pin the V-9 known-answer constant now, against the
    unmodified production code, and add the test plus the V-7 `-0.0` example to
    `tests.rs`.
@@ -697,12 +706,13 @@ Stage C1 (properties that hold today; commit green): add
 
 Stage C2 (counter-example-driven fixes; red then green in one commit):
 
-1. Red: add V-4 and V-5 over the full-domain `route_payload()`, the D-2
-   witness example, and the integer arm of V-3. Run the focused suite and
-   record each shrunk counter-example (expected: D-1 from V-4, D-2 from the
-   witness, D-3 from V-3's integer arm) in `Artefacts and notes`. Any
-   counter-example not in D-1..D-3 is added to `Surprises & Discoveries` and
-   handled under the same discipline.
+1. Red: add full-domain `coordinate_number()` and `route_payload()` strategies,
+   then add V-4 and V-5 over that payload strategy, the D-2 witness example,
+   and the integer arm of V-3. Run the focused suite and record each shrunk
+   counter-example (expected: D-1 from V-4, D-2 from the witness, D-3 from
+   V-3's integer arm) in `Artefacts and notes`. Any counter-example not in
+   D-1..D-3 is added to `Surprises & Discoveries` and handled under the same
+   discipline.
 2. Promote each shrunk counter-example to a named `rstest` case in
    `tests.rs` (these, too, fail at this point).
 3. Green: in `cache_key.rs`, add `MAX_COORDINATE_MAGNITUDE: f64 = 180.0`;
@@ -724,10 +734,11 @@ Stage C2 (counter-example-driven fixes; red then green in one commit):
 6. Run NC-2, NC-4, and MUT-1; record results. A property whose
    corresponding mutants survive is vacuous and must be rewritten before
    proceeding.
-7. Pre-commit guard: `git diff -- backend/src/domain/ports/cache_key.rs`
-   must show only the planned fix (no control residue);
-   `git status --porcelain` inspected for `proptest-regressions/` files. Commit
-   test and fix together (EP-M3).
+7. Pre-commit guard: both
+   `git diff --cached -- backend/src/domain/ports/cache_key.rs` and
+   `git diff -- backend/src/domain/ports/cache_key.rs` must show only the
+   planned fix (no control residue); `git status --porcelain` inspected for
+   `proptest-regressions/` files. Commit test and fix together (EP-M3).
 
 Stage D (LEM-1 fallback evidence):
 
@@ -978,8 +989,9 @@ floating-point precision and both bounded feasibility runs timed out.
 - [x] EP-M1 / Stage B: split `cache_key.rs` tests into `cache_key/tests.rs`;
   extraction is formatted, source and docs gates passed, and final CodeRabbit
   review completed with no findings.
-- [ ] EP-M2 / Stage C1: strategies; V-9 constant pinned against unmodified
-  code; V-1, V-2/V-3 in-range, V-6, V-7, V-8 green.
+- [x] EP-M2 / Stage C1: themed property modules and strategies; V-9 pinned
+  against unmodified code; focused suite has 26 passing tests; full repository
+  gates passed and final CodeRabbit review reported no findings.
 - [ ] EP-M3 / Stage C2: D-1..D-3 red transcripts recorded.
 - [ ] EP-M3 / Stage C2: counter-examples promoted to `rstest` cases.
 - [ ] EP-M3 / Stage C2: `CoordinateOutOfRange` fix; V-4, V-5, V-10,
@@ -1022,6 +1034,38 @@ floating-point precision and both bounded feasibility runs timed out.
   recovery procedure and its general rollback cross-reference were corrected.
   The docs-only gates and `coderabbit review --agent` both passed on the
   complete four-file staged change.
+- Observation: the first Stage C1 full gate pass exposed a Whitaker lint
+  requirement for inner module documentation on every new Rust child module.
+  Purpose-specific `//!` comments now describe the four property modules; all
+  other deterministic gates passed before this lint correction.
+- Observation: the first clean Stage C1 CodeRabbit review found that proptest's
+  `NORMAL`, `SUBNORMAL`, and `ZERO` strategies default to positive values, and
+  the uniform grid-cell range almost never draws zero. The float generator now
+  combines each finite class with both sign flags, and the grid-cell generator
+  has a dedicated zero arm for V-7.
+- Observation: the next Stage C1 review found that V-8 must use payloads whose
+  coordinate leaves are all admitted, so its intended leaf edit is reached
+  after Stage C2 adds coordinate rejection. The new `admitted_route_payload()`
+  composes the same recursive shape with bounded coordinate numbers;
+  `route_payload()` remains full-domain for idempotence and rejection
+  properties.
+- Observation: after bounding V-8's coordinate leaves, the first Stage C1
+  deterministic gate pass succeeded and CodeRabbit reported no findings.
+  Follow-up reviews on the final staged patch then found stale test-module
+  references, insufficiently nested V-8 edits, a guard that omitted staged
+  diffs, and a missing Python assertion diagnostic. The plan, V-8 pair
+  generator, guard, and diagnostic now address each finding. The final complete
+  gate run and review are recorded below.
+- Observation: the final staged CodeRabbit review found that this orientation
+  section still described the former inline test module and pre-split source
+  line count. It now points to `cache_key/tests.rs` and the property-module
+  directory. Subsequent reviews refined V-8's generator: its request pair now
+  changes one generated `field-*` string leaf under
+  `generated.payload.content`, while keeping the random sample and both sibling
+  edit fields fixed. The reviews also requested staged-diff coverage in the
+  pre-commit guard and an invocation diagnostic in the workflow tooling test.
+  Those corrections passed all deterministic gates and the final CodeRabbit
+  review before the C1 commit.
 - Observation: local Kani guidance conflicts with LEM-1's model assumption.
   Evidence: `kani/SKILL.md` says Kani does not model floating-point precision;
   the plan's AXM-5 assumes bit-precise floating-point semantics. Impact: the
@@ -1117,6 +1161,11 @@ floating-point precision and both bounded feasibility runs timed out.
   Repository search found no equivalent helper. The helper remains local to
   `cache_key.rs` and has no independent reuse contract or public interface.
   Date/Author: 2026-09-28, implementation agent.
+- Decision: place Stage C1 property groups and shared strategies in themed
+  child modules under `tests/properties/` from the outset. The strategy helpers
+  and seven properties would make one file approach the repository's 400-line
+  limit; child modules keep each responsibility reviewable and below that cap.
+  Date/Author: 2026-09-28, implementation agent.
 - Decision: verify payload-level invariants with `proptest`, plus `rstest`
   examples and a scoped `cargo-mutants` gate. Rationale: the payload domain is
   unbounded and recursive; property tests with mutation-gate non-vacuity
@@ -1192,6 +1241,24 @@ findings. Gate logs are under `/tmp` with the branch suffix
 log is
 `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-4.out`.
 
+Stage C1 evidence: `cargo test -p backend --lib cache_key` passes 26 tests
+(including the eight new C1 example/property tests), with 766 filtered out. The
+full repository pass reported 1,488 Rust tests passed and four skipped, one
+trybuild test passed, 40 workflow-contract tests passed, 90 frontend tests
+passed, and 107 Python tests passed. Backend doctests passed 160 tests, with 96
+ignored; formatting, lint, typecheck, Markdown lint (125 files), and Mermaid
+validation also passed. Gate logs are under `/tmp` with the full branch slug
+`e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests`;
+the final CodeRabbit review found no concerns and is recorded at
+`/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-12.out`.
+V-9 pins
+`route:v1:064a4c57f3b53c1461a025298f66a1393b7b3a0c19cfe19c5297c063c7d06be9`.
+The digest was computed before Stage C2 with this independent command:
+
+```sh
+printf '%s' '{"origin":{"lat":51.5,"lng":-0.1},"preferences":{"interestThemeIds":["art","history"]}}' | sha256sum
+```
+
 Dependency confirmation: `cargo tree -p backend -e features -i serde_json` shows
 `serde_json` 1.0.150 with `default`, `raw_value`, and `std`, without
 `preserve_order`. Caller search (`rg -n for_route_request backend/src`) finds
@@ -1247,6 +1314,15 @@ claim and instead requires LEM-1's hand derivation, the existing full-domain
 generated properties, and an exhaustive check of a 100,000-ULP slice inside
 each ±180 boundary. The developers' guide will state this limitation and
 disposition explicitly.
+
+Revision note (2026-09-28): post-gate CodeRabbit reviews identified that V-8
+must vary a generated string leaf under `generated.payload.content`, keeping
+the random sample and sibling fields constant; the pre-commit guard must
+include staged changes; and the workflow contract test should report recorded
+invocations on failure. The property, guard, assertion diagnostic, and module
+references now reflect those findings. All deterministic gates passed on the
+final staged C1 patch, and CodeRabbit reported no remaining concerns. C2's
+scope is unchanged.
 
 Revision note (2026-08-16): revised after the six-lens design panel review.
 Added V-8 and V-9; corrected the `canonicalize_and_hash` and
