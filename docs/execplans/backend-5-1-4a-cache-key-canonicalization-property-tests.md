@@ -359,7 +359,8 @@ ARCH-CACHEKEY-CONTRACT -> RM-5.1.4a -> EP-M2, EP-M3
        coordinate_bound_is_inclusive,                 (V-10 boundary)
        <promoted D-1..D-3 regression cases> }
 ARCH-CACHEKEY-COORD-DOMAIN -> EP-M3
-  -> cache_key::tests::dense_rounding_slice_near_coordinate_bound (LEM-1 fallback)
+  -> cache_key::tests::dense_boundary::dense_rounding_slice_near_coordinate_bound
+     (LEM-1 fallback)
 ARCH-CACHEKEY-OWNERSHIP -> EP-M1 -> module split keeps tests inside the
   domain port module (no adapter involvement)
 ```
@@ -1045,7 +1046,18 @@ floating-point precision and both bounded feasibility runs timed out.
   and nixie 22. CodeRabbit review 18 found no concerns and was not
   rate-limited. Review log:
   `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-18.out`.
-- [ ] EP-M3 / Stage D: dense boundary-slice test and written Kani disposition.
+  Commit: `5157cec`.
+- [x] EP-M3 / Stage D: the dense boundary-slice test checks all 100,000 inward
+  ULPs at both ±180 boundaries for admission, grid-cell recovery, and bitwise
+  idempotence. The developers' guide records the Kani limitation and finite
+  regression scope. The first lint pass caught a missing Whitaker-required
+  inner module comment; after adding it, all deterministic gates passed. The
+  focused suite had 48 passing tests; the full `make test` target passed.
+  CodeRabbit review 19 returned no findings and no rate limit. Gate log
+  suffixes: check-fmt 30, lint 21, cache-key 18, backend doctests 16, test 18,
+  typecheck 17, Markdown lint 26, nixie 25. Review log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-19.out`.
+  Stage D commit is pending.
 - [ ] EP-M4 / Stage E: TODO removal, roadmap 5.1.4a entry ticked,
   architecture doc (admission bound and variant), developers-guide bullet and
   subsection, second MUT-1 run, gates green.
@@ -1436,10 +1448,15 @@ Stage C2 red evidence (before the source fix):
   now uses British `afterwards`. The follow-up formatting, Markdown lint, and
   Mermaid gates passed. Logs: check-fmt 27, Markdown lint 24 (125 files, zero
   errors), and nixie 23; the initial spelling failure is in Markdown lint 23.
+- Observation: Stage D enumerates inward IEEE-754 bit patterns from both signed
+  boundaries by subtracting each ULP offset. This yields the immediately
+  interior values for +180 and -180, and directly checks each clause of LEM-1.
+  The first lint run required an inner module-purpose doc comment in the new
+  test module; adding it cleared Whitaker, and the next complete gate sequence
+  and CodeRabbit review both passed.
 
-Still to record: the MUT-1 kill lists (Stage C2 and EP-M4); the NC-2/NC-4
-transcripts with their filtered-in counts; and the dense boundary-slice test
-result.
+Still to record: the MUT-1 kill lists (Stage C2 and EP-M4), and the NC-2/NC-4
+transcripts with their filtered-in counts.
 
 ______________________________________________________________________
 

@@ -25,6 +25,16 @@ All suites run through the same quality gateways:
 - `make audit`
 - `make test`
 
+### Floating-point precision evidence
+
+Kani does not establish IEEE-754 precision claims in this repository. The
+cache-key coordinate-rounding contract uses a written argument, generated
+properties, and a deterministic slice of 100,000 representable values inside
+each ±180-degree boundary. That finite slice is regression evidence; it does
+not prove the full admitted domain. Bounded Kani spikes for a JSON-number
+wrapper and the scalar rounding kernel exceeded 30 minutes without a verdict.
+The ExecPlan records their logs, resource measurements, and the full argument.
+
 ## Workflow pins and Dependabot
 
 Dependabot owns the upgrade of GitHub Actions and reusable workflows, including
