@@ -291,7 +291,7 @@ queue, cache, and repository ports defined in section 1.
   to prevent thundering herd on cache expiry.
 - [x] 5.1.4. Add contract tests for cache key canonicalization (sorted themes,
   rounded coordinates, Secure Hash Algorithm 256-bit (SHA-256) key format).
-- [x] 5.1.4a. Add property-based tests for cache key canonicalization
+- [ ] 5.1.4a. Add property-based tests for cache key canonicalization
   invariants (theme permutation invariance, coordinate rounding equivalence and
   divergence, normalization idempotence, single-leaf divergence, key format,
   known-answer digest, coordinate admission bound).

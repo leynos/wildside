@@ -103,30 +103,47 @@ fn observe_payload_features(
     observed: &mut ObservedPayloadFeatures,
 ) {
     match value {
-        Value::Number(number)
-            if current_key.is_some_and(|key| ROUNDED_COORDINATE_KEYS.contains(&key)) =>
-        {
-            if let Some(value) = number.as_f64() {
-                observed.has_fractional_coordinate |=
-                    value.abs() <= MAX_COORDINATE_MAGNITUDE && value.fract() != 0.0;
-                observed.has_out_of_range_coordinate |= value.abs() > MAX_COORDINATE_MAGNITUDE;
-            }
-        }
+        Value::Number(number) => observe_coordinate_feature(number, current_key, observed),
         Value::Object(entries) => {
             for (key, child) in entries {
                 observe_payload_features(child, Some(key), observed);
             }
         }
-        Value::Array(items) => {
-            observed.has_theme_array |= current_key
-                .is_some_and(|key| SORTED_ARRAY_KEYS.contains(&key))
-                && items.len() >= 2
-                && items.iter().all(Value::is_string);
-
-            for item in items {
-                observe_payload_features(item, None, observed);
-            }
-        }
+        Value::Array(items) => observe_array_features(items, current_key, observed),
         _ => {}
     }
+}
+
+fn observe_coordinate_feature(
+    number: &serde_json::Number,
+    current_key: Option<&str>,
+    observed: &mut ObservedPayloadFeatures,
+) {
+    if !current_key.is_some_and(|key| ROUNDED_COORDINATE_KEYS.contains(&key)) {
+        return;
+    }
+
+    if let Some(value) = number.as_f64() {
+        observed.has_fractional_coordinate |=
+            value.abs() <= MAX_COORDINATE_MAGNITUDE && value.fract() != 0.0;
+        observed.has_out_of_range_coordinate |= value.abs() > MAX_COORDINATE_MAGNITUDE;
+    }
+}
+
+fn observe_array_features(
+    items: &[Value],
+    current_key: Option<&str>,
+    observed: &mut ObservedPayloadFeatures,
+) {
+    observed.has_theme_array |= is_theme_array(current_key, items);
+
+    for item in items {
+        observe_payload_features(item, None, observed);
+    }
+}
+
+fn is_theme_array(current_key: Option<&str>, items: &[Value]) -> bool {
+    current_key.is_some_and(|key| SORTED_ARRAY_KEYS.contains(&key))
+        && items.len() >= 2
+        && items.iter().all(Value::is_string)
 }

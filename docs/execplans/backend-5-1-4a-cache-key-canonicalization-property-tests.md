@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: COMPLETE
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -1083,9 +1083,33 @@ floating-point precision and both bounded feasibility runs timed out.
   36, Markdown lint 32 (125 files, 0 errors), and Nixie 31. Their logs have the
   project/branch prefix and these suffixes. Stage E document commits: `14d4aa4`,
   `0797119`, `b73730c`, `5de8b0a`, and `1be2bf0`. The roadmap item is checked
-  in the final closeout.
+  in the Stage E closeout and is currently unchecked while hosted-check
+  remediation remains open.
+- [ ] Hosted-check remediation: PR #458's terminal CodeScene check reported a
+  Complex Method advisory (complexity 9) for `observe_payload_features` in
+  `backend/src/domain/ports/cache_key/tests/properties/strategy_coverage.rs`.
+  The helper has been split into focused coordinate, array, and theme-array
+  functions; local `cs review ... --pretty` reports health 10.0 with no finding.
+  Full deterministic gates passed. CodeRabbit review 21 found that roadmap
+  item 5.1.4a was still checked; the marker is now unchecked until hosted
+  remediation is complete. The docs-only gates passed. Review 22 found that
+  the Stage E closeout text should distinguish historical completion from the
+  current unchecked roadmap status; that wording is now explicit. The next
+  docs-only gates passed (check-fmt 45 files, Markdown lint 125 files/0 errors,
+  Nixie all diagrams valid), and CodeRabbit review 23 returned no concerns.
+  The source/plan/roadmap remediation commit and a fresh terminal hosted-check
+  result remain before restoring COMPLETE. Logs use the project/branch prefix
+  and suffix `docs-status-followup`.
 
 ## Surprises & discoveries
+
+- Observation: after the original implementation was published, the hosted
+  CodeScene check found `observe_payload_features` at complexity 9. The
+  property-observation behaviour has been decomposed into coordinate, array,
+  and theme-array helpers without changing its traversal or feature predicates.
+  Local CodeScene review now reports health 10.0 with no finding; the repository
+  rules file still produces the existing CLI parse warning. The hosted check
+  must be rerun against the remediation commit before this plan can close.
 
 - Observation: the first Stage B gate pass exposed a rustfmt diff in the
   extracted test module, although `make check-fmt` continued to later format
@@ -1214,6 +1238,12 @@ floating-point precision and both bounded feasibility runs timed out.
   cost.
 
 ## Decision log
+
+- Decision: keep the coverage-observation logic split by JSON value kind and
+  feature predicate after the hosted CodeScene review identified a complex
+  method. Rationale: this keeps each decision local while preserving the
+  generated strategy's feature accounting and makes the hosted health gate
+  actionable. Date/Author: 2026-09-28, implementation agent.
 
 - Decision: treat counter-examples as authoritative; fix D-1..D-3 in
   production and let generators span the full finite number domain, rather than
@@ -1503,8 +1533,9 @@ subsequent kills; the EP-M4 report records every caught and unviable mutant.
 The NC-2 and NC-4 transcripts above show one filtered-in target test per run,
 both failing under the injected mutation and passing after the narrow revert.
 Stage E documentation was committed as five focused changes. Roadmap item
-5.1.4a is checked, and the implementation and validation obligations in this
-plan are complete.
+5.1.4a was checked at Stage E, when the implementation and validation
+obligations in this plan were complete. It is currently unchecked while the
+hosted CodeScene remediation remains open.
 
 ______________________________________________________________________
 
