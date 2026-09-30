@@ -15,8 +15,8 @@ if typ.TYPE_CHECKING:
 
     from .config import PreviewConfig
 
-SESSION_SECRET_KEY_NAME = "session_key"  # noqa: S105 - Secret data key name, not secret material.
-SESSION_SECRET_NAME = "wildside-session-key"  # noqa: S105 - Secret resource name, not secret material.
+SESSION_SECRET_KEY_NAME = "session_key"  # ruff: ignore[hardcoded-password-string] - Secret data key name, not secret material.
+SESSION_SECRET_NAME = "wildside-session-key"  # ruff: ignore[hardcoded-password-string] - Secret resource name, not secret material.
 
 # kubectl reports a genuine create conflict as
 # ``Error from server (AlreadyExists): secrets "..." already exists``. The

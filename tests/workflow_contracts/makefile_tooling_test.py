@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess  # noqa: S404 - tests deliberately exercise Make via subprocess.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - tests deliberately exercise Make via subprocess.
 from pathlib import Path
 from shutil import which
 
@@ -72,7 +72,7 @@ def _run_make(
     make = which("make")
     assert make is not None, "make must be available for workflow contract tests"
     fake_uv = Path(env["PATH"].split(os.pathsep, maxsplit=1)[0]) / "uv"
-    return subprocess.run(  # noqa: S603 - the resolved make executable is trusted.
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - the resolved make executable is trusted.
         [
             make,
             "--no-print-directory",

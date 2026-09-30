@@ -40,7 +40,7 @@ if typ.TYPE_CHECKING:
 def test_deploy_preview_docker_requirement_conditional_on_skip_build(
     monkeypatch: pytest.MonkeyPatch,
     preview_config: PreviewConfig,
-    skip_build: bool,  # noqa: FBT001 - pytest parametrize documents both boolean modes.
+    skip_build: bool,  # ruff: ignore[boolean-type-hint-positional-argument] - pytest parametrize documents both boolean modes.
     expected_tools: tuple[str, ...],
 ) -> None:
     """Verify that Docker preflight follows the selected build mode."""

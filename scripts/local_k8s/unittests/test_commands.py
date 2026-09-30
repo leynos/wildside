@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess  # noqa: S404 - subprocess.CalledProcessError models a real failure.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - subprocess.CalledProcessError models a real failure.
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor

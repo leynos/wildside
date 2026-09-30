@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import subprocess  # noqa: S404 - tests deliberately exercise the CLI via subprocess.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - tests deliberately exercise the CLI via subprocess.
 import sys
 import typing as typ
 from pathlib import Path
@@ -34,7 +34,7 @@ FAKE_TOOL_NAMES = (
 
 def test_local_k8s_cli_help_smoke(uv_executable: str, local_k8s_script: Path) -> None:
     """Verify the script entry point loads and exposes the preview CLI."""
-    completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - argv is fixed by the test.
         [uv_executable, "run", str(local_k8s_script), "--help"],
         text=True,
         capture_output=True,
@@ -55,7 +55,7 @@ def test_local_k8s_status_reports_configuration_errors_at_cli_boundary(
     env = os.environ.copy()
     env["WILDSIDE_K8S_CLUSTER"] = "../wildside"
 
-    completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - argv is fixed by the test.
         [uv_executable, "run", str(local_k8s_script), "status"],
         text=True,
         capture_output=True,
@@ -94,7 +94,7 @@ def _run_make_targets(env: dict[str, str], targets: tuple[str, ...]) -> None:
     make = which("make")
     assert make is not None, "make must be available to execute preview targets"
     for target in targets:
-        completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
+        completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - argv is fixed by the test.
             [make, "--no-print-directory", f"PATH={env['PATH']}", target],
             text=True,
             capture_output=True,
@@ -135,7 +135,7 @@ def test_fake_tool_rejects_unsupported_wrapper_options(tmp_path: Path) -> None:
         "WILDSIDE_CONTAINER_ENGINE": "podman",
     }
 
-    completed = subprocess.run(  # noqa: S603 - executable is the test fake.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - executable is the test fake.
         [fake_bin / "env", "--unexpected", "kind", "get", "clusters"],
         text=True,
         capture_output=True,
@@ -274,7 +274,7 @@ def _assert_fake_command_fails_closed(
     container_engine: str,
 ) -> None:
     """Assert an unmodelled container-engine command fails closed."""
-    unexpected = subprocess.run(  # noqa: S603 - executable is the test fake.
+    unexpected = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - executable is the test fake.
         [fake_bin / container_engine, "push", "wildside-backend:local"],
         text=True,
         capture_output=True,

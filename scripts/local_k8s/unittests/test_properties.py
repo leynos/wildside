@@ -15,10 +15,10 @@ import pytest
 hypothesis = pytest.importorskip("hypothesis")
 st = pytest.importorskip("hypothesis.strategies")
 
-from hypothesis import HealthCheck, given, settings  # noqa: E402
-from local_k8s.cluster import import_image  # noqa: E402
-from local_k8s.config import PreviewConfig  # noqa: E402
-from local_k8s.k8s import helm_fullname, print_kubernetes_status  # noqa: E402
+from hypothesis import HealthCheck, given, settings  # ruff: ignore[module-import-not-at-top-of-file]
+from local_k8s.cluster import import_image  # ruff: ignore[module-import-not-at-top-of-file]
+from local_k8s.config import PreviewConfig  # ruff: ignore[module-import-not-at-top-of-file]
+from local_k8s.k8s import helm_fullname, print_kubernetes_status  # ruff: ignore[module-import-not-at-top-of-file]
 
 if typ.TYPE_CHECKING:
     from hypothesis.strategies import DrawFn

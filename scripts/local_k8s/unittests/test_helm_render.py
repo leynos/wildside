@@ -8,7 +8,7 @@ values regression that breaks the local preview is caught before deploy.
 from __future__ import annotations
 
 import shutil
-import subprocess  # noqa: S404 - test drives helm via subprocess.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - test drives helm via subprocess.
 from pathlib import Path
 
 import pytest
@@ -53,7 +53,7 @@ def local_preview_render() -> str:
     helm = shutil.which("helm")
     if helm is None:
         pytest.skip("helm is required to render the local preview chart")
-    completed = subprocess.run(  # noqa: S603 - argv is fixed by the test.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - argv is fixed by the test.
         [
             helm,
             "template",

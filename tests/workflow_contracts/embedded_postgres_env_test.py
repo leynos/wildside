@@ -90,7 +90,7 @@ WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 # Not a secret: this is the documented default superuser password for the
 # throwaway embedded test cluster, and it is declared in the Makefile and both
 # workflows in plain text for exactly that reason.
-STABLE_PG_PASSWORD = "wildside_embedded_test"  # noqa: S105
+STABLE_PG_PASSWORD = "wildside_embedded_test"  # ruff: ignore[hardcoded-password-string]
 THESEUS_RELEASES_URL = "https://github.com/theseus-rs/postgresql-binaries"
 
 # The `coverage` job runs on pull requests only, and not for Dependabot. That

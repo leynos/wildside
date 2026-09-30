@@ -18,7 +18,7 @@ Run via ``make test-workflow-contracts``.
 from __future__ import annotations
 
 import shutil
-import subprocess  # noqa: S404 - the check step's script is under test.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - the check step's script is under test.
 import typing as typ
 
 import github_conditions as conditions
@@ -61,7 +61,7 @@ def _published_availability(tmp_path: Path, *, has_token: bool) -> str:
     output = tmp_path / "github_output"
     bash = shutil.which("bash")
     assert bash is not None, "bash must be installed to run the check step"
-    subprocess.run(  # noqa: S603 - the workflow's own script, rendered here.
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - the workflow's own script, rendered here.
         [bash, "-c", script.replace(AVAILABILITY_EXPRESSION, str(has_token).lower())],
         check=True,
         env={"PATH": "/usr/bin:/bin", "GITHUB_OUTPUT": str(output)},

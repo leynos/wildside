@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import dataclasses as dc
 import logging
-import subprocess  # noqa: S404 - repo's deliberate subprocess boundary module.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - repo's deliberate subprocess boundary module.
 import typing as typ
 
 from plumbum import local
@@ -52,7 +52,7 @@ def _run_with_input(
     input_text: str,
 ) -> CommandResult:
     """Run a command with stdin text via subprocess."""
-    completed = subprocess.run(  # noqa: S603 - command is built internally.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - command is built internally.
         [command, *args],
         input=input_text,
         text=True,
@@ -89,7 +89,7 @@ def _run_streaming_with_subprocess(
     cwd: str | None = None,
 ) -> None:
     """Run a command with inherited stdout and stderr."""
-    subprocess.run(  # noqa: S603 - local preview tools are PATH-resolved.
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - local preview tools are PATH-resolved.
         [command, *args],
         check=True,
         cwd=cwd,
