@@ -221,13 +221,22 @@ The following tooling is available in this environment:
 - `srgn` — Structural grep and syntax-tree pattern editing.
 - `difft` **(Difftastic)** — Semantic diff tool that compares code structure.
 
-## Spelling policy
+<!-- typos-config-builder:agents-md:start -->
 
-- `make spelling` enforces en-GB-oxendict spelling across the whole tree.
-  Both `make all` and `make markdownlint` depend on it.
-- `typos.toml` is regenerated on every run from the live shared dictionary and
-  the `typos.local.toml` overlay. Never edit generated entries by hand; add
-  narrow repository-specific terminology to `typos.local.toml` instead.
+## Spelling
+
+- `make spelling` runs the pinned `typos-config-builder gate`, which
+  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and
+  `typos.local.toml`, then checks spelling and the shared phrase corrections.
+- `typos.toml` is generated: never edit it by hand. Put narrow
+  repository-specific exceptions in `typos.local.toml`, as exact or full-line
+  patterns rather than bare accepted words.
+- When `make spelling` changes `typos.toml`, commit the regenerated file. If
+  the change is unrelated to your work, commit it in a separate base pull
+  request and stack your branch on it, so each review diff stays focused.
+
+<!-- typos-config-builder:agents-md:end -->
+
 - The configuration builder refreshes the untracked shared dictionary cache
   only when the authoritative copy is newer, so a valid cache stays usable when
   the network is unavailable.
