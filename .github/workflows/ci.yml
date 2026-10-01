@@ -303,6 +303,8 @@ jobs:
       # Dependabot merges instead.
       - name: Install cargo-audit
         if: github.actor != 'dependabot[bot]'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # Compare the whole version field. A substring match would accept
@@ -543,6 +545,8 @@ jobs:
             -E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests))'
 
       - name: Compile-fail tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           cargo test --locked --all-features -p backend --test declare_test_support_compile_fail
           cargo test --locked --features trybuild-tests -p pagination cursor_trait_bound_compile_fail_tests
