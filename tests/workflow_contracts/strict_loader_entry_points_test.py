@@ -93,7 +93,7 @@ def test_each_path_reader_refuses_a_repeated_key(
 )
 def test_each_fixed_path_reader_refuses_a_repeated_key(
     doubled: Path,
-    module: typ.Any,  # noqa: ANN401 - a test module, read by attribute.
+    module: typ.Any,  # ruff: ignore[any-type] - a test module, read by attribute.
     reader_name: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

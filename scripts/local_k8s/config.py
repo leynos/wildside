@@ -83,7 +83,7 @@ class PreviewConfig:
 
     @property
     def kube_context(self) -> str:
-        """Return the kube context name created by the selected provider.
+        """Kube context name created by the selected provider.
 
         Returns
         -------

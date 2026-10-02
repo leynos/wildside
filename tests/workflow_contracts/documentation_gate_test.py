@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess  # noqa: S404 - the contract has to run the gate to observe it.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - the contract has to run the gate to observe it.
 from pathlib import Path
 
 import pytest
@@ -142,7 +142,7 @@ def test_make_targets_keep_docs_check_in_the_repository_gate() -> None:
         "rather than a documentation verdict"
     )
 
-    completed = subprocess.run(  # noqa: S603 - a fixed, resolved local command.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - a fixed, resolved local command.
         [_resolve("make"), "--dry-run", "docs-check"],
         cwd=PROJECT_ROOT,
         check=True,
@@ -166,7 +166,7 @@ def test_make_targets_keep_docs_check_in_the_repository_gate() -> None:
 
 def test_typedoc_rejects_an_undocumented_public_function() -> None:
     """The configured warning policy must fail on an undocumented declaration."""
-    completed = subprocess.run(  # noqa: S603 - a fixed, resolved local command.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - a fixed, resolved local command.
         [
             _resolve("pnpm"),
             "exec",

@@ -123,7 +123,7 @@ def main() -> None:
     --------
     >>> main()  # doctest: +SKIP
     """
-    today = dt.date.today()  # noqa: DTZ011 -- calendar date; local time intended
+    today = dt.date.today()  # ruff: ignore[call-date-today] -- calendar date; local time intended
     problems = collect_problems(load_ignore_file_lines(), today)
     if not problems:
         return

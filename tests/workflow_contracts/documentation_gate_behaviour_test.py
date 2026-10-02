@@ -18,7 +18,7 @@ key to the defect it catches rather than to a reviewer's expectation of it.
 from __future__ import annotations
 
 import json
-import subprocess  # noqa: S404 - the contract has to run TypeDoc to observe it.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - the contract has to run TypeDoc to observe it.
 import typing as typ
 from pathlib import Path
 from shutil import which
@@ -144,7 +144,7 @@ def _write_project(
 
 def _run(config_path: Path) -> subprocess.CompletedProcess[str]:
     """Run TypeDoc over a fixture configuration."""
-    return subprocess.run(  # noqa: S603 - a resolved binary over a scratch project.
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - a resolved binary over a scratch project.
         [_typedoc(), "--options", str(config_path)],
         cwd=config_path.parent,
         capture_output=True,

@@ -86,7 +86,7 @@ def _written_text(key_node: yaml.Node) -> set[tuple[str, object]]:
     return set()
 
 
-def load(text: str) -> typ.Any:  # noqa: ANN401 - the same contract as yaml.safe_load.
+def load(text: str) -> typ.Any:  # ruff: ignore[any-type] - the same contract as yaml.safe_load.
     r"""Parse one YAML document, refusing a mapping that repeats a key.
 
     The result is typed as ``yaml.safe_load``'s is, so a caller moving to
@@ -117,4 +117,4 @@ def load(text: str) -> typ.Any:  # noqa: ANN401 - the same contract as yaml.safe
     ...     print(error.problem)
     found the key 'runs-on' twice in one mapping
     """
-    return yaml.load(text, Loader=_StrictLoader)  # noqa: S506 - a SafeLoader subclass.
+    return yaml.load(text, Loader=_StrictLoader)  # ruff: ignore[unsafe-yaml-load] - a SafeLoader subclass.

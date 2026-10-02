@@ -8,7 +8,7 @@ than being duplicated or imported across test modules.
 from __future__ import annotations
 
 import os
-import subprocess  # noqa: S404 -- test harness invokes a fixed, trusted script
+import subprocess  # ruff: ignore[suspicious-subprocess-import] -- test harness invokes a fixed, trusted script
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -37,10 +37,10 @@ def run_bash(
     merged_env.pop("POSTGRESQL_RELEASES_URL", None)
     if env is not None:
         merged_env.update(env)
-    return subprocess.run(  # noqa: S603 -- args are test-controlled, not external input
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] -- args are test-controlled, not external input
         # S607 below: bash is required to source SCRIPT_PATH before running the
         # snippet, and is resolved from PATH so the platform's shell wins.
-        ["bash", "-c", f"source {SCRIPT_PATH} && {snippet}"],  # noqa: S607
+        ["bash", "-c", f"source {SCRIPT_PATH} && {snippet}"],  # ruff: ignore[start-process-with-partial-path]
         cwd=PROJECT_ROOT,
         env=merged_env,
         text=True,

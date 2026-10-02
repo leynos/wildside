@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import functools
 import re
-import subprocess  # noqa: S404 - the contract has to run make to observe it.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - the contract has to run make to observe it.
 import typing as typ
 from pathlib import Path
 from shutil import which
@@ -105,7 +105,7 @@ def _make() -> str:
 
 def _is_gnu_make(path: str) -> bool:
     """Return whether the executable at ``path`` identifies as GNU Make."""
-    version = subprocess.run(  # noqa: S603 - a resolved executable.
+    version = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - a resolved executable.
         [path, "--version"],
         capture_output=True,
         text=True,
@@ -134,7 +134,7 @@ def _write_scratch_makefile(directory: Path, prologue: cabc.Iterable[str]) -> Pa
 
 def _run_probe(makefile: Path, target: str) -> subprocess.CompletedProcess[str]:
     """Run one probe target and return the completed process."""
-    return subprocess.run(  # noqa: S603 - a resolved make over a scratch file.
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - a resolved make over a scratch file.
         [_make(), "--no-print-directory", "-f", str(makefile), target],
         cwd=makefile.parent,
         capture_output=True,
