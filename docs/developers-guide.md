@@ -2548,6 +2548,10 @@ overlay, runs the pinned Typos binary over the whole tree including hidden
 files, and enforces the shared phrase corrections Typos cannot express. Both
 `make all` and `make markdownlint` depend on it.
 
+`TYPOS_CONFIG_BUILDER_VERSION` in the `Makefile` pins the
+`typos-config-builder` release the gate runs (currently `v0.1.3`). Raise it
+together with the regenerated `typos.toml`, never on its own.
+
 Because the dictionary is live, `typos.toml` must never be drift checked in
 continuous integration. Never edit generated entries by hand; add narrow
 repository-specific entries to `typos.local.toml` instead.
