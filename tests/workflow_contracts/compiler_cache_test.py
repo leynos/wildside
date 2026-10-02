@@ -42,6 +42,7 @@ RETIRED_JOB_ENV = ("RUSTC_WRAPPER", "SCCACHE_GHA_ENABLED", "SCCACHE_CONF")
 
 
 def _steps(filename: str, job_id: str) -> list[dict[str, object]]:
+    """Return the parsed steps of one job in one workflow file."""
     return inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
 
 
