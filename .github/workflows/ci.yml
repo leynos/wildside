@@ -38,7 +38,7 @@ env:
   SCCACHE_SHA256_ARM64: '821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77'
   # 0.12.19 is the first uv that ships PyPy 3.12, which the Pylint gate pins.
   UV_VERSION: '0.12.19'
-  WHITAKER_INSTALLER_VERSION: '0.2.7'
+  WHITAKER_INSTALLER_VERSION: '0.2.9'
   YAMLLINT_VERSION: '1.35.1'
 
 # Default GITHUB_TOKEN to no access; each job re-grants only what it needs.
@@ -275,7 +275,7 @@ jobs:
       # ~/.cargo/bin, and the uv layers above, so the shared action must not
       # become a second owner of them.
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@a5765019912a8ab6882b12db049c7cde635f3a85
+        uses: leynos/shared-actions/.github/actions/setup-rust@6dea5677a84fec60ca51b07202570e3af12ffdb4
         with:
           cache-provider: external
           # The server is started from a `run:` step above; a second one
@@ -331,7 +331,7 @@ jobs:
       # distribution; replaces the former `cargo binstall merman-cli` and
       # bare `uv tool install nixie-cli` steps.
       - name: Install Nixie and Merman
-        uses: leynos/shared-actions/.github/actions/install-nixie@a5765019912a8ab6882b12db049c7cde635f3a85
+        uses: leynos/shared-actions/.github/actions/install-nixie@6dea5677a84fec60ca51b07202570e3af12ffdb4
         with:
           nixie-version: ${{ env.NIXIE_VERSION }}
           merman-version: ${{ env.MERMAN_VERSION }}
@@ -437,7 +437,7 @@ jobs:
       - name: Install mdtablefix
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
-        uses: leynos/shared-actions/.github/actions/install-mdtablefix@a5765019912a8ab6882b12db049c7cde635f3a85
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@6dea5677a84fec60ca51b07202570e3af12ffdb4
         with:
           version: "0.6.0"
 
@@ -471,7 +471,7 @@ jobs:
         run: make lint-clippy
 
       - name: Install Whitaker
-        uses: leynos/shared-actions/.github/actions/install-whitaker@a5765019912a8ab6882b12db049c7cde635f3a85
+        uses: leynos/shared-actions/.github/actions/install-whitaker@6dea5677a84fec60ca51b07202570e3af12ffdb4
         with:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
@@ -734,7 +734,7 @@ jobs:
           # workflow one, so it is read here in the shell.
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
-          SHARED_ACTIONS_PIN: a5765019912a8ab6882b12db049c7cde635f3a85
+          SHARED_ACTIONS_PIN: 6dea5677a84fec60ca51b07202570e3af12ffdb4
           # The Makefile pins pg-embed-setup-unpriv, whose pg_worker binary
           # lands in the cargo bin directory this archive carries.
           MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
@@ -797,7 +797,7 @@ jobs:
         run: bash scripts/start-compiler-cache.sh
 
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@a5765019912a8ab6882b12db049c7cde635f3a85
+        uses: leynos/shared-actions/.github/actions/setup-rust@6dea5677a84fec60ca51b07202570e3af12ffdb4
         with:
           cache-provider: external
           # The server is started from a `run:` step above; a second one
@@ -824,7 +824,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
+        uses: leynos/shared-actions/.github/actions/generate-coverage@6dea5677a84fec60ca51b07202570e3af12ffdb4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
