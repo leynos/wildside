@@ -58,7 +58,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: 'true'
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
 
       # Ubicloud publishes its local cache proxy to action steps, not to plain
       # `run:` steps, so sccache's GitHub Actions backend sees no credentials
