@@ -1644,9 +1644,10 @@ duplicating it elsewhere.
 The repository requires Ruff 0.16.8, pinned as `RUFF_VERSION` in the Makefile
 and run through `uv tool run --from ruff==$(RUFF_VERSION)`. Run the quality
 gates through `make` so local runs use the pinned version and match CI; a Ruff
-from `PATH` can differ in its rule set. Ruff 0.16 rejects rule codes in
-`pyproject.toml` selectors, so the root `pyproject.toml` is the single source
-of the Ruff rules and uses rule names (for example `unsorted-imports`, not
+from `PATH` can differ in its rule set. Ruff 0.16 reports rule codes in
+`pyproject.toml` selectors as `rule-codes-in-selectors` (RUF201) diagnostics,
+which fail `ruff check`, so the root `pyproject.toml` is the single source of
+the Ruff rules and uses rule names (for example `unsorted-imports`, not
 `I001`). Write suppressions the same way, as `# ruff: ignore[rule-name]`
 comments with a reason, rather than `# noqa: CODE`.
 
