@@ -6,13 +6,16 @@ updates:
       github-actions:
         patterns:
           - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
     directory: "/"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "github-actions"
     schedule:
-      interval: "weekly"
+      interval: "daily"
       day: "sunday"
       time: "02:00"
       timezone: "Etc/UTC"
@@ -24,6 +27,20 @@ updates:
   # tools/architecture-lint member crates.
   - package-ecosystem: "cargo"
     directory: "/"
+    groups:
+      # The rstest-bdd crates release in lockstep and one bumped alone does not
+      # build. Cargo counts a 0.x minor as a major, which the catch-all leaves
+      # ungrouped, so this group keeps the family in one pull request. It must
+      # precede the catch-all: Dependabot uses the first group that matches.
+      rstest-bdd:
+        patterns:
+          - "rstest-bdd*"
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -44,7 +61,7 @@ updates:
       - "dependencies"
       - "bun"
     schedule:
-      interval: "weekly"
+      interval: "daily"
       day: "monday"
       time: "02:10"
       timezone: "Etc/UTC"
@@ -67,7 +84,7 @@ updates:
       - "dependencies"
       - "npm"
     schedule:
-      interval: "weekly"
+      interval: "daily"
       day: "monday"
       time: "02:20"
       timezone: "Etc/UTC"
@@ -90,7 +107,7 @@ updates:
       - "dependencies"
       - "npm"
     schedule:
-      interval: "weekly"
+      interval: "daily"
       day: "monday"
       time: "02:30"
       timezone: "Etc/UTC"
@@ -113,7 +130,7 @@ updates:
       - "dependencies"
       - "npm"
     schedule:
-      interval: "weekly"
+      interval: "daily"
       day: "monday"
       time: "02:40"
       timezone: "Etc/UTC"
@@ -131,12 +148,19 @@ updates:
   # Enable version updates for Helm charts
   - package-ecosystem: "helm"
     directory: "/deploy/charts/wildside"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "helm"
     schedule:
-      interval: "weekly"
+      interval: "daily"
       day: "sunday"
       time: "03:00"
       timezone: "Etc/UTC"
