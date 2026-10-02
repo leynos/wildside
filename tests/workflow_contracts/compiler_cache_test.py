@@ -1,256 +1,141 @@
 """Contract tests for the compiler cache across the Rust jobs.
 
-These encode where the `sccache` server may start, which backend it must bind,
-what evidence a run has to leave behind, and which cache key owns the archive
-that stores the binary. They are separate from the cache-ownership contracts
-because the failure they guard against is different: not two writers competing
-for one key, but a cache that reports success while its objects go elsewhere.
+`setup-rust` owns sccache here: it installs it, selects the backend by runner,
+starts the server with a 60 s startup timeout, names it as the rustc wrapper,
+and, if the server will not start, falls back to an uncached build instead of
+failing the job (shared-actions #546). These contracts hold that arrangement:
+one reviewed `setup-rust` call per job with the inputs and id the report reads,
+none of the hand-rolled pieces it replaced surviving beside it, and a
+statistics step that reads what the action reports and stands down on a
+fallback.
 """
 
 from __future__ import annotations
 
-import pathlib
-
 import pytest
 import workflow_inventory as inv
 
-#: A parsed workflow step. The inventory hands these back straight from YAML,
-#: so the values are unvalidated. `object` keeps them unusable until a
-#: narrowing check proves what they are, which is exactly what `Any` would
-#: throw away.
-type Step = dict[str, object]
+#: The shared-actions commit `setup-rust` must pin: #546, which sits on #523.
+#: Asserted by value, so a bump has to update it and someone has to confirm the
+#: new revision still leaves this repository the sole owner of its caches.
+SETUP_RUST_PIN = "6cec89bac47a21cf756d68d638a9a510998e57f8"
 
-#: Every Rust job starts its compiler cache through this one script, so the
-#: digest pins and the backend guard have a single place to change.
-COMPILER_CACHE_SCRIPT = (
-    pathlib.Path(__file__).resolve().parents[2] / "scripts" / "start-compiler-cache.sh"
-)
+SETUP_STEP = "Install Rust toolchain"
+SETUP_ID = "setup-rust"
+REPORT_STEP = "Record compiler-cache effectiveness"
+NOT_FALLBACK = "steps.setup-rust.outputs.sccache-status != 'fallback'"
 
-
-def _compiler_cache_script() -> str:
-    """Return the compiler-cache start script's source."""
-    return COMPILER_CACHE_SCRIPT.read_text(encoding="utf-8")
-
-
-def _step_env(step: Step) -> dict[str, object]:
-    """Return a step's `env` block, or an empty mapping when it declares none.
-
-    The block arrives unvalidated from YAML, so it is narrowed here once and
-    its keys coerced, rather than at each use.
-    """
-    env = step.get("env")
-    if not isinstance(env, dict):
-        return {}
-    return {str(name): value for name, value in env.items()}
-
-
-def _structured_composer(steps: list[Step], key: str) -> str | None:
-    """Return `key`'s value where a step declares it as a structured `env` entry."""
-    matches = (env[key] for env in map(_step_env, steps) if key in env)
-    return next((str(value) for value in matches), None)
-
-
-def _script_composer(steps: list[Step], key: str) -> str | None:
-    """Return the `Set cache keys` line that assigns `key`.
-
-    The `printf` that builds it continues onto the next line, so the scalar is
-    unwrapped before it is split; matching a line at a time would find the
-    format string without its arguments.
-    """
-    script = str(inv.find_step(steps, "Set cache keys")["run"])
-    lines = script.replace("\\\n", " ").splitlines()
-    return next((line for line in lines if f"{key}=" in line), None)
-
-
-def _cache_key_composer(steps: list[Step], key: str) -> str:
-    """Return the text that builds `key`, and nothing else in the job.
-
-    A cache key is composed one of two ways here. `TOOL_PINS` is a structured
-    `env` value on the step that consumes it. `COVERAGE_TOOLS_CACHE_KEY` is a
-    `printf` in the `Set cache keys` shell script.
-    """
-    composer = _structured_composer(steps, key) or _script_composer(steps, key)
-    if composer is None:
-        message = f"no step composes {key}"
-        raise AssertionError(message)
-    return composer
-
-
+#: Each Rust job and the `expect-cache` it must declare. `ci.yml` jobs have a
+#: fork arm on a GitHub-hosted runner, so they take whichever backend the runner
+#: offers; `coverage-upload` runs only on the managed runner and must get its
+#: proxy.
 RUST_JOBS = (
-    ("ci.yml", "build"),
-    ("ci.yml", "coverage"),
-    ("coverage-main.yml", "coverage-upload"),
+    ("ci.yml", "build", "any"),
+    ("ci.yml", "coverage", "any"),
+    ("coverage-main.yml", "coverage-upload", "ubicloud"),
 )
 
-
-@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
-def test_rust_jobs_export_the_compiler_wrapper(filename: str, job_id: str) -> None:
-    """The shared setup action installs sccache but never exports the wrapper.
-
-    Without `RUSTC_WRAPPER` the compiler ignores sccache entirely and the job
-    reports a healthy cache while recompiling everything, which is the worst
-    of both outcomes now that no `target` tree is archived.
-    """
-    job = inv.load_workflow(filename)["jobs"][job_id]
-    environment = job.get("env", {})
-    assert environment.get("RUSTC_WRAPPER") == "sccache", (
-        f"{filename}:{job_id} must export RUSTC_WRAPPER"
-    )
-    assert environment.get("SCCACHE_GHA_ENABLED") == "true", (
-        f"{filename}:{job_id} must enable sccache's GitHub Actions backend"
-    )
+#: Job-level variables only a job that wires sccache by hand sets. `setup-rust`
+#: exports the wrapper and selects the backend itself, so either surviving means
+#: the job still carries a second owner.
+RETIRED_JOB_ENV = ("RUSTC_WRAPPER", "SCCACHE_GHA_ENABLED", "SCCACHE_CONF")
 
 
-@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
-def test_cache_credentials_are_exported_before_the_toolchain(
-    filename: str, job_id: str
+def _steps(filename: str, job_id: str) -> list[dict[str, object]]:
+    return inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
+
+
+@pytest.mark.parametrize(("filename", "job_id", "expect"), RUST_JOBS)
+def test_setup_rust_owns_the_compiler_cache(
+    filename: str, job_id: str, expect: str
 ) -> None:
-    """A plain `run:` step cannot see the managed runner's cache proxy.
-
-    Only an action step can, so the credentials must be republished before the
-    toolchain setup that installs sccache runs.
-    """
-    steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
-    export = inv.step_index(steps, "Export cache credentials for sccache")
-    toolchain = inv.step_index(steps, "Install Rust toolchain")
-    assert export < toolchain, (
-        f"{filename}:{job_id} must export the cache credentials before setup-rust"
+    """One reviewed call, with sccache left on and the id the report reads."""
+    steps = _steps(filename, job_id)
+    setup = inv.find_step(steps, SETUP_STEP)
+    uses = str(setup.get("uses", ""))
+    assert uses.endswith(f"/setup-rust@{SETUP_RUST_PIN}"), (
+        f"{filename}:{job_id} must pin setup-rust at {SETUP_RUST_PIN}; found {uses}"
     )
-    exported = str(inv.find_step(steps, "Export cache credentials for sccache"))
-    for variable in ("ACTIONS_CACHE_URL", "ACTIONS_RUNTIME_TOKEN"):
-        assert variable in exported, (
-            f"{filename}:{job_id} must republish {variable} for sccache"
-        )
-    # A non-empty value selects the v2 cache service, which bypasses the
-    # managed runner's proxy and sends sccache's objects somewhere the rest of
-    # the estate cannot read. Assert the exact call, not just the name.
-    assert "core.exportVariable('ACTIONS_CACHE_SERVICE_V2', '')" in exported, (
-        f"{filename}:{job_id} must clear ACTIONS_CACHE_SERVICE_V2, not merely set it"
+    assert setup.get("id") == SETUP_ID, (
+        f"{filename}:{job_id} setup-rust must carry the id {SETUP_ID!r}"
     )
-
-
-@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
-def test_compiler_cache_statistics_bracket_the_build(
-    filename: str, job_id: str
-) -> None:
-    """Statistics are the only evidence that the wrapper actually engaged."""
-    steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
-    reset = inv.step_index(steps, "Reset compiler-cache counters")
-    report = inv.step_index(steps, "Record compiler-cache effectiveness")
-    assert reset < report, f"{filename}:{job_id} must reset counters before reporting"
-    assert inv.find_step(steps, "Record compiler-cache effectiveness").get("if") == (
-        "always()"
-    ), f"{filename}:{job_id} must report statistics even when the build fails"
-
-
-@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
-def test_the_compiler_cache_server_starts_from_a_run_step(
-    filename: str, job_id: str
-) -> None:
-    """The server binds its backend at start, so where it starts decides which.
-
-    `setup-rust` starts one through `mozilla-actions/sccache-action`, whose
-    last act is to write `ACTIONS_CACHE_SERVICE_V2=on` back to the environment
-    file along with GitHub's own results URL and token. That clobbers this
-    job's earlier credential export, for that server and every step after it,
-    and the objects go to GitHub instead of the managed store. Passing
-    `use-sccache: false` keeps that step out of the job. The first Wildside run
-    to wire sccache made exactly this mistake: 14,480 compile requests produced
-    no objects in the managed cache.
-    """
-    steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
-    export = inv.step_index(steps, "Export cache credentials for sccache")
-    start = inv.step_index(steps, "Install and start the compiler cache")
-    toolchain = inv.step_index(steps, "Install Rust toolchain")
-    reset = inv.step_index(steps, "Reset compiler-cache counters")
-
-    starter = inv.find_step(steps, "Install and start the compiler cache")
-    assert "run" in starter, "the server must start from a run step, not an action"
-    assert COMPILER_CACHE_SCRIPT.name in str(starter["run"]), (
-        f"{filename}:{job_id} must start the server through "
-        f"{COMPILER_CACHE_SCRIPT.name}"
-    )
-    assert "--start-server" in _compiler_cache_script(), (
-        f"{COMPILER_CACHE_SCRIPT.name} must start the server explicitly"
-    )
-    assert export < start < toolchain < reset, (
-        f"{filename}:{job_id} must export credentials, start the server, set up "
-        "the toolchain, and only then reset the counters"
-    )
-
-    setup = inv.find_step(steps, "Install Rust toolchain")
     options = setup.get("with")
     assert isinstance(options, dict), f"{filename}:{job_id} needs setup-rust inputs"
-    assert options.get("use-sccache") == "false", (
-        f"{filename}:{job_id} must stop setup-rust starting a second server"
+    assert options.get("expect-cache") == expect, (
+        f"{filename}:{job_id} must set expect-cache: {expect}"
+    )
+    assert options.get("cache-provider") == "external", (
+        f"{filename}:{job_id} owns its caches, so setup-rust must not"
+    )
+    assert str(options.get("use-sccache", "true")).lower() == "true", (
+        f"{filename}:{job_id} must leave sccache to setup-rust, not turn it off"
     )
 
 
-@pytest.mark.parametrize(("filename", "job_id"), RUST_JOBS)
-def test_the_compiler_cache_start_verifies_its_backend(
-    filename: str, job_id: str
+@pytest.mark.parametrize(("filename", "job_id", "expect"), RUST_JOBS)
+def test_no_hand_rolled_compiler_cache_survives_beside_setup_rust(
+    filename: str, job_id: str, expect: str
 ) -> None:
-    """A server on the wrong backend must fail the job, not be measured.
-
-    Both assertions target the guard rather than a mention of it. `ghac`
-    appears in the script's prose, and `sha256sum` computes a digest that a
-    script could then ignore, so neither name alone proves the protection is
-    still wired.
-    """
-    steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
-    starter = inv.find_step(steps, "Install and start the compiler cache")
-    invocation = str(starter["run"])
-    assert COMPILER_CACHE_SCRIPT.name in invocation, (
-        f"{filename}:{job_id} must delegate to {COMPILER_CACHE_SCRIPT.name}"
-    )
-    script = _compiler_cache_script()
-    assert "ghac*)" in script, (
-        "the start script must branch on the backend, not merely name it"
-    )
-    assert '"$actual_sha" != "$expected_sha"' in script, (
-        "the start script must compare the archive digest against its pin"
-    )
-    assert "sha256sum" in script, "the start script must compute the archive digest"
-    # `sccache` is named as RUSTC_WRAPPER, so every later step resolves it
-    # through PATH. The script installs it into a directory that not every
-    # runner image carries, so it must publish that directory itself rather
-    # than inherit it.
-    # Match the whole command, value included. The comment explaining why the
-    # publication is needed also contains `GITHUB_PATH`, and the redirection on
-    # its own would accept a write that published nothing useful.
-    published = [line for line in script.splitlines() if '>>"$GITHUB_PATH"' in line]
-    assert published, "the start script must append to GITHUB_PATH"
-    assert all('"$install_dir"' in line for line in published), (
-        "the start script must publish its install directory, not something else"
-    )
+    """Two owners would start two servers, and the older one would win."""
+    del expect
+    job = inv.load_workflow(filename)["jobs"][job_id]
+    environment = job.get("env", {}) or {}
+    for variable in RETIRED_JOB_ENV:
+        assert variable not in environment, (
+            f"{filename}:{job_id} must not set {variable} at job level; "
+            "setup-rust owns it"
+        )
+    for step in inv.job_steps(job):
+        script = str(step.get("run", ""))
+        uses = str(step.get("uses", ""))
+        label = f"{filename}:{job_id} step {step.get('name')!r}"
+        assert "start-compiler-cache" not in script, f"{label} starts the server"
+        assert "sccache --zero-stats" not in script, f"{label} zeroes the counters"
+        assert "sccache --start-server" not in script, f"{label} starts the server"
+        exports_proxy = uses.startswith("actions/github-script") and (
+            "ACTIONS_CACHE_URL" in str((step.get("with") or {}).get("script", ""))
+        )
+        assert not exports_proxy, f"{label} exports the cache proxy by hand"
 
 
-@pytest.mark.parametrize(
-    ("filename", "job_id", "key"),
-    [
-        ("ci.yml", "build", "TOOL_PINS"),
-        ("ci.yml", "coverage", "COVERAGE_TOOLS_CACHE_KEY"),
-        ("coverage-main.yml", "coverage-upload", "COVERAGE_TOOLS_CACHE_KEY"),
-    ],
-)
-def test_the_sccache_pin_feeds_the_archive_that_stores_it(
-    filename: str, job_id: str, key: str
+@pytest.mark.parametrize(("filename", "job_id", "expect"), RUST_JOBS)
+def test_the_toolchain_is_set_up_before_anything_reports_statistics(
+    filename: str, job_id: str, expect: str
 ) -> None:
-    """Every job caches `~/.local/bin`, which is where sccache is installed.
+    """Statistics describe the job's own compilation, so setup-rust comes first."""
+    del expect
+    steps = _steps(filename, job_id)
+    assert inv.step_index(steps, SETUP_STEP) < inv.step_index(steps, REPORT_STEP), (
+        f"{filename}:{job_id} must set up Rust before reporting statistics"
+    )
 
-    Without the pin in the key, bumping `SCCACHE_VERSION` leaves the warm
-    archive valid and the old binary is restored under the new pin. The start
-    script's version probe then re-downloads on every run until an unrelated
-    pin happens to move.
 
-    The assertion reads the composer itself rather than the job as a whole.
-    Every one of these jobs also names `SCCACHE_VERSION` in its `env` block,
-    for the start script's benefit, so a search over the serialized job would
-    stay true after the pin was removed from the key.
+@pytest.mark.parametrize(("filename", "job_id", "expect"), RUST_JOBS)
+def test_the_statistics_step_reads_the_action_and_stands_down_on_a_fallback(
+    filename: str, job_id: str, expect: str
+) -> None:
+    """A server that fell back has no statistics, and asking restarts it.
+
+    The step runs under `always()` and the fallback guard, names the backend
+    `setup-rust` chose (`Cache location` reads `ghac` for the proxy and for
+    GitHub's own service alike), and still reports zero compile requests as a
+    failed integration rather than a cold cache.
     """
-    steps = inv.job_steps(inv.load_workflow(filename)["jobs"][job_id])
-    composer = _cache_key_composer(steps, key)
-    assert "SCCACHE_VERSION" in composer, (
-        f"{filename}:{job_id} must feed the sccache pin into {key}, "
-        f"not merely name it elsewhere in the job"
+    del expect
+    report = inv.find_step(_steps(filename, job_id), REPORT_STEP)
+    assert report.get("if") == f"always() && {NOT_FALLBACK}", (
+        f"{filename}:{job_id} must report on failure too, and stand down on a "
+        "setup-rust fallback"
+    )
+    env = report.get("env")
+    assert isinstance(env, dict), f"{filename}:{job_id} report needs an env block"
+    assert env.get("SCCACHE_BACKEND") == (
+        "${{ steps.setup-rust.outputs.cache-backend }}"
+    ), f"{filename}:{job_id} must hand setup-rust's cache-backend to the report"
+    script = str(report.get("run", ""))
+    assert "printf 'backend: %s\\n' \"${SCCACHE_BACKEND}\"" in script, (
+        f"{filename}:{job_id} must print the backend it reports"
+    )
+    assert "sccache --show-stats" in script, (
+        f"{filename}:{job_id} must report sccache's statistics"
     )
