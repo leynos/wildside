@@ -38,7 +38,7 @@ env:
   SCCACHE_SHA256_ARM64: '821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77'
   # 0.12.19 is the first uv that ships PyPy 3.12, which the Pylint gate pins.
   UV_VERSION: '0.12.19'
-  WHITAKER_INSTALLER_VERSION: '0.2.7'
+  WHITAKER_INSTALLER_VERSION: '0.2.9'
   YAMLLINT_VERSION: '1.35.1'
 
 # Default GITHUB_TOKEN to no access; each job re-grants only what it needs.
