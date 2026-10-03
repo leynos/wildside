@@ -115,7 +115,7 @@ def test_the_toolchain_is_set_up_before_anything_reports_statistics(
 def test_the_statistics_step_reads_the_action_and_stands_down_on_a_fallback(
     filename: str, job_id: str, expect: str
 ) -> None:
-    """A server that fell back has no statistics, and asking restarts it.
+    """A server that fell back has no statistics, and an empty report misleads.
 
     The step runs under `always()` and the fallback guard, names the backend
     `setup-rust` chose (`Cache location` reads `ghac` for the proxy and for
