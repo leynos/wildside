@@ -8,13 +8,13 @@
     "build": "node build/style-dictionary.js",
     "postinstall": "node -e \"try { require.resolve('style-dictionary'); } catch { process.exit(0); }\" && node build/style-dictionary.js",
     "validate:contrast": "node build/validate-contrast.js",
-    "test": "node build/validate-contrast.js"
+    "test": "node build/validate-contrast.js && node --test test/outputs.test.js"
   },
   "devDependencies": {
     "@types/node": "^22",
     "color": "^5.0.0",
     "markdownlint-cli": "^0.48.0",
-    "style-dictionary": "^5.0.4",
+    "style-dictionary": "^5.4.4",
     "vite": "^7.3.5"
   },
   "contrastThreshold": 4.5,

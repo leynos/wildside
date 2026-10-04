@@ -1,0 +1,22 @@
+export default {
+  "themes": [
+    {
+      "primary": "{color.primary.700}",
+      "primary-focus": "{color.primary.800}",
+      "primary-content": "{color.neutral.0}",
+      "base-100": "{color.neutral.900}",
+      "base-200": "{color.neutral.800}",
+      "base-content": "{color.neutral.50}",
+      "base-content-muted": "{color.neutral.400}"
+    },
+    {
+      "primary": "{color.primary.500}",
+      "primary-focus": "{color.primary.600}",
+      "primary-content": "{color.neutral.900}",
+      "base-100": "{color.neutral.0}",
+      "base-200": "{color.neutral.50}",
+      "base-content": "{color.neutral.900}",
+      "base-content-muted": "{color.neutral.600}"
+    }
+  ]
+};

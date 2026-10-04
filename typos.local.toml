@@ -163,5 +163,6 @@ exclude = [
   "backend/crates/pagination/tests/ui/cursor_decode_no_deserialise_owned.rs",
   "backend/crates/pagination/tests/ui/cursor_decode_no_deserialise_owned.stderr",
   "packages/tokens/build",
+  "packages/tokens/test/golden",
   "packages/tokens/src/utils/color.js",
 ]
