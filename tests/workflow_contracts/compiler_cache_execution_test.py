@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess  # noqa: S404 - the step's own script is the subject.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - the step's own script is the subject.
 import typing as typ
 
 import pytest
@@ -221,7 +221,7 @@ def _run_step(script: str, tmp_path: Path, *, installed: bool, backend: str) -> 
     }
     if installed:
         environment["BASH_ENV"] = str(tmp_path / "fake.sh")
-    completed = subprocess.run(  # noqa: S603 - the step's own script under test.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - the step's own script under test.
         [bash, "-c", script],
         capture_output=True,
         check=False,
