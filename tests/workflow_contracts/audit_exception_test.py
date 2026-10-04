@@ -140,17 +140,10 @@ VULNERABLE_PICOMATCH_RANGES = (
     ((4, 0, 0), (4, 0, 4)),
 )
 
-#: GHSA-vj5c-m527-mpff, prototype pollution in Style Dictionary's
-#: `convertTokenData`. The patched 5.4.4 needs glob 13, which collides with the
-#: repository-wide glob 11 resolution, so the exception waits on that knot.
-STYLE_DICTIONARY_EXCEPTION_IDS = ("STYLE_DICTIONARY_PROTOTYPE_POLLUTION_2026_07",)
-STYLE_DICTIONARY_TRACKING_ISSUE = "https://github.com/leynos/wildside/issues/471"
-FIRST_PATCHED_STYLE_DICTIONARY = (5, 4, 4)
-
 #: Every ledger entry must appear here, so that adding an exception means
 #: writing the condition that retires it rather than only a date.
 EXCEPTIONS_WITH_REMOVAL_INVARIANTS = frozenset(
-    EXTRACT_ZIP_EXCEPTION_IDS + PICOMATCH_EXCEPTION_IDS + STYLE_DICTIONARY_EXCEPTION_IDS
+    EXTRACT_ZIP_EXCEPTION_IDS + PICOMATCH_EXCEPTION_IDS
 )
 
 #: A removal condition is an issue reference, either bare or as a full URL. An
@@ -316,32 +309,4 @@ def test_the_picomatch_exceptions_are_void_once_bun_resolves_patched_builds(
         f"cannot resolve a patched build, but bun.lock now resolves only "
         f"{sorted(resolved)}. Remove the entries and close "
         f"{PICOMATCH_TRACKING_ISSUE}."
-    )
-
-
-def test_the_style_dictionary_exception_is_void_once_the_patch_resolves(
-    ledger: list[AuditException], packages: lock.PackageTable
-) -> None:
-    """The Style Dictionary exception rests on the patch being out of reach.
-
-    Unlike the others, this advisory has a fix: 5.4.4. It is excepted because
-    that release requires glob 13 and the repository pins glob 11 for a
-    separate command-injection advisory. The day the lockfile resolves 5.4.4 or
-    later, whichever way that knot is untied, the entry is unnecessary.
-    """
-    present = _coupled_group(ledger, STYLE_DICTIONARY_EXCEPTION_IDS)
-    if not present:
-        pytest.skip("the Style Dictionary advisory is no longer excepted")
-
-    resolved = lock.resolved_versions(packages, "style-dictionary")
-    assert resolved, "bun.lock must resolve Style Dictionary for this entry to apply"
-
-    vulnerable = [
-        version for version in resolved if version < FIRST_PATCHED_STYLE_DICTIONARY
-    ]
-    assert vulnerable, (
-        f"{sorted(present)} excepts GHSA-vj5c-m527-mpff on the grounds that the "
-        f"patched Style Dictionary is unreachable, but bun.lock now resolves "
-        f"{sorted(resolved)}. Remove the entry and close "
-        f"{STYLE_DICTIONARY_TRACKING_ISSUE}."
     )
