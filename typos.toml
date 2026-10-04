@@ -23,6 +23,7 @@ extend-exclude = [
     "package-lock.json",
     "packages/tokens/build",
     "packages/tokens/src/utils/color.js",
+    "packages/tokens/test/golden",
     "pnpm-lock.yaml",
     "target",
     "typos.local.toml",
