@@ -147,10 +147,18 @@ STYLE_DICTIONARY_EXCEPTION_IDS = ("STYLE_DICTIONARY_PROTOTYPE_POLLUTION_2026_07"
 STYLE_DICTIONARY_TRACKING_ISSUE = "https://github.com/leynos/wildside/issues/471"
 FIRST_PATCHED_STYLE_DICTIONARY = (5, 4, 4)
 
+#: GHSA-vfj7-8cjw-p6xm, stack exhaustion in `braces`, which has no patched
+#: release. Its removal invariants live in `braces_exception_test.py`; the
+#: identifier is registered here so the check below still sees every entry.
+BRACES_EXCEPTION_IDS = ("BRACES_NESTED_PATTERN_DOS_2026_10",)
+
 #: Every ledger entry must appear here, so that adding an exception means
 #: writing the condition that retires it rather than only a date.
 EXCEPTIONS_WITH_REMOVAL_INVARIANTS = frozenset(
-    EXTRACT_ZIP_EXCEPTION_IDS + PICOMATCH_EXCEPTION_IDS + STYLE_DICTIONARY_EXCEPTION_IDS
+    EXTRACT_ZIP_EXCEPTION_IDS
+    + PICOMATCH_EXCEPTION_IDS
+    + STYLE_DICTIONARY_EXCEPTION_IDS
+    + BRACES_EXCEPTION_IDS
 )
 
 #: A removal condition is an issue reference, either bare or as a full URL. An
