@@ -38,7 +38,7 @@
     "package": "frontend-pwa",
     "advisory": "GHSA-vfj7-8cjw-p6xm",
     "introducedBy": "braces",
-    "reason": "Development-time tooling only. braces reaches the tree through chokidar@3.6.0 and micromatch@4.0.8, which both pin braces@3.0.3 in pnpm-lock.yaml, and the brace patterns they expand come from repository-controlled configuration, not from user input. The advisory (published 2026-09-18, stack exhaustion on deeply nested patterns) covers every release up to 3.0.3, which is the latest published, so there is no patched release to move to. Tracked in https://github.com/leynos/wildside/issues/527; remove this entry once a patched braces exists or chokidar and micromatch drop braces 3.",
+    "reason": "Development-time tooling only. braces reaches the tree through chokidar@3.6.0 and micromatch@4.0.8, which both pin braces@3.0.3 in pnpm-lock.yaml. The brace patterns come from repository-controlled configuration, not runtime user input, but pull requests can change that configuration and cause their own CI build to fail. The advisory (published 2026-09-18, stack exhaustion on deeply nested patterns) covers every release up to 3.0.3, which is the latest published, so there is no patched release to move to. Tracked in https://github.com/leynos/wildside/issues/527; remove this entry once a patched braces exists or chokidar and micromatch drop braces 3.",
     "addedAt": "2026-10-04",
     "expiresAt": "2026-12-04"
   }
