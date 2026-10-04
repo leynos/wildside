@@ -2019,9 +2019,15 @@ indefensible fails the test suite instead of waiting for its expiry:
   which stops being true once Bun honours ranged `resolutions` keys or the last
   Picomatch 2 consumer leaves.
 - An exception taken out against a patched release fails once the patch is
-  reachable. The Style Dictionary entry holds only while `bun.lock` resolves a
-  release below 5.4.4, the version whose glob 13 requirement collides with the
-  repository-wide glob 11 resolution.
+  reachable. The Style Dictionary entry was of this kind and is gone: the
+  patched release (5.4.4 and later) needs glob 13, so the repository-wide
+  `glob` resolution moved to 13.0.6 in both the pnpm overrides and the Bun
+  `resolutions`, `packages/tokens` takes `^5.4.4`, and the exception was
+  removed (#471). The glob CLI command-injection advisory the old pin existed
+  for (GHSA-5j98-mcp5-4vw2) does not reach 13.x. `packages/tokens/test` holds
+  the generated token files byte for byte, so a later Style Dictionary change
+  that alters the CSS variables, the Tailwind preset or the daisyUI theme fails
+  a test instead of passing unseen.
 - Entries that rest on one argument stand or fall together. The two
   `extract-zip` entries and the two Picomatch entries are each checked as a
   group, so a ledger holding one of a pair fails rather than quietly keeping an
