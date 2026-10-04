@@ -32,5 +32,14 @@
     "reason": "A second, independent advisory against the same unpatchable extract-zip 2.0.1 that EXTRACT_ZIP_SYMLINK_TRAVERSAL_2026_08 covers, reported by both pnpm and Bun. The symlink entries it describes are written only while @puppeteer/browsers 2.x unpacks a Chrome archive that puppeteer itself fetched from Google's endpoints at build time, so no attacker-supplied archive reaches it. It resolves with the same puppeteer 25.7 upgrade and must not outlive it. Tracked in https://github.com/leynos/wildside/issues/491.",
     "addedAt": "2026-09-14",
     "expiresAt": "2026-11-14"
+  },
+  {
+    "id": "BRACES_NESTED_PATTERN_DOS_2026_10",
+    "package": "frontend-pwa",
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "introducedBy": "braces",
+    "reason": "Development-time tooling only. braces reaches the tree through chokidar@3.6.0 and micromatch@4.0.8, which both pin braces@3.0.3 in pnpm-lock.yaml, and the brace patterns they expand come from repository-controlled configuration, not from user input. The advisory (published 2026-09-18, stack exhaustion on deeply nested patterns) covers every release up to 3.0.3, which is the latest published, so there is no patched release to move to. Tracked in https://github.com/leynos/wildside/issues/527; remove this entry once a patched braces exists or chokidar and micromatch drop braces 3.",
+    "addedAt": "2026-10-04",
+    "expiresAt": "2026-12-04"
   }
 ]
