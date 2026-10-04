@@ -115,7 +115,28 @@ def _arm_holds(
 def evaluate(
     condition: str, outputs: dict[tuple[str, str], str], *, job_failed: bool
 ) -> bool:
-    """Evaluate a step `if:` the way GitHub Actions would for the given state."""
+    """Evaluate a step `if:` the way GitHub Actions would for the given state.
+
+    Parameters
+    ----------
+    condition : str
+        The step's `if:` text. An empty string means no condition, and a
+        condition that names no status function gets an implicit
+        `success() &&`. The grammar is `&&` and `||` over `always()`,
+        `success()`, `failure()` and `steps.<id>.outputs.<name>` compared with
+        `==` or `!=` against a single-quoted string literal.
+    outputs : dict[tuple[str, str], str]
+        Step outputs by `(step id, output name)`. A missing output reads as an
+        empty string, as it does on a runner.
+    job_failed : bool
+        Whether an earlier step failed, which decides `success()` and
+        `failure()`.
+
+    Returns
+    -------
+    bool
+        Whether the step would run.
+    """
     text = _with_implicit_success(condition)
     return any(
         _arm_holds(arm, outputs, job_failed=job_failed) for arm in text.split("||")

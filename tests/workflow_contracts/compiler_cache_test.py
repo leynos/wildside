@@ -20,6 +20,24 @@ import workflow_inventory as inv
 #: new revision still leaves this repository the sole owner of its caches.
 SETUP_RUST_PIN = "6cec89bac47a21cf756d68d638a9a510998e57f8"
 
+#: The one `uses` value every Rust job must carry: the exact repository, action
+#: path and pin. A suffix match would accept another repository's, or another
+#: action's, `setup-rust@<pin>` and so bypass the cache behaviour under test.
+SETUP_RUST_USES = f"leynos/shared-actions/.github/actions/setup-rust@{SETUP_RUST_PIN}"
+
+
+def is_the_pinned_setup_rust(uses: str) -> bool:
+    """Return whether `uses` is exactly the reviewed `setup-rust` reference.
+
+    >>> is_the_pinned_setup_rust(SETUP_RUST_USES)
+    True
+    >>> other = "other/repo/.github/actions/setup-rust@" + SETUP_RUST_PIN
+    >>> is_the_pinned_setup_rust(other)
+    False
+    """
+    return uses == SETUP_RUST_USES
+
+
 SETUP_STEP = "Install Rust toolchain"
 SETUP_ID = "setup-rust"
 REPORT_STEP = "Record compiler-cache effectiveness"
@@ -54,8 +72,8 @@ def test_setup_rust_owns_the_compiler_cache(
     steps = _steps(filename, job_id)
     setup = inv.find_step(steps, SETUP_STEP)
     uses = str(setup.get("uses", ""))
-    assert uses.endswith(f"/setup-rust@{SETUP_RUST_PIN}"), (
-        f"{filename}:{job_id} must pin setup-rust at {SETUP_RUST_PIN}; found {uses}"
+    assert is_the_pinned_setup_rust(uses), (
+        f"{filename}:{job_id} must use exactly {SETUP_RUST_USES}; found {uses}"
     )
     assert setup.get("id") == SETUP_ID, (
         f"{filename}:{job_id} setup-rust must carry the id {SETUP_ID!r}"
@@ -140,3 +158,36 @@ def test_the_statistics_step_reads_the_action_and_stands_down_on_a_fallback(
     assert "sccache --show-stats" in script, (
         f"{filename}:{job_id} must report sccache's statistics"
     )
+
+
+@pytest.mark.parametrize(
+    "uses",
+    [
+        pytest.param(
+            f"other-org/shared-actions/.github/actions/setup-rust@{SETUP_RUST_PIN}",
+            id="another-repository",
+        ),
+        pytest.param(
+            f"leynos/shared-actions/.github/actions/other/setup-rust@{SETUP_RUST_PIN}",
+            id="another-action-path-with-the-same-suffix",
+        ),
+        pytest.param(
+            "leynos/shared-actions/.github/actions/setup-rust@" + "0" * 40,
+            id="another-pin",
+        ),
+        pytest.param(
+            "leynos/shared-actions/.github/actions/setup-rust@main",
+            id="a-branch-instead-of-the-pin",
+        ),
+    ],
+)
+def test_a_setup_rust_reference_that_is_not_the_exact_action_is_refused(
+    uses: str,
+) -> None:
+    """The narrow half: a lookalike with the same suffix or pin must not pass.
+
+    Each case would satisfy a `uses.endswith("/setup-rust@<pin>")` check or
+    carry the right pin on the wrong path, and must differ from the one value
+    the contract accepts.
+    """
+    assert not is_the_pinned_setup_rust(uses), f"{uses!r} must be refused"
