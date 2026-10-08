@@ -368,12 +368,13 @@ to avoid the sccache-action overwriting the proxy export. #523 made
 contract refuses each retired piece.
 
 The statistics step reads `sccache-status` and `cache-backend`. A server that
-fell back never started and has no statistics, and `sccache --show-stats` would
-start it again, so the step runs under
-`always() && steps.setup-rust.outputs.sccache-status != 'fallback'`. It prints
-the backend `setup-rust` chose, because `Cache location` reads `ghac` for the
-proxy and for GitHub's own service alike. Zero compile requests means the
-wrapper never engaged: a failed integration, not a cold cache.
+fell back never started and has no statistics. With no server,
+`sccache --show-stats` prints empty default statistics. The fallback guard
+prevents an uncached job from publishing those statistics, so the step runs
+under `always() && steps.setup-rust.outputs.sccache-status != 'fallback'`. It
+prints the backend `setup-rust` chose, because `Cache location` reads `ghac`
+for the proxy and for GitHub's own service alike. Zero compile requests means
+the wrapper never engaged: a failed integration, not a cold cache.
 
 `tests/workflow_contracts/compiler_cache_test.py` holds this: the reviewed pin
 by value, the inputs and id, none of the retired pieces, setup before the
