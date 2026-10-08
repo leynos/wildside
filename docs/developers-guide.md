@@ -338,47 +338,47 @@ catch.
 ### The compiler cache
 
 No `target` tree is archived, so sccache is the only thing standing between a
-warm run and a full recompile. Three pieces have to be present together, and
-each Rust job carries all three:
+warm run and a full recompile. Each Rust job lets `setup-rust` own it, through
+one reviewed call (pinned at `6cec89ba`, shared-actions PR 546, which sits on
+PR 523) with three inputs and an id:
 
-- `RUSTC_WRAPPER: sccache` and `SCCACHE_GHA_ENABLED` at job level. The shared
-  `setup-rust` action installs sccache but does not export the wrapper, so a
-  job that omits this compiles uncached while reporting a healthy cache.
-- An `actions/github-script` step, immediately after checkout, that
-  republishes `ACTIONS_CACHE_URL` and `ACTIONS_RUNTIME_TOKEN` and empties
-  `ACTIONS_CACHE_SERVICE_V2`. The managed runner exposes its local cache proxy
-  to action steps but not to plain `run:` steps, and emptying the service
-  variable keeps sccache on the endpoint the proxy intercepts.
-- A `run:` step that calls `scripts/start-compiler-cache.sh`, before the
-  toolchain setup. The script installs a pinned, digest-verified sccache and
-  starts the server. `setup-rust` is called with `use-sccache: 'false'` so it
-  cannot start a second one. Every Rust job calls the same script, so the
-  digest pins and the backend guard have one place to change.
-- `sccache --zero-stats` before the build and `--show-stats` into the job
-  summary afterwards.
+- `cache-provider: external`, because this job owns `~/.cargo/registry`,
+  `~/.cargo/bin` and the uv layers;
+- `expect-cache`: `any` for the two `ci.yml` jobs, which have a fork arm on a
+  GitHub-hosted runner, and `ubicloud` for `coverage-main.yml`'s
+  `coverage-upload`, which runs only on the managed runner and fails if the
+  proxy is missing;
+- `use-sccache` left at its default of `true`;
+- `id: setup-rust`, which the statistics step reads outputs through.
 
-**Where the server starts decides which backend it uses**, and this is the part
-that is easy to get wrong. The server binds its backend once, at start.
-`setup-rust` with `use-sccache: true` starts one through
-`mozilla-actions/sccache-action`, and that action's last act is to write
-`ACTIONS_CACHE_SERVICE_V2=on` back to the environment file, along with GitHub's
-own results URL and token. That clobbers the credential export the job made
-earlier, both for the server it just started and for every step after it, so
-the objects go to GitHub rather than the managed store. Wildside's first
-attempt did exactly that: 14,480 compile requests, a plausible-looking `ghac`
-backend, and no objects in the managed cache at all. Calling `setup-rust` with
-`use-sccache: 'false'` keeps that step out of the job, and starting the server
-from a `run:` step means it reads the exported values as they were written. The
-start step fails the job if the resulting backend is not `ghac`.
+`setup-rust` installs sccache, selects the backend by runner, exports the cache
+proxy's credentials itself on the managed runner, starts the server with a 60 s
+startup timeout (sccache's own is a fixed 10 s that the proxy intermittently
+outlasts) and names sccache as the wrapper. If the server still will not start,
+it does not fail the job: it clears `RUSTC_WRAPPER`, so Cargo compiles
+uncached, and raises a `sccache-fallback` warning annotation, a summary line
+and the `sccache-status` output (`fallback`, or `started`).
 
-`SCCACHE_VERSION` feeds the key of every archive that carries `~/.local/bin`,
-which is where the script installs the binary. Bumping the pin without that
-would leave the warm archive valid and restore the old binary under the new
-pin, so the script would re-download on every run until an unrelated pin moved.
+This repository used to wire all of that by hand: job-level `RUSTC_WRAPPER` and
+`SCCACHE_GHA_ENABLED`, an `actions/github-script` credential export, and
+`scripts/start-compiler-cache.sh` (a pinned, digest-verified sccache install
+that started the server), with `setup-rust` called with `use-sccache: 'false'`
+to avoid the sccache-action overwriting the proxy export. #523 made
+`setup-rust` handle that, and two owners would start two servers, so the
+contract refuses each retired piece.
 
-Read the statistics rather than assuming. Zero compile requests, or a cache
-location of local disk, means the wrapper never engaged; that is a failed
-integration, not a cold cache.
+The statistics step reads `sccache-status` and `cache-backend`. A server that
+fell back never started and has no statistics. With no server,
+`sccache --show-stats` prints empty default statistics. The fallback guard
+prevents an uncached job from publishing those statistics, so the step runs
+under `always() && steps.setup-rust.outputs.sccache-status != 'fallback'`. It
+prints the backend `setup-rust` chose, because `Cache location` reads `ghac`
+for the proxy and for GitHub's own service alike. Zero compile requests means
+the wrapper never engaged: a failed integration, not a cold cache.
+
+`tests/workflow_contracts/compiler_cache_test.py` holds this: the reviewed pin
+by value, the inputs and id, none of the retired pieces, setup before the
+statistics, and the guard and backend wiring on each report step.
 
 ### Cache ownership
 
@@ -391,15 +391,15 @@ carrying it cannot move between runner providers unchanged.
 Table 1 names every cache archive, the single job that writes it, and the
 inputs its key is built from.
 
-| Archive                      | Owner                   | Key inputs                              |
-| ---------------------------- | ----------------------- | --------------------------------------- |
-| pnpm store                   | `setup-node` in `build` | the action's own lockfile hash          |
-| Workspace `node_modules`     | `build`                 | the pnpm and Bun lock hashes            |
-| Bun download cache           | `build`                 | both Bun lock hashes                    |
-| Global tools                 | `build`                 | tool pins, `Makefile`, `dylint.toml`    |
-| Cargo registry and Git index | `coverage-upload`       | `rust-toolchain.toml`, `Cargo.lock`     |
-| Coverage-lane tools          | `coverage-upload`       | shared-actions pin, sccache, `Makefile` |
-| Embedded PostgreSQL binaries | `coverage-upload`       | the PostgreSQL version                  |
+| Archive                      | Owner                   | Key inputs                           |
+| ---------------------------- | ----------------------- | ------------------------------------ |
+| pnpm store                   | `setup-node` in `build` | the action's own lockfile hash       |
+| Workspace `node_modules`     | `build`                 | the pnpm and Bun lock hashes         |
+| Bun download cache           | `build`                 | both Bun lock hashes                 |
+| Global tools                 | `build`                 | tool pins, `Makefile`, `dylint.toml` |
+| Cargo registry and Git index | `coverage-upload`       | `rust-toolchain.toml`, `Cargo.lock`  |
+| Coverage-lane tools          | `coverage-upload`       | shared-actions pin, `Makefile`       |
+| Embedded PostgreSQL binaries | `coverage-upload`       | the PostgreSQL version               |
 
 The archives above cover these paths:
 

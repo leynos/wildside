@@ -33,9 +33,6 @@ env:
   CARGO_AUDIT_VERSION: '0.22.1'
   MERMAN_VERSION: '0.7.0'
   NIXIE_VERSION: '1.1.0'
-  SCCACHE_VERSION: '0.17.0'
-  SCCACHE_SHA256_X64: '67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006'
-  SCCACHE_SHA256_ARM64: '821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77'
   # 0.12.19 is the first uv that ships PyPy 3.12, which the Pylint gate pins.
   UV_VERSION: '0.12.19'
   WHITAKER_INSTALLER_VERSION: '0.2.9'
@@ -71,29 +68,12 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-    env:
-      # The shared setup-rust action installs sccache but does not export the
-      # wrapper, so without these two the compiler runs uncached.
-      RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
           persist-credentials: false
           fetch-depth: 0
 
-      # Ubicloud publishes its local cache proxy to action steps, not to plain
-      # `run:` steps, so sccache's GitHub Actions backend sees no credentials
-      # unless an action republishes them. Emptying ACTIONS_CACHE_SERVICE_V2
-      # keeps sccache on the v1 endpoint, which is the one the proxy
-      # intercepts. Without this the build silently compiles uncached.
-      - name: Export cache credentials for sccache
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-            core.exportVariable('ACTIONS_CACHE_SERVICE_V2', '');
       # v4.1.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
       # `cache: 'pnpm'` makes this action the sole owner of the pnpm store.
@@ -122,7 +102,6 @@ jobs:
             merman=${{ env.MERMAN_VERSION }}
             nextest=${{ env.NEXTEST_VERSION }}
             nixie=${{ env.NIXIE_VERSION }}
-            sccache=${{ env.SCCACHE_VERSION }}
             uv=${{ env.UV_VERSION }}
             whitaker-installer=${{ env.WHITAKER_INSTALLER_VERSION }}
             yamllint=${{ env.YAMLLINT_VERSION }}
@@ -263,24 +242,18 @@ jobs:
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
           restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
 
-      # setup-rust runs with use-sccache: false because the sccache action it
-      # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
-      # clobbering the export above for every later step. The script explains
-      # the rest.
-      - name: Install and start the compiler cache
-        shell: bash
-        run: bash scripts/start-compiler-cache.sh
-
       # cache-provider: external — this job owns ~/.cargo/registry,
       # ~/.cargo/bin, and the uv layers above, so the shared action must not
       # become a second owner of them.
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@6dea5677a84fec60ca51b07202570e3af12ffdb4
+        id: setup-rust
+        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
         with:
           cache-provider: external
-          # The server is started from a `run:` step above; a second one
-          # started inside this action would bind the wrong backend.
-          use-sccache: 'false'
+          # `setup-rust` owns sccache: it selects the backend by runner, starts the
+          # server with a 60 s startup timeout, and falls back to an uncached
+          # build, with a `sccache-fallback` warning, if the server will not start.
+          expect-cache: any
 
       - name: Install uv
         id: setup-uv
@@ -331,7 +304,7 @@ jobs:
       # distribution; replaces the former `cargo binstall merman-cli` and
       # bare `uv tool install nixie-cli` steps.
       - name: Install Nixie and Merman
-        uses: leynos/shared-actions/.github/actions/install-nixie@6dea5677a84fec60ca51b07202570e3af12ffdb4
+        uses: leynos/shared-actions/.github/actions/install-nixie@6cec89bac47a21cf756d68d638a9a510998e57f8
         with:
           nixie-version: ${{ env.NIXIE_VERSION }}
           merman-version: ${{ env.MERMAN_VERSION }}
@@ -437,7 +410,7 @@ jobs:
       - name: Install mdtablefix
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
-        uses: leynos/shared-actions/.github/actions/install-mdtablefix@6dea5677a84fec60ca51b07202570e3af12ffdb4
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@6cec89bac47a21cf756d68d638a9a510998e57f8
         with:
           version: "0.6.0"
 
@@ -458,11 +431,6 @@ jobs:
       - name: Workflow lint script tests
         run: make test-lint-actions
 
-      # Backend
-      # Counters are reset here so the statistics below describe this job's
-      # compilation rather than anything the setup actions did.
-      - name: Reset compiler-cache counters
-        run: sccache --zero-stats
       - name: Rust build
         run: cargo check --locked --manifest-path backend/Cargo.toml --all-targets --all-features
       - name: Rust fmt check
@@ -471,7 +439,7 @@ jobs:
         run: make lint-clippy
 
       - name: Install Whitaker
-        uses: leynos/shared-actions/.github/actions/install-whitaker@6dea5677a84fec60ca51b07202570e3af12ffdb4
+        uses: leynos/shared-actions/.github/actions/install-whitaker@6cec89bac47a21cf756d68d638a9a510998e57f8
         with:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
@@ -577,8 +545,13 @@ jobs:
       # Zero compile requests means the wrapper never engaged, which is a
       # failed integration rather than a cold cache.
       - name: Record compiler-cache effectiveness
-        if: always()
+        # A server that fell back (setup-rust's sccache-status) never started and
+        # has no statistics; with no server `sccache --show-stats` prints empty
+        # defaults, which would read as a broken integration.
+        if: always() && steps.setup-rust.outputs.sccache-status != 'fallback'
         shell: bash
+        env:
+          SCCACHE_BACKEND: ${{ steps.setup-rust.outputs.cache-backend }}
         run: |
           set -euo pipefail
           fence='```'
@@ -589,9 +562,10 @@ jobs:
             echo 'sccache is not installed; skipping compiler-cache statistics.'
             exit 0
           fi
+          printf 'backend: %s\n' "${SCCACHE_BACKEND}"
           sccache --show-stats | tee sccache-stats.txt
           {
-            printf '### sccache\n\n%s text\n' "$fence"
+            printf '### sccache\n\n- backend: %s\n\n%s text\n' "${SCCACHE_BACKEND}" "$fence"
             cat sccache-stats.txt
             printf '%s\n' "$fence"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -703,27 +677,11 @@ jobs:
       # suite needs far longer — the repo's nextest global-timeout alone is
       # 60 minutes — so raise the cap well above it.
       RUN_RUST_CARGO_WAIT_TIMEOUT: '5400'
-      # The shared setup-rust action installs sccache but does not export the
-      # wrapper, so without these two the compiler runs uncached.
-      RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
           persist-credentials: false
 
-      # Ubicloud publishes its local cache proxy to action steps, not to plain
-      # `run:` steps, so sccache's GitHub Actions backend sees no credentials
-      # unless an action republishes them. Emptying ACTIONS_CACHE_SERVICE_V2
-      # keeps sccache on the v1 endpoint, which is the one the proxy
-      # intercepts. Without this the build silently compiles uncached.
-      - name: Export cache credentials for sccache
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-            core.exportVariable('ACTIONS_CACHE_SERVICE_V2', '');
 
       - name: Set cache keys
         shell: bash
@@ -734,7 +692,7 @@ jobs:
           # workflow one, so it is read here in the shell.
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
-          SHARED_ACTIONS_PIN: 6dea5677a84fec60ca51b07202570e3af12ffdb4
+          SHARED_ACTIONS_PIN: 6cec89bac47a21cf756d68d638a9a510998e57f8
           # The Makefile pins pg-embed-setup-unpriv, whose pg_worker binary
           # lands in the cargo bin directory this archive carries.
           MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
@@ -744,8 +702,8 @@ jobs:
           {
             printf 'CACHE_SCOPE=%s\n' "$scope"
             printf 'CARGO_CACHE_KEY=cargo-v1-%s-%s\n' "$scope" "$CARGO_LOCK_HASH"
-            printf 'COVERAGE_TOOLS_CACHE_KEY=coverage-tools-v1-%s-%s-sccache%s-mk%s\n' \
-              "$scope" "$SHARED_ACTIONS_PIN" "$SCCACHE_VERSION" "$MAKEFILE_HASH"
+            printf 'COVERAGE_TOOLS_CACHE_KEY=coverage-tools-v1-%s-%s-mk%s\n' \
+              "$scope" "$SHARED_ACTIONS_PIN" "$MAKEFILE_HASH"
             printf 'PG_EMBEDDED_CACHE_KEY=pg-embedded-v1-%s-%s\n' \
               "$scope" "$PG_VERSION"
           } >>"$GITHUB_ENV"
@@ -788,26 +746,16 @@ jobs:
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
           restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
 
-      # setup-rust runs with use-sccache: false because the sccache action it
-      # would call writes ACTIONS_CACHE_SERVICE_V2=on back to GITHUB_ENV,
-      # clobbering the export above for every later step. The script explains
-      # the rest.
-      - name: Install and start the compiler cache
-        shell: bash
-        run: bash scripts/start-compiler-cache.sh
-
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@6dea5677a84fec60ca51b07202570e3af12ffdb4
+        id: setup-rust
+        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
         with:
           cache-provider: external
-          # The server is started from a `run:` step above; a second one
-          # started inside this action would bind the wrong backend.
-          use-sccache: 'false'
+          # `setup-rust` owns sccache: it selects the backend by runner, starts the
+          # server with a 60 s startup timeout, and falls back to an uncached
+          # build, with a `sccache-fallback` warning, if the server will not start.
+          expect-cache: any
 
-      # Counters are reset here so the statistics below describe this job's
-      # compilation rather than anything the setup actions did.
-      - name: Reset compiler-cache counters
-        run: sccache --zero-stats
       - name: Install pg_worker binary
         env:
           # cargo-binstall resolves the release archive through the GitHub
@@ -824,7 +772,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@6dea5677a84fec60ca51b07202570e3af12ffdb4
+        uses: leynos/shared-actions/.github/actions/generate-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -861,8 +809,13 @@ jobs:
       # Zero compile requests means the wrapper never engaged, which is a
       # failed integration rather than a cold cache.
       - name: Record compiler-cache effectiveness
-        if: always()
+        # A server that fell back (setup-rust's sccache-status) never started and
+        # has no statistics; with no server `sccache --show-stats` prints empty
+        # defaults, which would read as a broken integration.
+        if: always() && steps.setup-rust.outputs.sccache-status != 'fallback'
         shell: bash
+        env:
+          SCCACHE_BACKEND: ${{ steps.setup-rust.outputs.cache-backend }}
         run: |
           set -euo pipefail
           fence='```'
@@ -873,9 +826,10 @@ jobs:
             echo 'sccache is not installed; skipping compiler-cache statistics.'
             exit 0
           fi
+          printf 'backend: %s\n' "${SCCACHE_BACKEND}"
           sccache --show-stats | tee sccache-stats.txt
           {
-            printf '### sccache\n\n%s text\n' "$fence"
+            printf '### sccache\n\n- backend: %s\n\n%s text\n' "${SCCACHE_BACKEND}" "$fence"
             cat sccache-stats.txt
             printf '%s\n' "$fence"
           } >> "$GITHUB_STEP_SUMMARY"

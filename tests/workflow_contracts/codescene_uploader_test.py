@@ -33,7 +33,7 @@ WORKFLOW_DIRECTORY: typ.Final = REPOSITORY_ROOT / ".github" / "workflows"
 #: The uploader revision this repository trusts. Named as an allowlist rather
 #: than matched as "any full SHA": the pin is the manifest, so a different
 #: revision is a different trust anchor whatever the shape of its identifier.
-UPLOADER_PIN: typ.Final = "6dea5677a84fec60ca51b07202570e3af12ffdb4"
+UPLOADER_PIN: typ.Final = "6cec89bac47a21cf756d68d638a9a510998e57f8"
 UPLOADER_ACTION: typ.Final = (
     "leynos/shared-actions/.github/actions/upload-codescene-coverage"
 )
