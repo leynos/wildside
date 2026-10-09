@@ -439,7 +439,7 @@ jobs:
         # first release with `--check` and `--git`.
         uses: leynos/shared-actions/.github/actions/install-mdtablefix@6dea5677a84fec60ca51b07202570e3af12ffdb4
         with:
-          version: "0.6.0"
+          version: "0.6.1"
 
       - name: Markdown format check
         run: make check-fmt-markdown
