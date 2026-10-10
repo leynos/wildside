@@ -247,7 +247,7 @@ jobs:
       # become a second owner of them.
       - name: Install Rust toolchain
         id: setup-rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/setup-rust@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
         with:
           cache-provider: external
           # `setup-rust` owns sccache: it selects the backend by runner, starts the
@@ -304,7 +304,7 @@ jobs:
       # distribution; replaces the former `cargo binstall merman-cli` and
       # bare `uv tool install nixie-cli` steps.
       - name: Install Nixie and Merman
-        uses: leynos/shared-actions/.github/actions/install-nixie@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/install-nixie@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
         with:
           nixie-version: ${{ env.NIXIE_VERSION }}
           merman-version: ${{ env.MERMAN_VERSION }}
@@ -410,7 +410,7 @@ jobs:
       - name: Install mdtablefix
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
-        uses: leynos/shared-actions/.github/actions/install-mdtablefix@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
         with:
           version: "0.6.1"
 
@@ -439,7 +439,7 @@ jobs:
         run: make lint-clippy
 
       - name: Install Whitaker
-        uses: leynos/shared-actions/.github/actions/install-whitaker@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/install-whitaker@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
         with:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
@@ -748,7 +748,7 @@ jobs:
 
       - name: Install Rust toolchain
         id: setup-rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/setup-rust@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
         with:
           cache-provider: external
           # `setup-rust` owns sccache: it selects the backend by runner, starts the
@@ -772,7 +772,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/generate-coverage@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
