@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
       id-token: write  # OIDC workflow-source resolution
-    uses: leynos/shared-actions/.github/workflows/mutation-cargo.yml@6cec89bac47a21cf756d68d638a9a510998e57f8
+    uses: leynos/shared-actions/.github/workflows/mutation-cargo.yml@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
     with:
       # `allow-no-mutants` is left at the action's default of false, so a
       # run that reaches cargo-mutants and enumerates nothing fails rather

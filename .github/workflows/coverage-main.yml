@@ -119,7 +119,7 @@ jobs:
 
       - name: Install Rust toolchain
         id: setup-rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/setup-rust@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
         with:
           # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
           cache-provider: external
@@ -144,7 +144,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/generate-coverage@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -188,7 +188,7 @@ jobs:
         # be uploaded as the trunk's and become the baseline every pull
         # request is ratcheted against.
         if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@b59d7d13d29636cc9f0c33a81ba17a9a2bde9bb8
         with:
           # mode defaults to "upload", which is the only mode this estate
           # uses: under CV-005 no pull-request lane talks to CodeScene, so
