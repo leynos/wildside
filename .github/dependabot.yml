@@ -169,3 +169,22 @@ updates:
       timezone: "Etc/UTC"
     cooldown:
       default-days: 7
+
+  # Keep the pinned Rust toolchain current (RT-024).
+  - package-ecosystem: "rust-toolchain"
+    directory: "/"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "rust-toolchain"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
