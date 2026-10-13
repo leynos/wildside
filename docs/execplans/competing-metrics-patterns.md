@@ -112,8 +112,41 @@ removing it.
 - [x] (2026-10-13) The user accepted increasing the hard file limit to 25.
   Implementation resumes with the planned acceptance scope unchanged; stop and
   escalate if the actual patch exceeds 25 files or 600 net lines.
-- [ ] EP-M1: pagination metrics port and `NoOp` implementation (red tests
-  first).
+- (2026-10-13) EP-M1 red-stage tests were added before the port implementation.
+  Cargo spent 5h28m preparing shared target artefacts and compiling uncached
+  because sccache was unreachable. The filtered test completed successfully
+  against the now-implemented port: both HTTP and persistence source-label
+  assertions passed. Since the port was added while Cargo prepared
+  dependencies, the expected red result was not observed. Evidence:
+  `/tmp/test-red-m1-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-1791851016.out`.
+- [x] EP-M1: pagination metrics port and `NoOp` implementation are added; the
+  focused test and all deterministic milestone gates pass.
+- (2026-10-13) First full EP-M1 gate attempt: `make check-fmt` passed.
+  `make lint` found the missing inner doc comment on the test module; that
+  finding is fixed. Its Python tier also failed while fetching pinned public
+  dependency `pylint-pypy-shim`: the Lody GitHub helper returned HTTP 403 and
+  `credentials_exhausted`. A retry with the prescribed clean PATH still used
+  Lody because `GIT_EXEC_PATH` pointed at a Lody session directory. With
+  `GIT_EXEC_PATH` unset, `/usr/bin/git` selected `/usr/libexec/git-core` and a
+  read-only `ls-remote` to the public dependency succeeded. The next lint run
+  will also unset `GIT_EXEC_PATH`; later gates have not started.
+- (2026-10-13) With standard Git routing restored, `make lint` passed rustdoc,
+  Clippy, Whitaker, architecture, frontend and specification checks, then
+  Pylint found C1803 in the unchanged
+  `tests/workflow_contracts/makefile_tooling_test.py`. The equivalent
+  truth-value assertion is simplified so the full deterministic lint gate can
+  pass; this adds one file to the branch's counted scope.
+- (2026-10-13) The clean-routed `make lint` retry passed, including the pinned
+  Pylint dependency, and `make test` passed 1,482 Nextest tests plus the Bun
+  and Python suites. `make markdownlint` then found the American spelling
+  `artifacts` above; this is corrected to `artefacts`. Markdown and Mermaid
+  gates remain pending.
+- (2026-10-13) Final EP-M1 gates passed: `make check-fmt`, `make lint`,
+  `make test`, `make markdownlint`, and `make nixie`. The test run covered
+  1,482 Nextest tests and the remaining Bun and Python suites. The
+  documentation gates passed after correcting the spelling finding. Scrutineer
+  recorded no findings. CodeRabbit review is the milestone's remaining closeout
+  step.
 - [ ] EP-M2: Prometheus adapter in `backend/src/outbound/metrics/`.
 - [ ] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
@@ -195,7 +228,14 @@ removing it.
 
 ## Outcomes & retrospective
 
-To be completed at milestone boundaries and at completion.
+EP-M1 established a synchronous, infallible domain port that preserves the
+structured log while delegating counting to an injected implementation. The
+no-op recorder was verified to retain both source labels in structured events.
+All deterministic code and documentation gates passed. One unrelated but
+gate-blocking Pylint assertion in the workflow-contract tests was simplified;
+it is included in the 25-file scope accounting. The user-approved file cap
+remains 25 and the net-line cap remains 600. Scrutineer's CodeRabbit review is
+required before beginning EP-M2.
 
 ## Context and orientation
 
