@@ -259,15 +259,18 @@ removing it.
   `/tmp/nixie-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-14.out`,
   and
   `/tmp/backend-check-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-3.out`.
+- (2026-10-13) CodeRabbit re-reviewed the corrected M3 commit
+  `70b740e23d8cca77fc1386426da5f5b7b0608877` and reported zero findings. Output:
+  `/tmp/coderabbit-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`.
 - (2026-10-13) Scope checkpoint against the pre-implementation baseline
-  `4d099ed`: 22 unique paths and 550 net added lines. EP-M4's planned deletion,
+  `4d099ed`: 22 unique paths and 563 net added lines. EP-M4's planned deletion,
   export and architecture-document edits bring the path count to 25. EP-M5's
   developer-guide and architecture-lint changes would bring it to at least 27;
   no work beyond the accepted 25-path cap is started pending a scope decision.
 - [x] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
   re-export, and the `main.rs` registration call.
-- [ ] EP-M3: deterministic gates and CodeRabbit review clear.
+- [x] EP-M3: deterministic gates and CodeRabbit review clear.
 - [ ] EP-M4: remove the dead `RouteMetrics` port; update
   `docs/wildside-backend-architecture.md`.
 - [ ] EP-M5: document the single metrics convention in
