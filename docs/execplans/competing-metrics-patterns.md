@@ -145,13 +145,12 @@ removing it.
   `make test`, `make markdownlint`, and `make nixie`. The test run covered
   1,482 Nextest tests and the remaining Bun and Python suites. The
   documentation gates passed after correcting the spelling finding. The
-  deterministic gate run recorded no findings. CodeRabbit review is the
-  milestone's remaining closeout step.
+  deterministic gate run recorded no findings.
 - (2026-10-13) CodeRabbit reviewed M1 at `cdc25ac` and reported one low-severity
   documentation finding: a stray space in the `users.rs` path below. The path
   is corrected. `make check-fmt`, `make markdownlint`, and `make nixie` passed
-  after the correction; the corrected candidate will receive a final review
-  before EP-M2.
+  after the correction. A final CodeRabbit review at `c57a3d2` reported zero
+  findings, clearing the concern before EP-M2.
 - [ ] EP-M2: Prometheus adapter in `backend/src/outbound/metrics/`.
 - [ ] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
@@ -239,8 +238,8 @@ no-op recorder was verified to retain both source labels in structured events.
 All deterministic code and documentation gates passed. One unrelated but
 gate-blocking Pylint assertion in the workflow-contract tests was simplified;
 it is included in the 25-file scope accounting. The user-approved file cap
-remains 25 and the net-line cap remains 600. Scrutineer's CodeRabbit review is
-required before beginning EP-M2.
+remains 25 and the net-line cap remains 600. CodeRabbit reviewed `c57a3d2` with
+zero findings, so EP-M2 can proceed.
 
 ## Context and orientation
 
