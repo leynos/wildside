@@ -144,9 +144,14 @@ removing it.
 - (2026-10-13) Final EP-M1 gates passed: `make check-fmt`, `make lint`,
   `make test`, `make markdownlint`, and `make nixie`. The test run covered
   1,482 Nextest tests and the remaining Bun and Python suites. The
-  documentation gates passed after correcting the spelling finding. Scrutineer
-  recorded no findings. CodeRabbit review is the milestone's remaining closeout
-  step.
+  documentation gates passed after correcting the spelling finding. The
+  deterministic gate run recorded no findings. CodeRabbit review is the
+  milestone's remaining closeout step.
+- (2026-10-13) CodeRabbit reviewed M1 at `cdc25ac` and reported one low-severity
+  documentation finding: a stray space in the `users.rs` path below. The path
+  is corrected. `make check-fmt`, `make markdownlint`, and `make nixie` passed
+  after the correction; the corrected candidate will receive a final review
+  before EP-M2.
 - [ ] EP-M2: Prometheus adapter in `backend/src/outbound/metrics/`.
 - [ ] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
@@ -271,8 +276,8 @@ exact source-reference sweep (the `leta` tool is not installed):
 
 - `backend/src/inbound/http/users_pagination.rs:286,295` inside
   `map_cursor_error`, reached via `list_users`
-  (`backend/src/inbound/http/ users.rs:219`, which holds
-  `web::Data<HttpState>`) → `parse_users_page_params` → `map_cursor_error`.
+  (`backend/src/inbound/http/users.rs:219`, which holds `web::Data<HttpState>`)
+  → `parse_users_page_params` → `map_cursor_error`.
 - `backend/src/outbound/persistence/user_persistence_error_mapping.rs:26,35`
   inside `map_user_pagination_error`, reached from
   `map_user_persistence_error`, whose callers are `diesel_login_service.rs`,
