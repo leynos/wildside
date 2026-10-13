@@ -264,15 +264,31 @@ removing it.
   `/tmp/coderabbit-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`.
 - (2026-10-13) Scope checkpoint against the pre-implementation baseline
   `4d099ed`: 22 unique paths and 563 net added lines. EP-M4's planned deletion,
-  export and architecture-document edits bring the path count to 25. EP-M5's
-  developer-guide and architecture-lint changes would bring it to at least 27;
-  no work beyond the accepted 25-path cap is started pending a scope decision.
+  export and architecture-document edits were initially estimated to bring the
+  path count to 25; the later recount below corrects this because
+  `ports/mod.rs` was already changed in M3. EP-M5 remains outside the accepted
+  cap pending a scope decision.
+- (2026-10-13) EP-M4 implementation removed the unused port definition and
+  export, and revised the architecture decision, testing guidance, and route
+  service example. A source-wide search now finds no code references; remaining
+  documentation mentions are historical records in the implementation plan,
+  completed roadmap, prior idempotency plan, and architecture history.
+- (2026-10-13) The first M4 gate wave passed formatting, lint, typecheck, and
+  tests, then stopped at spelling because the candidate deletion was not staged:
+  `git ls-files` still supplied the removed path to typos. No spelling
+  configuration change is needed; stage the candidate deletion before rerunning
+  the index-based gate.
+- (2026-10-13) Recount after M4 implementation against `4d099ed`: 24 unique
+  paths and 550 net added lines. `ports/mod.rs` was already a changed M3 path,
+  so EP-M4 adds two paths. EP-M5 is still estimated to require at least three
+  more paths and remains outside the accepted cap pending a scope decision.
 - [x] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
   re-export, and the `main.rs` registration call.
 - [x] EP-M3: deterministic gates and CodeRabbit review clear.
-- [ ] EP-M4: remove the dead `RouteMetrics` port; update
+- [x] EP-M4: remove the dead `RouteMetrics` port; update
   `docs/wildside-backend-architecture.md`.
+- [ ] EP-M4: deterministic gates and CodeRabbit review clear.
 - [ ] EP-M5: document the single metrics convention in
   `docs/developers-guide.md`; extend `tools/architecture-lint` to forbid
   `prometheus` imports outside the sanctioned modules.
@@ -493,10 +509,11 @@ against the real `prometheus::Registry`, not a mock.
   function bodies; the new design must encode it as `NoOp` selection at
   composition, verified by compiling both configurations. Non-vacuity: deleting
   the `NoOp` arm in `server/mod.rs` composition would fail this compile.
-- Obligation: V-DEAD-PORT-GONE — `RouteMetrics`/`RouteMetricsError` no
-  longer exist. Method: `rg -n "RouteMetrics" backend/src docs` returns only
-  historical ExecPlan/architecture-changelog mentions; `make test` compiles.
-  Non-vacuity: before EP-M4 the grep hits
+- Obligation: V-DEAD-PORT-GONE — `RouteMetrics`/`RouteMetricsError` no longer
+  exist in source or current design examples. Method:
+  `rg -n "RouteMetrics" backend/src docs` returns no source hits and only
+  historical plan, roadmap, and architecture-decision records; `make test`
+  compiles. Non-vacuity: before EP-M4 the grep hits
   `backend/src/domain/ports/route_metrics.rs` and `ports/mod.rs:170`.
 - Obligation: V-LINT-GUARD — `tools/architecture-lint` rejects `prometheus`
   imports outside `outbound::metrics`, `server`, and the binary entry point.
@@ -700,8 +717,10 @@ Evidence gathered during reconnaissance (2026-08-16) and preflight (2026-09-28):
   `backend/src/outbound/persistence/user_persistence_error_mapping.rs:26,35`;
   crate-root re-export `backend/src/lib.rs:47`; start-up call
   `backend/src/main.rs:31`.
-- Dead port: `backend/src/domain/ports/route_metrics.rs:15`; only other
-  reference is the re-export at `ports/mod.rs:170` (`leta refs RouteMetrics`).
+- Dead port: `backend/src/domain/ports/route_metrics.rs:15`; the source had no
+  implementations or callers beyond the re-export at `ports/mod.rs:170`. An
+  M4-wide search also found historical references in a completed roadmap
+  checklist and the 2025 idempotency-metrics decision log.
 - Current fan-out: `map_user_persistence_error` has three adapter callers:
   `diesel_login_service.rs`, `diesel_users_query.rs`, and
   `diesel_user_profile_query.rs`. The HTTP state composition helper is
