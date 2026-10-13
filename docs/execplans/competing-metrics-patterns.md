@@ -280,8 +280,10 @@ removing it.
   the index-based gate.
 - (2026-10-13) Recount after M4 implementation against `4d099ed`: 24 unique
   paths and 560 net added lines. `ports/mod.rs` was already a changed M3 path,
-  so EP-M4 adds two paths. EP-M5 is still estimated to require at least three
-  more paths and remains outside the accepted cap pending a scope decision.
+  so EP-M4 adds two paths. EP-M5 requires at least five new paths for the
+  developers' guide, lint rule, unit test, BDD test, and feature fixture. That
+  would bring the branch to at least 29 paths, exceeding the accepted cap of
+  25. The 600-line cap has 40 lines of headroom; EP-M5 must stay within it.
 - (2026-10-13) All seven M4 gates passed on `a870894`; Nextest passed 1,489
   cases with four skipped, and Markdown lint reported zero errors across 125
   files. CodeRabbit reviewed 23 files and reported zero findings. Gate and
