@@ -17,10 +17,11 @@ use url::Url;
 use utoipa::ToSchema;
 
 use crate::domain::pagination_errors::{invalid_cursor_error, unsupported_direction_error};
-use crate::domain::ports::{ListUsersPageRequest, UsersPage};
+use crate::domain::ports::{
+    ListUsersPageRequest, PaginationErrorMetrics, PaginationErrorSource, UsersPage,
+};
 use crate::domain::{Error, User, UserCursorKey};
 use crate::inbound::http::schemas::UserSchema;
-use crate::observability::pagination_errors::{PaginationErrorSource, record_pagination_error};
 
 /// Raw users list query parameters.
 ///
@@ -107,6 +108,7 @@ pub enum UsersPageDirection {
 ///
 /// ```ignore
 /// use backend::domain::ports::ListUsersPageRequest;
+/// use backend::domain::ports::NoOpPaginationErrorMetrics;
 /// use backend::inbound::http::users_pagination::{
 ///     PageParams, UsersListQueryParams, UsersPageDirection, parse_users_page_params,
 /// };
@@ -119,7 +121,8 @@ pub enum UsersPageDirection {
 ///     PageParams,
 ///     ListUsersPageRequest,
 ///     UsersPageDirection,
-/// ) = parse_users_page_params(query).expect("valid users pagination params");
+/// ) = parse_users_page_params(query, &NoOpPaginationErrorMetrics)
+///     .expect("valid users pagination params");
 ///
 /// assert_eq!(params.limit(), 2);
 /// assert_eq!(request.limit(), 2);
@@ -127,6 +130,7 @@ pub enum UsersPageDirection {
 /// ```
 pub fn parse_users_page_params(
     params: UsersListQueryParams,
+    pagination_error_metrics: &dyn PaginationErrorMetrics,
 ) -> Result<(PageParams, ListUsersPageRequest, UsersPageDirection), Error> {
     let limit = parse_limit(params.limit.as_deref())?;
     let page_params = PageParams::new(params.cursor.clone(), limit)
@@ -136,7 +140,7 @@ pub fn parse_users_page_params(
         .as_deref()
         .map(Cursor::<UserCursorKey>::decode)
         .transpose()
-        .map_err(map_cursor_error)?;
+        .map_err(|error| map_cursor_error(error, pagination_error_metrics))?;
     let direction = cursor
         .as_ref()
         .map_or(UsersPageDirection::First, cursor_direction);
@@ -275,7 +279,10 @@ fn current_request_url(request: &HttpRequest) -> Result<Url, Error> {
     Url::parse(&url).map_err(|err| Error::internal(format!("failed to build request URL: {err}")))
 }
 
-fn map_cursor_error(error: CursorError) -> Error {
+fn map_cursor_error(
+    error: CursorError,
+    pagination_error_metrics: &dyn PaginationErrorMetrics,
+) -> Error {
     match error {
         CursorError::UnsupportedDirection { direction } => {
             debug!(
@@ -283,7 +290,8 @@ fn map_cursor_error(error: CursorError) -> Error {
                 source = "users_http",
                 "rejected users cursor with unsupported direction"
             );
-            record_pagination_error(PaginationErrorSource::UsersHttp, "unsupported_direction");
+            pagination_error_metrics
+                .record(PaginationErrorSource::UsersHttp, "unsupported_direction");
             unsupported_direction_error()
         }
         CursorError::InvalidBase64 { message } | CursorError::Deserialize { message } => {
@@ -292,7 +300,7 @@ fn map_cursor_error(error: CursorError) -> Error {
                 source = "users_http",
                 "rejected users cursor with decode failure"
             );
-            record_pagination_error(PaginationErrorSource::UsersHttp, "invalid_cursor");
+            pagination_error_metrics.record(PaginationErrorSource::UsersHttp, "invalid_cursor");
             invalid_cursor_error()
         }
         CursorError::Serialize { message } => {
@@ -313,4 +321,61 @@ fn invalid_limit_error(value: Option<&str>) -> Error {
         "value": value,
         "max": MAX_LIMIT,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    //! Verify that HTTP cursor errors use the injected metrics recorder.
+
+    use std::sync::Mutex;
+
+    use crate::domain::ErrorCode;
+    use crate::domain::ports::{PaginationErrorMetrics, PaginationErrorSource};
+
+    use super::{UsersListQueryParams, parse_users_page_params};
+
+    #[derive(Default)]
+    struct RecordingPaginationErrorMetrics(Mutex<Vec<(PaginationErrorSource, &'static str)>>);
+
+    impl PaginationErrorMetrics for RecordingPaginationErrorMetrics {
+        fn increment(&self, source: PaginationErrorSource, detail_code: &'static str) {
+            self.0
+                .lock()
+                .expect("pagination metrics lock should not be poisoned")
+                .push((source, detail_code));
+        }
+    }
+
+    fn assert_cursor_error_is_recorded(cursor: &str, expected_detail_code: &'static str) {
+        let metrics = RecordingPaginationErrorMetrics::default();
+        let params = UsersListQueryParams {
+            cursor: Some(cursor.to_owned()),
+            limit: None,
+        };
+
+        let error = match parse_users_page_params(params, &metrics) {
+            Err(error) => error,
+            Ok(_) => panic!("invalid cursor should be rejected"),
+        };
+
+        assert_eq!(error.code(), ErrorCode::InvalidRequest);
+        assert_eq!(
+            *metrics
+                .0
+                .lock()
+                .expect("pagination metrics lock should not be poisoned"),
+            vec![(PaginationErrorSource::UsersHttp, expected_detail_code)]
+        );
+    }
+
+    #[test]
+    fn records_invalid_cursor_errors() {
+        assert_cursor_error_is_recorded("not-a-cursor", "invalid_cursor");
+    }
+
+    #[test]
+    fn records_unsupported_direction_errors() {
+        let cursor = "eyJrZXkiOnsiY3JlYXRlZF9hdCI6IjIwMjYtMDMtMjJUMTA6MzA6MDBaIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifSwiZGlyIjoiU2lkZXdheXMifQ";
+        assert_cursor_error_is_recorded(cursor, "unsupported_direction");
+    }
 }

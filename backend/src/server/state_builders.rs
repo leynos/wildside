@@ -11,9 +11,9 @@ use backend::domain::ports::{
     FixtureRouteAnnotationsCommand, FixtureRouteAnnotationsQuery, FixtureUserInterestsCommand,
     FixtureUserPreferencesCommand, FixtureUserPreferencesQuery, FixtureUserProfileQuery,
     FixtureUsersQuery, FixtureWalkSessionCommand, FixtureWalkSessionQuery, LoginService,
-    OfflineBundleCommand, OfflineBundleQuery, RouteAnnotationsCommand, RouteAnnotationsQuery,
-    RouteSubmissionService, UserInterestsCommand, UserPreferencesCommand, UserPreferencesQuery,
-    UserProfileQuery, UsersQuery, WalkSessionCommand, WalkSessionQuery,
+    OfflineBundleCommand, OfflineBundleQuery, PaginationErrorMetrics, RouteAnnotationsCommand,
+    RouteAnnotationsQuery, RouteSubmissionService, UserInterestsCommand, UserPreferencesCommand,
+    UserPreferencesQuery, UserProfileQuery, UsersQuery, WalkSessionCommand, WalkSessionQuery,
 };
 use backend::domain::{
     OfflineBundleCommandService, OfflineBundleQueryService, RouteAnnotationsService,
@@ -121,27 +121,34 @@ fn build_profile_interests_pair_with_pool<Pool>(
     }
 }
 
-fn build_login_users_pair(config: &ServerConfig) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>) {
+fn build_login_users_pair(
+    config: &ServerConfig,
+    pagination_error_metrics: &Arc<dyn PaginationErrorMetrics>,
+) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>) {
     build_login_users_pair_with_pool(&config.db_pool, |pool| {
         (
-            Arc::new(DieselLoginService::new(DieselUserRepository::new(
-                pool.clone(),
-            ))) as Arc<dyn LoginService>,
-            Arc::new(DieselUsersQuery::new(DieselUserRepository::new(
-                pool.clone(),
-            ))) as Arc<dyn UsersQuery>,
+            Arc::new(DieselLoginService::new(
+                DieselUserRepository::new(pool.clone()),
+                pagination_error_metrics.clone(),
+            )) as Arc<dyn LoginService>,
+            Arc::new(DieselUsersQuery::new(
+                DieselUserRepository::new(pool.clone()),
+                pagination_error_metrics.clone(),
+            )) as Arc<dyn UsersQuery>,
         )
     })
 }
 
 fn build_profile_interests_pair(
     config: &ServerConfig,
+    pagination_error_metrics: &Arc<dyn PaginationErrorMetrics>,
 ) -> (Arc<dyn UserProfileQuery>, Arc<dyn UserInterestsCommand>) {
     build_profile_interests_pair_with_pool(&config.db_pool, |pool| {
         (
-            Arc::new(DieselUserProfileQuery::new(Arc::new(
-                DieselUserRepository::new(pool.clone()),
-            ))) as Arc<dyn UserProfileQuery>,
+            Arc::new(DieselUserProfileQuery::new(
+                Arc::new(DieselUserRepository::new(pool.clone())),
+                pagination_error_metrics.clone(),
+            )) as Arc<dyn UserProfileQuery>,
             Arc::new(DieselUserInterestsCommand::new(Arc::new(
                 DieselUserPreferencesRepository::new(pool.clone()),
             ))) as Arc<dyn UserInterestsCommand>,
@@ -245,9 +252,12 @@ build_idempotent_pair!(
     FixtureRouteAnnotationsQuery
 );
 
-fn compose_user_state_ports(config: &ServerConfig) -> UserStatePortsBundle {
-    let (login, users) = build_login_users_pair(config);
-    let (profile, interests) = build_profile_interests_pair(config);
+fn compose_user_state_ports(
+    config: &ServerConfig,
+    pagination_error_metrics: &Arc<dyn PaginationErrorMetrics>,
+) -> UserStatePortsBundle {
+    let (login, users) = build_login_users_pair(config, pagination_error_metrics);
+    let (profile, interests) = build_profile_interests_pair(config, pagination_error_metrics);
     let (preferences, preferences_query) = build_user_preferences_pair(config);
     let (route_annotations, route_annotations_query) = build_route_annotations_pair(config);
 
@@ -313,35 +323,11 @@ fn build_enrichment_provenance_repository(
     }
 }
 
-/// Build the shared HTTP state from configured ports and fixture fallbacks.
-///
-/// # Examples
-///
-/// ```rust
-/// use std::net::SocketAddr;
-/// use std::sync::Arc;
-///
-/// use actix_web::cookie::{Key, SameSite};
-/// use actix_web::web;
-/// use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
-/// use backend::inbound::http::state::HttpState;
-/// use backend::test_support::server::{ServerConfig, build_http_state};
-///
-/// let config = ServerConfig::new(
-///     Key::generate(),
-///     false,
-///     SameSite::Lax,
-///     SocketAddr::from(([127, 0, 0, 1], 0)),
-/// );
-/// let route_submission: Arc<dyn RouteSubmissionService> =
-///     Arc::new(FixtureRouteSubmissionService);
-///
-/// let state: web::Data<HttpState> = build_http_state(&config, route_submission);
-/// let _ = state;
-/// ```
-pub fn build_http_state(
+/// Build HTTP state with the metrics recorder selected at server composition.
+pub(super) fn build_http_state_with_metrics(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
+    pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
 ) -> web::Data<HttpState> {
     let UserStatePortsBundle {
         login,
@@ -352,13 +338,13 @@ pub fn build_http_state(
         preferences_query,
         route_annotations,
         route_annotations_query,
-    } = compose_user_state_ports(config);
+    } = compose_user_state_ports(config, &pagination_error_metrics);
     let (offline_bundles, offline_bundles_query) = build_offline_bundles_pair(config);
     let (walk_sessions, walk_sessions_query) = build_walk_sessions_pair(config);
     let enrichment_provenance = build_enrichment_provenance_repository(config);
     let (catalogue, descriptors) = build_catalogue_services(config);
 
-    web::Data::new(HttpState::new_with_extra(
+    web::Data::new(HttpState::new_with_extra_and_metrics(
         HttpStatePorts {
             login,
             users,
@@ -379,5 +365,6 @@ pub fn build_http_state(
             walk_sessions,
             walk_sessions_query,
         },
+        pagination_error_metrics,
     ))
 }

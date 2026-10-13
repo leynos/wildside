@@ -7,7 +7,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::domain::ports::{LoginService, UserRepository};
+#[cfg(test)]
+use crate::domain::ports::NoOpPaginationErrorMetrics;
+use crate::domain::ports::{LoginService, PaginationErrorMetrics, UserRepository};
 use crate::domain::{DisplayName, Error, LoginCredentials, User, UserId};
 
 use super::diesel_user_repository::DieselUserRepository;
@@ -24,19 +26,27 @@ const FIXTURE_DISPLAY_NAME: &str = "Ada Lovelace";
 #[derive(Clone)]
 pub struct DieselLoginService {
     user_repository: Arc<dyn UserRepository>,
+    pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
 }
 
 impl DieselLoginService {
     /// Create a new service backed by a Diesel user repository.
-    pub fn new(user_repository: DieselUserRepository) -> Self {
+    pub fn new(
+        user_repository: DieselUserRepository,
+        pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
+    ) -> Self {
         Self {
             user_repository: Arc::new(user_repository),
+            pagination_error_metrics,
         }
     }
 
     #[cfg(test)]
     fn from_repository(user_repository: Arc<dyn UserRepository>) -> Self {
-        Self { user_repository }
+        Self {
+            user_repository,
+            pagination_error_metrics: Arc::new(NoOpPaginationErrorMetrics),
+        }
     }
 
     async fn ensure_fixture_user_exists(&self, user_id: &UserId) -> Result<(), Error> {
@@ -44,7 +54,9 @@ impl DieselLoginService {
             .user_repository
             .find_by_id(user_id)
             .await
-            .map_err(map_user_persistence_error)?;
+            .map_err(|error| {
+                map_user_persistence_error(error, self.pagination_error_metrics.as_ref())
+            })?;
 
         if existing.is_some() {
             return Ok(());
@@ -54,10 +66,9 @@ impl DieselLoginService {
             .map_err(|err| Error::internal(format!("invalid fixture display name: {err}")))?;
         let user = User::with_current_timestamp(user_id.clone(), display_name);
 
-        self.user_repository
-            .upsert(&user)
-            .await
-            .map_err(map_user_persistence_error)
+        self.user_repository.upsert(&user).await.map_err(|error| {
+            map_user_persistence_error(error, self.pagination_error_metrics.as_ref())
+        })
     }
 }
 

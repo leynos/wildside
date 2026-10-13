@@ -182,9 +182,63 @@ removing it.
   `/tmp/coderabbit-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-3.out`.
 - [x] EP-M2: adapter, deterministic gates, and CodeRabbit review all pass.
 - [x] EP-M2: Prometheus adapter in `backend/src/outbound/metrics/`.
-- [ ] EP-M3: wire injection through inbound and outbound call sites; delete
+- (2026-10-13) EP-M3 wiring is in progress: `HttpState` and the three Diesel
+  user adapters now receive one injected `PaginationErrorMetrics` handle from
+  server composition; HTTP parsing and persistence mapping tests assert exact
+  source/detail-code values with local recorders. The existing cursor response
+  tests retain their serial guards and continue to verify the HTTP error
+  contract; they no longer depend on a process-global recorder. The `OnceLock`
+  module, root export and startup registration call are removed. Fourteen
+  metrics-enabled parser, mapping, adapter and server-exposition tests passed,
+  followed by two cursor-response tests. The exposition test starts the server,
+  submits an invalid cursor, and confirms `/metrics` exposes the preserved
+  counter name, labels and increment. Evidence:
+  `/tmp/ep-m3-focused-final-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4.out` and
+  `/tmp/ep-m3-cursor-http-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4.out`. A first
+  focused build overlapped source edits and failed against an intermediate
+  tree; it is not treated as validation. An initial exposition-test attempt
+  timed out while stopping the server with the client pool alive; dropping the
+  client before graceful shutdown resolved it.
+- (2026-10-13) First full M3 gate wave: `make check-fmt`, `make typecheck`,
+  `make test` (1,489 Nextest cases, compile-fail 1/1, Python 107 passed),
+  `make nixie`, and `cargo check -p backend --no-default-features` passed.
+  `make lint` found the exposition integration test importing inbound/HTTP
+  types from the outbound metrics module and reported `state_builders.rs` at
+  410 lines. The feature-off check also identified an unused `NoOp` import.
+  `make markdownlint` stopped when the spelling command received a deleted but
+  unstaged path from `git ls-files`. Evidence is in the Scrutineer logs ending
+  `-10.out`, `-6.out`, `-3.out`, `-12.out`, `-11.out`, and
+  `backend-check-...patterns.out` under `/tmp`.
+- (2026-10-13) Gate-driven corrections: the `/metrics` end-to-end test now lives
+  with server-bootstrap tests in `backend/src/tests.rs`, keeping inbound and
+  HTTP dependencies out of `outbound::metrics`. The test-support wrapper moved
+  to `server/mod.rs`, leaving `server/state_builders.rs` at 370 lines; its
+  no-op import was removed. Only the two intentionally deleted observability
+  paths are staged so the index-based spelling gate omits them. The original
+  candidate’s serial response-test attributes remain unchanged.
+- (2026-10-13) The corrected EP-M3 candidate passed the second full deterministic
+  wave: `make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `make markdownlint`, `make nixie`, and
+  `cargo check -p backend --no-default-features`. Nextest reported 1,489 cases
+  without failures; the compile-fail harness passed 1/1 and Python reported 107
+  passing tests. Logs:
+  `/tmp/check-fmt-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-11.out`,
+  `/tmp/lint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-7.out`,
+  `/tmp/typecheck-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`,
+  `/tmp/test-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-4.out`,
+  `/tmp/markdownlint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-13.out`,
+  `/tmp/nixie-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-12.out`,
+  and `/tmp/backend-check-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`.
+  CodeRabbit review remains pending the committed candidate.
+- (2026-10-13) Scope checkpoint: the three-dot diff against `origin/main` plus
+  the worktree contains 22 unique files. EP-M4's planned deletion, export and
+  architecture-document edits bring that to 25. EP-M5's developer-guide and
+  architecture-lint changes would bring it to 27; no work beyond the accepted
+  25-file cap is started pending a scope decision.
+- [x] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
   re-export, and the `main.rs` registration call.
+- [ ] EP-M3: deterministic gates and CodeRabbit review clear.
 - [ ] EP-M4: remove the dead `RouteMetrics` port; update
   `docs/wildside-backend-architecture.md`.
 - [ ] EP-M5: document the single metrics convention in
@@ -216,6 +270,12 @@ removing it.
   `create_server` builds the Actix server in `backend/src/server/mod.rs`.
   Impact: EP-M3 must thread the selected handle through this builder as well as
   the HTTP state; selection remains at server composition time.
+- Observation (2026-10-13): the HTTP cursor-error tests and persistence error
+  mapping tests were serialized around the module-level recorder, but no BDD
+  step asserts on the Prometheus counter. The users-list BDD scenario checks
+  the invalid-cursor response only. Impact: M3 replaces recorder-dependent
+  assertions with injected-recorder assertions in unit tests. The cursor
+  response tests retain their serial attributes and response assertions.
 - Observation: the plan is stored at
   `docs/execplans/competing-metrics-patterns.md`; the requested
   `docs/execplans/feat/` subdirectory is absent. The open PR title already has
@@ -245,6 +305,13 @@ removing it.
   request path; counter increments cannot meaningfully fail, and a metrics
   failure must never alter request handling. Matches the current behaviour of
   `increment_pagination_error_counter`. Date/Author: 2026-08-16, drafting agent.
+- Decision (2026-10-13): keep the end-to-end `/metrics` assertion with the
+  server-bootstrap tests rather than the outbound Prometheus adapter tests.
+  Rationale: the architecture guard correctly forbids an outbound metrics
+  module from depending on inbound HTTP and Actix client APIs. Move the no-op
+  test-support wrapper to the server facade to keep the state-builder module
+  below its 400-line limit while retaining its composition helper. Date/Author:
+  2026-10-13, implementation agent.
 - Decision: remove `RouteMetrics` and `RouteMetricsError` rather than wire
   them. Rationale: pre-1.0, application-internal, zero implementations and zero
   call sites; a dead port invites divergent guesses about its semantics.
@@ -480,9 +547,9 @@ EP-M3. Wiring and deletion, one coherent change:
   `observability` module if empty apart from it; check
   `backend/src/observability/` for siblings first —
   `leta files backend/src/observability`).
-- Update tests that constructed the global (the `#[serial]` test moves to
-  the EP-M2 adapter tests; BDD steps referencing the counter re-assert via an
-  injected adapter and fresh registry).
+- Replace the tests' reliance on the process-global recorder with injected
+  recorder assertions. The existing BDD scenario continues to verify the
+  invalid-cursor response; it does not assert on the metric counter.
 
 EP-M4. Delete `backend/src/domain/ports/route_metrics.rs` and its `pub use` in
 `ports/mod.rs:170`. Update `docs/wildside-backend-architecture.md`: drop or
@@ -516,12 +583,12 @@ after each milestone.
   Remaining: wiring.
 - EP-M3 — single pattern in force; global deleted. Acceptance:
   V-GLOBAL-GONE, V-FEATURE-OFF, full gates green, `/metrics` still exposes
-  `wildside_pagination_errors_total` (manual check: run the server with metrics
-  enabled, trigger an invalid cursor on the users list endpoint,
-  `curl /metrics | grep pagination`). Conformance: no persisted/wire format
-  change (metric name and labels preserved). Recovery: this milestone is a
-  single commit; revert restores Pattern B intact. Compatibility decision: none
-  — `register_pagination_error_metrics` is application-internal and pre-1.0; no
+  `wildside_pagination_errors_total` (automated check starts the server with
+  metrics enabled, triggers an invalid cursor on the users list endpoint, and
+  reads `/metrics`). Conformance: no persisted/wire format change (metric name
+  and labels preserved). Recovery: this milestone is a single commit; revert
+  restores Pattern B intact. Compatibility decision: none —
+  `register_pagination_error_metrics` is application-internal and pre-1.0; no
   shim.
 - EP-M4 — dead port removed; architecture doc consistent with code.
   Acceptance: V-DEAD-PORT-GONE; `make markdownlint` and `make nixie` green.

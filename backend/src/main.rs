@@ -28,7 +28,6 @@ fn make_metrics()
     let metrics = PrometheusMetricsBuilder::new("wildside")
         .endpoint("/metrics")
         .build()?;
-    backend::register_pagination_error_metrics(&metrics.registry)?;
     Ok(metrics)
 }
 
