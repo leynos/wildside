@@ -10,8 +10,9 @@ pub mod server {
 
     use std::sync::Arc;
 
-    use crate::domain::ports::RouteSubmissionService;
+    use crate::domain::ports::{NoOpPaginationErrorMetrics, RouteSubmissionService};
     use crate::inbound::http::state::HttpState;
+    use crate::server::state_builders;
     use actix_web::web;
 
     pub use crate::server::ServerConfig;
@@ -50,7 +51,11 @@ pub mod server {
         config: &ServerConfig,
         route_submission: Arc<dyn RouteSubmissionService>,
     ) -> web::Data<HttpState> {
-        crate::server::build_http_state(config, route_submission)
+        state_builders::build_http_state_with_metrics(
+            config,
+            route_submission,
+            Arc::new(NoOpPaginationErrorMetrics),
+        )
     }
 
     /// Build the route submission service using the same selector as production.

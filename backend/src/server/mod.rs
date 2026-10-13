@@ -3,7 +3,7 @@
 mod config;
 #[cfg(feature = "metrics")]
 mod metrics;
-mod state_builders;
+pub(crate) mod state_builders;
 
 pub use config::ServerConfig;
 
@@ -152,43 +152,6 @@ fn build_pagination_error_metrics(
     }
 
     Ok(Arc::new(NoOpPaginationErrorMetrics))
-}
-
-/// Build HTTP state for the test-support facade using no-op metrics.
-///
-/// # Examples
-/// ```rust
-/// use std::net::SocketAddr;
-/// use std::sync::Arc;
-///
-/// use actix_web::cookie::{Key, SameSite};
-/// use actix_web::web;
-/// use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
-/// use backend::inbound::http::state::HttpState;
-/// use backend::test_support::server::{ServerConfig, build_http_state};
-///
-/// let config = ServerConfig::new(
-///     Key::generate(),
-///     false,
-///     SameSite::Lax,
-///     SocketAddr::from(([127, 0, 0, 1], 0)),
-/// );
-/// let route_submission: Arc<dyn RouteSubmissionService> =
-///     Arc::new(FixtureRouteSubmissionService);
-/// let state: web::Data<HttpState> = build_http_state(&config, route_submission);
-/// let _ = state;
-/// ```
-#[cfg(any(test, feature = "test-support"))]
-#[allow(dead_code, reason = "Used by the test-support facade")]
-pub(crate) fn build_http_state(
-    config: &ServerConfig,
-    route_submission: Arc<dyn RouteSubmissionService>,
-) -> web::Data<HttpState> {
-    state_builders::build_http_state_with_metrics(
-        config,
-        route_submission,
-        Arc::new(NoOpPaginationErrorMetrics),
-    )
 }
 
 #[derive(Clone)]

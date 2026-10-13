@@ -324,7 +324,7 @@ fn build_enrichment_provenance_repository(
 }
 
 /// Build HTTP state with the metrics recorder selected at server composition.
-pub(super) fn build_http_state_with_metrics(
+pub(crate) fn build_http_state_with_metrics(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
     pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,

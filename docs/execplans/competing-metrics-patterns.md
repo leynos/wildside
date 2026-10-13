@@ -209,16 +209,17 @@ removing it.
   unstaged path from `git ls-files`. Evidence is in the Scrutineer logs ending
   `-10.out`, `-6.out`, `-3.out`, `-12.out`, `-11.out`, and
   `backend-check-...patterns.out` under `/tmp`.
-- (2026-10-13) Gate-driven corrections: the `/metrics` end-to-end test now lives
-  with server-bootstrap tests in `backend/src/tests.rs`, keeping inbound and
-  HTTP dependencies out of `outbound::metrics`. The test-support wrapper moved
-  to `server/mod.rs`, leaving `server/state_builders.rs` at 370 lines; its
-  no-op import was removed. Only the two intentionally deleted observability
-  paths are staged so the index-based spelling gate omits them. The original
-  candidate’s serial response-test attributes remain unchanged.
-- (2026-10-13) The corrected EP-M3 candidate passed the second full deterministic
-  wave: `make check-fmt`, `make lint`, `make typecheck`, `make test`,
-  `make markdownlint`, `make nixie`, and
+- (2026-10-13) Gate-driven corrections: the `/metrics` end-to-end test now
+  lives in an inline test module in `backend/src/main.rs`, keeping inbound and
+  HTTP dependencies out of `outbound::metrics` while using an already changed
+  path. The test-support wrapper was initially moved to `server/mod.rs`, leaving
+  `server/state_builders.rs` at 370 lines; its no-op import was removed. Only
+  the two intentionally deleted observability paths were staged so the
+  index-based spelling gate omitted them. The original candidate’s serial
+  response-test attributes remain unchanged.
+- (2026-10-13) The corrected EP-M3 candidate passed the second full
+  deterministic wave: `make check-fmt`, `make lint`, `make typecheck`,
+  `make test`, `make markdownlint`, `make nixie`, and
   `cargo check -p backend --no-default-features`. Nextest reported 1,489 cases
   without failures; the compile-fail harness passed 1/1 and Python reported 107
   passing tests. Logs:
@@ -228,13 +229,41 @@ removing it.
   `/tmp/test-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-4.out`,
   `/tmp/markdownlint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-13.out`,
   `/tmp/nixie-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-12.out`,
-  and `/tmp/backend-check-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`.
-  CodeRabbit review remains pending the committed candidate.
-- (2026-10-13) Scope checkpoint: the three-dot diff against `origin/main` plus
-  the worktree contains 22 unique files. EP-M4's planned deletion, export and
-  architecture-document edits bring that to 25. EP-M5's developer-guide and
-  architecture-lint changes would bring it to 27; no work beyond the accepted
-  25-file cap is started pending a scope decision.
+  and
+  `/tmp/backend-check-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`.
+  CodeRabbit reviewed committed candidate `6ff878e`; findings and corrections
+  are recorded below.
+- (2026-10-13) CodeRabbit reviewed M3 commit `6ff878e` and raised two concerns:
+  an unnecessary `dead_code` suppression on the test-support state builder, and
+  an unbounded HTTP request phase in the server exposition test. The server
+  module is compiled again by the binary target, where the test-support helper
+  has no caller. The helper now lives in the library's `test_support.rs` and
+  calls the shared `state_builders` constructor, avoiding the binary-only dead
+  code while keeping production and test composition on one seam. The test
+  moved into `main.rs` so this one-file addition keeps the overall change
+  within the accepted 25-path limit after EP-M4. The login, invalid-cursor and
+  metrics requests now share a 15-second timeout; the test still stops and
+  joins the server before returning a timeout error. The first post-review gate
+  attempt failed `make lint` on the binary-only dead-code diagnostic; other
+  gates were not run. The revised candidate then passed all seven deterministic
+  gates: `make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `make markdownlint`, `make nixie`, and
+  `cargo check -p backend --no-default-features`. Nextest reported 1,489 passed
+  and four skipped; compile-fail passed, as did frontend, workflow-contract and
+  Python suites. Logs:
+  `/tmp/check-fmt-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-16.out`,
+  `/tmp/lint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-9.out`,
+  `/tmp/typecheck-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-3.out`,
+  `/tmp/test-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-5.out`,
+  `/tmp/markdownlint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-15.out`,
+  `/tmp/nixie-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-14.out`,
+  and
+  `/tmp/backend-check-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-3.out`.
+- (2026-10-13) Scope checkpoint against the pre-implementation baseline
+  `4d099ed`: 22 unique paths and 550 net added lines. EP-M4's planned deletion,
+  export and architecture-document edits bring the path count to 25. EP-M5's
+  developer-guide and architecture-lint changes would bring it to at least 27;
+  no work beyond the accepted 25-path cap is started pending a scope decision.
 - [x] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
   re-export, and the `main.rs` registration call.
@@ -306,12 +335,13 @@ removing it.
   failure must never alter request handling. Matches the current behaviour of
   `increment_pagination_error_counter`. Date/Author: 2026-08-16, drafting agent.
 - Decision (2026-10-13): keep the end-to-end `/metrics` assertion with the
-  server-bootstrap tests rather than the outbound Prometheus adapter tests.
-  Rationale: the architecture guard correctly forbids an outbound metrics
-  module from depending on inbound HTTP and Actix client APIs. Move the no-op
-  test-support wrapper to the server facade to keep the state-builder module
-  below its 400-line limit while retaining its composition helper. Date/Author:
-  2026-10-13, implementation agent.
+  binary's inline test module in `backend/src/main.rs` rather than the outbound
+  Prometheus adapter tests. Rationale: the architecture guard correctly forbids
+  an outbound metrics module from depending on inbound HTTP and Actix client
+  APIs. The test-support wrapper lives in the library's `test_support.rs` and
+  calls the shared state-builder seam. This avoids a dead-code diagnostic
+  because `main.rs` compiles its own `server` module, without restoring a lint
+  suppression. Date/Author: 2026-10-13, implementation agent.
 - Decision: remove `RouteMetrics` and `RouteMetricsError` rather than wire
   them. Rationale: pre-1.0, application-internal, zero implementations and zero
   call sites; a dead port invites divergent guesses about its semantics.
