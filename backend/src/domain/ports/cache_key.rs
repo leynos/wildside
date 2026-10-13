@@ -205,7 +205,10 @@ fn should_sort_array(current_key: Option<&str>) -> bool {
 
 fn round_coordinate(key: &str, number: &Number) -> Result<Number, RouteCacheKeyDerivationError> {
     let Some(value) = number.as_f64() else {
-        return Ok(number.clone());
+        return Err(RouteCacheKeyDerivationError::CoordinateOutOfRange {
+            key: key.to_owned(),
+            value: number.clone(),
+        });
     };
 
     if value.abs() > MAX_COORDINATE_MAGNITUDE {

@@ -1089,12 +1089,12 @@ floating-point precision and both bounded feasibility runs timed out.
   Complex Method advisory (complexity 9) for `observe_payload_features` in
   `backend/src/domain/ports/cache_key/tests/properties/strategy_coverage.rs`.
   The helper has been split into focused coordinate, array, and theme-array
-  functions; local `cs review ... --pretty` reports health 10.0 with no finding.
-  Full deterministic gates passed. CodeRabbit review 21 found that roadmap
-  item 5.1.4a was still checked; the marker is now unchecked until hosted
-  remediation is complete. The docs-only gates passed. Review 22 found that
-  the Stage E closeout text should distinguish historical completion from the
-  current unchecked roadmap status; that wording is now explicit. The next
+  functions; local `cs review ... --pretty` reports health 10.0 with no
+  finding. Full deterministic gates passed. CodeRabbit review 21 found that
+  roadmap item 5.1.4a was still checked; the marker is now unchecked until
+  hosted remediation is complete. The docs-only gates passed. Review 22 found
+  that the Stage E closeout text should distinguish historical completion from
+  the current unchecked roadmap status; that wording is now explicit. The next
   docs-only gates passed (check-fmt 45 files, Markdown lint 125 files/0 errors,
   Nixie all diagrams valid), and CodeRabbit review 23 returned no concerns.
   Final status wording and closeout gates passed: check-fmt 45 files, Markdown
@@ -1103,24 +1103,58 @@ floating-point precision and both bounded feasibility runs timed out.
   connection error (not a rate limit). The remediation was committed as
   `977206e` and published to PR #458. Its terminal hosted CodeScene check
   passed. After the documentation closeout commit `71cd8e4`, the live PR head
-  and remote branch both matched
-  `71cd8e4d823f4e01ccf2c0e3c22c1a10240e09db`; terminal hosted CodeScene and
-  Gecko checks passed, with no failed or pending checks. The final CodeScene
-  result is
-  <https://codescene.io/projects/70675/delta/results/7724509>. Hosted CodeRabbit
-  was skipped because the PR is draft (local review 24 completed cleanly); Kody
-  and the `dependabot-automerge` workflow were also skipped. Monitoring bundle:
-  `/tmp/actions-final-leynos-wildside-pr458-SSFJu0`. Logs use the project/branch
-  prefix and suffixes `docs-status-followup`, `docs-closeout`,
-  `docs-status-final`, and `final-closeout-retry`.
+  and remote branch both matched `71cd8e4d823f4e01ccf2c0e3c22c1a10240e09db`;
+  terminal hosted CodeScene and Gecko checks passed, with no failed or pending
+  checks. The final CodeScene result is
+  <https://codescene.io/projects/70675/delta/results/7724509>. Hosted
+  CodeRabbit was skipped because the PR is draft (local review 24 completed
+  cleanly); Kody and the `dependabot-automerge` workflow were also skipped.
+  Monitoring bundle: `/tmp/actions-final-leynos-wildside-pr458-SSFJu0`. Logs
+  use the project/branch prefix and suffixes `docs-status-followup`,
+  `docs-closeout`, `docs-status-final`, and `final-closeout-retry`.
 - [x] Latest implementation-head verification: before this documentation
   follow-up, PR #458's implementation head and remote branch matched
-  `d4df6990e53e4670c2734a3fd49ed929948fb34d`. CodeScene and Gecko passed;
-  Kody and `dependabot-automerge` were skipped. Hosted CodeRabbit was skipped
+  `d4df6990e53e4670c2734a3fd49ed929948fb34d`. CodeScene and Gecko passed; Kody
+  and `dependabot-automerge` were skipped. Hosted CodeRabbit was skipped
   because the PR is draft, and local CodeRabbit review 24 returned no findings.
   CodeScene result:
-  <https://codescene.io/projects/70675/delta/results/7724584>. Monitoring bundle:
-  `/tmp/actions-final-leynos-wildside-pr458-LddO8d`.
+  <https://codescene.io/projects/70675/delta/results/7724584>. Monitoring
+  bundle: `/tmp/actions-final-leynos-wildside-pr458-LddO8d`.
+- [x] CodeScene duplication follow-up: the docs-only commit `5852ae9` triggered
+  a hosted CodeScene advisory for duplicated rejection cases in
+  `backend/src/domain/ports/cache_key/tests.rs`; that source was unchanged from
+  the previously green implementation head. Local `cs review` reproduced the
+  duplicate between the rounding-overflow and idempotence-counterexample tests.
+  Consolidated the shared assertion into one `rstest` table with three named
+  inputs, preserving both overflow values and the idempotence counterexample.
+  Local CodeScene now reports health 10.0 with no finding. `make check-fmt`,
+  `make lint`, the targeted cache-key tests (48 passed), `make test` (exit 0;
+  1,510 passed, 4 skipped, plus the compile-fail and follow-on checks),
+  `make typecheck`, `make markdownlint` (125 files, 0 errors), and `make nixie`
+  all passed. The CodeRabbit review after this follow-up found one low-severity
+  documentation mismatch: this item was still described as pending while
+  roadmap item 5.1.4a remained checked. The implementation and its follow-up
+  are complete; the roadmap stays checked because the planned functionality and
+  acceptance criteria are complete. This progress record now states that
+  explicitly. The repository code-health-rules JSON parse warning remains
+  pre-existing and was not changed.
+- [x] Final review remediation: the updated-tree CodeRabbit review confirmed
+  the coordinate fallback should preserve admission even when `as_f64()` cannot
+  represent a number. The pinned `serde_json` 1.0.150 source and active feature
+  set make that branch unreachable in this build, but returning the original
+  number would leave the invariant unguarded if conversion could fail in
+  another supported build. The fallback now returns `CoordinateOutOfRange`.
+  `make check-fmt`, `make lint`, `cargo test -p backend cache_key` (48 passed),
+  `make test` (exit 0; 1,510 passed, 4 skipped, with compile-fail and follow-on
+  checks passing), `make typecheck`, `make markdownlint` (125 files, 0 errors),
+  and `make nixie` all passed after this change. CodeRabbit's previous snapshot
+  still showed this plan as `IN_PROGRESS` and reported one minor roadmap-status
+  concern. This final update marks the plan `COMPLETE` and records the cleanup
+  as finished; roadmap item 5.1.4a remains checked because its planned
+  functionality and acceptance criteria are complete. The confirming review on
+  this completed plan returned no findings after the docs-only gates passed
+  (`make check-fmt`, `make markdownlint`, and `make nixie`). The earlier
+  status, fallback, and roadmap concerns are cleared on this candidate.
 
 ## Surprises & discoveries
 
@@ -1128,11 +1162,12 @@ floating-point precision and both bounded feasibility runs timed out.
   CodeScene check found `observe_payload_features` at complexity 9. The
   property-observation behaviour has been decomposed into coordinate, array,
   and theme-array helpers without changing its traversal or feature predicates.
-  Local CodeScene review now reports health 10.0 with no finding; the repository
-  rules file still produces the existing CLI parse warning. The hosted
-  CodeScene check passed on `977206e` after publication; its result is linked
-  in `Progress`. The hosted CodeRabbit check was skipped by draft status, while
-  the requested local CodeRabbit review completed with no findings.
+  Local CodeScene review now reports health 10.0 with no finding; the
+  repository rules file still produces the existing CLI parse warning. The
+  hosted CodeScene check passed on `977206e` after publication; its result is
+  linked in `Progress`. The hosted CodeRabbit check was skipped by draft
+  status, while the requested local CodeRabbit review completed with no
+  findings.
 
 - Observation: the first Stage B gate pass exposed a rustfmt diff in the
   extracted test module, although `make check-fmt` continued to later format
@@ -1374,10 +1409,21 @@ floating-point precision and both bounded feasibility runs timed out.
 The property suite, coordinate admission fix, supporting documentation, and
 validation evidence are complete. The hosted CodeScene finding was resolved by
 splitting feature observation into focused helpers; the hosted check passed on
-the remediation commit. The design-panel and review findings were resolved,
-and final CodeRabbit review 24 returned no concerns. The hosted
-CodeRabbit check remains skipped by the draft-PR policy; Kody and the
-automerge workflow also skipped without failed jobs.
+the remediation commit. The design-panel and review findings were resolved, and
+final CodeRabbit review 24 returned no concerns. The hosted CodeRabbit check
+remains skipped by the draft-PR policy; Kody and the automerge workflow also
+skipped without failed jobs.
+
+A later hosted CodeScene advisory on docs-only commit `5852ae9` identified
+duplicated coordinate-rejection tests. The cases now share one named `rstest`
+table without losing either overflow value or the idempotence counterexample;
+local CodeScene reports health 10.0 with no finding. The fallback for a
+coordinate number that cannot be represented as `f64` now returns the typed
+admission error. This branch cannot be reached with the pinned default
+`serde_json` configuration, but its behaviour now preserves the bound if the
+feature set changes. All deterministic gates passed after these changes, and
+the roadmap item remains checked. The final local CodeRabbit review's status
+finding came from a snapshot taken before this `COMPLETE` status update.
 
 Follow-up: evaluate a verifier with explicit IEEE-754 support for LEM-1. No
 Kani harness or CI wiring is planned for this change.

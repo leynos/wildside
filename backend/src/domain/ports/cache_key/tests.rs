@@ -224,9 +224,10 @@ fn route_request_key_rounds_documented_coordinate_fields(
 }
 
 #[rstest]
-#[case(1.8e303)]
-#[case(1.9e303)]
-fn route_request_rejects_rounding_overflow_coordinate(#[case] coordinate: f64) {
+#[case::overflow_at_1_8e303(1.8e303)]
+#[case::overflow_at_1_9e303(1.9e303)]
+#[case::idempotence_counterexample(-42_389_709_114.565025)]
+fn route_request_rejects_counterexample_coordinates(#[case] coordinate: f64) {
     let payload = json!({"lat": coordinate});
     let result = RouteCacheKey::for_route_request(&payload);
 
@@ -235,22 +236,7 @@ fn route_request_rejects_rounding_overflow_coordinate(#[case] coordinate: f64) {
             &result,
             Err(RouteCacheKeyDerivationError::CoordinateOutOfRange { key, .. }) if key == "lat"
         ),
-        "expected admission rejection for {coordinate}; got {result:?}"
-    );
-}
-
-#[rstest]
-#[case(-42_389_709_114.565025)]
-fn large_idempotence_counterexample_is_rejected(#[case] coordinate: f64) {
-    let payload = json!({"lat": coordinate});
-    let result = RouteCacheKey::for_route_request(&payload);
-
-    assert!(
-        matches!(
-            &result,
-            Err(RouteCacheKeyDerivationError::CoordinateOutOfRange { key, .. }) if key == "lat"
-        ),
-        "expected idempotence counterexample to be rejected; got {result:?}"
+        "expected coordinate counterexample to be rejected; got {result:?}"
     );
 }
 
