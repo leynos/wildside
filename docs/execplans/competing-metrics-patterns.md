@@ -176,7 +176,11 @@ removing it.
   `/tmp/markdownlint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-9.out`,
   and
   `/tmp/nixie-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-8.out`.
-- [~] EP-M2: adapter and deterministic gates pass; CodeRabbit review remains.
+- (2026-10-13) CodeRabbit reviewed the committed M2 candidate
+  `706f82754e9056fcd218c4b1ef561e8317f9220f`; the review completed with zero
+  findings across all six changed files. Evidence:
+  `/tmp/coderabbit-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-3.out`.
+- [x] EP-M2: adapter, deterministic gates, and CodeRabbit review all pass.
 - [x] EP-M2: Prometheus adapter in `backend/src/outbound/metrics/`.
 - [ ] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
@@ -270,7 +274,7 @@ zero findings.
 EP-M2 adds the registry-backed adapter with the existing metric name, help
 text, and positional `code`, `source` labels. Focused tests cover every source
 and detail-code combination and repeated increments. All five deterministic
-gates passed; the required CodeRabbit review is pending before EP-M3 begins.
+gates passed, and CodeRabbit found no concerns at `706f827`. EP-M3 may begin.
 
 ## Context and orientation
 
