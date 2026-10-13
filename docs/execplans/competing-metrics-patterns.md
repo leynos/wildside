@@ -279,16 +279,21 @@ removing it.
   configuration change is needed; stage the candidate deletion before rerunning
   the index-based gate.
 - (2026-10-13) Recount after M4 implementation against `4d099ed`: 24 unique
-  paths and 550 net added lines. `ports/mod.rs` was already a changed M3 path,
+  paths and 560 net added lines. `ports/mod.rs` was already a changed M3 path,
   so EP-M4 adds two paths. EP-M5 is still estimated to require at least three
   more paths and remains outside the accepted cap pending a scope decision.
+- (2026-10-13) All seven M4 gates passed on `a870894`; Nextest passed 1,489
+  cases with four skipped, and Markdown lint reported zero errors across 125
+  files. CodeRabbit reviewed 23 files and reported zero findings. Gate and
+  review logs are recorded in the turn evidence; review output is
+  `/tmp/coderabbit-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-3.out`.
 - [x] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
   re-export, and the `main.rs` registration call.
 - [x] EP-M3: deterministic gates and CodeRabbit review clear.
 - [x] EP-M4: remove the dead `RouteMetrics` port; update
   `docs/wildside-backend-architecture.md`.
-- [ ] EP-M4: deterministic gates and CodeRabbit review clear.
+- [x] EP-M4: deterministic gates and CodeRabbit review clear.
 - [ ] EP-M5: document the single metrics convention in
   `docs/developers-guide.md`; extend `tools/architecture-lint` to forbid
   `prometheus` imports outside the sanctioned modules.
