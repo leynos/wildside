@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: BLOCKED
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -65,7 +65,7 @@ removing it.
 
 ## Tolerances (exception triggers)
 
-- Scope: stop and escalate if the change exceeds 20 files or 600 net lines.
+- Scope: stop and escalate if the change exceeds 25 files or 600 net lines.
 - Interface: the crate-root re-export `register_pagination_error_metrics` in
   `backend/src/lib.rs` is application-internal and will be deleted without a
   compatibility shim; escalate only if an out-of-crate consumer other than
@@ -84,8 +84,8 @@ removing it.
   missed. Threading an injected handle therefore reaches one more adapter than
   the plan first mapped. Severity: medium. Likelihood: confirmed. Mitigation:
   inject the same `Arc<dyn PaginationErrorMetrics>` into all three adapters and
-  record each mapping call in the caller inventory. The additional file count
-  triggers the scope escalation recorded in `Decision Log`.
+  record each mapping call in the caller inventory. The user accepted the
+  resulting 25-file scope; that remains the hard file limit.
 - Risk: `serial_test`-guarded tests depend on the `OnceLock` global's
   process-wide lifetime; removing the global changes test isolation
   assumptions. Severity: low. Likelihood: medium. Mitigation: the replacement
@@ -106,8 +106,12 @@ removing it.
 - [x] (2026-09-28) Preflight confirmed three persistence adapters call
   `map_user_persistence_error`; the plan anticipated only two. The planned
   wiring, removals, documentation and lint coverage project to 25 changed
-  files, exceeding the 20-file tolerance. Implementation is paused pending a
-  scope decision.
+  files, exceeding the original 20-file tolerance. Implementation paused at
+  that point pending a scope decision; the decision was resolved on 2026-10-13
+  below.
+- [x] (2026-10-13) The user accepted increasing the hard file limit to 25.
+  Implementation resumes with the planned acceptance scope unchanged; stop and
+  escalate if the actual patch exceeds 25 files or 600 net lines.
 - [ ] EP-M1: pagination metrics port and `NoOp` implementation (red tests
   first).
 - [ ] EP-M2: Prometheus adapter in `backend/src/outbound/metrics/`.
@@ -181,16 +185,13 @@ removing it.
   ones — a phantom abstraction poisons that sweep. The architecture document is
   updated in the same milestone so design and code agree. Date/Author:
   2026-08-16, drafting agent.
-- Proposed scope deviation: the additional persistence adapter makes the
-  planned change touch an estimated 25 files, exceeding the 20-file stop
-  threshold. No implementation has started. Options are to raise the file
-  tolerance while keeping the planned behaviour and verification, to split
-  documentation and the architecture-lint guard into a separately authorized
-  follow-up, or to narrow the planned acceptance scope. The first option
-  preserves the single-pattern end state; the second delays the regression
-  guard; the third leaves part of this plan incomplete. No architecture or ADR
-  change is required if the file tolerance is raised. Awaiting explicit
-  direction. Date/Author: 2026-09-28, Codex.
+- Decision: raise the file tolerance from 20 to 25 while retaining the planned
+  behaviour, documentation, architecture-lint guard, and verification
+  obligations. Rationale: this keeps the third persistence adapter covered and
+  preserves the single-pattern end state; the accepted cap still provides a
+  hard stop if implementation grows further. The 600-net-line limit is
+  unchanged. No architecture or ADR change is required. Date/Author:
+  2026-10-13, User.
 
 ## Outcomes & retrospective
 
@@ -555,6 +556,7 @@ No new dependencies. End-state interfaces:
 ## Revision note
 
 On 2026-09-28, preflight found a third persistence mapping caller and the actual
-`build_http_state` composition helper. The projected 25-file change exceeds
-the plan's 20-file tolerance, so implementation is blocked pending an explicit
-scope decision. The metrics design and verification obligations are unchanged.
+`build_http_state` composition helper. On 2026-10-13, the user accepted
+raising the hard file tolerance from 20 to 25. Implementation proceeds under
+the updated 25-file and unchanged 600-net-line limits; the metrics design and
+verification obligations are unchanged.
