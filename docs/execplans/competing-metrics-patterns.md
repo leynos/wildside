@@ -151,7 +151,33 @@ removing it.
   is corrected. `make check-fmt`, `make markdownlint`, and `make nixie` passed
   after the correction. A final CodeRabbit review at `c57a3d2` reported zero
   findings, clearing the concern before EP-M2.
-- [ ] EP-M2: Prometheus adapter in `backend/src/outbound/metrics/`.
+- (2026-10-13) EP-M2 parameterized tests were added for all source/detail-code
+  combinations, the metric name/help/label order, and a double increment. The
+  focused metrics-enabled Cargo run reached the expected unresolved adapter
+  re-export before implementation. It compiled uncached while waiting for the
+  shared package lock because sccache was unreachable. Evidence:
+  `/tmp/test-red-m2-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns.out`.
+- (2026-10-13) After implementing the adapter, the focused metrics-enabled
+  library test passed all five cases (four source/code combinations and a
+  double increment). The gathered samples preserve the metric name, help, label
+  names/order, label values, and counts. Evidence:
+  `/tmp/test-m2-focused-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`.
+- (2026-10-13) EP-M2 full deterministic gates passed on the implementation
+  candidate at `f944360` (the source changes were present in the worktree).
+  `make check-fmt`, `make lint`, `make test`, `make markdownlint`, and
+  `make nixie` all passed. The lint log includes one existing non-failing
+  workflow truthy-value warning at
+  `.github/workflows/dependabot-automerge.yml:7`. The test run passed 1,487
+  Nextest cases, the compile-fail harness, Bun checks, workflow contracts, and
+  107 Python tests. Evidence:
+  `/tmp/check-fmt-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-7.out`,
+  `/tmp/lint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-5.out`,
+  `/tmp/test-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`,
+  `/tmp/markdownlint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-9.out`,
+  and
+  `/tmp/nixie-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-8.out`.
+- [~] EP-M2: adapter and deterministic gates pass; CodeRabbit review remains.
+- [x] EP-M2: Prometheus adapter in `backend/src/outbound/metrics/`.
 - [ ] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
   re-export, and the `main.rs` registration call.
@@ -239,7 +265,12 @@ All deterministic code and documentation gates passed. One unrelated but
 gate-blocking Pylint assertion in the workflow-contract tests was simplified;
 it is included in the 25-file scope accounting. The user-approved file cap
 remains 25 and the net-line cap remains 600. CodeRabbit reviewed `c57a3d2` with
-zero findings, so EP-M2 can proceed.
+zero findings.
+
+EP-M2 adds the registry-backed adapter with the existing metric name, help
+text, and positional `code`, `source` labels. Focused tests cover every source
+and detail-code combination and repeated increments. All five deterministic
+gates passed; the required CodeRabbit review is pending before EP-M3 begins.
 
 ## Context and orientation
 
