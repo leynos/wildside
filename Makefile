@@ -150,7 +150,7 @@ PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
 .PHONY: spelling
 .PHONY: lint-rust lint-clippy lint-whitaker lint-frontend lint-asyncapi lint-openapi lint-makefile
 .PHONY: lint-actions lint-architecture workspace-sync prepare-pg-worker
-.PHONY: lint-python typecheck-python check-fmt-python
+.PHONY: lint-python typecheck-python check-fmt-python fmt-python
 
 # `make fmt` and `make check-fmt` call mdtablefix directly. `--git` selects the
 # Markdown files Git tracks and `--include-untracked` adds the untracked files
@@ -214,6 +214,11 @@ fmt: workspace-sync
 	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
 	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 	$(MDLINT) --fix "**/*.md"
+	$(MAKE) fmt-python
+
+# Split to keep the `fmt` target within checkmake's body-length rule, matching
+# the existing `check-fmt-python` seam.
+fmt-python:
 	$(RUFF) format
 	$(RUFF) check --select I --fix
 
@@ -339,8 +344,9 @@ test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-act
 
 test-rust: workspace-sync prepare-pg-worker
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
-		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests))'
+		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail))'
 	$(RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features
+	$(RUST_FLAGS_ENV) cargo test -p backend --test sha2_digest_formatting_compile_fail --all-features
 
 test-frontend: deps typecheck
 	pnpm run test

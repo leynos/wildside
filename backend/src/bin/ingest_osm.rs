@@ -190,10 +190,17 @@ fn resolve_database_url(explicit: Option<String>, from_env: Option<String>) -> i
 
 #[cfg(test)]
 mod tests {
-    //! Unit tests for CLI parsing helpers.
+    //! Unit tests for the `ingest-osm` binary's pure helpers.
+    //!
+    //! Three concerns are covered here: geofence-bound parsing, database-URL
+    //! resolution from the flag and the injected environment value, and
+    //! [`sha256_file`]'s digest rendering. The hashing cases pin the output
+    //! against published SHA-256 vectors, because the digest is the provenance
+    //! key recorded for every ingestion run.
 
     use std::io::{self, Write};
 
+    use proptest::prelude::*;
     use rstest::rstest;
     use tempfile::NamedTempFile;
 
@@ -304,10 +311,26 @@ mod tests {
     }
 
     /// Digests are rendered as fixed-width lowercase hex, including the leading
-    /// zeroes that `{:x}`-style formatting of individual bytes would drop.
+    /// zeroes that per-byte `{:x}`-style formatting would drop.
+    ///
+    /// `b"abc"` is the decisive fixture: its digest holds a `0x00` byte at
+    /// index 29, so the rendering must keep the `00` at offset 58. Encoding
+    /// each byte independently would lose that zero and shorten the string.
     #[rstest]
-    fn sha256_file_renders_fixed_width_lowercase_hex() {
-        let digest = digest_of(b"wildside").expect("digest fixture");
+    #[case::no_zero_byte(
+        b"wildside",
+        "d27e91f98d0150c4b6580a87c953c4162a7b920cb404f5261c3f9177943b220d"
+    )]
+    #[case::leading_zero_byte(
+        b"abc",
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    )]
+    fn sha256_file_renders_fixed_width_lowercase_hex(
+        #[case] contents: &[u8],
+        #[case] expected: &str,
+    ) {
+        let digest = digest_of(contents).expect("digest fixture");
+        assert_eq!(digest, expected);
         assert_eq!(digest.len(), 64);
         assert!(
             digest
@@ -315,5 +338,73 @@ mod tests {
                 .all(|character| character.is_ascii_digit() || ('a'..='f').contains(&character)),
             "digest should be lowercase hex: {digest}"
         );
+    }
+
+    /// A path that resolves but names no file must fail loudly.
+    ///
+    /// Without this the failure mode a user is most likely to hit — a typo in
+    /// `--osm-pbf` — would be indistinguishable from success: an unreadable
+    /// path must not be treated as empty input and hashed to the empty-string
+    /// vector, because that digest is written to the provenance record.
+    #[rstest]
+    fn sha256_file_reports_a_missing_input_file() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let missing = directory.path().join("absent.osm.pbf");
+
+        let error = sha256_file(&missing).expect_err("a missing file should fail");
+        let message = error.to_string();
+
+        assert!(
+            message.contains("absent.osm.pbf"),
+            "the error should name the path: {message}"
+        );
+    }
+
+    proptest! {
+        /// The rendering invariants hold for arbitrary payloads, not just the
+        /// named fixtures above.
+        ///
+        /// A payload is generated for each way the read loop can consume it:
+        /// shorter than one 8 KiB read, exactly a whole number of reads, and
+        /// mid-read by a single byte in either direction. Those are the
+        /// boundaries where an off-by-one in `hasher.update(&buffer[..read])`
+        /// would show up.
+        ///
+        /// Each digest must decode back to the same bytes `Sha256::digest`
+        /// produces, and must render as exactly 64 lowercase hex characters.
+        /// Decoding is what makes a lost leading zero fatal rather than
+        /// cosmetic: it would shift every subsequent byte and break the round
+        /// trip.
+        #[test]
+        fn sha256_file_renders_arbitrary_payloads_as_lowercase_hex(
+            seed in proptest::collection::vec(any::<u8>(), 0..64),
+            payload_len in proptest::sample::select(vec![
+                0_usize,
+                8 * 1024 - 1,
+                8 * 1024,
+                8 * 1024 + 1,
+                24 * 1024,
+                24 * 1024 + 1,
+            ]),
+        ) {
+            let mut contents = seed;
+            if contents.len() < payload_len {
+                contents.resize(payload_len, 0);
+            }
+
+            let digest = digest_of(&contents).expect("digest fixture");
+            let decoded = hex::decode(&digest).expect("digest must be valid hex");
+
+            prop_assert_eq!(decoded, Sha256::digest(&contents).to_vec());
+            prop_assert_eq!(digest.len(), 64);
+            prop_assert!(
+                digest
+                    .chars()
+                    .all(|character| character.is_ascii_digit()
+                        || ('a'..='f').contains(&character)),
+                "digest should be lowercase hex: {}",
+                digest
+            );
+        }
     }
 }

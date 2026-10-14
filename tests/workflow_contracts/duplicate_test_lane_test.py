@@ -63,6 +63,8 @@ lane into a different run from the one that was measured.
 
 from __future__ import annotations
 
+import typing as typ
+
 import ci_lane_reading as lanes
 import ci_step_predicates as does
 import nextest_profile as profiles
@@ -75,6 +77,8 @@ from lane_expectations import (
     DEPENDABOT_GUARD,
     MEASURED_FEATURES,
     NEXTEST_EXCLUSION,
+    NEXTEST_EXCLUSION_REFERENCE,
+    NEXTEST_EXCLUSION_VARIABLE,
     NEXTEST_FILTER_OPTION,
 )
 
@@ -94,6 +98,38 @@ def fixture_document() -> dict[str, object]:
         The parsed workflow.
     """
     return lanes.load_workflow(lanes.WORKFLOW_PATH)
+
+
+def _step_environment(step: dict[str, object]) -> dict[str, object]:
+    """Return a step's ``env`` mapping, or an empty one.
+
+    Only one case here reads a step's environment, so this stays local
+    rather than joining :mod:`ci_lane_reading`: that module answers what
+    the workflow declares about jobs and steps, and a second caller would
+    be the point at which this moves there.
+
+    Parameters
+    ----------
+    step : dict[str, object]
+        The parsed step.
+
+    Returns
+    -------
+    dict[str, object]
+        The ``env`` mapping, or an empty one when the step declares none
+        or declares something that is not a mapping. A missing block and
+        an unreadable one are both empty here because the caller is
+        asserting a key is present, and it reports the absence with the
+        value it found either way.
+    """
+    environment = step.get("env")
+    # The cast says only what the check established: a mapping whose keys are
+    # strings and whose values are unconstrained, which is how the caller
+    # treats it. `dict(environment)` would be rejected by the type checker,
+    # because a `dict[Unknown, Unknown]` matches no `dict.__init__` overload.
+    if isinstance(environment, dict):
+        return typ.cast("dict[str, object]", environment)
+    return {}
 
 
 def test_the_backend_suite_runs_in_a_coverage_lane_on_pull_request(
@@ -199,7 +235,7 @@ def test_the_build_job_runs_the_compile_fail_suites_unconditionally(
 
     Scenario: the compile-fail binaries were excluded from both
     invocations by name, so the build job's own step is the only thing
-    that has ever run them. Invariant: it runs both commands as one
+    that has ever run them. Invariant: it runs every command as one
     step's entire script, and neither the job nor the step can skip or
     swallow it. A job-level condition skips the gate; a
     `continue-on-error` at either scope runs it and discards the
@@ -322,6 +358,14 @@ def test_the_dependabot_lane_excludes_the_compile_fail_binaries(
     contract asking only whether each name appears is satisfied by
     `not (binary(a) | binary(b)) | binary(a)`, which names both and
     excludes neither.
+
+    The lane passes the expression by reference, because the enumerated
+    form is longer than the workflow's own line-length limit allows. So
+    both halves are asserted: the `-E` word is the pinned reference, and
+    the variable that reference names is declared, on this step, as the
+    pinned expression. Asserting only the reference would pass with the
+    value changed underneath it, and asserting only the value would pass
+    with the runner pointed at some other variable.
     """
     suite_steps = [
         step
@@ -338,9 +382,18 @@ def test_the_dependabot_lane_excludes_the_compile_fail_binaries(
         for words in shell.command_words(lanes.script_of(suite_steps[0]) or "")
         if shell.executable_name(command := shell.executed_command(words)) == "cargo"
     ]
-    assert filters == [NEXTEST_EXCLUSION], (
+    assert filters == [NEXTEST_EXCLUSION_REFERENCE], (
         f"the Dependabot lane must run cargo with exactly "
-        f"{NEXTEST_FILTER_OPTION} {NEXTEST_EXCLUSION!r}; found {filters}. Both "
-        "binaries are meant to fail to compile, and only the Compile-fail "
-        "tests step expects that failure"
+        f"{NEXTEST_FILTER_OPTION} {NEXTEST_EXCLUSION_REFERENCE!r}; found "
+        f"{filters}. Both binaries are meant to fail to compile, and only the "
+        "Compile-fail tests step expects that failure"
+    )
+
+    declared = _step_environment(suite_steps[0]).get(NEXTEST_EXCLUSION_VARIABLE)
+    assert declared == NEXTEST_EXCLUSION, (
+        f"the Dependabot lane must declare {NEXTEST_EXCLUSION_VARIABLE} as "
+        f"{NEXTEST_EXCLUSION!r}; found {declared!r}. The lane passes the "
+        "expression by reference, so this is the value it actually runs under; "
+        "a contract reading only the reference would certify a filter it never "
+        "checked"
     )

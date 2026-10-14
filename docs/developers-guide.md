@@ -2563,13 +2563,17 @@ The backend hashes with `sha2` 0.11. That release finalizes to
 longer compile, and both have a settled replacement in this repository:
 
 - **Rendering a digest.** Encode it with `hex::encode` (already a direct
-  dependency) rather than `format!("{:x}", …)`. Every call site follows this
-  convention: `backend/src/bin/ingest_osm.rs`,
-  `backend/src/domain/idempotency/payload.rs`,
+  dependency) rather than `format!("{:x}", …)`. The call sites that render a
+  digest as hex follow this convention: `backend/src/bin/ingest_osm.rs`,
   `backend/src/domain/route_submission/mod.rs`, and
   `backend/src/inbound/http/session_config/fingerprint.rs`. Do not add a
   bespoke hex encoder; `hex::encode` already renders fixed-width lowercase
-  digits, including leading zeroes.
+  digits, including leading zeroes. Not every hashing call site renders hex.
+  `backend/src/domain/idempotency/payload.rs` and
+  `backend/src/domain/ports/cache_key.rs` convert the finalized digest to
+  `[u8; 32]` and keep the raw bytes, because `PayloadHash` stores the digest
+  rather than its text form. On that path, `PayloadHash::to_hex` is the sole
+  call to `hex::encode`; the conversion itself never renders text.
 - **Feeding a hasher from a reader.** Read into a fixed-size buffer and call
   `Digest::update` per chunk rather than `io::copy(&mut reader, &mut hasher)`.
   `sha256_file` in `backend/src/bin/ingest_osm.rs` is the reference
