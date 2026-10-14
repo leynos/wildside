@@ -102,7 +102,22 @@ Observable success:
 - [x] (2026-10-14) Posted the four review responses under the allocated bot
       identities: three inline replies (Codex P1, CodeRabbit leading-zero,
       CodeRabbit call-sites) and one top-level banner reconciliation.
+- [x] (2026-10-14) Fixed the CodeRabbit row-6 finding: the property test's
+      `payload_len` never controlled the payload length. Committed as `3d1c7ab`
+      after the six-gate run described below.
+- [x] (2026-10-14) Diagnosed the hosted `build` job's audit failure as entirely
+      pre-existing and fixed it by upgrading `quinn-proto` to 0.11.19 rather
+      than adding an ignore. Committed as `9bcd7bb`; `make rust-audit` exits 0.
+- [x] (2026-10-14) Pushed both commits; remote head, local `HEAD` and the
+      tracking ref all read `9bcd7bbe3298c88f10b836bb8df52cd759bf2f38`.
+- [x] (2026-10-14) Posted the row-6 reconciliation under `buzzybee-df12`
+      ([comment][row6-reply]). CodeRabbit confirmed: "Row 6 is resolved. No
+      finding remains open from the six-row reconciliation."
+- [ ] Clear CodeRabbit's stale `CHANGES_REQUESTED` decision, which is anchored
+      to `9ad51301` — a commit that is not an ancestor of the branch.
 - [ ] Shepherd PR [#448] to merge via `pr-babysitting`.
+
+[row6-reply]: https://github.com/leynos/wildside/pull/448#issuecomment-6160710645
 
 ## Surprises & Discoveries
 
@@ -254,6 +269,44 @@ Observable success:
   to retry, which would have double-posted. Confirmed nothing was sent by
   querying the API for the comment IDs before retrying.
 
+- **The gate runner reverted an in-flight working-tree change.** While
+  `make test` was running, `Cargo.lock` was updated to clear the quinn-proto
+  advisories. The `scrutineer` observed the file changing mid-run, could not
+  attribute it to any gate — correctly, since no gate log contains a cargo
+  resolution message — and restored it with `git checkout -- Cargo.lock`,
+  treating an unexplained modification as corruption. The edit was then
+  re-applied after the run.
+
+  Nobody acted wrongly: an unexplained mid-run mutation of a tracked file is
+  exactly what a gate owner should refuse to accept. The lesson is about
+  ordering, not about the restore. A gate run freezes the tree by manifest, so
+  working-tree edits made during it are invisible to the gates and will be
+  reverted; the fix is to finish editing before handing the tree to a gate
+  runner, and to re-apply rather than re-run when the change is provably inert
+  to compilation. Confirmed here by `cargo tree -i quinn-proto` printing
+  "nothing to print" under the default features, `--all-features` and
+  `--target all`.
+
+- **The `build` job's audit failure was pre-existing, and `main` is also red.**
+  Run `38508138964` failed the `Audit` step with
+  `error: 5 vulnerabilities found!` — RUSTSEC-2026-0338 through 0342, all in
+  `quinn-proto` 0.11.15. Nothing about the branch caused it:
+
+  - `git diff f315df5 HEAD | grep -c quinn` is `0`.
+  - `quinn-proto` is 0.11.15 on both the base and the branch.
+  - Auditing the *base* lockfile, extracted with
+    `git show f315df5:Cargo.lock`, reproduces the identical five findings.
+  - `main`'s last green `build` run is `f315df5`; the advisory database gained
+    these entries afterwards.
+
+  So this is not a defect the branch introduced, and leaving it would have meant
+  `main` stayed red. Fixed by `cargo update -p quinn-proto` (0.11.15 →
+  0.11.19, above the 0.11.17/0.11.18 fix thresholds) with no new ignore, so
+  `CARGO_AUDIT_IGNORES` keeps exactly its two original entries. `cargo audit`
+  against the bumped lockfile exits 0. This is the "fix the underlying issue
+  rather than silencing it" constraint applied to a finding that was not even
+  ours.
+
 - **A true `ingest-osm` CLI end-to-end test is not cheaply available.** The
   binary's OSM source adapter (`WildsideDataOsmSourceRepository`) delegates to
   `wildside-data::ingest_osm_pbf_report`, an external git dependency
@@ -316,6 +369,37 @@ Observable success:
   Bash would accept the line; the contract would fail it. Withdrawn rather than
   applied. Date: 2026-10-14.
 
+- Decision: fix the `quinn-proto` advisories by upgrading the dependency
+  instead of adding `RUSTSEC-2026-0338..0342` to `CARGO_AUDIT_IGNORES`.
+  Rationale: the constraint is to fix underlying issues rather than suppress
+  them, and suppression would have been the larger change — five new ignore
+  entries, each a standing admission that a known-vulnerable crate is
+  acceptable. 0.11.19 is a patch-level move within the same minor, `reqwest`
+  already accepts `quinn ^0.11`, and the crate is never compiled by this
+  workspace, so the upgrade is the smaller and safer edit as well as the
+  correct one. Date: 2026-10-14.
+
+- Decision: accept the gate runner's revert of `Cargo.lock` without
+  re-litigating it, and re-apply the change afterwards instead of re-running
+  the gates. Rationale: the revert was the correct response to an unexplained
+  mid-run mutation, and re-running six gates would have cost roughly twenty
+  minutes to learn nothing — the change is provably outside the compiled graph.
+  The inertness was established by direct evidence (`cargo tree -i` under three
+  feature sets; `cargo metadata --locked`), not by assumption. Date: 2026-10-14.
+
 ## Outcomes & Retrospective
 
-Populated on completion.
+Carried to merge readiness. `make check-fmt`, `make lint`, `make typecheck`,
+`make test`, `make markdownlint` and `make nixie` all pass on `3d1c7ab`, and
+`make rust-audit` passes on `9bcd7bb`. Both review findings raised against the
+original revision are dispositioned, and CodeRabbit has confirmed that no
+finding remains open from its six-row reconciliation.
+
+The substantive lesson is about what the gates actually validated. The six-gate
+run covered `3d1c7ab`; `9bcd7bb` landed afterwards. That is only sound because
+the later commit was shown to be outside the compiled dependency graph, which
+took direct evidence to establish — a lockfile edit *looks* like it could
+change every build, and the intuition that it must invalidate the gates is the
+one a reader would have. Recording the evidence was therefore part of the work,
+not a footnote to it. Where that evidence had not been available, the correct
+move would have been to re-run the gates rather than to argue from the diff.
