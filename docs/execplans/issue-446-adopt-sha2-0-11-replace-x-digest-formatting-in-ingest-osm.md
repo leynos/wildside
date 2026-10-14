@@ -91,8 +91,18 @@ Observable success:
       `NEXTEST_EXCLUSION` in `ci.yml`. Every reply must therefore cite the new
       commit, not `168e799`; citing the pushed commit before it exists would be
       a false claim.
-- [ ] Re-run the full gate set on the repaired tree.
-- [ ] Push, then shepherd PR [#448] to merge via `pr-babysitting`.
+- [x] (2026-10-14) Re-ran the full gate set on the repaired tree via
+      `scrutineer`, against a frozen md5 manifest. Green: `check-fmt`, `lint`,
+      `typecheck`, `test`, `markdownlint`, `nixie`. The one failure was
+      `check-fmt` against a superseded execplan revision, re-run last and
+      passed.
+- [x] (2026-10-14) Committed as `04482d2` and pushed with
+      `--force-with-lease`; remote head, local `HEAD` and the tracking ref all
+      read `04482d2cf4953cca973aff5327f9730c924d5485`.
+- [x] (2026-10-14) Posted the four review responses under the allocated bot
+      identities: three inline replies (Codex P1, CodeRabbit leading-zero,
+      CodeRabbit call-sites) and one top-level banner reconciliation.
+- [ ] Shepherd PR [#448] to merge via `pr-babysitting`.
 
 ## Surprises & Discoveries
 
@@ -223,6 +233,26 @@ Observable success:
   `56eba4a` *after* PR [#448]'s last CI run: the `build` job for run
   `32646722832` has no `TypeDoc documentation gate` step at all, which is why
   `Workflow contract tests` passed then and would fail now.
+
+- **`--force-with-lease` cannot lease an implicit tracking ref when pushing to
+  a URL.** The first push attempt was rejected `(stale info)` even though the
+  local remote-tracking ref matched the remote tip exactly. Cause: the push
+  named the SSH URL directly rather than a configured remote, so git could not
+  associate it with `origin` and had no ref to compare the lease against. The
+  fix is an explicit lease —
+  `--force-with-lease=refs/heads/BR:<observed-tip>` — with the tip read from
+  `ls-remote` first. Worth knowing because AGENTS.md *requires* pushing the SSH
+  URL when `origin` is HTTPS, which is exactly the case that triggers it.
+
+- **`/tmp/post_manual_comment.sh` defines a function; running it posts
+  nothing.** Invoking it as `bash /tmp/post_manual_comment.sh REPO PR BODY`
+  exits silently and posts nothing at all — the file is a single
+  `post_manual_comment() ( … )` definition with no trailing call. It must be
+  sourced and then called:
+  `source /tmp/post_manual_comment.sh; post_manual_comment …`. The silent exit
+  is the trap: it looks like a rate-limit or auth failure, so the temptation is
+  to retry, which would have double-posted. Confirmed nothing was sent by
+  querying the API for the comment IDs before retrying.
 
 - **A true `ingest-osm` CLI end-to-end test is not cheaply available.** The
   binary's OSM source adapter (`WildsideDataOsmSourceRepository`) delegates to
