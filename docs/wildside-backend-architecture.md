@@ -2570,6 +2570,9 @@ We also run exporters:
 We define **custom application metrics** for domain-specific
 monitoring([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L727-L735)):
 
+Application metrics use injected ports, `NoOp` defaults, and Prometheus
+adapters in `outbound::metrics`; pagination uses `PaginationErrorMetrics`.
+
 - **Job Durations:** Histogram `route_generation_duration_seconds` for route
   computation
   time([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L729-L737)).
