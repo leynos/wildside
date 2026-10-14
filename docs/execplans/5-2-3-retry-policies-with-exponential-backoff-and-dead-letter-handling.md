@@ -117,10 +117,18 @@ Repository state relevant to this task:
   evidence of retry and dead-letter behaviour requires driving job execution in
   tests.
 
-Facts about Apalis at the pinned versions (`apalis-core = "1.0.0-rc.7"`,
-`apalis-postgres = "1.0.0-rc.6"`, `backend/Cargo.toml:34-35`), established from
-docs.rs for those exact versions, the published crate sources, and the
-apalis-dev repositories; these are external axioms for this plan:
+Version caution (review of 2026-10-14): `backend/Cargo.toml:34-35` declares
+`apalis-core = "1.0.0-rc.7"` and `apalis-postgres = "1.0.0-rc.6"`, but these
+are caret requirements. `Cargo.lock` resolves `apalis-core 1.0.0-rc.9` and
+`apalis-postgres 1.0.0-rc.8`, and the same requirements also admit the
+incompatible `1.0.0` final release published on 2026-10-12. The code that
+actually compiles is rc.9/rc.8. Unless stated otherwise, the facts below were
+re-verified against those resolved sources. Where rc.6 and rc.8 differ, the
+rc.8 behaviour governs.
+
+Facts about Apalis at the resolved versions, established from docs.rs, the
+published crate sources, and the apalis-dev repositories; these are external
+axioms for this plan:
 
 - Retry middleware lives in the `apalis` facade crate
   (`apalis::layers::retry`, crate feature `retry`), not in `apalis-core`. It
@@ -150,16 +158,30 @@ apalis-dev repositories; these are external axioms for this plan:
   `Killed` rows (or exhausted `Failed` rows) that remain in `apalis.jobs`;
   listing and requeuing require direct SQL. No pruning or retention mechanism
   exists upstream at these pins.
-- Backoff sleeps happen in-process inside the tower retry layer while the
-  job row stays `Running` and locked; `run_at` is not rescheduled on failure.
-  Attempts are persisted once, at final acknowledgement. Consequences:
-  `max_attempts` is a per-lease bound — a worker crash discards in-process
-  attempt history, and the recovered job restarts from its last persisted
-  count, so lifetime attempts across crashes are unbounded and handlers must be
-  idempotent; and long backoff chains occupy a worker slot for their whole
-  duration, so the total in-process wait must be bounded and must remain below
-  whatever orphan-recovery threshold 5.3.1 configures, or the reaper would
-  re-deliver a live, mid-backoff job and cause duplicate execution.
+- Corrected 2026-10-14 (the original bullet below is retained for the record
+  and is false at rc.7–rc.9): the worker stack is, outermost first, `Data`,
+  user middleware (retry), backend middleware (`Ack` around `LockTask`),
+  `Readiness`, `Tracker`, then the handler. tower's `Stack::new(inner, outer)`
+  makes the last-added layer the innermost, and `TrackerLayer` is added last.
+  Each in-process retry therefore re-enters LockTask, Ack, and Tracker. That
+  has three consequences. `Attempt` advances once per handler invocation. Every
+  failed in-process attempt is acked separately, writing `status = 'Failed'` and
+  `attempts = n` with `run_at` unchanged. While the retry layer sleeps, the
+  row is eligible for `apalis.get_jobs` on any worker, and the next
+  `lock_by_id.sql` accepts `Queued` rows and so can take the lock back.
+  In-process backoff over `PostgresStorage` is therefore a duplicate-execution
+  race at these pins, not a locked wait.
+- Original premise (false at rc.7–rc.9; see correction above): backoff sleeps
+  happen in-process inside the tower retry layer while the job row stays
+  `Running` and locked; `run_at` is not rescheduled on failure. Attempts are
+  persisted once, at final acknowledgement. Consequences: `max_attempts` is a
+  per-lease bound — a worker crash discards in-process attempt history, and the
+  recovered job restarts from its last persisted count, so lifetime attempts
+  across crashes are unbounded and handlers must be idempotent; and long
+  backoff chains occupy a worker slot for their whole duration, so the total
+  in-process wait must be bounded and must remain below whatever
+  orphan-recovery threshold 5.3.1 configures, or the reaper would re-deliver a
+  live, mid-backoff job and cause duplicate execution.
 
 Named external axioms to confirm by compile probe before implementation
 proceeds (the upstream-surprises tolerance attaches to each):
@@ -171,12 +193,16 @@ proceeds (the upstream-surprises tolerance attaches to each):
 - AXIOM-ATTEMPT: every in-process handler attempt advances the task's shared
   `apalis_core::task::Attempt`, so the final ack observes the cumulative count
   and writes `Killed` when `attempt >= max_attempts`, and the storage refetch
-  loop never multiplies the budget for policy-managed jobs. Source inspection
-  on 2026-10-13 disproved the planned mechanism: Apalis's worker tracker wraps
-  the whole user middleware call and increments once, while the retry policy
-  only reads the count. A replacement mechanism is pending approval; do not
-  begin EP-M1 until this axiom is re-established by a runtime probe and the
-  compile canary.
+  loop never multiplies the budget for policy-managed jobs. On 2026-10-13, an
+  inspection of the rc.7 sources concluded that the tracker wraps the whole
+  user-middleware call and increments only once. The review on 2026-10-14 found
+  that conclusion inverts tower's layer order: the tracker is innermost, so the
+  counting half of this axiom holds at rc.7–rc.9. The "final ack" half is
+  false, because each in-process attempt is acked separately (see the corrected
+  fact above). The axiom is therefore false as a whole, for a different reason
+  than first recorded. Under proposed Decision D11 it is replaced by
+  AXIOM-DURABLE (EP-M0). Do not begin EP-M1 until the user rules on D10 and D11
+  and the EP-M0 runtime probe has run.
 - AXIOM-ACK: the ack path persists `attempts` and computes status as described
   above (verified in rc.6 sources; re-verified cheaply by the rc-canary tests,
   obligation V8).
@@ -677,13 +703,34 @@ probe to confirm the shared `Attempt` is incremented per in-process retry).
 Record findings in `Surprises & discoveries`. If either axiom fails, stop and
 escalate before any milestone work.
 
-Current M0 stop condition: source inspection disproved AXIOM-ATTEMPT. The
-execution is paused before EP-M1 while a replacement attempt-accounting
-mechanism is reviewed. The proposed correction is for the custom retry policy
-to advance the task's shared `Attempt` before scheduling each in-process retry,
-then prove that retry count, acknowledged `attempts`, `max_attempts`, and
-storage redelivery agree in a bounded runtime probe. This proposal is not yet
-adopted. AXIOM-FACADE's compile canary remains unrun.
+Current M0 stop condition (review of 2026-10-14): execution remains paused
+before EP-M1. The proposed policy-owned `Attempt` increment is rejected
+(Decision D9) because it would count each retry twice. Two revisions await the
+user's ruling: D10 (pin Apalis exactly) and D11 (durable `run_at` backoff in
+place of the in-process tower retry layer). If both are approved, the remaining
+EP-M0 work is:
+
+1. Pin `apalis-core = "=1.0.0-rc.9"` and `apalis-postgres = "=1.0.0-rc.8"`
+   (the versions already in `Cargo.lock`, so no code change is expected).
+   Confirm that `cargo tree -p backend | grep apalis` shows exactly those two
+   versions, run the baseline gates, and commit.
+2. Run the AXIOM-DURABLE runtime probe as a scratch test against embedded
+   PostgreSQL: a `WorkerBuilder` over `PostgresStorage` with no retry layer,
+   and a handler wrapper that fails retryably and, before returning `Err`, runs
+   the guarded `run_at` update from D11 with a 2-second delay. Predictions,
+   each of which falsifies the axiom if it fails: (a) the handler sees
+   `Attempt::current() == 1` on the first run and `== 2` on the redelivered
+   run; (b) for that 2-second window, no poll fetches the row (no second
+   invocation within 1.5 s); (c) the row is redelivered after the delay; (d)
+   with `max_attempts = 2`, the second failure persists `status = 'Killed'` and
+   `attempts = 2`, and no third invocation occurs within a further 3 s; (e) a
+   fatal failure that sets `max_attempts = attempts` before returning persists
+   `status = 'Failed'` with `attempts >= max_attempts`, and the row is never
+   redelivered. Record the verdict in `Surprises & discoveries`, then drop the
+   scratch test.
+
+AXIOM-FACADE no longer applies if D11 is approved, because the facade crate is
+not needed.
 
 Plateau: clean tree, recorded baseline, axioms confirmed or escalated.
 Recovery: drop the scratch commit.
@@ -909,6 +956,9 @@ row), which exists solely behind the port and its tests.
 - [ ] EP-M0 baseline audit and compile probe (paused: Firecrawl source
   inspection disproved AXIOM-ATTEMPT; a revised mechanism needs approval before
   continuing).
+- [x] (2026-10-14) Planning review of the 2026-10-13 finding: the
+  policy-owned increment is rejected (D9); D10 (exact Apalis pins) and D11
+  (durable `run_at` backoff) are proposed and await the user's ruling.
 - [ ] EP-M1 domain retry policy and classification.
 - [ ] EP-M2 Apalis retry wiring, bounded attempts, fatal kill.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
@@ -950,12 +1000,52 @@ row), which exists solely behind the port and its tests.
   (retrieved 2026-10-13). `WorkerBuilderExt::retry` installs a retry layer in
   user middleware, which the tracker wraps once. Impact: AXIOM-ATTEMPT is false
   as written; EP-M1–M4 must not proceed until a revised mechanism passes a
-  bounded runtime probe and the user approves the plan revision.
+  bounded runtime probe and the user approves the plan revision. Superseded
+  2026-10-14: the layer order is inverted. See the next entries.
 - Proposed correction, not yet adopted: increment the shared `Attempt` in
   the custom retry policy immediately before it returns a retry future. Then
   verify that the next handler invocation observes the increment and that final
   acknowledgement persists the same total. This retains the facade retry layer
-  while making attempt accounting explicit in our adapter policy.
+  while making attempt accounting explicit in our adapter policy. Rejected
+  2026-10-14 (Decision D9).
+- Observation (2026-10-14 review): the tracker is the innermost worker layer,
+  so `Attempt` advances once per in-process attempt. Evidence: the worker's
+  local `ServiceBuilder::layer` builds `Stack::new(layer, self.layer)`; tower's
+  `Stack::new(inner, outer)` layers `inner` first and `outer` around it; the
+  stack adds `self.middleware` first and `TrackerLayer` last, with the comment
+  "pass the user defined middleware first" (identical in
+  [apalis-core rc.7](https://docs.rs/crate/apalis-core/1.0.0-rc.7/source/src/worker/mod.rs)
+  and the cached rc.9 source,
+  [tower-layer `Stack`](https://docs.rs/tower-layer/latest/src/tower_layer/stack.rs.html)).
+  Corroboration: upstream's own `basic_worker_retries` test in
+  [apalis rc.7 retry](https://docs.rs/crate/apalis/1.0.0-rc.7/source/src/layers/retry/mod.rs)
+  asserts that `Attempt::current()` reaches 4 under `RetryPolicy::retries(3)`,
+  which is only possible if it advances per retry. Impact: the 2026-10-13
+  conclusion is inverted, and a policy-owned increment would double-count.
+- Observation (2026-10-14 review): the backend middleware (Ack wrapping
+  LockTask) sits inside user middleware, so every failed in-process attempt is
+  acked separately. Evidence: rc.8 `PostgresStorage::middleware` returns
+  `Stack::new(LockTaskLayer, AcknowledgeLayer<PgAck>)`; rc.8 `ack.sql` sets
+  `status`, `attempts`, `last_result`, and `done_at`, but not `run_at` or
+  `lock_by`; the `get_jobs` predicate (migration `20251018165056_queue_jobs`)
+  selects `Failed AND attempts < max_attempts AND run_at < now()` without
+  regard to `lock_by`; `lock_by_id.sql` relocks `Pending`, `Queued`, or
+  re-fetchable `Failed` rows. Impact: while the tower retry layer sleeps, the
+  job is a re-fetchable `Failed` row, so a second worker can run it
+  concurrently and the two can take the lock from each other. This is a
+  duplicate-execution hazard that the original D2 did not foresee, and it
+  invalidates in-process backoff over `PostgresStorage` at these pins.
+- Observation (2026-10-14 review): `Cargo.lock` resolves
+  `apalis-core 1.0.0-rc.9` and `apalis-postgres 1.0.0-rc.8`, not the rc.7/rc.6
+  that the manifest and this plan name. The caret requirements also admit
+  `1.0.0` final (published 2026-10-12). That release is a breaking rewrite:
+  `Task<Args>` loses its `Ctx` and `IdType` parameters, results persist in
+  batches through `handle_result.sql`, and backend middleware moves *outside*
+  user middleware, so a retry layer there would be acked once. Evidence:
+  crates.io version listing and the 1.0.0 crate sources
+  (`apalis-core/src/worker/mod.rs`, `src/worker/lifecycle.rs`,
+  `apalis-postgres/src/queries/handle_result.rs`). Impact: an unrelated
+  `cargo update` would silently replace every axiom in this plan (Decision D10).
 
 ## Decision log
 
@@ -1020,6 +1110,56 @@ row), which exists solely behind the port and its tests.
   an enqueue outcome and latency; using retry or dead-letter events as its
   outcome would mislabel queue processing as enqueue activity and pollute the
   enqueue latency histogram. Date/author: 2026-10-13, execution refinement.
+- D9 — Reject the policy-owned `Attempt` increment. Rationale: the tracker
+  is the innermost layer and already increments once per in-process attempt, so
+  an extra increment in the retry policy would advance the count twice per
+  retry. That halves the effective budget and persists `attempts` values that
+  skip. Date/author: 2026-10-14, planning review.
+- D10 (proposed, awaiting the user's ruling) — Pin Apalis exactly to the
+  resolved versions: `apalis-core = "=1.0.0-rc.9"` and
+  `apalis-postgres = "=1.0.0-rc.8"`. Rationale: caret requirements on
+  prerelease versions admit `1.0.0` final, a breaking rewrite whose layer order
+  and persistence path differ from everything this plan verifies. The upgrade
+  to 1.0.0 should be its own roadmap item: it changes the enqueue adapter and
+  the `Task` API, and once 1.0.0 is in place the V8 canaries are the
+  re-verification checklist. Alternative: perform that upgrade first as a
+  precursor, then re-plan 5.2.3 against 1.0.0. That would mean building worker
+  code only once, on the final API, at the cost of delaying 5.2.3. Date/author:
+  2026-10-14, planning review.
+- D11 (proposed, awaiting the user's ruling) — Replace in-process tower
+  retry with durable, storage-scheduled backoff. Supersedes D1 and D2 if
+  approved. Mechanism: no retry layer is installed. A handler wrapper (the
+  service passed to `WorkerBuilder::build`, so it runs inside the tracker and
+  before the ack) classifies the error through `JobErrorKind`. It reads the
+  current attempt from the extracted `Attempt` and the task id. Before it
+  returns `Err`, it issues one guarded update while the row is still `Running`
+  and locked by this worker
+  (`WHERE id = $1 AND lock_by = $2 AND status = 'Running'`). For a retryable
+  error below the budget, it sets
+  `run_at = now() + JobRetryPolicy::delay(attempt, jitter)`. For a fatal error,
+  it sets `max_attempts` to the in-memory `Attempt::current()` value, which is
+  exactly the `attempts` value the ack is about to persist. When
+  `Attempt::current() >= max_attempts`, no update is made, because the ack
+  already writes `Killed`. Because the ack does not touch `run_at` or
+  `max_attempts`, the row becomes `Failed` and is either invisible to
+  `get_jobs` until the delay elapses or permanently dead under the existing
+  dead predicate. Exhaustion still falls to the library: the ack writes
+  `Killed` when `attempt >= max_attempts`, and the fetch path rehydrates
+  `Attempt` from the persisted `attempts`. Rationale: at rc.7–rc.9 the
+  in-process alternative is racy (see `Surprises & discoveries`). The durable
+  form closes the race, because the row is never fetchable during the delay. It
+  also frees worker slots during backoff, survives worker crashes with attempt
+  history intact, makes `max_attempts` a lifetime bound rather than a per-lease
+  bound, and removes the `apalis` facade dependency, AXIOM-FACADE, the
+  `TOTAL_BACKOFF_BUDGET` coupling to orphan recovery, and the custom
+  `tower::retry::Policy`. The cost is one extra SQL statement per failure, and
+  backoff precision bounded below by the poll interval. Panel prior art
+  (graphile-worker, sidekiq) uses this model. The domain `JobRetryPolicy`
+  remains the executed policy. Consequences to apply before EP-M1 if approved:
+  rewrite D1, D2, D4, the "Interfaces and dependencies" adapter section,
+  obligations V1b, V4, and V8, the EP-M2 green step, and the Risks entries tied
+  to in-process backoff. Replace AXIOM-ATTEMPT with AXIOM-DURABLE, the
+  five-part runtime probe in EP-M0. Date/author: 2026-10-14, planning review.
 
 ## Outcomes & retrospective
 
@@ -1056,3 +1196,16 @@ policy only reads that count. EP-M1–M4 are paused pending review of the
 proposed policy-owned attempt increment and a bounded runtime probe. D8 keeps
 retry/dead-letter event counters separate from enqueue outcome and latency
 metrics.
+
+2026-10-14: planning review of the 2026-10-13 finding. That finding inverted
+tower's layer order: the tracker is innermost and already counts every
+in-process attempt, so the proposed policy-owned increment is rejected (D9).
+The review instead found that every in-process attempt is acked separately,
+leaving a re-fetchable `Failed` row during each backoff sleep. That is a
+duplicate-execution hazard, and it invalidates in-process backoff at these
+pins. The review also found that the build resolves rc.9/rc.8, not the
+rc.7/rc.6 named here, and that the caret requirements admit the breaking
+`1.0.0` final release. Two proposals await the user's ruling: D10 (exact pins;
+the 1.0.0 upgrade becomes a separate item) and D11 (durable `run_at` backoff in
+place of the tower retry layer). EP-M0 now carries a falsifiable,
+five-prediction runtime probe (AXIOM-DURABLE). EP-M1 onward stays paused.
