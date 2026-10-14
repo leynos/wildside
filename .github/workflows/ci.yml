@@ -504,19 +504,32 @@ jobs:
           PG_PASSWORD: wildside_embedded_test
           # Root-path bootstrap requires the worker binary for privilege demotion.
           PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
+          # The binaries this lane refuses, named in full rather than
+          # matched by pattern. A pattern would silently absorb a future
+          # compile-fail suite and run it nowhere: the `Compile-fail
+          # tests` step is the only place these are executed, and it
+          # names each one, so a widened filter costs a gate rather than
+          # saving a line. Held here rather than inline because the
+          # enumerated expression is longer than the line the linter
+          # allows; the contract pins both this value and the reference
+          # below, so neither can drift alone.
+          NEXTEST_EXCLUSION: >-
+            not (binary(declare_test_support_compile_fail) |
+            binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail))
         run: |
           # Clean stale pg-embed directories that may conflict with new runs.
           find target/ -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} + 2>/dev/null || true
           RUSTFLAGS="-D warnings" cargo nextest run --locked \
             --manifest-path backend/Cargo.toml \
             --all-targets --all-features \
-            -E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests))'
+            -E "$NEXTEST_EXCLUSION"
 
       - name: Compile-fail tests
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           cargo test --locked --all-features -p backend --test declare_test_support_compile_fail
+          cargo test --locked --all-features -p backend --test sha2_digest_formatting_compile_fail
           cargo test --locked --features trybuild-tests -p pagination cursor_trait_bound_compile_fail_tests
 
       # OpenAPI dump (at runtime or via a small bin)

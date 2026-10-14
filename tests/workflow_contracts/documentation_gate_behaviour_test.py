@@ -44,6 +44,16 @@ SURFACES = (
 #: The TypeScript configuration the fixture compiles under. It mirrors the
 #: front-end's compiler options closely enough for a single-function module;
 #: the gate's verdict comes from TypeDoc's validation, not from type checking.
+#:
+#: `types` is emptied rather than omitted. An absent `types` makes the compiler
+#: collect every `node_modules/@types` directory from the fixture up to the
+#: filesystem root and pull each one in as an implicit type library. The fixture
+#: lands in a temporary directory, so what it would pick up is whatever the
+#: machine happens to have above its temporary root: a scratch install tree
+#: there turns a self-contained probe into `TS2688: Cannot find type definition
+#: file` for a package the repository never named. The probe declares no ambient
+#: types, so including none is both the accurate description of the program and
+#: what keeps the contract a statement about the gate rather than the host.
 FIXTURE_TSCONFIG = {
     "compilerOptions": {
         "target": "ES2022",
@@ -52,6 +62,7 @@ FIXTURE_TSCONFIG = {
         "strict": True,
         "noEmit": True,
         "skipLibCheck": True,
+        "types": [],
     },
     "include": ["probe.ts"],
 }
