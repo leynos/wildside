@@ -150,8 +150,15 @@ Observable success:
       job's `Rust tests` step skips for non-dependabot actors.
 - [x] (2026-10-14) Confirmed zero unresolved review threads and
       `mergeStateStatus: CLEAN`.
-- [ ] Merge PR [#448] now that `build` is green, then verify the post-merge
-      `main` run.
+- [x] (2026-10-14) Merged PR [#448] via squash once `build` was green:
+      `mergedAt` `2026-10-14T06:20:54Z` by `leynos`, merge commit
+      `43d75cecca1c96ca4c2ece903dbfae778e7ab2b3` on `main`, and issue
+      [#446] auto-closed one second later. The merged tree is byte-identical to
+      the PR head — `git diff --stat 3db431e 43d75ce` is empty — so the
+      six-gate evidence recorded above carries over to `main` unchanged. The
+      PR branch was deleted by the merge.
+- [ ] Verify the post-merge `main` runs on `43d75ce` (`ci` run
+      `38521681179` and `Coverage (main)` run `38521681092`).
 
 [row6-reply]: https://github.com/leynos/wildside/pull/448#issuecomment-6160710645
 
