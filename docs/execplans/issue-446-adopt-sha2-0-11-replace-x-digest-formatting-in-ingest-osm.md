@@ -136,10 +136,22 @@ Observable success:
       missing `rust-src`, which suppresses the source snippet in a bound note.
       Fixed the fixture rather than the expectation; see the Surprises entry
       and the Decision Log.
-- [ ] Re-run the affected gates, commit and push the fixture fix, then
-      re-observe CI.
-- [ ] Shepherd PR [#448] to merge via `pr-babysitting`, gated on the `build`
-      check alone.
+- [x] (2026-10-14) Re-ran all six gates via `scrutineer` against a frozen md5
+      manifest: `check-fmt`, `lint`, `typecheck`, `test`, `markdownlint`,
+      `nixie` all green on their real log verdicts, and the three files digest
+      identically before and after. Committed as `b72bc30` and pushed with an
+      explicit lease; remote head, local `HEAD` and the tracking ref all read
+      `b72bc3017c45aa80dd797f0039d050be3cf24872`.
+- [x] (2026-10-14) Hosted CI run `38517952852` completed **success** on
+      `b72bc30`. The previously red `Compile-fail tests` step now passes, and
+      `Audit` passes on the upgraded lockfile. The `coverage` job ran
+      `cargo llvm-cov nextest --workspace` unfiltered: **1795 tests run, 1795
+      passed, 4 skipped**, which is what covers the compilation the `build`
+      job's `Rust tests` step skips for non-dependabot actors.
+- [x] (2026-10-14) Confirmed zero unresolved review threads and
+      `mergeStateStatus: CLEAN`.
+- [ ] Merge PR [#448] now that `build` is green, then verify the post-merge
+      `main` run.
 
 [row6-reply]: https://github.com/leynos/wildside/pull/448#issuecomment-6160710645
 
@@ -458,10 +470,12 @@ Observable success:
 ## Outcomes & Retrospective
 
 Carried to merge readiness. `make check-fmt`, `make lint`, `make typecheck`,
-`make test`, `make markdownlint` and `make nixie` all pass on `3d1c7ab`, and
-`make rust-audit` passes on `9bcd7bb`. Both review findings raised against the
-original revision are dispositioned, and CodeRabbit has confirmed that no
-finding remains open from its six-row reconciliation.
+`make test`, `make markdownlint` and `make nixie` all pass on `b72bc30`, and
+`make rust-audit` passes on the upgraded lockfile. Both review findings raised
+against the original revision are dispositioned, CodeRabbit has confirmed that
+no finding remains open from its six-row reconciliation, all three review
+threads are resolved, and hosted CI run `38517952852` is green with
+`mergeStateStatus: CLEAN`.
 
 The substantive lesson is about what the gates actually validated. The six-gate
 run covered `3d1c7ab`; `9bcd7bb` landed afterwards. That is only sound because
@@ -471,3 +485,14 @@ change every build, and the intuition that it must invalidate the gates is the
 one a reader would have. Recording the evidence was therefore part of the work,
 not a footnote to it. Where that evidence had not been available, the correct
 move would have been to re-run the gates rather than to argue from the diff.
+
+The second lesson is narrower and more portable: a compile-fail expectation is
+a function of the whole toolchain, including which components are installed,
+not just the compiler version. The `sha2_hasher_io_write` fixture passed in
+every local gate and failed on the first hosted run, and the version check that
+would normally settle a local-versus-CI discrepancy — comparing rustc builds —
+came back identical. Only the diagnostic *shapes* differed. The durable fix was
+not to reconcile the two outputs but to stop asserting on std's source at all,
+so that the expectation depends on the fixture and the dependency it pins. The
+same reasoning would apply to any fixture whose diagnostic reaches outside the
+crate under test.
