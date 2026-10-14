@@ -150,8 +150,28 @@ Observable success:
       job's `Rust tests` step skips for non-dependabot actors.
 - [x] (2026-10-14) Confirmed zero unresolved review threads and
       `mergeStateStatus: CLEAN`.
-- [ ] Merge PR [#448] now that `build` is green, then verify the post-merge
-      `main` run.
+- [x] (2026-10-14) Merged PR [#448] via squash once `build` was green:
+      `mergedAt` `2026-10-14T06:20:54Z` by `leynos`, merge commit
+      `43d75cecca1c96ca4c2ece903dbfae778e7ab2b3` on `main`, and issue
+      [#446] auto-closed one second later. The merged tree is byte-identical to
+      the PR head — `git diff --stat 3db431e 43d75ce` is empty — so the
+      six-gate evidence recorded above carries over to `main` unchanged. The
+      PR branch was deleted by the merge.
+- [x] (2026-10-14) Verified the post-merge `main` runs on `43d75ce`. The `ci`
+      run [`38521681179`] finished **success**, and its `build` job succeeded
+      with the two steps that had been red now passing: `Compile-fail
+      tests` passed on a runner without `rust-src`, confirming the fixture fix
+      addresses the environment difference rather than merely re-blessing it,
+      and `Audit` passed, confirming the `quinn-proto` upgrade holds on `main`.
+      The separate `Coverage (main)` run [`38521681092`] also finished
+      **success**, running `cargo llvm-cov nextest --workspace` unfiltered.
+      Within `ci`, the `coverage` job is `skipped` (the standalone Coverage
+      workflow supersedes it) and `Rust tests` is `skipped` under the
+      pre-existing dependabot-actor gate; the unfiltered coverage run is what
+      covers that compilation.
+
+[`38521681179`]: https://github.com/leynos/wildside/actions/runs/38521681179
+[`38521681092`]: https://github.com/leynos/wildside/actions/runs/38521681092
 
 [row6-reply]: https://github.com/leynos/wildside/pull/448#issuecomment-6160710645
 
