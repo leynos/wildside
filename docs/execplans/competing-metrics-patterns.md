@@ -287,7 +287,7 @@ removing it.
 - [x] EP-M4: deterministic gates and CodeRabbit review clear.
 - [x] EP-M5: document metrics policy; reject Prometheus outside outbound
   metrics adapters and adapter tests. All deterministic gates pass.
-- [ ] EP-M5: CodeRabbit review clear.
+- [x] EP-M5: CodeRabbit reviewed 29 files with zero findings at `c30489f`.
 
 ## Surprises & discoveries
 
