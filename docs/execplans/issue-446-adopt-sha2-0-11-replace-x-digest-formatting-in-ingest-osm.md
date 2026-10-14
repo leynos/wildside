@@ -53,6 +53,13 @@ Observable success:
 - Re-blessing `.stderr` fixtures against a changed toolchain can produce churn
   unrelated to this change. Mitigated by blessing only after confirming the
   fixtures still fail to compile for the intended reason.
+- **Realized.** A `.stderr` fixture can also depend on which *components* the
+  toolchain has installed, not just its version. The `sha2_hasher_io_write`
+  expectation quoted `std::io::copy`'s signature, and rustc only renders that
+  snippet when the standard library sources are present. CI installs a minimal
+  component set without `rust-src`, so the fixture passed locally and failed
+  hosted on the same compiler. Mitigated by asserting the bound from
+  fixture-local code instead; see the Surprises entry and the Decision Log.
 
 ## Progress
 
@@ -123,12 +130,46 @@ Observable success:
       `pull_request` rule, so no approval is required to merge. Classic
       branch protection returns 404 "Branch not protected"; the ruleset is the
       real configuration.
+- [x] (2026-10-14) Diagnosed the hosted `Compile-fail tests` failure on
+      `b4161ea`. Same rustc build on both sides
+      (`df6ee909ef35c75aa58aa45af6ac071a9b8285c2`); the variable was the
+      missing `rust-src`, which suppresses the source snippet in a bound note.
+      Fixed the fixture rather than the expectation; see the Surprises entry
+      and the Decision Log.
+- [ ] Re-run the affected gates, commit and push the fixture fix, then
+      re-observe CI.
 - [ ] Shepherd PR [#448] to merge via `pr-babysitting`, gated on the `build`
       check alone.
 
 [row6-reply]: https://github.com/leynos/wildside/pull/448#issuecomment-6160710645
 
 ## Surprises & Discoveries
+
+- **A trybuild `.stderr` fixture pinned the presence of `rust-src`, not just the
+  compiler version.** The hosted `build` job went red at the
+  `Compile-fail tests` step on `b4161ea` while the identical step passed
+  locally. The compiler was *not* the variable: the panic backtrace resolved to
+  `/rustc/df6ee909ef35c75aa58aa45af6ac071a9b8285c2`, and local
+  `rustc --version` reports `1.98.0-nightly (df6ee909e 2026-06-28)` — the same
+  build. The difference was the installed component set. `rust-toolchain.toml`
+  requests `rustfmt`, `clippy` and `rust-analyzer`, but the shared
+  `leynos/shared-actions` `setup-rust` action overrides that list with
+  `components: rustfmt, clippy, llvm-tools-preview`, so CI never installs
+  `rust-src`. Without the standard library sources rustc cannot render the
+  source snippet for a bound it is reporting, so the
+  `note: required by a bound in 'std::io::copy'` block lost its signature lines
+  and collapsed from eleven lines to one.
+
+  Reproduced deterministically without touching the toolchain, by building a
+  second sysroot of symlinks to the real one with only `lib/rustlib/src`
+  removed, and compiling the same snippet under both. With `rust-src` present
+  the `note:` block quotes `pub fn copy<R: ?Sized, W: ?Sized>…` through
+  `W: Write, ^^^^^ required by this bound in 'copy'`; without it the block is a
+  bare `--> $RUST/std/src/io/copy.rs` and the diagnostic gutter narrows by one
+  column. The only fixture that hit this was `sha2_hasher_io_write.rs`, because
+  it was the only one whose diagnostic reached into std's source;
+  `sha2_digest_lowerhex.rs` cites only the fixture file and the `sha2` type
+  path, which is why it stayed green.
 
 - **The `ci.yml` nextest filter line cannot be reflowed to fit yamllint.**
   Adding `binary(sha2_digest_formatting_compile_fail)` to the `-E` expression
@@ -325,6 +366,24 @@ Observable success:
   adapter with a fixture double and drives the *domain service*, not the binary.
 
 ## Decision Log
+
+- Decision: make the `sha2_hasher_io_write` fixture assert its bound from
+  fixture-local code rather than blessing the shorter hosted diagnostic.
+  Rationale: three options were available, and two are wrong. Blessing the
+  hosted output verbatim would trade a local failure for a hosted one, because
+  the eleven-line form is what any developer with `rust-src` sees; the fixture
+  would then be red on a workstation and green on CI. Adding `rust-src` to
+  `rust-toolchain.toml` is not available either — the shared `setup-rust`
+  action passes its own `components` list, which would still win — and even if
+  it worked it would make every CI run download the standard library sources to
+  serve one compile-fail fixture. Routing the sink through a local
+  `fn stream_into<W: io::Write>` keeps the assertion exactly as strong — the
+  error is still `the trait bound 'Sha256: std::io::Write' is not satisfied` —
+  while moving both spans into the fixture, so the expectation is a function of
+  the fixture and the dependency, which is what a compile-fail test is for.
+  Verified by compiling the fixture under a sysroot with and without
+  `lib/rustlib/src`: the two diagnostics are byte-identical to each other and
+  to the committed `.stderr`, and neither mentions std's source.
 
 - Decision: skip commit `9ad5130` ("Clear the h2 advisory blocking the audit
   gate") during the rebase instead of resolving its conflicts. Rationale:
