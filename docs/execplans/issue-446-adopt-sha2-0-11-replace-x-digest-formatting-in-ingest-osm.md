@@ -158,8 +158,8 @@ Observable success:
       six-gate evidence recorded above carries over to `main` unchanged. The
       PR branch was deleted by the merge.
 - [x] (2026-10-14) Verified the post-merge `main` runs on `43d75ce`. The `ci`
-      run [`38521681179`] finished **success** and its `build` job passed every
-      step, including the two that had been red or skipped before: `Compile-fail
+      run [`38521681179`] finished **success**, and its `build` job succeeded
+      with the two steps that had been red now passing: `Compile-fail
       tests` passed on a runner without `rust-src`, confirming the fixture fix
       addresses the environment difference rather than merely re-blessing it,
       and `Audit` passed, confirming the `quinn-proto` upgrade holds on `main`.
