@@ -377,21 +377,16 @@ mod tests {
         /// trip.
         #[test]
         fn sha256_file_renders_arbitrary_payloads_as_lowercase_hex(
-            seed in proptest::collection::vec(any::<u8>(), 0..64),
-            payload_len in proptest::sample::select(vec![
+            contents in proptest::sample::select(vec![
                 0_usize,
                 8 * 1024 - 1,
                 8 * 1024,
                 8 * 1024 + 1,
                 24 * 1024,
                 24 * 1024 + 1,
-            ]),
+            ])
+            .prop_flat_map(|len| proptest::collection::vec(any::<u8>(), len)),
         ) {
-            let mut contents = seed;
-            if contents.len() < payload_len {
-                contents.resize(payload_len, 0);
-            }
-
             let digest = digest_of(&contents).expect("digest fixture");
             let decoded = hex::decode(&digest).expect("digest must be valid hex");
 
