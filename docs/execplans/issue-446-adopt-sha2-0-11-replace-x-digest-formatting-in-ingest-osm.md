@@ -113,9 +113,18 @@ Observable success:
 - [x] (2026-10-14) Posted the row-6 reconciliation under `buzzybee-df12`
       ([comment][row6-reply]). CodeRabbit confirmed: "Row 6 is resolved. No
       finding remains open from the six-row reconciliation."
-- [ ] Clear CodeRabbit's stale `CHANGES_REQUESTED` decision, which is anchored
-      to `9ad51301` — a commit that is not an ancestor of the branch.
-- [ ] Shepherd PR [#448] to merge via `pr-babysitting`.
+- [x] (2026-10-14) Established that the stale `CHANGES_REQUESTED` decision is
+      advisory, not blocking. CodeRabbit's only change-requesting review is
+      anchored to `9ad51301`, which is not an ancestor of the branch, and every
+      review it filed against the current candidate is `COMMENTED`. The `main`
+      ruleset (`main-required-checks`, id `18428148`) enforces exactly two
+      rules — `required_status_checks` with the single context `build`
+      (integration `15368`, non-strict) and `deletion`. There is no
+      `pull_request` rule, so no approval is required to merge. Classic
+      branch protection returns 404 "Branch not protected"; the ruleset is the
+      real configuration.
+- [ ] Shepherd PR [#448] to merge via `pr-babysitting`, gated on the `build`
+      check alone.
 
 [row6-reply]: https://github.com/leynos/wildside/pull/448#issuecomment-6160710645
 
