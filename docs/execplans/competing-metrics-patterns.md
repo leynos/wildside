@@ -5,7 +5,8 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: IMPLEMENTATION COMPLETE; local gates pass; CodeRabbit and hosted
+assessment pending.
 
 ## Purpose / big picture
 
@@ -97,21 +98,20 @@ removing it.
   updates the architecture document in the same commit and records the removal
   in the decision log; the trait is trivially re-introducible when a route
   cache lands.
-- Risk (closed 2026-10-15): post-rebase gates and CodeScene checks passed;
-  CodeRabbit review must still cover the final committed head.
+- Risk: implementation review and hosted ExecPlan assessment await publication;
+  local deterministic gates and CodeScene checks pass.
 
 ## Progress
 
 - [x] (2026-08-16) Reconnaissance complete: both patterns characterized with
   file:line evidence; `RouteMetrics` confirmed dead (definition and `pub use`
   only, no implementations or call sites).
-- [x] (2026-09-28–2026-10-15) Preflight found a third persistence adapter.
-  User approvals raised the path cap from 20 to 25, 29 for M5, then 30 for
-  roadmap closeout; the 600-net-line cap remained fixed.
-- [x] (2026-10-15) Fixed CodeScene's 74-line test: scenario 49 lines, helpers
-  26/18. Rebased 17 commits onto `9f4baf0`; 225 target-only paths match.
-  Focused/full gates, metrics-off, CodeScene 10.0 and clean delta passed;
-  Nextest 1,810/4 skipped, both compile-fail tests passed. Logs are in `/tmp`.
+- [x] (2026-09-28–2026-10-15) Preflight found a third adapter; user raised
+  scope from 20 to 25, 29 for M5, then 30 paths; 600 lines stayed fixed.
+- [x] (2026-10-15) Fixed CodeScene's 74-line test (scenario 49, helpers
+  26/18); rebased 18 owner-authored commits onto PR #542 (`6ec7f72`);
+  range-diff matched all. Gates, metrics-off, CodeScene 10.0/clean delta and
+  compile-fail tests passed; Nextest 1,810 passed, four skipped.
 - (2026-10-15) The configured spelling gate regenerated the colour-name
   expression in `typos.toml`. Following `AGENTS.md`, this unrelated generated
   refresh is isolated in draft base PR #542 at `6ec7f72`; its formatting,
@@ -258,8 +258,11 @@ removing it.
 - [x] EP-M4: deterministic gates and CodeRabbit review clear.
 - [x] EP-M5: document metrics policy; reject Prometheus outside outbound
   metrics adapters and adapter tests. All deterministic gates pass.
-- [x] EP-M5: CodeRabbit reviewed 29 implementation files with zero findings
-  at `c30489f`; review closure is recorded at `2d1070a`.
+- (2026-10-15) CodeRabbit found missing `actix_web_prom` guards in domain and
+  inbound; allowing inbound conflicts with the developers' guide. Both red
+  fixtures reproduced the gap; focused tests and final gates passed (Nextest
+  1,812/4 skipped; pytest 606/1 skipped; metrics-off). CodeScene scored 10.0;
+  delta vs `6ec7f72` was clean. Logs are in the ledger; review remains pending.
 
 ## Surprises & discoveries
 
@@ -269,9 +272,8 @@ removing it.
 - Observation: roadmap §4.2.3 covers page-size, cursor-direction, and traversal
   analytics, not pagination-error metrics architecture. Added completed task
   1.3.4 under architecture guardrails for this implementation.
-- Observation (2026-10-15): main advanced from the PR's original base `ed897e0`
-  to `9f4baf0`, leaving the draft conflicting. This branch has no stack parent;
-  its 17 owner-authored commits were replayed as one linear series.
+- Observation (2026-10-15): open base PR #542 contains the generated spelling
+  refresh; PR #460 will be stacked on it after revalidation.
 - Observation: both patterns already share one `prometheus::Registry`, owned
   by `actix_web_prom::PrometheusMetrics` built in `backend/src/main.rs` with
   endpoint `/metrics`. Evidence: `backend/src/main.rs` lines 28–31. Impact:
@@ -294,11 +296,6 @@ removing it.
   the invalid-cursor response only. Impact: M3 replaces recorder-dependent
   assertions with injected-recorder assertions in unit tests. The cursor
   response tests retain their serial attributes and response assertions.
-- Observation: the plan is stored at
-  `docs/execplans/competing-metrics-patterns.md`; the requested
-  `docs/execplans/feat/` subdirectory is absent. The open PR title already has
-  no `Plan:` prefix. Impact: this repository-root plan remains the living
-  record, and the PR title needs no edit.
 
 ## Decision log
 
@@ -348,27 +345,27 @@ removing it.
   for EP-M5, then 30 for roadmap closeout. The 600-line limit and verification
   obligations remain unchanged. No architecture or ADR change was required.
   Author: User.
+- Decision (2026-10-15): reject `actix_web_prom` in domain and inbound modules,
+  following the developers' guide and the existing `prometheus` boundary; the
+  conflicting reviewer suggestion to allow it inbound was rejected. Keep the
+  crate available at the composition root.
 - Decision (2026-10-15): keep the generated dictionary refresh in a one-file
   base PR and stack the metrics PR on it, as `AGENTS.md` requires unrelated
   generated configuration updates to remain separate.
 
 ## Outcomes & retrospective
 
-EP-M1 established a synchronous, infallible domain port that preserves the
-structured log while delegating counting to an injected implementation. The
-no-op recorder was verified to retain both source labels in structured events.
-All deterministic code and documentation gates passed. One unrelated but
-gate-blocking Pylint assertion in the workflow-contract tests was simplified;
-it is included in the 30-path scope. The net-line cap remains 600. CodeRabbit
-reviewed `c57a3d2` with zero findings.
+EP-M1 established the infallible port, preserved logging and labels, and passed
+gates. The unrelated Pylint assertion fix remains within scope; CodeRabbit
+cleared M1.
 
-EP-M1–M5 are implemented, and roadmap task 1.3.4 is checked. The metrics
-exposition contract is preserved, the global recorder and dead port are gone,
-and the architecture guard is active. The CodeScene finding is fixed without a
-lint suppression. Rebase, focused and full local gates, feature-off
-compilation, CodeScene review and delta passed. The generated dictionary
-refresh is isolated in a base PR. Local implementation is complete; hosted CI
-and PR assessments remain for `pr-babysitting`.
+EP-M1–M5 and roadmap task 1.3.4 are complete. The counter contract is
+preserved, globals and the dead port are gone, and architecture lint enforces
+the documented boundary. Post-restack gates, metrics-off, and CodeScene pass.
+Task scope remains 30 paths / 600 net lines against baseline `4d099ed`, within
+the approved 30 / 600 limits. Proof inventory is not applicable: no CrossHair,
+Kani, Verus, LemmaScript, or comparable proof was introduced or changed. Hosted
+CI and ExecPlan assessment pass to `pr-babysitting` after publication.
 
 ## Context and orientation
 
@@ -494,9 +491,10 @@ against the real `prometheus::Registry`, not a mock.
   compiles. Non-vacuity: before EP-M4 the grep hits
   `backend/src/domain/ports/route_metrics.rs` and `ports/mod.rs:170`.
 - Obligation: V-LINT-GUARD — `tools/architecture-lint` rejects `prometheus`
-  imports outside `outbound::metrics`, `server`, and the binary entry point.
-  Method: extend the lint's forbidden-roots table; add a red fixture case to
-  its existing `rstest`/BDD suites (`tools/architecture-lint/src/tests.rs`,
+  and `actix_web_prom` imports from domain and inbound, and rejects
+  `prometheus` outside `outbound::metrics` and outbound adapter tests. Method:
+  extend the lint's forbidden-roots table; add a red fixture case to its
+  existing `rstest`/BDD suites (`tools/architecture-lint/src/tests.rs`,
   `tests/architecture_guardrails_bdd.rs`) showing an inbound file importing
   `prometheus` is rejected. Rationale: the lint already models per-layer
   forbidden crates; this is the cheapest durable guard against pattern

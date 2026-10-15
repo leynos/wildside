@@ -180,6 +180,7 @@ impl ModuleLayer {
                 "actix_service",
                 "actix_web",
                 "actix_web_actors",
+                "actix_web_prom",
                 "awc",
                 "diesel",
                 "diesel_async",
@@ -191,6 +192,7 @@ impl ModuleLayer {
                 "utoipa",
             ]),
             Self::Inbound => BTreeSet::from([
+                "actix_web_prom",
                 "diesel",
                 "diesel_async",
                 "diesel_migrations",
