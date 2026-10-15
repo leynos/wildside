@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -31,10 +31,10 @@ directly from an inbound HTTP adapter
 (`backend/src/inbound/http/users_pagination.rs`) and an outbound persistence
 adapter (`backend/src/outbound/persistence/user_persistence_error_mapping.rs`).
 
-After this change, exactly one pattern remains: every metric is recorded
-through an injected trait with a `NoOp` and a Prometheus implementation, the
-`OnceLock` global and the crate-root registration function are gone, and the
-convention is written down in `docs/developers-guide.md`. Observable success:
+The completed change leaves one pattern: every metric is recorded through an
+injected trait with a `NoOp` and a Prometheus implementation, the `OnceLock`
+global and the crate-root registration function are gone, and the convention is
+written down in `docs/developers-guide.md`. Observable success:
 `rg "OnceLock" backend/src` returns no metrics-related hits, the
 `wildside_pagination_errors_total` counter still increments with the same name
 and labels for the same events, and all commit gates pass. The plan also
@@ -65,7 +65,7 @@ removing it.
 
 ## Tolerances (exception triggers)
 
-- Scope: stop and escalate if the change exceeds 29 files or 600 net lines.
+- Scope: stop and escalate if the change exceeds 30 files or 600 net lines.
 - Interface: the crate-root re-export `register_pagination_error_metrics` in
   `backend/src/lib.rs` is application-internal and will be deleted without a
   compatibility shim; escalate only if an out-of-crate consumer other than
@@ -84,8 +84,8 @@ removing it.
   missed. Threading an injected handle therefore reaches one more adapter than
   the plan first mapped. Severity: medium. Likelihood: confirmed. Mitigation:
   inject the same `Arc<dyn PaginationErrorMetrics>` into all three adapters and
-  record each mapping call in the caller inventory. The user approved the
-  29-file scope for EP-M5; the 600-net-line limit remains hard.
+  record each mapping call in the caller inventory. The user later approved 30
+  paths for roadmap closure; the 600-net-line limit remains hard.
 - Risk: `serial_test`-guarded tests depend on the `OnceLock` global's
   process-wide lifetime; removing the global changes test isolation
   assumptions. Severity: low. Likelihood: medium. Mitigation: the replacement
@@ -103,9 +103,9 @@ removing it.
 - [x] (2026-08-16) Reconnaissance complete: both patterns characterized with
   file:line evidence; `RouteMetrics` confirmed dead (definition and `pub use`
   only, no implementations or call sites).
-- [x] (2026-09-28–2026-10-14) Preflight found a third persistence adapter.
-  The user raised the file cap from 20 to 25, then 29 for M5; the 600-line cap
-  remained fixed.
+- [x] (2026-09-28–2026-10-15) Preflight found a third persistence adapter.
+  User approvals raised the path cap from 20 to 25, 29 for M5, then 30 for
+  roadmap closeout; the 600-net-line cap remained fixed.
 - (2026-10-13) EP-M1 red-stage tests were added before the port implementation.
   Cargo spent 5h28m preparing shared target artefacts and compiling uncached
   because sccache was unreachable. The filtered test completed successfully
@@ -287,17 +287,17 @@ removing it.
 - [x] EP-M4: deterministic gates and CodeRabbit review clear.
 - [x] EP-M5: document metrics policy; reject Prometheus outside outbound
   metrics adapters and adapter tests. All deterministic gates pass.
-- [x] EP-M5: CodeRabbit reviewed 29 files with zero findings at `c30489f`.
+- [x] EP-M5: CodeRabbit reviewed 29 implementation files with zero findings
+  at `c30489f`; review closure is recorded at `2d1070a`.
 
 ## Surprises & discoveries
 
-- Observation: no repository document names the "two competing metrics
-  patterns"; the phrase comes from the task, and the closest documented tension
-  is the deliberate proliferation of per-feature ports. Evidence: full-tree
-  Markdown sweep for
-  `metrics|competing|prometheus|observability|instrumentation|recorder`.
-  Impact: this plan is the artefact that records the divergence and its
-  resolution.
+- Observation: repository docs had no named metrics-pattern conflict; only
+  per-feature ports were documented. The task and full-tree Markdown sweep
+  established this plan as the record of the divergence and its resolution.
+- Observation: roadmap §4.2.3 covers page-size, cursor-direction, and traversal
+  analytics, not pagination-error metrics architecture. Added completed task
+  1.3.4 under architecture guardrails for this implementation.
 - Observation: both patterns already share one `prometheus::Registry`, owned
   by `actix_web_prom::PrometheusMetrics` built in `backend/src/main.rs` with
   endpoint `/metrics`. Evidence: `backend/src/main.rs` lines 28–31. Impact:
@@ -364,10 +364,10 @@ removing it.
   ones — a phantom abstraction poisons that sweep. The architecture document is
   updated in the same milestone so design and code agree. Date/Author:
   2026-08-16, drafting agent.
-- Decisions (2026-10-13, 2026-10-14): raise the file cap from 20 to 25, then
-  29 for EP-M5, retaining the 600-line limit and planned verification. This
-  covers the third persistence adapter and preserves the single-pattern end
-  state. No architecture or ADR change is required. Author: User.
+- Decisions (2026-10-13–15): the user raised the path cap from 20 to 25, 29
+  for EP-M5, then 30 for roadmap closeout. The 600-line limit and verification
+  obligations remain unchanged. No architecture or ADR change was required.
+  Author: User.
 
 ## Outcomes & retrospective
 
@@ -376,14 +376,12 @@ structured log while delegating counting to an injected implementation. The
 no-op recorder was verified to retain both source labels in structured events.
 All deterministic code and documentation gates passed. One unrelated but
 gate-blocking Pylint assertion in the workflow-contract tests was simplified;
-it is included in the 29-file scope accounting. The user-approved file cap is
-29 and the net-line cap remains 600. CodeRabbit reviewed `c57a3d2` with zero
-findings.
+it is included in the 30-path scope. The net-line cap remains 600. CodeRabbit
+reviewed `c57a3d2` with zero findings.
 
-EP-M2 adds the registry-backed adapter with the existing metric name, help
-text, and positional `code`, `source` labels. Focused tests cover every source
-and detail-code combination and repeated increments. All five deterministic
-gates passed, and CodeRabbit found no concerns at `706f827`. EP-M3 may begin.
+EP-M2–M5 completed the adapter, injection, dead-port removal, and metrics lint
+guard. All gates and reviews are clear at `2d1070a`; roadmap task 1.3.4 is
+checked. Final scope is 30 paths and 598 net lines.
 
 ## Context and orientation
 
@@ -683,8 +681,9 @@ error[E0432]: unresolved import `crate::outbound::metrics::PrometheusPaginationE
 - Done means: all six verification obligations discharged with evidence
   recorded here; `make test`, `make lint` (against baseline), `make check-fmt`,
   `make markdownlint`, `make nixie` green; behavioural check of `/metrics`
-  performed at EP-M3; docs updated; five commits (one per milestone) with
-  imperative, wrapped messages.
+  performed at EP-M3; docs updated; five implementation milestones committed
+  with imperative, wrapped messages. Review-fix and plan-closure commits are
+  recorded in Progress.
 
 ## Idempotence and recovery
 
@@ -747,7 +746,6 @@ No new dependencies. End-state interfaces:
 ## Revision note
 
 On 2026-09-28, preflight found a third persistence mapping caller and the actual
-`build_http_state` composition helper. On 2026-10-13, the user raised the hard
-file tolerance from 20 to 25; on 2026-10-14, the user raised it to 29 for
-EP-M5. The 600-net-line limit and metrics design and verification obligations
-are unchanged.
+`build_http_state` composition helper. User approvals raised the path cap from
+20 to 25, 29 for M5, then 30 for roadmap closeout; the 600-net-line limit and
+metrics design and verification obligations remain unchanged.
