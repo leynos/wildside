@@ -5,8 +5,8 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IMPLEMENTATION COMPLETE; local gates pass; CodeRabbit and hosted
-assessment pending.
+Status: IMPLEMENTATION COMPLETE; local gates and CodeRabbit CLI review clear;
+hosted assessment pending publication.
 
 ## Purpose / big picture
 
@@ -98,8 +98,8 @@ removing it.
   updates the architecture document in the same commit and records the removal
   in the decision log; the trait is trivially re-introducible when a route
   cache lands.
-- Risk: implementation review and hosted ExecPlan assessment await publication;
-  local deterministic gates and CodeScene checks pass.
+- Risk: hosted ExecPlan assessment and CI await publication; local deterministic
+  gates, CodeScene checks, and the CodeRabbit CLI review pass.
 
 ## Progress
 
@@ -256,13 +256,14 @@ removing it.
 - [x] EP-M4: remove the dead `RouteMetrics` port; update
   `docs/wildside-backend-architecture.md`.
 - [x] EP-M4: deterministic gates and CodeRabbit review clear.
-- [x] EP-M5: document metrics policy; reject Prometheus outside outbound
-  metrics adapters and adapter tests. All deterministic gates pass.
+- [x] EP-M5: policy documented, lint guard and gates pass; CodeRabbit review
+      clear.
 - (2026-10-15) CodeRabbit found missing `actix_web_prom` guards in domain and
   inbound; allowing inbound conflicts with the developers' guide. Both red
   fixtures reproduced the gap; focused tests and final gates passed (Nextest
   1,812/4 skipped; pytest 606/1 skipped; metrics-off). CodeScene scored 10.0;
-  delta vs `6ec7f72` was clean. Logs are in the ledger; review remains pending.
+  Delta was clean. CodeRabbit CLI 0.9.0 reviewed 29 files at `0e98666` vs
+  `6ec7f72`: zero findings; full comparison context is in the ledger.
 
 ## Surprises & discoveries
 
@@ -362,10 +363,9 @@ cleared M1.
 EP-M1–M5 and roadmap task 1.3.4 are complete. The counter contract is
 preserved, globals and the dead port are gone, and architecture lint enforces
 the documented boundary. Post-restack gates, metrics-off, and CodeScene pass.
-Task scope remains 30 paths / 600 net lines against baseline `4d099ed`, within
-the approved 30 / 600 limits. Proof inventory is not applicable: no CrossHair,
-Kani, Verus, LemmaScript, or comparable proof was introduced or changed. Hosted
-CI and ExecPlan assessment pass to `pr-babysitting` after publication.
+Proof inventory is not applicable: no CrossHair, Kani, Verus, LemmaScript, or
+comparable proof was introduced or changed. Hosted CI and ExecPlan assessment
+pass to `pr-babysitting` after publication.
 
 ## Context and orientation
 
