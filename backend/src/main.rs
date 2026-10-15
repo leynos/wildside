@@ -203,40 +203,9 @@ mod pagination_metrics_exposition_tests {
 
         let request_result: Result<(), Box<dyn StdError>> =
             match timeout(Duration::from_secs(15), async {
-                let login_response = client
-                    .post(format!("{base_url}/api/v1/login"))
-                    .send_json(&serde_json::json!({
-                        "username": "admin",
-                        "password": "password"
-                    }))
-                    .await?;
-                if !login_response.status().is_success() {
-                    return Err(io::Error::other("fixture login should succeed").into());
-                }
-                let cookie_header = login_response
-                    .headers()
-                    .get(header::SET_COOKIE)
-                    .ok_or_else(|| {
-                        io::Error::other("login response should set a session cookie")
-                    })?;
-                let session_cookie = cookie_header
-                    .to_str()?
-                    .split(';')
-                    .next()
-                    .ok_or_else(|| io::Error::other("session cookie should contain a value"))?;
-
-                let cursor_response = client
-                    .get(format!("{base_url}/api/v1/users?cursor=not-a-cursor"))
-                    .insert_header((header::COOKIE, session_cookie))
-                    .send()
-                    .await?;
-                if cursor_response.status() != actix_web::http::StatusCode::BAD_REQUEST {
-                    return Err(io::Error::other("invalid cursor should return HTTP 400").into());
-                }
-
-                let mut metrics_response = client.get(format!("{base_url}/metrics")).send().await?;
-                let metrics_body = metrics_response.body().await?;
-                let metrics_text = std::str::from_utf8(&metrics_body)?;
+                let session_cookie = login_session_cookie(&client, &base_url).await?;
+                let metrics_text =
+                    invalid_cursor_metrics_text(&client, &base_url, &session_cookie).await?;
                 if !metrics_text.contains(
                     "wildside_pagination_errors_total{code=\"invalid_cursor\",source=\"users_http\"} 1",
                 ) {
@@ -262,5 +231,51 @@ mod pagination_metrics_exposition_tests {
         }
         request_result?;
         Ok(())
+    }
+
+    async fn login_session_cookie(
+        client: &awc::Client,
+        base_url: &str,
+    ) -> Result<String, Box<dyn StdError>> {
+        let response = client
+            .post(format!("{base_url}/api/v1/login"))
+            .send_json(&serde_json::json!({
+                "username": "admin",
+                "password": "password"
+            }))
+            .await?;
+        if !response.status().is_success() {
+            return Err(io::Error::other("fixture login should succeed").into());
+        }
+
+        let cookie_header = response
+            .headers()
+            .get(header::SET_COOKIE)
+            .ok_or_else(|| io::Error::other("login response should set a session cookie"))?;
+        let session_cookie = cookie_header
+            .to_str()?
+            .split(';')
+            .next()
+            .ok_or_else(|| io::Error::other("session cookie should contain a value"))?;
+        Ok(session_cookie.to_owned())
+    }
+
+    async fn invalid_cursor_metrics_text(
+        client: &awc::Client,
+        base_url: &str,
+        session_cookie: &str,
+    ) -> Result<String, Box<dyn StdError>> {
+        let cursor_response = client
+            .get(format!("{base_url}/api/v1/users?cursor=not-a-cursor"))
+            .insert_header((header::COOKIE, session_cookie))
+            .send()
+            .await?;
+        if cursor_response.status() != actix_web::http::StatusCode::BAD_REQUEST {
+            return Err(io::Error::other("invalid cursor should return HTTP 400").into());
+        }
+
+        let mut metrics_response = client.get(format!("{base_url}/metrics")).send().await?;
+        let metrics_body = metrics_response.body().await?;
+        Ok(std::str::from_utf8(&metrics_body)?.to_owned())
     }
 }

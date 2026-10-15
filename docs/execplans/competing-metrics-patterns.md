@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: COMPLETE
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -97,6 +97,8 @@ removing it.
   updates the architecture document in the same commit and records the removal
   in the decision log; the trait is trivially re-introducible when a route
   cache lands.
+- Risk (closed 2026-10-15): post-rebase gates and CodeScene checks passed;
+  CodeRabbit review must still cover the final committed head.
 
 ## Progress
 
@@ -106,6 +108,15 @@ removing it.
 - [x] (2026-09-28–2026-10-15) Preflight found a third persistence adapter.
   User approvals raised the path cap from 20 to 25, 29 for M5, then 30 for
   roadmap closeout; the 600-net-line cap remained fixed.
+- [x] (2026-10-15) Fixed CodeScene's 74-line test: scenario 49 lines, helpers
+  26/18. Rebased 17 commits onto `9f4baf0`; 225 target-only paths match.
+  Focused/full gates, metrics-off, CodeScene 10.0 and clean delta passed;
+  Nextest 1,810/4 skipped, both compile-fail tests passed. Logs are in `/tmp`.
+- (2026-10-15) The configured spelling gate regenerated the colour-name
+  expression in `typos.toml`. Following `AGENTS.md`, this unrelated generated
+  refresh is isolated in draft base PR #542 at `6ec7f72`; its formatting,
+  spelling/Markdown, and Mermaid gates passed. Stack this task on #542 while
+  retaining the approved 30-path/600-net-line combined cap.
 - (2026-10-13) EP-M1 red-stage tests were added before the port implementation.
   Cargo spent 5h28m preparing shared target artefacts and compiling uncached
   because sccache was unreachable. The filtered test completed successfully
@@ -115,15 +126,11 @@ removing it.
   `/tmp/test-red-m1-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-1791851016.out`.
 - [x] EP-M1: pagination metrics port and `NoOp` implementation are added; the
   focused test and all deterministic milestone gates pass.
-- (2026-10-13) First full EP-M1 gate attempt: `make check-fmt` passed.
-  `make lint` found the missing inner doc comment on the test module; that
-  finding is fixed. Its Python tier also failed while fetching pinned public
-  dependency `pylint-pypy-shim`: the Lody GitHub helper returned HTTP 403 and
-  `credentials_exhausted`. A retry with the prescribed clean PATH still used
-  Lody because `GIT_EXEC_PATH` pointed at a Lody session directory. With
-  `GIT_EXEC_PATH` unset, `/usr/bin/git` selected `/usr/libexec/git-core` and a
-  read-only `ls-remote` to the public dependency succeeded. The next lint run
-  will also unset `GIT_EXEC_PATH`; later gates have not started.
+- (2026-10-13) Initial M1 gates: formatting passed; lint found a missing test
+  module doc comment, later fixed. Its Python tier hit HTTP 403 through the
+  Lody GitHub helper. A clean PATH still routed through `GIT_EXEC_PATH`;
+  unsetting it let standard Git's public `ls-remote` succeed. Evidence:
+  `/tmp/lint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-5.out`.
 - (2026-10-13) With standard Git routing restored, `make lint` passed rustdoc,
   Clippy, Whitaker, architecture, frontend and specification checks, then
   Pylint found C1803 in the unchanged
@@ -193,16 +200,10 @@ removing it.
   tree; it is not treated as validation. An initial exposition-test attempt
   timed out while stopping the server with the client pool alive; dropping the
   client before graceful shutdown resolved it.
-- (2026-10-13) First full M3 gate wave: `make check-fmt`, `make typecheck`,
-  `make test` (1,489 Nextest cases, compile-fail 1/1, Python 107 passed),
-  `make nixie`, and `cargo check -p backend --no-default-features` passed.
-  `make lint` found the exposition integration test importing inbound/HTTP
-  types from the outbound metrics module and reported `state_builders.rs` at
-  410 lines. The feature-off check also identified an unused `NoOp` import.
-  `make markdownlint` stopped when the spelling command received a deleted but
-  unstaged path from `git ls-files`. Evidence is in the Scrutineer logs ending
-  `-10.out`, `-6.out`, `-3.out`, `-12.out`, `-11.out`, and
-  `backend-check-...patterns.out` under `/tmp`.
+- (2026-10-13) First M3 gate wave passed formatting, typecheck, tests (1,489
+  Nextest, compile-fail 1/1, Python 107), Mermaid, and feature-off. Lint found
+  HTTP imports in the outbound test and a 410-line state builder; spelling also
+  saw an unstaged deletion. Fixes and rerun evidence follow below.
 - (2026-10-13) Gate-driven corrections: the `/metrics` end-to-end test now
   lives in an inline test module in `backend/src/main.rs`, keeping inbound and
   HTTP dependencies out of `outbound::metrics` while using an already changed
@@ -211,48 +212,19 @@ removing it.
   the two intentionally deleted observability paths were staged so the
   index-based spelling gate omitted them. The original candidate’s serial
   response-test attributes remain unchanged.
-- (2026-10-13) The corrected EP-M3 candidate passed the second full
-  deterministic wave: `make check-fmt`, `make lint`, `make typecheck`,
-  `make test`, `make markdownlint`, `make nixie`, and
-  `cargo check -p backend --no-default-features`. Nextest reported 1,489 cases
-  without failures; the compile-fail harness passed 1/1 and Python reported 107
-  passing tests. Logs:
-  `/tmp/check-fmt-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-11.out`,
-  `/tmp/lint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-7.out`,
-  `/tmp/typecheck-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`,
-  `/tmp/test-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-4.out`,
-  `/tmp/markdownlint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-13.out`,
-  `/tmp/nixie-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-12.out`,
-  and
-  `/tmp/backend-check-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`.
+- (2026-10-13) Corrected M3 passed all seven gates: formatting, lint,
+  typecheck, tests (1,489 Nextest; compile-fail 1/1; Python 107), Markdown,
+  Mermaid, and feature-off. Captured gate logs are recorded in the ledger.
   CodeRabbit reviewed committed candidate `6ff878e`; findings and corrections
   are recorded below.
-- (2026-10-13) CodeRabbit reviewed M3 commit `6ff878e` and raised two concerns:
-  an unnecessary `dead_code` suppression on the test-support state builder, and
-  an unbounded HTTP request phase in the server exposition test. The server
-  module is compiled again by the binary target, where the test-support helper
-  has no caller. The helper now lives in the library's `test_support.rs` and
-  calls the shared `state_builders` constructor, avoiding the binary-only dead
-  code while keeping production and test composition on one seam. The test
-  moved into `main.rs` so this one-file addition keeps the overall change
-  within the accepted 25-path limit after EP-M4. The login, invalid-cursor and
-  metrics requests now share a 15-second timeout; the test still stops and
-  joins the server before returning a timeout error. The first post-review gate
-  attempt failed `make lint` on the binary-only dead-code diagnostic; other
-  gates were not run. The revised candidate then passed all seven deterministic
-  gates: `make check-fmt`, `make lint`, `make typecheck`, `make test`,
-  `make markdownlint`, `make nixie`, and
-  `cargo check -p backend --no-default-features`. Nextest reported 1,489 passed
-  and four skipped; compile-fail passed, as did frontend, workflow-contract and
-  Python suites. Logs:
-  `/tmp/check-fmt-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-16.out`,
-  `/tmp/lint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-9.out`,
-  `/tmp/typecheck-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-3.out`,
-  `/tmp/test-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-5.out`,
-  `/tmp/markdownlint-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-15.out`,
-  `/tmp/nixie-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-14.out`,
-  and
-  `/tmp/backend-check-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-3.out`.
+- (2026-10-13) CodeRabbit at `6ff878e` flagged a `dead_code` suppression and
+  unbounded HTTP requests. Since the binary compiles its own server module, the
+  helper moved to library `test_support.rs`; the exposition test stayed in
+  `main.rs` to respect architecture and file limits. Its requests use a
+  15-second bound, and server stop/join completes before errors propagate. An
+  initial helper placement failed lint; the corrected candidate passed all
+  seven gates (1,489 passed, four skipped) and CodeRabbit found zero issues at
+  `70b740e`. Captured logs are recorded in the ledger.
 - (2026-10-13) CodeRabbit re-reviewed the corrected M3 commit
   `70b740e23d8cca77fc1386426da5f5b7b0608877` and reported zero findings. Output:
   `/tmp/coderabbit-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-2.out`.
@@ -273,10 +245,9 @@ removing it.
   1,495 Nextest, four skipped, 107 Python, compile-fail/frontend/workflow,
   format, lint, typecheck, Markdown, Mermaid and feature-off. Logs are the
   captured `*-3.out` gates and backend `*-2.out` check.
-- (2026-10-13) All seven M4 gates passed on `a870894`; Nextest passed 1,489
-  cases with four skipped, and Markdown lint reported zero errors across 125
-  files. CodeRabbit reviewed 23 files and reported zero findings. Gate and
-  review logs are recorded in the turn evidence; review output is
+- (2026-10-13) M4 at `a870894` passed all seven gates (1,489 passed, four
+  skipped; Markdown 125 files, zero errors); CodeRabbit found zero issues in 23
+  files. Review log:
   `/tmp/coderabbit-fc6a3bee-d4dd-4e85-bad9-aab0e5d668a4-feat-competing-metrics-patterns-3.out`.
 - [x] EP-M3: wire injection through inbound and outbound call sites; delete
   the `OnceLock` global, the duplicate `cfg` function bodies, the `lib.rs`
@@ -298,6 +269,9 @@ removing it.
 - Observation: roadmap §4.2.3 covers page-size, cursor-direction, and traversal
   analytics, not pagination-error metrics architecture. Added completed task
   1.3.4 under architecture guardrails for this implementation.
+- Observation (2026-10-15): main advanced from the PR's original base `ed897e0`
+  to `9f4baf0`, leaving the draft conflicting. This branch has no stack parent;
+  its 17 owner-authored commits were replayed as one linear series.
 - Observation: both patterns already share one `prometheus::Registry`, owned
   by `actix_web_prom::PrometheusMetrics` built in `backend/src/main.rs` with
   endpoint `/metrics`. Evidence: `backend/src/main.rs` lines 28–31. Impact:
@@ -356,7 +330,13 @@ removing it.
   APIs. The test-support wrapper lives in the library's `test_support.rs` and
   calls the shared state-builder seam. This avoids a dead-code diagnostic
   because `main.rs` compiles its own `server` module, without restoring a lint
-  suppression. Date/Author: 2026-10-13, implementation agent.
+  suppression. Keep the test in this module and extract focused helpers to
+  satisfy CodeScene without weakening the bounded request or shutdown checks.
+  Date/Author: 2026-10-13 and 2026-10-15, implementation agent.
+- Decision (2026-10-15): use Git's built-in `zdiff3` merge during the rebase
+  because Weave was selected only by global attributes, not repository policy.
+  Preserve target-side guide changes and replay only the metrics convention.
+  Date/Author: 2026-10-15, implementation agent.
 - Decision: remove `RouteMetrics` and `RouteMetricsError` rather than wire
   them. Rationale: pre-1.0, application-internal, zero implementations and zero
   call sites; a dead port invites divergent guesses about its semantics.
@@ -368,6 +348,9 @@ removing it.
   for EP-M5, then 30 for roadmap closeout. The 600-line limit and verification
   obligations remain unchanged. No architecture or ADR change was required.
   Author: User.
+- Decision (2026-10-15): keep the generated dictionary refresh in a one-file
+  base PR and stack the metrics PR on it, as `AGENTS.md` requires unrelated
+  generated configuration updates to remain separate.
 
 ## Outcomes & retrospective
 
@@ -379,9 +362,13 @@ gate-blocking Pylint assertion in the workflow-contract tests was simplified;
 it is included in the 30-path scope. The net-line cap remains 600. CodeRabbit
 reviewed `c57a3d2` with zero findings.
 
-EP-M2–M5 completed the adapter, injection, dead-port removal, and metrics lint
-guard. All gates and reviews are clear at `2d1070a`; roadmap task 1.3.4 is
-checked. Final scope is 30 paths and 598 net lines.
+EP-M1–M5 are implemented, and roadmap task 1.3.4 is checked. The metrics
+exposition contract is preserved, the global recorder and dead port are gone,
+and the architecture guard is active. The CodeScene finding is fixed without a
+lint suppression. Rebase, focused and full local gates, feature-off
+compilation, CodeScene review and delta passed. The generated dictionary
+refresh is isolated in a base PR. Local implementation is complete; hosted CI
+and PR assessments remain for `pr-babysitting`.
 
 ## Context and orientation
 
@@ -682,8 +669,9 @@ error[E0432]: unresolved import `crate::outbound::metrics::PrometheusPaginationE
   recorded here; `make test`, `make lint` (against baseline), `make check-fmt`,
   `make markdownlint`, `make nixie` green; behavioural check of `/metrics`
   performed at EP-M3; docs updated; five implementation milestones committed
-  with imperative, wrapped messages. Review-fix and plan-closure commits are
-  recorded in Progress.
+  with imperative, wrapped messages; post-rebase CodeScene file/delta checks
+  and implementation review clear. Review-fix and plan-closure commits are in
+  Progress.
 
 ## Idempotence and recovery
 
