@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: COMPLETE
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -1155,8 +1155,47 @@ floating-point precision and both bounded feasibility runs timed out.
   this completed plan returned no findings after the docs-only gates passed
   (`make check-fmt`, `make markdownlint`, and `make nixie`). The earlier
   status, fallback, and roadmap concerns are cleared on this candidate.
+- [x] Latest implementation and hosted status: commit `a2b5b67` makes
+  `round_coordinate` return `CoordinateOutOfRange` when `Number::as_f64()`
+  cannot represent a coordinate, preserving the ±180 admission contract if the
+  active `serde_json` feature set changes. It also consolidates the two
+  overflow examples and the idempotence counter-example in one named `rstest`
+  table. The full deterministic gates recorded above passed after these source
+  changes. At the implementation head
+  `a2b5b670aec9e8fd0fd5306632218f2bb1f29e9c`, hosted CodeScene and Gecko passed
+  (CodeScene result:
+  <https://codescene.io/projects/70675/delta/results/7938425>); no check is
+  pending or failed. Hosted CodeRabbit, Kody, and automerge were skipped under
+  the draft/configured conditions, while local CodeRabbit review 24 returned no
+  findings. Roadmap item 5.1.4a remains checked and implementation acceptance
+  remains complete.
+
+- [ ] PR integration: on 2026-10-16, the live `main` target had advanced from
+  the PR's recorded base `ed897e0` to `9f4baf0`, and GitHub reported the old PR
+  head conflicting. The 21-commit PR-owned linear series was rebased onto the
+  fetched `main` tip. `git range-diff` mapped all 21 commits; 18 patches
+  matched and three had reviewed documentation or test-diagnostic context
+  changes. The final diff retains all 15 intended paths. The rebase conflict
+  preserved the current guide's CI and tooling sections while adding the Kani
+  evidence and property-testing conventions. The Makefile workflow contract
+  test retains the PR's failure diagnostic alongside `main`'s newer fixture and
+  gate assertions. No production source conflict or dependency change occurred.
+  The roadmap item remains checked because implementation acceptance is
+  complete. Full gates, fresh assessments and review, readiness, and merge
+  remain pending for the rebased candidate.
 
 ## Surprises & discoveries
+
+- Observation: by 2026-10-16, `main` had moved 41 commits past the PR's
+  recorded base. The read-only merge preview identified overlapping edits in
+  `docs/developers-guide.md` and
+  `tests/workflow_contracts/makefile_tooling_test.py`. During replay, the guide
+  stopped twice at the PR's Kani-evidence and property-convention commits; each
+  resolution retained the expanded main guide and restored the PR passage. The
+  workflow test merged automatically, preserving the current `TMPDIR`, lint,
+  typecheck, and test-target contracts plus the PR's diagnostic assertion.
+  `range-diff` showed 18 unchanged patches and three reviewed context changes;
+  no merge commit or lockfile conflict was introduced.
 
 - Observation: after the original implementation was published, the hosted
   CodeScene check found `observe_payload_features` at complexity 9. The
@@ -1168,6 +1207,11 @@ floating-point precision and both bounded feasibility runs timed out.
   linked in `Progress`. The hosted CodeRabbit check was skipped by draft
   status, while the requested local CodeRabbit review completed with no
   findings.
+
+- Observation: the final admission fallback is unreachable with the pinned
+  default `serde_json` 1.0.150 feature set, where `Number::as_f64()` always
+  returns `Some`. Returning `CoordinateOutOfRange` anyway keeps the contract
+  explicit if a future feature configuration changes number conversion.
 
 - Observation: the first Stage B gate pass exposed a rustfmt diff in the
   extracted test module, although `make check-fmt` continued to later format
@@ -1336,6 +1380,12 @@ floating-point precision and both bounded feasibility runs timed out.
   `expect_used`; this typed fallback preserves the proof-backed normal path
   without a panic or the old silent unrounded fallback. Date/Author:
   2026-09-28, implementation agent.
+- Decision: reject a coordinate with `CoordinateOutOfRange` if
+  `Number::as_f64()` returns `None`. Rationale: an unconvertible coordinate
+  cannot be shown to lie inside the admitted ±180 domain; passing it through
+  would weaken the invariant if the `serde_json` feature set changes. This
+  branch is defensive under the currently pinned default configuration.
+  Date/Author: 2026-10-15, implementation agent.
 - Decision: decline a Kani harness for LEM-1 in this change and support the
   claim with its hand proof, generated properties, and a dense boundary-slice
   regression. Rationale: the installed Kani guidance says floating-point
@@ -1399,6 +1449,16 @@ floating-point precision and both bounded feasibility runs timed out.
   their expected outcome. Rationale: proptest failure-persistence convention;
   stale seeds would keep CI red or silently stop testing the original
   counter-example. Date/Author: 2026-09-28, planning agent.
+- Decision: rebase the PR-owned range onto the live `main` tip before resuming
+  acceptance. Rationale: PR #458 still targeted `main`, but its recorded base
+  was `ed897e0` while live `main` was `9f4baf0`, and GitHub reported a
+  conflict. The original range is the 21 linear commits after the verified
+  base. Use the built-in `zdiff3` merge with the ambient global attributes file
+  disabled: Weave is selected only by a user-wide `*.rs` rule, with no
+  repository opt-in. The reviewed resolutions preserve all current-main guide
+  and workflow-test changes while carrying forward the PR's Kani note,
+  property-testing guidance, and assertion diagnostic. Date/Author: 2026-10-16,
+  implementation agent.
 - Implementation constraint: the Kani skill requires written justification
   when a requested harness is declined. Stage E will document why this verifier
   cannot substantiate LEM-1 and the chosen test fallback. Source: local `kani`
@@ -1424,6 +1484,13 @@ admission error. This branch cannot be reached with the pinned default
 feature set changes. All deterministic gates passed after these changes, and
 the roadmap item remains checked. The final local CodeRabbit review's status
 finding came from a snapshot taken before this `COMPLETE` status update.
+
+The latest implementation commit is `a2b5b670aec9e8fd0fd5306632218f2bb1f29e9c`.
+Its hosted CodeScene and Gecko checks passed, with no pending or failed checks
+on that implementation head. Hosted CodeRabbit, Kody, and automerge were
+skipped under the draft and configured conditions. The defensive admission
+fallback and named rejection table are included in the completed
+implementation, with the roadmap's 5.1.4a item checked.
 
 Follow-up: evaluate a verifier with explicit IEEE-754 support for LEM-1. No
 Kani harness or CI wiring is planned for this change.
