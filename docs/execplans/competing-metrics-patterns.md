@@ -6,7 +6,8 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: IMPLEMENTATION COMPLETE; local gates and CodeRabbit CLI review clear;
-hosted assessment pending publication.
+published as draft PR #460 on PR #542; hosted CI and ExecPlan assessment
+pending.
 
 ## Purpose / big picture
 
@@ -264,6 +265,14 @@ removing it.
   1,812/4 skipped; pytest 606/1 skipped; metrics-off). CodeScene scored 10.0;
   Delta was clean. CodeRabbit CLI 0.9.0 reviewed 29 files at `0e98666` vs
   `6ec7f72`: zero findings; full comparison context is in the ledger.
+- (2026-10-15) Published the complete M1–M5 candidate as draft PR #460 at
+  `98c77d37bcc423779fc791087f7be396d9eabe14`, stacked on draft PR #542 at
+  `6ec7f72916a0417fbf6cc8fa799ad6b1e671adf0`. The implementation candidate
+  `0e986668e61b3513ddbd45134176aa2ac2fe92b4` passed all seven deterministic
+  gates; the final plan-only update passed `make check-fmt`,
+  `make markdownlint`, and `make nixie`. PR #460 remains draft. Hosted CI and
+  the ExecPlan completeness/correctness assessment are pending; proof
+  assessment is not applicable because no proof was introduced or changed.
 
 ## Surprises & discoveries
 
@@ -364,8 +373,9 @@ EP-M1–M5 and roadmap task 1.3.4 are complete. The counter contract is
 preserved, globals and the dead port are gone, and architecture lint enforces
 the documented boundary. Post-restack gates, metrics-off, and CodeScene pass.
 Proof inventory is not applicable: no CrossHair, Kani, Verus, LemmaScript, or
-comparable proof was introduced or changed. Hosted CI and ExecPlan assessment
-pass to `pr-babysitting` after publication.
+comparable proof was introduced or changed. Hosted CI and the ExecPlan
+completeness/correctness assessment remain pending on the published draft PR;
+the work is handed to `pr-babysitting` for that lifecycle stage.
 
 ## Context and orientation
 
