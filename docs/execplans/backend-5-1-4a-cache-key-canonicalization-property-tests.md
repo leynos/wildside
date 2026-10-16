@@ -5,7 +5,8 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS — blocked on build-limits supervisor admission
+Status: IN PROGRESS — compiler-dependent candidate gates were refused by
+build-limits admission
 
 ## Purpose / big picture
 
@@ -1358,6 +1359,29 @@ floating-point precision and both bounded feasibility runs timed out.
   still returns `EAGAIN`, so the source candidate cannot yet be fully
   validated, assessed, made ready, or merged. The roadmap checkbox remains
   checked for the completed implementation.
+- [ ] One-shot exact-candidate gate sequence on local HEAD
+  `5e2c83bf049d8745b822fb3cb6a6b596cbd2122b`, with a five-path working diff
+  SHA-256 of `31d9e9eb222d10394da8f985bc150d31c3610dbf2884a40d10af46f87648ac76`:
+  `make fmt` completed without fixes; `make check-fmt` passed; `make audit`
+  passed with 15 allowed warnings; `make typecheck` passed; `make markdownlint`
+  passed 126 files with zero errors; and `make nixie` passed. `make lint`, the
+  focused cache-key tests, backend doctests, and `make test` were refused
+  before compilation or test execution with
+  `build-limits: the supervisor refused: launch-failed`. The full test target
+  stopped during Cargo metadata before running tests. There were no source
+  diagnostics, so these four results are infrastructure-unverified rather than
+  source failures or passes. Before the sequence, `build-limits-status` showed
+  healthy admission with capacity 4, no held slots, and no waiters. The final
+  status still said healthy but showed all four slots held and unrelated
+  repositories queued. The candidate gates were started once and allowed to
+  queue; no retry or bypass was attempted. `make markdownlint` regenerated a
+  `typos.toml` line; it was restored after confirming the file had been clean
+  before the run. The candidate remains unpublished because its compiler gates
+  lack terminal execution evidence. The PR remains open and draft, and roadmap
+  item 5.1.4a remains checked for implementation completion. Assessment, formal
+  review, readiness, and merge remain blocked on complete candidate validation.
+  Gate logs use the full branch suffix under `/tmp`; the compiler refusal is
+  captured in the lint, focused-test, backend-doctest, and full-test logs.
 
 ## Surprises & discoveries
 
@@ -1718,6 +1742,16 @@ floating-point precision and both bounded feasibility runs timed out.
   Resume validation only after admission health is restored, then run the full
   sequence on the corrected exact candidate. Date/Author: 2026-10-16,
   implementation agent, under the PR-babysitting instructions.
+- Decision: treat the candidate's `build-limits` `launch-failed` responses as
+  infrastructure refusals even though the status probe reported the supervisor
+  healthy, and stop after the requested one-shot sequential gate run.
+  Rationale: the compiler-dependent gates exited before producing source
+  diagnostics, and the user explicitly directed that each gate be started once
+  while unrelated repositories are not awaited. Do not claim these gates
+  passed, retry the commands, or bypass admission. Resume only when the
+  compiler service owner restores reliable launch admission and a new
+  exact-candidate run is authorized. Date/Author: 2026-10-16, implementation
+  agent, under the PR-babysitting instructions.
 - Implementation constraint: the Kani skill requires written justification
   when a requested harness is declined. Stage E will document why this verifier
   cannot substantiate LEM-1 and the chosen test fallback. Source: local `kani`
