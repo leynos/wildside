@@ -6,7 +6,9 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: IN PROGRESS — compiler-dependent candidate gates were refused by
-build-limits admission
+build-limits admission. Published head `9ddcf14` then failed its hosted Audit
+step on `rustls` 0.23.45; the local lockfile candidate upgrades to 0.23.46 but
+remains unpublished until the refused gates have terminal evidence.
 
 ## Purpose / big picture
 
@@ -1382,6 +1384,24 @@ floating-point precision and both bounded feasibility runs timed out.
   review, readiness, and merge remain blocked on complete candidate validation.
   Gate logs use the full branch suffix under `/tmp`; the compiler refusal is
   captured in the lint, focused-test, backend-doctest, and full-test logs.
+- [ ] Published-head observation: PR #458 head
+  `9ddcf14f26432648fe54af071cd9b9917237693a`, base
+  `9f4baf0b192c67f6e08eda4ced686a0fbd65a002`, Actions run `38970834317` attempt
+  1 completed with `build` failed at Audit and `coverage` passed. Audit found
+  four advisories against published `rustls` 0.23.45 and recommends 0.23.46 or
+  newer. CodeScene result `7993016` and Gecko passed; Kody and automerge were
+  skipped, and hosted CodeRabbit reported its draft-review skip. The
+  failed-step evidence is retained in
+  `/tmp/pr458-actions-monitor.w6DQuH/run-38970834317-attempt-1/failed.log`.
+  This result confirms the published lockfile defect; it does not validate the
+  local five-path candidate, whose `Cargo.lock` updates `rustls` to 0.23.46.
+  The candidate diff SHA-256 remains
+  `31d9e9eb222d10394da8f985bc150d31c3610dbf2884a40d10af46f87648ac76`, and the
+  four compiler-dependent gates remain infrastructure-unverified after
+  `launch-failed`. The PR description was corrected and read back at this head;
+  it reports the local candidate and the validation distinction. Assessment,
+  formal review, readiness, and merge remain blocked until an authorized
+  complete gate run can validate and publish the candidate.
 
 ## Surprises & discoveries
 
