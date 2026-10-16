@@ -410,6 +410,21 @@ removing it.
   and
   `/tmp/test-prometheus-pagination-restored-green-wildside-feat-competing-metrics-patterns.out`.
 
+- (2026-10-16) Candidate-bound assessment follow-up
+  `wildside-pr460-execplan-f659b24-evidence-20261016` (request
+  [6208949578](https://github.com/leynos/wildside/pull/460#issuecomment-6208949578),
+  response
+  [6208963414](https://github.com/leynos/wildside/pull/460#issuecomment-6208963414))
+  assessed base `6ec7f72916a0417fbf6cc8fa799ad6b1e671adf0` and head
+  `f659b24f9730cd2ba241e6c8aac1817926465385`. It accepted the mutation and
+  metrics-disabled library evidence, found no in-scope production defect or
+  omitted production requirement, and confirmed EP-M1–M5 completion. It found
+  one documentation inconsistency: V-LOG-ALWAYS below implied the M1 red-stage
+  compile failure was observed. That result was not observed; this statement is
+  corrected below. The broad metrics-disabled integration suite remains an open
+  verification limitation because embedded PostgreSQL bootstrap failed. The
+  assessor could not access the local `/tmp` transcripts independently.
+
 ## Surprises & discoveries
 
 - Observation: repository docs had no named metrics-pattern conflict; only
@@ -558,7 +573,10 @@ so proof assessment is N/A. The hosted assessment found no in-scope production
 defect and its two evidence requests are addressed here. Roadmap 1.3.4 is
 checked complete. PR #460 remains open/draft; hosted CI and final
 candidate-bound assessment status are tracked by `pr-babysitting` and the
-delivery ledger. No readiness or merge action is authorized.
+delivery ledger. The follow-up assessment accepted the requested evidence and
+identified only the V-LOG-ALWAYS wording corrected above; it left the broad
+metrics-disabled database integration run as an open verification limitation.
+No readiness or merge action is authorized.
 
 ## Context and orientation
 
@@ -657,10 +675,11 @@ against the real `prometheus::Registry`, not a mock.
   backend tests do) around `NoOpPaginationErrorMetrics::record`. Rationale: the
   invariant is about an observable side effect a type check cannot see. Domain:
   one call per source variant on the `NoOp` implementation. Artefact: tests in
-  `backend/src/domain/ports/pagination_error_metrics.rs`. Evidence: red — test
-  written against the not-yet-existing port fails to compile; green — passes;
-  the assertion checks the `error_code` and `source` fields, not merely that
-  some event fired. Non-vacuity: asserting on field values means an empty-log
+  `backend/src/domain/ports/pagination_error_metrics.rs`. Evidence: the
+  expected red stage was planned but not observed because implementation
+  started while Cargo compiled; the test was then run green and passes; the
+  assertion checks the `error_code` and `source` fields, not merely that some
+  event fired. Non-vacuity: asserting on field values means an empty-log
   implementation or a wrong-label implementation both fail.
 - Obligation: V-GLOBAL-GONE — no metrics state is reachable except through
   an injected implementation. Method: structural check:
