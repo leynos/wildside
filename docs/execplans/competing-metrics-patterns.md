@@ -13,8 +13,9 @@ library tests and the focused no-op/persistence cases pass. The full backend
 integration suite remains limited by embedded PostgreSQL admin-database
 bootstrap failures; those failures are recorded below. The completed roadmap
 task is checked in `docs/backend-roadmap.md` §1.3.4. PR #460 remains open and
-draft; hosted CI and the candidate-bound assessment are lifecycle work, not
-local implementation gates.
+draft. Candidate-bound completeness/correctness assessment is clear through the
+wording-correction response below; hosted CI remains pending and is lifecycle
+work, not a local implementation gate.
 
 ## Purpose / big picture
 
@@ -424,6 +425,22 @@ removing it.
   corrected below. The broad metrics-disabled integration suite remains an open
   verification limitation because embedded PostgreSQL bootstrap failed. The
   assessor could not access the local `/tmp` transcripts independently.
+- (2026-10-16) Wording-correction follow-up
+  `wildside-pr460-execplan-f659b24-wording-7b21a71-20261016` (request
+  [6209134172](https://github.com/leynos/wildside/pull/460#issuecomment-6209134172),
+  response
+  [6209142407](https://github.com/leynos/wildside/pull/460#issuecomment-6209142407))
+  assessed base `6ec7f72916a0417fbf6cc8fa799ad6b1e671adf0` and head
+  `7b21a718cacec23ae3826885377fc69179bc882d`. CodeRabbit confirmed the
+  V-LOG-ALWAYS inconsistency is resolved, found no additional in-scope plan or
+  implementation omission or defect, and retained the M1–M5 completion
+  assessment. It confirmed that only the ExecPlan changed since `f659b24` and
+  retained the broad metrics-disabled database run as an open verification
+  limitation. It inspected the committed evidence record but could not access
+  the local `/tmp` transcripts or independently refresh hosted CI. At the last
+  read, run `38858002002` on this head had coverage passed while build and
+  compile-fail tests remained in progress; later publication supersedes this
+  candidate's CI state.
 
 ## Surprises & discoveries
 
@@ -571,12 +588,12 @@ integration run remain blocked by embedded PostgreSQL bootstrap. The mutation
 confirms the counter tests fail when incrementing is removed. No proof changed,
 so proof assessment is N/A. The hosted assessment found no in-scope production
 defect and its two evidence requests are addressed here. Roadmap 1.3.4 is
-checked complete. PR #460 remains open/draft; hosted CI and final
-candidate-bound assessment status are tracked by `pr-babysitting` and the
-delivery ledger. The follow-up assessment accepted the requested evidence and
-identified only the V-LOG-ALWAYS wording corrected above; it left the broad
-metrics-disabled database integration run as an open verification limitation.
-No readiness or merge action is authorized.
+checked complete. PR #460 remains open/draft. The candidate-bound assessment
+accepted the requested evidence; its follow-up confirmed the V-LOG-ALWAYS
+correction and found no further in-scope issue. The broad metrics-disabled
+database integration run remains an open verification limitation. No proof
+changed, so proof assessment is N/A. Hosted CI remains under `pr-babysitting`
+and the delivery ledger. No readiness or merge action is authorized.
 
 ## Context and orientation
 
