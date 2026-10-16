@@ -6,10 +6,15 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: IMPLEMENTATION COMPLETE; M1–M5 and the Rustls audit repair pass local
-gates and CodeScene. The named-test response to CodeRabbit also passes focused,
-full, and documentation gates. CodeRabbit cleared committed head `bec4217` with
-zero findings across all 30 changed paths. Publication, hosted CI, and the
-hosted ExecPlan assessment remain pending on draft PR #460 stacked on PR #542.
+all-feature gates and CodeScene. The counter mutation check is non-vacuous:
+removing `.inc()` makes all four parameter cases observe 0.0, and restoring the
+adapter makes all four pass. With default features disabled, 789 backend
+library tests and the focused no-op/persistence cases pass. The full backend
+integration suite remains limited by embedded PostgreSQL admin-database
+bootstrap failures; those failures are recorded below. The completed roadmap
+task is checked in `docs/backend-roadmap.md` §1.3.4. PR #460 remains open and
+draft; hosted CI and the candidate-bound assessment are lifecycle work, not
+local implementation gates.
 
 ## Purpose / big picture
 
@@ -101,11 +106,13 @@ removing it.
   updates the architecture document in the same commit and records the removal
   in the decision log; the trait is trivially re-introducible when a route
   cache lands.
-- Risk: hosted CI and the ExecPlan assessment await publication of the audit
-  repair; its local deterministic gates and CodeScene checks pass. Severity:
-  low. Likelihood: pending external checks. Mitigation: commit the validated
-  lock-only repair, re-review that exact candidate, then hand it to
-  `pr-babysitting` for hosted CI and assessment.
+- Risk: the complete backend test run without default features is affected by
+  embedded PostgreSQL admin-database bootstrap failures in this environment.
+  Severity: medium. Likelihood: confirmed in two runs. Mitigation: retain the
+  failed full-suite evidence without attributing it to metrics, and separately
+  run the feature-off library suite and metrics-specific mapping tests; those
+  focused suites pass. Hosted CI and the ExecPlan assessment remain tracked by
+  `pr-babysitting` for the published draft PR.
 
 ## Progress
 
@@ -364,8 +371,44 @@ removing it.
   30 PR paths against exact stacked base
   `6ec7f72916a0417fbf6cc8fa799ad6b1e671adf0` and reported zero findings
   (`/tmp/coderabbit-wildside-feat-competing-metrics-patterns-3.out`). The
-  worktree is clean. Push and remote parity, hosted CI, and the hosted ExecPlan
-  assessment remain pending.
+  source candidate remains unchanged by the verification follow-up; current
+  publication and lifecycle state is recorded in the final progress entry and
+  the shared delivery ledger.
+- (2026-10-16) Hosted ExecPlan assessment request
+  `wildside-pr460-execplan-ddefabd-20261016` (comment
+  [6208360722](https://github.com/leynos/wildside/pull/460#issuecomment-6208360722))
+  assessed base `6ec7f72916a0417fbf6cc8fa799ad6b1e671adf0` and head
+  `ddefabddf5e5ddaf56c551288769ae53f86587b4`. The substantive response
+  [6208386490](https://github.com/leynos/wildside/pull/460#issuecomment-6208386490)
+  found no in-scope production correctness defects and confirmed M1–M5 were
+  complete, while asking for the planned counter mutation and backend test
+  execution without metrics. It also noted that the M1 expected-red result was
+  not observed; that qualification remains explicit above.
+- (2026-10-16) Feature-off backend library tests passed on
+  `ddefabddf5e5ddaf56c551288769ae53f86587b4`: 789 passed, three skipped with
+  `cargo nextest run -p backend --no-default-features --lib --no-fail-fast`.
+  The two focused no-op logging and persistence mapping tests also passed both
+  named cases (2/2 each). Logs:
+  `/tmp/test-backend-lib-metrics-off-wildside-feat-competing-metrics-patterns.out`,
+  `/tmp/test-noop-record-metrics-off-wildside-feat-competing-metrics-patterns.out`,
+  and
+  `/tmp/test-pagination-mapping-metrics-off-wildside-feat-competing-metrics-patterns.out`.
+- (2026-10-16) The complete no-default-features backend run was not green in
+  this environment. The unfiltered run had 1,504 passed, 89 failed, and four
+  skipped; the documented `SKIP_TEST_CLUSTER=1` rerun had 1,584 passed, nine
+  failed, and four skipped. Every reported failure was an embedded PostgreSQL
+  admin-database bootstrap error (`pg-embed-setup-unpriv-0.5.1`); the failure
+  logs show no metrics assertion failure. Logs:
+  `/tmp/test-backend-metrics-off-wildside-feat-competing-metrics-patterns-1.out`
+  and
+  `/tmp/test-backend-metrics-off-skipcluster-wildside-feat-competing-metrics-patterns.out`.
+- (2026-10-16) V-BEHAVIOUR-SAME non-vacuity was tested by removing only the
+  adapter's `.inc()` call. All four named source/code cases failed with actual
+  `Some(0.0)` against expected `Some(1.0)`. Restoring the exact original file
+  made all four pass; the worktree is clean. Logs:
+  `/tmp/test-prometheus-pagination-mutation-red-wildside-feat-competing-metrics-patterns.out`
+  and
+  `/tmp/test-prometheus-pagination-restored-green-wildside-feat-competing-metrics-patterns.out`.
 
 ## Surprises & discoveries
 
@@ -403,6 +446,13 @@ removing it.
   the invalid-cursor response only. Impact: M3 replaces recorder-dependent
   assertions with injected-recorder assertions in unit tests. The cursor
   response tests retain their serial attributes and response assertions.
+- Observation (2026-10-16): the broad metrics-disabled backend command reaches
+  application tests but embedded PostgreSQL startup fails for some database-
+  backed targets with `failed to connect to admin database: db error`. The
+  documented cluster-skip setting reduces but does not eliminate those setup
+  failures. The complete backend library suite and focused metrics-path tests
+  do pass with default features disabled, separating the feature-off behaviour
+  from the unavailable test-cluster service.
 
 ## Decision log
 
@@ -484,6 +534,12 @@ removing it.
   stable contract for distinct, meaningful inputs; named cases preserve
   scenario clarity while keeping the assertions in one place. The dependency
   already exists. Date/Author: 2026-10-16, implementation agent.
+- Decision (2026-10-16): treat the no-default-features integration failures as
+  an environment limitation, not a metrics regression. Rationale: all reported
+  failures are embedded PostgreSQL admin-database bootstrap errors, while the
+  789-test feature-off library suite and both focused metrics-path tests pass.
+  Keep the incomplete integration run visible and do not claim it green.
+  Date/Author: 2026-10-16, implementation agent.
 
 ## Outcomes & retrospective
 
@@ -493,12 +549,16 @@ cleared M1.
 
 EP-M1–M5 and roadmap task 1.3.4 are complete. The counter contract is
 preserved, globals and the dead port are gone, and architecture lint enforces
-the documented boundary. The lock-only Rustls repair passes all local gates,
-including `make audit` and the metrics-off check; CodeScene is clear. No proof
-changed, so proof assessment is N/A. The latest named-test review response is
-committed and CodeRabbit-clear. Push and remote parity, hosted CI, and the
-ExecPlan assessment remain with `pr-babysitting`; the pull request remains a
-draft.
+the documented boundary. The lock-only Rustls repair passes the full local
+gates, including `make audit`; CodeScene is clear. Metrics-disabled library and
+focused tests pass, while nine database-backed cases in the broader feature-off
+integration run remain blocked by embedded PostgreSQL bootstrap. The mutation
+confirms the counter tests fail when incrementing is removed. No proof changed,
+so proof assessment is N/A. The hosted assessment found no in-scope production
+defect and its two evidence requests are addressed here. Roadmap 1.3.4 is
+checked complete. PR #460 remains open/draft; hosted CI and final
+candidate-bound assessment status are tracked by `pr-babysitting` and the
+delivery ledger. No readiness or merge action is authorized.
 
 ## Context and orientation
 
@@ -583,12 +643,13 @@ against the real `prometheus::Registry`, not a mock.
   space is a small finite partition; exhaustive enumeration is practical and
   property generation adds nothing. Domain: all four source/code combinations,
   plus a double-increment case asserting the value 2.0. Artefact: tests in
-  `backend/src/outbound/metrics/prometheus_pagination_errors.rs`. Evidence: red
-  — the test file fails to compile before the adapter exists; green —
-  `make test` passes with the new tests listed. Non-vacuity: the existing
-  regression test (currently `pagination_errors.rs:94–116`) is ported and must
-  still assert a gathered value of exactly 1.0; a deliberate mutation (dropping
-  the `.inc()` call) must make it fail with value 0.0.
+  `backend/src/outbound/metrics/prometheus_pagination_errors.rs`. Evidence:
+  green — the full all-feature suite passes and lists the new tests. The
+  original M1 expected-red run did not observe the planned pre-adapter failure
+  because the port was added while Cargo compiled; the plan records this
+  qualification. Non-vacuity: the deliberate mutation (dropping `.inc()`) made
+  all four cases fail with actual `Some(0.0)`; after restoring the adapter, all
+  four passed with value `Some(1.0)`. See the paired logs in Progress.
 - Obligation: V-LOG-ALWAYS — the structured log is emitted by the provided
   trait method regardless of implementation, including `NoOp`. Method: unit
   test using a captured `tracing` subscriber
@@ -609,14 +670,20 @@ against the real `prometheus::Registry`, not a mock.
   property; the compiler and a grep are proportionate. Non-vacuity: before
   EP-M3 the same greps return hits at the documented lines, so the check
   demonstrably distinguishes the two states.
-- Obligation: V-FEATURE-OFF — the crate builds and tests pass without the
-  `metrics` feature, and pagination errors still log. Method:
-  `cargo check -p backend --no-default-features` (plus whatever feature set the
-  Makefile gate uses) and the V-LOG-ALWAYS test, which is not feature-gated.
-  Rationale: the previous design encoded feature-off behaviour in duplicate
-  function bodies; the new design must encode it as `NoOp` selection at
-  composition, verified by compiling both configurations. Non-vacuity: deleting
-  the `NoOp` arm in `server/mod.rs` composition would fail this compile.
+- Obligation: V-FEATURE-OFF — the crate builds and metrics-related library
+  tests pass without the `metrics` feature, and pagination errors still log.
+  Method: `cargo check -p backend --no-default-features`, the complete backend
+  library suite and focused mapping/logging tests with
+  `cargo nextest run -p backend --no-default-features`, and the V-LOG-ALWAYS
+  test, which is not feature-gated. The full backend integration command was
+  also attempted with and without `SKIP_TEST_CLUSTER=1`; it remains incomplete
+  because several database-backed targets fail during embedded PostgreSQL
+  admin-database setup. This is recorded as an environment limitation, not a
+  green suite. Rationale: the previous design encoded feature-off behaviour in
+  duplicate function bodies; the new design must encode it as `NoOp` selection
+  at composition, verified by compiling both configurations. Non-vacuity:
+  deleting the `NoOp` arm in `server/mod.rs` composition would fail this
+  compile.
 - Obligation: V-DEAD-PORT-GONE — `RouteMetrics`/`RouteMetricsError` no longer
   exist in source or current design examples. Method:
   `rg -n "RouteMetrics" backend/src docs` returns no source hits and only
