@@ -1,8 +1,7 @@
 //! Repo-local architectural lint for enforcing hexagonal boundaries.
 //!
-//! The Wildside backend is a hexagonal modular monolith. The "hexagon" is
-//! enforced at the Rust module level (`domain` + ports, inbound adapters,
-//! outbound adapters). This crate provides a lightweight lint that:
+//! The backend's module boundaries separate `domain` + ports, inbound
+//! adapters, and outbound adapters. This lint enforces them:
 //!
 //! - forbids `domain` code from depending on adapter modules (`inbound`,
 //!   `outbound`) or framework/infrastructure crates

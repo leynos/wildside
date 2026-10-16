@@ -285,6 +285,20 @@ removing it.
   candidate fingerprints and logs are in the delivery ledger. Commit and
   CodeRabbit review of this exact repair, hosted CI rerun, and the ExecPlan
   assessment remain pending; proof assessment is N/A.
+- (2026-10-16) CodeRabbit reviewed `ce17ca8` against the exact stacked base and
+  found `tools/architecture-lint/src/lib.rs` one line over the 400-line file
+  limit. Inlining the one-use predicate then failed Whitaker's
+  `conditional-max-n-branches` lint. The corrected candidate restores the named
+  predicate and shortens the module overview; the allowlist is unchanged and
+  the file is exactly 400 lines. Candidate diff fingerprint
+  `01c8b0500389255f1bbcf1993638a7b69fc473a4ef01e7967755f789440e0a97` passed
+  `make check-fmt`, `make lint`, `make typecheck`, `make test` (1,812 Nextest
+  cases, four skipped; compile-fail, Python, frontend, workflow, and
+  action-lint suites passed), `make markdownlint` (126 files, zero errors),
+  `make nixie`, `make audit` (15 existing allowlisted advisories), and the
+  backend no-default-features check. CodeScene scored 10.0 and found no delta
+  issues. Exact logs are in the delivery ledger. Only committed-head CodeRabbit
+  review remains before publication.
 
 ## Surprises & discoveries
 
@@ -381,6 +395,12 @@ removing it.
   expand the audit allowlist. `make audit` confirms this resolves the new
   findings while the existing 15 allowed warnings remain. User authorized the
   scope; implementation agent selected the lock-only repair.
+- Decision (2026-10-16): resolve the architecture-lint line-limit finding
+  within the existing 30-path cap by clarifying the module overview while
+  retaining the named metrics/test path predicate. Rationale: Whitaker rejects
+  the inlined compound condition; the named predicate preserves the rule and
+  keeps the file within 400 lines without adding a path. Date/Author:
+  2026-10-16, implementation agent.
 
 ## Outcomes & retrospective
 
