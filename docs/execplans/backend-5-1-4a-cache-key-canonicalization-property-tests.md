@@ -1183,6 +1183,31 @@ floating-point precision and both bounded feasibility runs timed out.
   The roadmap item remains checked because implementation acceptance is
   complete. Full gates, fresh assessments and review, readiness, and merge
   remain pending for the rebased candidate.
+- [ ] Rebased-candidate gates: on candidate
+  `857377290566d53ab4800e17059094b4039f477a` (tree
+  `c0048eb9215cf33222b91ab02633287a5cf82cb2`), `make check-fmt` passed in 2s;
+  `make typecheck` passed in 10s, including Python and TypeScript;
+  `make markdownlint` passed for 126 files with zero errors in 46s; and
+  `make nixie` passed in 2s. `cargo test -p backend --lib cache_key` passed 48
+  tests, with 770 filtered out, in 2,888s. The candidate gate sequence is
+  incomplete: `make lint` exited 2 after 3,757s, backend doctests exited 1
+  after 93s, and `make test` stopped before tests. Each failure was caused by
+  the build-limits supervisor refusing compiler or rustdoc admission as
+  unhealthy, not by a reported lint or test failure. Logs: check-fmt
+  `/tmp/check-fmt-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  lint
+  `/tmp/lint-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  focused tests
+  `/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  doctests
+  `/tmp/doctest-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  typecheck
+  `/tmp/typecheck-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  full tests
+  `/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-full.out`.
+  No CodeRabbit review was requested for this candidate. The PR integration
+  gate remains open pending recovery of compiler admission and completion of
+  the interrupted gates.
 
 ## Surprises & discoveries
 
@@ -1196,6 +1221,17 @@ floating-point precision and both bounded feasibility runs timed out.
   typecheck, and test-target contracts plus the PR's diagnostic assertion.
   `range-diff` showed 18 unchanged patches and three reviewed context changes;
   no merge commit or lockfile conflict was introduced.
+
+- Observation: the first sequential local gate pass on rebased candidate
+  `8573772` completed the formatting, typecheck, Markdown, and Mermaid gates,
+  and the focused cache-key suite passed all 48 tests. Lint, doctests, and the
+  full test target could not complete because the unhealthy build-limits
+  supervisor refused compiler, rustdoc, or Cargo metadata admission. The
+  failures are infrastructure evidence; they do not establish a source failure
+  or a green result for those gates. `make markdownlint` regenerated one
+  live-dictionary pattern in generated `typos.toml`; after confirming
+  `typos.local.toml` was unchanged, only that gate-created generated change was
+  restored as out of scope.
 
 - Observation: after the original implementation was published, the hosted
   CodeScene check found `observe_payload_features` at complexity 9. The
@@ -1459,6 +1495,13 @@ floating-point precision and both bounded feasibility runs timed out.
   and workflow-test changes while carrying forward the PR's Kani note,
   property-testing guidance, and assertion diagnostic. Date/Author: 2026-10-16,
   implementation agent.
+- Decision: do not retry gates that failed because build-limits admission was
+  unhealthy, and do not bypass the shared compiler supervisor. Rationale: the
+  recorded refusals identify admission infrastructure failure, while starting
+  duplicate or unmanaged compiler work would violate the repository's shared
+  admission policy and would not produce trustworthy candidate evidence. Wait
+  for admission recovery, then resume the remaining gates sequentially.
+  Date/Author: 2026-10-16, implementation agent.
 - Implementation constraint: the Kani skill requires written justification
   when a requested harness is declined. Stage E will document why this verifier
   cannot substantiate LEM-1 and the chosen test fallback. Source: local `kani`
