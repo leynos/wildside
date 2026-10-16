@@ -74,6 +74,11 @@ fn lint_single() -> LintSingle {
 #[case("domain/metrics.rs", "use actix_web_prom::*;", false)]
 #[case("inbound/metrics.rs", "use actix_web_prom::*;", false)]
 #[case("outbound/persistence/metrics.rs", "use prometheus::Registry;", false)]
+#[case(
+    "outbound/persistence/tests_helper.rs",
+    "use prometheus::Registry;",
+    false
+)]
 #[case("outbound/metrics_backup.rs", "use prometheus::Registry;", false)]
 #[case(
     "outbound/metrics/prometheus_idempotency.rs",

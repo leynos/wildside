@@ -312,6 +312,32 @@ removing it.
   tests, formatting, lint, typecheck, Markdown, Mermaid, audit, and metrics-off
   all passed. CodeScene scored 10.0 with no delta issues. Logs are in the
   delivery ledger. Committed-head CodeRabbit re-review remains pending.
+- (2026-10-16) CodeRabbit reviewed `1adddde` and reported two trivial
+  findings. Camino path semantics and the new `metrics_backup.rs` regression
+  had already established the directory-prefix behaviour. Added a second
+  negative case for `outbound/persistence/tests_helper.rs`, which is a file
+  name rather than a `tests/` directory, and documented the deliberately
+  unsupported `dir: "Sideways"` cursor fixture. The first `make markdownlint`
+  reported one en-GB spelling error in this entry; the correction is included
+  here. At dirty-patch fingerprint
+  `b6c446e212f65a5e9bc588e5793cf32349b172b21e1ae1c1ac4842eeab118431`, the
+  focused boundary suite passed 18 cases (four skipped), and all gates passed:
+  `make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `make markdownlint`, `make nixie`, `make audit`, and
+  `cargo check -p backend --no-default-features`. Nextest passed 1,814 tests
+  with four skipped; both compile-fail harnesses passed; Python workflow
+  contracts passed 115 with 13 skipped; action-lint passed 14. Bun audit found
+  no vulnerabilities across 688 packages (seven ignored), and Rust audit
+  reported 16 allowed warnings. CodeScene scored 10.0 and found no delta issues
+  against stacked base `6ec7f72`. The worktree still has only the three
+  intended paths. Against the stacked base, the branch has 30 unique paths and
+  432 net implementation lines excluding this living ExecPlan, within the
+  approved 30-path/600-line cap. Committed-head CodeRabbit re-review remains
+  pending.
+- (2026-10-16) The final ExecPlan closeout passed `make check-fmt` (125 files
+  unchanged, 113 already formatted), `make markdownlint` (126 files, zero
+  errors), and `make nixie` (all diagrams validated). No generated tracked
+  files changed. Logs use the `-docs-closeout-1.out` suffix in `/tmp`.
 
 ## Surprises & discoveries
 
@@ -420,6 +446,11 @@ removing it.
   admitted by the metrics directory exception. The regression case records that
   contract without changing the production rule. Date/Author: 2026-10-16,
   implementation agent.
+- Decision (2026-10-16): preserve the `/tests/` directory exception and add a
+  negative case for `outbound/persistence/tests_helper.rs`. Rationale: the
+  boundary allows Prometheus in outbound test directories, not files whose
+  names merely contain `tests`; the fixture protects that distinction.
+  Date/Author: 2026-10-16, implementation agent.
 
 ## Outcomes & retrospective
 

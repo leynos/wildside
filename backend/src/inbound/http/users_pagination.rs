@@ -375,6 +375,7 @@ mod tests {
 
     #[test]
     fn records_unsupported_direction_errors() {
+        // This opaque fixture decodes to a users cursor with `dir: "Sideways"`.
         let cursor = "eyJrZXkiOnsiY3JlYXRlZF9hdCI6IjIwMjYtMDMtMjJUMTA6MzA6MDBaIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifSwiZGlyIjoiU2lkZXdheXMifQ";
         assert_cursor_error_is_recorded(cursor, "unsupported_direction");
     }
