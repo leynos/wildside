@@ -1347,6 +1347,17 @@ floating-point precision and both bounded feasibility runs timed out.
   admission is still unavailable; resume the sequential compiler gates after
   the supervisor is restored, then validate, publish, and reassess the
   candidate. No compiler gate or review was started after this diagnostic.
+- [ ] PR babysitting update: the documentation-only status commit `eddadbe` was
+  published on top of `a8a9730`; the five source/test changes and lockfile
+  repair remain local and unpublished. Hosted run 38968061409, attempt 1, on
+  the exact `eddadbe162744d12dcd5d12ec5c77e378a9b6ac4` head failed at Audit for
+  the same four `rustls` 0.23.45 advisories; coverage, CodeScene, and Gecko
+  passed. Kody, automerge, and hosted CodeRabbit were skipped by the configured
+  draft conditions. The PR description was read back after updating it for
+  `eddadbe`; title and draft state remain unchanged. The compiler supervisor
+  still returns `EAGAIN`, so the source candidate cannot yet be fully
+  validated, assessed, made ready, or merged. The roadmap checkbox remains
+  checked for the completed implementation.
 
 ## Surprises & discoveries
 
