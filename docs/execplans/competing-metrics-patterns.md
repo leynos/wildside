@@ -5,9 +5,9 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IMPLEMENTATION COMPLETE; local gates and CodeRabbit CLI review clear;
-published as draft PR #460 on PR #542; hosted CI and ExecPlan assessment
-pending.
+Status: IMPLEMENTATION COMPLETE; the Rustls audit repair passes local gates and
+CodeScene. Commit and CodeRabbit CLI re-review, hosted CI, and the hosted
+ExecPlan assessment remain pending on draft PR #460 stacked on PR #542.
 
 ## Purpose / big picture
 
@@ -99,8 +99,11 @@ removing it.
   updates the architecture document in the same commit and records the removal
   in the decision log; the trait is trivially re-introducible when a route
   cache lands.
-- Risk: hosted ExecPlan assessment and CI await publication; local deterministic
-  gates, CodeScene checks, and the CodeRabbit CLI review pass.
+- Risk: hosted CI and the ExecPlan assessment await publication of the audit
+  repair; its local deterministic gates and CodeScene checks pass. Severity:
+  low. Likelihood: pending external checks. Mitigation: commit the validated
+  lock-only repair, re-review that exact candidate, then hand it to
+  `pr-babysitting` for hosted CI and assessment.
 
 ## Progress
 
@@ -265,14 +268,23 @@ removing it.
   1,812/4 skipped; pytest 606/1 skipped; metrics-off). CodeScene scored 10.0;
   Delta was clean. CodeRabbit CLI 0.9.0 reviewed 29 files at `0e98666` vs
   `6ec7f72`: zero findings; full comparison context is in the ledger.
-- (2026-10-15) Published the complete M1–M5 candidate as draft PR #460 at
-  `98c77d37bcc423779fc791087f7be396d9eabe14`, stacked on draft PR #542 at
-  `6ec7f72916a0417fbf6cc8fa799ad6b1e671adf0`. The implementation candidate
-  `0e986668e61b3513ddbd45134176aa2ac2fe92b4` passed all seven deterministic
-  gates; the final plan-only update passed `make check-fmt`,
-  `make markdownlint`, and `make nixie`. PR #460 remains draft. Hosted CI and
-  the ExecPlan completeness/correctness assessment are pending; proof
-  assessment is not applicable because no proof was introduced or changed.
+- (2026-10-15–16) Published M1–M5 as draft PR #460 stacked on #542 at
+  `6ec7f72916a0417fbf6cc8fa799ad6b1e671adf0`; candidate `0e98666` passed seven
+  gates and CodeRabbit. Hosted run `38812258008` later failed Audit on
+  `rustls 0.23.45`, while coverage passed. Four RustSec advisories identify
+  `0.23.46` as patched; only `Cargo.lock` changes, the thirtieth path, with no
+  new dependency or net-line growth. On dirty candidate HEAD
+  `0d8035bcd1d5d2bcff5d4ee2c6e6e929f5d2cb4b`, the lock repair passed all gates:
+  `make check-fmt`, `make lint`, `make typecheck`, `make test` (1,812 passed,
+  four skipped; both compile-fail tests passed; Python and Bun suites passed),
+  `make markdownlint`, `make nixie`, `make audit` (Bun reported no
+  vulnerabilities; Rust reported 15 allowlisted warnings), and
+  `cargo check -p backend --no-default-features`. CodeScene scored 10.0 and
+  found no delta issues against the PR base. The subsequent plan-only update
+  passed `make check-fmt`, `make markdownlint`, and `make nixie`; exact
+  candidate fingerprints and logs are in the delivery ledger. Commit and
+  CodeRabbit review of this exact repair, hosted CI rerun, and the ExecPlan
+  assessment remain pending; proof assessment is N/A.
 
 ## Surprises & discoveries
 
@@ -282,8 +294,12 @@ removing it.
 - Observation: roadmap §4.2.3 covers page-size, cursor-direction, and traversal
   analytics, not pagination-error metrics architecture. Added completed task
   1.3.4 under architecture guardrails for this implementation.
-- Observation (2026-10-15): open base PR #542 contains the generated spelling
-  refresh; PR #460 will be stacked on it after revalidation.
+- Observation (2026-10-15–16): base PR #542 isolates spelling refresh; hosted
+  audit found four `rustls 0.23.45` advisories, patched in `0.23.46`.
+- Observation (2026-10-16): the lock-only upgrade passes `make audit`; Bun found
+  no vulnerabilities across 688 packages (seven ignored), and the Rust audit
+  retained 15 allowlisted warnings. No dependency manifest or audit exception
+  changed.
 - Observation: both patterns already share one `prometheus::Registry`, owned
   by `actix_web_prom::PrometheusMetrics` built in `backend/src/main.rs` with
   endpoint `/metrics`. Evidence: `backend/src/main.rs` lines 28–31. Impact:
@@ -359,9 +375,12 @@ removing it.
   following the developers' guide and the existing `prometheus` boundary; the
   conflicting reviewer suggestion to allow it inbound was rejected. Keep the
   crate available at the composition root.
-- Decision (2026-10-15): keep the generated dictionary refresh in a one-file
-  base PR and stack the metrics PR on it, as `AGENTS.md` requires unrelated
-  generated configuration updates to remain separate.
+- Decisions (2026-10-15–16): isolate generated spelling refresh on base PR #542.
+  After the hosted audit, update only locked `rustls` to patched `0.23.46`, the
+  first release allowed by existing constraints; add no dependency and do not
+  expand the audit allowlist. `make audit` confirms this resolves the new
+  findings while the existing 15 allowed warnings remain. User authorized the
+  scope; implementation agent selected the lock-only repair.
 
 ## Outcomes & retrospective
 
@@ -371,11 +390,11 @@ cleared M1.
 
 EP-M1–M5 and roadmap task 1.3.4 are complete. The counter contract is
 preserved, globals and the dead port are gone, and architecture lint enforces
-the documented boundary. Post-restack gates, metrics-off, and CodeScene pass.
-Proof inventory is not applicable: no CrossHair, Kani, Verus, LemmaScript, or
-comparable proof was introduced or changed. Hosted CI and the ExecPlan
-completeness/correctness assessment remain pending on the published draft PR;
-the work is handed to `pr-babysitting` for that lifecycle stage.
+the documented boundary. The lock-only Rustls repair passes all local gates,
+including `make audit` and the metrics-off check; CodeScene is clear. No proof
+changed, so proof assessment is N/A. After committing and reviewing this
+repair, hosted CI and the ExecPlan assessment remain with `pr-babysitting`; the
+pull request remains a draft.
 
 ## Context and orientation
 
@@ -515,6 +534,13 @@ against the real `prometheus::Registry`, not a mock.
 No other non-trivial invariants are introduced: the change moves an existing
 counter behind a trait without altering concurrency, ordering, or persisted
 state.
+
+Final revalidation of the audit repair (2026-10-16): all deterministic gates,
+`make audit`, the metrics-off backend check, and CodeScene passed on the same
+dirty candidate. Exact logs and results are recorded in `Progress` and the
+private delivery ledger. The lock-only repair still needs commit-bound
+CodeRabbit review and hosted CI; these do not alter the implementation
+acceptance obligations above.
 
 ## Plan of work
 
@@ -675,11 +701,13 @@ error[E0432]: unresolved import `crate::outbound::metrics::PrometheusPaginationE
 - Refactor: tidy, then full gates via `scrutineer`.
 - Done means: all six verification obligations discharged with evidence
   recorded here; `make test`, `make lint` (against baseline), `make check-fmt`,
-  `make markdownlint`, `make nixie` green; behavioural check of `/metrics`
-  performed at EP-M3; docs updated; five implementation milestones committed
-  with imperative, wrapped messages; post-rebase CodeScene file/delta checks
-  and implementation review clear. Review-fix and plan-closure commits are in
-  Progress.
+  `make markdownlint`, `make nixie`, and `make audit` green; behavioural check
+  of `/metrics` performed at EP-M3; docs updated; five implementation
+  milestones committed with imperative, wrapped messages; post-rebase CodeScene
+  file/delta checks and implementation review clear. Review-fix and
+  plan-closure commits are in Progress. The later lock-only audit repair also
+  passes the full local gate sequence; its commit-bound review and hosted CI
+  remain delivery steps.
 
 ## Idempotence and recovery
 
