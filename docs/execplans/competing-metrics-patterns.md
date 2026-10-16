@@ -5,9 +5,11 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IMPLEMENTATION COMPLETE; the Rustls audit repair passes local gates and
-CodeScene. Commit and CodeRabbit CLI re-review, hosted CI, and the hosted
-ExecPlan assessment remain pending on draft PR #460 stacked on PR #542.
+Status: IMPLEMENTATION COMPLETE; M1–M5 and the Rustls audit repair pass local
+gates and CodeScene. The named-test response to CodeRabbit also passes focused,
+full, and documentation gates. Commit and committed-head CodeRabbit re-review,
+hosted CI, and the hosted ExecPlan assessment remain pending on draft PR #460
+stacked on PR #542.
 
 ## Purpose / big picture
 
@@ -338,6 +340,27 @@ removing it.
   unchanged, 113 already formatted), `make markdownlint` (126 files, zero
   errors), and `make nixie` (all diagrams validated). No generated tracked
   files changed. Logs use the `-docs-closeout-1.out` suffix in `/tmp`.
+- (2026-10-16) CodeRabbit reviewed `f23fed4` and suggested covering both
+  duplicate test pairs with named `rstest` cases. Each pair exercises one
+  mapping relation over distinct source/code inputs, and `rstest` is already a
+  backend dependency. Added named cases to the no-op logging and HTTP cursor
+  tests, retaining the unsupported-direction fixture explanation. Both focused
+  tests passed (two cases each), as did `make check-fmt`, `make lint`,
+  `make typecheck`, and `make test` (1,814 passed, four skipped; compile-fail
+  passed; Python workflow tests 115 passed, 13 skipped; action-lint 14 passed).
+  `make markdownlint` found two spelling errors in this progress entry; the
+  wording was corrected and the rerun passed. The remaining gates also passed:
+  `make nixie`, `make audit`, the backend no-default-features check, and
+  CodeScene review plus delta against stacked base `6ec7f72`. Audit found no
+  Bun vulnerabilities across 688 packages (seven ignored); Rust reported 16
+  allowed warnings. CodeScene scored 10.0 with no delta issues. The candidate
+  touches 30 paths including this plan, with 430 net implementation lines
+  excluding it, within the approved 30-path/600-line limits. The Rustls fix and
+  named test cases are validated. A docs-only closeout wave passed
+  `make check-fmt` (125 files unchanged), `make markdownlint` (126 files, zero
+  errors), and `make nixie` (all diagrams validated); logs use the
+  `-final-docs-1.out` suffix in `/tmp`. Committing this review response and
+  committed-head CodeRabbit review remain pending.
 
 ## Surprises & discoveries
 
@@ -451,6 +474,11 @@ removing it.
   boundary allows Prometheus in outbound test directories, not files whose
   names merely contain `tests`; the fixture protects that distinction.
   Date/Author: 2026-10-16, implementation agent.
+- Decision (2026-10-16): cover the duplicated pagination logging and HTTP
+  cursor assertions with named `rstest` cases. Rationale: each pair checks one
+  stable contract for distinct, meaningful inputs; named cases preserve
+  scenario clarity while keeping the assertions in one place. The dependency
+  already exists. Date/Author: 2026-10-16, implementation agent.
 
 ## Outcomes & retrospective
 

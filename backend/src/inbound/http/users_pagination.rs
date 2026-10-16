@@ -331,6 +331,7 @@ mod tests {
 
     use crate::domain::ErrorCode;
     use crate::domain::ports::{PaginationErrorMetrics, PaginationErrorSource};
+    use rstest::rstest;
 
     use super::{UsersListQueryParams, parse_users_page_params};
 
@@ -368,15 +369,13 @@ mod tests {
         );
     }
 
-    #[test]
-    fn records_invalid_cursor_errors() {
-        assert_cursor_error_is_recorded("not-a-cursor", "invalid_cursor");
-    }
+    // This opaque fixture decodes to a users cursor with `dir: "Sideways"`.
+    const UNSUPPORTED_DIRECTION_CURSOR: &str = "eyJrZXkiOnsiY3JlYXRlZF9hdCI6IjIwMjYtMDMtMjJUMTA6MzA6MDBaIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifSwiZGlyIjoiU2lkZXdheXMifQ";
 
-    #[test]
-    fn records_unsupported_direction_errors() {
-        // This opaque fixture decodes to a users cursor with `dir: "Sideways"`.
-        let cursor = "eyJrZXkiOnsiY3JlYXRlZF9hdCI6IjIwMjYtMDMtMjJUMTA6MzA6MDBaIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifSwiZGlyIjoiU2lkZXdheXMifQ";
-        assert_cursor_error_is_recorded(cursor, "unsupported_direction");
+    #[rstest]
+    #[case::invalid_cursor("not-a-cursor", "invalid_cursor")]
+    #[case::unsupported_direction(UNSUPPORTED_DIRECTION_CURSOR, "unsupported_direction")]
+    fn records_cursor_error_metrics(#[case] cursor: &str, #[case] expected_code: &'static str) {
+        assert_cursor_error_is_recorded(cursor, expected_code);
     }
 }

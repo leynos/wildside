@@ -85,26 +85,25 @@ mod tests {
     //! Verify that the no-op recorder preserves structured pagination logs.
 
     use super::{NoOpPaginationErrorMetrics, PaginationErrorMetrics, PaginationErrorSource};
+    use rstest::rstest;
     use tracing_test::traced_test;
 
     #[traced_test]
-    #[test]
-    fn no_op_record_emits_error_code_and_http_source() {
-        NoOpPaginationErrorMetrics.record(PaginationErrorSource::UsersHttp, "invalid_cursor");
+    #[rstest]
+    #[case::users_http(PaginationErrorSource::UsersHttp, "invalid_cursor", "users_http")]
+    #[case::user_persistence(
+        PaginationErrorSource::UserPersistence,
+        "unsupported_direction",
+        "user_persistence"
+    )]
+    fn no_op_record_emits_error_code_and_source(
+        #[case] source: PaginationErrorSource,
+        #[case] detail_code: &'static str,
+        #[case] expected_source: &str,
+    ) {
+        NoOpPaginationErrorMetrics.record(source, detail_code);
 
-        assert!(logs_contain("error_code=\"invalid_cursor\""));
-        assert!(logs_contain("source=\"users_http\""));
-    }
-
-    #[traced_test]
-    #[test]
-    fn no_op_record_emits_error_code_and_persistence_source() {
-        NoOpPaginationErrorMetrics.record(
-            PaginationErrorSource::UserPersistence,
-            "unsupported_direction",
-        );
-
-        assert!(logs_contain("error_code=\"unsupported_direction\""));
-        assert!(logs_contain("source=\"user_persistence\""));
+        assert!(logs_contain(&format!("error_code=\"{detail_code}\"")));
+        assert!(logs_contain(&format!("source=\"{expected_source}\"")));
     }
 }
