@@ -439,8 +439,27 @@ removing it.
   limitation. It inspected the committed evidence record but could not access
   the local `/tmp` transcripts or independently refresh hosted CI. At the last
   read, run `38858002002` on this head had coverage passed while build and
-  compile-fail tests remained in progress; later publication supersedes this
-  candidate's CI state.
+  compile-fail tests remained in progress; the later publication and its CI
+  result are recorded below.
+- (2026-10-16) Final implementation record publication
+  `1b9b946a317b5fb7f86834bc7e2f4c991d9110a6` passed `make fmt`,
+  `make check-fmt`, `make markdownlint` (zero errors), and `make nixie`. The
+  commit records CodeRabbit response `6209142407`; the PR description was
+  refreshed with M1–M5 evidence, the checked roadmap task, the assessment
+  outcome, and the remaining feature-off database limitation. Roadmap item
+  1.3.4 is checked complete. PR #460 remains open and draft. The active Lody
+  session title matches the PR title, and its reference remains in the terminal
+  PR References section.
+- Published base/head at this read were
+  `6ec7f72916a0417fbf6cc8fa799ad6b1e671adf0` /
+  `1b9b946a317b5fb7f86834bc7e2f4c991d9110a6`; local HEAD, origin tracking, and
+  the SSH remote matched. CI run `38859424558`, attempt 1, reached the
+  420-second watcher bound still in progress. Coverage passed at 100% (794
+  hits, 1 miss, 0 errors); build remained active at compile-fail tests.
+  CodeScene and Gecko passed; CodeRabbit's status context was successful while
+  its pre-merge check was skipped for the draft PR; Kody and automerge were
+  skipped. No completed failure was observed. Hosted CI remains pending; no
+  readiness or merge action is authorized.
 
 ## Surprises & discoveries
 
