@@ -299,6 +299,19 @@ removing it.
   backend no-default-features check. CodeScene scored 10.0 and found no delta
   issues. Exact logs are in the delivery ledger. Only committed-head CodeRabbit
   review remains before publication.
+- (2026-10-16) CodeRabbit reviewed `78c4095` and questioned whether the path
+  prefix also admits `outbound/metrics_backup.rs`. Locked Camino 1.2.4
+  documents that `Utf8Path::starts_with` compares whole path components and
+  delegates to `std::path::Path::starts_with`; the sibling path does not match.
+  Added the requested near-miss regression case expecting a Prometheus import
+  there to remain forbidden. No production rule change is needed. The focused
+  test passed 17/17 cases (four skipped); the full gate wave passed on
+  fingerprint
+  `14c108716dd396456f2ffbe07f2582e3427e0892f48d9c6637c0fbbc425cd619`: 1,813
+  Nextest cases, compile-fail, Python, frontend, workflow, and action-lint
+  tests, formatting, lint, typecheck, Markdown, Mermaid, audit, and metrics-off
+  all passed. CodeScene scored 10.0 with no delta issues. Logs are in the
+  delivery ledger. Committed-head CodeRabbit re-review remains pending.
 
 ## Surprises & discoveries
 
@@ -401,6 +414,12 @@ removing it.
   the inlined compound condition; the named predicate preserves the rule and
   keeps the file within 400 lines without adding a path. Date/Author:
   2026-10-16, implementation agent.
+- Decision (2026-10-16): retain Camino's `Utf8Path::starts_with` directory
+  check and add a `metrics_backup.rs` near-miss test. Rationale: the locked
+  Camino implementation matches whole path components, so this path is not
+  admitted by the metrics directory exception. The regression case records that
+  contract without changing the production rule. Date/Author: 2026-10-16,
+  implementation agent.
 
 ## Outcomes & retrospective
 
