@@ -7,9 +7,9 @@ be kept up to date as work proceeds.
 
 Status: IMPLEMENTATION COMPLETE; M1–M5 and the Rustls audit repair pass local
 gates and CodeScene. The named-test response to CodeRabbit also passes focused,
-full, and documentation gates. Commit and committed-head CodeRabbit re-review,
-hosted CI, and the hosted ExecPlan assessment remain pending on draft PR #460
-stacked on PR #542.
+full, and documentation gates. CodeRabbit cleared committed head `bec4217` with
+zero findings across all 30 changed paths. Publication, hosted CI, and the
+hosted ExecPlan assessment remain pending on draft PR #460 stacked on PR #542.
 
 ## Purpose / big picture
 
@@ -359,8 +359,13 @@ removing it.
   named test cases are validated. A docs-only closeout wave passed
   `make check-fmt` (125 files unchanged), `make markdownlint` (126 files, zero
   errors), and `make nixie` (all diagrams validated); logs use the
-  `-final-docs-1.out` suffix in `/tmp`. Committing this review response and
-  committed-head CodeRabbit review remain pending.
+  `-final-docs-2.out` suffix in `/tmp`. Committed the test refactor as
+  `bec4217fa87c0a97727a30652a571a2c3444c393`; CodeRabbit CLI 0.9.0 reviewed all
+  30 PR paths against exact stacked base
+  `6ec7f72916a0417fbf6cc8fa799ad6b1e671adf0` and reported zero findings
+  (`/tmp/coderabbit-wildside-feat-competing-metrics-patterns-3.out`). The
+  worktree is clean. Push and remote parity, hosted CI, and the hosted ExecPlan
+  assessment remain pending.
 
 ## Surprises & discoveries
 
@@ -490,9 +495,10 @@ EP-M1–M5 and roadmap task 1.3.4 are complete. The counter contract is
 preserved, globals and the dead port are gone, and architecture lint enforces
 the documented boundary. The lock-only Rustls repair passes all local gates,
 including `make audit` and the metrics-off check; CodeScene is clear. No proof
-changed, so proof assessment is N/A. After committing and reviewing this
-repair, hosted CI and the ExecPlan assessment remain with `pr-babysitting`; the
-pull request remains a draft.
+changed, so proof assessment is N/A. The latest named-test review response is
+committed and CodeRabbit-clear. Push and remote parity, hosted CI, and the
+ExecPlan assessment remain with `pr-babysitting`; the pull request remains a
+draft.
 
 ## Context and orientation
 
