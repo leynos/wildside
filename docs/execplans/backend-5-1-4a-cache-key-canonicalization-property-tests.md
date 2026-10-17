@@ -5,15 +5,18 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS — PR #458 is published at
-`bd0c80bac0e1a26e7f09343702e55a44e5422dd1`. Local source-candidate gates,
-including the complete `make test` target, passed. Final plan reconciliation
-edits also passed the documentation gates. The first test run hit a stale
-PostgreSQL runtime lock; the successful rerun used isolated temporary paths
-without touching the process holding the default lock. The repairs are not yet
-committed or published. Next, validate the plan edits, commit and publish the
-candidate, obtain fresh completeness and proof assessments and formal review,
-then mark the PR ready and merge once findings and checks reach equilibrium.
+Status: IN PROGRESS — implementation and local validation are complete; final
+PR integration remains. The latest source candidate was published to PR #458 at
+`435b7c8813a545c81ac4319487a39caf6a7f9206` after fixing generated coverage for
+non-numeric coordinate values and splitting a CodeScene large method. All eight
+local gates passed sequentially on that source candidate, including the full
+`make test` target with isolated PostgreSQL runtime paths. The first test
+attempt on an earlier candidate hit a stale PostgreSQL runtime lock; the
+successful isolated rerun did not touch the process holding the default lock.
+This status update corrects the stale candidate and completion statements
+below. At this observation, hosted CodeScene and Gecko passed; the PR's build
+and coverage checks were still running. Fresh completeness and proof
+assessments, formal review, readiness, and merge remain pending.
 
 ## Purpose / big picture
 
@@ -1052,6 +1055,10 @@ square root.
 
 ## Progress
 
+The entries below preserve historical candidate-specific outcomes. A later
+entry supersedes an earlier statement about the current head, validation, or
+merge status.
+
 - [x] Historical local validation on 2026-10-17, before PR rebasing: after
   compiler admission recovered, local HEAD
   `1d1db11dd03efdcaf2c5a884d709ebb44f1206e6` passed `make check-fmt`,
@@ -1507,6 +1514,20 @@ square root.
   completes. Rebase log: `/tmp/pr458-rebase-20261017.out`; range review:
   `/tmp/pr458-range-diff-20261017.out`.
 
+- [x] Current source-candidate validation, 2026-10-17: the completeness
+  follow-up added non-numeric coordinate coverage and reconciled the planning
+  exception and maintenance notes. The CodeScene large-method advisory was
+  fixed by extracting the coordinate-coverage assertions. The resulting
+  published source candidate passed, sequentially, `make check-fmt`,
+  `make lint`, `make typecheck`, `make test`, `make audit`, `make spelling`,
+  `make markdownlint`, and `make nixie`. The full test gate passed 1,830 Rust
+  tests; both compile-fail cases passed; Python workflow tests passed 606 with
+  one skip; targeted Python tests passed 115 with 13 skips; and frontend tests
+  passed. Logs use the full branch suffix under `/tmp`. The latest observation
+  found hosted CodeScene and Gecko passing and CI run `39062088719` still
+  running, with build queued and coverage in progress. Fresh completeness and
+  proof assessments, formal review, readiness, and merge remain open.
+
 ## Surprises & discoveries
 
 - Observation: by 2026-10-16, `main` had moved 41 commits past the PR's
@@ -1895,31 +1916,12 @@ square root.
 
 ## Outcomes & retrospective
 
-The current uncommitted candidate is HEAD
-`bd0c80bac0e1a26e7f09343702e55a44e5422dd1` plus the four tracked working-tree
-changes. Its diff SHA-256 before and after the full test gate was
-`32e315279f1aafc08e835ebfa4476979c52cef880947fd4d68f33c678b0944b8`.
-`make check-fmt`, `make lint`, `make typecheck`, `make audit`, `make spelling`,
-`make markdownlint`, and `make nixie` passed. The initial default-runtime
-`make test` run reached 3,600 seconds with 957 of 1,830 Rust tests completed:
-942 passed, 14 PostgreSQL-backed tests timed out, one was terminated by the
-global timeout, four were skipped, and 873 were not run. Investigation found a
-long-lived PostgreSQL process holding
-`/tmp/wildside-pg-embedded-shared-cluster.lock`; it was left untouched.
-
-The complete `make test` rerun passed with
-`TMPDIR=/var/tmp/wildside-pr458-tmp-e1abce79`,
-`PG_RUNTIME_DIR=/var/tmp/wildside-pr458-pg-e1abce79/install`, and
-`PG_DATA_DIR=/var/tmp/wildside-pr458-pg-e1abce79/data`. It completed 1,830 Rust
-tests with four configured skips; both compile-fail targets passed. Python
-workflow contracts passed 606 tests with one skip; targeted Python passed 115
-with 13 skips; lint-actions passed 14 tests; TypeScript and frontend tests
-passed. The gate log is
-`/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-3.out`.
-This validates the current source candidate, while the documentation edits in
-this update still need their Markdown gates. Hosted run `39034226820`,
-CodeScene, and Gecko describe the previously published head only. Fresh
-assessments, hosted checks, formal review, readiness, and merge remain pending.
+Historical validation on candidate `bd0c80bac0e1a26e7f09343702e55a44e5422dd1`:
+the first default-runtime `make test` run reached its 3,600-second timeout
+after 957 of 1,830 Rust tests. A long-lived PostgreSQL process held
+`/tmp/wildside-pg-embedded-shared-cluster.lock`; it was left untouched. The
+complete rerun used isolated PostgreSQL runtime paths and passed. That outcome
+is superseded by the latest exact source-candidate gate record in Progress.
 
 Historical implementation record: the property suite, coordinate admission fix,
 supporting documentation, and validation evidence were considered complete on
@@ -1942,12 +1944,13 @@ the roadmap item remains checked. The final local CodeRabbit review's status
 finding came from a snapshot taken before this `COMPLETE` status update.
 
 That implementation history culminated in commit
-`a2b5b670aec9e8fd0fd5306632218f2bb1f29e9c`; its hosted CodeScene and Gecko
-checks passed. It is not the current PR head. PR #458 now requires the
-non-numeric coordinate coverage repair and current-plan reconciliation to pass
-fresh gates and review before it reaches equilibrium. The roadmap's 5.1.4a item
-remains checked for the shipped implementation scope; the added completeness
-work and PR integration are still pending.
+`a2b5b670aec9e8fd0fd5306632218f2bb1f29e9c`; it is not the current PR head. The
+later non-numeric coordinate coverage repair and CodeScene large-method fix are
+published and passed all eight sequential local gates on the source candidate.
+The current PR integration snapshot is recorded in Progress above; hosted CI,
+fresh assessments, formal review, readiness, and merge are tracked separately
+from implementation completion. Roadmap item 5.1.4a remains checked for the
+delivered implementation scope.
 
 Follow-up: evaluate a verifier with explicit IEEE-754 support for LEM-1. No
 Kani harness or CI wiring is planned for this change.
