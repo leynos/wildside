@@ -5,61 +5,94 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: IN PROGRESS (EP-M0 resumed on 2026-10-17 after the user accepted
+Decisions D10 and D11)
 
 This plan covers backend roadmap item 5.2.3 only:
 
 > Implement retry policies with exponential backoff and dead-letter handling.
 
-The plan must be explicitly approved by the user before any implementation
-milestone begins. Approval of this plan does not authorize worker consumption
-or deployment (roadmap 5.3.1), trace-identifier propagation (5.2.4), or
-request-path dispatch changes (the `TODO(#276)` markers in
-`backend/src/domain/route_submission/mod.rs` remain in place).
+The user approved this plan and authorized execution on 2026-10-13. On
+2026-10-17 the user accepted the revised mechanism (D10: exact Apalis pins;
+D11: durable, storage-scheduled backoff). This approval does not cover worker
+consumption or deployment (roadmap 5.3.1), trace-identifier propagation
+(5.2.4), the Apalis 1.0.0 upgrade (issue
+[#550](https://github.com/leynos/wildside/issues/550)), or request-path
+dispatch changes. The `TODO(#276)` markers in
+`backend/src/domain/route_submission/mod.rs` stay in place.
+
+## Read this first (revision of 2026-10-17)
+
+If you have been working from an earlier version of this plan, these are the
+changes that matter:
+
+- There is **no tower retry layer**. Do not add the `apalis` facade crate, and
+  do not call `.retry(...)` on any `WorkerBuilder`. At the pinned versions an
+  in-process retry layer races with the storage fetcher (see
+  `Surprises & discoveries`, 2026-10-14).
+- Backoff is **durable**. When a job fails, a handler wrapper writes the next
+  `run_at` (or, for a fatal error, shrinks `max_attempts`) on the still-locked
+  row *before* the ack runs. The library's ack then records `Failed` or
+  `Killed`, and the existing fetch predicate does the rest (Decision D11).
+- Apalis is **pinned exactly**, to `apalis-core = "=1.0.0-rc.9"` and
+  `apalis-postgres = "=1.0.0-rc.8"` (Decision D10). The 1.0.0 upgrade is issue
+  #550, which is out of scope here.
+- AXIOM-FACADE and AXIOM-ATTEMPT are retired. AXIOM-PIN, AXIOM-DURABLE, and
+  AXIOM-ACK replace them, and EP-M0 discharges them.
+- `TOTAL_BACKOFF_BUDGET` is retired. Workers no longer hold a slot during
+  backoff, so the per-delay cap `MAX_BACKOFF_DELAY` replaces it (Decision D13).
+- `requeue` must restore the queue's configured `max_attempts`, because the
+  fatal path shrinks it (Decision D12).
+- EP-M1 (the pure domain policy) is unaffected in shape. EP-M2 has been
+  rewritten. EP-M3 gains the budget restoration. EP-M4 names the renamed ADRs.
 
 ## Purpose / big picture
 
 Wildside enqueues background jobs (`GenerateRouteJob`, `EnrichmentJob`) through
 the `RouteQueue` port into an Apalis-backed PostgreSQL queue (`apalis.jobs`
-table). Today a job that fails during processing would be retried using Apalis
-defaults (up to 25 attempts, no deliberate backoff), and a permanently failing
-job would linger with no dead-letter story: nothing bounds retries
-deliberately, nothing classifies errors as retryable versus fatal, and no
-interface exists to inspect or requeue dead jobs.
+table). Today a job that fails during processing would be redelivered using
+Apalis defaults: up to 25 attempts, with no deliberate backoff. A permanently
+failing job would linger with no dead-letter story. Nothing bounds retries
+deliberately, nothing classifies errors as retryable or fatal, and no interface
+exists to inspect or requeue dead jobs.
 
 This plan adds the retry and dead-letter policy layer:
 
-- A pure domain retry policy that computes bounded exponential backoff delays
-  with jitter and decides, per attempt and error class, whether to retry or
-  dead-letter a job. The domain policy is the policy production executes: the
-  adapter implements a `tower::retry::Policy` that delegates to it, so the
-  verified function and the running function are the same function.
-- A domain error classification for job execution failures (retryable versus
+- A pure domain retry policy. It computes bounded exponential backoff delays
+  with jitter and decides, per attempt and error class, whether to retry a job
+  or dead-letter it. The domain policy is the policy production executes: the
+  adapter's handler wrapper calls it directly, so the verified function and the
+  running function are the same function.
+- A domain error classification for job execution failures (retryable or
   fatal), following the precedent of `EnrichmentSourceError::is_retryable()`.
+- Durable retry scheduling in the outbound queue adapter. A handler wrapper
+  turns each failure into a guarded update on the still-locked `apalis.jobs`
+  row: a future `run_at` for a retry, or a shrunken `max_attempts` for a fatal
+  error. The library's own ack and fetch predicate then enforce the backoff and
+  the dead state.
 - A `DeadLetterQueue` driven port and a PostgreSQL adapter that lists,
-  requeues, and discards dead jobs (rows in `apalis.jobs` that are `Killed` or
-  that have exhausted their attempts), with guarded state transitions and
-  requeue provenance.
-- Adapter wiring that translates the domain policy into the Apalis 1.0-rc
-  tower retry stack, persists the bounded `max_attempts` on every enqueued job,
-  enforces that fatally failed jobs are dead at the storage level (not merely
-  un-retried in-process), and emits retry and dead-letter metrics through the
-  existing `RouteQueueMetrics` port.
+  requeues, and discards dead jobs, with guarded state transitions, requeue
+  provenance, and restoration of the retry budget on requeue.
+- Enqueue-side persistence of the policy's `max_attempts` on every job, and
+  retry and dead-letter event counters through dedicated `RouteQueueMetrics`
+  methods.
 
 Observable outcomes:
 
-- `cargo test -p backend` demonstrates: a job whose handler always fails
-  retryably is attempted exactly `max_attempts` times in total (across all
-  storage fetches, within one worker lease) and is then dead; a fatal failure
-  runs the handler exactly once and leaves a row that the storage fetcher can
-  never pick up again; a dead job can be listed and requeued through the
-  `DeadLetterQueue` port and then observably runs to success; requeuing a live
-  or absent job fails cleanly. These run against embedded PostgreSQL via
-  `rstest-bdd` scenarios.
-- Property tests pin the backoff invariants (delays bounded above and below,
+- `cargo test -p backend` demonstrates the following against embedded
+  PostgreSQL via `rstest-bdd` scenarios:
+  - A job whose handler always fails retryably runs exactly `max_attempts`
+    times in total across storage redeliveries. Each redelivery happens no
+    earlier than the `run_at` the previous failure scheduled, and the job then
+    ends `Killed`.
+  - A fatal failure runs the handler exactly once and leaves a row that the
+    storage fetcher can never pick up again.
+  - A dead job can be listed and requeued through the `DeadLetterQueue` port,
+    regains its full retry budget, and then observably runs to success.
+  - Requeuing a live or absent job fails cleanly.
+- Property tests pin the backoff invariants: delays bounded above and below,
   jitter within the configured fraction, monotone non-decreasing growth until
-  the cap binds, a bounded total-backoff budget, and retry decisions that never
-  exceed `max_attempts`).
+  the cap binds, and retry decisions that never exceed `max_attempts`.
 - `make check-fmt`, `make typecheck`, `make lint`, and `make test` pass after
   each major milestone.
 - Roadmap item 5.2.3 is marked done only after every gate passes and the
@@ -67,7 +100,7 @@ Observable outcomes:
 
 ## Context and orientation
 
-Everything below is verifiable in the working tree; no prior plan is required
+Everything below is verifiable in the working tree. No prior plan is required
 reading, though
 `docs/execplans/backend-5-2-2-job-structs-for-generate-route-and-enrichment.md`
 records the scope boundaries this plan inherits.
@@ -82,22 +115,24 @@ Repository state relevant to this task:
 - Adapter: `backend/src/outbound/queue/apalis_route_queue.rs` implements the
   enqueue side. `ApalisPostgresProvider` wraps
   `apalis_postgres::PostgresStorage<serde_json::Value>` over a dedicated
-  `sqlx::PgPool`; `setup` creates the `apalis.jobs` schema at runtime (no
-  Diesel migration). `QueueProvider` is the crate-internal test seam with
-  `FakeQueueProvider`/`FailingQueueProvider` doubles in
+  `sqlx::PgPool`, and `setup` creates the `apalis.jobs` schema at runtime (no
+  Diesel migration). `push_job` currently calls `storage.push(payload)`, which
+  uses the default context and therefore `max_attempts = 25`. `QueueProvider`
+  is the crate-internal test seam, with `FakeQueueProvider` and
+  `FailingQueueProvider` doubles in
   `backend/src/outbound/queue/test_helpers.rs`.
 - Consumer-side scaffolding: `backend/src/outbound/queue/job_decode.rs`
   provides the pure `decode_job<J>` helper. Its module documentation and
   `docs/wildside-backend-architecture.md` (section "Background Job Execution
   (Apalis Workers)") both state that the queue-processing error path applies
-  "the retry/dead-letter policy owned by 5.2.3" — that seam is where this
-  plan's policy attaches. Note that `decode_job` deliberately never logs
-  payload contents; the same privacy stance applies to dead-letter surfaces in
-  this plan.
+  "the retry/dead-letter policy owned by 5.2.3". That seam is where this plan's
+  handler wrapper attaches. `decode_job` deliberately never logs payload
+  contents, and the same privacy stance applies to every retry and dead-letter
+  surface in this plan. A decode failure is the canonical fatal error.
 - Jobs: `backend/src/domain/jobs/generate_route.rs` and
   `backend/src/domain/jobs/enrichment.rs` define versioned V1 envelopes. The
   module documentation of `backend/src/domain/jobs/mod.rs` currently scopes the
-  module to job payloads; it must be updated when the retry policy joins it.
+  module to job payloads. It must be updated when the retry policy joins it.
 - Error-classification precedent:
   `backend/src/domain/ports/enrichment_source.rs` exposes
   `EnrichmentSourceError::is_retryable()`, and
@@ -105,190 +140,185 @@ Repository state relevant to this task:
   house pattern for attempt-local error taxonomies.
 - Metrics: the `RouteQueueMetrics` port with `RouteQueueOutcome`
   (`success`/`failure`) and the Prometheus adapter exist. Enqueue outcomes and
-  latency remain enqueue-only; the port gains separate retry and dead-letter
-  event counters (a named deliverable, not an opportunistic one). Queue-depth
-  and age gauges remain deferred to roadmap 6.x.
+  latency remain enqueue-only. The port gains separate retry and dead-letter
+  event counters (Decision D8). Queue-depth and age gauges remain deferred to
+  roadmap 6.x.
+- Randomness: `rand = { version = "0.8", features = ["small_rng"] }` is
+  already a production dependency in `backend/Cargo.toml`. The adapter draws
+  jitter samples from it, so no new dependency is needed.
 - No worker, `Monitor`, or `WorkerBuilder` exists anywhere in the crate, and
   nothing configures Apalis orphan recovery (`reenqueue_orphaned_after`) yet.
-  Production worker consumption and orphan-recovery configuration are roadmap
-  5.3.1. Until 5.3.1 lands, a worker process that dies mid-job leaves the row
-  `Running` indefinitely; this plan documents that fact rather than fixing it.
-  Test-only consumption harnesses are in scope here because behavioural
+  Production worker consumption and orphan-recovery configuration belong to
+  roadmap 5.3.1. Until 5.3.1 lands, a worker process that dies mid-job leaves
+  the row `Running` indefinitely. This plan documents that fact rather than
+  fixing it. Test-only consumption harnesses are in scope, because behavioural
   evidence of retry and dead-letter behaviour requires driving job execution in
   tests.
 
-Version caution (review of 2026-10-14): `backend/Cargo.toml:34-35` declares
-`apalis-core = "1.0.0-rc.7"` and `apalis-postgres = "1.0.0-rc.6"`, but these
-are caret requirements. `Cargo.lock` resolves `apalis-core 1.0.0-rc.9` and
-`apalis-postgres 1.0.0-rc.8`, and the same requirements also admit the
-incompatible `1.0.0` final release published on 2026-10-12. The code that
-actually compiles is rc.9/rc.8. Unless stated otherwise, the facts below were
-re-verified against those resolved sources. Where rc.6 and rc.8 differ, the
-rc.8 behaviour governs.
+Apalis versions: `backend/Cargo.toml:34-35` declares `apalis-core` and
+`apalis-postgres` with caret requirements (`"1.0.0-rc.7"` and `"1.0.0-rc.6"`).
+`Cargo.lock` resolves them to `apalis-core 1.0.0-rc.9` and
+`apalis-postgres 1.0.0-rc.8`, and the caret requirements also admit the breaking
+`1.0.0` final release. EP-M0 replaces them with exact pins on the resolved
+versions (Decision D10). All facts below are verified against rc.9/rc.8, the
+code that actually compiles. The cached sources are under
+`~/.cargo/registry/src/*/apalis-{core-1.0.0-rc.9,postgres-1.0.0-rc.8,sql-1.0.0-rc.9}`.
+They are external axioms for this plan:
 
-Facts about Apalis at the resolved versions, established from docs.rs, the
-published crate sources, and the apalis-dev repositories; these are external
-axioms for this plan:
+- Worker middleware order (`apalis-core` `src/worker/mod.rs`), outermost
+  first: `Data`, user middleware, backend middleware (`Ack` around `LockTask`),
+  `Readiness`, `Tracker`, then the handler. The tracker's `AttemptOnPollFuture`
+  increments the task's `Attempt` on first poll, so inside the handler
+  `Attempt::current()` is the 1-based number of the current attempt.
+- Fetch (`apalis.get_jobs`, migration `20251018165056_queue_jobs.sql`) selects
+  rows with
+  `status = 'Pending' OR (status = 'Failed' AND attempts < max_attempts)` and
+  `run_at < now()`, and marks them `Queued`. `LockTask`
+  (`queries/task/lock_by_id.sql`) moves a row to `Running` and sets `lock_by`
+  to the worker name, again only when `run_at < now()`. The `queue_by_id.sql`
+  path also requires `run_at < now()`. The notify trigger fires only on
+  `INSERT`. **Every fetch path therefore honours `run_at`**, which is the
+  property D11 relies on.
+- Hydration (`apalis-sql` `src/from_row.rs`): a fetched row becomes a task
+  whose `Attempt` starts at the persisted `attempts` and whose context
+  `max_attempts` is the persisted `max_attempts` (default 25 if null).
+- Ack (`apalis-postgres` `src/ack.rs`, `queries/task/ack.sql`): after the
+  handler returns, the ack writes `status`, `attempts = Attempt::current()`,
+  `last_result`, and `done_at`, guarded by `id` and `lock_by`. It never touches
+  `run_at` or `max_attempts`. `calculate_status` returns `Done` on `Ok`, and
+  `Killed` on `Err` when the *in-memory* context `max_attempts` is at most
+  `Attempt::current()`; otherwise it returns `Failed`. The
+  `Error::Abort => Killed` arm is commented out, so abort errors are not
+  persisted as `Killed`.
+- Extractors (`apalis-core`): `Attempt`, `TaskId`, and `WorkerContext`
+  implement `FromRequest`, so a handler can obtain the attempt number, the task
+  id, and the worker name (`WorkerContext::name()`, which is the value
+  `LockTask` writes to `lock_by`).
+- Enqueue context: `PgContext` (`apalis_sql::context::SqlContext<PgPool>`)
+  has `with_max_attempts(i32)`, and `TaskSink::push_task` accepts a built task.
+  The adapter can therefore persist a per-job `max_attempts` without importing
+  `apalis-sql` directly.
+- There is no built-in dead-letter table or requeue API. Dead jobs are rows
+  that remain in `apalis.jobs`. Listing and requeuing require direct SQL. No
+  pruning or retention mechanism exists upstream at these pins.
+- The `apalis` facade crate's `RetryLayer` exists, but this plan does not use
+  it (Decision D14). Installed as user middleware at these pins, it re-enters
+  the ack on every in-process attempt. The ack leaves a re-fetchable `Failed`
+  row while the layer sleeps, so another worker can run the same job
+  concurrently.
 
-- Retry middleware lives in the `apalis` facade crate
-  (`apalis::layers::retry`, crate feature `retry`), not in `apalis-core`. It
-  re-exports `tower::retry`: `RetryPolicy::retries(n)`, `.with_backoff(...)`
-  for backoff, and `.retry_if(pred)` for conditional retry, and `Policy` is
-  implementable for custom behaviour. `apalis-core`'s
-  `BackoffStrategy`/`BackoffConfig` govern backend polling cadence, not task
-  retries. Adopting the upstream layer requires adding the `apalis` facade
-  crate as a dependency with the `retry` feature.
-- The `apalis.jobs` row carries `status` (`Pending`, `Queued`, `Running`,
-  `Done`, `Failed`, `Killed`), `attempts` (default 0), `max_attempts` (default
-  25), and `run_at`. The fetch function `apalis.get_jobs` selects
-  `status = 'Pending' OR (status = 'Failed' AND attempts < max_attempts)` with
-  `run_at < now()`. There are therefore two retry loops in play: the tower
-  layer's in-process retries within one execution, and the storage fetcher's
-  re-delivery of `Failed` rows. Reconciling them is a named verification
-  obligation of this plan (AXIOM-ATTEMPT below).
-- On acknowledgement, `calculate_status` maps `Ok` to `Done`, and an error
-  with `attempt >= max_attempts` to `Killed`, otherwise `Failed`. The
-  `Error::Abort => Killed` arm is present but commented out in apalis-postgres
-  1.0.0-rc.6, so abort-style fatal errors are not persisted as `Killed` by the
-  library. A fatal error acked at attempt 1 of 3 becomes a `Failed` row with
-  spare attempts: the storage fetcher will re-deliver it, and a dead-letter
-  query keyed on exhaustion will not see it. Fatal dead-lettering therefore
-  requires an explicit storage-level action by our wiring (Decision D4).
-- There is no built-in dead-letter table or requeue API. Dead jobs are
-  `Killed` rows (or exhausted `Failed` rows) that remain in `apalis.jobs`;
-  listing and requeuing require direct SQL. No pruning or retention mechanism
-  exists upstream at these pins.
-- Corrected 2026-10-14 (the original bullet below is retained for the record
-  and is false at rc.7–rc.9): the worker stack is, outermost first, `Data`,
-  user middleware (retry), backend middleware (`Ack` around `LockTask`),
-  `Readiness`, `Tracker`, then the handler. tower's `Stack::new(inner, outer)`
-  makes the last-added layer the innermost, and `TrackerLayer` is added last.
-  Each in-process retry therefore re-enters LockTask, Ack, and Tracker. That
-  has three consequences. `Attempt` advances once per handler invocation. Every
-  failed in-process attempt is acked separately, writing `status = 'Failed'` and
-  `attempts = n` with `run_at` unchanged. While the retry layer sleeps, the
-  row is eligible for `apalis.get_jobs` on any worker, and the next
-  `lock_by_id.sql` accepts `Queued` rows and so can take the lock back.
-  In-process backoff over `PostgresStorage` is therefore a duplicate-execution
-  race at these pins, not a locked wait.
-- Original premise (false at rc.7–rc.9; see correction above): backoff sleeps
-  happen in-process inside the tower retry layer while the job row stays
-  `Running` and locked; `run_at` is not rescheduled on failure. Attempts are
-  persisted once, at final acknowledgement. Consequences: `max_attempts` is a
-  per-lease bound — a worker crash discards in-process attempt history, and the
-  recovered job restarts from its last persisted count, so lifetime attempts
-  across crashes are unbounded and handlers must be idempotent; and long
-  backoff chains occupy a worker slot for their whole duration, so the total
-  in-process wait must be bounded and must remain below whatever
-  orphan-recovery threshold 5.3.1 configures, or the reaper would re-deliver a
-  live, mid-backoff job and cause duplicate execution.
+Named external axioms, each discharged in EP-M0 and then guarded permanently by
+the V8 canaries. The upstream-surprises tolerance attaches to each:
 
-Named external axioms to confirm by compile probe before implementation
-proceeds (the upstream-surprises tolerance attaches to each):
-
-- AXIOM-FACADE: the `apalis` facade crate at 1.0.0-rc.7 composes with
-  `apalis-postgres` 1.0.0-rc.6 (release candidates carry no cross-version
-  guarantee; the three-way skew is exactly where a trait-bound mismatch would
-  surface).
-- AXIOM-ATTEMPT: every in-process handler attempt advances the task's shared
-  `apalis_core::task::Attempt`, so the final ack observes the cumulative count
-  and writes `Killed` when `attempt >= max_attempts`, and the storage refetch
-  loop never multiplies the budget for policy-managed jobs. On 2026-10-13, an
-  inspection of the rc.7 sources concluded that the tracker wraps the whole
-  user-middleware call and increments only once. The review on 2026-10-14 found
-  that conclusion inverts tower's layer order: the tracker is innermost, so the
-  counting half of this axiom holds at rc.7–rc.9. The "final ack" half is
-  false, because each in-process attempt is acked separately (see the corrected
-  fact above). The axiom is therefore false as a whole, for a different reason
-  than first recorded. Under proposed Decision D11 it is replaced by
-  AXIOM-DURABLE (EP-M0). Do not begin EP-M1 until the user rules on D10 and D11
-  and the EP-M0 runtime probe has run.
-- AXIOM-ACK: the ack path persists `attempts` and computes status as described
-  above (verified in rc.6 sources; re-verified cheaply by the rc-canary tests,
-  obligation V8).
+- AXIOM-PIN: after EP-M0's pin change, `cargo tree -p backend` resolves
+  exactly `apalis-core 1.0.0-rc.9` and `apalis-postgres 1.0.0-rc.8`, and no
+  other Apalis release.
+- AXIOM-DURABLE: a handler that updates its own locked row's `run_at` (or
+  `max_attempts`) before returning `Err` controls redelivery. The row is not
+  fetched before `run_at`; it is fetched after it; the next run observes
+  `Attempt::current()` one higher; exhaustion persists `Killed`; and a row whose
+  `max_attempts` was shrunk to the current attempt is never fetched again.
+  EP-M0's runtime probe tests these five predictions.
+- AXIOM-ACK: the ack writes only `status`, `attempts`, `last_result`, and
+  `done_at`, guarded by `lock_by`, and computes status from the in-memory
+  context as described above.
 
 Terms used in this plan:
 
 - "Dead-letter" a job: stop retrying it and park it in a state the storage
-  fetcher can never re-deliver (`Killed`, or `Failed` with exhausted attempts)
-  for operator inspection and optional requeue.
+  fetcher can never redeliver, for operator inspection and optional requeue.
+  Dead rows are `Killed` (retry budget exhausted) or `Failed` with
+  `attempts >= max_attempts` (fatal failure, Decision D4).
 - "Fatal error": a job-execution failure that retrying cannot fix (for
-  example, a payload that fails validation), classified so the job dead-letters
-  immediately rather than burning attempts.
+  example, a payload that fails decoding or validation). It is classified so
+  the job dead-letters immediately rather than burning attempts.
 - "Retryable error": a transient failure (timeout, transport, rate limit)
   worth retrying with backoff.
-- "Worker lease": the period from a worker fetching a job (row locked,
-  `Running`) to its final acknowledgement. Attempt counts are persisted per
-  lease.
+- "Handler wrapper": the adapter-owned service passed to
+  `WorkerBuilder::build`. It runs the job-specific handler, classifies its
+  failure, consults `JobRetryPolicy`, applies the guarded scheduling update,
+  records metrics and logs, and then returns the error so the library's ack
+  persists it.
+- "Attempt": one handler invocation. Attempts are persisted by the ack after
+  every invocation, so `max_attempts` is a lifetime bound. The one exception is
+  an invocation that crashes the worker process before its ack (see `Risks`).
 
 ## Constraints
 
 Hard invariants. Violation requires escalation, not workarounds.
 
-- Do not begin implementation before the user approves this plan.
+- Do not begin a milestone before the previous plateau is committed and its
+  gates pass. D10 and D11 are approved; any further mechanism change needs the
+  user's approval.
 - Keep scope to roadmap item 5.2.3. Do not implement 5.2.4 (trace
   propagation), 5.3.1 (worker pools, Kubernetes deployment, queue partitioning,
-  orphan-recovery configuration), or request-path dispatch. Production binaries
-  must not gain a worker loop from this plan; consumption harnesses are
-  test-only.
-- Preserve hexagonal architecture. The retry policy and error classification
-  live in the domain layer and must not import Apalis, tower, SQLx, Diesel, or
-  Actix types. The `DeadLetterQueue` port is defined by the domain; the
-  PostgreSQL adapter implements it in `backend/src/outbound/`. Background
-  workers and caches interact with the domain exclusively via ports (roadmap
-  section 5 preamble).
-- The domain policy is authoritative: production retry behaviour must route
-  through `JobRetryPolicy::decide`/`backoff_delay`. Substituting tower's own
-  backoff arithmetic for the domain's requires an explicit
-  translation-verification obligation and a Decision-log entry.
-- The retry policy constructor must enforce a total-backoff budget: the
-  worst-case sum of all in-process delays,
-  `sum(backoff_delay(a) for a in 1..max_attempts)` at maximal jitter, must not
-  exceed the named constant `TOTAL_BACKOFF_BUDGET` (initial value 60 seconds;
-  recorded in ADR-002 together with the requirement that this budget plus
-  worst-case handler duration stays strictly below the orphan-recovery
-  threshold 5.3.1 will configure).
+  orphan-recovery configuration), the Apalis 1.0.0 upgrade (#550), or
+  request-path dispatch. Production binaries must not gain a worker loop from
+  this plan; consumption harnesses are test-only.
+- Preserve hexagonal architecture. The retry policy, error classification,
+  and job failure type live in the domain layer and must not import Apalis,
+  tower, SQLx, Diesel, or Actix types. The `DeadLetterQueue` port is defined by
+  the domain, and the PostgreSQL adapter implements it in
+  `backend/src/outbound/`. The handler wrapper and its scheduling SQL are
+  adapter code in `backend/src/outbound/queue/`. Background workers and caches
+  interact with the domain exclusively via ports (roadmap section 5 preamble).
+- The domain policy is authoritative. Every retry or dead-letter outcome in
+  production must come from `JobRetryPolicy::decide`. No other code may compute
+  a delay or a retry decision.
+- Do not install any in-process retry middleware on an Apalis worker: no
+  `apalis` facade dependency, no `RetryLayer`, no `.retry(...)`, and no
+  hand-rolled tower `Retry` (Decision D14). EP-M2 adds a conformance check for
+  this.
+- Every scheduling update written by the handler wrapper must be guarded by
+  `id`, `lock_by = <this worker's name>`, and `status = 'Running'`, so it can
+  only affect the row this worker currently holds. An update that affects zero
+  rows is logged at `warn` level and never retried.
+- The retry policy constructor must reject any configuration whose capped
+  delay exceeds `MAX_BACKOFF_DELAY`, initially one hour (Decision D13).
 - Do not change the `RouteQueue` trait signature. `JobDispatchError`
   variants may only be extended, not changed, and only if a milestone
-  demonstrates the need; the default position is to leave enqueue-side errors
-  untouched because retry classification concerns job execution, not enqueue.
-- Do not upgrade or replace `apalis-core`, `apalis-postgres`, or `sqlx`
-  pins. Adding the `apalis` facade crate at the matching 1.0.0-rc.7 version
-  with the `retry` feature is the single permitted dependency addition on the
-  production side; `googletest` is the single permitted dev-dependency
-  addition. Any further dependency need triggers escalation.
-- Do not alter or migrate the Apalis-owned schema shape (`apalis.jobs`
-  columns, statuses, functions) and do not add Diesel migrations for Apalis
-  tables. One additive exception is pre-authorized: the dead-letter adapter may
-  create a partial index supporting the dead-jobs predicate, executed through
-  the adapter's setup path alongside `PostgresStorage::setup`, if and only if
-  milestone EP-M3's `EXPLAIN` check shows a sequential scan (Decision D6).
-  Introducing a separate dead-letter table is out of scope (Decision D3).
-- Dead-letter state transitions must be guarded compare-and-swap updates:
+  demonstrates the need. The default position is to leave enqueue-side errors
+  untouched, because retry classification concerns job execution, not enqueue.
+- Dependencies: pin `apalis-core = "=1.0.0-rc.9"` and
+  `apalis-postgres = "=1.0.0-rc.8"` exactly (D10). Do not upgrade or replace
+  them, `sqlx`, or `rand`. `googletest` is the single permitted dev-dependency
+  addition. No production dependency may be added.
+- Do not alter or migrate the Apalis-owned schema (`apalis.jobs` columns,
+  statuses, functions), and do not add Diesel migrations for Apalis tables. The
+  scheduling and dead-letter adapters may *write* existing columns (`run_at`,
+  `max_attempts`, `status`, `attempts`, `last_result`) through guarded
+  statements. One additive exception is pre-authorized: the dead-letter adapter
+  may create a partial index supporting the dead-jobs predicate, through the
+  adapter's setup path alongside `PostgresStorage::setup`, if and only if
+  milestone EP-M3's `EXPLAIN` check shows a sequential scan (Decision D6). A
+  separate dead-letter table is out of scope (Decision D3).
+- Dead-letter state transitions must be guarded compare-and-swap updates.
   `requeue` and `discard` take effect only when the row currently satisfies the
   dead predicate, and an ineffective update surfaces as a port error, never as
   silence.
-- Automated requeue is forbidden. `requeue` is an operator action; any
+- Automated requeue is forbidden. `requeue` is an operator action, and any
   future automation must carry a per-job requeue budget (recorded in ADR-003).
   Requeue provenance must be recorded so repeat offenders are visible.
-- Dead-letter surfaces (the `DeadJob` type, logs, metrics) must not expose
-  raw job payloads; persisted error strings must be size-bounded. This matches
-  the existing `decode_job` privacy stance.
-- Behavioural tests must not assert timing magnitudes (only counts,
-  orderings, and terminal states), and the test consumption harness must have a
-  hard iteration and deadline cap so a wiring bug fails fast instead of hanging
-  the suite.
+- Retry and dead-letter surfaces (the `DeadJob` type, the error text the
+  wrapper returns to the ack, logs, and metrics) must not expose raw job
+  payloads. Error strings must be size-bounded. This matches the existing
+  `decode_job` privacy stance.
+- Behavioural tests may assert counts, orderings (including comparisons
+  between persisted timestamps), and terminal states. They must not assert
+  wall-clock magnitudes. The test consumption harness must have a hard
+  iteration and deadline cap, so a wiring bug fails fast instead of hanging the
+  suite. Test policies use millisecond-scale delays and a short poll interval.
 - Versioned job envelopes and their JSON shape (pinned by `insta`
   snapshots from 5.2.2) must not change.
 - Keep documentation in en-GB-oxendict style per
-  `docs/documentation-style-guide.md`; wrap prose at 80 columns and code at 120
-  columns; sentence-case headings.
-- Keep source files below 400 lines; split modules before finishing a
+  `docs/documentation-style-guide.md`: wrap prose at 80 columns and code at 120
+  columns, and use sentence-case headings.
+- Keep source files below 400 lines. Split modules before finishing a
   milestone if needed.
 - Run gates sequentially (build caching), never in parallel, and capture
   long output with `tee` to
   `/tmp/$ACTION-wildside-$(git branch --show-current).out`. Prefer Makefile
-  targets. Full gate runs are delegated to the `scrutineer` subagent.
+  targets. Delegate full gate runs to the `scrutineer` subagent.
 - Commit each milestone only after its gates pass. Do not amend earlier
   commits; add new ones.
 - Do not mark roadmap item 5.2.3 done until all gates and reviews are clean.
@@ -301,15 +331,14 @@ Hard invariants. Violation requires escalation, not workarounds.
   budget.
 - Port shape: stop and escalate before changing `RouteQueue`, existing
   `JobDispatchError` variants, or any 5.2.2 job struct field.
-- Dependencies: the `apalis` facade crate (with `retry` feature, version
-  matching `apalis-core` 1.0.0-rc.7) and `googletest` (dev-dependency) are
-  pre-authorized by this plan once approved. Stop and escalate for anything
-  else.
-- Upstream surprises: if any named axiom (AXIOM-FACADE, AXIOM-ATTEMPT,
-  AXIOM-ACK) fails its compile probe or canary, or the Apalis rc APIs otherwise
-  differ materially from "Context and orientation" (for example, `max_attempts`
-  cannot be set per enqueued task), stop, record the discovery, and escalate
-  with options rather than upgrading pins.
+- Dependencies: the exact Apalis pins (D10) and `googletest`
+  (dev-dependency) are pre-authorized. Stop and escalate for anything else,
+  including any temptation to add the `apalis` facade crate.
+- Upstream surprises: if AXIOM-PIN, AXIOM-DURABLE, or AXIOM-ACK fails its
+  probe or canary, or the Apalis rc APIs otherwise differ materially from
+  "Context and orientation" (for example, `TaskId` or `WorkerContext` cannot be
+  extracted in a handler), stop. Record the discovery and escalate with options
+  rather than changing pins or reaching for the retry layer.
 - Iterations: if a red test still fails after three green attempts, or a
   gate fails three consecutive runs on the same cause, stop and escalate.
 - Ambiguity: if retry semantics interact with idempotency in a way not
@@ -317,54 +346,58 @@ Hard invariants. Violation requires escalation, not workarounds.
 
 ## Risks
 
-- Risk: Apalis 1.0-rc APIs are release candidates and may not match docs.rs
-  exactly at compile time, and the facade (rc.7) over `apalis-postgres` (rc.6)
-  is an unverified three-way skew. Severity: medium. Likelihood: medium.
-  Mitigation: milestone EP-M0 includes the compile probe as an explicit step
-  (not merely a mitigation note); the upstream-surprises tolerance names the
-  axioms it protects.
-- Risk: in-process backoff holds a job locked and occupies a worker slot
-  for the whole retry chain; interacting badly with a future orphan-recovery
-  threshold would cause duplicate execution of live jobs. Severity: high.
-  Likelihood: medium. Mitigation: the `TOTAL_BACKOFF_BUDGET` constructor
-  constraint (obligation V1b) makes the bound structural; ADR-002 records the
-  inequality 5.3.1 must respect; the retry counter metric gives the occupancy
-  signal.
-- Risk: a worker crash mid-lease discards in-process attempt history, so a
-  handler that crashes the process (out-of-memory, abort) can loop forever
-  without ever dead-lettering. Severity: medium. Likelihood: low-to-medium.
-  Mitigation: per-attempt structured logging (job id, attempt number) is the
-  artefact that survives a crash; the operator runbook (EP-M4) includes the
-  crash-loop detection query; the per-lease semantics are documented rather
-  than implied. A structural fix (persisting attempts per attempt) belongs
-  upstream or to 5.3.1.
+- Risk: release-candidate APIs drift. Severity: medium. Likelihood: low
+  after D10. Mitigation: exact pins (AXIOM-PIN), the V8 canaries, and issue
+  #550 for the deliberate 1.0.0 move. Apalis 1.0.0's `get_jobs` still filters on
+  `run_at`, so D11 is expected to carry over; #550 re-verifies it.
+- Risk: a worker crash between the tracker's increment and the ack loses
+  that one attempt's count. A handler that crashes the whole process (for
+  example, out-of-memory) is therefore never acked and can loop without
+  dead-lettering once 5.3.1 configures orphan recovery. Severity: medium.
+  Likelihood: low. Mitigation: per-attempt structured logging (job id, attempt
+  number) survives the crash, and the EP-M4 runbook includes the crash-loop
+  detection query. D11 narrows this from the earlier per-lease loss of a whole
+  retry chain to a single in-flight attempt.
+- Risk: a scheduling update fails (database error or lost lock). Severity:
+  low. Likelihood: low. Effect: for a retryable error, the ack still records
+  `Failed`, but with an unchanged, past `run_at`, so the job is redelivered on
+  the next poll without backoff. It remains bounded by `max_attempts`. For a
+  fatal error, the row stays re-fetchable and the handler fails fatally again
+  on redelivery, still bounded by `max_attempts`. Mitigation: `warn`-level log
+  plus a `schedule_failure` label on the retry counter. Retry no further; do
+  not escalate the failure into a panic.
+- Risk: backoff precision is bounded below by the storage poll interval,
+  because failed rows are rediscovered only by polling (the notify trigger
+  fires on insert only). Severity: low. Likelihood: certain. Mitigation:
+  documented in ADR-002; production delays are seconds or longer, and tests
+  configure a short poll interval.
 - Risk: behavioural tests need test-only job consumption, which could drift
   into building 5.3.1's worker early, or diverge from what 5.3.1 builds.
   Severity: low. Likelihood: medium. Mitigation: the harness lives under
-  `backend/tests/support/`, is not part of the production binary, and its
-  worker-construction function is named as the reference wiring 5.3.1 must
-  promote or consciously diverge from.
-- Risk: `rstest-bdd` scenarios with embedded PostgreSQL and real sleeps
+  `backend/tests/support/` and is not part of the production binary. The
+  handler wrapper itself is production adapter code, so 5.3.1 reuses it rather
+  than reinventing it, and the harness's worker-construction function is named
+  as the reference wiring 5.3.1 must promote or consciously diverge from.
+- Risk: `rstest-bdd` scenarios with embedded PostgreSQL and real polling
   could be slow or flaky. Severity: medium. Likelihood: medium. Mitigation:
-  test policies use millisecond-scale delays; scenarios assert counts,
-  orderings, and terminal states only; the harness has hard iteration and
-  deadline caps; embedded-PostgreSQL setup reuses
+  millisecond delays, a short poll interval, assertions on counts, orderings,
+  and terminal states only, hard iteration and deadline caps, and reuse of
   `backend/tests/support/embedded_postgres.rs`.
-- Risk: `apalis.jobs` grows without bound (`Done` and `Killed` rows are
-  never pruned upstream), degrading the dead-letter listing over time.
-  Severity: low (now), medium (later). Likelihood: high eventually. Mitigation:
-  `list_dead` is ordered and limited; the `EXPLAIN` check and optional partial
-  index (D6) keep the query plan honest; row retention is explicitly recorded
-  as unowned here and proposed for roadmap section 6 (observability/operations)
-  rather than silently ignored.
+- Risk: `apalis.jobs` grows without bound (`Done`, `Killed`, and dead
+  `Failed` rows are never pruned upstream), degrading the dead-letter listing
+  over time. Severity: low now, medium later. Likelihood: high eventually.
+  Mitigation: `list_dead` is ordered and limited, and the `EXPLAIN` check and
+  optional partial index (D6) keep the query plan honest. Row retention is
+  explicitly unowned here and proposed for roadmap section 6.
 
 ## Skills and reference documents
 
 Skills to load when implementing: `leta`, `rust-router` (then `rust-errors` for
-the error taxonomy and `rust-async-and-concurrency` for the tower layer work),
-`hexagonal-architecture`, `proptest`, `rust-unit-testing`, `rust-unused-code`
-(for the pre-5.3.1 public factory seam), `arch-decision-records` (for the ADRs),
-`commit-message`, `pr-creation`, `en-gb-oxendict`.
+the error taxonomy, `rust-async-and-concurrency` for the handler wrapper, and
+`rust-types-and-apis` for the newtypes), `hexagonal-architecture`, `proptest`,
+`rust-unit-testing`, `rust-unused-code` (for the pre-5.3.1 public factory seam),
+`nextest`, `arch-decision-records` (for the ADRs), `commit-message`,
+`pr-creation`, and `en-gb-oxendict`.
 
 Repository documents to read first:
 
@@ -372,20 +405,22 @@ Repository documents to read first:
   (Apalis Workers)" section (retry/dead-letter design intent, scope split
   between 5.2.1–5.2.4 and 5.3.1, the `decode_job` seam, and the promise of
   per-job-type queues that shapes the policy-per-adapter decision D7).
-- `docs/backend-roadmap.md` — section 5.2 and 5.3 (scope overlap with
+- `docs/backend-roadmap.md` — sections 5.2 and 5.3 (scope overlap with
   5.3.1's "bounded retries, and dead-letter handling").
 - `docs/developers-guide.md` — "Apalis queue adapter boundaries",
-  "Background job payloads", "Queue build requirements", "Queue test
+  "Background job payloads", "Queue build requirements", and "Queue test
   infrastructure".
 - `docs/rstest-bdd-users-guide.md` and
   `docs/pg-embed-setup-unpriv-users-guide.md` — behavioural-test and
   embedded-PostgreSQL conventions.
 - `docs/rust-testing-with-rstest-fixtures.md`,
-  `docs/rust-doctest-dry-guide.md`,
+  `docs/rust-doctest-dry-guide.md`, and
   `docs/complexity-antipatterns-and-refactoring-strategies.md` — testing and
   structure conventions.
 - `docs/documentation-style-guide.md` — ADR template ("an ADR captures one
   accepted decision") and style rules.
+- This plan's `Surprises & discoveries` section, entries dated 2026-10-14,
+  for the evidence behind D9–D11.
 
 ## Conformance basis
 
@@ -400,26 +435,27 @@ the roadmap and architecture document are the governing artefacts):
   backoff, dead-letter after max attempts, per-job-type queue configuration,
   and the 5.2.3/5.3.1 scope split.
 - `docs/execplans/backend-5-2-2-job-structs-for-generate-route-and-enrichment.md`
-  scope reservations (EP-522-SCOPE): job envelope stability, deferred
+  scope reservations (EP-522-SCOPE): job envelope stability and deferred
   retry/dead-letter ownership.
 - New ADRs produced by this plan:
-  `docs/adr-002-apalis-in-process-retry-with-bounded-backoff.md` (ADR-002, the
-  retry mechanism: tower layer, in-process backoff, total-backoff budget, fatal
-  short-circuit) and
+  `docs/adr-002-durable-retry-scheduling-for-apalis-jobs.md` (ADR-002, the
+  retry mechanism: durable `run_at` scheduling by a handler wrapper, the ban on
+  in-process retry middleware at the rc pins, fatal dead-lettering by shrinking
+  `max_attempts`, and the exact-pin policy) and
   `docs/adr-003-dead-letters-as-apalis-rows-behind-a-domain-port.md` (ADR-003,
-  the dead-letter representation, guarded transitions, requeue provenance and
-  the no-automated-requeue rule). Split per the style guide's
-  one-decision-per-ADR rule.
+  the dead-letter representation, guarded transitions, budget restoration,
+  requeue provenance, and the no-automated-requeue rule). The split follows the
+  style guide's one-decision-per-ADR rule.
 
 Trace links:
 
 ```plaintext
 ROAD-5.2.3 -> ARCH-JOBS -> EP-M1 -> backend/src/domain/jobs/retry.rs (policy + proptest invariants V1-V3)
-ROAD-5.2.3 -> ARCH-JOBS -> EP-M2 -> retry wiring + max_attempts + fatal kill (BDD: queue_retry_policy.feature, V4-V5)
+ROAD-5.2.3 -> ARCH-JOBS -> EP-M2 -> handler wrapper + retry scheduling (BDD: queue_retry_policy.feature, V3b-V5, V9)
 ROAD-5.2.3 -> ARCH-JOBS -> EP-M3 -> DeadLetterQueue port + PostgreSQL adapter (BDD: queue_dead_letter.feature, V6)
 ROAD-5-PORTS -> EP-M1..M3 -> domain imports audit (no adapter types in domain)
 EP-522-SCOPE -> EP-M2 -> insta snapshots unchanged for V1 envelopes (V7)
-AXIOM-FACADE/AXIOM-ATTEMPT/AXIOM-ACK -> EP-M0 compile probe + V8 rc-canary tests
+AXIOM-PIN/AXIOM-DURABLE/AXIOM-ACK -> EP-M0 pin + runtime probe -> EP-M2 V8 rc-canary tests
 ADR-002/ADR-003 -> EP-M4 -> docs updates + contents.md registration
 ```
 
@@ -427,8 +463,8 @@ ADR-002/ADR-003 -> EP-M4 -> docs updates + contents.md registration
 
 Domain layer (new module `backend/src/domain/jobs/retry.rs`, re-exported from
 `backend/src/domain/jobs/mod.rs`, whose module documentation is updated to
-cover policy as well as payloads; names indicative, refine during
-implementation without changing intent):
+cover policy as well as payloads). Names are indicative; refine them during
+implementation without changing intent:
 
 ```rust
 /// Why a job execution attempt failed, as classified by the handler.
@@ -439,20 +475,29 @@ pub enum JobErrorKind {
     Fatal,
 }
 
+/// A classified, payload-free job execution failure returned by handlers.
+pub struct JobFailure {
+    kind: JobErrorKind,
+    message: String, // size-bounded at construction; never contains payload data
+}
+
 /// A jitter sample in the unit interval, validated at construction.
 pub struct JitterSample(f64); // JitterSample::new(x) errors unless 0.0 <= x <= 1.0
+
+/// Upper bound on any single backoff delay (Decision D13).
+pub const MAX_BACKOFF_DELAY: Duration = Duration::from_secs(60 * 60);
 
 /// Bounded exponential backoff policy for background jobs.
 pub struct JobRetryPolicy {
     max_attempts: NonZeroU32,
     base_delay: Duration,
     multiplier: f64,       // >= 1.0, validated
-    max_delay: Duration,
+    max_delay: Duration,   // <= MAX_BACKOFF_DELAY, validated
     jitter_fraction: f64,  // 0.0..=1.0, validated; delay varies +/- this fraction
 }
 
 pub enum RetryDecision {
-    /// Retry after the given delay.
+    /// Retry no earlier than the given delay from now.
     Retry { delay: Duration },
     /// Stop retrying; the job is dead-lettered.
     DeadLetter,
@@ -460,7 +505,7 @@ pub enum RetryDecision {
 
 impl JobRetryPolicy {
     /// Errors unless attempts are non-zero, multiplier >= 1.0, jitter in
-    /// [0, 1], and the worst-case total backoff fits TOTAL_BACKOFF_BUDGET.
+    /// [0, 1], and the capped delay (including jitter) fits MAX_BACKOFF_DELAY.
     pub fn new(...) -> Result<Self, JobRetryPolicyBuildError>;
     pub fn decide(&self, attempt: NonZeroU32, kind: JobErrorKind, jitter: JitterSample) -> RetryDecision;
     pub fn backoff_delay(&self, attempt: NonZeroU32, jitter: JitterSample) -> Duration;
@@ -469,27 +514,38 @@ impl JobRetryPolicy {
 ```
 
 The jitter sample maps linearly onto `[-jitter_fraction, +jitter_fraction]`
-around the nominal delay (0.5 is the midpoint, i.e. no jitter); the policy
-stays pure and deterministic under test and the adapter supplies randomness.
-`JobRetryPolicyBuildError` follows the style of `EnrichmentJobBuildError`.
-Handlers map source errors through a stated convention —
-`impl From<&EnrichmentSourceError> for JobErrorKind` honouring
-`is_retryable()` — so 5.3.1's handlers inherit the bridge rather than inventing
-it.
+around the nominal delay (0.5 is the midpoint, meaning no jitter). The policy
+stays pure and deterministic under test, and the adapter supplies the
+randomness. `JobRetryPolicyBuildError` follows the style of
+`EnrichmentJobBuildError`. Handlers map source errors through a stated
+convention, `impl From<&EnrichmentSourceError> for JobErrorKind` honouring
+`is_retryable()`, so 5.3.1's handlers inherit the bridge rather than inventing
+it. A `decode_job` failure maps to `JobErrorKind::Fatal`.
 
-Domain port (new file `backend/src/domain/ports/dead_letter_queue.rs`, error via
-`define_port_error!`):
+Domain port (new file `backend/src/domain/ports/dead_letter_queue.rs`, with its
+error defined via `define_port_error!`):
 
 ```rust
 /// Opaque identifier for a dead job; the storage representation is an
 /// adapter detail.
 pub struct DeadJobId(String);
 
+/// Why a job is dead.
+#[non_exhaustive]
+pub enum DeadReason {
+    /// The retry budget was exhausted (`Killed` row).
+    Exhausted,
+    /// A fatal error short-circuited retries (`Failed` row whose
+    /// `max_attempts` was shrunk to its attempt count).
+    Fatal,
+}
+
 /// A job parked after exhausting retries or failing fatally.
 #[non_exhaustive]
 pub struct DeadJob {
     pub id: DeadJobId,
     pub job_type: String,
+    pub reason: DeadReason,
     pub attempts: u32,
     /// Size-bounded, payload-free description of the last failure.
     pub last_error: Option<String>,
@@ -505,182 +561,241 @@ pub trait DeadLetterQueue: Send + Sync {
     async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError>;
     /// Guarded: fails with `DeadLetterError::NotDead` if the row does not
     /// currently satisfy the dead predicate (absent, live, or running).
+    /// Restores the queue's configured retry budget (Decision D12).
     async fn requeue(&self, id: &DeadJobId) -> Result<(), DeadLetterError>;
     /// Guarded like `requeue`; deletes the row (Decision D5).
     async fn discard(&self, id: &DeadJobId) -> Result<(), DeadLetterError>;
 }
 ```
 
-`DeadLetterError` variants: `NotDead { message }` (guard failed: absent or not
-currently dead) and `Unavailable { message }` (storage failure). The expected
-eventual driver of this port is an operator/admin surface in roadmap section 6
-(and possibly 5.3.1 worker-side tooling); until then its only callers are
-behavioural tests, which is an accepted, documented gap — the 03:00 operator
-interface is SQL, and EP-M4's runbook provides it.
+`DeadLetterError` variants:
 
-Outbound adapter (new file
+- `NotDead { message }`: the guard failed, because the row is absent or not
+  currently dead.
+- `UnknownQueue { message }`: `requeue` found a dead row whose `job_type` has
+  no configured retry budget, so it refuses to guess one.
+- `Unavailable { message }`: a storage failure.
+
+The expected eventual driver of this port is an operator or admin surface in
+roadmap section 6 (and possibly 5.3.1 worker-side tooling). Until then its only
+callers are behavioural tests. This is an accepted, documented gap: the 03:00
+operator interface is SQL, and EP-M4's runbook provides it.
+
+Outbound dead-letter adapter (new file
 `backend/src/outbound/queue/postgres_dead_letter.rs`):
-`PostgresDeadLetterQueue` holding an `sqlx::PgPool`. The dead predicate is
-`status = 'Killed' OR (status = 'Failed' AND attempts >= max_attempts)`.
-`list_dead` orders by `done_at DESC` with `LIMIT`. `requeue` executes a guarded
-update — `SET status = 'Pending', attempts = 0, run_at = now()`,
-`WHERE id = $1 AND (<dead predicate>)` — and records provenance by prepending a
-bounded `requeued: N` marker to `last_result`; zero rows affected maps to
-`NotDead`. `discard` is a guarded `DELETE ... RETURNING`, logging the returned
-row (without payload) for forensics.
+`PostgresDeadLetterQueue` holds an `sqlx::PgPool` and a `RequeueBudgets` map
+from Apalis queue name (the `job_type` column) to `NonZeroU32`. It is built
+from the same per-queue `JobRetryPolicy` instances as the enqueue adapters (D7,
+D12).
 
-Outbound wiring (extend `backend/src/outbound/queue/`, for example
-`retry_layer.rs`):
+- The dead predicate is
+  `status = 'Killed' OR (status = 'Failed' AND attempts >= max_attempts)`.
+  `DeadReason` is `Exhausted` for `Killed` rows and `Fatal` for `Failed` rows.
+- `list_dead` orders by `done_at DESC` and applies `LIMIT`.
+- `requeue` reads the row's `job_type` to look up its budget (returning
+  `UnknownQueue` if none is configured), then executes one guarded update. The
+  update sets `status = 'Pending'`, `attempts = 0`, `max_attempts = $budget`,
+  `run_at = now()`, `lock_by = NULL`, and `lock_at = NULL`, with
+  `WHERE id = $1 AND job_type = $2 AND (<dead predicate>)`. It records
+  provenance by prepending a bounded `requeued: N` marker to `last_result`.
+  Zero rows affected maps to `NotDead`.
+- `discard` is a guarded `DELETE ... RETURNING`, logging the returned row
+  (without payload) for forensics.
 
-- A `tower::retry::Policy` implementation that delegates every decision to
-  `JobRetryPolicy::decide`/`backoff_delay` (the adapter draws the jitter
-  sample), so the domain policy is the executed policy. Tower's
-  `ExponentialBackoffMaker` is a fallback only; using it requires a
-  translation-verification obligation and a Decision-log entry.
-- Fatal enforcement: on `JobErrorKind::Fatal` the wiring both declines the
-  in-process retry and makes the row dead at the storage level (a guarded
-  `UPDATE apalis.jobs SET status = 'Killed'` through the adapter's pool, or
-  driving the shared attempt counter to `max_attempts` before ack if
-  AXIOM-ATTEMPT's probe shows that is reliable — settled in EP-M2 and recorded
-  in the Decision log). Returning `AbortError` is an optional strengthening if
-  usable at this rc; the classification predicate alone must be sufficient, so
-  obligation V5 does not depend on `AbortError`.
-- Enqueue-side persistence of the policy's `max_attempts` on the task
-  context. One `JobRetryPolicy` is carried per queue-adapter instance (that is,
-  per job family/queue), matching the architecture document's per-job-type
-  queue configuration; there is no global constant (Decision D7).
-- Per-attempt structured logging (job id, attempt number, error kind) — the
-  only attempt artefact that survives a worker crash — and retry and
-  dead-letter counters through the extended `RouteQueueMetrics` outcome
-  vocabulary.
+Outbound retry wiring (new files under `backend/src/outbound/queue/`, for
+example `retry_schedule.rs` for the SQL and `retrying_handler.rs` for the
+wrapper):
 
-The retry-layer factory will be a public item consumed, until 5.3.1, only by
-the integration-test harness; that public export is the deliberate 5.3.1 seam
-(handle per the `rust-unused-code` skill), and the harness's
-worker-construction function is the reference wiring 5.3.1 must promote into
-`backend/src/outbound/queue/` or record why it diverged.
+- `PostgresRetryScheduler` (holding the Apalis `PgPool`) exposes two guarded
+  statements, both
+  `WHERE id = $task_id AND lock_by = $worker AND status = 'Running'`:
+  - `schedule_retry(task_id, worker, delay)`:
+    `UPDATE apalis.jobs SET run_at = now() + $delay`.
+  - `mark_fatal(task_id, worker, attempt)`:
+    `UPDATE apalis.jobs SET max_attempts = $attempt`.
+  Each returns whether exactly one row was updated.
+- The handler wrapper is a `tower::Service<PgTask<Value>>` passed to
+  `WorkerBuilder::build`. A plain service is accepted through the blanket
+  `impl IntoWorkerService<B, S, Args, Ctx> for S` (`apalis-core`
+  `src/task_fn/mod.rs:239`). Because it receives the whole task, it reads
+  `parts.attempt`, `parts.task_id`, the in-memory `parts.ctx.max_attempts()`,
+  and the `WorkerContext` from `parts.data` without needing extractors. It
+  decodes the payload with `decode_job` (a decode failure is `Fatal`) and calls
+  the job-specific handler, which returns `Result<_, JobFailure>`. On
+  `Err(failure)` it:
+  1. Converts `Attempt::current()` into `NonZeroU32` (zero is a wiring bug:
+     log at `error` level and treat as attempt 1).
+  2. Calls `policy.decide(attempt, failure.kind, jitter)`, drawing the jitter
+     from `rand`.
+  3. On `Retry { delay }`: calls `schedule_retry` and records the retry
+     counter.
+  4. On `DeadLetter` with `attempt < context max_attempts` (a fatal error, or
+     a row persisted with a larger budget than the current policy): calls
+     `mark_fatal(attempt)` and records the dead-letter counter. The ack will
+     write `Failed` with `attempts = attempt = max_attempts`, which is
+     permanently unfetchable.
+  5. On `DeadLetter` with `attempt >= context max_attempts`: writes nothing
+     (the ack writes `Killed`) and records the dead-letter counter.
+  6. Emits one structured log line (job id, job type, attempt, error kind,
+     decision; never the payload), then returns the bounded failure message
+     as the error, so the ack persists it in `last_result`.
+- Enqueue side: `ApalisPostgresProvider::push_job` switches from
+  `push(payload)` to `push_task` with a `PgContext` built via
+  `with_max_attempts(policy.max_attempts())`. One `JobRetryPolicy` is carried
+  per queue-adapter instance (that is, per job family or queue), matching the
+  architecture document's per-job-type queue configuration. There is no global
+  constant (Decision D7).
+- Metrics: dedicated `RouteQueueMetrics` methods (Decision D8):
+  - `observe_retry`, labelled `scheduled` or `schedule_failure`.
+  - `observe_dead_letter`, labelled `exhausted` or `fatal`.
 
-Production dependency addition:
+The wrapper factory and `PostgresRetryScheduler` are public items consumed,
+until 5.3.1, only by the integration-test harness. That public export is the
+deliberate 5.3.1 seam (handle it per the `rust-unused-code` skill). The
+harness's worker-construction function (storage + wrapper, no retry layer) is
+the reference wiring 5.3.1 must promote into `backend/src/outbound/queue/` or
+record why it diverged.
+
+Dependency changes (EP-M0 and EP-M1):
 
 ```toml
-apalis = { version = "1.0.0-rc.7", default-features = false, features = ["retry"] }
-```
+# backend/Cargo.toml — exact pins (Decision D10); no other production change.
+apalis-core = "=1.0.0-rc.9"
+apalis-postgres = "=1.0.0-rc.8"
 
-Dev-dependency addition: `googletest = "0.13"` (or current compatible release)
-for matcher-based assertions alongside `pretty_assertions`.
+# [dev-dependencies]
+googletest = "0.13" # or the current compatible release
+```
 
 ## Verification plan
 
-External axioms: AXIOM-FACADE, AXIOM-ATTEMPT, and AXIOM-ACK as defined in
-"Context and orientation", plus: tower's retry machinery drives `Policy`
-implementations per its documentation, and embedded PostgreSQL behaves like
-production PostgreSQL for the SQL used. Third-party internals are not verified;
-repository-owned logic that builds on these interfaces is verified against the
-real interface (embedded PostgreSQL, real Apalis storage) at the behavioural
-tier, and the rc-coupling canaries (V8) turn silent upstream drift into test
-failures.
+External axioms: AXIOM-PIN, AXIOM-DURABLE, and AXIOM-ACK, as defined in
+"Context and orientation". In addition, embedded PostgreSQL is assumed to
+behave like production PostgreSQL for the SQL used. Third-party internals are
+not verified. Repository-owned logic that builds on these interfaces is
+verified against the real interface (embedded PostgreSQL, real Apalis storage
+and worker) at the behavioural tier, and the rc-coupling canaries (V8) turn
+silent upstream drift into test failures.
 
 Obligations:
 
 - Obligation V1 (backoff bounded above and below): for every attempt `a`
   in `1..=max_attempts` and jitter sample `j`,
-  `nominal(a) * (1 - jitter_fraction) <= backoff_delay(a, j) <=
-  min(nominal(a), max_delay) * (1 + jitter_fraction)`
-  where `nominal(a)` is the capped exponential curve. The lower bound is
+  `min(nominal(a), max_delay) * (1 - jitter_fraction) <= backoff_delay(a, j) <=
+  min(nominal(a), max_delay) * (1 + jitter_fraction)`,
+  where `nominal(a)` is the uncapped exponential curve. The lower bound is
   material: `>= 0` alone would be vacuous for an unsigned `Duration`. Method:
   property test (`proptest`) over generated policies, attempts, and jitter
-  samples. Rationale: the invariant spans a continuous input domain; examples
-  cannot cover it. Artefact:
-  `backend/src/domain/jobs/retry/tests/properties.rs` (or inline `tests`
-  module, matching house layout). Evidence: `cargo test -p backend retry` —
-  fails before implementation (red), passes after. Non-vacuity: generators emit
+  samples. Rationale: the invariant spans a continuous input domain that
+  examples cannot cover. Artefact:
+  `backend/src/domain/jobs/retry/tests/properties.rs` (or an inline `tests`
+  module, matching house layout). Evidence: `cargo test -p backend retry` fails
+  before implementation (red) and passes after. Non-vacuity: generators emit
   policies across base delays from 1 ms to minutes, multipliers 1.0–10.0, and
   jitter 0.0–1.0; a seeded fault (temporarily removing the cap clamp) must make
   the property fail.
-- Obligation V1b (total budget bounded): construction fails whenever the
-  worst-case total in-process backoff exceeds `TOTAL_BACKOFF_BUDGET`, and for
-  every successfully constructed policy the property
-  `sum(backoff_delay(a, max_jitter)) <= TOTAL_BACKOFF_BUDGET` holds. Method:
-  property test over generated configurations, plus parameterized boundary
-  cases just under and just over the budget. Non-vacuity: the generator must
-  produce both accepted and rejected configurations (classification recorded);
-  weakening the constructor check must fail the over-budget cases.
+- Obligation V1b (delay ceiling): construction fails whenever
+  `max_delay * (1 + jitter_fraction)` exceeds `MAX_BACKOFF_DELAY`, and for
+  every successfully constructed policy,
+  `backoff_delay(a, j) <= MAX_BACKOFF_DELAY` for all `a` and `j`. Method:
+  property test plus parameterized boundary cases just under and just over the
+  ceiling. Non-vacuity: the generator must produce both accepted and rejected
+  configurations (classification recorded), and weakening the constructor check
+  must fail the over-ceiling cases.
 - Obligation V2 (monotone growth pre-cap): with jitter fixed at the
   midpoint, `backoff_delay(a+1) >= backoff_delay(a)` until the cap is reached.
-  Method: property test plus parameterized `rstest` cases at the boundary
-  (attempt where the cap first binds). Non-vacuity: generator classification
-  records the fraction of cases where the cap binds; both classes (capped,
-  uncapped) must be exercised; negative control: inverting the multiplier must
-  fail the property.
+  Method: property test plus parameterized `rstest` cases at the boundary (the
+  attempt where the cap first binds). Non-vacuity: generator classification
+  records the fraction of cases where the cap binds, and both classes (capped
+  and uncapped) must be exercised. As a negative control, inverting the
+  multiplier must fail the property.
 - Obligation V3 (decision totality and bounds): `decide` returns
   `DeadLetter` whenever `kind == Fatal` or `attempt >= max_attempts`, and
   `Retry` otherwise; no path yields a retry beyond `max_attempts`. Method:
   exhaustive parameterized tests over the finite classification
-  (`Fatal`/`Retryable` × attempt below/at/above the bound) plus a property test
-  over attempt ranges. `googletest` matchers for the decision shape,
-  `pretty_assertions` for equality. Rationale: the decision function is a small
-  finite state map; exhaustive partitioning plus properties is proportionate.
-  No bounded model checking (`kani`) or proof (`verus`) is warranted: the logic
-  has no unsafe code, no unbounded state, and no lemma beyond the enumerated
-  partitions — this is recorded as the explicit justification required when
-  declining heavier rigour. Non-vacuity: each partition has a witness case; a
-  seeded off-by-one fault in the bound comparison must be rejected.
-- Obligation V3b (attempt-counter alignment): the adapter maps the
-  domain's 1-based attempt numbering onto Apalis's attempt counter such that
-  the final ack sees `attempt >= max_attempts` exactly when the domain policy
-  has decided `DeadLetter` on exhaustion. Method: parameterized adapter unit
-  test over the mapping at the boundaries (first attempt, last attempt, one
-  past). Rationale: an off-by-one here silently grants or steals an attempt and
-  no other obligation would localize it. Non-vacuity: shifting the mapping by
-  one in either direction must fail the test.
-- Obligation V4 (persisted retry bound, single lease): a job enqueued
+  (`Fatal`/`Retryable` × attempt below, at, and above the bound) plus a
+  property test over attempt ranges, using `googletest` matchers for the
+  decision shape and `pretty_assertions` for equality. Rationale: the decision
+  function is a small finite state map, so exhaustive partitioning plus
+  properties is proportionate. No bounded model checking (`kani`) or proof
+  (`verus`) is warranted: the logic has no unsafe code, no unbounded state, and
+  no lemma beyond the enumerated partitions. This is the explicit justification
+  required when declining heavier rigour. Non-vacuity: each partition has a
+  witness case, and a seeded off-by-one fault in the bound comparison must be
+  rejected.
+- Obligation V3b (wrapper decision table): the handler wrapper maps every
+  combination of (classification, `Attempt::current()` relative to the policy
+  bound, `Attempt::current()` relative to the in-memory context `max_attempts`)
+  to exactly one action: `schedule_retry`, `mark_fatal`, or no write. It also
+  records the matching metric label. Method: `rstest` parameterized unit tests
+  of the wrapper's decision function (factored out as a pure adapter-local
+  function), with the scheduler behind a test double. Rationale: an off-by-one
+  here silently grants or steals an attempt or leaves a fatal row re-fetchable,
+  and no other obligation localizes it. Non-vacuity: shifting either comparison
+  by one must fail at least one case.
+- Obligation V4 (lifetime retry bound with durable backoff): a job enqueued
   through the adapter carries the policy's `max_attempts` in
-  `apalis.jobs.max_attempts`, and a handler that always fails retryably is
-  executed exactly `max_attempts` times in total across all storage fetches
-  within one worker lease, after which the row is dead (per the dead predicate)
-  and is never re-delivered by further polling. The per-lease scoping is
-  deliberate: a worker crash resets in-process history (documented per-lease
-  semantics), and this obligation does not claim otherwise. Method: behavioural
-  test (`rstest-bdd`) against embedded PostgreSQL with the capped test harness;
-  assertions on the handler's observed run count, the row's `attempts` and
-  `status` columns, and on continued polling delivering nothing. Non-vacuity:
-  the scenario asserts the handler ran more than once (a policy that never
-  retries fails) and that extra polling after death yields no further runs (a
-  multiplied two-loop budget fails); a control scenario with a succeeding
-  handler must end `Done` with one attempt.
+  `apalis.jobs.max_attempts`. A handler that always fails retryably runs exactly
+  `max_attempts` times in total across storage redeliveries, after which the
+  row is `Killed` with `attempts = max_attempts` and is never redelivered by
+  further polling. Each redelivery begins no earlier than the `run_at` that the
+  previous failure persisted (an ordering between recorded timestamps, not a
+  magnitude). Method: behavioural test (`rstest-bdd`) against embedded
+  PostgreSQL with the capped harness, asserting the observed run count, per-run
+  `Attempt::current()` values (1, 2, …), the row's `attempts` and `status`, the
+  `run_at` ordering, and that continued polling delivers nothing. Non-vacuity:
+  the scenario asserts that the handler ran more than once (a policy that never
+  retries fails) and that extra polling after death yields no runs (an
+  unbounded loop fails). A control scenario with a succeeding handler must end
+  `Done` with one attempt.
 - Obligation V5 (fatal short-circuit is storage-dead): a handler returning
-  a fatal error runs exactly once, and the resulting row satisfies the dead
-  predicate and is never re-delivered by continued polling — not merely "the
-  harness stopped polling". Method: behavioural test as V4 with a
-  fatal-classified failure, including a post-failure polling phase.
-  Non-vacuity: misclassifying fatal as retryable fails the run-count assertion;
-  omitting the storage-level kill fails the re-delivery assertion (the storage
-  fetcher would re-deliver a `Failed` row with spare attempts).
-- Obligation V6 (dead-letter round trip and guards): a dead job appears in
-  `DeadLetterQueue::list_dead` with its attempt count, bounded last error, and
-  requeue count; `requeue` makes it run again and succeed (proven by observing
-  execution, not a status flip) and increments its provenance count; `discard`
-  removes it; requeuing a live or absent job returns `NotDead` and changes
-  nothing; listing ignores live jobs. Method: behavioural test (`rstest-bdd`)
-  with embedded PostgreSQL. Non-vacuity: listing before any failure must be
-  empty (witness that the query filters live jobs); the guard scenarios are
-  negative controls by construction.
+  a fatal failure runs exactly once. The resulting row is `Failed` with
+  `attempts >= max_attempts`, satisfies the dead predicate, and is never
+  redelivered by continued polling, which is a stronger claim than "the harness
+  stopped polling". Method: behavioural test as V4 with a fatal-classified
+  failure, including a post-failure polling phase. Non-vacuity: misclassifying
+  fatal as retryable fails the run-count assertion, and removing `mark_fatal`
+  fails the redelivery assertion.
+- Obligation V6 (dead-letter round trip, guards, and budget restoration): a
+  dead job appears in `DeadLetterQueue::list_dead` with its reason, attempt
+  count, bounded last error, and requeue count. `requeue` makes it run again
+  and succeed (proven by observing execution, not a status flip), increments
+  its provenance count, and restores `max_attempts` to the queue's configured
+  budget. A requeued *fatal* job that then fails retryably must get the full
+  budget again. `discard` removes the row. Requeuing a live or absent job
+  returns `NotDead` and changes nothing, and requeuing a dead row from an
+  unconfigured queue returns `UnknownQueue`. Listing ignores live jobs. Method:
+  behavioural test (`rstest-bdd`) with embedded PostgreSQL. Non-vacuity:
+  listing before any failure must be empty (a witness that the query filters
+  live jobs), the guard scenarios are negative controls by construction, and
+  omitting the `max_attempts` restoration fails the requeued-fatal scenario.
 - Obligation V7 (snapshot stability): V1 job envelope snapshots from 5.2.2
-  are byte-identical after this plan; any new operator-facing rendering of dead
-  jobs is snapshot-pinned with `insta`. Method: existing `insta` suites re-run;
-  new snapshots only for new multivariant output. Non-vacuity:
-  `cargo insta test` fails on any drift by construction.
-- Obligation V8 (rc-coupling canaries): the `apalis.jobs` columns, status
-  literals, fetch-eligibility predicate behaviour, and ack semantics this
-  plan's SQL depends on exist and behave as assumed at the pinned versions.
-  Method: cheap embedded-PostgreSQL integration tests that set up Apalis
-  storage and assert the schema facts directly (column presence, a
-  `Failed`-with-spare-attempts row is fetchable, a `Killed` row is not).
-  Rationale: a future pin bump must fail tests rather than silently corrupt
-  retry or dead-letter behaviour; ADR-002/ADR-003 list these assumptions with
-  an "on 1.0-final upgrade, re-verify" note. Non-vacuity: each canary asserts a
-  positive and a negative case (for example, fetchable versus not-fetchable),
-  so a vacuously green canary requires both sides to break in tandem.
+  are byte-identical after this plan, and any new operator-facing rendering of
+  dead jobs is snapshot-pinned with `insta`. Method: re-run the existing
+  `insta` suites, and add new snapshots only for new multivariant output.
+  Non-vacuity: `cargo insta test` fails on any drift by construction.
+- Obligation V8 (rc-coupling canaries): the facts behind AXIOM-DURABLE and
+  AXIOM-ACK hold at the pinned versions. Specifically: the `apalis.jobs`
+  columns used exist; a `Failed` row with spare attempts and a past `run_at` is
+  fetched; the same row with a future `run_at` is not; a `Killed` row and a
+  `Failed` row with `attempts >= max_attempts` are not; the ack leaves `run_at`
+  and `max_attempts` untouched; and a fetched task's `Attempt` starts at the
+  persisted `attempts`. Method: cheap embedded-PostgreSQL integration tests
+  that promote EP-M0's probe assertions into permanent tests. Rationale: issue
+  #550 or any other pin change must fail tests rather than silently corrupt
+  retry or dead-letter behaviour, and ADR-002 and ADR-003 list these
+  assumptions with an "on 1.0 upgrade, re-verify" note. Non-vacuity: each
+  canary asserts a positive and a negative case (fetchable versus not
+  fetchable), so a vacuously green canary would require both sides to break in
+  tandem.
+- Obligation V9 (no in-process retry middleware): no production or test
+  code installs a retry layer on an Apalis worker, and `backend/Cargo.toml` has
+  no `apalis` facade dependency. Method: a conformance check recorded at each
+  milestone boundary, `rg -n '\.retry\(|RetryLayer|apalis::layers' backend/`
+  returning no matches and `grep -n '^apalis\s*=' backend/Cargo.toml` returning
+  nothing, plus the V4 run-count assertion, which a duplicating retry layer
+  would break. Non-vacuity: the check is a plain text search, so any
+  reintroduction is visible to it.
 
 If implementation reveals an invariant not listed here (for example, an
 ordering constraint between requeue and concurrent fetch beyond the
@@ -688,105 +803,109 @@ guarded-update design), return to this section and extend it before continuing.
 
 ## Plan of work
 
-### Milestone EP-M0 — approval, baseline audit, and compile probe
+### Milestone EP-M0 — pin, baseline audit, and runtime probe
 
-Confirm plan approval. Run `scrutineer` for a baseline gate run on the
-untouched branch and record results in `Progress` (known issue: local Whitaker
-lint suite may be ahead of CI's pin; record, do not chase).
+The user approved D10 and D11 on 2026-10-17. Steps:
 
-Then run the compile probe as an explicit step, not a side note: add the
-`apalis` facade dependency in a scratch commit (or a temporary test), and
-confirm AXIOM-FACADE (facade rc.7 composes with `apalis-postgres` rc.6: a
-worker builder with `.retry(...)` over `PostgresStorage` type-checks) and
-AXIOM-ATTEMPT (inspect the facade retry layer's source or a minimal runtime
-probe to confirm the shared `Attempt` is incremented per in-process retry).
-Record findings in `Surprises & discoveries`. If either axiom fails, stop and
-escalate before any milestone work.
+1. Run `scrutineer` for a baseline gate run on the branch as it stands, and
+   record the results in `Progress`. Known issue: an orphaned postmaster can
+   hold the shared embedded-PostgreSQL lock and make local `make test` time
+   out; record it if it occurs, rather than chasing it.
+2. Pin `apalis-core = "=1.0.0-rc.9"` and `apalis-postgres = "=1.0.0-rc.8"`
+   in `backend/Cargo.toml`. These are the versions already in `Cargo.lock`, so
+   no code change is expected. Run
+   `cargo tree -p backend -e normal | grep -E 'apalis-(core|postgres|sql)'` and
+   confirm only rc.9/rc.8/rc.9 appear (AXIOM-PIN). Update the "Queue / Apalis
+   dependencies" note in `docs/developers-guide.md` with one sentence on the
+   exact-pin policy and a link to issue #550. Run gates and commit.
+3. Run the AXIOM-DURABLE runtime probe as a scratch integration test against
+   embedded PostgreSQL. Build a `WorkerBuilder` over `PostgresStorage` with a
+   short poll interval and no retry layer. Enqueue one job with
+   `max_attempts = 2` and attach a handler that records each invocation's
+   `Attempt::current()`. On the first invocation, before returning `Err`, the
+   handler runs the guarded
+   `UPDATE apalis.jobs SET run_at = now() + interval '2 seconds'` (with `id`,
+   `lock_by`, and `status = 'Running'` guards). Predictions, each of which
+   falsifies the axiom if it fails:
+   1. The handler sees `Attempt::current() == 1` on the first run and `== 2`
+      on the redelivered run.
+   2. No poll fetches the row during the 2-second window (no second
+      invocation within 1.5 seconds).
+   3. The row is redelivered after the delay.
+   4. The second failure persists `status = 'Killed'` and `attempts = 2`, and
+      no third invocation occurs within a further 3 seconds.
+   5. In a second job (`max_attempts = 3`), a first-run failure that runs the
+      guarded `UPDATE ... SET max_attempts = 1` persists `status = 'Failed'`,
+      `attempts = 1`, and `max_attempts = 1`, and the row is never redelivered.
 
-Current M0 stop condition (review of 2026-10-14): execution remains paused
-before EP-M1. The proposed policy-owned `Attempt` increment is rejected
-(Decision D9) because it would count each retry twice. Two revisions await the
-user's ruling: D10 (pin Apalis exactly) and D11 (durable `run_at` backoff in
-place of the in-process tower retry layer). If both are approved, the remaining
-EP-M0 work is:
+   The probe may use wall-clock waits because it is a scratch experiment, not a
+   committed test. Record the verdict, with evidence, in
+   `Surprises & discoveries`, then drop the scratch test (EP-M2 re-creates the
+   assertions as V8 canaries without timing magnitudes). If any prediction
+   fails, stop and escalate per the upstream-surprises tolerance.
 
-1. Pin `apalis-core = "=1.0.0-rc.9"` and `apalis-postgres = "=1.0.0-rc.8"`
-   (the versions already in `Cargo.lock`, so no code change is expected).
-   Confirm that `cargo tree -p backend | grep apalis` shows exactly those two
-   versions, run the baseline gates, and commit.
-2. Run the AXIOM-DURABLE runtime probe as a scratch test against embedded
-   PostgreSQL: a `WorkerBuilder` over `PostgresStorage` with no retry layer,
-   and a handler wrapper that fails retryably and, before returning `Err`, runs
-   the guarded `run_at` update from D11 with a 2-second delay. Predictions,
-   each of which falsifies the axiom if it fails: (a) the handler sees
-   `Attempt::current() == 1` on the first run and `== 2` on the redelivered
-   run; (b) for that 2-second window, no poll fetches the row (no second
-   invocation within 1.5 s); (c) the row is redelivered after the delay; (d)
-   with `max_attempts = 2`, the second failure persists `status = 'Killed'` and
-   `attempts = 2`, and no third invocation occurs within a further 3 s; (e) a
-   fatal failure that sets `max_attempts = attempts` before returning persists
-   `status = 'Failed'` with `attempts >= max_attempts`, and the row is never
-   redelivered. Record the verdict in `Surprises & discoveries`, then drop the
-   scratch test.
-
-AXIOM-FACADE no longer applies if D11 is approved, because the facade crate is
-not needed.
-
-Plateau: clean tree, recorded baseline, axioms confirmed or escalated.
-Recovery: drop the scratch commit.
+Plateau: exact pins committed, baseline recorded, and AXIOM-PIN, AXIOM-DURABLE,
+and AXIOM-ACK confirmed (or escalated). Recovery: revert the pin commit, or
+drop the scratch test.
 
 ### Milestone EP-M1 — domain retry policy and classification (red-green)
 
 Red: add failing `rstest` unit tests, `googletest`/`pretty_assertions`
 assertions, and `proptest` properties for `JobRetryPolicy`, `RetryDecision`,
-`JobErrorKind`, and `JitterSample` (obligations V1, V1b, V2, V3). Add
-`googletest` to `[dev-dependencies]`.
+`JobErrorKind`, `JobFailure`, and `JitterSample` (obligations V1, V1b, V2, V3).
+Add `googletest` to `[dev-dependencies]`.
 
-Green: implement `backend/src/domain/jobs/retry.rs` (pure; no adapter imports).
-Constructor validation per the interface section, including the
-`TOTAL_BACKOFF_BUDGET` check. Add the
-`From<&EnrichmentSourceError> for JobErrorKind` bridge. Update the
-`backend/src/domain/jobs/mod.rs` module documentation to cover policy as well
-as payloads.
+Green: implement `backend/src/domain/jobs/retry.rs` (pure; no adapter imports)
+with constructor validation per the interface section, including the
+`MAX_BACKOFF_DELAY` check. Add the
+`From<&EnrichmentSourceError> for JobErrorKind` bridge, and give `JobFailure` a
+size-bounded message constructor. Update the `backend/src/domain/jobs/mod.rs`
+module documentation to cover policy as well as payloads.
 
-Refactor: documentation comments with examples per house style; keep files
-under 400 lines.
+Refactor: add documentation comments with examples per house style, and keep
+files under 400 lines.
 
-Plateau: domain policy fully tested and inert (nothing consumes it yet —
-coherent because it is a pure library addition). Gates via `scrutineer`; commit.
+Plateau: domain policy fully tested and inert. Nothing consumes it yet, which
+is coherent because it is a pure library addition. Gates via `scrutineer`;
+commit.
 
-### Milestone EP-M2 — Apalis retry wiring, bounded attempts, fatal kill
+### Milestone EP-M2 — durable retry wiring, bounded attempts, fatal dead-lettering
 
 Red: add the BDD feature `backend/tests/features/queue_retry_policy.feature`
 (embedded below) and step bindings in
-`backend/tests/queue_retry_policy_bdd.rs`; add the test-only consumption
-harness under `backend/tests/support/` (worker built from the facade retry
-layer + storage, driven with hard iteration and deadline caps). Add the V8
-rc-canary tests and the V3b attempt-mapping unit tests. Scenarios fail because
-no wiring exists.
+`backend/tests/queue_retry_policy_bdd.rs`. Add the test-only consumption
+harness under `backend/tests/support/`: a worker built from `PostgresStorage`
+and the production handler wrapper, with no retry layer, a short poll interval,
+and hard iteration and deadline caps. Add the V8 canaries (promoting the EP-M0
+probe assertions, with no timing magnitudes) and the V3b decision-table unit
+tests. The scenarios fail because no wiring exists.
 
-Green: add the `apalis` facade dependency (feature `retry`); implement the
-custom `tower::retry::Policy` delegating to the domain policy; enqueue-side
-`max_attempts` persistence; fatal enforcement (settle the mechanism — guarded
-storage-level kill versus attempt-counter drive — per the AXIOM-ATTEMPT probe
-results, and record it in the Decision log; the `retry_if`-style classification
-must suffice without `AbortError`); per-attempt structured logging; retry and
-dead-letter counters through dedicated `RouteQueueMetrics` methods, keeping
-`observe_enqueue` and its latency labels restricted to enqueue outcomes.
+Green, in this order:
+
+1. `PostgresRetryScheduler` with the two guarded statements.
+2. The wrapper's pure decision function (V3b) and the async wrapper around it,
+   including jitter sampling, payload-free structured logging, and the bounded
+   error message returned to the ack.
+3. Enqueue-side `max_attempts` persistence through `push_task` with a
+   `PgContext` built from the adapter's policy (D7).
+4. `observe_retry` and `observe_dead_letter` on `RouteQueueMetrics`, with
+   Prometheus adapter counters, keeping `observe_enqueue` and its latency
+   labels restricted to enqueue outcomes (D8).
 
 Refactor: shape the harness's worker-construction function as the named 5.3.1
-promotion candidate.
+promotion candidate, and run the V9 conformance check.
 
-Feature specification (kept in sync with the implementation):
+Feature specification (keep it in sync with the implementation):
 
 ```gherkin
-Feature: Queue retry policy with exponential backoff
+Feature: Queue retry policy with durable exponential backoff
 
   Scenario: A transiently failing job is retried with backoff then succeeds
     Given a queue with a retry policy of 4 attempts and millisecond backoff
     And a job whose handler fails twice then succeeds
     When the worker processes the queue
-    Then the handler runs three times
+    Then the handler runs three times with attempts 1, 2 and 3
+    And each rerun starts no earlier than the retry time its failure scheduled
     And the job completes with status "Done"
 
   Scenario: A persistently failing job exhausts its attempts and is dead-lettered
@@ -794,7 +913,7 @@ Feature: Queue retry policy with exponential backoff
     And a job whose handler always fails with a retryable error
     When the worker processes the queue
     Then the handler runs exactly three times in total
-    And the job is recorded as dead
+    And the job is recorded as dead because its retries were exhausted
     And further polling delivers no more runs
 
   Scenario: A fatally failing job is dead-lettered immediately
@@ -802,27 +921,42 @@ Feature: Queue retry policy with exponential backoff
     And a job whose handler fails with a fatal error
     When the worker processes the queue
     Then the handler runs once
-    And the job is recorded as dead
+    And the job is recorded as dead because of a fatal error
     And further polling delivers no more runs
+
+  Scenario: An enqueued job carries the queue's retry budget
+    Given a queue with a retry policy of 5 attempts
+    When a job is enqueued through the route queue adapter
+    Then the stored job allows at most 5 attempts
 ```
 
-Plateau: retry policy enforced end to end under test; production behaviour
-unchanged except enqueued rows now carry the bounded `max_attempts`
-(persisted-format note: this only tightens the existing column's per-row value;
-deployed rows with the default 25 remain valid). Gates; commit.
+Plateau: the retry policy is enforced end to end under test. Production
+behaviour is unchanged except that enqueued rows now carry the bounded
+`max_attempts`. Persisted-format note: this only tightens the existing column's
+per-row value, and deployed rows with the default 25 remain valid; the wrapper's
+`mark_fatal` path also dead-letters such rows once the policy bound is
+reached. Gates; commit.
 
 ### Milestone EP-M3 — dead-letter port and PostgreSQL adapter
 
 Red: add `backend/tests/features/queue_dead_letter.feature` (embedded below)
-and step bindings in `backend/tests/queue_dead_letter_bdd.rs`; add failing unit
-tests for `DeadJobId`, the port error type, and the guard semantics.
+and step bindings in `backend/tests/queue_dead_letter_bdd.rs`. Add failing unit
+tests for `DeadJobId`, `DeadReason` mapping, the port error type, and the guard
+semantics.
 
-Green: define the `DeadLetterQueue` port; implement `PostgresDeadLetterQueue`
-with the guarded compare-and-swap updates, requeue provenance,
-discard-as-delete (Decision D5), ordered and limited listing, and size-bounded,
-payload-free `last_error`. Run the `EXPLAIN` check against a seeded table (a
-few thousand rows) and create the partial index through the adapter setup path
-only if a sequential scan appears (Decision D6); record the outcome either way.
+Green: define the `DeadLetterQueue` port, then implement
+`PostgresDeadLetterQueue` with:
+
+- the guarded compare-and-swap updates;
+- budget restoration from `RequeueBudgets` (D12);
+- requeue provenance;
+- discard-as-delete (D5);
+- ordered and limited listing;
+- a size-bounded, payload-free `last_error`.
+
+Run the `EXPLAIN` check against a seeded table (a few thousand rows). Create
+the partial index through the adapter setup path only if a sequential scan
+appears (D6), and record the outcome either way.
 
 Feature specification:
 
@@ -832,7 +966,7 @@ Feature: Dead-letter listing, requeue, and discard
   Scenario: Dead jobs are listed with their failure context
     Given a job has been dead-lettered after exhausting its retries
     When the operator lists dead jobs
-    Then the listing contains the job with its attempt count and last error
+    Then the listing contains the job with its reason, attempt count and last error
 
   Scenario: A requeued dead job runs again and can succeed
     Given a job has been dead-lettered after exhausting its retries
@@ -841,6 +975,14 @@ Feature: Dead-letter listing, requeue, and discard
     And the worker processes the queue
     Then the job completes with status "Done"
     And the listing records one prior requeue for that job
+
+  Scenario: A requeued fatal job regains its full retry budget
+    Given a job has been dead-lettered by a fatal error
+    And the job now fails with a retryable error
+    When the operator requeues the dead job
+    And the worker processes the queue
+    Then the handler runs the queue's full number of attempts
+    And the job is recorded as dead because its retries were exhausted
 
   Scenario: Requeuing a live job is rejected
     Given a pending job exists
@@ -860,79 +1002,106 @@ Feature: Dead-letter listing, requeue, and discard
     Then the listing is empty
 ```
 
-Plateau: dead-letter handling usable by future operators/workers through a
-domain port. Gates; commit.
+Plateau: dead-letter handling is usable by future operators and workers through
+a domain port. Gates; commit.
 
 ### Milestone EP-M4 — documentation, ADRs, runbook, roadmap closure
 
 Write ADR-002 and ADR-003 (named under "Conformance basis") per the style-guide
-template and the `arch-decision-records` skill, recording decisions D1–D7, the
-rc-coupled assumptions with their "on 1.0-final upgrade, re-verify" note, and a
-short pin-bump rehearsal subsection naming the V8 canaries and the decisions to
-re-read when Apalis 1.0 final lands.
+template and the `arch-decision-records` skill. ADR-002 records D10, D11, D13,
+and D14, including the 2026-10-14 race evidence that ruled out in-process retry
+at the rc pins. ADR-003 records D3–D6 and D12. Both list the rc-coupled
+assumptions with an "on 1.0 upgrade (#550), re-verify" note naming the V8
+canaries.
 
 Update `docs/wildside-backend-architecture.md` ("Background Job Execution")
-from aspiration to implemented reality, including the per-lease attempt
-semantics and the backoff-budget/orphan-recovery inequality 5.3.1 must respect.
-Update `docs/developers-guide.md` ("Apalis queue adapter boundaries" and
-test-infrastructure sections) with the new symbols, dependency, conventions,
-and an operator runbook section: the SQL to list dead jobs, requeue one,
-discard one, and detect the crash-loop signature (rows repeatedly returning to
-`Pending`/`Running` with stale `attempts`), plus a note naming the roadmap item
-expected to deliver a proper operator surface. Register both ADRs in
-`docs/contents.md`. `docs/users-guide.md` is expected to need no change (queue
-internals are not client-visible); confirm and record in the Decision log.
-Propose a roadmap note for row retention/pruning ownership under section 6.
-Mark roadmap item 5.2.3 done with an execution note. Full gates via
-`scrutineer` including Markdown lint and Mermaid validation; commit; open the
-implementation pull request.
+from aspiration to implemented reality, covering:
 
-Plateau: feature complete, documented, roadmap closed.
+- durable `run_at` scheduling;
+- lifetime attempt semantics, with the single in-flight-attempt crash
+  exception;
+- the fact that backoff no longer occupies worker slots;
+- the poll-interval precision floor;
+- the reminder that 5.3.1 must not install a retry layer at the rc pins.
+
+Update `docs/developers-guide.md` ("Apalis queue adapter boundaries" and the
+test-infrastructure sections) with the new symbols, the exact-pin convention,
+and the no-retry-layer rule. Add an operator runbook section with the SQL to:
+
+- list dead jobs;
+- requeue one, restoring `max_attempts`;
+- discard one;
+- detect the crash-loop signature (rows repeatedly returning to
+  `Pending`/`Running` with stale `attempts`).
+
+The runbook should also name the roadmap item expected to deliver a proper
+operator surface.
+
+Register both ADRs in `docs/contents.md`. `docs/users-guide.md` is expected to
+need no change, because queue internals are not client-visible; confirm this
+and record it in the Decision log. Propose a roadmap note for row retention and
+pruning ownership under section 6. Mark roadmap item 5.2.3 done with an
+execution note. Run the full gates via `scrutineer`, including Markdown lint
+and Mermaid validation; commit; and open the implementation pull request.
+
+Plateau: feature complete, documented, and the roadmap item closed.
 
 ## Milestones and plateaus — conformance checks
 
-At each milestone boundary check: ROAD-5-PORTS holds (no adapter imports in
-`backend/src/domain/`); ARCH-JOBS scope split intact (no production worker
-loop, no orphan-recovery configuration); no unapproved dependency, public
-interface, or persisted-format change beyond the `max_attempts` tightening and
-(if triggered) the D6 partial index named in this plan; V1 envelope snapshots
-unchanged; trace links in `Conformance basis` current.
+At each milestone boundary, check that:
+
+- ROAD-5-PORTS holds (no adapter imports in `backend/src/domain/`);
+- the ARCH-JOBS scope split is intact (no production worker loop and no
+  orphan-recovery configuration);
+- V9 holds (no retry layer and no `apalis` facade dependency);
+- AXIOM-PIN holds (`cargo tree` shows only the pinned Apalis versions);
+- there is no unapproved dependency, public-interface, or persisted-format
+  change beyond the `max_attempts` tightening, the guarded scheduling writes,
+  and (if triggered) the D6 partial index named in this plan;
+- the V1 envelope snapshots are unchanged;
+- the trace links in `Conformance basis` are current.
 
 Compatibility decision: none required. All touched APIs are pre-1.0,
-application-internal surfaces; no aliases, shims, or dual implementations are
-permitted. The persisted-format question is confined to
-`apalis.jobs.max_attempts` (an existing column whose per-row value this plan
-sets explicitly; deployed rows with the default 25 remain valid) and the
-optional additive partial index (D6).
+application-internal surfaces, and no aliases, shims, or dual implementations
+are permitted. The persisted-format question is confined to `apalis.jobs`
+values that this plan writes through existing columns (`max_attempts`,
+`run_at`, and the requeue reset) and to the optional additive partial index
+(D6).
 
 ## Concrete steps
 
-Work from the repository root. Representative commands (implementers adjust
-test names as they land):
+Work from the repository root. Representative commands (adjust test names as
+they land):
 
 ```bash
 git branch --show-current   # expect 5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling
+cargo tree -p backend -e normal | grep -E 'apalis-(core|postgres|sql)'
 cargo test -p backend retry 2>&1 | tee /tmp/test-wildside-$(git branch --show-current).out
 cargo test -p backend --test queue_retry_policy_bdd 2>&1 | tee /tmp/bdd-wildside-$(git branch --show-current).out
 cargo test -p backend --test queue_dead_letter_bdd 2>&1 | tee /tmp/dlq-wildside-$(git branch --show-current).out
+rg -n '\.retry\(|RetryLayer|apalis::layers' backend/ ; grep -n '^apalis\s*=' backend/Cargo.toml
 ```
 
-Full gates (delegated to `scrutineer`, sequential): `make check-fmt`,
-`make typecheck`, `make lint`, `make test`, plus `make markdownlint` and
-`make nixie` for documentation milestones.
+Full gates (delegated to `scrutineer` and run sequentially) are
+`make check-fmt`, `make typecheck`, `make lint`, and `make test`, plus
+`make markdownlint` and `make nixie` for documentation milestones.
 
 ## Validation and acceptance
 
-Red-Green-Refactor evidence to record per milestone: the red command and its
+Record Red-Green-Refactor evidence per milestone: the red command and its
 expected failure (missing symbol or failing scenario), the green command
-passing, and the refactor re-run. BDD scenarios above are the acceptance
-behaviour; unit and property tests discharge V1–V3b; behavioural tests
-discharge V4–V6 and V8; `insta` re-runs discharge V7.
+passing, and the refactor re-run. The BDD scenarios above are the acceptance
+behaviour. Unit and property tests discharge V1–V3b, behavioural tests
+discharge V4–V6 and V8, `insta` re-runs discharge V7, and the boundary
+conformance check discharges V9.
 
-Quality criteria: all four Makefile gates pass; obligations V1–V8 discharged
-with non-vacuity evidence recorded in `Artefacts and notes`; CodeRabbit review
-(if requested) has no unresolved in-scope findings; roadmap 5.2.3 ticked with
-an execution note.
+Quality criteria:
+
+- all four Makefile gates pass;
+- obligations V1–V9 are discharged, with non-vacuity evidence recorded in
+  `Artefacts and notes`;
+- a CodeRabbit review, if requested, has no unresolved in-scope findings;
+- roadmap item 5.2.3 is ticked with an execution note.
 
 ## Idempotence and recovery
 
@@ -941,7 +1110,10 @@ throwaway clusters; re-running is safe. If a milestone fails mid-way,
 `git status` and the committed plateau of the previous milestone define the
 recovery point; revert uncommitted changes rather than patching forward. The
 only destructive operation introduced is `discard` (a guarded delete of a dead
-row), which exists solely behind the port and its tests.
+row), which exists solely behind the port and its tests. The scheduling writes
+(`run_at`, `max_attempts`) are guarded to the row the worker holds and are
+idempotent for a given attempt. The EP-M0 pin change is reverted by restoring
+the two caret requirements.
 
 ## Progress
 
@@ -953,14 +1125,19 @@ row), which exists solely behind the port and its tests.
   all findings folded into this revision.
 - [x] (2026-10-13) User explicitly authorized execution by invoking
   `/sdlc-implementation` for this plan.
-- [ ] EP-M0 baseline audit and compile probe (paused: Firecrawl source
-  inspection disproved AXIOM-ATTEMPT; a revised mechanism needs approval before
-  continuing).
+- [x] (2026-10-13) EP-M0 paused: a Firecrawl source inspection reported
+  that AXIOM-ATTEMPT was false and proposed a policy-owned increment.
 - [x] (2026-10-14) Planning review of the 2026-10-13 finding: the
   policy-owned increment is rejected (D9); D10 (exact Apalis pins) and D11
-  (durable `run_at` backoff) are proposed and await the user's ruling.
+  (durable `run_at` backoff) are proposed.
+- [x] (2026-10-17) The user accepted D10 and D11. The plan was rewritten
+  around durable scheduling (see `Read this first`), and issue
+  [#550](https://github.com/leynos/wildside/issues/550) was opened for the
+  Apalis 1.0.0 upgrade.
+- [ ] EP-M0 baseline gates, exact pins (AXIOM-PIN), and AXIOM-DURABLE
+  runtime probe.
 - [ ] EP-M1 domain retry policy and classification.
-- [ ] EP-M2 Apalis retry wiring, bounded attempts, fatal kill.
+- [ ] EP-M2 durable retry wiring, bounded attempts, fatal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
@@ -1046,30 +1223,46 @@ row), which exists solely behind the port and its tests.
   (`apalis-core/src/worker/mod.rs`, `src/worker/lifecycle.rs`,
   `apalis-postgres/src/queries/handle_result.rs`). Impact: an unrelated
   `cargo update` would silently replace every axiom in this plan (Decision D10).
+- Observation (2026-10-17, while folding in D10/D11): the facts D11 needs
+  hold at rc.9/rc.8. Every fetch path filters `run_at < now()`: `get_jobs`,
+  `lock_by_id.sql`, and `queue_by_id.sql` all do, and the notify trigger fires
+  only on `INSERT`. `TaskRow::try_into_task` (`apalis-sql`) rehydrates both
+  `Attempt` and the context `max_attempts` from the row. `WorkerBuilder::build`
+  accepts any `Service<Task<..>>` through a blanket `IntoWorkerService` impl
+  (`apalis-core` `src/task_fn/mod.rs:239`), so the wrapper can read `parts.ctx`
+  directly. `PgContext::with_max_attempts` exists for the enqueue side, and
+  `rand` 0.8 is already a dependency for jitter. One gap needed closing: the
+  fatal path shrinks `max_attempts`, so `requeue` must restore it (Decision
+  D12). Apalis 1.0.0's `get_jobs` also still filters on `run_at`, so D11 is
+  expected to survive issue #550. Note, however, that 1.0.0 requires `sqlx`
+  0.9, and the backend is on 0.8. Evidence: cached rc sources under
+  `~/.cargo/registry/src/` and the 1.0.0 crate tarballs.
 
 ## Decision log
 
-- D1 — Adopt the upstream Apalis tower retry machinery, with a custom
-  `tower::retry::Policy` that delegates to the domain `JobRetryPolicy`.
-  Rationale: the facade layer is the supported mechanism at these pins and
-  integrates with the worker builder 5.3.1 will use; delegating keeps the
-  verified domain function authoritative instead of maintaining a parallel spec
-  in tower's backoff maker. Depending on tower directly would mean
-  reimplementing the apalis-aware glue (request cloning, attempt bookkeeping) —
-  exactly the brittle rc-coupled code this choice avoids. Date/author:
-  2026-08-16, planning agent (subject to user approval of this plan).
-- D2 — Accept in-process backoff under a hard total budget; defer
-  persisted (`run_at`-based) backoff. Rationale: the honest constraint is that
-  rc.6 exposes no failure-time hook with which to reschedule `run_at` (the
-  operator-path SQL in D3 already writes to the library-managed table, so
-  schema purity is not the argument). Building the hook means owning custom
-  ack-path middleware that 5.3.1 will restructure. The strongest alternative —
-  durable graphile-worker-style rescheduling — buys crash-durable backoff and
-  freed worker slots at that cost; at the mandated small delay caps the
-  durability delta is marginal. Revisit trigger, recorded in ADR-002: revisit
-  if any production policy's worst-case total in-process wait approaches
-  `TOTAL_BACKOFF_BUDGET`, or if 5.3.1 load tests observe worker-slot exhaustion
-  during backoff. Date/author: 2026-08-16, planning agent.
+- D1 — *Superseded on 2026-10-17 by D11 and D14.* Adopt the upstream Apalis
+  tower retry machinery, with a custom `tower::retry::Policy` that delegates to
+  the domain `JobRetryPolicy`. Rationale: the facade layer is the supported
+  mechanism at these pins and integrates with the worker builder 5.3.1 will
+  use; delegating keeps the verified domain function authoritative instead of
+  maintaining a parallel spec in tower's backoff maker. Depending on tower
+  directly would mean reimplementing the apalis-aware glue (request cloning,
+  attempt bookkeeping) — exactly the brittle rc-coupled code this choice
+  avoids. Date/author: 2026-08-16, planning agent (subject to user approval of
+  this plan).
+- D2 — *Superseded on 2026-10-17 by D11 and D13.* Accept in-process backoff
+  under a hard total budget; defer persisted (`run_at`-based) backoff.
+  Rationale: the honest constraint is that rc.6 exposes no failure-time hook
+  with which to reschedule `run_at` (the operator-path SQL in D3 already writes
+  to the library-managed table, so schema purity is not the argument). Building
+  the hook means owning custom ack-path middleware that 5.3.1 will restructure.
+  The strongest alternative — durable graphile-worker-style rescheduling — buys
+  crash-durable backoff and freed worker slots at that cost; at the mandated
+  small delay caps the durability delta is marginal. Revisit trigger, recorded
+  in ADR-002: revisit if any production policy's worst-case total in-process
+  wait approaches `TOTAL_BACKOFF_BUDGET`, or if 5.3.1 load tests observe
+  worker-slot exhaustion during backoff. Date/author: 2026-08-16, planning
+  agent.
 - D3 — Dead letters are rows in `apalis.jobs` (status `Killed` or
   exhausted `Failed`), surfaced through a domain `DeadLetterQueue` port; no
   separate table. Dead-letter surfaces never expose raw payloads (privacy
@@ -1079,13 +1272,19 @@ row), which exists solely behind the port and its tests.
   tables; the port isolates the representation so a future table swap stays
   adapter-local. Date/author: 2026-08-16, planning agent.
 - D4 — Fatal errors are made dead at the storage level by our wiring, not
-  by relying on Apalis abort persistence. Rationale: the abort-to-`Killed` path
-  is incomplete at rc.6, and a fatal `Failed` row with spare attempts would be
-  re-delivered by the storage fetcher. The wiring must perform a guarded kill
-  (or drive the attempt counter to exhaustion, per the AXIOM-ATTEMPT probe);
-  either way the dead predicate holds and re-delivery is impossible. This also
-  keeps behaviour stable if 1.0-final restores the abort arm. Date/author:
-  2026-08-16, planning agent.
+  by relying on Apalis abort persistence. *Mechanism settled on 2026-10-17
+  under D11: before the ack, the handler wrapper shrinks the locked row's
+  `max_attempts` to the current attempt, so the ack's `Failed` row satisfies
+  `attempts >= max_attempts` and is never fetched. The alternatives sketched
+  below (setting `Killed` directly, or driving the attempt counter) are
+  rejected: the ack overwrites `status`, and inflating `attempts` would
+  misreport how often the job ran.* Original rationale: the abort-to-`Killed`
+  path is incomplete at rc.6, and a fatal `Failed` row with spare attempts
+  would be re-delivered by the storage fetcher. The wiring must perform a
+  guarded kill (or drive the attempt counter to exhaustion, per the
+  AXIOM-ATTEMPT probe); either way the dead predicate holds and re-delivery is
+  impossible. This also keeps behaviour stable if 1.0-final restores the abort
+  arm. Date/author: 2026-08-16, planning agent.
 - D5 — `discard` deletes the dead row (guarded, `RETURNING`, logged
   without payload). Rationale: the earlier marker-based sketch was
   self-contradictory — a discarded-but-`Killed` row would still match the dead
@@ -1115,7 +1314,7 @@ row), which exists solely behind the port and its tests.
   an extra increment in the retry policy would advance the count twice per
   retry. That halves the effective budget and persists `attempts` values that
   skip. Date/author: 2026-10-14, planning review.
-- D10 (proposed, awaiting the user's ruling) — Pin Apalis exactly to the
+- D10 (accepted by the user on 2026-10-17) — Pin Apalis exactly to the
   resolved versions: `apalis-core = "=1.0.0-rc.9"` and
   `apalis-postgres = "=1.0.0-rc.8"`. Rationale: caret requirements on
   prerelease versions admit `1.0.0` final, a breaking rewrite whose layer order
@@ -1125,8 +1324,9 @@ row), which exists solely behind the port and its tests.
   re-verification checklist. Alternative: perform that upgrade first as a
   precursor, then re-plan 5.2.3 against 1.0.0. That would mean building worker
   code only once, on the final API, at the cost of delaying 5.2.3. Date/author:
-  2026-10-14, planning review.
-- D11 (proposed, awaiting the user's ruling) — Replace in-process tower
+  2026-10-14, planning review. The 1.0.0 upgrade is tracked as
+  [#550](https://github.com/leynos/wildside/issues/550).
+- D11 (accepted by the user on 2026-10-17) — Replace in-process tower
   retry with durable, storage-scheduled backoff. Supersedes D1 and D2 if
   approved. Mechanism: no retry layer is installed. A handler wrapper (the
   service passed to `WorkerBuilder::build`, so it runs inside the tracker and
@@ -1160,6 +1360,30 @@ row), which exists solely behind the port and its tests.
   obligations V1b, V4, and V8, the EP-M2 green step, and the Risks entries tied
   to in-process backoff. Replace AXIOM-ATTEMPT with AXIOM-DURABLE, the
   five-part runtime probe in EP-M0. Date/author: 2026-10-14, planning review.
+  These consequences were applied on 2026-10-17. The wrapper is a
+  `tower::Service` over the task, so it reads the in-memory `max_attempts` from
+  `parts.ctx` rather than an extractor.
+- D12 — `requeue` restores the queue's configured retry budget. Rationale:
+  under D4 and D11, a fatally dead row has `max_attempts` equal to its attempt
+  count. Resetting only `attempts = 0` would leave a requeued job with a budget
+  of one. `PostgresDeadLetterQueue` is therefore built with a `RequeueBudgets`
+  map from Apalis queue name (`job_type`) to the `max_attempts` of that queue's
+  `JobRetryPolicy`, and it refuses with `UnknownQueue` rather than guess. A
+  budget lookup keeps the port signature operator-friendly. Encoding the
+  original budget in the row's `metadata` was rejected because that column is
+  library-owned and changes shape in 1.0.0. Date/author: 2026-10-17, planning
+  agent.
+- D13 — Replace `TOTAL_BACKOFF_BUDGET` with a per-delay ceiling,
+  `MAX_BACKOFF_DELAY` (one hour). Rationale: the total budget existed to bound
+  worker-slot occupancy and to stay below the orphan-recovery threshold. Under
+  D11, no worker holds a job during backoff, so neither concern applies. A
+  ceiling still guards against misconfiguration (for example, a large
+  multiplier) parking jobs for days. Date/author: 2026-10-17, planning agent.
+- D14 — Forbid in-process retry middleware on Apalis workers at the rc
+  pins. Rationale: the 2026-10-14 evidence shows it races with the storage
+  fetcher. The V9 conformance check enforces this rule, and ADR-002 records it.
+  Issue #550 may revisit it under 1.0.0's changed middleware order, but only
+  with evidence. Date/author: 2026-10-17, planning agent.
 
 ## Outcomes & retrospective
 
@@ -1209,3 +1433,25 @@ rc.7/rc.6 named here, and that the caret requirements admit the breaking
 the 1.0.0 upgrade becomes a separate item) and D11 (durable `run_at` backoff in
 place of the tower retry layer). EP-M0 now carries a falsifiable,
 five-prediction runtime probe (AXIOM-DURABLE). EP-M1 onward stays paused.
+
+2026-10-17: the user accepted D10 (exact Apalis pins) and D11 (durable,
+storage-scheduled backoff). The plan is rewritten around them, and a
+`Read this first` section summarizes the delta for implementers. Changes:
+
+- AXIOM-FACADE and AXIOM-ATTEMPT are retired in favour of AXIOM-PIN,
+  AXIOM-DURABLE, and AXIOM-ACK, discharged by EP-M0's pin step and five-part
+  runtime probe.
+- D1 and D2 are superseded, D4's mechanism is settled, and D12 (requeue
+  restores the budget), D13 (`MAX_BACKOFF_DELAY` replaces
+  `TOTAL_BACKOFF_BUDGET`), and D14 (no in-process retry middleware) are added.
+- Interfaces gain `JobFailure`, `DeadReason`, `DeadLetterError::UnknownQueue`,
+  `PostgresRetryScheduler`, and the service-shaped handler wrapper. The
+  `apalis` facade dependency is dropped.
+- Obligations V1b, V3b, V4, V5, V6, and V8 are rewritten, and V9 (no retry
+  layer) is added.
+- EP-M2 is rewritten, EP-M3 gains budget restoration, and EP-M4 names the
+  renamed ADR-002 (`adr-002-durable-retry-scheduling-for-apalis-jobs.md`).
+- Issue [#550](https://github.com/leynos/wildside/issues/550) tracks the
+  Apalis 1.0.0 upgrade.
+
+The next step is EP-M0.
