@@ -223,7 +223,8 @@ pub async fn list_users(
     params: web::Query<UsersListQueryParams>,
 ) -> ApiResult<web::Json<Paginated<User>>> {
     let user_id = session.require_user_id()?;
-    let (page_params, page_request, direction) = parse_users_page_params(params.into_inner())?;
+    let (page_params, page_request, direction) =
+        parse_users_page_params(params.into_inner(), state.pagination_error_metrics.as_ref())?;
     let page = state.users.list_users_page(&user_id, page_request).await?;
     let response = build_users_page_response(&request, &page_params, page, direction)?;
     Ok(web::Json(response))

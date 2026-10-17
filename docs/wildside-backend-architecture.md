@@ -1552,9 +1552,11 @@ spec)(
 >
 > **Design decision (2025-11-09):** Establish `backend::domain::ports` as the
 > canonical home for outbound port traits and their error enums. The module now
-> exposes `RouteRepository`, `RouteCache`, `RouteQueue`, `RouteMetrics`, and
-> `UserRepository`, each guarded by strongly typed errors such as
-> `RoutePersistenceError` and `UserPersistenceError`. Introducing
+> exposes `RouteRepository`, `RouteCache`, `RouteQueue`, and `UserRepository`,
+> each guarded by strongly typed errors such as `RoutePersistenceError` and
+> `UserPersistenceError`. The initial design also listed a `RouteMetrics` port;
+> that unused placeholder was removed on 2026-10-13, and route-cache metrics
+> should be designed with the cache implementation. Introducing
 > `RouteCacheKey` keeps cache identifiers validated inside the domain so caches
 > cannot rely on ad hoc string keys. Driven adapters must map their backend
 > failures into these enums, eliminating the previous `anyhow::Result` usage
@@ -2568,6 +2570,9 @@ We also run exporters:
 We define **custom application metrics** for domain-specific
 monitoring([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L727-L735)):
 
+Application metrics use injected ports, `NoOp` defaults, and Prometheus
+adapters in `outbound::metrics`; pagination uses `PaginationErrorMetrics`.
+
 - **Job Durations:** Histogram `route_generation_duration_seconds` for route
   computation
   time([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L729-L737)).
@@ -2720,9 +2725,9 @@ real and one used in tests. Wildside follows this rule through three layers of
 tests:
 
 - **Domain unit tests:** Pure Rust tests exercise services with in-memory
-  doubles implementing outbound ports (`RouteRepository`, `RouteCache`,
-  `RouteQueue`, `RouteMetrics`). Builders live beside the port traits so each
-  test can inject deterministic behaviour.
+  doubles implementing outbound ports (`RouteRepository`, `RouteCache`, and
+  `RouteQueue`). Builders live beside the port traits so each test can inject
+  deterministic behaviour.
 - **Adapter contract tests:** Each driven adapter (Diesel repository, Redis
   cache, Apalis dispatcher, Martin client) ships a contract suite ensuring it
   obeys the port semantics, including error mapping. Postgres-backed suites use
@@ -2792,13 +2797,11 @@ impl Application {
         let repo = Arc::new(diesel_repository(config).await?);
         let cache = Arc::new(redis_cache(config).await?);
         let queue = Arc::new(apalis_dispatcher(config).await?);
-        let metrics = Arc::new(prometheus_metrics(config)?);
 
         let route_service = Arc::new(RouteServiceImpl::new(
             Arc::clone(&repo),
             Arc::clone(&cache),
             Arc::clone(&queue),
-            Arc::clone(&metrics),
         ));
 
         let http = http_server(route_service.clone(), config)?;
@@ -2813,6 +2816,11 @@ returned runtimes. Tests can call the same builder, replacing adapters with
 test doubles when needed, keeping bootstrapping logic in one place.
 
 ### Sample Ports, Errors, and Adapters
+
+Route-cache metrics are intentionally absent from this example. The former
+`RouteMetrics` placeholder had no implementations or call sites. Introduce a
+metrics port with the cache itself, once hit and miss semantics can be based on
+the concrete cache and service flows.
 
 ```rust
 // backend/src/domain/ports.rs
@@ -2877,12 +2885,6 @@ pub trait RouteQueue: Send + Sync {
 }
 
 #[async_trait]
-pub trait RouteMetrics: Send + Sync {
-    async fn record_hit(&self);
-    async fn record_miss(&self);
-}
-
-#[async_trait]
 pub trait RouteService: Send + Sync {
     async fn request_route(
         &self,
@@ -2890,38 +2892,34 @@ pub trait RouteService: Send + Sync {
     ) -> Result<RoutePlan, RouteServiceError>;
 }
 
-pub struct RouteServiceImpl<R, C, Q, M>
+pub struct RouteServiceImpl<R, C, Q>
 where
     R: RouteRepository,
     C: RouteCache,
     Q: RouteQueue<Plan = RoutePlan>,
-    M: RouteMetrics,
 {
     repo: Arc<R>,
     cache: Arc<C>,
     queue: Arc<Q>,
-    metrics: Arc<M>,
 }
 
-impl<R, C, Q, M> RouteServiceImpl<R, C, Q, M>
+impl<R, C, Q> RouteServiceImpl<R, C, Q>
 where
     R: RouteRepository,
     C: RouteCache,
     Q: RouteQueue<Plan = RoutePlan>,
-    M: RouteMetrics,
 {
-    pub fn new(repo: Arc<R>, cache: Arc<C>, queue: Arc<Q>, metrics: Arc<M>) -> Self {
-        Self { repo, cache, queue, metrics }
+    pub fn new(repo: Arc<R>, cache: Arc<C>, queue: Arc<Q>) -> Self {
+        Self { repo, cache, queue }
     }
 }
 
 #[async_trait]
-impl<R, C, Q, M> RouteService for RouteServiceImpl<R, C, Q, M>
+impl<R, C, Q> RouteService for RouteServiceImpl<R, C, Q>
 where
     R: RouteRepository,
     C: RouteCache,
     Q: RouteQueue<Plan = RoutePlan>,
-    M: RouteMetrics,
 {
     async fn request_route(
         &self,
@@ -2929,7 +2927,6 @@ where
     ) -> Result<RoutePlan, RouteServiceError> {
         let key = CacheKey::from(&request);
         if let Some(plan) = self.cache.get(&key).await? {
-            self.metrics.record_hit().await;
             return Ok(plan);
         }
 
@@ -2937,7 +2934,6 @@ where
         self.repo.save(&plan).await?;
         self.cache.put(&key, &plan).await?;
         self.queue.enqueue(&plan).await?;
-        self.metrics.record_miss().await;
         Ok(plan)
     }
 }
@@ -2968,8 +2964,8 @@ pub async fn create_route(
 
 Adapters remain thin translators and the domain owns all behaviour. Command
 handlers call only `RouteService`; the service then coordinates every outbound
-port, ensuring cache, persistence, job dispatch, metrics, and error conversion
-stay inside the hexagon. Follow the same pattern for user management, tile
+port, ensuring cache, persistence, job dispatch, and error conversion stay
+inside the hexagon. Follow the same pattern for user management, tile
 preparation, and analytics ports to complete the migration.
 
 ### Outbound Adapter Class Diagram

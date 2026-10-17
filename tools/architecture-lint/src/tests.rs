@@ -69,6 +69,27 @@ fn lint_single() -> LintSingle {
     "use utoipa::ToSchema; #[derive(ToSchema)] struct Foo;",
     false
 )]
+#[case("domain/ports/metrics.rs", "use prometheus::Registry;", false)]
+#[case("inbound/http/metrics.rs", "use prometheus::Registry;", false)]
+#[case("domain/metrics.rs", "use actix_web_prom::*;", false)]
+#[case("inbound/metrics.rs", "use actix_web_prom::*;", false)]
+#[case("outbound/persistence/metrics.rs", "use prometheus::Registry;", false)]
+#[case(
+    "outbound/persistence/tests_helper.rs",
+    "use prometheus::Registry;",
+    false
+)]
+#[case("outbound/metrics_backup.rs", "use prometheus::Registry;", false)]
+#[case(
+    "outbound/metrics/prometheus_idempotency.rs",
+    "use prometheus::Registry;",
+    true
+)]
+#[case(
+    "outbound/queue/apalis_route_queue/tests/metrics.rs",
+    "use prometheus::Registry;",
+    true
+)]
 fn detects_boundary_violations(
     lint_single: LintSingle,
     #[case] file: &str,

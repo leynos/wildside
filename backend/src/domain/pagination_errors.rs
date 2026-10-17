@@ -2,8 +2,8 @@
 //!
 //! These helpers centralize the user-visible cursor error contract so inbound
 //! adapters and repository error mapping cannot drift. The module returns
-//! only domain [`Error`] values; logging and Prometheus side-effects live in
-//! `crate::observability::pagination_errors` and are recorded by adapters.
+//! only domain [`Error`] values; callers record failures through the injected
+//! pagination-error metrics port.
 
 use serde_json::json;
 

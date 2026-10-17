@@ -3,10 +3,9 @@
 mod config;
 #[cfg(feature = "metrics")]
 mod metrics;
-mod state_builders;
+pub(crate) mod state_builders;
 
 pub use config::ServerConfig;
-pub(crate) use state_builders::build_http_state;
 
 #[cfg(feature = "metrics")]
 use metrics::MetricsLayer;
@@ -25,7 +24,10 @@ use backend::Trace;
 use backend::doc::ApiDoc;
 #[cfg(feature = "metrics")]
 use backend::domain::ports::NoOpIdempotencyMetrics;
-use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+use backend::domain::ports::{
+    FixtureRouteSubmissionService, NoOpPaginationErrorMetrics, PaginationErrorMetrics,
+    RouteSubmissionService,
+};
 use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
 use backend::inbound::http::admin_enrichment::list_enrichment_provenance;
 use backend::inbound::http::annotations::{get_annotations, update_progress, upsert_note};
@@ -42,7 +44,7 @@ use backend::inbound::http::walk_sessions::create_walk_session;
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
 #[cfg(feature = "metrics")]
-use backend::outbound::metrics::PrometheusIdempotencyMetrics;
+use backend::outbound::metrics::{PrometheusIdempotencyMetrics, PrometheusPaginationErrorMetrics};
 use backend::outbound::persistence::DieselIdempotencyRepository;
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
@@ -130,6 +132,26 @@ pub(crate) fn build_route_submission_service(
             None => Ok(Arc::new(FixtureRouteSubmissionService)),
         }
     }
+}
+
+fn build_pagination_error_metrics(
+    config: &ServerConfig,
+) -> std::io::Result<Arc<dyn PaginationErrorMetrics>> {
+    #[cfg(not(feature = "metrics"))]
+    let _ = config;
+
+    #[cfg(feature = "metrics")]
+    if let Some(prometheus) = config.metrics() {
+        let metrics =
+            PrometheusPaginationErrorMetrics::new(&prometheus.registry).map_err(|error| {
+                std::io::Error::other(format!(
+                    "pagination error metrics registration failed: {error}"
+                ))
+            })?;
+        return Ok(Arc::new(metrics));
+    }
+
+    Ok(Arc::new(NoOpPaginationErrorMetrics))
 }
 
 #[derive(Clone)]
@@ -253,7 +275,12 @@ pub fn create_server(
 ) -> std::io::Result<Server> {
     let server_health_state = health_state.clone();
     let route_submission = build_route_submission_service(&config)?;
-    let http_state = build_http_state(&config, route_submission);
+    let pagination_error_metrics = build_pagination_error_metrics(&config)?;
+    let http_state = state_builders::build_http_state_with_metrics(
+        &config,
+        route_submission,
+        pagination_error_metrics,
+    );
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {
         key,

@@ -63,6 +63,9 @@ delivery, so future work remains inside the hexagonal boundaries.
 - [x] 1.3.3. Provide integration tests that exercise HTTP and WebSocket
   handlers against mocked ports to ensure adapters remain side effect free and
   domain logic stays framework-agnostic.
+- [x] 1.3.4. Standardize metrics recording and enforce outbound adapter
+  boundaries with architecture lint. See
+  `docs/execplans/competing-metrics-patterns.md` and PR #460.
 
 ## 2. Core access and sessions
 

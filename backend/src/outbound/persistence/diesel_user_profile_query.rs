@@ -8,8 +8,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 #[cfg(test)]
-use crate::domain::ports::UserPersistenceError;
-use crate::domain::ports::{UserProfileQuery, UserRepository};
+use crate::domain::ports::{NoOpPaginationErrorMetrics, UserPersistenceError};
+use crate::domain::ports::{PaginationErrorMetrics, UserProfileQuery, UserRepository};
 use crate::domain::{Error, User, UserId};
 
 use super::user_persistence_error_mapping::map_user_persistence_error;
@@ -18,12 +18,24 @@ use super::user_persistence_error_mapping::map_user_persistence_error;
 #[derive(Clone)]
 pub struct DieselUserProfileQuery {
     user_repository: Arc<dyn UserRepository>,
+    pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
 }
 
 impl DieselUserProfileQuery {
     /// Create a new profile query adapter backed by a user repository.
-    pub fn new(user_repository: Arc<dyn UserRepository>) -> Self {
-        Self { user_repository }
+    pub fn new(
+        user_repository: Arc<dyn UserRepository>,
+        pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
+    ) -> Self {
+        Self {
+            user_repository,
+            pagination_error_metrics,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_noop_metrics(user_repository: Arc<dyn UserRepository>) -> Self {
+        Self::new(user_repository, Arc::new(NoOpPaginationErrorMetrics))
     }
 }
 
@@ -34,7 +46,9 @@ impl UserProfileQuery for DieselUserProfileQuery {
             .user_repository
             .find_by_id(user_id)
             .await
-            .map_err(map_user_persistence_error)?;
+            .map_err(|error| {
+                map_user_persistence_error(error, self.pagination_error_metrics.as_ref())
+            })?;
 
         match maybe_user {
             Some(user) => Ok(user),
@@ -111,7 +125,7 @@ mod tests {
     #[tokio::test]
     async fn fetch_profile_returns_user_when_present() -> TestResult {
         let profile_user = user("11111111-1111-1111-1111-111111111111", "Ada Lovelace")?;
-        let query = DieselUserProfileQuery::new(Arc::new(SuccessUserRepository {
+        let query = DieselUserProfileQuery::with_noop_metrics(Arc::new(SuccessUserRepository {
             user: profile_user.clone(),
         }));
 
@@ -123,7 +137,7 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_profile_returns_internal_error_when_user_missing() -> TestResult {
-        let query = DieselUserProfileQuery::new(Arc::new(MissingUserRepository));
+        let query = DieselUserProfileQuery::with_noop_metrics(Arc::new(MissingUserRepository));
         let authenticated_user = user_id("11111111-1111-1111-1111-111111111111")?;
 
         let err = query
@@ -150,7 +164,9 @@ mod tests {
         #[case] failure: UserPersistenceError,
         #[case] expected_code: ErrorCode,
     ) -> TestResult {
-        let query = DieselUserProfileQuery::new(Arc::new(FailingUserRepository { error: failure }));
+        let query = DieselUserProfileQuery::with_noop_metrics(Arc::new(FailingUserRepository {
+            error: failure,
+        }));
 
         let err = query
             .fetch_profile(&user_id("11111111-1111-1111-1111-111111111111")?)
