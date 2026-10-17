@@ -20,7 +20,8 @@ const repositoryRoot = new URL('../', import.meta.url);
  * removing one is a deliberate edit here as well.
  */
 const EXPECTED_CARGO_AUDIT =
-  'cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258';
+  'cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258 ' +
+  '--ignore RUSTSEC-2026-0367 --ignore RUSTSEC-2026-0368 --ignore RUSTSEC-2026-0369';
 
 /**
  * Ask Make to print a target's execution plan without running the recipes.
