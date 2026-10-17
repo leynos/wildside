@@ -1424,6 +1424,24 @@ floating-point precision and both bounded feasibility runs timed out.
   formal review, readiness, and merge remain blocked until an authorized
   complete gate run can validate and publish the candidate.
 
+- [x] Rebased the direct `main` candidate on 2026-10-17 after PR #548 merged.
+  The old boundary is the PR's recorded base,
+  `9f4baf0b192c67f6e08eda4ced686a0fbd65a002`; the fetched target is
+  `17606efbb9796a2f06cf626fd5770616df315541`, which contains #548's merge commit
+  `44e926336f8c5df70ccfa9bdc7d4914540e4d0e5`. All 27 child commits replayed
+  without conflicts or empty commits. `range-diff` matched the first 26
+  commits; the final validation commit still carries its intentional code and
+  evidence updates, while the rustls lockfile and generated spelling changes
+  are now inherited from `main`. The rebased head is
+  `040a00823802c3a9aeee4ec38ee5c88c4fc64932`; `git diff --check` passes and the
+  child diff is 15 paths. The rebase used Git's built-in merge with `zdiff3`
+  and disabled the user's ambient Weave attributes for this unattended replay.
+  Existing gate and review results refer to the old candidate and are
+  historical; the complete sequential gate set remains pending for this exact
+  head. The published PR still points to its old head until that validation
+  completes. Rebase log: `/tmp/pr458-rebase-20261017.out`; range review:
+  `/tmp/pr458-range-diff-20261017.out`.
+
 ## Surprises & discoveries
 
 - Observation: by 2026-10-16, `main` had moved 41 commits past the PR's
