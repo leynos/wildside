@@ -50,12 +50,12 @@ pub(super) fn divergent_cells() -> impl Strategy<Value = (i64, i64)> {
 }
 
 pub(super) fn admitted_route_payload() -> impl Strategy<Value = Value> {
-    recursive_route_payload(admitted_coordinate_number())
+    recursive_route_payload(admitted_coordinate_value())
 }
 
 pub(super) fn route_payload() -> impl Strategy<Value = Value> {
-    let recursive = recursive_route_payload(coordinate_number());
-    let coordinate = coordinate_number().prop_map(|value| serde_json::json!({"lat": value}));
+    let recursive = recursive_route_payload(coordinate_value());
+    let coordinate = coordinate_value().prop_map(|value| serde_json::json!({"lat": value}));
 
     // Ensure the broad numeric domain is exercised at a coordinate leaf, even
     // when recursive JSON generation chooses unrelated object keys.
@@ -94,6 +94,55 @@ fn coordinate_number() -> impl Strategy<Value = Value> + Clone {
         3 => moderate_coordinate_number(),
         2 => large_coordinate_number(),
     ]
+}
+
+fn coordinate_value() -> impl Strategy<Value = Value> + Clone {
+    prop_oneof![4 => coordinate_number(), 1 => non_numeric_coordinate_value()]
+}
+
+fn admitted_coordinate_value() -> impl Strategy<Value = Value> + Clone {
+    prop_oneof![4 => admitted_coordinate_number(), 1 => non_numeric_coordinate_value()]
+}
+
+fn non_numeric_coordinate_value() -> impl Strategy<Value = Value> + Clone {
+    prop_oneof![
+        2 => small_string().prop_map(Value::String),
+        1 => any::<bool>().prop_map(Value::Bool),
+        1 => Just(Value::Null),
+        1 => prop::collection::vec(json_leaf(), 0..=4).prop_map(Value::Array),
+        1 => small_string().prop_map(|label| serde_json::json!({"label": label})),
+    ]
+}
+
+pub(super) fn non_numeric_coordinate_pair() -> impl Strategy<Value = (Value, Value)> {
+    let string_change = (coordinate_key(), small_string()).prop_map(|(key, first)| {
+        let second = format!("{first}!");
+        (
+            serde_json::json!({key.clone(): first}),
+            serde_json::json!({key: second}),
+        )
+    });
+    let boolean_flip = (coordinate_key(), any::<bool>()).prop_map(|(key, first)| {
+        (
+            serde_json::json!({key.clone(): first}),
+            serde_json::json!({key: !first}),
+        )
+    });
+    let null_to_string = (coordinate_key(), small_string()).prop_map(|(key, value)| {
+        (
+            serde_json::json!({key.clone(): Value::Null}),
+            serde_json::json!({key: value}),
+        )
+    });
+    let object_change = (coordinate_key(), small_string()).prop_map(|(key, first)| {
+        let second = format!("{first}!");
+        (
+            serde_json::json!({key.clone(): {"label": first}}),
+            serde_json::json!({key: {"label": second}}),
+        )
+    });
+
+    prop_oneof![string_change, boolean_flip, null_to_string, object_change]
 }
 
 fn moderate_coordinate_number() -> impl Strategy<Value = Value> + Clone {

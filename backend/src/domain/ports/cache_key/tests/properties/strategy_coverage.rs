@@ -49,6 +49,26 @@ fn generated_strategies_reach_special_keys_and_all_v8_edits() {
         observed.has_out_of_range_coordinate,
         "fixed-seed samples missed an out-of-range coordinate: {observed:?}"
     );
+    assert!(
+        observed.has_coordinate_string,
+        "fixed-seed samples missed a string under a coordinate key: {observed:?}"
+    );
+    assert!(
+        observed.has_coordinate_boolean,
+        "fixed-seed samples missed a boolean under a coordinate key: {observed:?}"
+    );
+    assert!(
+        observed.has_coordinate_null,
+        "fixed-seed samples missed null under a coordinate key: {observed:?}"
+    );
+    assert!(
+        observed.has_coordinate_array,
+        "fixed-seed samples missed an array under a coordinate key: {observed:?}"
+    );
+    assert!(
+        observed.has_coordinate_object,
+        "fixed-seed samples missed an object under a coordinate key: {observed:?}"
+    );
 
     let edits = payload_pair_with_single_leaf_edit();
     for _ in 0..SAMPLE_COUNT {
@@ -81,6 +101,11 @@ struct ObservedPayloadFeatures {
     has_theme_array: bool,
     has_admitted_fractional_coordinate_outside_zero_cell: bool,
     has_out_of_range_coordinate: bool,
+    has_coordinate_string: bool,
+    has_coordinate_boolean: bool,
+    has_coordinate_null: bool,
+    has_coordinate_array: bool,
+    has_coordinate_object: bool,
     edits: ObservedSingleLeafEdits,
 }
 
@@ -106,6 +131,8 @@ fn observe_payload_features(
     current_key: Option<&str>,
     observed: &mut ObservedPayloadFeatures,
 ) {
+    observe_non_numeric_coordinate_value(value, current_key, observed);
+
     match value {
         Value::Number(number) => observe_coordinate_feature(number, current_key, observed),
         Value::Object(entries) => {
@@ -115,6 +142,25 @@ fn observe_payload_features(
         }
         Value::Array(items) => observe_array_features(items, current_key, observed),
         _ => {}
+    }
+}
+
+fn observe_non_numeric_coordinate_value(
+    value: &Value,
+    current_key: Option<&str>,
+    observed: &mut ObservedPayloadFeatures,
+) {
+    if !current_key.is_some_and(|key| ROUNDED_COORDINATE_KEYS.contains(&key)) {
+        return;
+    }
+
+    match value {
+        Value::String(_) => observed.has_coordinate_string = true,
+        Value::Bool(_) => observed.has_coordinate_boolean = true,
+        Value::Null => observed.has_coordinate_null = true,
+        Value::Array(_) => observed.has_coordinate_array = true,
+        Value::Object(_) => observed.has_coordinate_object = true,
+        Value::Number(_) => {}
     }
 }
 

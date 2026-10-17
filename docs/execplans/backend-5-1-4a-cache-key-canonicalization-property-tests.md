@@ -5,13 +5,15 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS — the local candidate based on published head
-`1d1db11dd03efdcaf2c5a884d709ebb44f1206e6` has passed the complete local gate
-sequence, including full `make test`. Its five-path source diff SHA-256 is
-`31d9e9eb222d10394da8f985bc150d31c3610dbf2884a40d10af46f87648ac76`. PR #458 is
-still draft at the published head, whose hosted Audit failure predates the
-`rustls` 0.23.46 lockfile fix. Publish the validated candidate, then obtain
-fresh hosted checks and review before readiness and merge.
+Status: IN PROGRESS — PR #458 is published at
+`bd0c80bac0e1a26e7f09343702e55a44e5422dd1`. Local source-candidate gates,
+including the complete `make test` target, passed. Final plan reconciliation
+edits also passed the documentation gates. The first test run hit a stale
+PostgreSQL runtime lock; the successful rerun used isolated temporary paths
+without touching the process holding the default lock. The repairs are not yet
+committed or published. Next, validate the plan edits, commit and publish the
+candidate, obtain fresh completeness and proof assessments and formal review,
+then mark the PR ready and merge once findings and checks reach equilibrium.
 
 ## Purpose / big picture
 
@@ -47,9 +49,16 @@ them by bounding the admitted coordinate magnitude in the domain canonicalizer,
 rejecting out-of-range coordinates with a typed error, and establishing the
 rounding projection property with a hand proof, generated properties, and an
 exhaustive test over a dense representable-float slice near the bound. The
-planned Kani proof was evaluated and declined: the installed guidance says it
-does not model floating-point precision, and both 30-minute spikes stalled
-before a verdict.
+planned Kani proof was evaluated and declined for this change: the wrapper and
+isolated-scalar spikes both exceeded 30 minutes without a verdict, so they
+provided no useful verdict or model validation for LEM-1. The local Kani skill
+cautions that floating-point precision is not established and recommends
+stubbing operations such as trig and square root; version-matched Kani 0.67
+documentation says floating-point numbers are supported, while trig, cosine,
+and square root are over-approximated. LEM-1 uses multiplication, division, and
+rounding, but these timed-out spikes do not establish how Kani models that
+claim. See the
+[Kani 0.67 Rust feature support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md).
 
 The observable outcome for a developer is: `cargo test -p backend cache_key`
 runs the new property suite over the full finite JSON number domain; each
@@ -225,8 +234,12 @@ hygiene).
 - No new crate dependencies (dev or production). Use the existing
   `proptest`, `rstest`, `insta`, and `pretty_assertions` dev-dependencies;
   `cargo-mutants` and `cargo-kani` are installed developer tools, not Cargo
-  dependencies. Kani is evaluated for LEM-1 but not used because its installed
-  guidance excludes floating-point precision and the bounded spikes timed out.
+  dependencies. Kani is evaluated for LEM-1 but not used: the wrapper and
+  isolated-scalar spikes timed out without a verdict or useful model validation
+  for this claim. The local skill cautions about floating-point precision; the
+  [Kani 0.67 feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md)
+  documents floating-point support and over-approximation for trig, cosine,
+  and square root.
 - Respect the repository's 400-line file limit (`AGENTS.md`): after the
   split, `cache_key.rs`, `cache_key/tests.rs`, and property modules must each
   stay under 400 lines. Contingency: if `tests/properties.rs` approaches the
@@ -263,10 +276,15 @@ hygiene).
   escalation.
 - Kani: if the harness cannot be built against the `backend` crate, or does
   not complete within 30 minutes or 16 GB of memory, stop Kani work and record
-  the failure mode. The wrapper and isolated-kernel spikes both met this limit;
-  Kani is declined for this floating-point claim. The hand proof LEM-1 and the
-  full-domain properties remain in force, with a deterministic dense boundary
-  slice added as the measured fallback.
+  the failure mode. The wrapper and isolated-kernel spikes both exceeded the
+  time limit without a verdict or useful model validation for LEM-1. The local
+  Kani skill cautions that floating-point precision is not established and
+  recommends stubs for trig and square root; Kani 0.67's
+  [feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md)
+  documents floating-point support and over-approximation of trig, cosine, and
+  square root. Since LEM-1 uses multiplication, division, and rounding, the
+  hand proof and full-domain properties remain in force, with the deterministic
+  dense boundary slice as the measured fallback. Do not claim a Kani proof.
 - Runtime: if the property suite adds more than 30 seconds to
   `cargo test -p backend --lib` on the development machine, reduce case counts
   or generator depth and record the decision. (Panel arithmetic estimates well
@@ -314,12 +332,15 @@ hygiene).
   Mitigation: re-validate and prune regression seeds in the same commit as any
   fix; promoted `rstest` cases remain the durable record.
 - Risk: no machine proof is available for LEM-1 with the installed Kani tool.
-  Severity: medium. Likelihood: confirmed. Evidence: its local skill says
-  floating-point precision is not modelled, and wrapper and isolated-kernel
-  spikes each exceeded 30 minutes without a verdict. Mitigation: do not land or
-  claim an unsupported Kani proof; retain the hand argument, generated full-
-  domain properties, and deterministic dense-slice regression. Revisit with a
-  verifier that explicitly supports the required IEEE-754 operations.
+  Severity: medium. Likelihood: confirmed. Evidence: the local skill cautions
+  that floating-point precision is not established and recommends stubs for
+  trig and square root; the Kani 0.67 feature-support guide documents float
+  support and over-approximation for trig, cosine, and square root. The wrapper
+  and isolated-kernel spikes each exceeded 30 minutes without a verdict or
+  useful model validation for LEM-1. Mitigation: do not claim a Kani proof;
+  retain the hand argument, generated full-domain properties, and deterministic
+  dense-slice regression. Revisit when a run can validate the relevant
+  operations and complete with a useful verdict.
 
 ## Conformance basis
 
@@ -357,6 +378,7 @@ ARCH-CACHEKEY-CONTRACT -> RM-5.1.4a -> EP-M2, EP-M3
        non_theme_array_order_is_material,             (V-6)
        non_string_theme_array_order_is_material,      (V-6)
        edited_leaves_produce_distinct_keys,           (V-8)
+       non_numeric_coordinate_values_remain_distinct, (V-8)
        out_of_range_coordinates_are_rejected,         (V-10)
        route_payload_reaches_special_keys }           (non-vacuity guard)
   -> cache_key::tests::{
@@ -387,10 +409,15 @@ Method selection:
   proptest expresses directly.
 - LEM-1 carries a written arithmetic argument. Kani and Verus were assessed
   for this finite `f64` claim, but neither provides suitable evidence in this
-  environment: the installed Kani guidance says floating-point precision is not
-  modelled and two Kani spikes exceeded 30 minutes without a verdict; Verus has
-  limited IEEE-754 reasoning and would require axiomatizing the rounding facts
-  under test. The claim is therefore supported by the hand derivation,
+  environment. The local Kani skill cautions that floating-point precision is
+  not established and recommends stubs for trig and square root. Kani 0.67's
+  [feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md)
+  says floating-point numbers are supported and specifically documents
+  over-approximation for trig, cosine, and square root. LEM-1 uses
+  multiplication, division, and rounding; the two Kani spikes timed out without
+  a verdict, so no useful model validation was obtained for this claim. Verus
+  has limited IEEE-754 reasoning and would require axiomatizing the rounding
+  facts under test. The claim is therefore supported by the hand derivation,
   full-domain generated properties, and an exhaustive test of all representable
   values in a fixed 100,000-ULP slice inside each ±180 boundary. This slice is
   a regression check, not a proof over the whole domain. Kani is also not used
@@ -412,9 +439,9 @@ Axioms (external interfaces treated as correct, not verified here):
 - AXM-3: `proptest` 1.x generates values from the stated strategies and
   shrinks failures; default 256 cases per property. The seed-to-value stream is
   not guaranteed stable across proptest versions.
-- AXM-4: `serde_json` float formatting (ryu, shortest round-trip) is
-  injective on distinct finite `f64` values — distinct floats serialize to
-  distinct byte strings.
+- AXM-4: the pinned `serde_json` 1.0.150 float formatter, `zmij`, uses shortest
+  round-trip formatting that is injective on distinct finite `f64` values —
+  distinct floats serialize to distinct byte strings.
 - AXM-5: Rust `f64` arithmetic (`*`, `/`, `round`) follows IEEE-754 binary64
   semantics: multiplication and division round to nearest-even, while `round`
   rounds half away from zero. This is an assumption of the hand proof; Kani
@@ -444,8 +471,9 @@ and `180.0`, asserting (a), (b), and (c). This is an exhaustive regression
 check for those intervals, not a machine proof over all admitted `f64` values.
 Full-domain `proptest` properties exercise generated finite values; the hand
 proof carries the remaining domain argument. No Kani harness is landed: both the
-`Number` wrapper spike and the isolated scalar kernel exceeded 30 minutes, and
-the installed Kani guidance says it does not model floating-point precision.
+`Number` wrapper spike and the isolated scalar kernel exceeded 30 minutes
+without a verdict or useful model validation for LEM-1. The local skill's
+precision caution and the Kani 0.67 feature-support details are recorded above.
 Logs and resource measurements are recorded in `Artefacts and notes`; the
 written disposition is in `docs/developers-guide.md`.
 
@@ -561,17 +589,22 @@ number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
 - Obligation V-8 (single-leaf divergence — general injectivity guard):
   editing exactly one non-canonicalized leaf of a generated, successfully
   derived payload (changing a string value to a distinct string, flipping a
-  boolean, or inserting a fresh key) changes the key. Its payload strategy
-  keeps every coordinate number within ±180 so both derivations succeed,
-  independently of the unrestricted payload strategy used for Stage C2
-  rejection properties. Without this, a normalizer that dropped or rewrote
-  non-special fields would pass V-1, V-4, V-5, and V-6. Method: property test;
-  the strategy picks a payload and one edit whose changed-ness is guaranteed by
-  construction (appending a suffix to a string; flipping `true` to `false`;
-  inserting a `fresh-*` key into a content object whose only initial key is
-  `sample`). Artefact: same file, `edited_leaves_produce_distinct_keys`.
-  Non-vacuity: rests on AXM-1/AXM-4; the mutation gate must kill
-  identity-erasing mutants (e.g. the object branch returning `Value::Null`).
+  boolean, or inserting a fresh key) changes the key. A companion generated
+  property varies non-numeric values directly under coordinate keys. Its
+  payload strategy keeps every numeric coordinate within ±180 so both
+  derivations succeed, independently of the unrestricted payload strategy used
+  for Stage C2 rejection properties. Without these checks, a normalizer that
+  dropped or rewrote non-special fields would pass V-1, V-4, V-5, and V-6.
+  Method: property tests; the strategy picks a payload and one edit whose
+  changed-ness is guaranteed by construction (appending a suffix to a string;
+  flipping `true` to `false`; inserting a `fresh-*` key into a content object
+  whose only initial key is `sample`), or changes a string, boolean, null, or
+  object value under a coordinate key. Artefacts: same file,
+  `edited_leaves_produce_distinct_keys` and
+  `non_numeric_coordinate_values_remain_distinct`; direct edge cases are in
+  `coordinates.rs`. Non-vacuity: rests on AXM-1/AXM-4; the mutation gate must
+  kill identity-erasing mutants (e.g. the object branch returning
+  `Value::Null`).
 - Obligation V-9 (digest algorithm known-answer): one fixed, in-range
   payload maps to a precomputed `route:v1:<expected 64-hex SHA-256>` string,
   computed once from the canonical bytes with an independent tool (`sha256sum`)
@@ -663,14 +696,19 @@ Deliberately not verified, with rationale:
   request validation belongs to the route-request inbound boundary, not the
   cache key. The ±180 admission bound is a numeric-soundness bound applied
   uniformly to every coordinate key; it is what LEM-1 needs, no more.
-- Non-number values under coordinate keys (for example `"lat": "51.5"`) and
-  Unicode normalization or case-folding of theme strings: the canonical form
-  has never claimed to normalize these; they pass through verbatim, so
-  textually different values legitimately produce different keys. V-8 covers
-  that they are not dropped.
-- SHA-256 collision resistance and ryu formatting internals: axioms AXM-1
+- Unicode normalization or case-folding of theme strings: the canonical form
+  has never claimed to normalize these; theme strings pass through verbatim.
+- SHA-256 collision resistance and `zmij` formatting internals: axioms AXM-1
   and AXM-4. V-9 pins the *choice* of algorithm and serialization at the
   boundary, which is repository-owned.
+
+Non-number values under coordinate keys are not normalized; they pass through
+verbatim. Direct examples in `coordinates.rs` cover strings, booleans, null,
+arrays, and objects. Arrays reset coordinate context, while an object nested in
+an array restores per-field context. V-8's generated
+`non_numeric_coordinate_values_remain_distinct` property checks material
+changes among strings, booleans, null, and objects under coordinate keys; the
+array context cases are direct examples.
 
 ## Plan of work
 
@@ -705,16 +743,16 @@ so no file approaches the repository's 400-line limit.
    (small-alphabet string vectors), `grid_cell_pair()` (integer cell plus one
    nonzero offset magnitude used with both signs, below 0.49),
    `divergent_cells()` (cell plus nonzero delta), `admitted_route_payload()`
-   for V-8 (recursive JSON with coordinate leaves bounded to the admitted
-   domain), `payload_pair_with_single_leaf_edit()` for V-8 (vary one generated
-   string leaf under `generated.payload.content`, holding the sibling edits
-   fixed), and `rotate_by_one` for V-6. Add the unrestricted
-   `coordinate_number()` and `route_payload()` strategies in Stage C2 for its
-   full-domain properties. Free functions returning `impl Strategy<Value = T>`,
-   matching the `generate_route/tests.rs` house style; no `prop_compose!` (no
-   repository precedent). Property names deliberately omit the
-   `route_request_key_` prefix used by the example tests — the `properties`
-   module path disambiguates.
+   for V-8 (recursive JSON with numeric coordinate leaves bounded to the
+   admitted domain), `payload_pair_with_single_leaf_edit()` for V-8 (vary one
+   generated string leaf under `generated.payload.content`, holding the sibling
+   edits fixed), `non_numeric_coordinate_pair()` for V-8, and `rotate_by_one`
+   for V-6. Add the unrestricted `coordinate_number()` and `route_payload()`
+   strategies in Stage C2 for its full-domain properties. Free functions
+   returning `impl Strategy<Value = T>`, matching the `generate_route/tests.rs`
+   house style; no `prop_compose!` (no repository precedent). Property names
+   deliberately omit the `route_request_key_` prefix used by the example tests
+   — the `properties` module path disambiguates.
 2. Compute and pin the V-9 known-answer constant now, against the
    unmodified production code, and add the test plus the V-7 `-0.0` example to
    `tests.rs`.
@@ -812,13 +850,17 @@ Test-framework applicability, per the repository brief: `rstest` carries the
 example-shaped checks (statistics-guard harness, `-0.0` literal, known-answer
 digest, boundary table, promoted counter-examples); `proptest` carries the
 payload invariants; LEM-1 is supported by its hand proof, generated properties,
-and dense boundary-slice regression, while Kani was evaluated and declined
-because it produced no verdict and its installed guidance excludes floating-
-point precision; `insta` snapshots the new error message (consistent with the
-module's existing error snapshots); `googletest` is not a dependency of this
-crate (see `Decision Log`); no new `rstest-bdd` scenario is added because no
-externally observable workflow changes (the existing Redis BDD scenario covers
-the end-to-end contract with in-range coordinates, which this plan leaves
+and the dense boundary-slice regression, while Kani was evaluated and declined
+because both 30-minute spikes timed out without a verdict or useful model
+validation for LEM-1. The local skill cautions about floating-point precision;
+Kani 0.67 supports floating-point numbers but over-approximates some operations
+such as trig, cosine, and square root. See the
+[Kani 0.67 feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md).
+`insta` snapshots the new error message (consistent with the module's existing
+error snapshots); `googletest` is not a dependency of this crate (see
+`Decision Log`); no new `rstest-bdd` scenario is added because no externally
+observable workflow changes (the existing Redis BDD scenario covers the
+end-to-end contract with in-range coordinates, which this plan leaves
 byte-identical); `verus` is unsuitable for the float lemma, for the reasons
 given in `Verification plan`.
 
@@ -1001,15 +1043,19 @@ Dependencies: dev-dependencies already present — `proptest = "1"`,
 `rstest = "0.26"`, `insta`, `serde_json` (`json!` macro), `pretty_assertions`.
 Developer tooling: `cargo-mutants` (also run nightly by
 `.github/workflows/mutation-testing.yml`) and `cargo-kani` 0.67. Kani is not
-wired into CI or used for LEM-1 because its installed guidance excludes
-floating-point precision and both bounded feasibility runs timed out.
+wired into CI or used for LEM-1 because both bounded feasibility runs timed out
+without a verdict or useful model validation. The local skill cautions about
+floating-point precision; Kani 0.67's
+[feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md)
+documents floating-point support and over-approximation for trig, cosine, and
+square root.
 
 ## Progress
 
-- [x] Resumed validation on 2026-10-17 after compiler admission recovered.
-  On local HEAD `1d1db11dd03efdcaf2c5a884d709ebb44f1206e6` with the five-path
-  source diff SHA-256 recorded above, `make check-fmt`, `make lint`,
-  `make typecheck`, `make markdownlint`, and `make nixie` all passed.
+- [x] Historical local validation on 2026-10-17, before PR rebasing: after
+  compiler admission recovered, local HEAD
+  `1d1db11dd03efdcaf2c5a884d709ebb44f1206e6` passed `make check-fmt`,
+  `make lint`, `make typecheck`, `make markdownlint`, and `make nixie`.
   `cargo test -p backend cache_key` passed 48 matching tests;
   `cargo test -p backend --doc` passed 160 doctests with 96 ignored; and
   `make test` passed with 1,825 Nextest tests and four skipped. Both compile-
@@ -1021,9 +1067,8 @@ floating-point precision and both bounded feasibility runs timed out.
   `/tmp/test-2-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`,
   and the full test target in
   `/tmp/test-3-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`.
-  These results supersede the compiler-admission refusals below for this
-  unchanged local source candidate. The PR remains unpublished at its old draft
-  head; hosted checks and review must run against the published fix.
+  These results superseded compiler-admission refusals for that unchanged
+  local source candidate. They do not validate the current PR candidate.
 - [x] Stage A: dependency and caller facts reconfirmed; wrapper and
   scalar-kernel Kani spikes reached CBMC but exceeded 30 minutes. No proof is
   claimed; the hand-proof and dense-slice fallback is recorded.
@@ -1193,6 +1238,26 @@ floating-point precision and both bounded feasibility runs timed out.
   the draft/configured conditions, while local CodeRabbit review 24 returned no
   findings. Roadmap item 5.1.4a remains checked and implementation acceptance
   remains complete.
+
+- [ ] PR #458 follow-up, 2026-10-17: the published candidate is
+  `bd0c80bac0e1a26e7f09343702e55a44e5422dd1`. CodeRabbit completeness assessment
+  `cache-key-completeness-bd0c80ba-20261017-1311` confirmed the candidate head
+  and base and reported two low-severity gaps: generated coverage did not
+  exercise non-numeric values under coordinate keys, and this plan's
+  current-status and formatter statements were stale. The local repair adds
+  direct cases for strings, booleans, null, arrays, and objects, including
+  array context reset and nested-object context restoration, plus the V-8
+  property `non_numeric_coordinate_values_remain_distinct`. The strategy and
+  plan edits are uncommitted and unpublished. The first repair gate attempt
+  failed `make check-fmt` because this plan needed formatting and `make lint`
+  because four strategy closures moved `key` more than once (E0382). The
+  strategy ownership correction is now present. `make typecheck`, `make test`,
+  `make audit`, `make spelling`, `make markdownlint`, and `make nixie` were not
+  run. All corrected-candidate gates remain pending. The fixed-seed strategy
+  guard also requires generated strings, booleans, nulls, arrays, and objects
+  under coordinate keys. Run the complete candidate gate sequence, then publish
+  and verify the resulting head before requesting fresh completeness and proof
+  assessments and formal review. Readiness and merge remain pending.
 
 - [ ] PR integration: on 2026-10-16, the live `main` target had advanced from
   the PR's recorded base `ed897e0` to `9f4baf0`, and GitHub reported the old PR
@@ -1577,13 +1642,14 @@ floating-point precision and both bounded feasibility runs timed out.
   pre-commit guard and an invocation diagnostic in the workflow tooling test.
   Those corrections passed all deterministic gates and the final CodeRabbit
   review before the C1 commit.
-- Observation: local Kani guidance conflicts with LEM-1's model assumption.
-  Evidence: `kani/SKILL.md` says Kani does not model floating-point precision;
-  the plan's AXM-5 assumes bit-precise floating-point semantics. Impact: the
-  Stage A spike must demonstrate that the installed `cargo-kani` actually
-  supports the operations and assertions used here before the proof stage can
-  proceed. A successful run that treats operations imprecisely is not proof
-  evidence.
+- Historical observation (2026-09-28): the local Kani skill was read as
+  conflicting with LEM-1's model assumption. The skill cautions about
+  floating-point precision and recommends stubs for trig and square root; AXM-5
+  assumes IEEE-754 semantics. That concern prompted the Stage A spikes. The
+  current version-matched Kani 0.67 feature-support guide says it supports
+  floating-point numbers and identifies trig, cosine, and square root as
+  over-approximated. The spikes nevertheless timed out without a verdict, so no
+  useful model validation was obtained for LEM-1.
 - Observation: the first Kani spike stopped in a dependency build script
   because `kani-compiler` could not load its bundled LLVM shared library.
   Evidence: `/tmp/kani-wildside-b514a-spike.out` and
@@ -1690,13 +1756,16 @@ floating-point precision and both bounded feasibility runs timed out.
   Date/Author: 2026-10-15, implementation agent.
 - Decision: decline a Kani harness for LEM-1 in this change and support the
   claim with its hand proof, generated properties, and a dense boundary-slice
-  regression. Rationale: the installed Kani guidance says floating-point
-  precision is not modelled; the wrapper and isolated-kernel spikes each
-  exceeded 30 minutes without a verdict (details in `Artefacts and notes`). A
-  green result would not establish the requested IEEE-754 claim. This is the
-  documented written disposition required by the Kani project-integration
-  guidance; revisit with a verifier that explicitly supports these operations.
-  Date/Author: 2026-09-28, implementation agent.
+  regression. Rationale: the wrapper and isolated-kernel spikes each exceeded
+  30 minutes without a verdict or useful model validation for LEM-1 (details in
+  `Artefacts and notes`). The local skill cautions about float precision and
+  recommends stubs for trig and square root; Kani 0.67's feature-support guide
+  documents floating-point support and over-approximation for trig, cosine, and
+  square root. The timed-out runs provide no verdict and therefore no proof
+  evidence for the requested IEEE-754 claim. This is the documented written
+  disposition required by the Kani project-integration guidance; revisit with a
+  verifier that can provide a useful result for these operations. Date/Author:
+  2026-09-28, implementation agent.
 - Decision: isolate the existing scalar rounding expression in the private
   `round_coordinate_value` function so the dense boundary-slice test can call
   the exact operation without constructing `serde_json::Number` values.
@@ -1826,16 +1895,37 @@ floating-point precision and both bounded feasibility runs timed out.
 
 ## Outcomes & retrospective
 
-The resumed local validation is complete for the unchanged source candidate:
-all five requested Make gates, focused cache-key tests, backend doctests, and
-the full `make test` target passed. The original `build-limits` refusals remain
-useful history but are superseded by these terminal results. Publication, fresh
-hosted CI, review disposition, readiness, and merge remain outstanding.
+The current uncommitted candidate is HEAD
+`bd0c80bac0e1a26e7f09343702e55a44e5422dd1` plus the four tracked working-tree
+changes. Its diff SHA-256 before and after the full test gate was
+`32e315279f1aafc08e835ebfa4476979c52cef880947fd4d68f33c678b0944b8`.
+`make check-fmt`, `make lint`, `make typecheck`, `make audit`, `make spelling`,
+`make markdownlint`, and `make nixie` passed. The initial default-runtime
+`make test` run reached 3,600 seconds with 957 of 1,830 Rust tests completed:
+942 passed, 14 PostgreSQL-backed tests timed out, one was terminated by the
+global timeout, four were skipped, and 873 were not run. Investigation found a
+long-lived PostgreSQL process holding
+`/tmp/wildside-pg-embedded-shared-cluster.lock`; it was left untouched.
 
-The property suite, coordinate admission fix, supporting documentation, and
-validation evidence are complete. The hosted CodeScene finding was resolved by
-splitting feature observation into focused helpers; the hosted check passed on
-the remediation commit. The design-panel and review findings were resolved, and
+The complete `make test` rerun passed with
+`TMPDIR=/var/tmp/wildside-pr458-tmp-e1abce79`,
+`PG_RUNTIME_DIR=/var/tmp/wildside-pr458-pg-e1abce79/install`, and
+`PG_DATA_DIR=/var/tmp/wildside-pr458-pg-e1abce79/data`. It completed 1,830 Rust
+tests with four configured skips; both compile-fail targets passed. Python
+workflow contracts passed 606 tests with one skip; targeted Python passed 115
+with 13 skips; lint-actions passed 14 tests; TypeScript and frontend tests
+passed. The gate log is
+`/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-3.out`.
+This validates the current source candidate, while the documentation edits in
+this update still need their Markdown gates. Hosted run `39034226820`,
+CodeScene, and Gecko describe the previously published head only. Fresh
+assessments, hosted checks, formal review, readiness, and merge remain pending.
+
+Historical implementation record: the property suite, coordinate admission fix,
+supporting documentation, and validation evidence were considered complete on
+earlier candidates. The hosted CodeScene finding was resolved by splitting
+feature observation into focused helpers; the hosted check passed on the
+remediation commit. The design-panel and review findings were resolved, and
 final CodeRabbit review 24 returned no concerns. The hosted CodeRabbit check
 remains skipped by the draft-PR policy; Kody and the automerge workflow also
 skipped without failed jobs.
@@ -1851,12 +1941,13 @@ feature set changes. All deterministic gates passed after these changes, and
 the roadmap item remains checked. The final local CodeRabbit review's status
 finding came from a snapshot taken before this `COMPLETE` status update.
 
-The latest implementation commit is `a2b5b670aec9e8fd0fd5306632218f2bb1f29e9c`.
-Its hosted CodeScene and Gecko checks passed, with no pending or failed checks
-on that implementation head. Hosted CodeRabbit, Kody, and automerge were
-skipped under the draft and configured conditions. The defensive admission
-fallback and named rejection table are included in the completed
-implementation, with the roadmap's 5.1.4a item checked.
+That implementation history culminated in commit
+`a2b5b670aec9e8fd0fd5306632218f2bb1f29e9c`; its hosted CodeScene and Gecko
+checks passed. It is not the current PR head. PR #458 now requires the
+non-numeric coordinate coverage repair and current-plan reconciliation to pass
+fresh gates and review before it reaches equilibrium. The roadmap's 5.1.4a item
+remains checked for the shipped implementation scope; the added completeness
+work and PR integration are still pending.
 
 Follow-up: evaluate a verifier with explicit IEEE-754 support for LEM-1. No
 Kani harness or CI wiring is planned for this change.
@@ -2068,12 +2159,15 @@ interface and canonical-form limits, and V-9 is pinned before any fix so it
 guards in-range key stability.
 
 Revision note (2026-09-28): Stage A's wrapper and isolated-kernel Kani spikes
-both reached CBMC but exceeded 30 minutes without a verdict. The installed Kani
-guidance also excludes floating-point precision. Stage D now declines a Kani
-claim and instead requires LEM-1's hand derivation, the existing full-domain
-generated properties, and an exhaustive check of a 100,000-ULP slice inside
-each ±180 boundary. The developers' guide will state this limitation and
-disposition explicitly.
+both reached CBMC but exceeded 30 minutes without a verdict. The then-installed
+local guidance was understood to exclude floating-point precision. Stage D
+therefore declined a Kani claim and instead required LEM-1's hand derivation,
+the existing full-domain generated properties, and an exhaustive check of a
+100,000-ULP slice inside each ±180 boundary. The developers' guide records the
+disposition. A later check of the version-matched Kani 0.67 feature-support
+guide clarifies that floating-point types are supported, with trig, cosine, and
+square root over-approximated; the two timed-out spikes still provide no useful
+model validation or verdict for LEM-1.
 
 Revision note (2026-09-28): post-gate CodeRabbit reviews identified that V-8
 must vary one generated leaf under `generated.payload.content`, while keeping

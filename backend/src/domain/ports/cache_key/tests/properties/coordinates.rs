@@ -4,8 +4,10 @@ use proptest::prelude::*;
 use serde_json::json;
 
 use super::super::super::ROUNDED_COORDINATE_KEYS;
-use super::strategies::{distinct_integer_pair, divergent_cells, grid_cell_pair};
-use crate::domain::ports::RouteCacheKey;
+use super::strategies::{
+    distinct_integer_pair, divergent_cells, grid_cell_pair, non_numeric_coordinate_pair,
+};
+use crate::domain::ports::{RouteCacheKey, RouteCacheKeyDerivationError};
 
 const COORDINATE_SCALE: f64 = 100_000.0;
 
@@ -72,4 +74,91 @@ proptest! {
             "distinct integer coordinates must be rejected or derive distinct keys: {first_integer:?}, {second_integer:?} => {first_key:?}, {second_key:?}"
         );
     }
+
+    #[test]
+    fn non_numeric_coordinate_values_remain_distinct(
+        (first, second) in non_numeric_coordinate_pair(),
+    ) {
+        let first_key = RouteCacheKey::for_route_request(&first);
+        let second_key = RouteCacheKey::for_route_request(&second);
+
+        prop_assert!(first_key.is_ok(), "first non-numeric value: {:?}", first_key.as_ref().err());
+        prop_assert!(second_key.is_ok(), "second non-numeric value: {:?}", second_key.as_ref().err());
+        prop_assert_ne!(first_key.ok(), second_key.ok());
+    }
+}
+
+#[test]
+fn string_values_under_coordinate_keys_remain_distinct() {
+    for &field in ROUNDED_COORDINATE_KEYS {
+        let first = json!({field: "north"});
+        let second = json!({field: "south"});
+        let first_key = RouteCacheKey::for_route_request(&first)
+            .expect("a string under a coordinate key is admitted");
+        let second_key = RouteCacheKey::for_route_request(&second)
+            .expect("a string under a coordinate key is admitted");
+
+        assert_ne!(
+            first_key, second_key,
+            "material string changes under {field} must remain in the key"
+        );
+    }
+}
+
+#[test]
+fn non_numeric_coordinate_values_preserve_material_changes() {
+    let cases = [
+        (
+            "boolean values",
+            json!({"lng": true}),
+            json!({"lng": false}),
+        ),
+        (
+            "null and string values",
+            json!({"lon": null}),
+            json!({"lon": "unset"}),
+        ),
+        (
+            "object values",
+            json!({"latitude": {"label": "north"}}),
+            json!({"latitude": {"label": "south"}}),
+        ),
+    ];
+
+    for (description, first, second) in cases {
+        let first_key = RouteCacheKey::for_route_request(&first)
+            .expect("a non-numeric value under a coordinate key is admitted");
+        let second_key = RouteCacheKey::for_route_request(&second)
+            .expect("a non-numeric value under a coordinate key is admitted");
+
+        assert_ne!(
+            first_key, second_key,
+            "material changes to {description} must remain in the key"
+        );
+    }
+}
+
+#[test]
+fn array_values_reset_coordinate_context() {
+    let first = json!({"lat": [181.0]});
+    let second = json!({"lat": [181.000_001]});
+    let first_key = RouteCacheKey::for_route_request(&first)
+        .expect("an array element is not a coordinate leaf");
+    let second_key = RouteCacheKey::for_route_request(&second)
+        .expect("an array element is not a coordinate leaf");
+
+    assert_ne!(
+        first_key, second_key,
+        "array elements under lat must not be rounded as coordinate values"
+    );
+}
+
+#[test]
+fn nested_object_restores_coordinate_context_inside_an_array() {
+    let payload = json!({"lat": [{"lng": 181.0}]});
+
+    assert!(matches!(
+        RouteCacheKey::for_route_request(&payload),
+        Err(RouteCacheKeyDerivationError::CoordinateOutOfRange { ref key, .. }) if key == "lng"
+    ));
 }
