@@ -49,26 +49,7 @@ fn generated_strategies_reach_special_keys_and_all_v8_edits() {
         observed.has_out_of_range_coordinate,
         "fixed-seed samples missed an out-of-range coordinate: {observed:?}"
     );
-    assert!(
-        observed.has_coordinate_string,
-        "fixed-seed samples missed a string under a coordinate key: {observed:?}"
-    );
-    assert!(
-        observed.has_coordinate_boolean,
-        "fixed-seed samples missed a boolean under a coordinate key: {observed:?}"
-    );
-    assert!(
-        observed.has_coordinate_null,
-        "fixed-seed samples missed null under a coordinate key: {observed:?}"
-    );
-    assert!(
-        observed.has_coordinate_array,
-        "fixed-seed samples missed an array under a coordinate key: {observed:?}"
-    );
-    assert!(
-        observed.has_coordinate_object,
-        "fixed-seed samples missed an object under a coordinate key: {observed:?}"
-    );
+    assert_non_numeric_coordinate_coverage(&observed);
 
     let edits = payload_pair_with_single_leaf_edit();
     for _ in 0..SAMPLE_COUNT {
@@ -93,6 +74,29 @@ fn generated_strategies_reach_special_keys_and_all_v8_edits() {
         observed.edits.has_fresh_key_insertion,
         "fixed-seed samples missed a fresh-key insertion: {:?}",
         observed.edits
+    );
+}
+
+fn assert_non_numeric_coordinate_coverage(observed: &ObservedPayloadFeatures) {
+    assert!(
+        observed.has_coordinate_string,
+        "fixed-seed samples missed a string under a coordinate key: {observed:?}"
+    );
+    assert!(
+        observed.has_coordinate_boolean,
+        "fixed-seed samples missed a boolean under a coordinate key: {observed:?}"
+    );
+    assert!(
+        observed.has_coordinate_null,
+        "fixed-seed samples missed null under a coordinate key: {observed:?}"
+    );
+    assert!(
+        observed.has_coordinate_array,
+        "fixed-seed samples missed an array under a coordinate key: {observed:?}"
+    );
+    assert!(
+        observed.has_coordinate_object,
+        "fixed-seed samples missed an object under a coordinate key: {observed:?}"
     );
 }
 
