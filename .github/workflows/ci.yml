@@ -84,7 +84,7 @@ jobs:
           fetch-depth: 0
 
       - name: Start resource sampler
-        run: ./scripts/ci-resource-sampler.sh start
+        run: bash ./scripts/ci-resource-sampler.sh start
 
       # v4.1.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
@@ -686,7 +686,7 @@ jobs:
 
       - name: Report resource sampler
         if: always()
-        run: ./scripts/ci-resource-sampler.sh report
+        run: bash ./scripts/ci-resource-sampler.sh report
 
   # Rust coverage. This lane generates coverage and ratchets it against the
   # baseline; it talks to CodeScene not at all. A pull-request lane that ran
@@ -725,7 +725,7 @@ jobs:
           persist-credentials: false
 
       - name: Start resource sampler
-        run: ./scripts/ci-resource-sampler.sh start
+        run: bash ./scripts/ci-resource-sampler.sh start
 
 
       - name: Set cache keys
@@ -912,4 +912,4 @@ jobs:
 
       - name: Report resource sampler
         if: always()
-        run: ./scripts/ci-resource-sampler.sh report
+        run: bash ./scripts/ci-resource-sampler.sh report
