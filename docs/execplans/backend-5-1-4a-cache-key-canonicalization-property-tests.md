@@ -5,10 +5,13 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS — compiler-dependent candidate gates were refused by
-build-limits admission. Published head `9ddcf14` then failed its hosted Audit
-step on `rustls` 0.23.45; the local lockfile candidate upgrades to 0.23.46 but
-remains unpublished until the refused gates have terminal evidence.
+Status: IN PROGRESS — the local candidate based on published head
+`1d1db11dd03efdcaf2c5a884d709ebb44f1206e6` has passed the complete local gate
+sequence, including full `make test`. Its five-path source diff SHA-256 is
+`31d9e9eb222d10394da8f985bc150d31c3610dbf2884a40d10af46f87648ac76`. PR #458 is
+still draft at the published head, whose hosted Audit failure predates the
+`rustls` 0.23.46 lockfile fix. Publish the validated candidate, then obtain
+fresh hosted checks and review before readiness and merge.
 
 ## Purpose / big picture
 
@@ -1003,6 +1006,24 @@ floating-point precision and both bounded feasibility runs timed out.
 
 ## Progress
 
+- [x] Resumed validation on 2026-10-17 after compiler admission recovered.
+  On local HEAD `1d1db11dd03efdcaf2c5a884d709ebb44f1206e6` with the five-path
+  source diff SHA-256 recorded above, `make check-fmt`, `make lint`,
+  `make typecheck`, `make markdownlint`, and `make nixie` all passed.
+  `cargo test -p backend cache_key` passed 48 matching tests;
+  `cargo test -p backend --doc` passed 160 doctests with 96 ignored; and
+  `make test` passed with 1,825 Nextest tests and four skipped. Both compile-
+  fail tests passed, as did the Python, workflow-contract, lint-actions, and
+  Bun suites. Logs: check-fmt, lint, typecheck, Markdown lint, and Nixie use
+  the branch-suffixed `/tmp` paths; focused tests are in
+  `/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`,
+  backend doctests in
+  `/tmp/test-2-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`,
+  and the full test target in
+  `/tmp/test-3-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`.
+  These results supersede the compiler-admission refusals below for this
+  unchanged local source candidate. The PR remains unpublished at its old draft
+  head; hosted checks and review must run against the published fix.
 - [x] Stage A: dependency and caller facts reconfirmed; wrapper and
   scalar-kernel Kani spikes reached CBMC but exceeded 30 minutes. No proof is
   claimed; the hand-proof and dense-slice fallback is recorded.
@@ -1772,12 +1793,26 @@ floating-point precision and both bounded feasibility runs timed out.
   compiler service owner restores reliable launch admission and a new
   exact-candidate run is authorized. Date/Author: 2026-10-16, implementation
   agent, under the PR-babysitting instructions.
+- Decision: after admission recovered, run the full local validation sequence
+  once on the unchanged candidate and record only terminal results. All
+  deterministic gates, focused cache-key tests, backend doctests, and the full
+  `make test` passed, so the candidate is eligible for fresh review and
+  publication. The PR is still draft and its remote checks still describe the
+  prior `rustls` 0.23.45 head; hosted acceptance and merge remain pending.
+  Date/Author: 2026-10-17, implementation agent, under the user's
+  PR-babysitting instruction.
 - Implementation constraint: the Kani skill requires written justification
   when a requested harness is declined. Stage E will document why this verifier
   cannot substantiate LEM-1 and the chosen test fallback. Source: local `kani`
   skill, `Project integration`.
 
 ## Outcomes & retrospective
+
+The resumed local validation is complete for the unchanged source candidate:
+all five requested Make gates, focused cache-key tests, backend doctests, and
+the full `make test` target passed. The original `build-limits` refusals remain
+useful history but are superseded by these terminal results. Publication, fresh
+hosted CI, review disposition, readiness, and merge remain outstanding.
 
 The property suite, coordinate admission fix, supporting documentation, and
 validation evidence are complete. The hosted CodeScene finding was resolved by

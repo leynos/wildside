@@ -1,4 +1,7 @@
 //! Guards generated payloads and V-8 edit forms against vacuous coverage.
+//!
+//! If a fixed-seed check fails after a proptest or strategy change, verify
+//! witness reach and reseed; do not weaken the properties.
 
 use proptest::{
     prelude::*,
@@ -14,6 +17,7 @@ use crate::domain::ports::cache_key::{
 
 const SAMPLE_COUNT: usize = 512;
 const COVERAGE_SEED: u64 = 0x51_04_2a;
+const ZERO_ROUNDING_CELL_BOUNDARY: f64 = 0.000_005;
 
 #[test]
 fn generated_strategies_reach_special_keys_and_all_v8_edits() {
@@ -38,8 +42,8 @@ fn generated_strategies_reach_special_keys_and_all_v8_edits() {
         "fixed-seed samples missed an all-string theme array: {observed:?}"
     );
     assert!(
-        observed.has_fractional_coordinate,
-        "fixed-seed samples missed an in-range fractional coordinate: {observed:?}"
+        observed.has_admitted_fractional_coordinate_outside_zero_cell,
+        "fixed-seed samples missed an admitted fractional coordinate outside the zero rounding cell: {observed:?}"
     );
     assert!(
         observed.has_out_of_range_coordinate,
@@ -75,7 +79,7 @@ fn generated_strategies_reach_special_keys_and_all_v8_edits() {
 #[derive(Debug, Default)]
 struct ObservedPayloadFeatures {
     has_theme_array: bool,
-    has_fractional_coordinate: bool,
+    has_admitted_fractional_coordinate_outside_zero_cell: bool,
     has_out_of_range_coordinate: bool,
     edits: ObservedSingleLeafEdits,
 }
@@ -124,8 +128,10 @@ fn observe_coordinate_feature(
     }
 
     if let Some(value) = number.as_f64() {
-        observed.has_fractional_coordinate |=
-            value.abs() <= MAX_COORDINATE_MAGNITUDE && value.fract() != 0.0;
+        observed.has_admitted_fractional_coordinate_outside_zero_cell |= value.abs()
+            <= MAX_COORDINATE_MAGNITUDE
+            && value.abs() > ZERO_ROUNDING_CELL_BOUNDARY
+            && value.fract() != 0.0;
         observed.has_out_of_range_coordinate |= value.abs() > MAX_COORDINATE_MAGNITUDE;
     }
 }

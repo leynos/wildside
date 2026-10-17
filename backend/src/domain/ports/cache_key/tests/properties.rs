@@ -4,6 +4,8 @@
 //! `serde_json::Map` configuration. Geographic validity is outside this
 //! cache-key contract. Negative-control evidence is recorded in
 //! `docs/execplans/backend-5-1-4a-cache-key-canonicalization-property-tests.md`.
+//! Revisit object-order coverage if the `serde_json` `preserve_order` feature
+//! is enabled.
 
 mod canonical_arrays;
 mod coordinates;

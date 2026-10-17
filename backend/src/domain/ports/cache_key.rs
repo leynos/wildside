@@ -118,7 +118,7 @@ pub enum RouteCacheKeyDerivationError {
     /// The canonical payload could not be hashed.
     #[error(transparent)]
     Hash(#[from] PayloadHashError),
-    /// A route coordinate was outside the supported latitude/longitude range.
+    /// A coordinate value violates the route-cache-key admission bound.
     #[error("coordinate field '{key}' must be between -180 and 180; got {value}")]
     CoordinateOutOfRange { key: String, value: Number },
     /// Rounding unexpectedly produced a value that JSON cannot represent.

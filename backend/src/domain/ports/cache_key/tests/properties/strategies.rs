@@ -91,7 +91,19 @@ fn coordinate_number() -> impl Strategy<Value = Value> + Clone {
         2 => any::<i64>().prop_map(|value| Value::Number(value.into())),
         2 => any::<u64>().prop_map(|value| Value::Number(value.into())),
         4 => finite_json_number(),
+        3 => moderate_coordinate_number(),
         2 => large_coordinate_number(),
+    ]
+}
+
+fn moderate_coordinate_number() -> impl Strategy<Value = Value> + Clone {
+    prop_oneof![
+        3 => (-180.0_f64..=180.0_f64)
+            .prop_filter_map("moderate in-range coordinates are JSON numbers", json_number),
+        2 => (-1_000.0_f64..=-180.0_f64)
+            .prop_filter_map("moderate negative coordinates are JSON numbers", json_number),
+        2 => (180.0_f64..=1_000.0_f64)
+            .prop_filter_map("moderate positive coordinates are JSON numbers", json_number),
     ]
 }
 
