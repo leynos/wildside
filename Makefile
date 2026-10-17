@@ -44,8 +44,8 @@ export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go
 # workspace enables the `vendored` feature, so the build script extracts a
 # compile-time constant (utoipa-swagger-ui-vendored 5.17.14) that contains no
 # symlinks and no SUID/SGID entries; all three advisories need an
-# attacker-controlled archive, which cannot occur here. Remove these ignores
-# as soon as the resolved zip is >= 9.0.0:
+# attacker-controlled archive, which cannot occur here. Review by 2026-11-17,
+# and remove these ignores as soon as the resolved zip is >= 9.0.0:
 # https://github.com/leynos/wildside/issues/547
 CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258 \
 	--ignore RUSTSEC-2026-0367 --ignore RUSTSEC-2026-0368 \
