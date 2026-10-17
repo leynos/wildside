@@ -1,7 +1,7 @@
 //! Domain cache key type and route-request derivation shared by route cache
 //! adapters.
 
-use serde_json::{Number, Value};
+use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -9,6 +9,7 @@ use crate::domain::idempotency::{PayloadHash, PayloadHashError};
 
 const ROUTE_CACHE_NAMESPACE: &str = "route:v1";
 const COORDINATE_PRECISION_FACTOR: f64 = 100_000.0;
+const MAX_COORDINATE_MAGNITUDE: f64 = 180.0;
 const SORTED_ARRAY_KEYS: &[&str] = &["themes", "themeIds", "interestThemeIds"];
 const ROUNDED_COORDINATE_KEYS: &[&str] = &["lat", "lng", "lon", "latitude", "longitude"];
 
@@ -34,6 +35,7 @@ impl RouteCacheKey {
     /// The derivation normalizes semantically equivalent route requests so the
     /// cache can be shared across reordered themes, reordered object keys, and
     /// coordinate noise that disappears after rounding to five decimal places.
+    /// Coordinates in rounded fields must be within -180 to 180 degrees.
     ///
     /// # Example
     ///
@@ -57,6 +59,13 @@ impl RouteCacheKey {
     /// assert_eq!(first_key, second_key);
     /// assert!(first_key.as_str().starts_with("route:v1:"));
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RouteCacheKeyDerivationError::CoordinateOutOfRange`] when a
+    /// coordinate in a rounded field is outside the supported range. It can
+    /// also return a hashing or key-validation error if canonical derivation
+    /// fails.
     pub fn for_route_request(payload: &Value) -> Result<Self, RouteCacheKeyDerivationError> {
         let hash = hash_route_request_value(payload)?.to_hex();
 
@@ -109,13 +118,19 @@ pub enum RouteCacheKeyDerivationError {
     /// The canonical payload could not be hashed.
     #[error(transparent)]
     Hash(#[from] PayloadHashError),
+    /// A coordinate value violates the route-cache-key admission bound.
+    #[error("coordinate field '{key}' must be between -180 and 180; got {value}")]
+    CoordinateOutOfRange { key: String, value: Number },
+    /// Rounding unexpectedly produced a value that JSON cannot represent.
+    #[error("rounded coordinate in field '{key}' is not a finite JSON number: {value}")]
+    RoundedCoordinateNotRepresentable { key: String, value: Number },
     /// The generated cache key failed validation.
     #[error(transparent)]
     Validation(RouteCacheKeyValidationError),
 }
 
-fn hash_route_request_value(value: &Value) -> Result<PayloadHash, PayloadHashError> {
-    let normalized = normalize_route_request_value(value, None);
+fn hash_route_request_value(value: &Value) -> Result<PayloadHash, RouteCacheKeyDerivationError> {
+    let normalized = normalize_route_request_value(value, None)?;
     let json_bytes =
         serde_json::to_vec(&normalized).map_err(|err| PayloadHashError::Serialization {
             message: err.to_string(),
@@ -125,60 +140,115 @@ fn hash_route_request_value(value: &Value) -> Result<PayloadHash, PayloadHashErr
     Ok(PayloadHash::from_bytes(hash_bytes))
 }
 
-fn normalize_route_request_value(value: &Value, current_key: Option<&str>) -> Value {
+fn normalize_route_request_value(
+    value: &Value,
+    current_key: Option<&str>,
+) -> Result<Value, RouteCacheKeyDerivationError> {
     match value {
-        Value::Object(map) => {
-            let mut entries: Vec<_> = map.iter().collect();
-            entries.sort_by_key(|(key, _)| key.as_str());
-
-            let normalized = entries
-                .into_iter()
-                .map(|(key, child)| {
-                    (
-                        key.clone(),
-                        normalize_route_request_value(child, Some(key.as_str())),
-                    )
-                })
-                .collect();
-
-            Value::Object(normalized)
-        }
-        Value::Array(items) => {
-            let mut normalized: Vec<Value> = items
-                .iter()
-                .map(|item| normalize_route_request_value(item, None))
-                .collect();
-
-            if should_sort_array(current_key) && normalized.iter().all(Value::is_string) {
-                normalized.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
-            }
-
-            Value::Array(normalized)
-        }
-        Value::Number(number) if should_round_coordinate(current_key) => {
-            Value::Number(round_coordinate(number))
-        }
-        other => other.clone(),
+        Value::Object(map) => normalize_object(map),
+        Value::Array(items) => normalize_array(items, current_key),
+        Value::Number(number) => normalize_number(number, current_key),
+        other => Ok(other.clone()),
     }
+}
+
+fn normalize_object(map: &Map<String, Value>) -> Result<Value, RouteCacheKeyDerivationError> {
+    let mut entries: Vec<_> = map.iter().collect();
+    entries.sort_by_key(|(key, _)| key.as_str());
+
+    let normalized = entries
+        .into_iter()
+        .map(|(key, child)| {
+            Ok((
+                key.clone(),
+                normalize_route_request_value(child, Some(key.as_str()))?,
+            ))
+        })
+        .collect::<Result<_, RouteCacheKeyDerivationError>>()?;
+
+    Ok(Value::Object(normalized))
+}
+
+fn normalize_array(
+    items: &[Value],
+    current_key: Option<&str>,
+) -> Result<Value, RouteCacheKeyDerivationError> {
+    let mut normalized: Vec<Value> = items
+        .iter()
+        .map(|item| normalize_route_request_value(item, None))
+        .collect::<Result<_, RouteCacheKeyDerivationError>>()?;
+    sort_normalized_array(current_key, &mut normalized);
+
+    Ok(Value::Array(normalized))
+}
+
+fn sort_normalized_array(current_key: Option<&str>, values: &mut [Value]) {
+    if should_sort_array(current_key) && values.iter().all(Value::is_string) {
+        values.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+    }
+}
+
+fn normalize_number(
+    number: &Number,
+    current_key: Option<&str>,
+) -> Result<Value, RouteCacheKeyDerivationError> {
+    if let Some(key) = current_key.filter(|key| ROUNDED_COORDINATE_KEYS.contains(key)) {
+        return round_coordinate(key, number).map(Value::Number);
+    }
+
+    Ok(Value::Number(number.clone()))
 }
 
 fn should_sort_array(current_key: Option<&str>) -> bool {
     current_key.is_some_and(|key| SORTED_ARRAY_KEYS.contains(&key))
 }
 
-fn should_round_coordinate(current_key: Option<&str>) -> bool {
-    current_key.is_some_and(|key| ROUNDED_COORDINATE_KEYS.contains(&key))
-}
-
-fn round_coordinate(number: &Number) -> Number {
+fn round_coordinate(key: &str, number: &Number) -> Result<Number, RouteCacheKeyDerivationError> {
     let Some(value) = number.as_f64() else {
-        return number.clone();
+        return Err(RouteCacheKeyDerivationError::CoordinateOutOfRange {
+            key: key.to_owned(),
+            value: number.clone(),
+        });
     };
 
-    let rounded = (value * COORDINATE_PRECISION_FACTOR).round() / COORDINATE_PRECISION_FACTOR;
-    let canonical = if rounded == 0.0 { 0.0 } else { rounded };
+    if value.abs() > MAX_COORDINATE_MAGNITUDE {
+        return Err(RouteCacheKeyDerivationError::CoordinateOutOfRange {
+            key: key.to_owned(),
+            value: number.clone(),
+        });
+    }
 
-    Number::from_f64(canonical).unwrap_or_else(|| number.clone())
+    let canonical = round_coordinate_value(value);
+
+    Number::from_f64(canonical).ok_or_else(|| {
+        RouteCacheKeyDerivationError::RoundedCoordinateNotRepresentable {
+            key: key.to_owned(),
+            value: number.clone(),
+        }
+    })
+}
+
+/// Round to five decimal places and canonicalize signed zero.
+///
+/// # Examples
+///
+/// ```
+/// # use backend::domain::ports::RouteCacheKey;
+/// # use serde_json::json;
+/// let rounded = RouteCacheKey::for_route_request(&json!({"lat": 51.500001}))
+///     .expect("valid coordinate");
+/// let canonical = RouteCacheKey::for_route_request(&json!({"lat": 51.5}))
+///     .expect("valid coordinate");
+/// assert_eq!(rounded, canonical);
+/// let negative_zero = RouteCacheKey::for_route_request(&json!({"lat": -0.0}))
+///     .expect("valid coordinate");
+/// let positive_zero = RouteCacheKey::for_route_request(&json!({"lat": 0.0}))
+///     .expect("valid coordinate");
+/// assert_eq!(negative_zero, positive_zero);
+/// ```
+fn round_coordinate_value(value: f64) -> f64 {
+    let rounded = (value * COORDINATE_PRECISION_FACTOR).round() / COORDINATE_PRECISION_FACTOR;
+    if rounded == 0.0 { 0.0 } else { rounded }
 }
 
 /// Returns `true` when `hash` is a 64-character lowercase hexadecimal string.
@@ -190,188 +260,4 @@ fn is_lowercase_hex_digest(hash: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    //! Validates cache key parsing, canonicalization, and whitespace
-    //! constraints.
-    //! TODO: Add property-based tests for canonicalization invariants across
-    //! generated key ordering, theme arrays, and coordinate rounding cases.
-    use insta::assert_snapshot;
-    use serde_json::json;
-
-    use crate::domain::idempotency::PayloadHashError;
-
-    use super::{
-        ROUNDED_COORDINATE_KEYS, RouteCacheKey, RouteCacheKeyDerivationError,
-        RouteCacheKeyValidationError, SORTED_ARRAY_KEYS,
-    };
-    use rstest::rstest;
-
-    #[rstest]
-    #[case("")]
-    #[case("   ")]
-    fn cache_key_rejects_blank(#[case] value: &str) {
-        let err = RouteCacheKey::new(value).expect_err("blank keys rejected");
-        assert_eq!(err, RouteCacheKeyValidationError::Empty);
-    }
-
-    #[rstest]
-    #[case(" leading")]
-    #[case("trailing ")]
-    fn cache_key_rejects_whitespace_padding(#[case] value: &str) {
-        let err = RouteCacheKey::new(value).expect_err("padded key rejected");
-        assert_eq!(err, RouteCacheKeyValidationError::ContainsWhitespace);
-    }
-
-    #[rstest]
-    fn cache_key_accepts_clean_input() {
-        let key = RouteCacheKey::new("route:user:1").expect("valid key");
-        assert_eq!(key.as_str(), "route:user:1");
-        assert_eq!(key.to_string(), "route:user:1");
-    }
-
-    #[test]
-    fn route_request_key_has_expected_namespace_and_hash_shape() {
-        let payload = json!({
-            "origin": {"lat": 51.5, "lng": -0.1},
-            "destination": {"lat": 48.85661, "lng": 2.35222},
-            "preferences": {"interestThemeIds": ["history", "art"]},
-        });
-
-        let key = RouteCacheKey::for_route_request(&payload).expect("route key");
-        let digest = key
-            .as_str()
-            .strip_prefix("route:v1:")
-            .expect("route namespace");
-
-        assert_eq!(digest.len(), 64);
-        assert!(
-            digest
-                .chars()
-                .all(|character| character.is_ascii_hexdigit())
-        );
-        assert_eq!(digest, digest.to_ascii_lowercase());
-    }
-
-    #[test]
-    fn route_cache_error_messages_match_snapshots() {
-        assert_snapshot!(
-            RouteCacheKeyValidationError::Empty.to_string(),
-            @"route cache key must not be empty"
-        );
-        assert_snapshot!(
-            RouteCacheKeyValidationError::ContainsWhitespace.to_string(),
-            @"route cache key must not contain surrounding whitespace"
-        );
-        assert_snapshot!(
-            RouteCacheKeyValidationError::MalformedDigest.to_string(),
-            @"route cache key digest must be a 64-character lowercase hex string"
-        );
-        assert_snapshot!(
-            RouteCacheKeyDerivationError::Hash(PayloadHashError::Serialization {
-                message: "not representable as canonical JSON".to_owned(),
-            })
-            .to_string(),
-            @"failed to serialize canonical JSON payload: not representable as canonical JSON"
-        );
-        assert_snapshot!(
-            RouteCacheKeyDerivationError::Validation(
-                RouteCacheKeyValidationError::MalformedDigest,
-            )
-            .to_string(),
-            @"route cache key digest must be a 64-character lowercase hex string"
-        );
-    }
-
-    #[rstest]
-    #[case("themes", json!(["history", "art"]), json!(["art", "history"]))]
-    #[case(
-        "themeIds",
-        json!(["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"]),
-        json!(["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"])
-    )]
-    #[case(
-        "interestThemeIds",
-        json!(["theme-b", "theme-a"]),
-        json!(["theme-a", "theme-b"])
-    )]
-    fn route_request_key_sorts_documented_theme_arrays(
-        #[case] field_name: &str,
-        #[case] first_themes: serde_json::Value,
-        #[case] second_themes: serde_json::Value,
-    ) {
-        assert!(SORTED_ARRAY_KEYS.contains(&field_name));
-        let first = json!({
-            "origin": {"lat": 51.5000001, "lng": -0.1000001},
-            "destination": {"lat": 48.85661, "lng": 2.35222},
-            "preferences": {field_name: first_themes},
-        });
-        let second = json!({
-            "destination": {"lng": 2.35222, "lat": 48.85661},
-            "preferences": {field_name: second_themes},
-            "origin": {"lng": -0.1, "lat": 51.5},
-        });
-
-        let first_key = RouteCacheKey::for_route_request(&first).expect("first route key");
-        let second_key = RouteCacheKey::for_route_request(&second).expect("second route key");
-
-        assert_eq!(first_key, second_key);
-    }
-
-    #[rstest]
-    #[case("lat", 51.5000049, 51.5)]
-    #[case("lng", -0.1000049, -0.1)]
-    #[case("latitude", 48.8566141, 48.85661)]
-    #[case("longitude", 2.3522249, 2.35222)]
-    #[case("lat", -0.0000049, 0.0000049)]
-    #[case("lng", -0.0000049, 0.0000049)]
-    fn route_request_key_rounds_documented_coordinate_fields(
-        #[case] field_name: &str,
-        #[case] first_coordinate: f64,
-        #[case] second_coordinate: f64,
-    ) {
-        assert!(ROUNDED_COORDINATE_KEYS.contains(&field_name));
-        let first = json!({field_name: first_coordinate});
-        let second = json!({field_name: second_coordinate});
-
-        let first_key = RouteCacheKey::for_route_request(&first).expect("first route key");
-        let second_key = RouteCacheKey::for_route_request(&second).expect("second route key");
-
-        assert_eq!(first_key, second_key);
-    }
-
-    #[test]
-    fn route_request_key_changes_for_material_payload_differences() {
-        let first = json!({
-            "origin": {"lat": 51.5, "lng": -0.1},
-            "destination": {"lat": 48.85661, "lng": 2.35222},
-            "preferences": {"interestThemeIds": ["art", "history"]},
-        });
-        let second = json!({
-            "origin": {"lat": 51.50002, "lng": -0.1},
-            "destination": {"lat": 48.85661, "lng": 2.35222},
-            "preferences": {"interestThemeIds": ["art", "history"]},
-        });
-
-        let first_key = RouteCacheKey::for_route_request(&first).expect("first route key");
-        let second_key = RouteCacheKey::for_route_request(&second).expect("second route key");
-
-        assert_ne!(first_key, second_key);
-    }
-
-    #[test]
-    fn route_request_key_preserves_non_theme_array_order() {
-        let first = json!({
-            "origin": {"lat": 51.5, "lng": -0.1},
-            "preferences": {"avoid": ["stairs", "crowds"]},
-        });
-        let second = json!({
-            "origin": {"lat": 51.5, "lng": -0.1},
-            "preferences": {"avoid": ["crowds", "stairs"]},
-        });
-
-        let first_key = RouteCacheKey::for_route_request(&first).expect("first route key");
-        let second_key = RouteCacheKey::for_route_request(&second).expect("second route key");
-
-        assert_ne!(first_key, second_key);
-    }
-}
+mod tests;

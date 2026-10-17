@@ -1,0 +1,2196 @@
+# Add property-based tests for route cache key canonicalization invariants
+
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+`Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
+be kept up to date as work proceeds.
+
+Status: IN PROGRESS — implementation and local validation are complete; final
+PR integration remains. The latest source candidate was published to PR #458 at
+`435b7c8813a545c81ac4319487a39caf6a7f9206` after fixing generated coverage for
+non-numeric coordinate values and splitting a CodeScene large method. All eight
+local gates passed sequentially on that source candidate, including the full
+`make test` target with isolated PostgreSQL runtime paths. The first test
+attempt on an earlier candidate hit a stale PostgreSQL runtime lock; the
+successful isolated rerun did not touch the process holding the default lock.
+This status update corrects the stale candidate and completion statements
+below. At this observation, hosted CodeScene and Gecko passed; the PR's build
+and coverage checks were still running. Fresh completeness and proof
+assessments, formal review, readiness, and merge remain pending.
+
+## Purpose / big picture
+
+Roadmap item 5.1.4 shipped canonical route cache key derivation
+(`RouteCacheKey::for_route_request` in `backend/src/domain/ports/cache_key.rs`)
+with example-based contract tests. The test module still carries this marker:
+
+```rust
+//! TODO: Add property-based tests for canonicalization invariants across
+//! generated key ordering, theme arrays, and coordinate rounding cases.
+```
+
+This follow-up, tracked as roadmap item 5.1.4a, discharges that TODO. It adds
+property-based tests (using the `proptest` crate, which generates many random
+inputs and shrinks failures to minimal counter-examples) that state the
+canonicalization invariants over generated route-request payloads rather than
+hand-picked examples: theme-array permutation invariance, coordinate rounding
+equivalence and divergence, normalization idempotence, negative-zero collapse,
+order preservation for non-canonicalized arrays, divergence under single-leaf
+edits, and the `route:v1:<64-character lowercase hexadecimal SHA-256>` key
+format. It also adds one known-answer example test that pins the digest
+algorithm itself, closing a gap where no test would fail if the hash function
+were swapped.
+
+The canonicalization code is not yet called by any production path (its only
+caller outside its own module is the Redis-backed behavioural test), so there
+are no deployed cache entries or clients to protect. Counter-examples are
+therefore treated as authoritative: **a property failure inside the natural
+input domain is a production defect to be fixed, not an input region to be
+fenced off by narrowing the generator.** Planning has already found three such
+defects in coordinate rounding (see `Surprises & Discoveries`); this plan fixes
+them by bounding the admitted coordinate magnitude in the domain canonicalizer,
+rejecting out-of-range coordinates with a typed error, and establishing the
+rounding projection property with a hand proof, generated properties, and an
+exhaustive test over a dense representable-float slice near the bound. The
+planned Kani proof was evaluated and declined for this change: the wrapper and
+isolated-scalar spikes both exceeded 30 minutes without a verdict, so they
+provided no useful verdict or model validation for LEM-1. The local Kani skill
+cautions that floating-point precision is not established and recommends
+stubbing operations such as trig and square root; version-matched Kani 0.67
+documentation says floating-point numbers are supported, while trig, cosine,
+and square root are over-approximated. LEM-1 uses multiplication, division, and
+rounding, but these timed-out spikes do not establish how Kani models that
+claim. See the
+[Kani 0.67 Rust feature support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md).
+
+The observable outcome for a developer is: `cargo test -p backend cache_key`
+runs the new property suite over the full finite JSON number domain; each
+property demonstrably fails when the canonicalization logic is broken
+(mutation-testing and seeded-fault evidence is recorded below); LEM-1 is
+supported by its written arithmetic argument, full-domain generated properties,
+and a dense boundary-slice regression; route requests whose coordinate-keyed
+numbers exceed ±180 in magnitude fail key derivation with
+`RouteCacheKeyDerivationError::CoordinateOutOfRange` instead of producing
+silently wrong keys; and the TODO comment is gone. Cache keys for in-range
+requests are byte-for-byte unchanged.
+
+This plan was reviewed pre-implementation by a six-lens design panel; the
+verdict was "proceed with conditions" and every condition is folded into the
+obligations and stages below (see `Decision Log`). It was then revised on the
+commissioning engineer's instruction that counter-examples carry more authority
+than the first revision gave them.
+
+## Context and orientation
+
+Wildside is a Rust backend organized hexagonally: domain code under
+`backend/src/domain/` defines ports; adapters under `backend/src/outbound/`
+implement them. Route plans are cached in Redis under canonical keys so that
+semantically equivalent requests share one cache entry.
+
+Key locations:
+
+- `backend/src/domain/ports/cache_key.rs` (215 lines) — the canonicalization
+  seam. `RouteCacheKey::for_route_request(payload: &serde_json::Value)`
+  normalizes the payload via the private `normalize_route_request_value`,
+  hashes the compact serialization of the normalized value with
+  `sha2::Sha256::digest` directly (in the private `hash_route_request_value`,
+  lines 117–126; `crate::domain::idempotency::PayloadHash` is used only as a
+  byte container via `from_bytes`/`to_hex` — `canonicalize_and_hash` from the
+  idempotency module is **not** called on this path), and formats
+  `route:v1:<hex digest>`. Its `#[cfg(test)] mod tests` declaration (line 215)
+  resolves to `backend/src/domain/ports/cache_key/tests.rs`; property modules
+  live under `backend/src/domain/ports/cache_key/tests/properties/`.
+- Normalization semantics (from the current implementation):
+  - Object entries are collected and explicitly sorted by key at every depth.
+  - Arrays whose immediate containing object key is one of `SORTED_ARRAY_KEYS`
+    (`themes`, `themeIds`, `interestThemeIds`) are sorted lexicographically,
+    but only when every element is a JSON string; any non-string element
+    leaves the whole array in original order. Duplicates are preserved.
+  - Array elements recurse with `current_key = None`, so eligibility for
+    sorting or rounding never propagates through an array boundary; however,
+    objects inside arrays regain per-field eligibility (a `lat` field inside
+    `waypoints: [{...}]` is still rounded).
+  - Numbers whose immediate containing key is one of `ROUNDED_COORDINATE_KEYS`
+    (`lat`, `lng`, `lon`, `latitude`, `longitude`) are rounded to five decimal
+    places via `(value * 100_000.0).round() / 100_000.0` in the private
+    `round_coordinate`; a result equal to zero is canonicalized to positive
+    zero. Before multiplication, values with magnitude above 180 are rejected
+    with `CoordinateOutOfRange`, avoiding the overflow in defect D-2. If
+    `Number::from_f64` cannot represent the rounded result, derivation returns
+    `RoundedCoordinateNotRepresentable` rather than retaining the original
+    number.
+  - Values under coordinate keys that are not numbers (strings, objects,
+    arrays, booleans, null) pass through untouched.
+- Callers: `rg for_route_request backend/src` finds no production caller;
+  `backend/tests/route_cache_key_canonicalization_bdd.rs` is the only external
+  user. The public error enum `RouteCacheKeyDerivationError` is re-exported from
+  `backend/src/domain/ports/mod.rs:50` but matched nowhere.
+- `backend/src/domain/idempotency/payload.rs` — `PayloadHash` (the SHA-256
+  digest container) and, separately, `canonicalize_and_hash` used by the
+  idempotency feature (not by the cache-key path).
+- `backend/tests/route_cache_key_canonicalization_bdd.rs` with
+  `backend/tests/features/route_cache_key_canonicalization.feature` — one
+  Redis-backed `rstest-bdd` scenario proving two fixed, semantically equivalent
+  payloads share a cache slot. It uses in-range coordinates and remains
+  unchanged.
+- Module-split precedents: `backend/src/outbound/queue/apalis_route_queue.rs`
+  declares `#[cfg(test)] mod tests;` resolving to
+  `apalis_route_queue/tests.rs`, which declares `mod properties;`
+  (`tests/properties.rs`).
+  `backend/src/domain/jobs/enrichment/tests/ bounding_box.rs` is a themed
+  grandchild property file — the closest precedent for what this plan builds.
+  `proptest!` is used in six files today; none overrides `ProptestConfig`.
+- Mutation testing already runs nightly over this file:
+  `.github/workflows/mutation-testing.yml` invokes the shared
+  `mutation-cargo.yml` with `paths: "backend/,crates/,tools/"`, and
+  `cargo-mutants` (27.x) is installed locally. This plan uses a scoped
+  cargo-mutants run as its standing non-vacuity mechanism.
+- Kani 0.67 (`cargo kani`) is installed locally; the repository has no Kani
+  harnesses or wiring yet. Workspace lints live in the root `Cargo.toml`
+  (`[workspace.lints.rust]`, line 72), which does not yet declare `cfg(kani)`.
+
+Facts established during planning that shape this design:
+
+- `serde_json` is compiled without the `preserve_order` feature (confirmed
+  from `Cargo.lock`: no `indexmap` dependency on `serde_json` 1.0.150), so
+  `serde_json::Value::Object` is backed by `BTreeMap` and object key order is
+  already sorted at the `Value` representation level. A property asserting
+  "object key insertion order does not affect the key" is therefore vacuous: it
+  cannot fail even if the explicit sort in `normalize_route_request_value` were
+  deleted. See `Decision Log`. (Duplicate keys in JSON text collapse last-wins
+  at parse time, upstream of this seam's `&Value` boundary, so no
+  textual-ordering path survives.)
+- `serde_json::Number::as_f64` in this build always returns `Some` (verified
+  against the pinned 1.0.150 sources: `PosInt`/`NegInt` are lossily cast with
+  `as f64`).
+- Non-finite floats (NaN, infinities) cannot be constructed through the
+  public `serde_json::Value` API (`Number::from_f64` rejects them) nor parsed
+  from JSON text, so generators need not (and cannot) cover them.
+- `proptest = "1"` is already a dev-dependency (`backend/Cargo.toml:92`). No
+  new dependencies are required.
+- No `proptest-regressions/` directories exist yet and `.gitignore` does not
+  exclude them; the proptest failure-persistence convention is to commit them.
+  For this suite they would land under
+  `backend/proptest-regressions/domain/ports/cache_key/tests/properties.txt`.
+
+Known production defects (found during planning; each is a counter-example to
+an obligation below and is fixed by this plan, not excluded):
+
+- D-1 (idempotence failure at large magnitude): once `|value| * 100_000.0`
+  exceeds roughly 2^51, the divide-back step is no longer exact enough for a
+  second rounding pass to land on the same integer, so
+  `normalize(normalize(v)) != normalize(v)` — a counter-example to V-4.
+- D-2 (overflowing coordinates bypass admission): for finite `|value|` above
+  roughly 1.8e303 the multiply overflows to infinity, `Number::from_f64(inf)`
+  returns `None`, and the original number passes through. This witnesses that
+  the old implementation accepts coordinates outside the new ±180 contract. It
+  is not a V-2 equivalence counter-example: the binary64 ULP at this magnitude
+  is about 3.05e287, so distinct representable values cannot share a
+  five-decimal grid cell.
+- D-3 (distinct integers collapse): integer coordinates beyond 2^53 are
+  lossily cast by `as_f64`, so distinct `i64`/`u64` coordinate values map to
+  one key — a counter-example to V-3/V-8 divergence.
+
+All three live only at magnitudes no real coordinate occupies (latitude is
+bounded by ±90, longitude by ±180). The first revision of this plan hid them by
+bounding the generators; this revision fixes them at the source.
+
+Relevant guides to read before implementing: the `proptest`, `kani`,
+`rust-errors`, `rust-unit-testing`, and `hexagonal-architecture` skills;
+`docs/rust-testing-with-rstest-fixtures.md`; `docs/rstest-bdd-users-guide.md`
+(for why the existing BDD suite is left alone);
+`docs/rust-doctest-dry-guide.md` (the `for_route_request` doctest gains an
+error-path sentence); `docs/wildside-backend-architecture.md` (route caching
+contract; the line anchors cited in `Conformance basis` are pre-Stage-E); and
+`docs/complexity-antipatterns-and-refactoring-strategies.md` (module-split
+hygiene).
+
+## Constraints
+
+- Production edits in `backend/src/domain/ports/cache_key.rs` are limited to:
+  the mechanical test-module split; the private scalar extraction into
+  `round_coordinate_value` for direct boundary-slice testing; removal of the
+  TODO comment; and fixes for counter-examples to the obligations in
+  `Verification plan` (the known defects D-1..D-3 and any further
+  counter-example found inside the generator domain). Every production fix must
+  be preceded by a recorded failing property or example (red), then land
+  together with that test passing (green) in one commit.
+- A production fix must not change the canonical bytes, and hence the cache
+  key, of any request whose coordinate-keyed numbers are all within ±180. The
+  known-answer test V-9 and the existing example tests enforce this. (No cache
+  is deployed, so this is a design-hygiene constraint rather than a migration
+  one; if a future fix genuinely needs to change in-range keys, that is an
+  escalation, and the namespace would move to `route:v2`.)
+- The permitted public-interface additions are the two new variants:
+  `RouteCacheKeyDerivationError::CoordinateOutOfRange { key: String, value:
+  serde_json::Number }`
+  and
+  `RouteCacheKeyDerivationError::RoundedCoordinateNotRepresentable { key:
+  String, value: serde_json::Number }`.
+  `serde_json::Number` preserves the enum's `Eq` derive; a plain `f64` field
+  would not. Private function signatures inside `cache_key.rs` may change
+  freely.
+- Keep the canonicalization seam and its coordinate-domain policy in the
+  domain; do not move logic into
+  `backend/src/outbound/cache/redis_route_cache.rs` or test through the Redis
+  adapter.
+- No new crate dependencies (dev or production). Use the existing
+  `proptest`, `rstest`, `insta`, and `pretty_assertions` dev-dependencies;
+  `cargo-mutants` and `cargo-kani` are installed developer tools, not Cargo
+  dependencies. Kani is evaluated for LEM-1 but not used: the wrapper and
+  isolated-scalar spikes timed out without a verdict or useful model validation
+  for this claim. The local skill cautions about floating-point precision; the
+  [Kani 0.67 feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md)
+  documents floating-point support and over-approximation for trig, cosine,
+  and square root.
+- Respect the repository's 400-line file limit (`AGENTS.md`): after the
+  split, `cache_key.rs`, `cache_key/tests.rs`, and property modules must each
+  stay under 400 lines. Contingency: if `tests/properties.rs` approaches the
+  limit, split it into a `tests/properties/` directory (`strategies.rs` for
+  generators, sibling files per invariant group), following the
+  `enrichment/tests/bounding_box.rs` themed-file precedent.
+- Existing tests (unit, snapshot, doctest, BDD) must continue to pass
+  unmodified apart from the mechanical relocation of the unit-test module.
+- Property bodies must use `prop_assert!`/`prop_assert_eq!`/`prop_assert_ne!`
+  (not `panic!`/`unwrap`) so shrinking works.
+- Strategies must construct valid inputs by composition; `prop_filter` and
+  `prop_assume!` are only acceptable for genuinely rare rejections, never for
+  structural constraints (the filtering trap). Generators must not be narrowed
+  to avoid a counter-example; the only permitted domain bounds are the ones the
+  production contract itself states (the ±180 admission bound after Stage C2).
+- Manual negative-control mutations are never committed: before each
+  commit, `git diff` of `cache_key.rs` against the intended change must show
+  only the planned fix (see the pre-commit guard in `Concrete steps`).
+
+## Tolerances (exception triggers)
+
+- Scope: more than 16 files touched, or more than 80 net non-test production
+  lines, means stop and escalate.
+- Interface: any public API change other than the two
+  `RouteCacheKeyDerivationError` variants declared above, or making a private
+  item `pub`, means stop and escalate.
+- Canonical form: any fix that would change the key of an in-range request
+  (V-9 or an existing example test turning red) means stop and escalate.
+- Dependencies: any new crate requirement means stop and escalate.
+- New counter-examples: a counter-example beyond D-1..D-3 is fixed under the
+  same red-green discipline if the fix fits the interface and canonical-form
+  tolerances; otherwise record the shrunk input, commit nothing red, and
+  escalate. Two failed fix attempts on the same counter-example also trigger
+  escalation.
+- Kani: if the harness cannot be built against the `backend` crate, or does
+  not complete within 30 minutes or 16 GB of memory, stop Kani work and record
+  the failure mode. The wrapper and isolated-kernel spikes both exceeded the
+  time limit without a verdict or useful model validation for LEM-1. The local
+  Kani skill cautions that floating-point precision is not established and
+  recommends stubs for trig and square root; Kani 0.67's
+  [feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md)
+  documents floating-point support and over-approximation of trig, cosine, and
+  square root. Since LEM-1 uses multiplication, division, and rounding, the
+  hand proof and full-domain properties remain in force, with the deterministic
+  dense boundary slice as the measured fallback. Do not claim a Kani proof.
+- Runtime: if the property suite adds more than 30 seconds to
+  `cargo test -p backend --lib` on the development machine, reduce case counts
+  or generator depth and record the decision. (Panel arithmetic estimates well
+  under one second at 256 cases per property; the tolerance is a backstop, not
+  a budget.)
+- Mutation survivors: if the scoped cargo-mutants run leaves survivors in
+  `normalize_route_request_value`, `round_coordinate`, `should_sort_array`, or
+  `is_lowercase_hex_digest` after one strengthening loop, stop and record the
+  surviving mutants in `Artefacts and notes` before proceeding.
+
+## Risks
+
+- Risk: properties find counter-examples beyond D-1..D-3.
+  Severity: medium. Likelihood: low-to-medium (the generators now roam the full
+  finite number domain, which is the point). Mitigation: that is the desired
+  outcome; fix under the red-green discipline and the tolerances above, promote
+  the shrunk input to a named `rstest` case, and commit the regression file.
+- Risk: rejecting out-of-range coordinates is the wrong policy (for example,
+  a future caller wants totality). Severity: low. Likelihood: low. Mitigation:
+  there is no caller today; the alternatives (pass-through, clamping,
+  integer-grid serialization) are recorded in `Decision Log` together with why
+  they were rejected. Reversing the policy is a local change behind the same
+  private function.
+- Risk: floating-point subtlety makes the divergence property flaky.
+  Severity: low. Likelihood: low. Mitigation: derive both coordinates in a pair
+  from one integer grid cell with offsets capped at ±0.49 grid units, so
+  equivalence and divergence are decided by integer choice at generation time;
+  at the admitted magnitude (|cell| ≤ 18,000,000) float drift is below 10⁻⁸
+  grid units.
+- Risk: the module split breaks visibility assumptions.
+  Severity: low. Likelihood: low. Mitigation: private items are visible to all
+  descendant modules (`super::` from `tests.rs`, `super::super::` from
+  `tests/properties.rs`); the split is mechanical and gate-checked in its own
+  commit.
+- Risk: the fixed-seed statistics guard breaks on a proptest version bump or
+  a legitimate strategy edit (the seed-to-value stream is not stable across
+  versions). Severity: low. Likelihood: medium over the long term. Mitigation:
+  keep the thresholds probabilistically slack (at least one hit per witness
+  class in 512 draws); document in the guard's comment that a failure after a
+  proptest bump or strategy change means re-verifying witness reach and
+  re-seeding, not weakening the properties.
+- Risk: a committed `proptest-regressions` seed keeps replaying an input
+  whose expected outcome changed with a fix (for example a D-1 input that is
+  now rejected rather than rounded). Severity: low. Likelihood: medium.
+  Mitigation: re-validate and prune regression seeds in the same commit as any
+  fix; promoted `rstest` cases remain the durable record.
+- Risk: no machine proof is available for LEM-1 with the installed Kani tool.
+  Severity: medium. Likelihood: confirmed. Evidence: the local skill cautions
+  that floating-point precision is not established and recommends stubs for
+  trig and square root; the Kani 0.67 feature-support guide documents float
+  support and over-approximation for trig, cosine, and square root. The wrapper
+  and isolated-kernel spikes each exceeded 30 minutes without a verdict or
+  useful model validation for LEM-1. Mitigation: do not claim a Kani proof;
+  retain the hand argument, generated full-domain properties, and deterministic
+  dense-slice regression. Revisit when a run can validate the relevant
+  operations and complete with a useful verdict.
+
+## Conformance basis
+
+- `docs/backend-roadmap.md` §5.1: items 5.1.1–5.1.4 are complete; this plan
+  adds and discharges item 5.1.4a (the roadmap entry is created by this work —
+  see `Plan of work`). Identifier: RM-5.1.4a.
+- `docs/wildside-backend-architecture.md` (line anchors pre-Stage-E):
+  - lines 1574–1579 (domain model): `RouteCacheKey` owns canonical
+    derivation; adapters never canonicalize.
+    Identifier: ARCH-CACHEKEY-OWNERSHIP.
+  - lines 1938–1950 (route caching): the canonical form sorts the three theme
+    arrays, rounds coordinates to five decimal places, serializes JSON with
+    stable key ordering, and hashes with SHA-256; keys follow
+    `route:v1:<sha256>`. Identifier: ARCH-CACHEKEY-CONTRACT. Stage E extends
+    this contract with the coordinate admission bound
+    (ARCH-CACHEKEY-COORD-DOMAIN).
+- Prior art (external, informative only): RFC 8785 (JSON Canonicalization
+  Scheme) motivates hashing a canonical JSON form; this repository uses its own
+  simpler canonical form (BTreeMap key order plus compact
+  `serde_json::to_vec`), not RFC 8785 number/string formatting. No conformance
+  to RFC 8785 is claimed or planned.
+- No Terms of Reference document exists for this work; the roadmap and the
+  architecture document are the upstream artefacts.
+
+Trace links:
+
+```plaintext
+ARCH-CACHEKEY-CONTRACT -> RM-5.1.4a -> EP-M2, EP-M3
+  -> cache_key::tests::properties::{
+       theme_permutations_share_a_key,                (V-1)
+       coordinates_in_one_grid_cell_share_a_key,      (V-2, V-7 zero cell)
+       coordinates_in_distinct_grid_cells_diverge,    (V-3)
+       normalization_is_idempotent,                   (V-4)
+       derived_keys_match_route_v1_format,            (V-5)
+       non_theme_array_order_is_material,             (V-6)
+       non_string_theme_array_order_is_material,      (V-6)
+       edited_leaves_produce_distinct_keys,           (V-8)
+       non_numeric_coordinate_values_remain_distinct, (V-8)
+       out_of_range_coordinates_are_rejected,         (V-10)
+       route_payload_reaches_special_keys }           (non-vacuity guard)
+  -> cache_key::tests::{
+       negative_zero_coordinate_collapses_to_zero,    (V-7 example)
+       route_request_key_matches_known_sha256_digest, (V-9)
+       coordinate_bound_is_inclusive,                 (V-10 boundary)
+       <promoted D-1..D-3 regression cases> }
+ARCH-CACHEKEY-COORD-DOMAIN -> EP-M3
+  -> cache_key::tests::dense_boundary::dense_rounding_slice_near_coordinate_bound
+     (LEM-1 fallback)
+ARCH-CACHEKEY-OWNERSHIP -> EP-M1 -> module split keeps tests inside the
+  domain port module (no adapter involvement)
+```
+
+## Verification plan
+
+The work verifies existing invariants over generated input ranges and, because
+the fixes introduce one new contractual rule (the coordinate admission bound)
+and one lemma the rule exists to make true (rounding is a projection on the
+admitted domain), backed by a hand proof, generated properties, and the dense
+boundary-slice regression described below.
+
+Method selection:
+
+- Property tests carry the payload-level invariants: the input domain
+  (arbitrary JSON payloads, permutations, all finite numbers) is far too large
+  to enumerate, and the invariants are relational (pairs of payloads), which
+  proptest expresses directly.
+- LEM-1 carries a written arithmetic argument. Kani and Verus were assessed
+  for this finite `f64` claim, but neither provides suitable evidence in this
+  environment. The local Kani skill cautions that floating-point precision is
+  not established and recommends stubs for trig and square root. Kani 0.67's
+  [feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md)
+  says floating-point numbers are supported and specifically documents
+  over-approximation for trig, cosine, and square root. LEM-1 uses
+  multiplication, division, and rounding; the two Kani spikes timed out without
+  a verdict, so no useful model validation was obtained for this claim. Verus
+  has limited IEEE-754 reasoning and would require axiomatizing the rounding
+  facts under test. The claim is therefore supported by the hand derivation,
+  full-domain generated properties, and an exhaustive test of all representable
+  values in a fixed 100,000-ULP slice inside each ±180 boundary. This slice is
+  a regression check, not a proof over the whole domain. Kani is also not used
+  for `is_lowercase_hex_digest` (a two-line character-class check pinned by V-5
+  and the mutation gate) or payload-level properties (unbounded recursive
+  structures).
+- Loom and state-machine testing are inapplicable (no concurrency, no state).
+
+Axioms (external interfaces treated as correct, not verified here):
+
+- AXM-1: `sha2::Sha256` implements FIPS 180-4 SHA-256 (collision behaviour
+  is not tested; "different canonical bytes give different digests" is assumed
+  for the divergence properties, which is sound for test purposes because a
+  collision would be a cryptographic event).
+- AXM-2: `serde_json` 1.0.150 without `preserve_order`: `Value::Object` is
+  `BTreeMap`-backed; `to_vec` is deterministic for a given `Value`;
+  `Number::from_f64` rejects non-finite values; `Number::as_f64` always returns
+  `Some` in this build (lossily for integers beyond 2^53).
+- AXM-3: `proptest` 1.x generates values from the stated strategies and
+  shrinks failures; default 256 cases per property. The seed-to-value stream is
+  not guaranteed stable across proptest versions.
+- AXM-4: the pinned `serde_json` 1.0.150 float formatter, `zmij`, uses shortest
+  round-trip formatting that is injective on distinct finite `f64` values —
+  distinct floats serialize to distinct byte strings.
+- AXM-5: Rust `f64` arithmetic (`*`, `/`, `round`) follows IEEE-754 binary64
+  semantics: multiplication and division round to nearest-even, while `round`
+  rounds half away from zero. This is an assumption of the hand proof; Kani
+  runs here do not validate it.
+
+Lemma LEM-1 (rounding is a projection on the admitted domain). Let
+`MAX_COORDINATE_MAGNITUDE = 180.0` and `P = 100_000.0`. For every finite `f64`
+`x` with `|x| <= 180`, define `n = round(x * P)` and
+`r = canonical_zero(n / P)` (the current `round_coordinate` arithmetic). Then
+(a) `|r| <= 180`, so `r` is itself admitted; (b) `round(r * P) == n`; and hence
+(c) `round_coordinate(r) == r` bit-for-bit. Hand proof: `P` is exactly
+representable. `|x * P| <= 1.8e7 < 2^25`, so `n` is an integer with
+`|n| < 2^25`, exactly representable. Division gives
+`n / P = (n / 10^5)(1 + d1)` with `|d1| <= 2^-53`; multiplying back gives
+`(n / P) * P = n (1 + d1)(1 + d2)` with `|d2| <= 2^-53`, so the error from `n`
+is at most `|n| * (2^-52 + 2^-106) < 2^25 * 2^-51.9 < 2^-26`, far below the
+`1/2` needed for `round` to return `n`; that is (b). Since `|n| <= 1.8e7`
+exactly (rounding cannot overshoot the integer `1.8e7`), `|n / P| <= 180` after
+correctly rounded division; that is (a). The zero case: `n == 0` gives
+`r == +0.0` by the canonical-zero step, and `round(+0.0 * P) == 0`. (c) follows
+because `r` is a function of `n` alone. A corollary used by V-3: `n` is
+recoverable from `r` by (b), so distinct grid cells give distinct `r` and, by
+AXM-4, distinct bytes. Method: hand proof plus
+`dense_rounding_slice_near_coordinate_bound`, which enumerates all representable
+`f64` values in the 100,000-ULP interval immediately inside each of `-180.0`
+and `180.0`, asserting (a), (b), and (c). This is an exhaustive regression
+check for those intervals, not a machine proof over all admitted `f64` values.
+Full-domain `proptest` properties exercise generated finite values; the hand
+proof carries the remaining domain argument. No Kani harness is landed: both the
+`Number` wrapper spike and the isolated scalar kernel exceeded 30 minutes
+without a verdict or useful model validation for LEM-1. The local skill's
+precision caution and the Kani 0.67 feature-support details are recorded above.
+Logs and resource measurements are recorded in `Artefacts and notes`; the
+written disposition is in `docs/developers-guide.md`.
+
+Obligations. Each is exercised through the public entry point
+`RouteCacheKey::for_route_request` unless stated; `normalize` refers to the
+private `normalize_route_request_value`, reachable from the test modules
+(private items are visible to descendant modules: `super::` in `tests.rs`,
+`super::super::` in `tests/properties.rs`). "Coordinate leaf" means a JSON
+number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
+
+- Obligation V-1 (theme permutation invariance): for every generated payload
+  containing an all-string array under each of `themes`, `themeIds`, and
+  `interestThemeIds` (covering duplicates and empty arrays), every permutation
+  of each such array yields the same cache key. Method: property test. Domain:
+  string vectors length 0..8 drawn from a small alphabet (to force duplicates),
+  permuted via `proptest::sample::Index`; payloads place the array both at the
+  top level and nested under `preferences`. Artefact:
+  `backend/src/domain/ports/cache_key/tests/properties.rs`,
+  `theme_permutations_share_a_key`. Evidence:
+  `cargo test -p backend --lib cache_key::tests::properties`. Non-vacuity:
+  generated vectors include length ≥ 2 with non-identity permutations (witness
+  class); the mutation gate MUT-1 must kill comparator/guard mutants in
+  `normalize_route_request_value`.
+- Obligation V-2 (coordinate rounding equivalence): two payloads identical
+  except that a coordinate leaf carries different values which round to the
+  same five-decimal grid cell yield the same key. Pairs are constructed from
+  one integer grid cell: draw `cell: i64` in `-18_000_000..=18_000_000` (the
+  full admitted range) and one offset magnitude in `0.01..0.49` grid units,
+  then use its negative and positive forms. This guarantees distinct inputs
+  without filtering. Convert with `(cell as f64 + offset) / 100_000.0`, clamped
+  into ±180 only at the two extreme cells where an offset would step outside. A
+  companion arm compares exact in-range whole coordinates represented as JSON
+  integers and floats (so `51` and `51.0` are exercised as equal). Method: one
+  property test whose body iterates over each key in `ROUNDED_COORDINATE_KEYS`
+  and two shapes (top level; inside an object inside an array, the `waypoints`
+  shape). Artefact: same file, `coordinates_in_one_grid_cell_share_a_key`.
+  Non-vacuity: offsets include nonzero values of both signs; manual negative
+  control NC-2 (change `COORDINATE_PRECISION_FACTOR` to `1_000_000.0`) must
+  fail this property. Before Stage C2, explicit D-2 cases at `1.8e303` and
+  `1.9e303` under `lat` must fail the admission assertion. Those cases exercise
+  the overflow path and the old acceptance behaviour; they do not claim that
+  these values round to the same cell.
+- Obligation V-3 (coordinate divergence): payloads identical except for
+  coordinate leaves in different grid cells yield different keys; and two
+  distinct JSON integers under a coordinate key either yield different keys or
+  are rejected (never silently collide). Method: property test; one generator
+  draws `cell` in `-18_000_000..=18_000_000` and a nonzero `delta` in
+  `-36_000_000..=-1` or `1..=36_000_000`. It clamps `cell + delta` into the
+  admitted range; if that yields `cell` again, it selects the adjacent in-range
+  cell (`cell + 1`, except at the maximum where it selects `cell - 1`). Thus
+  every generated pair is distinct without filtering. A second arm draws
+  arbitrary distinct `i64`/`u64` pairs. Artefact: same file,
+  `coordinates_in_distinct_grid_cells_diverge`. Non-vacuity: rests on LEM-1's
+  corollary, AXM-1, and AXM-4; the mutation gate must kill "`round_coordinate`
+  returns a constant" mutants. The integer arm is the red evidence for D-3
+  before Stage C2.
+- Obligation V-4 (normalization idempotence): for every generated payload
+  where `normalize(v)` succeeds, `normalize(normalize(v))` succeeds and equals
+  `normalize(v)`, and — mandatorily, because `Value::eq` treats `-0.0 == 0.0`
+  while the two serialize differently —
+  `for_route_request(v) == for_route_request(&normalize(v))`. Method: property
+  test over a general recursive JSON strategy (`prop_recursive`, depth ≤ 4, ≤ 8
+  collection items, leaves covering null, bool, the **full** `i64` and `u64`
+  ranges, the full finite `f64` range, and strings) whose object-key strategy
+  is biased to emit the special key names (`themes`, `lat`, `lng`, …) with high
+  probability. Float leaves mix `any::<f64>()` restricted to finite values by
+  construction (`prop::num::f64::NORMAL | SUBNORMAL | ZERO`) with a
+  sub-strategy concentrated in ±1,000 so both in-range and out-of-range
+  coordinates are common. Artefact: same file, `normalization_is_idempotent`.
+  Non-vacuity: the statistics guard proves the strategy reaches the sort and
+  round branches and out-of-range coordinates; manual negative control NC-4
+  (append a constant to every string during normalization) must fail
+  idempotence. Before Stage C2 this property is expected to fail with a D-1
+  counter-example. The default randomized run did not reach that failure, so
+  D-1's exact witness is also a named `rstest` that directly checks the
+  non-idempotent normalization before the fix.
+- Obligation V-5 (derivation totality and key format): for every generated
+  payload, derivation never panics and returns either `Ok(key)` whose string
+  matches `^route:v1:[0-9a-f]{64}$` (checked with explicit character-class
+  assertions; no regex crate), or `Err(CoordinateOutOfRange { .. })`; and it
+  returns `Ok` exactly when every coordinate leaf has `|value| <= 180` (the
+  oracle is a small test-side walk that only *finds* coordinate leaves — it
+  does not re-implement rounding). Note `RouteCacheKey::new` validates only
+  emptiness and surrounding whitespace; hex-digest validation lives solely in
+  `for_route_request` via `is_lowercase_hex_digest`, so the property's own
+  assertions carry the format obligation. Method: property test over the same
+  recursive strategy as V-4. Artefact: same file,
+  `derived_keys_match_route_v1_format`. Non-vacuity: the mutation gate must
+  kill mutants of `is_lowercase_hex_digest`, of the namespace formatting, and
+  of the magnitude comparison.
+- Obligation V-6 (order is material where canonicalization is not claimed):
+  permuting an array of ≥ 2 pairwise-distinct elements with a non-identity
+  permutation changes the key, in two variants: (a) all-string arrays under a
+  key not in `SORTED_ARRAY_KEYS`; (b) arrays under a theme key containing at
+  least one non-string element (the all-string guard leaves them unsorted).
+  Distinctness is by construction (indexed strings `item-0`, `item-1`, …, plus
+  one distinct non-string element for variant (b)); the permutation is rotation
+  by one of a vector of length ≥ 2, which on pairwise-distinct elements is
+  never the identity (a periodic array such as `[1, 1]` rotates to itself and
+  would fail spuriously). Method: property tests. Artefacts: same file,
+  `non_theme_array_order_is_material` and
+  `non_string_theme_array_order_is_material`. Non-vacuity: the mutation gate
+  must kill "sort every array unconditionally" mutants (e.g.
+  `should_sort_array -> true`, all-string guard removed).
+- Obligation V-7 (negative zero collapse): any coordinate value that rounds
+  to zero (offsets within the zero grid cell, both signs) produces the same key
+  as literal `0.0`. Method: the `cell == 0` class of V-2's generator, plus an
+  explicit `rstest` example for the `json!(-0.0)` literal (proptest floats
+  rarely emit signed zero). Artefact: V-2's property plus
+  `cache_key/tests.rs::negative_zero_coordinate_collapses_to_zero`.
+  Non-vacuity: the mutation gate must kill removal of the `rounded == 0.0`
+  collapse.
+- Obligation V-8 (single-leaf divergence — general injectivity guard):
+  editing exactly one non-canonicalized leaf of a generated, successfully
+  derived payload (changing a string value to a distinct string, flipping a
+  boolean, or inserting a fresh key) changes the key. A companion generated
+  property varies non-numeric values directly under coordinate keys. Its
+  payload strategy keeps every numeric coordinate within ±180 so both
+  derivations succeed, independently of the unrestricted payload strategy used
+  for Stage C2 rejection properties. Without these checks, a normalizer that
+  dropped or rewrote non-special fields would pass V-1, V-4, V-5, and V-6.
+  Method: property tests; the strategy picks a payload and one edit whose
+  changed-ness is guaranteed by construction (appending a suffix to a string;
+  flipping `true` to `false`; inserting a `fresh-*` key into a content object
+  whose only initial key is `sample`), or changes a string, boolean, null, or
+  object value under a coordinate key. Artefacts: same file,
+  `edited_leaves_produce_distinct_keys` and
+  `non_numeric_coordinate_values_remain_distinct`; direct edge cases are in
+  `coordinates.rs`. Non-vacuity: rests on AXM-1/AXM-4; the mutation gate must
+  kill identity-erasing mutants (e.g. the object branch returning
+  `Value::Null`).
+- Obligation V-9 (digest algorithm known-answer): one fixed, in-range
+  payload maps to a precomputed `route:v1:<expected 64-hex SHA-256>` string,
+  computed once from the canonical bytes with an independent tool (`sha256sum`)
+  **before any Stage C2 fix**, and pinned as a literal. It is the only test
+  that fails if the hash algorithm or the pre-hash serialization is swapped,
+  and it doubles as the guard that fixes do not change in-range keys. The
+  digest is not re-derived in test code; the comment beside the constant
+  records the exact command that produced it. Method: example test (`rstest`).
+  Artefact: `cache_key/tests.rs::route_request_key_matches_known_sha256_digest`.
+  Non-vacuity: the mutation gate's `hash_route_request_value` mutants must be
+  killed by this test.
+- Obligation V-10 (coordinate admission bound): a payload containing any
+  coordinate leaf with `|value| > 180` (any finite `f64`, any `i64`/`u64`, at
+  any depth including inside arrays of objects) fails derivation with
+  `CoordinateOutOfRange` naming that key and the number's textual form; values
+  of exactly ±180 are admitted. When several leaves are out of range, which one
+  is reported is deterministic (the first in canonical key order), and the
+  property asserts only that the reported leaf is one of the offending ones.
+  Method: property test plus an `rstest` boundary table (`180`, `-180`, `180.0`,
+  `180.000001`, `-180.000001`, `i64::MAX`, `u64::MAX`, `1e308`, subnormal)
+  with an `insta` snapshot of the error's `Display` text, matching the module's
+  existing error-message snapshots. Artefacts: same file,
+  `out_of_range_coordinates_are_rejected`;
+  `cache_key/tests.rs::coordinate_bound_is_inclusive`. Non-vacuity: the
+  mutation gate must kill `<=`→`<` and `>`→`>=` mutants of the bound comparison
+  (the inclusive-boundary cases exist for this).
+
+Standing non-vacuity mechanisms (in the committed suite, not one-off):
+
+- Statistics guard `route_payload_reaches_special_keys`: draws 512 values
+  from `route_payload()` on a fixed seed and asserts at least one payload
+  contains (i) a theme key with an all-string array of length ≥ 2, (ii) an
+  in-range coordinate leaf with a fractional value, and (iii) an out-of-range
+  coordinate leaf. The "at least one" thresholds are deliberately slack so
+  proptest version bumps or strategy edits do not flip them; the doc comment
+  states that a failure after such a change means re-verifying witness reach
+  and re-seeding, not loosening properties. Implementation sketch (the
+  supported proptest 1.x sampling API):
+
+  ```rust
+  let mut runner = proptest::test_runner::TestRunner::deterministic();
+  let strategy = route_payload();
+  let mut reach = WitnessReach::default();
+  for _ in 0..512 {
+      let value = strategy
+          .new_tree(&mut runner)
+          .expect("strategy should produce a tree")
+          .current();
+      reach.record(&value);
+  }
+  assert!(reach.saw_sortable_themes);
+  assert!(reach.saw_fractional_in_range_coordinate);
+  assert!(reach.saw_out_of_range_coordinate);
+  ```
+
+- Mutation gate MUT-1: a scoped run of
+  `cargo mutants --file backend/src/domain/ports/cache_key.rs -- --lib`
+  executed after Stage C2 and again at EP-M4. The nightly mutation-testing
+  workflow keeps this evidence standing thereafter. cargo-mutants generates the
+  comparator swaps, guard-function `-> true`/`-> false` replacements,
+  `round_coordinate -> constant`, relational-operator flips, and function-body
+  erasures; it cannot commit a mutation and produces machine-readable
+  transcripts.
+
+- Manual negative controls (only what mutants cannot generate): NC-2
+  (constant change to `COORDINATE_PRECISION_FACTOR`) and NC-4 (string-append
+  inside normalization). Procedure: apply the mutation, run the focused
+  property or harness and record the failure into `Artefacts and notes`
+  including the filtered-in test count (a transcript showing zero filtered-in
+  tests is vacuous and must be treated as a failed control). Before applying a
+  control, record the intended worktree and index diffs for the file. Apply and
+  reverse only the narrow temporary edit: restore the precision constant for
+  NC-2, and remove only the injected string-append for NC-4. Never use
+  whole-file checkout/restore or reverse the complete file diff, since that can
+  discard the uncommitted Stage C2 fix. After reversal, confirm the temporary
+  mutation is absent, the recorded Stage C2 diff remains in the worktree/index,
+  and `git diff --check` passes before rerunning the focused property to green.
+  The property module's doc comment points at this ExecPlan as the record of
+  the negative-control evidence.
+
+Deliberately not verified, with rationale:
+
+- Object key-order invariance: vacuous in this build (AXM-2, BTreeMap); it
+  cannot fail whatever the implementation does. Recorded here and in the module
+  documentation instead of writing a tautological property. If `preserve_order`
+  is ever enabled, this decision must be revisited — a note to that effect goes
+  into the property module's doc comment.
+- Geographic validity (latitude within ±90, longitude within ±180 per axis):
+  request validation belongs to the route-request inbound boundary, not the
+  cache key. The ±180 admission bound is a numeric-soundness bound applied
+  uniformly to every coordinate key; it is what LEM-1 needs, no more.
+- Unicode normalization or case-folding of theme strings: the canonical form
+  has never claimed to normalize these; theme strings pass through verbatim.
+- SHA-256 collision resistance and `zmij` formatting internals: axioms AXM-1
+  and AXM-4. V-9 pins the *choice* of algorithm and serialization at the
+  boundary, which is repository-owned.
+
+Non-number values under coordinate keys are not normalized; they pass through
+verbatim. Direct examples in `coordinates.rs` cover strings, booleans, null,
+arrays, and objects. Arrays reset coordinate context, while an object nested in
+an array restores per-field context. V-8's generated
+`non_numeric_coordinate_values_remain_distinct` property checks material
+changes among strings, booleans, null, and objects under coordinate keys; the
+array context cases are direct examples.
+
+## Plan of work
+
+Stage A (reconnaissance plus Kani feasibility spikes): confirm the recon
+findings still hold (`leta show normalize_route_request_value`,
+`leta show round_coordinate`; `cargo tree -p backend -i serde_json`
+re-confirming no `preserve_order`; `rg for_route_request backend/src`
+re-confirming no production caller). Record the pre-split baseline test count
+from a fresh `cargo test -p backend --lib cache_key` run (expected eighteen
+cases; record the actual number in `Artefacts and notes`). The wrapper and
+scalar-kernel Kani spikes both exceeded 30 minutes without a verdict. Record
+their transcripts, then proceed with the documented hand-proof and dense-slice
+fallback; do not add a Kani harness or claim a machine proof.
+
+Stage B (mechanical split, first plateau):
+
+1. In `backend/src/domain/ports/cache_key.rs`, replace
+   `#[cfg(test)] mod tests { ... }` (lines 192–377) with
+   `#[cfg(test)] mod tests;`. The TODO comment moves with the module and is
+   deleted only in Stage E.
+2. Create `backend/src/domain/ports/cache_key/tests.rs` containing the
+   existing example tests verbatim (`super::` paths are unchanged for a child
+   file module).
+
+Stage C1 (properties that hold today; commit green): add
+`backend/src/domain/ports/cache_key/tests/properties.rs`, declared via
+`mod properties;` in `tests.rs`. Keep the module root small and split
+strategies and invariant groups into themed children under `tests/properties/`
+so no file approaches the repository's 400-line limit.
+
+1. Strategy helpers in `tests/properties/strategies.rs`: `theme_array()`
+   (small-alphabet string vectors), `grid_cell_pair()` (integer cell plus one
+   nonzero offset magnitude used with both signs, below 0.49),
+   `divergent_cells()` (cell plus nonzero delta), `admitted_route_payload()`
+   for V-8 (recursive JSON with numeric coordinate leaves bounded to the
+   admitted domain), `payload_pair_with_single_leaf_edit()` for V-8 (vary one
+   generated string leaf under `generated.payload.content`, holding the sibling
+   edits fixed), `non_numeric_coordinate_pair()` for V-8, and `rotate_by_one`
+   for V-6. Add the unrestricted `coordinate_number()` and `route_payload()`
+   strategies in Stage C2 for its full-domain properties. Free functions
+   returning `impl Strategy<Value = T>`, matching the `generate_route/tests.rs`
+   house style; no `prop_compose!` (no repository precedent). Property names
+   deliberately omit the `route_request_key_` prefix used by the example tests
+   — the `properties` module path disambiguates.
+2. Compute and pin the V-9 known-answer constant now, against the
+   unmodified production code, and add the test plus the V-7 `-0.0` example to
+   `tests.rs`.
+3. Add the properties that hold on today's code: V-1, V-6 (both variants),
+   V-7's generator class inside V-2, and V-8. V-2 and V-3 are added with their
+   in-range generators only at this stage.
+4. Commit (EP-M2).
+
+Stage C2 (counter-example-driven fixes; red then green in one commit):
+
+1. Red: add full-domain `coordinate_number()` and `route_payload()` strategies,
+   then add V-4 and V-5 over that payload strategy, the explicit D-2 overflow
+   cases, and the integer arm of V-3. Run the focused suite and record the
+   counter-examples (D-1 from its direct idempotence case and D-3 from V-3)
+   plus the failing D-2 case values and returned keys in `Artefacts and notes`.
+   The broad V-4 random run may miss the narrow D-1 rounding defect; if so,
+   retain the direct named witness. Any counter-example not in D-1..D-3 is
+   added to `Surprises & Discoveries` and handled under the same discipline.
+2. Promote each shrunk counter-example to a named `rstest` case in
+   `tests.rs` (these, too, fail at this point).
+3. Green: in `cache_key.rs`, add `MAX_COORDINATE_MAGNITUDE: f64 = 180.0`;
+   make `round_coordinate` return
+   `Result<Number, RouteCacheKeyDerivationError>`, rejecting
+   `|as_f64()| > MAX_COORDINATE_MAGNITUDE` with `CoordinateOutOfRange` (the
+   check is exact for integers too: every integer the lossy cast distorts is
+   far above 180); thread the `Result` through `normalize_route_request_value`
+   and `hash_route_request_value` with `?`; replace the `from_f64` fallback
+   with a typed `RoundedCoordinateNotRepresentable` error because the workspace
+   denies `expect_used`. Add both `CoordinateOutOfRange` and
+   `RoundedCoordinateNotRepresentable` variants with `serde_json::Number` value
+   fields and `#[error(...)]` messages naming key and value, and extend the
+   `for_route_request` rustdoc with an `# Errors` section.
+4. Add V-10 (property, boundary table, snapshot) and the statistics guard.
+5. Re-run the focused suite: all green, V-9 and every pre-existing example
+   test unchanged. Prune any regression seeds whose expected outcome the fix
+   changed; commit the rest.
+6. Run NC-2, NC-4, and MUT-1; record results. A property whose
+   corresponding mutants survive is vacuous and must be rewritten before
+   proceeding.
+7. Pre-commit guard: both
+   `git diff --cached -- backend/src/domain/ports/cache_key.rs` and
+   `git diff -- backend/src/domain/ports/cache_key.rs` must show only the
+   planned fix (no control residue); `git status --porcelain` inspected for
+   `proptest-regressions/` files. Commit test and fix together (EP-M3).
+
+Stage D (LEM-1 fallback evidence):
+
+1. Do not add `cfg(kani)`, a proof module, or a passing-proof claim. Record the
+   two bounded Kani spike transcripts and their resource measurements.
+2. Add a deterministic test that visits every representable `f64` in 100,000
+   adjacent bit patterns inside each of the `-180.0` and `180.0` boundaries.
+   Assert the rounded result remains admitted, maps back to the original
+   integer grid cell, and is bit-for-bit idempotent.
+3. Keep the full-domain `proptest` properties and LEM-1 hand argument. State
+   plainly that the boundary test is finite regression evidence and does not
+   replace a machine proof over the admitted domain.
+4. Document the Kani limitation and this verification choice in
+   `docs/developers-guide.md`, then commit the fallback test and disposition in
+   the EP-M3 plateau.
+
+Stage E (documentation and closure):
+
+1. Delete the TODO lines from `cache_key/tests.rs` module docs; extend the
+   property module's doc comment with the documented exclusions (key-order
+   vacuity under BTreeMap; geographic validity out of scope) and the pointer to
+   this ExecPlan for the negative-control record.
+2. `docs/backend-roadmap.md`: insert under §5.1, after 5.1.4:
+   `- [ ] 5.1.4a. Add property-based tests for cache key canonicalization`
+   `invariants (theme permutation invariance, coordinate rounding`
+   `equivalence and divergence, normalization idempotence, single-leaf`
+   `divergence, key format, known-answer digest, coordinate admission`
+   `bound).` It is ticked to `[x]` only when this plan reaches COMPLETE.
+3. `docs/wildside-backend-architecture.md` route-caching section: record
+   ARCH-CACHEKEY-COORD-DOMAIN — coordinate-keyed numbers above 180 in magnitude
+   are rejected with `CoordinateOutOfRange` because rounding is only a
+   projection (LEM-1) inside that bound — and note that the contract is
+   supported by the hand proof, example-based, property-based, dense-boundary,
+   and mutation-tested coverage under `backend/src/domain/ports/cache_key/`.
+   Also list the new error variant where the domain-model section describes
+   `RouteCacheKey`.
+4. `docs/developers-guide.md`: (a) add a property-testing bullet to the
+   "Testing strategy" list at the top; (b) a short subsection under testing
+   conventions recording: property modules live in `tests/properties.rs` child
+   modules; strategies are free functions composing valid values (no structural
+   filtering, and no narrowing a generator to dodge a counter-example); bodies
+   use `prop_assert*`; `proptest-regressions/` files are committed and pruned
+   when a property's expected outcome changes; shrunk failures are promoted to
+   named `rstest` cases; scoped `cargo mutants --file` runs are the standing
+   non-vacuity check; and this plan's Kani limitation and fallback are recorded
+   with the testing guidance.
+5. `docs/users-guide.md`: no change — no user-visible behaviour change (no
+   production path calls the derivation yet); recorded in `Decision Log`.
+
+Test-framework applicability, per the repository brief: `rstest` carries the
+example-shaped checks (statistics-guard harness, `-0.0` literal, known-answer
+digest, boundary table, promoted counter-examples); `proptest` carries the
+payload invariants; LEM-1 is supported by its hand proof, generated properties,
+and the dense boundary-slice regression, while Kani was evaluated and declined
+because both 30-minute spikes timed out without a verdict or useful model
+validation for LEM-1. The local skill cautions about floating-point precision;
+Kani 0.67 supports floating-point numbers but over-approximates some operations
+such as trig, cosine, and square root. See the
+[Kani 0.67 feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md).
+`insta` snapshots the new error message (consistent with the module's existing
+error snapshots); `googletest` is not a dependency of this crate (see
+`Decision Log`); no new `rstest-bdd` scenario is added because no externally
+observable workflow changes (the existing Redis BDD scenario covers the
+end-to-end contract with in-range coordinates, which this plan leaves
+byte-identical); `verus` is unsuitable for the float lemma, for the reasons
+given in `Verification plan`.
+
+## Milestones and plateaus
+
+- EP-M1 (mechanical test-module split). Outcome: `cache_key.rs` shrinks to
+  ~193 production lines plus `#[cfg(test)] mod tests;`; all existing tests pass
+  unchanged. Acceptance evidence: `cargo test -p backend --lib cache_key`
+  passes with exactly the baseline count recorded in Stage A; `make check-fmt`
+  and `make lint` show no new findings. Conformance check: no public interface,
+  dependency, or format change. Recovery: single mechanical commit; revert
+  restores the inline module.
+- EP-M2 (properties that hold today). Outcome: V-1, V-2/V-3 (in-range
+  arms), V-6, V-8 properties, V-7 and V-9 examples, all green against
+  unmodified production code. Acceptance evidence: the focused property run
+  reports the expected test count (assert via `grep 'test result: ok'` on the
+  tee'd log under `set -o pipefail`; zero matched tests is a failure).
+  Recovery: additive; revert restores EP-M1.
+- EP-M3 (counter-examples fixed and LEM-1 fallback evidence). Outcome: red
+  transcripts for D-1..D-3 recorded; `CoordinateOutOfRange` fix landed with
+  V-4, V-5, V-10, full-domain V-3, promoted regression cases, and the
+  statistics guard; V-9 unchanged; NC-2/NC-4 and MUT-1 recorded; dense
+  boundary-slice regression and documented Kani disposition recorded.
+  Acceptance evidence: focused suite green; MUT-1 kill list with no survivors
+  in the named functions; boundary test passes; Kani spike transcripts
+  explicitly show no proof verdict. Conformance check: in-range keys
+  byte-identical (V-9 and pre-existing examples green without edits); the only
+  public changes are the two new error variants. Compatibility decision: both
+  variants are additive public changes with no consumers; no deprecation is
+  needed. Recovery: revert the fix and fallback-test commits to return to EP-M2.
+- EP-M4 (documentation, roadmap, TODO removal). Outcome: TODO gone, roadmap
+  item 5.1.4a present and ticked, architecture and developers' guides updated,
+  second MUT-1 run recorded, all gates green. Acceptance evidence:
+  `make check-fmt`, `make lint`, `make test` logs show no new failures (compare
+  the lint log against a baseline log captured from `main` — the local Whitaker
+  0.2.7 vs CI 0.2.6 skew produces known noise);
+  `git grep "TODO: Add property-based tests" backend/src/domain/ports` returns
+  nothing. Recovery: docs-only commits, trivially revertable.
+
+## Concrete steps
+
+All commands run from the repository root with `set -o pipefail` active in the
+shell (the `| tee` pipes otherwise mask non-zero exits). Long outputs go through
+`tee` to
+`/tmp/$ACTION-wildside-backend-5-1-4a-cache-key-canonicalization-property-tests.out`
+(abbreviated below as `b514a`). Gates run sequentially, never in parallel;
+full-gate runs are delegated to the `scrutineer` subagent where possible.
+
+```bash
+set -o pipefail
+
+# Stage A
+cargo tree -p backend -i serde_json | head -20   # expect no indexmap parent
+rg -n for_route_request backend/src               # expect only cache_key.rs
+cargo test -p backend --lib cache_key 2>&1 | tee /tmp/test-wildside-b514a-baseline.out
+grep 'test result:' /tmp/test-wildside-b514a-baseline.out   # record count (expected 18)
+# Kani spikes (both timed out before a verdict; no harness is retained)
+# Wrapper transcript: /tmp/kani-wildside-b514a-spike-ldpath.out
+# Scalar-kernel transcript: /tmp/kani-wildside-b514a-kernel-spike.out
+
+# Stage B
+cargo test -p backend --lib cache_key 2>&1 | tee /tmp/test-wildside-b514a-m1.out
+grep 'test result:' /tmp/test-wildside-b514a-m1.out   # identical count to baseline
+
+# Stage C1 / C2 focused loop
+cargo test -p backend --lib cache_key 2>&1 | tee /tmp/test-wildside-b514a-m2.out
+grep 'test result:' /tmp/test-wildside-b514a-m2.out   # 0 matched tests is a FAILURE
+# V-9 constant: serialize the normalized fixed payload to a file from a
+# scratch test, then:
+sha256sum /tmp/b514a-v9-canonical.json
+
+# Stage C2 mutation gate (also rerun at EP-M4)
+cargo mutants --file backend/src/domain/ports/cache_key.rs -- --lib 2>&1 \
+  | tee /tmp/mutants-wildside-b514a.out
+# expect caught mutants for normalize_route_request_value, round_coordinate,
+# should_sort_array/should_round_coordinate, is_lowercase_hex_digest,
+# hash_route_request_value; record survivors
+
+# Stage C2 pre-commit guards
+git diff -- backend/src/domain/ports/cache_key.rs   # only the planned fix
+git status --porcelain                              # inspect proptest-regressions
+
+# Stage D
+# Run dense_rounding_slice_near_coordinate_bound with the focused suite.
+
+# Stage E / gates (delegate to scrutineer; sequential)
+make check-fmt 2>&1 | tee /tmp/check-fmt-wildside-b514a.out
+make lint      2>&1 | tee /tmp/lint-wildside-b514a.out
+make test      2>&1 | tee /tmp/test-wildside-b514a.out
+```
+
+Note: `make check-fmt` and `make lint` are known to exit 0 even when sub-checks
+fail; read the tee'd logs, not the exit codes. `make lint` may show
+pre-existing Whitaker suite findings caused by a local 0.2.7 vs CI 0.2.6
+version skew; diff against a `main` baseline log so only newly introduced
+findings block progress.
+
+Commit after each stage (B, C1, C2, D, each Stage E document), using file-based
+commit messages per the `commit-message` skill. The C2 commit message must cite
+the red transcripts recorded in this document.
+
+## Validation and acceptance
+
+Acceptance is behavioural:
+
+1. Before Stage C1, `cargo test -p backend --lib cache_key::tests::properties`
+   reports zero matching tests (module absent). After Stage C2 it reports the
+   ten named properties plus the statistics guard, all passing, and
+   `cache_key::tests` additionally reports the `-0.0`, known-answer,
+   boundary-table, and promoted counter-example cases.
+2. Red evidence for each fix: the Stage C2 transcripts show the named D-1
+   idempotence case failing, both D-2 overflow cases failing admission, and
+   V-3's integer arm failing with a D-3 pair, each with a nonzero filtered-in
+   test count; after the fix the same tests pass and the promoted cases assert
+   `CoordinateOutOfRange`.
+
+   ```plaintext
+   Test failed: assertion failed: `(left == right)` ...
+   input: coordinate = -42389709114.565025
+   left:  {"lat": -42389709114.56504}
+   right: {"lat": -42389709114.56503}
+   test result: FAILED. 0 passed; 1 failed
+   ```
+
+3. Non-vacuity evidence: the MUT-1 transcript shows the expected mutant
+   kills; NC-2 and NC-4 fail their target properties while applied and pass
+   after a verified-clean revert; the dense boundary-slice test covers every
+   representable value in its documented ULP intervals.
+4. In-range stability: V-9 and every pre-existing example test pass without
+   edits across the fix commit.
+5. `make check-fmt`, `make lint`, and `make test` logs show no findings
+   beyond the `main` baseline.
+6. `docs/backend-roadmap.md` contains the ticked 5.1.4a entry; the TODO
+   comment is gone from the ports module; the architecture document records the
+   coordinate admission bound; the developers' guide lists property testing in
+   its testing-strategy overview.
+
+## Idempotence and recovery
+
+Every stage is an additive, mechanical, or single-fix commit; re-running any
+command is safe. If a property fails intermittently, the committed
+`proptest-regressions/` seed makes the failure reproducible (stored seeds
+replay first). Prune regression seeds in the same commit as any fix that
+changes their expected outcome. Rollback at any plateau is `git revert` of that
+stage's commit; no data, schema, or wire format is touched (no cache is
+deployed). Recover an interrupted negative control using the mutation-specific
+procedure under `Verification plan`: reverse only its temporary edit, confirm
+it is absent, and verify any Stage C2 diff remains. Never restore the whole
+file. Temporary Kani harnesses were removed; their logs and no-proof
+disposition are retained in this plan.
+
+## Interfaces and dependencies
+
+Public interface additions (the only additions):
+
+```rust
+pub enum RouteCacheKeyDerivationError {
+    // existing: Hash(PayloadHashError), Validation(RouteCacheKeyValidationError)
+    /// A coordinate-keyed number exceeds the admitted magnitude of 180.
+    #[error("coordinate field '{key}' must be between -180 and 180; got {value}")]
+    CoordinateOutOfRange { key: String, value: serde_json::Number },
+    /// Rounding unexpectedly produced a value that JSON cannot represent.
+    #[error("rounded coordinate in field '{key}' is not a finite JSON number: {value}")]
+    RoundedCoordinateNotRepresentable { key: String, value: serde_json::Number },
+}
+```
+
+Private changes in `cache_key.rs`: `MAX_COORDINATE_MAGNITUDE: f64 = 180.0`;
+`round_coordinate`, `normalize_route_request_value`, and
+`hash_route_request_value` become fallible.
+
+The test modules consume `RouteCacheKey`, `RouteCacheKeyDerivationError`,
+`RouteCacheKeyValidationError`, and the private items
+`normalize_route_request_value`, `round_coordinate`, `SORTED_ARRAY_KEYS`,
+`ROUNDED_COORDINATE_KEYS`, `COORDINATE_PRECISION_FACTOR`, and
+`MAX_COORDINATE_MAGNITUDE` via the `super::` chain (matching the
+`apalis_route_queue` precedent).
+
+Dependencies: dev-dependencies already present — `proptest = "1"`,
+`rstest = "0.26"`, `insta`, `serde_json` (`json!` macro), `pretty_assertions`.
+Developer tooling: `cargo-mutants` (also run nightly by
+`.github/workflows/mutation-testing.yml`) and `cargo-kani` 0.67. Kani is not
+wired into CI or used for LEM-1 because both bounded feasibility runs timed out
+without a verdict or useful model validation. The local skill cautions about
+floating-point precision; Kani 0.67's
+[feature-support guide](https://github.com/model-checking/kani/blob/kani-0.67.0/docs/src/rust-feature-support.md)
+documents floating-point support and over-approximation for trig, cosine, and
+square root.
+
+## Progress
+
+The entries below preserve historical candidate-specific outcomes. A later
+entry supersedes an earlier statement about the current head, validation, or
+merge status.
+
+- [x] Historical local validation on 2026-10-17, before PR rebasing: after
+  compiler admission recovered, local HEAD
+  `1d1db11dd03efdcaf2c5a884d709ebb44f1206e6` passed `make check-fmt`,
+  `make lint`, `make typecheck`, `make markdownlint`, and `make nixie`.
+  `cargo test -p backend cache_key` passed 48 matching tests;
+  `cargo test -p backend --doc` passed 160 doctests with 96 ignored; and
+  `make test` passed with 1,825 Nextest tests and four skipped. Both compile-
+  fail tests passed, as did the Python, workflow-contract, lint-actions, and
+  Bun suites. Logs: check-fmt, lint, typecheck, Markdown lint, and Nixie use
+  the branch-suffixed `/tmp` paths; focused tests are in
+  `/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`,
+  backend doctests in
+  `/tmp/test-2-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`,
+  and the full test target in
+  `/tmp/test-3-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`.
+  These results superseded compiler-admission refusals for that unchanged
+  local source candidate. They do not validate the current PR candidate.
+- [x] Stage A: dependency and caller facts reconfirmed; wrapper and
+  scalar-kernel Kani spikes reached CBMC but exceeded 30 minutes. No proof is
+  claimed; the hand-proof and dense-slice fallback is recorded.
+- [x] Stage A: capture the baseline focused test count (18 passed, 0 failed,
+  766 filtered out).
+- [x] EP-M1 / Stage B: split `cache_key.rs` tests into `cache_key/tests.rs`;
+  extraction is formatted, source and docs gates passed, and final CodeRabbit
+  review completed with no findings.
+- [x] EP-M2 / Stage C1: themed property modules and strategies; V-9 pinned
+  against unmodified code; focused suite has 26 passing tests; full repository
+  gates passed and final CodeRabbit review reported no findings. Commit:
+  `d4a3128`.
+- [x] EP-M3 / Stage C2: D-1..D-3 red transcripts recorded.
+- [x] EP-M3 / Stage C2: counter-examples promoted to `rstest` cases.
+- [x] EP-M3 / Stage C2: `CoordinateOutOfRange` fix; V-4, V-5, V-10,
+  full-domain V-3, and statistics guard green; V-9 unchanged. Focused cache-key
+  suite: 47 passed, 766 filtered out.
+- [x] EP-M3: NC-2 and NC-4 failed their intended properties, passed again
+  after narrow reversions, and left no temporary mutation in the source diff.
+- [x] EP-M3: MUT-1 kill list has no survivors; 28 caught and 3 unviable.
+- [x] EP-M3 / Stage C2: all deterministic gates passed, including 47 focused
+  cache-key tests, 1,509 Nextest tests (4 skipped), backend doctests, compile-
+  fail, workflow-contract, Python, TypeScript, typecheck, Markdown lint, and
+  Mermaid validation. Final CodeRabbit review reported no findings. Gate log
+  suffixes: check-fmt 21, lint 15, cache-key 14, backend docs 12, test 14,
+  typecheck 13, Markdown lint 19, nixie 19. Review log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-15.out`.
+- [x] EP-M3 / Stage C2: CodeRabbit review 16 found that V-8 generated only
+  string-value edits although the obligation also covers boolean flips and
+  fresh-key insertions. The strategy now generates all three forms, and the
+  fixed-seed guard checks each. Both duplicate findings are recorded at
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-16.out`;
+  the first lint rerun then caught invalid `prop_assert_ne!` capture syntax
+  and an unused enum import, both fixed. The subsequent deterministic gate run
+  passed; review 17 then requested specific failure messages for all four
+  accepted/rejected digest assertions. Those messages are now present, and the
+  post-fix gates and review are recorded below.
+- [x] EP-M3 / Stage C2: Review 17's digest assertion diagnostic finding is
+  fixed with distinct messages for valid lowercase hex, uppercase hex, invalid
+  characters, and short digests. Finding and gate log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-17.out`.
+  The post-fix deterministic gates all passed: check-fmt 25, lint 19,
+  cache-key 17, backend doctests 15, test 17, typecheck 16, Markdown lint 22,
+  and nixie 22. CodeRabbit review 18 found no concerns and was not
+  rate-limited. Review log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-18.out`.
+  Commit: `5157cec`.
+- [x] EP-M3 / Stage D: the dense boundary-slice test checks all 100,000 inward
+  ULPs at both ±180 boundaries for admission, grid-cell recovery, and bitwise
+  idempotence. The developers' guide records the Kani limitation and finite
+  regression scope. The first lint pass caught a missing Whitaker-required
+  inner module comment; after adding it, all deterministic gates passed. The
+  focused suite had 48 passing tests; the full `make test` target passed.
+  CodeRabbit review 19 returned no findings and no rate limit. Gate log
+  suffixes: check-fmt 30, lint 21, cache-key 18, backend doctests 16, test 18,
+  typecheck 17, Markdown lint 26, nixie 25. Review log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-19.out`.
+  Commit: `5072411`.
+- [x] EP-M4 / Stage E: obsolete property-test TODO lines were removed from
+  `cache_key/tests.rs` with the C2 property implementation; the module now
+  describes the implemented suite.
+- [x] EP-M4 / Stage E: the roadmap entry, architecture admission contract and
+  error variants, developers' guide property-testing conventions, and property
+  module exclusions are implemented. The second MUT-1 run completed with 33
+  mutants: 30 caught, 3 unviable, 0 missed, and 0 timed out. The unviable
+  replacements erased typed-returning functions with `Ok(Default::default())`
+  and failed compilation. The unmutated baseline passed. Full sequential gates
+  passed: check-fmt 32, lint 22 (nested Clippy and Whitaker clean), cache-key
+  19 (48 passed), backend doctests 17 (160 passed, 96 ignored), test 19,
+  typecheck 18, Markdown lint 28 (125 files, 0 errors), and Nixie 27. Logs:
+  `/tmp/mutants-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-2.out`,
+  `/tmp/mutants-full-e1abce79-stage-e-20260928.out`, and gate logs with the
+  suffixes above. CodeRabbit review 20 returned zero findings and no rate
+  limit; log:
+  `/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-20.out`.
+  The subsequent documentation-only gates also passed: check-fmt 33, Markdown
+  lint 29 (125 files, 0 errors), and Nixie 28. Their logs are under `/tmp` with
+  the project/branch prefix and these suffixes. A second documentation-only run
+  passed after formatting this review record: check-fmt 34, Markdown lint 30
+  (125 files, 0 errors), and Nixie 29. Final closeout gates passed: check-fmt
+  36, Markdown lint 32 (125 files, 0 errors), and Nixie 31. Their logs have the
+  project/branch prefix and these suffixes. Stage E document commits: `14d4aa4`,
+  `0797119`, `b73730c`, `5de8b0a`, and `1be2bf0`. Roadmap item 5.1.4a was
+  checked at Stage E, unchecked during hosted-check remediation, and restored
+  after the new CodeScene check passed.
+- [x] Hosted-check remediation: PR #458's terminal CodeScene check reported a
+  Complex Method advisory (complexity 9) for `observe_payload_features` in
+  `backend/src/domain/ports/cache_key/tests/properties/strategy_coverage.rs`.
+  The helper has been split into focused coordinate, array, and theme-array
+  functions; local `cs review ... --pretty` reports health 10.0 with no
+  finding. Full deterministic gates passed. CodeRabbit review 21 found that
+  roadmap item 5.1.4a was still checked; the marker is now unchecked until
+  hosted remediation is complete. The docs-only gates passed. Review 22 found
+  that the Stage E closeout text should distinguish historical completion from
+  the current unchecked roadmap status; that wording is now explicit. The next
+  docs-only gates passed (check-fmt 45 files, Markdown lint 125 files/0 errors,
+  Nixie all diagrams valid), and CodeRabbit review 23 returned no concerns.
+  Final status wording and closeout gates passed: check-fmt 45 files, Markdown
+  lint 125 files/0 errors, and Nixie all diagrams valid. Final CodeRabbit
+  review 24 returned no findings on retry after one transient WebSocket
+  connection error (not a rate limit). The remediation was committed as
+  `977206e` and published to PR #458. Its terminal hosted CodeScene check
+  passed. After the documentation closeout commit `71cd8e4`, the live PR head
+  and remote branch both matched `71cd8e4d823f4e01ccf2c0e3c22c1a10240e09db`;
+  terminal hosted CodeScene and Gecko checks passed, with no failed or pending
+  checks. The final CodeScene result is
+  <https://codescene.io/projects/70675/delta/results/7724509>. Hosted
+  CodeRabbit was skipped because the PR is draft (local review 24 completed
+  cleanly); Kody and the `dependabot-automerge` workflow were also skipped.
+  Monitoring bundle: `/tmp/actions-final-leynos-wildside-pr458-SSFJu0`. Logs
+  use the project/branch prefix and suffixes `docs-status-followup`,
+  `docs-closeout`, `docs-status-final`, and `final-closeout-retry`.
+- [x] Latest implementation-head verification: before this documentation
+  follow-up, PR #458's implementation head and remote branch matched
+  `d4df6990e53e4670c2734a3fd49ed929948fb34d`. CodeScene and Gecko passed; Kody
+  and `dependabot-automerge` were skipped. Hosted CodeRabbit was skipped
+  because the PR is draft, and local CodeRabbit review 24 returned no findings.
+  CodeScene result:
+  <https://codescene.io/projects/70675/delta/results/7724584>. Monitoring
+  bundle: `/tmp/actions-final-leynos-wildside-pr458-LddO8d`.
+- [x] CodeScene duplication follow-up: the docs-only commit `5852ae9` triggered
+  a hosted CodeScene advisory for duplicated rejection cases in
+  `backend/src/domain/ports/cache_key/tests.rs`; that source was unchanged from
+  the previously green implementation head. Local `cs review` reproduced the
+  duplicate between the rounding-overflow and idempotence-counterexample tests.
+  Consolidated the shared assertion into one `rstest` table with three named
+  inputs, preserving both overflow values and the idempotence counterexample.
+  Local CodeScene now reports health 10.0 with no finding. `make check-fmt`,
+  `make lint`, the targeted cache-key tests (48 passed), `make test` (exit 0;
+  1,510 passed, 4 skipped, plus the compile-fail and follow-on checks),
+  `make typecheck`, `make markdownlint` (125 files, 0 errors), and `make nixie`
+  all passed. The CodeRabbit review after this follow-up found one low-severity
+  documentation mismatch: this item was still described as pending while
+  roadmap item 5.1.4a remained checked. The implementation and its follow-up
+  are complete; the roadmap stays checked because the planned functionality and
+  acceptance criteria are complete. This progress record now states that
+  explicitly. The repository code-health-rules JSON parse warning remains
+  pre-existing and was not changed.
+- [x] Final review remediation: the updated-tree CodeRabbit review confirmed
+  the coordinate fallback should preserve admission even when `as_f64()` cannot
+  represent a number. The pinned `serde_json` 1.0.150 source and active feature
+  set make that branch unreachable in this build, but returning the original
+  number would leave the invariant unguarded if conversion could fail in
+  another supported build. The fallback now returns `CoordinateOutOfRange`.
+  `make check-fmt`, `make lint`, `cargo test -p backend cache_key` (48 passed),
+  `make test` (exit 0; 1,510 passed, 4 skipped, with compile-fail and follow-on
+  checks passing), `make typecheck`, `make markdownlint` (125 files, 0 errors),
+  and `make nixie` all passed after this change. CodeRabbit's previous snapshot
+  still showed this plan as `IN_PROGRESS` and reported one minor roadmap-status
+  concern. This final update marks the plan `COMPLETE` and records the cleanup
+  as finished; roadmap item 5.1.4a remains checked because its planned
+  functionality and acceptance criteria are complete. The confirming review on
+  this completed plan returned no findings after the docs-only gates passed
+  (`make check-fmt`, `make markdownlint`, and `make nixie`). The earlier
+  status, fallback, and roadmap concerns are cleared on this candidate.
+- [x] Latest implementation and hosted status: commit `a2b5b67` makes
+  `round_coordinate` return `CoordinateOutOfRange` when `Number::as_f64()`
+  cannot represent a coordinate, preserving the ±180 admission contract if the
+  active `serde_json` feature set changes. It also consolidates the two
+  overflow examples and the idempotence counter-example in one named `rstest`
+  table. The full deterministic gates recorded above passed after these source
+  changes. At the implementation head
+  `a2b5b670aec9e8fd0fd5306632218f2bb1f29e9c`, hosted CodeScene and Gecko passed
+  (CodeScene result:
+  <https://codescene.io/projects/70675/delta/results/7938425>); no check is
+  pending or failed. Hosted CodeRabbit, Kody, and automerge were skipped under
+  the draft/configured conditions, while local CodeRabbit review 24 returned no
+  findings. Roadmap item 5.1.4a remains checked and implementation acceptance
+  remains complete.
+
+- [ ] PR #458 follow-up, 2026-10-17: the published candidate is
+  `bd0c80bac0e1a26e7f09343702e55a44e5422dd1`. CodeRabbit completeness assessment
+  `cache-key-completeness-bd0c80ba-20261017-1311` confirmed the candidate head
+  and base and reported two low-severity gaps: generated coverage did not
+  exercise non-numeric values under coordinate keys, and this plan's
+  current-status and formatter statements were stale. The local repair adds
+  direct cases for strings, booleans, null, arrays, and objects, including
+  array context reset and nested-object context restoration, plus the V-8
+  property `non_numeric_coordinate_values_remain_distinct`. The strategy and
+  plan edits are uncommitted and unpublished. The first repair gate attempt
+  failed `make check-fmt` because this plan needed formatting and `make lint`
+  because four strategy closures moved `key` more than once (E0382). The
+  strategy ownership correction is now present. `make typecheck`, `make test`,
+  `make audit`, `make spelling`, `make markdownlint`, and `make nixie` were not
+  run. All corrected-candidate gates remain pending. The fixed-seed strategy
+  guard also requires generated strings, booleans, nulls, arrays, and objects
+  under coordinate keys. Run the complete candidate gate sequence, then publish
+  and verify the resulting head before requesting fresh completeness and proof
+  assessments and formal review. Readiness and merge remain pending.
+
+- [ ] PR integration: on 2026-10-16, the live `main` target had advanced from
+  the PR's recorded base `ed897e0` to `9f4baf0`, and GitHub reported the old PR
+  head conflicting. The 21-commit PR-owned linear series was rebased onto the
+  fetched `main` tip. `git range-diff` mapped all 21 commits; 18 patches
+  matched and three had reviewed documentation or test-diagnostic context
+  changes. The final diff retains all 15 intended paths. The rebase conflict
+  preserved the current guide's CI and tooling sections while adding the Kani
+  evidence and property-testing conventions. The Makefile workflow contract
+  test retains the PR's failure diagnostic alongside `main`'s newer fixture and
+  gate assertions. No production source conflict or dependency change occurred.
+  The roadmap item remains checked because implementation acceptance is
+  complete. Full gates, fresh assessments and review, readiness, and merge
+  remain pending for the rebased candidate.
+- [ ] Rebased-candidate gates: on candidate
+  `857377290566d53ab4800e17059094b4039f477a` (tree
+  `c0048eb9215cf33222b91ab02633287a5cf82cb2`), `make check-fmt` passed in 2s;
+  `make typecheck` passed in 10s, including Python and TypeScript;
+  `make markdownlint` passed for 126 files with zero errors in 46s; and
+  `make nixie` passed in 2s. `cargo test -p backend --lib cache_key` passed 48
+  tests, with 770 filtered out, in 2,888s. The candidate gate sequence is
+  incomplete: `make lint` exited 2 after 3,757s, backend doctests exited 1
+  after 93s, and `make test` stopped before tests. Each failure was caused by
+  the build-limits supervisor refusing compiler or rustdoc admission as
+  unhealthy, not by a reported lint or test failure. Logs: check-fmt
+  `/tmp/check-fmt-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  lint
+  `/tmp/lint-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  focused tests
+  `/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  doctests
+  `/tmp/doctest-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  typecheck
+  `/tmp/typecheck-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  full tests
+  `/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-full.out`.
+  No CodeRabbit review was requested for this candidate. The PR integration
+  gate remains open pending recovery of compiler admission and completion of
+  the interrupted gates.
+- [ ] Lockfile advisory repair: the PR head
+      `a8a97303c8ea8929d98e23ca0acd550c74823eee`
+  ran workflow 38948124676 to a terminal failure. The `build` job failed at
+  Audit; `coverage`, CodeScene, and Gecko passed. Audit reported new advisories
+  RUSTSEC-2026-0346, RUSTSEC-2026-0347, RUSTSEC-2026-0348, and
+  RUSTSEC-2026-0349 against `rustls` 0.23.45, each recommending at least
+  0.23.46. The audit log is
+  `/tmp/pr458-hosted-checks-6oy2ZxMN/run-38948124676-attempt-1/failed.log`.
+  `refs/remotes/origin/main` has the same `rustls` 0.23.45, and the PR diff
+  introduced no `Cargo.lock` change. A minimal lock-only update to `rustls`
+  0.23.46 has been made with `cargo update -p rustls --precise 0.23.46`; the
+  working tree contains only the resulting two-line version/checksum change.
+  The repair passed `make audit`, but full candidate validation remains
+  incomplete because `make lint` and `make test` were blocked by compiler
+  admission; the lockfile change is not yet committed.
+- Validation on the lockfile candidate: after changing only the `rustls`
+  version/checksum in `Cargo.lock`, the nine sequential gates produced seven
+  passes and two infrastructure failures. `make check-fmt` passed in 2s;
+  `make audit` passed in 244s; `make lint` exited 2 after 2,964s when the
+  unhealthy build-limits supervisor refused compiler requests; the focused
+  cache-key tests passed 48/48, with 770 filtered out, in 369s; backend
+  doctests passed 160 tests, with 96 ignored, in 156s; `make test` exited
+  before tests in under 1s when the unhealthy supervisor refused its rustc
+  target-info probe; `make typecheck` passed in 6s; `make markdownlint` passed
+  126 files with zero errors in 18s; and `make nixie` passed in 2s. The lint
+  and full-test results are infrastructure-unverified, not source failures or
+  passes. No retries were made. Logs: check-fmt
+  `/tmp/check-fmt-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  audit
+  `/tmp/audit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  lint
+  `/tmp/lint-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  focused tests
+  `/tmp/cache-key-tests-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  doctests
+  `/tmp/doctest-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  full tests
+  `/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  typecheck
+  `/tmp/typecheck-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  Markdown lint
+  `/tmp/markdownlint-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`;
+  Nixie
+  `/tmp/nixie-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests.out`.
+  Markdown lint regenerated a line in `typos.toml`; because it was clean
+  before the gate, that generated line was restored. The `rustls` lockfile
+  repair was still uncommitted at this point. Assessment, review, and merge
+  remain pending; the roadmap item stays checked for implementation completion.
+- [ ] Completeness-assessment follow-up: the prior CodeRabbit response
+      6157531876
+  assessed head `a2b5b670` and found three items. Current-head inspection
+  confirms those findings were still valid: generated coordinate numbers had no
+  weighted ±1,000 concentration or fixed-seed witness outside the zero rounding
+  cell; module guidance omitted the `preserve_order` contingency and reseeding
+  response; and the derivation error comment incorrectly described a geographic
+  range. The current working tree now adds the moderate generator and stronger
+  witness, completes both documentation notes, and describes the error as a
+  cache-key admission failure. The review also found that the 12-file threshold
+  had not recorded approval for the themed module split. The user's instruction
+  to carry PR #458 through babysitting to merge explicitly authorizes the
+  existing implementation scope; the tolerance is revised to 16 paths, covering
+  the original 15-path change and the necessary lockfile repair. Revalidate
+  these fixes, follow up with CodeRabbit on the published candidate, and await
+  a substantive disposition before readiness.
+
+- [ ] Current working-tree candidate based on published head
+  `a8a97303c8ea8929d98e23ca0acd550c74823eee`: the previously assessed
+  moderate-range strategy gap, missing fixed-seed witness outside the zero
+  rounding cell, missing strategy-maintenance notes, geographic wording, and
+  scope-threshold rationale are now addressed in the six-path working diff.
+  `make check-fmt` passed (125 files unchanged) and `make audit` passed (15
+  allowed warnings). `make lint` ended with Error 2 after over 16 minutes when
+  compiler admission failed: the supervisor socket returned `EAGAIN`, the
+  wrapper reported
+  `compile admission did not acknowledge the request before its deadline`, and
+  `cargo doc --workspace --no-deps` remained blocked until it exited naturally.
+  The focused cache-key suite passed 48/48 (770 filtered, 118s); backend
+  doctests passed 160 with 96 ignored (29s); `make test` stopped before running
+  tests because the supervisor refused the rustc target-info probe;
+  `make typecheck` passed (8s); and `make nixie` passed (1s). Markdown lint
+  found a spelling error in this progress entry; it is now corrected to the
+  en-GB `-ize` form. That run also regenerated a line in `typos.toml`, which
+  was restored after confirming it was clean before the gate. The corrected
+  plan then passed a documentation-only gate sequence: `make check-fmt` (125
+  files unchanged), `make markdownlint` (126 files, zero errors), and
+  `make nixie`. Markdown lint regenerated one line in `typos.toml`; that
+  generated change was restored after confirming the file had been clean before
+  the gate. The remaining lint and full-test outcomes are
+  infrastructure-unverified, not source failures or passes. Scrutineer's exact
+  logs use the `final-candidate` suffix under `/tmp`. The PR body was refreshed
+  and read back on the published `a8a9730` head; it accurately records that the
+  lockfile and completeness fixes remain unpublished. The roadmap item remains
+  checked for implementation completion. No candidate changes are committed or
+  pushed; assessments, review, readiness, and merge remain pending.
+- [ ] Six-file completeness and audit-repair candidate: the latest exact-diff
+  sequence found a Markdown formatting issue in this progress record;
+  `make check-fmt` reported `+8 -9` for this ExecPlan. `make audit` passed in
+  15s with 15 allowed warnings. `make lint` reached Clippy's
+  `build-limits-rustc ... rustc -vV` request and remained there for 20m40s
+  without a source diagnostic or terminal admission response. Two separate
+  `build-limits-status` calls failed to query the supervisor, first with a
+  timeout and then with `EAGAIN` (`Resource temporarily unavailable`). After
+  reporting unhealthy admission, the planner interrupted only this candidate's
+  own foreground lint command. This is infrastructure-unverified, not a lint
+  pass or source failure. Focused tests, doctests, full tests, typecheck,
+  Markdown lint, and Nixie were not started in that sequence. Logs: check-fmt
+  `/tmp/check-fmt-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-six-file-final.out`;
+  audit
+  `/tmp/audit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-six-file-final.out`;
+  lint
+  `/tmp/lint-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-six-file-final.out`.
+  No candidate commit or push is authorized by these partial results; the
+  remaining gates and hosted validation are still required before merge.
+- [ ] Post-recording documentation gates on the unchanged six-file candidate
+  based on `a8a97303c8ea8929d98e23ca0acd550c74823eee`: `make check-fmt` passed
+  (125 files unchanged), `make audit` passed in 307s after waiting for the
+  shared advisory database lock (12 allowed warnings), `make markdownlint`
+  passed (126 files, zero errors), and `make nixie` passed. Markdown lint
+  regenerated a `typos.toml` line; it was restored after confirming that file
+  was clean before the gate. `git diff --check` is clean. The audit and docs
+  results do not clear compiler-dependent gates: `make lint`, focused tests,
+  backend doctests, full `make test`, and `make typecheck` remain unrun on this
+  candidate because a subsequent `build-limits-status` call also failed with
+  `Resource temporarily unavailable` (`EAGAIN`) from
+  `/run/user/1000/buildlimits/supervisor.sock`. Do not bypass or restart the
+  supervisor; resume those gates only after admission is healthy. The PR
+  remains open and draft at the published `a8a9730` head; the roadmap item
+  remains checked for implementation completion. Candidate changes remain
+  unpublished, and completeness/proof assessments, formal review, readiness,
+  and merge remain pending. The PR description was updated and read back on the
+  same published `a8a9730` head to describe the implementation, distinguish
+  unpublished follow-up changes, and state the current validation block; the
+  existing title and draft state were preserved.
+- [ ] Final admission probe after the exact-plan documentation gates returned
+  the same `EAGAIN` while querying
+  `/run/user/1000/buildlimits/supervisor.sock`. This confirms that compiler
+  admission is still unavailable; resume the sequential compiler gates after
+  the supervisor is restored, then validate, publish, and reassess the
+  candidate. No compiler gate or review was started after this diagnostic.
+- [ ] PR babysitting update: the documentation-only status commit `eddadbe` was
+  published on top of `a8a9730`; the five source/test changes and lockfile
+  repair remain local and unpublished. Hosted run 38968061409, attempt 1, on
+  the exact `eddadbe162744d12dcd5d12ec5c77e378a9b6ac4` head failed at Audit for
+  the same four `rustls` 0.23.45 advisories; coverage, CodeScene, and Gecko
+  passed. Kody, automerge, and hosted CodeRabbit were skipped by the configured
+  draft conditions. The PR description was read back after updating it for
+  `eddadbe`; title and draft state remain unchanged. The compiler supervisor
+  still returns `EAGAIN`, so the source candidate cannot yet be fully
+  validated, assessed, made ready, or merged. The roadmap checkbox remains
+  checked for the completed implementation.
+- [ ] One-shot exact-candidate gate sequence on local HEAD
+  `5e2c83bf049d8745b822fb3cb6a6b596cbd2122b`, with a five-path working diff
+  SHA-256 of `31d9e9eb222d10394da8f985bc150d31c3610dbf2884a40d10af46f87648ac76`:
+  `make fmt` completed without fixes; `make check-fmt` passed; `make audit`
+  passed with 15 allowed warnings; `make typecheck` passed; `make markdownlint`
+  passed 126 files with zero errors; and `make nixie` passed. `make lint`, the
+  focused cache-key tests, backend doctests, and `make test` were refused
+  before compilation or test execution with
+  `build-limits: the supervisor refused: launch-failed`. The full test target
+  stopped during Cargo metadata before running tests. There were no source
+  diagnostics, so these four results are infrastructure-unverified rather than
+  source failures or passes. Before the sequence, `build-limits-status` showed
+  healthy admission with capacity 4, no held slots, and no waiters. The final
+  status still said healthy but showed all four slots held and unrelated
+  repositories queued. The candidate gates were started once and allowed to
+  queue; no retry or bypass was attempted. `make markdownlint` regenerated a
+  `typos.toml` line; it was restored after confirming the file had been clean
+  before the run. The candidate remains unpublished because its compiler gates
+  lack terminal execution evidence. The PR remains open and draft, and roadmap
+  item 5.1.4a remains checked for implementation completion. Assessment, formal
+  review, readiness, and merge remain blocked on complete candidate validation.
+  Gate logs use the full branch suffix under `/tmp`; the compiler refusal is
+  captured in the lint, focused-test, backend-doctest, and full-test logs.
+- [ ] Published-head observation: PR #458 head
+  `9ddcf14f26432648fe54af071cd9b9917237693a`, base
+  `9f4baf0b192c67f6e08eda4ced686a0fbd65a002`, Actions run `38970834317` attempt
+  1 completed with `build` failed at Audit and `coverage` passed. Audit found
+  four advisories against published `rustls` 0.23.45 and recommends 0.23.46 or
+  newer. CodeScene result `7993016` and Gecko passed; Kody and automerge were
+  skipped, and hosted CodeRabbit reported its draft-review skip. The
+  failed-step evidence is retained in
+  `/tmp/pr458-actions-monitor.w6DQuH/run-38970834317-attempt-1/failed.log`.
+  This result confirms the published lockfile defect; it does not validate the
+  local five-path candidate, whose `Cargo.lock` updates `rustls` to 0.23.46.
+  The candidate diff SHA-256 remains
+  `31d9e9eb222d10394da8f985bc150d31c3610dbf2884a40d10af46f87648ac76`, and the
+  four compiler-dependent gates remain infrastructure-unverified after
+  `launch-failed`. The PR description was corrected and read back at this head;
+  it reports the local candidate and the validation distinction. Assessment,
+  formal review, readiness, and merge remain blocked until an authorized
+  complete gate run can validate and publish the candidate.
+
+- [x] Rebased the direct `main` candidate on 2026-10-17 after PR #548 merged.
+  The old boundary is the PR's recorded base,
+  `9f4baf0b192c67f6e08eda4ced686a0fbd65a002`; the fetched target is
+  `17606efbb9796a2f06cf626fd5770616df315541`, which contains #548's merge commit
+  `44e926336f8c5df70ccfa9bdc7d4914540e4d0e5`. All 27 child commits replayed
+  without conflicts or empty commits. `range-diff` matched the first 26
+  commits; the final validation commit still carries its intentional code and
+  evidence updates, while the rustls lockfile and generated spelling changes
+  are now inherited from `main`. The rebased head is
+  `040a00823802c3a9aeee4ec38ee5c88c4fc64932`; `git diff --check` passes and the
+  child diff is 15 paths. The rebase used Git's built-in merge with `zdiff3`
+  and disabled the user's ambient Weave attributes for this unattended replay.
+  Existing gate and review results refer to the old candidate and are
+  historical; the complete sequential gate set remains pending for this exact
+  head. The published PR still points to its old head until that validation
+  completes. Rebase log: `/tmp/pr458-rebase-20261017.out`; range review:
+  `/tmp/pr458-range-diff-20261017.out`.
+
+- [x] Current source-candidate validation, 2026-10-17: the completeness
+  follow-up added non-numeric coordinate coverage and reconciled the planning
+  exception and maintenance notes. The CodeScene large-method advisory was
+  fixed by extracting the coordinate-coverage assertions. The resulting
+  published source candidate passed, sequentially, `make check-fmt`,
+  `make lint`, `make typecheck`, `make test`, `make audit`, `make spelling`,
+  `make markdownlint`, and `make nixie`. The full test gate passed 1,830 Rust
+  tests; both compile-fail cases passed; Python workflow tests passed 606 with
+  one skip; targeted Python tests passed 115 with 13 skips; and frontend tests
+  passed. Logs use the full branch suffix under `/tmp`. The latest observation
+  found hosted CodeScene and Gecko passing and CI run `39062088719` still
+  running, with build queued and coverage in progress. Fresh completeness and
+  proof assessments, formal review, readiness, and merge remain open.
+
+## Surprises & discoveries
+
+- Observation: by 2026-10-16, `main` had moved 41 commits past the PR's
+  recorded base. The read-only merge preview identified overlapping edits in
+  `docs/developers-guide.md` and
+  `tests/workflow_contracts/makefile_tooling_test.py`. During replay, the guide
+  stopped twice at the PR's Kani-evidence and property-convention commits; each
+  resolution retained the expanded main guide and restored the PR passage. The
+  workflow test merged automatically, preserving the current `TMPDIR`, lint,
+  typecheck, and test-target contracts plus the PR's diagnostic assertion.
+  `range-diff` showed 18 unchanged patches and three reviewed context changes;
+  no merge commit or lockfile conflict was introduced.
+
+- Observation: the first sequential local gate pass on rebased candidate
+  `8573772` completed the formatting, typecheck, Markdown, and Mermaid gates,
+  and the focused cache-key suite passed all 48 tests. Lint, doctests, and the
+  full test target could not complete because the unhealthy build-limits
+  supervisor refused compiler, rustdoc, or Cargo metadata admission. The
+  failures are infrastructure evidence; they do not establish a source failure
+  or a green result for those gates. `make markdownlint` regenerated one
+  live-dictionary pattern in generated `typos.toml`; after confirming
+  `typos.local.toml` was unchanged, only that gate-created generated change was
+  restored as out of scope.
+
+- Observation: hosted workflow 38948124676 on PR head
+  `a8a97303c8ea8929d98e23ca0acd550c74823eee` reached a terminal failure because
+  the `build` job failed at Audit. The audit log reported four new advisories
+  (RUSTSEC-2026-0346 through RUSTSEC-2026-0349) for `rustls` 0.23.45, all
+  recommending version 0.23.46 or later. Coverage, CodeScene, and Gecko passed.
+  Comparing `Cargo.lock` with `refs/remotes/origin/main` showed that main
+  already used 0.23.45 and the PR introduced no lockfile change. The working
+  tree now contains only the minimal version/checksum update to 0.23.46. That
+  update passed `make audit`; full candidate validation and commit remain
+  pending, with `make lint` and `make test` blocked by compiler admission.
+
+- Observation: on the working-tree lockfile candidate, `make check-fmt`,
+  `make audit`, focused cache-key tests, backend doctests, `make typecheck`,
+  `make markdownlint`, and `make nixie` passed. `make lint` and `make test`
+  could not complete because compiler admission was refused by the unhealthy
+  build-limits supervisor; the test target stopped before executing tests.
+  These two outcomes do not establish source failures or successful gates.
+  Markdown lint regenerated a `typos.toml` line, which was restored because the
+  generated file was clean before the run. The lockfile update remains
+  uncommitted and unvalidated as a full candidate; assessment, review, and
+  merge are still pending.
+
+- Observation: the earlier completeness assessment response 6157531876 applied
+  to head `a2b5b670`, not the current rebased candidate. Rechecking its three
+  requested changes against the source at `a8a97303` found each still relevant:
+  the full-domain number strategy lacked a moderate-range sub-strategy; the
+  coverage guard did not require an admitted fractional witness outside the
+  zero rounding cell; the property-module and strategy-coverage comments
+  omitted their specified maintenance guidance; and the error documentation
+  called the cache admission bound a latitude/longitude range. The historical
+  assessment remains evidence for that old head; current-head confirmation is
+  pending.
+
+- Observation: after the original implementation was published, the hosted
+  CodeScene check found `observe_payload_features` at complexity 9. The
+  property-observation behaviour has been decomposed into coordinate, array,
+  and theme-array helpers without changing its traversal or feature predicates.
+  Local CodeScene review now reports health 10.0 with no finding; the
+  repository rules file still produces the existing CLI parse warning. The
+  hosted CodeScene check passed on `977206e` after publication; its result is
+  linked in `Progress`. The hosted CodeRabbit check was skipped by draft
+  status, while the requested local CodeRabbit review completed with no
+  findings.
+
+- Observation: the final admission fallback is unreachable with the pinned
+  default `serde_json` 1.0.150 feature set, where `Number::as_f64()` always
+  returns `Some`. Returning `CoordinateOutOfRange` anyway keeps the contract
+  explicit if a future feature configuration changes number conversion.
+
+- Observation: the first Stage B gate pass exposed a rustfmt diff in the
+  extracted test module, although `make check-fmt` continued to later format
+  checks and returned success. `make fmt` has now formatted the module; Stage B
+  must repeat `make check-fmt` on the clean result. The same pass found a
+  pre-existing Pylint C1803 simplification in
+  `tests/workflow_contracts/makefile_tooling_test.py`; the assertion was
+  simplified without changing its meaning so the required repository lint gate
+  can complete. Evidence is in the first gate logs under `/tmp`.
+- Observation: the first Stage B CodeRabbit review found that the framework
+  applicability summary still said Kani carried LEM-1 and the scalar rounding
+  helper lacked documentation. The summary now records the hand proof,
+  generated properties, and dense boundary-slice regression; the helper now
+  documents five-decimal rounding and signed-zero canonicalization.
+- Observation: the next review found that V-3's clamped delta could select the
+  original cell again; its generator now substitutes an adjacent admitted cell
+  in that case. An older revision note also still described the Kani harness as
+  current, so it now records that Kani was declined and the
+  hand-proof/generated-property/bounded-regression fallback applies. CodeRabbit
+  also reported a missing test-module path while `cache_key/tests.rs` was
+  untracked; the review patch view omitted that file. It was staged for
+  subsequent reviews, and the comment did not recur.
+- Observation: the fourth review found that the NC-2/NC-4 recovery instructions
+  could discard a later uncommitted Stage C2 fix by checking out a whole file.
+  The procedure now records the intended diffs and applies or reverses only the
+  temporary mutation, then verifies that the mutation is gone and the Stage C2
+  diff remains before rerunning the green property.
+- Observation: final Stage B review found no remaining concerns after the
+  recovery procedure and its general rollback cross-reference were corrected.
+  The docs-only gates and `coderabbit review --agent` both passed on the
+  complete four-file staged change.
+- Observation: the first Stage C1 full gate pass exposed a Whitaker lint
+  requirement for inner module documentation on every new Rust child module.
+  Purpose-specific `//!` comments now describe the four property modules; all
+  other deterministic gates passed before this lint correction.
+- Observation: the first clean Stage C1 CodeRabbit review found that proptest's
+  `NORMAL`, `SUBNORMAL`, and `ZERO` strategies default to positive values, and
+  the uniform grid-cell range almost never draws zero. The float generator now
+  combines each finite class with both sign flags, and the grid-cell generator
+  has a dedicated zero arm for V-7.
+- Observation: the next Stage C1 review found that V-8 must use payloads whose
+  coordinate leaves are all admitted, so its intended leaf edit is reached
+  after Stage C2 adds coordinate rejection. The new `admitted_route_payload()`
+  composes the same recursive shape with bounded coordinate numbers;
+  `route_payload()` remains full-domain for idempotence and rejection
+  properties.
+- Observation: after bounding V-8's coordinate leaves, the first Stage C1
+  deterministic gate pass succeeded and CodeRabbit reported no findings.
+  Follow-up reviews on the final staged patch then found stale test-module
+  references, insufficiently nested V-8 edits, a guard that omitted staged
+  diffs, and a missing Python assertion diagnostic. The plan, V-8 pair
+  generator, guard, and diagnostic now address each finding. The final complete
+  gate run and review are recorded below.
+- Observation: the final staged CodeRabbit review found that this orientation
+  section still described the former inline test module and pre-split source
+  line count. It now points to `cache_key/tests.rs` and the property-module
+  directory. Subsequent reviews refined V-8's generator: its request pair now
+  changes one generated `field-*` string leaf under
+  `generated.payload.content`, while keeping the random sample and both sibling
+  edit fields fixed. The reviews also requested staged-diff coverage in the
+  pre-commit guard and an invocation diagnostic in the workflow tooling test.
+  Those corrections passed all deterministic gates and the final CodeRabbit
+  review before the C1 commit.
+- Historical observation (2026-09-28): the local Kani skill was read as
+  conflicting with LEM-1's model assumption. The skill cautions about
+  floating-point precision and recommends stubs for trig and square root; AXM-5
+  assumes IEEE-754 semantics. That concern prompted the Stage A spikes. The
+  current version-matched Kani 0.67 feature-support guide says it supports
+  floating-point numbers and identifies trig, cosine, and square root as
+  over-approximated. The spikes nevertheless timed out without a verdict, so no
+  useful model validation was obtained for LEM-1.
+- Observation: the first Kani spike stopped in a dependency build script
+  because `kani-compiler` could not load its bundled LLVM shared library.
+  Evidence: `/tmp/kani-wildside-b514a-spike.out` and
+  `/tmp/kani-wildside-b514a-spike-retry.out`; both ended before harness
+  compilation. `prover-tools kani install --version 0.67.0 --repo-root .`
+  restored the bundled library, and direct execution of
+  `kani-compiler --version` succeeds; exporting the Kani toolchain library path
+  lets Cargo's build scripts reach CBMC. The wrapper harness then exceeded the
+  30-minute feasibility limit: 189 VCCs, 15 remaining after simplification, two
+  intermediate satisfiable results, then a stall in the third reduction at
+  30m12s. Impact: no proof result is claimed; the next spike targets the pure
+  scalar kernel.
+- Observation: Kani's project-integration guidance requires either a harness
+  inventory or a written disposition when a requested harness is declined.
+  Impact: no unsupported harness will be committed; Stage E will document the
+  measured tool limitation and the test-based fallback in the developers' guide.
+- Observation: object key-order invariance — the headline "generated key
+  ordering" clause of the original TODO — is untestable in this build. Evidence:
+  `Cargo.lock` shows `serde_json` 1.0.150 without `indexmap`; `Value::Object`
+  is `BTreeMap`-backed, so key order is normalized before the code under test
+  runs. Impact: the plan replaces that clause with the idempotence property
+  (V-4) and a documented exclusion.
+- Observation: the three discovered defects occur at values a real
+  coordinate should never carry: D-1 idempotence failure above roughly 2^51 /
+  10^5, D-2 multiplication overflow above roughly 1.8e303, and D-3 distinct
+  integers beyond 2^53 collapsing. The first revision bounded generators to
+  ±1,000,000, which hid these defects. Because the derivation has no production
+  callers, the revised decision fixes admission at ±180 and keeps generators
+  over the full finite numeric domain.
+- Observation: D-2's original V-2 characterization was too strong. At
+  `1.8e303`, Python's IEEE-754 `math.ulp` reports approximately `3.04541e287`,
+  while multiplying by 100,000 overflows to infinity. Distinct representable
+  values at that magnitude therefore cannot occupy the same five-decimal cell.
+  D-2 remains a direct witness that the old implementation accepts a coordinate
+  after taking the overflow fallback; the revised example asserts rejection
+  under the ±180 admission contract. Evidence: `/tmp` Python experiment
+  (`math.ulp(1.8e303) == 3.04541e287` and `math.isinf(1.8e303 * 100_000.0)` is
+  true), pinned `serde_json-1.0.150/src/number.rs` lines 162–171, and LEM-1.
+  The rounding arithmetic is at `cache_key.rs:173–182`.
+- Observation (design panel): no existing or previously planned test would
+  fail if the hash algorithm or pre-hash serialization were swapped —
+  `cache_key.rs` calls `Sha256::digest` directly and the example tests check
+  only digest shape. Evidence: `hash_route_request_value` at
+  `cache_key.rs:117–126`;
+  `route_request_key_has_expected_namespace_and_hash_shape` checks length/hex
+  only. Impact: obligation V-9 (known-answer test) added.
+- Observation (design panel): the repository already runs nightly
+  cargo-mutants over `backend/`, making hand-scripted mutation controls mostly
+  redundant. Evidence: `.github/workflows/mutation-testing.yml`;
+  `cargo-mutants` 27.x installed locally. Impact: manual controls reduced to
+  the mutation shapes cargo-mutants does not generate (NC-2 and NC-4).
+- Observation: `RouteCacheKey::for_route_request` has no production caller.
+  Evidence: `rg for_route_request backend/src` matches only `cache_key.rs`; the
+  BDD test is the sole external user. Impact: counter-examples are treated as
+  authoritative defects; adding a public error variant carries no compatibility
+  cost.
+
+## Decision log
+
+- Decision: keep the coverage-observation logic split by JSON value kind and
+  feature predicate after the hosted CodeScene review identified a complex
+  method. Rationale: this keeps each decision local while preserving the
+  generated strategy's feature accounting and makes the hosted health gate
+  actionable. Date/Author: 2026-09-28, implementation agent.
+
+- Decision: treat counter-examples as authoritative; fix D-1..D-3 in
+  production and let generators span the full finite number domain, rather than
+  bounding generators to avoid them. Rationale: the commissioning engineer
+  directed that counter-example findings carry higher authority because the
+  production code is not yet in use; there are no deployed keys or callers to
+  protect, so fencing off the defects would only defer them to the first real
+  caller. Date/Author: 2026-09-28, planning agent, on commissioning-engineer
+  instruction.
+- Decision: fix by rejecting coordinate-keyed numbers with magnitude above
+  180 (`CoordinateOutOfRange`), uniformly across all coordinate keys.
+  Alternatives considered: (a) pass out-of-range values through unrounded —
+  total and idempotent, but silently makes noise-sensitive keys and hides
+  malformed requests; (b) clamp to ±180 — collapses distinct invalid requests
+  onto one valid key, a cache-poisoning shape; (c) make rounding correct for
+  every finite `f64` (identity once the `f64` spacing exceeds the grid,
+  integer-exact handling for large integers) — feasible but adds
+  magnitude-dependent branches for inputs that are never valid coordinates, and
+  a larger proof obligation; (d) per-axis geographic bounds (±90 for latitude)
+  — conflates cache-key soundness with request validation, which belongs at the
+  inbound boundary. The uniform ±180 bound is the smallest rule under which
+  LEM-1 holds with a wide margin and every in-range key is unchanged.
+  Date/Author: 2026-09-28, planning agent.
+- Decision: use the D-2 overflow cases as direct admission-contract witnesses,
+  not as V-2 equivalent-value pairs. Rationale: the binary64 ULP above
+  `1.8e303` is about `3.05e287`, far larger than the five-decimal grid, so two
+  distinct representable values cannot round to the same cell there. The
+  planned ±180 rejection remains unchanged. Date/Author: 2026-09-28,
+  implementation agent.
+- Decision: return `RoundedCoordinateNotRepresentable` if bounded rounding
+  cannot be represented as a JSON number. Rationale: the crate denies
+  `expect_used`; this typed fallback preserves the proof-backed normal path
+  without a panic or the old silent unrounded fallback. Date/Author:
+  2026-09-28, implementation agent.
+- Decision: reject a coordinate with `CoordinateOutOfRange` if
+  `Number::as_f64()` returns `None`. Rationale: an unconvertible coordinate
+  cannot be shown to lie inside the admitted ±180 domain; passing it through
+  would weaken the invariant if the `serde_json` feature set changes. This
+  branch is defensive under the currently pinned default configuration.
+  Date/Author: 2026-10-15, implementation agent.
+- Decision: decline a Kani harness for LEM-1 in this change and support the
+  claim with its hand proof, generated properties, and a dense boundary-slice
+  regression. Rationale: the wrapper and isolated-kernel spikes each exceeded
+  30 minutes without a verdict or useful model validation for LEM-1 (details in
+  `Artefacts and notes`). The local skill cautions about float precision and
+  recommends stubs for trig and square root; Kani 0.67's feature-support guide
+  documents floating-point support and over-approximation for trig, cosine, and
+  square root. The timed-out runs provide no verdict and therefore no proof
+  evidence for the requested IEEE-754 claim. This is the documented written
+  disposition required by the Kani project-integration guidance; revisit with a
+  verifier that can provide a useful result for these operations. Date/Author:
+  2026-09-28, implementation agent.
+- Decision: isolate the existing scalar rounding expression in the private
+  `round_coordinate_value` function so the dense boundary-slice test can call
+  the exact operation without constructing `serde_json::Number` values.
+  Repository search found no equivalent helper. The helper remains local to
+  `cache_key.rs` and has no independent reuse contract or public interface.
+  Date/Author: 2026-09-28, implementation agent.
+- Decision: place Stage C1 property groups and shared strategies in themed
+  child modules under `tests/properties/` from the outset. The strategy helpers
+  and seven properties would make one file approach the repository's 400-line
+  limit; child modules keep each responsibility reviewable and below that cap.
+  Date/Author: 2026-09-28, implementation agent.
+- Decision: verify payload-level invariants with `proptest`, plus `rstest`
+  examples and a scoped `cargo-mutants` gate. Rationale: the payload domain is
+  unbounded and recursive; property tests with mutation-gate non-vacuity
+  evidence give proportionate rigour there. Date/Author: 2026-08-16, planning
+  agent.
+- Decision: adopt the design panel's amendments — V-8 (single-leaf
+  divergence) and V-9 (known-answer digest); replace five manual negative
+  controls with the MUT-1 mutation gate; executable pre-commit guards;
+  `set -o pipefail` and scripted count assertions on tee'd pipes; AXM-4.
+  Alternatives rejected: an equivalence-oracle reference canonicalizer (shares
+  the implementation's mental model and cannot express divergence); a single
+  perturbation-enum property (muddles failure attribution); an optional
+  composed-perturbations property (deferred). Date/Author: 2026-08-16, planning
+  agent, on panel review. The panel's ±1,000,000 generator bound is superseded
+  by the 2026-09-28 decisions.
+- Decision: do not add `googletest` assertions despite the general testing
+  brief. Rationale: `googletest` is not a dependency of the `backend` crate;
+  adding it violates the no-new-dependencies constraint, and proptest bodies
+  must use `prop_assert*` to preserve shrinking anyway. Date/Author:
+  2026-08-16, planning agent.
+- Decision: one new `insta` snapshot (the `CoordinateOutOfRange` message)
+  and no new `rstest-bdd` scenario. Rationale: the module already snapshots its
+  error messages; no externally observable workflow changes, and the existing
+  Redis-backed BDD scenario uses in-range coordinates whose keys are unchanged.
+  Date/Author: 2026-09-28, planning agent.
+- Decision: add a `5.1.4a` checkbox to `docs/backend-roadmap.md` §5.1 even
+  though the roadmap has no lettered-item precedent. Rationale: the
+  commissioning request explicitly assigned roadmap reference 5.1.4a and
+  requires the entry to be markable as done on completion. Date/Author:
+  2026-08-16, planning agent.
+- Decision: `docs/users-guide.md` is not updated. Rationale: no production
+  path calls the derivation, so no user can observe the new rejection; the
+  architecture document records the rule for the future caller. Date/Author:
+  2026-09-28, planning agent.
+- Decision: record the coordinate admission bound in the architecture
+  document rather than an ADR. Rationale: it is a local, reversible rule inside
+  one private function with no consumers; the Decision Log entry and the
+  architecture section suffice. Date/Author: 2026-09-28, planning agent.
+- Decision: commit `proptest-regressions/` files if produced, promote shrunk
+  failures to named `rstest` cases, and prune seeds whenever a fix changes
+  their expected outcome. Rationale: proptest failure-persistence convention;
+  stale seeds would keep CI red or silently stop testing the original
+  counter-example. Date/Author: 2026-09-28, planning agent.
+- Decision: rebase the PR-owned range onto the live `main` tip before resuming
+  acceptance. Rationale: PR #458 still targeted `main`, but its recorded base
+  was `ed897e0` while live `main` was `9f4baf0`, and GitHub reported a
+  conflict. The original range is the 21 linear commits after the verified
+  base. Use the built-in `zdiff3` merge with the ambient global attributes file
+  disabled: Weave is selected only by a user-wide `*.rs` rule, with no
+  repository opt-in. The reviewed resolutions preserve all current-main guide
+  and workflow-test changes while carrying forward the PR's Kani note,
+  property-testing guidance, and assertion diagnostic. Date/Author: 2026-10-16,
+  implementation agent.
+- Decision: do not retry gates that failed because build-limits admission was
+  unhealthy, and do not bypass the shared compiler supervisor. Rationale: the
+  recorded refusals identify admission infrastructure failure, while starting
+  duplicate or unmanaged compiler work would violate the repository's shared
+  admission policy and would not produce trustworthy candidate evidence. Wait
+  for admission recovery, then resume the remaining gates sequentially.
+  Date/Author: 2026-10-16, implementation agent.
+- Decision: address all four newly surfaced `rustls` advisories with the
+  smallest lock-only update to 0.23.46 rather than suppressing the advisories.
+  Rationale: the audit names the same minimum fixed version for each advisory,
+  and `main` already carried 0.23.45 while the PR made no lockfile change. The
+  update is pending validation; do not treat this decision as evidence that the
+  audit or candidate gates pass. Date/Author: 2026-10-16, implementation agent.
+- Decision: preserve the existing themed test-module split and revise the
+  one-time scope tolerance from 12 to 16 changed paths. Rationale: CodeRabbit's
+  prior completeness assessment identified that the implementation exceeded the
+  original threshold without a recorded exception; the user has now explicitly
+  instructed that this exact PR be carried through review and merged once it
+  reaches equilibrium. The original 15 paths keep the test and support modules
+  below the 400-line limit, while the sixteenth path is the narrow `Cargo.lock`
+  repair for the hosted audit findings. The 80-line production change limit
+  remains unchanged, and no modules are to be consolidated merely to reduce the
+  count. Date/Author: 2026-10-16, implementation agent, under the user's
+  PR-babysitting instruction.
+- Decision: retain full-domain coordinate generators and add a weighted
+  moderate-number sub-strategy spanning admitted and rejected values within
+  ±1,000. Strengthen fixed-seed coverage to require an admitted fractional
+  coordinate outside the zero rounding cell, while preserving the independent
+  out-of-range witness. If coverage fails after a proptest or strategy update,
+  verify witness reach and reseed rather than weakening properties.
+  Date/Author: 2026-10-16, implementation agent, following CodeRabbit response
+  6157531876.
+- Decision: keep the current completeness and `rustls` repair candidate
+  unpublished until the complete sequential gate set has terminal results.
+  Rationale: formatting exposed an ExecPlan wrap issue, while the lint gate
+  could not obtain compiler admission after repeated supervisor errors; the
+  other candidate gates have not run. Do not bypass or restart the supervisor.
+  Resume validation only after admission health is restored, then run the full
+  sequence on the corrected exact candidate. Date/Author: 2026-10-16,
+  implementation agent, under the PR-babysitting instructions.
+- Decision: treat the candidate's `build-limits` `launch-failed` responses as
+  infrastructure refusals even though the status probe reported the supervisor
+  healthy, and stop after the requested one-shot sequential gate run.
+  Rationale: the compiler-dependent gates exited before producing source
+  diagnostics, and the user explicitly directed that each gate be started once
+  while unrelated repositories are not awaited. Do not claim these gates
+  passed, retry the commands, or bypass admission. Resume only when the
+  compiler service owner restores reliable launch admission and a new
+  exact-candidate run is authorized. Date/Author: 2026-10-16, implementation
+  agent, under the PR-babysitting instructions.
+- Decision: after admission recovered, run the full local validation sequence
+  once on the unchanged candidate and record only terminal results. All
+  deterministic gates, focused cache-key tests, backend doctests, and the full
+  `make test` passed, so the candidate is eligible for fresh review and
+  publication. The PR is still draft and its remote checks still describe the
+  prior `rustls` 0.23.45 head; hosted acceptance and merge remain pending.
+  Date/Author: 2026-10-17, implementation agent, under the user's
+  PR-babysitting instruction.
+- Implementation constraint: the Kani skill requires written justification
+  when a requested harness is declined. Stage E will document why this verifier
+  cannot substantiate LEM-1 and the chosen test fallback. Source: local `kani`
+  skill, `Project integration`.
+
+## Outcomes & retrospective
+
+Historical validation on candidate `bd0c80bac0e1a26e7f09343702e55a44e5422dd1`:
+the first default-runtime `make test` run reached its 3,600-second timeout
+after 957 of 1,830 Rust tests. A long-lived PostgreSQL process held
+`/tmp/wildside-pg-embedded-shared-cluster.lock`; it was left untouched. The
+complete rerun used isolated PostgreSQL runtime paths and passed. That outcome
+is superseded by the latest exact source-candidate gate record in Progress.
+
+Historical implementation record: the property suite, coordinate admission fix,
+supporting documentation, and validation evidence were considered complete on
+earlier candidates. The hosted CodeScene finding was resolved by splitting
+feature observation into focused helpers; the hosted check passed on the
+remediation commit. The design-panel and review findings were resolved, and
+final CodeRabbit review 24 returned no concerns. The hosted CodeRabbit check
+remains skipped by the draft-PR policy; Kody and the automerge workflow also
+skipped without failed jobs.
+
+A later hosted CodeScene advisory on docs-only commit `5852ae9` identified
+duplicated coordinate-rejection tests. The cases now share one named `rstest`
+table without losing either overflow value or the idempotence counterexample;
+local CodeScene reports health 10.0 with no finding. The fallback for a
+coordinate number that cannot be represented as `f64` now returns the typed
+admission error. This branch cannot be reached with the pinned default
+`serde_json` configuration, but its behaviour now preserves the bound if the
+feature set changes. All deterministic gates passed after these changes, and
+the roadmap item remains checked. The final local CodeRabbit review's status
+finding came from a snapshot taken before this `COMPLETE` status update.
+
+That implementation history culminated in commit
+`a2b5b670aec9e8fd0fd5306632218f2bb1f29e9c`; it is not the current PR head. The
+later non-numeric coordinate coverage repair and CodeScene large-method fix are
+published and passed all eight sequential local gates on the source candidate.
+The current PR integration snapshot is recorded in Progress above; hosted CI,
+fresh assessments, formal review, readiness, and merge are tracked separately
+from implementation completion. Roadmap item 5.1.4a remains checked for the
+delivered implementation scope.
+
+Follow-up: evaluate a verifier with explicit IEEE-754 support for LEM-1. No
+Kani harness or CI wiring is planned for this change.
+
+## Artefacts and notes
+
+Stage A baseline, captured at `4bb8187860ddefcb74d3460b439952772bc011e4`:
+`cargo test -p backend --lib cache_key` passed 18 tests, with 766 filtered out,
+in 886 seconds. The full output is
+`/tmp/test-wildside-backend-5-1-4a-cache-key-canonicalization-property-tests.out`.
+The run waited for the shared Cargo package-cache and build-directory locks;
+neither was bypassed.
+
+Stage B validation: the final full gate pass succeeded: `make check-fmt`,
+`make lint`, focused cache-key tests (18 passed, 766 filtered), backend
+doctests (160 passed, 96 ignored), `make test` (1,480 nextest passed, 4
+skipped; 1 trybuild and 107 Python tests passed), `make typecheck`,
+`make markdownlint` (125 files), and `make nixie`. The final staged docs-only
+revalidation also passed formatting, Markdown lint (125 files, no errors), and
+Mermaid validation. CodeRabbit reviewed all four staged paths and reported no
+findings. Gate logs are under `/tmp` with the branch suffix
+`backend-5-1-4a-cache-key-canonicalization-property-tests`; the final review
+log is
+`/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-4.out`.
+
+Stage C1 evidence: `cargo test -p backend --lib cache_key` passes 26 tests
+(including the eight new C1 example/property tests), with 766 filtered out. The
+full repository pass reported 1,488 Rust tests passed and four skipped, one
+trybuild test passed, 40 workflow-contract tests passed, 90 frontend tests
+passed, and 107 Python tests passed. Backend doctests passed 160 tests, with 96
+ignored; formatting, lint, typecheck, Markdown lint (125 files), and Mermaid
+validation also passed. Gate logs are under `/tmp` with the full branch slug
+`e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests`;
+the final CodeRabbit review found no concerns and is recorded at
+`/tmp/coderabbit-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-12.out`.
+V-9 pins
+`route:v1:064a4c57f3b53c1461a025298f66a1393b7b3a0c19cfe19c5297c063c7d06be9`.
+The digest was computed before Stage C2 with this independent command:
+
+```sh
+printf '%s' '{"origin":{"lat":51.5,"lng":-0.1},"preferences":{"interestThemeIds":["art","history"]}}' | sha256sum
+```
+
+Dependency confirmation: `cargo tree -p backend -e features -i serde_json` shows
+`serde_json` 1.0.150 with `default`, `raw_value`, and `std`, without
+`preserve_order`. Caller search (`rg -n for_route_request backend/src`) finds
+only the implementation and its local tests; CodeGraph finds the same local
+test callers and the behavioural test's `derive_equivalent_keys` step.
+
+The wrapper-harness Kani spike reached CBMC with
+`LD_LIBRARY_PATH=/home/leynos/.kani/kani-0.67.0/toolchain/lib`, then exceeded
+30m12s without a verdict. Its transcript reports 189 VCCs, 15 after
+simplification, two intermediate satisfiable results, and a third propositional
+reduction still running at the cutoff. RSS was about 83 MiB and system memory
+remained below the 16 GB limit. Log:
+`/tmp/kani-wildside-b514a-spike-ldpath.out`.
+
+The isolated scalar-kernel spike passed
+`prover-tools kani check-version --repo-root . --expected-version 0.67.0`, then
+exceeded 30m05s without a verdict. It reduced the model to 8 VCCs; two solver
+reductions reported SAT, and the third remained active at the cutoff. RSS was
+about 131 MiB; system memory remained below the limit. Log:
+`/tmp/kani-wildside-b514a-kernel-spike.out`. These intermediate results are not
+proof evidence. Both attempts were stopped by their own foreground command at
+the plan's 30-minute limit.
+
+Stage C2 red evidence (before the source fix):
+
+- D-1: `normalization_is_idempotent_for_large_counterexample` failed for
+  `lat = -42389709114.565025`. The first normalization produced
+  `-42389709114.56503`; the second produced `-42389709114.56504`. Log:
+  `/tmp/test-red-d1-idempotence-wildside-backend-5-1-4a.out`.
+- V-5: `derived_keys_match_route_v1_format` expected rejection but received a
+  key for the shrunk payload `{"themes":{"lat":-181}}`. Log:
+  `/tmp/test-red-v5-wildside-backend-5-1-4a.out`.
+- D-2: the named `1.8e303` and `1.9e303` cases both returned keys instead of
+  admission errors. The returned digests were
+  `ccffdc2c649ae4082a5b0f6e8f7659df982f665d0f390b4b778810da7b98b105` and
+  `3c49fa1b78732beb3ed88a2fa6e19a50f6c26739941004a4458e9db7b6dfa663`. Log:
+  `/tmp/test-red-d2-wildside-backend-5-1-4a.out`.
+- D-3: V-3 shrank to adjacent integers `1514566008529973632` and
+  `1514566008529973633`; both returned digest
+  `cbb5acf3e14d4d49e81c58993dd82032320954722b40bfd7be666314ddabb69e`. Log:
+  `/tmp/test-red-d3-wildside-backend-5-1-4a.out`. The promoted named `rstest`
+  reproduces the same collision at
+  `/tmp/test-red-d3-example-wildside-backend-5-1-4a.out`.
+- The first two default-seed runs of the broad V-4 property passed despite its
+  full-domain generator. The direct D-1 `rstest` above is therefore the
+  reproducible red witness; V-4 remains the general relational property.
+- The initial fixed-seed statistics guard reached fractional and out-of-range
+  coordinates but no sortable theme array. Adding an explicit theme-array entry
+  to the recursive payload strategy made the same 512 samples cover all three
+  required classes. The guard passes with seed `0x51042a`. Log:
+  `/tmp/test-strategy-coverage-wildside-backend-5-1-4a.out`.
+- After the source fix, all 47 focused cache-key tests passed, including the
+  V-10 table, snapshot, and property. Log:
+  `/tmp/test-cache-key-wildside-backend-5-1-4a-c2-v10.out`.
+- NC-2 changed `COORDINATE_PRECISION_FACTOR` to `1_000_000.0`; the
+  same-grid property failed after zero successes with coordinates
+  `-2.1262886517803015e-5` and `-1.8737113482196984e-5`. Restoring the constant
+  made the property pass. The injected run executed one test and failed with
+  810 filtered out; the reverted run passed one test with the same 810 filtered
+  out. Logs: `/tmp/nc2-wildside-backend-5-1-4a.out` and
+  `/tmp/nc2-reverted-wildside-backend-5-1-4a.out`.
+- NC-4 appended `!` to normalized strings; V-4 failed after nine successes
+  on `{"themes":["theme-0"]}`. The injected run executed one test and failed
+  with 810 filtered out; restoring the source made V-4 pass with the same 810
+  filtered out. Logs: `/tmp/nc4-wildside-backend-5-1-4a.out` and
+  `/tmp/nc4-reverted-wildside-backend-5-1-4a.out`. Pre- and post-control
+  worktree diffs are identical; the index diffs are both empty.
+- The first MUT-1 pass tested 31 mutants in 42 minutes: 24 were caught, 3
+  were unviable, and 4 survived. Survivors were the two constant replacements
+  for `RouteCacheKey::as_ref`, `is_lowercase_hex_digest -> true`, and the `&&`
+  to `||` mutation in that digest validator. The misses showed that the suite
+  did not directly test those accessor and validation contracts. The
+  machine-readable report was copied to
+  `/tmp/mutants-wildside-backend-5-1-4a-c2-first`; the command transcript is
+  `/tmp/mutants-wildside-backend-5-1-4a-c2.out`.
+- Added direct tests for `AsRef<str>` and lowercase digest validation in
+  response. The expanded focused suite passes 47 tests, with 766 filtered out.
+  Log: `/tmp/test-cache-key-wildside-backend-5-1-4a-c2-mutant-tests.out`.
+- The survivor-only MUT-1 iteration caught all four previously missed
+  mutations. Combined with the first pass, the 31-mutant scope has 28 caught, 3
+  unviable, and zero survivors. Logs:
+  `/tmp/mutants-wildside-backend-5-1-4a-c2.out` and
+  `/tmp/mutants-wildside-backend-5-1-4a-c2-iterate.out`. Machine-readable
+  reports are under `/tmp/mutants-wildside-backend-5-1-4a-c2-first-worktree`,
+  `/tmp/mutants-wildside-backend-5-1-4a-c2-iterate-first-run`, and
+  `/tmp/mutants-wildside-backend-5-1-4a-c2-iterate`.
+- Proptest seed files created by the red witnesses and negative controls were
+  removed after their cases were promoted or the controls were reverted; no
+  `backend/proptest-regressions/` files remain.
+- Observation: the first full Stage C2 gate pass confirmed formatting, then
+  stopped at `make lint`. Clippy requested consistent fractional digit grouping
+  in the large-coordinate strategy, and Whitaker identified clustered
+  conditionals in `normalize_route_request_value`. The normalization dispatch
+  now delegates object, array, and number cases to purpose-specific helpers.
+  The next full sequential pass passed every deterministic gate. CodeRabbit
+  reported duplicate stale error-contract declarations, which were corrected
+  along with a stale normalization-summary sentence. The final full pass passed
+  all deterministic gates and the final CodeRabbit review found no concerns.
+- Observation: after recording the clean C2 review, CodeRabbit identified a
+  gap between V-8's three stated edit forms and its string-only strategy. The
+  strategy now preserves string edits, adds a true-to-false boolean flip, and
+  inserts a fresh key under `generated.payload.content`; the fixed-seed guard
+  will prove all three branches are exercised. The first lint pass on that
+  extension caught a formatting-argument error in `prop_assert_ne!` and an
+  unused import; both are fixed before the next gate run.
+- Observation: CodeRabbit review 17 asked the four direct digest-validator
+  assertions to explain their expected result on failure. Each accepted or
+  rejected input now has a distinct diagnostic message. All deterministic gates
+  passed afterwards, and review 18 returned no findings.
+- Observation: the ExecPlan closeout lint caught American `afterward`; the text
+  now uses British `afterwards`. The follow-up formatting, Markdown lint, and
+  Mermaid gates passed. Logs: check-fmt 27, Markdown lint 24 (125 files, zero
+  errors), and nixie 23; the initial spelling failure is in Markdown lint 23.
+- Observation: Stage D enumerates inward IEEE-754 bit patterns from both signed
+  boundaries by subtracting each ULP offset. This yields the immediately
+  interior values for +180 and -180, and directly checks each clause of LEM-1.
+  The first lint run required an inner module-purpose doc comment in the new
+  test module; adding it cleared Whitaker, and the next complete gate sequence
+  and CodeRabbit review both passed.
+- Observation: the first EP-M4 MUT-1 attempt used `cargo-mutants`' default
+  temporary directory under `/tmp` and allocated 22 GiB before evaluating any
+  individual mutant. It was stopped after 929 seconds with exit status 101;
+  only the unmutated baseline passed, so this is not mutation evidence. Its
+  partial report directory is preserved at
+  `/tmp/mutants-partial-e1abce79-stage-e-20260928.out`. Local source inspection
+  shows `tempfile::Builder::tempdir()` follows `std::env::temp_dir()`. The
+  retry set `TMPDIR=/home/leynos/.cache/cargo-mutants-stage-e`, outside `/tmp`,
+  while retaining Cargo's shared default cache. It completed in 2,380 seconds
+  with exit 0: 33 mutants tested, 30 caught, 3 unviable, 0 missed, and 0 timed
+  out. The unviable cases were `for_route_request` at line 70,
+  `hash_route_request_value` at line 133, and `round_coordinate` at line 207;
+  replacing each typed return with `Ok(Default::default())` failed to compile.
+  The baseline passed. The command log is
+  `/tmp/mutants-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-2.out`;
+  the machine-readable report was archived at
+  `/tmp/mutants-full-e1abce79-stage-e-20260928.out`.
+
+The Stage C2 MUT-1 records above preserve the four initial survivors and their
+subsequent kills; the EP-M4 report records every caught and unviable mutant.
+The NC-2 and NC-4 transcripts above show one filtered-in target test per run,
+both failing under the injected mutation and passing after the narrow revert.
+Stage E documentation was committed as five focused changes. Roadmap item
+5.1.4a was checked at Stage E, when the implementation and validation
+obligations in this plan were complete. It was unchecked while the hosted
+CodeScene remediation remained open, then restored to checked after the
+remediation passed on `977206e`.
+
+______________________________________________________________________
+
+Revision note (2026-09-28): revised on the commissioning engineer's instruction
+that counter-example findings carry higher authority because the production
+code is not yet in use. The plan is no longer test-only: the three
+planning-time defects (D-1 idempotence failure, D-2 skipped rounding on
+overflow, D-3 large-integer collapse) are now fixed at the source by a uniform
+±180 coordinate admission bound with a new `CoordinateOutOfRange` error
+variant, instead of being hidden by a ±1,000,000 generator bound. Generators
+now span the full finite `f64` and `i64`/`u64` domains; V-4 and V-5 are
+restated over that domain, V-3 gains an integer-collision arm, and V-10
+(admission bound) is added. LEM-1 is supported by its hand proof, generated
+properties, and the bounded boundary-slice regression; the proposed Kani
+harness was declined after the feasibility spikes produced no verdict (see the
+following revision note). Stages were restructured into C1 (properties green
+today), C2 (red transcripts, then fix), D (bounded regression), and E (docs);
+milestones gained EP-M4. Tolerances now permit counter-example fixes within
+interface and canonical-form limits, and V-9 is pinned before any fix so it
+guards in-range key stability.
+
+Revision note (2026-09-28): Stage A's wrapper and isolated-kernel Kani spikes
+both reached CBMC but exceeded 30 minutes without a verdict. The then-installed
+local guidance was understood to exclude floating-point precision. Stage D
+therefore declined a Kani claim and instead required LEM-1's hand derivation,
+the existing full-domain generated properties, and an exhaustive check of a
+100,000-ULP slice inside each ±180 boundary. The developers' guide records the
+disposition. A later check of the version-matched Kani 0.67 feature-support
+guide clarifies that floating-point types are supported, with trig, cosine, and
+square root over-approximated; the two timed-out spikes still provide no useful
+model validation or verdict for LEM-1.
+
+Revision note (2026-09-28): post-gate CodeRabbit reviews identified that V-8
+must vary one generated leaf under `generated.payload.content`, while keeping
+the random sample and sibling fields constant. The strategy covers string
+changes, boolean flips, and fresh-key insertion, and the fixed-seed guard
+checks all three forms. The same reviews required the pre-commit guard to
+include staged changes and the workflow contract test to report recorded
+invocations on failure. Those changes passed the final staged C1 gates and
+review; a later C2 review required the additional V-8 edit forms.
+
+Revision note (2026-09-28): during Stage C2 setup, corrected D-2's red-test
+classification. The overflowing values remain direct rejection cases for the
+±180 admission rule; IEEE-754 spacing means they cannot demonstrate a
+five-decimal equivalence collision as originally described. D-1 and D-3 remain
+the normalization-idempotence and integer-collision witnesses. The production
+scope is unchanged.
+
+Revision note (2026-08-16): revised after the six-lens design panel review.
+Added V-8 and V-9; corrected the `canonicalize_and_hash` and
+`from_f64`-fallback claims; replaced five manual controls with the scoped
+cargo-mutants gate; added AXM-4; specified distinctness-by-construction and
+rotation-by-one for V-6; mechanized the pre-commit guards and pipefail
+discipline; corrected the baseline test count; renamed two properties.
