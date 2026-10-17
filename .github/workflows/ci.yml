@@ -10,6 +10,15 @@ name: ci
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner label for this measurement run
+        required: false
+        default: ubicloud-standard-4
+      cold:
+        description: Skip cache restores and use a private sccache namespace
+        type: boolean
+        default: false
 
 # A second push to a pull request supersedes the run already in flight, which
 # otherwise charges a full set of minutes for a result nobody reads. Pushes to
@@ -55,8 +64,8 @@ jobs:
     # request, so a push to `main` and a manual dispatch both take the
     # trusted arm rather than the fallback.
     runs-on: >-
-      ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
-      || 'ubicloud-standard-8' }}
+      ${{ inputs.runner || (github.event.pull_request.head.repo.fork && 'ubuntu-latest'
+      || 'ubicloud-standard-8') }}
     # 90, which is this job's own figure and no longer the coverage jobs':
     # both of those went to 120 in #486 to clear the 5,400 s cargo watchdog,
     # and this job has no watchdog to clear. A cold sccache pays about 1.4 s
@@ -65,7 +74,7 @@ jobs:
     # longest this job ever gets. 60 cancelled it mid compile-fail suite with
     # every step passing, which loses the generation the next run would have
     # read.
-    timeout-minutes: 90
+    timeout-minutes: 150
     permissions:
       contents: read
     steps:
@@ -73,6 +82,9 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      - name: Start resource sampler
+        run: ./scripts/ci-resource-sampler.sh start
 
       # v4.1.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
@@ -168,6 +180,7 @@ jobs:
       # its paths, and no two steps list the same path.
       - name: Restore workspace node_modules
         id: modules-cache
+        if: ${{ !inputs.cold }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
@@ -179,6 +192,7 @@ jobs:
 
       - name: Restore Bun download cache
         id: bun-cache
+        if: ${{ !inputs.cold }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.bun/install/cache
@@ -192,6 +206,7 @@ jobs:
       # travels with.
       - name: Restore Cargo registry
         id: cargo-cache
+        if: ${{ !inputs.cold }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
@@ -208,6 +223,7 @@ jobs:
       # while the command is missing.
       - name: Restore global tools
         id: tools-cache
+        if: ${{ !inputs.cold }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
@@ -233,7 +249,7 @@ jobs:
       # carries the same guard: a normal pull request runs no database.
       - name: Restore PostgreSQL embedded binaries
         id: pg-embedded-cache
-        if: github.actor == 'dependabot[bot]'
+        if: github.actor == 'dependabot[bot]' && !inputs.cold
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
@@ -245,6 +261,15 @@ jobs:
       # cache-provider: external — this job owns ~/.cargo/registry,
       # ~/.cargo/bin, and the uv layers above, so the shared action must not
       # become a second owner of them.
+      # Measurement only: a dispatch with cold=true gets its own sccache
+      # namespace (per run and per job), so it reads nothing any other run
+      # wrote and writes nothing any other run will read.
+      - name: Select a private cold sccache namespace
+        if: ${{ inputs.cold }}
+        run: |
+          printf 'SCCACHE_GHA_VERSION=placement-cold-%s-%s\n' \
+            "${GITHUB_RUN_ID}" "${GITHUB_JOB}" >>"${GITHUB_ENV}"
+
       - name: Install Rust toolchain
         id: setup-rust
         uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
@@ -659,6 +684,10 @@ jobs:
               "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Report resource sampler
+        if: always()
+        run: ./scripts/ci-resource-sampler.sh report
+
   # Rust coverage. This lane generates coverage and ratchets it against the
   # baseline; it talks to CodeScene not at all. A pull-request lane that ran
   # the CodeScene changed-line gate needed the CLI, a secret and a parse step
@@ -671,15 +700,15 @@ jobs:
     if: github.actor != 'dependabot[bot]' && github.event_name != 'push'
     # The same fork fallback as `build`; see the comment there.
     runs-on: >-
-      ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
-      || 'ubicloud-standard-8' }}
+      ${{ inputs.runner || (github.event.pull_request.head.repo.fork && 'ubuntu-latest'
+      || 'ubicloud-standard-8') }}
     # Above the 5,400 s cargo watchdog below plus the work either side of
     # the coverage step, which reached 59 s here and 522 s on the trunk
     # lane. At 90 minutes the ceiling equalled the watchdog exactly, so a
     # coverage step that spent its budget was cancelled by the job timer
     # rather than reported by the watchdog, and a cancellation discards
     # the log that would have explained it.
-    timeout-minutes: 120
+    timeout-minutes: 180
     permissions:
       contents: read
     env:
@@ -689,11 +718,14 @@ jobs:
       # instrumented workspace build plus the serialized embedded-Postgres
       # suite needs far longer — the repo's nextest global-timeout alone is
       # 60 minutes — so raise the cap well above it.
-      RUN_RUST_CARGO_WAIT_TIMEOUT: '5400'
+      RUN_RUST_CARGO_WAIT_TIMEOUT: '9000'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
         with:
           persist-credentials: false
+
+      - name: Start resource sampler
+        run: ./scripts/ci-resource-sampler.sh start
 
 
       - name: Set cache keys
@@ -723,6 +755,7 @@ jobs:
 
       - name: Restore Cargo registry
         id: cargo-cache
+        if: ${{ !inputs.cold }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
@@ -736,6 +769,7 @@ jobs:
       # is the key that explains the archive's contents.
       - name: Restore coverage tools
         id: coverage-tools-cache
+        if: ${{ !inputs.cold }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
@@ -751,6 +785,7 @@ jobs:
 
       - name: Restore PostgreSQL embedded binaries
         id: pg-embedded-cache
+        if: ${{ !inputs.cold }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
@@ -758,6 +793,15 @@ jobs:
             ~/.cache/pg-embedded/binaries
           key: ${{ env.PG_EMBEDDED_CACHE_KEY }}
           restore-keys: pg-embedded-v1-${{ env.CACHE_SCOPE }}-
+
+      # Measurement only: a dispatch with cold=true gets its own sccache
+      # namespace (per run and per job), so it reads nothing any other run
+      # wrote and writes nothing any other run will read.
+      - name: Select a private cold sccache namespace
+        if: ${{ inputs.cold }}
+        run: |
+          printf 'SCCACHE_GHA_VERSION=placement-cold-%s-%s\n' \
+            "${GITHUB_RUN_ID}" "${GITHUB_JOB}" >>"${GITHUB_ENV}"
 
       - name: Install Rust toolchain
         id: setup-rust
@@ -865,3 +909,7 @@ jobs:
             printf -- "- pg-embedded key: \`%s\` hit: \`%s\`\n" \
               "${PG_EMBEDDED_CACHE_KEY:-}" "${PG_EMBEDDED_HIT:-}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report resource sampler
+        if: always()
+        run: ./scripts/ci-resource-sampler.sh report
