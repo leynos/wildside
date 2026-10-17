@@ -36,7 +36,20 @@ export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go
 # path is unreachable in the deployed configuration. Review by 2026-10-03,
 # and remove this ignore rather than renew it if the server ever terminates
 # TLS or enables h2c: https://github.com/leynos/wildside/issues/472
-CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258
+# RUSTSEC-2026-0367/0368/0369 are zip 3.0.0 symlink, SUID/SGID and permission
+# escaping defects, all patched only in zip >= 9.0.0. zip is a *build*
+# dependency of utoipa-swagger-ui, which pins `^3.0`; that crate's own latest
+# release still pins `^8.6`, its main branch is unbumped, and 3.0.0 is the only
+# 3.x release, so no downstream version satisfies both constraints. This
+# workspace enables the `vendored` feature, so the build script extracts a
+# compile-time constant (utoipa-swagger-ui-vendored 5.17.14) that contains no
+# symlinks and no SUID/SGID entries; all three advisories need an
+# attacker-controlled archive, which cannot occur here. Remove these ignores
+# as soon as the resolved zip is >= 9.0.0:
+# https://github.com/leynos/wildside/issues/547
+CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258 \
+	--ignore RUSTSEC-2026-0367 --ignore RUSTSEC-2026-0368 \
+	--ignore RUSTSEC-2026-0369
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
