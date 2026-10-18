@@ -5,19 +5,16 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS — implementation and the current local candidate pass all
-eight sequential gates; final PR integration remains. The behaviour candidate
-`a58a68228317aa993a1d8d4208eae7e5c550f591` and its documentation-only
-validation record `0b0cf928558e4d4bd7b5bfd860ee03da79eb4380` are published to
-PR #458 on base `17606efbb9796a2f06cf626fd5770616df315541`. On the worktree
-with the current proof-scope corrections, `make check-fmt`, `make lint`,
-`make typecheck`, `make test`, `make audit`, `make spelling`,
-`make markdownlint`, and `make nixie` passed sequentially. Hosted CI run
-`39143593200` passed build and coverage; CodeScene result `8005984` and Gecko
-Security also passed on `0b0cf92`. The completeness and proof assessments on
-that head found no implementation defect and requested only documentation
-wording changes, now in this worktree. Fresh exact-head assessments, hosted
-validation on the follow-up, formal review, readiness, and merge remain pending.
+Status: IN PROGRESS — exact candidate
+`9588ee9a939aa74570fff9600226d80212b4f498` on base
+`17606efbb9796a2f06cf626fd5770616df315541` passed all eight local gates
+sequentially. Hosted CI run `39148629791` passed build and coverage; CodeScene
+result `8006306` and Gecko Security passed. Fresh completeness and proof
+assessments on H2 found no implementation omission or production defect and
+accepted the corrected proof scope. This progress record documents only that
+completed evidence. Formal review, readiness, and merge remain pending; the
+published follow-up head must receive its own hosted checks and exact-head
+assessments before readiness.
 
 ## Purpose / big picture
 
@@ -1577,6 +1574,28 @@ merge status.
   and
   [6252160305](https://github.com/leynos/wildside/pull/458#issuecomment-6252160305).
   Formal review, readiness, and merge remain open.
+
+- [x] Final H2 evidence, 2026-10-18: the exact published head was
+  `9588ee9a939aa74570fff9600226d80212b4f498` on base
+  `17606efbb9796a2f06cf626fd5770616df315541`. All eight local gates passed
+  sequentially on this file tree. Nextest reported 1,830 passed and four
+  skipped; compile-fail passed; Python workflow contracts reported 606 passed
+  and one skipped; Python doctests reported 115 passed and 13 skipped; and
+  lint-actions reported 14 passed. Audit accepted 15 advisories under the
+  exception ledger; Markdown lint checked 126 files with zero errors; Nixie
+  validated every diagram. Hosted CI run
+  [39148629791](https://github.com/leynos/wildside/actions/runs/39148629791)
+  completed successfully on that exact head: build and coverage passed; the
+  build job's Rust tests step was skipped while its compile-fail and other
+  reported build checks passed. CodeScene result
+  [8006306](https://codescene.io/projects/70675/delta/results/8006306) and
+  Gecko Security passed. The exact-head completeness assessment
+  [6252791412](https://github.com/leynos/wildside/pull/458#issuecomment-6252791412)
+  found no remaining material implementation omission or production defect;
+  the proof assessment
+  [6252811188](https://github.com/leynos/wildside/pull/458#issuecomment-6252811188)
+  accepted LEM-1's stated scalar claims under AXM-5. This entry updates the
+  earlier H2-pending record. Formal review, readiness, and merge remain open.
 
 ## Surprises & discoveries
 
