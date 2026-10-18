@@ -5,15 +5,19 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS — implementation and exact-head local validation are
-complete; final PR integration remains. The current source candidate is
-published to PR #458 at `a58a68228317aa993a1d8d4208eae7e5c550f591`, based on
-`17606efbb9796a2f06cf626fd5770616df315541`. All eight local gates passed
-sequentially on this head, including the full `make test` target with isolated
-PostgreSQL runtime paths. Hosted CI run `39062456701`, CodeScene result
-`7999954`, and Gecko Security passed on this head. The PR remains draft while
-the current-head assessments and formal review are completed; readiness and
-merge remain pending.
+Status: IN PROGRESS — implementation and the current local candidate pass all
+eight sequential gates; final PR integration remains. The behaviour candidate
+`a58a68228317aa993a1d8d4208eae7e5c550f591` and its documentation-only
+validation record `0b0cf928558e4d4bd7b5bfd860ee03da79eb4380` are published to
+PR #458 on base `17606efbb9796a2f06cf626fd5770616df315541`. On the worktree
+with the current proof-scope corrections, `make check-fmt`, `make lint`,
+`make typecheck`, `make test`, `make audit`, `make spelling`,
+`make markdownlint`, and `make nixie` passed sequentially. Hosted CI run
+`39143593200` passed build and coverage; CodeScene result `8005984` and Gecko
+Security also passed on `0b0cf92`. The completeness and proof assessments on
+that head found no implementation defect and requested only documentation
+wording changes, now in this worktree. Fresh exact-head assessments, hosted
+validation on the follow-up, formal review, readiness, and merge remain pending.
 
 ## Purpose / big picture
 
@@ -428,10 +432,11 @@ Method selection:
 
 Axioms (external interfaces treated as correct, not verified here):
 
-- AXM-1: `sha2::Sha256` implements FIPS 180-4 SHA-256 (collision behaviour
-  is not tested; "different canonical bytes give different digests" is assumed
-  for the divergence properties, which is sound for test purposes because a
-  collision would be a cryptographic event).
+- AXM-1: `sha2::Sha256` implements FIPS 180-4 SHA-256. The divergence
+  properties assume no SHA-256 collision; this is an axiom, not a proof that
+  the digest is injective. Deterministic hashing is sufficient for equal
+  canonical bytes to produce equal digests, but distinct bytes are not
+  guaranteed to produce distinct digests.
 - AXM-2: `serde_json` 1.0.150 without `preserve_order`: `Value::Object` is
   `BTreeMap`-backed; `to_vec` is deterministic for a given `Value`;
   `Number::from_f64` rejects non-finite values; `Number::as_f64` always returns
@@ -469,13 +474,15 @@ AXM-4, distinct bytes. Method: hand proof plus
 `f64` values in the 100,000-ULP interval immediately inside each of `-180.0`
 and `180.0`, asserting (a), (b), and (c). This is an exhaustive regression
 check for those intervals, not a machine proof over all admitted `f64` values.
-Full-domain `proptest` properties exercise generated finite values; the hand
-proof carries the remaining domain argument. No Kani harness is landed: both the
-`Number` wrapper spike and the isolated scalar kernel exceeded 30 minutes
-without a verdict or useful model validation for LEM-1. The local skill's
-precision caution and the Kani 0.67 feature-support details are recorded above.
-Logs and resource measurements are recorded in `Artefacts and notes`; the
-written disposition is in `docs/developers-guide.md`.
+The lemma concerns the implemented binary64 multiply/round/divide expression;
+it does not claim equivalence to exact-real decimal rounding at every halfway
+boundary. Full-domain `proptest` properties exercise generated finite values;
+the hand proof carries the remaining domain argument. No Kani harness is
+landed: both the `Number` wrapper spike and the isolated scalar kernel exceeded
+30 minutes without a verdict or useful model validation for LEM-1. The local
+skill's precision caution and the Kani 0.67 feature-support details are
+recorded above. Logs and resource measurements are recorded in
+`Artefacts and notes`; the written disposition is in `docs/developers-guide.md`.
 
 Obligations. Each is exercised through the public entry point
 `RouteCacheKey::for_route_request` unless stated; `normalize` refers to the
@@ -586,7 +593,7 @@ number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
   `cache_key/tests.rs::negative_zero_coordinate_collapses_to_zero`.
   Non-vacuity: the mutation gate must kill removal of the `rounded == 0.0`
   collapse.
-- Obligation V-8 (single-leaf divergence — general injectivity guard):
+- Obligation V-8 (single-leaf divergence guard):
   editing exactly one non-canonicalized leaf of a generated, successfully
   derived payload (changing a string value to a distinct string, flipping a
   boolean, or inserting a fresh key) changes the key. A companion generated
@@ -604,7 +611,8 @@ number whose immediate containing object key is in `ROUNDED_COORDINATE_KEYS`.
   `non_numeric_coordinate_values_remain_distinct`; direct edge cases are in
   `coordinates.rs`. Non-vacuity: rests on AXM-1/AXM-4; the mutation gate must
   kill identity-erasing mutants (e.g. the object branch returning
-  `Value::Null`).
+  `Value::Null`). The divergence conclusion is conditional on the stated
+  no-collision axiom and does not claim universal digest injectivity.
 - Obligation V-9 (digest algorithm known-answer): one fixed, in-range
   payload maps to a precomputed `route:v1:<expected 64-hex SHA-256>` string,
   computed once from the canonical bytes with an independent tool (`sha256sum`)
@@ -827,12 +835,12 @@ Stage E (documentation and closure):
    `bound).` It is ticked to `[x]` only when this plan reaches COMPLETE.
 3. `docs/wildside-backend-architecture.md` route-caching section: record
    ARCH-CACHEKEY-COORD-DOMAIN — coordinate-keyed numbers above 180 in magnitude
-   are rejected with `CoordinateOutOfRange` because rounding is only a
-   projection (LEM-1) inside that bound — and note that the contract is
-   supported by the hand proof, example-based, property-based, dense-boundary,
-   and mutation-tested coverage under `backend/src/domain/ports/cache_key/`.
-   Also list the new error variant where the domain-model section describes
-   `RouteCacheKey`.
+   are rejected with `CoordinateOutOfRange` because ±180 is a sufficient
+   admission bound chosen for the rounding-projection property (LEM-1) — and
+   note that the contract is supported by the hand proof, example-based,
+   property-based, dense-boundary, and mutation-tested coverage under
+   `backend/src/domain/ports/cache_key/`. Also list the new error variant where
+   the domain-model section describes `RouteCacheKey`.
 4. `docs/developers-guide.md`: (a) add a property-testing bullet to the
    "Testing strategy" list at the top; (b) a short subsection under testing
    conventions recording: property modules live in `tests/properties.rs` child
@@ -1546,6 +1554,30 @@ merge status.
   timeout record below reconcile them. The separate proof assessment, formal
   review, readiness, and merge remain open.
 
+- [x] Exact-head assessments, 2026-10-18: CodeRabbit assessed both
+  completeness and proof rigour on `0b0cf928558e4d4bd7b5bfd860ee03da79eb4380`
+  against base `17606efbb9796a2f06cf626fd5770616df315541`. The completeness
+  response found no implementation omission or production correctness defect
+  and accepted the prior evidence corrections. The proof response accepted
+  LEM-1's three scalar claims under AXM-5, with no production-code defect. Both
+  requested that ±180 be described as a sufficient chosen bound, that digest
+  divergence remain conditional on the no-collision axiom, and that the lemma
+  be tied to the implemented binary64 expression rather than exact-real decimal
+  rounding at every halfway boundary. Those wording corrections are in the
+  current worktree; all eight local gates passed sequentially on this
+  candidate. Hosted CI run `39143593200` passed build and coverage; CodeScene
+  result `8005984` and Gecko Security also passed. Fresh exact-head assessments
+  and hosted validation are required for the published follow-up. Completeness
+  response:
+  [6252227540](https://github.com/leynos/wildside/pull/458#issuecomment-6252227540);
+  proof response:
+  [6252183978](https://github.com/leynos/wildside/pull/458#issuecomment-6252183978).
+  Requests:
+  [6252096941](https://github.com/leynos/wildside/pull/458#issuecomment-6252096941)
+  and
+  [6252160305](https://github.com/leynos/wildside/pull/458#issuecomment-6252160305).
+  Formal review, readiness, and merge remain open.
+
 ## Surprises & discoveries
 
 - Observation: by 2026-10-16, `main` had moved 41 commits past the PR's
@@ -1773,9 +1805,10 @@ merge status.
   magnitude-dependent branches for inputs that are never valid coordinates, and
   a larger proof obligation; (d) per-axis geographic bounds (±90 for latitude)
   — conflates cache-key soundness with request validation, which belongs at the
-  inbound boundary. The uniform ±180 bound is the smallest rule under which
-  LEM-1 holds with a wide margin and every in-range key is unchanged.
-  Date/Author: 2026-09-28, planning agent.
+  inbound boundary. The uniform ±180 bound is a sufficient admission bound
+  chosen for this contract. LEM-1 holds throughout that domain, and every
+  in-range key is unchanged; no minimality claim is made. Date/Author:
+  2026-09-28, planning agent.
 - Decision: use the D-2 overflow cases as direct admission-contract witnesses,
   not as V-2 equivalent-value pairs. Rationale: the binary64 ULP above
   `1.8e303` is about `3.05e287`, far larger than the five-decimal grid, so two
