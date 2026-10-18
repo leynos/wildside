@@ -1379,8 +1379,12 @@ Related domain helpers:
 
 - `RouteCacheKey::for_route_request(...)` derives canonical
   `route:v1:<digest>` keys by normalizing route payloads before hashing.
-- `RouteCacheKeyDerivationError` reports `Hash` and `Validation` failures from
-  key derivation.
+  Numeric values under rounded coordinate keys must be finite and within the
+  inclusive ±180 admission bound; this is a cache-key rounding constraint, not
+  geographic validation.
+- `RouteCacheKeyDerivationError` reports `Hash`, `Validation`,
+  `CoordinateOutOfRange`, and `RoundedCoordinateNotRepresentable` failures.
+  Coordinate errors retain the key and original JSON number for diagnosis.
 
 #### Test infrastructure
 
