@@ -5,18 +5,15 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS — implementation and local validation are complete; final
-PR integration remains. The latest source candidate was published to PR #458 at
-`435b7c8813a545c81ac4319487a39caf6a7f9206` after fixing generated coverage for
-non-numeric coordinate values and splitting a CodeScene large method. All eight
-local gates passed sequentially on that source candidate, including the full
-`make test` target with isolated PostgreSQL runtime paths. The first test
-attempt on an earlier candidate hit a stale PostgreSQL runtime lock; the
-successful isolated rerun did not touch the process holding the default lock.
-This status update corrects the stale candidate and completion statements
-below. At this observation, hosted CodeScene and Gecko passed; the PR's build
-and coverage checks were still running. Fresh completeness and proof
-assessments, formal review, readiness, and merge remain pending.
+Status: IN PROGRESS — implementation and exact-head local validation are
+complete; final PR integration remains. The current source candidate is
+published to PR #458 at `a58a68228317aa993a1d8d4208eae7e5c550f591`, based on
+`17606efbb9796a2f06cf626fd5770616df315541`. All eight local gates passed
+sequentially on this head, including the full `make test` target with isolated
+PostgreSQL runtime paths. Hosted CI run `39062456701`, CodeScene result
+`7999954`, and Gecko Security passed on this head. The PR remains draft while
+the current-head assessments and formal review are completed; readiness and
+merge remain pending.
 
 ## Purpose / big picture
 
@@ -1528,6 +1525,27 @@ merge status.
   running, with build queued and coverage in progress. Fresh completeness and
   proof assessments, formal review, readiness, and merge remain open.
 
+- [x] Exact-head validation, 2026-10-18: PR #458 publishes
+  `a58a68228317aa993a1d8d4208eae7e5c550f591` on base
+  `17606efbb9796a2f06cf626fd5770616df315541`. The sequential local gates
+  `make check-fmt`, `make lint`, `make typecheck`, `make test`, `make audit`,
+  `make spelling`, `make markdownlint`, and `make nixie` passed. Nextest
+  reported 1,830 passed and four skipped; both compile-fail checks passed;
+  Python workflow contracts reported 606 passed and one skipped; Python
+  doctests reported 15 passed; and lint-actions reported 14 passed. Audit
+  accepted 15 advisories under the repository exception ledger. Markdown lint
+  checked 126 files with zero errors. Hosted CI
+  [run 39062456701](https://github.com/leynos/wildside/actions/runs/39062456701)
+  passed build and coverage; CodeScene
+  [result 7999954](https://codescene.io/projects/70675/delta/results/7999954)
+  and Gecko Security passed. The draft CodeRabbit status is not a formal
+  review. Completeness assessment
+  [6251835541](https://github.com/leynos/wildside/pull/458#issuecomment-6251835541)
+  found no implementation omission or production correctness defect and
+  requested two evidence-record corrections; this entry and the historical
+  timeout record below reconcile them. The separate proof assessment, formal
+  review, readiness, and merge remain open.
+
 ## Surprises & discoveries
 
 - Observation: by 2026-10-16, `main` had moved 41 commits past the PR's
@@ -1917,11 +1935,16 @@ merge status.
 ## Outcomes & retrospective
 
 Historical validation on candidate `bd0c80bac0e1a26e7f09343702e55a44e5422dd1`:
-the first default-runtime `make test` run reached its 3,600-second timeout
-after 957 of 1,830 Rust tests. A long-lived PostgreSQL process held
-`/tmp/wildside-pg-embedded-shared-cluster.lock`; it was left untouched. The
-complete rerun used isolated PostgreSQL runtime paths and passed. That outcome
-is superseded by the latest exact source-candidate gate record in Progress.
+the first default-runtime `make test` run reached its 3,600-second timeout. The
+retained transcript
+(`/tmp/test-e1abce79-3a81-406b-8473-7b288e22b103-backend-5-1-4a-cache-key-canonicalization-property-tests-bd0c80b.out`)
+reports 952 of 1,825 tests run: 937 passed, one failed, 14 timed out, and four
+skipped; 873 tests were not run. A long-lived PostgreSQL process held
+`/tmp/wildside-pg-embedded-shared-cluster.lock`; it was left untouched. A
+separate later run with isolated PostgreSQL runtime paths passed, but the
+retained record does not establish that rerun's exact head, so it is not
+attributed to `bd0c80ba` here. Later exact-candidate results are recorded in
+Progress.
 
 Historical implementation record: the property suite, coordinate admission fix,
 supporting documentation, and validation evidence were considered complete on
