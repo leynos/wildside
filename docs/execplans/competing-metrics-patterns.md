@@ -20,9 +20,11 @@ checks raised one documentation error and three warnings; their dispositions
 are recorded in the review-round entry below, and CodeRabbit's focused
 reconciliation reply accepted every disposition. CodeRabbit then auto-paused
 automatic reviews after the documentation repair commit, so its only `e72fd35`
-coverage is that reconciliation reply plus the paused status; one formal
-recovery review was enqueued through `comenq` because the pause is a diagnosed
-review gap, not a rate limit.
+coverage is that reconciliation reply plus the paused status. One formal
+recovery review was enqueued through `comenq` because the pause was a diagnosed
+review gap rather than a rate limit; CodeRabbit approved the pushed head before
+the queue reached it, so that redundant entry was deleted. `reviewDecision` is
+now `APPROVED` on `95e3b56`, pending `build` and `coverage`.
 
 ## Purpose / big picture
 
@@ -512,6 +514,18 @@ removing it.
   `comenq put leynos/wildside 460 "@coderabbitai review"` (queue ID `550b2871`,
   posted ETA 1h 38m). No manual review command or duplicate queue entry was
   used; `comenq list` and `comenq hist` showed no prior wildside request.
+- (2026-10-19) The plan-only commit `95e3b56` was pushed and CodeRabbit
+  approved that exact head (review `5575530713`, `commit_id`
+  `95e3b56ceae91e4e64443ab0ea88521e6bbb2150`, state `APPROVED`, submitted
+  17:51:51Z), with `reviewDecision` now `APPROVED` and the `CodeRabbit` status
+  context `success`. Its accompanying reply (issue comment `6273627586`) states
+  that no unresolved substantive finding remains in the prior reconciliation
+  and that the docstring threshold is an automated-result limitation, not a
+  source defect. The queued recovery review was no longer needed once the pause
+  resolved, so queue entry `550b2871` was deleted rather than left to post a
+  duplicate review; `comenq list` confirms no wildside entry remains. Merge
+  still waits on the `build` and `coverage` check runs started at 17:47 for
+  this head.
 
 ## Surprises & discoveries
 
@@ -667,9 +681,11 @@ integration run remains an open verification limitation. No proof changed, so
 proof assessment is N/A. CodeRabbit's four pre-merge rows are dispositioned in
 the 2026-10-19 progress entry, and CodeRabbit's focused reconciliation reply
 accepted every disposition. CodeRabbit auto-paused automatic reviews after the
-documentation repair, so its `e72fd35` check records a pause rather than a
-completed inspection; one managed recovery review is queued. Merge remains
-gated on that review outcome and a final CI observation under `pr-babysitting`.
+documentation repair, so its `e72fd35` check recorded a pause rather than a
+completed inspection; a managed recovery review was queued, and CodeRabbit
+approved the pushed head `95e3b56` before that entry was needed, so the entry
+was deleted. Merge remains gated on `build` and `coverage` and a final
+observation under `pr-babysitting`.
 
 ## Context and orientation
 
