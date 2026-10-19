@@ -8,6 +8,8 @@ use crate::domain::ports::{
     PaginationErrorMetrics, PaginationErrorSource, UserPaginationError, UserPersistenceError,
 };
 
+/// Map a persistence failure to the HTTP-safe domain error, recording any
+/// pagination error through the injected metrics port.
 pub(super) fn map_user_persistence_error(
     error: UserPersistenceError,
     pagination_error_metrics: &dyn PaginationErrorMetrics,
@@ -21,6 +23,8 @@ pub(super) fn map_user_persistence_error(
     }
 }
 
+/// Log and record a repository pagination failure before returning the shared
+/// client-facing error envelope.
 fn map_user_pagination_error(
     error: UserPaginationError,
     pagination_error_metrics: &dyn PaginationErrorMetrics,

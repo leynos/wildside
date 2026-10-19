@@ -1,4 +1,10 @@
-//! Prometheus adapter for pagination error metrics.
+//! Prometheus adapter for the domain pagination-error metrics port.
+//!
+//! Implements [`PaginationErrorMetrics`] with an `IntCounterVec` registered
+//! against a caller-supplied [`prometheus::Registry`], keeping metric state off
+//! process globals. The server composition root builds this adapter only when
+//! the `metrics` feature is enabled and a Prometheus registry is configured,
+//! and it is this counter that the `/metrics` endpoint exposes.
 
 use prometheus::{IntCounterVec, Opts, Registry};
 
@@ -60,6 +66,7 @@ mod tests {
     const METRIC_NAME: &str = "wildside_pagination_errors_total";
     const METRIC_HELP: &str = "Total pagination cursor errors mapped to client responses";
 
+    /// Assert the registry holds exactly one metric with the expected labels.
     fn assert_counter(
         registry: &Registry,
         detail_code: &str,
@@ -88,6 +95,7 @@ mod tests {
         );
     }
 
+    /// Assert each source/code pair increments its own labelled counter.
     #[rstest]
     #[case::http_invalid_cursor(PaginationErrorSource::UsersHttp, "invalid_cursor", "users_http")]
     #[case::http_unsupported_direction(
@@ -120,6 +128,7 @@ mod tests {
         assert_counter(&registry, detail_code, source_label, 1.0);
     }
 
+    /// Assert repeat increments accumulate on the same labelled series.
     #[test]
     fn increments_the_same_source_and_detail_code_twice() {
         let registry = Registry::new();

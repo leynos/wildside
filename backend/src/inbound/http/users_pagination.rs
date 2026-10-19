@@ -279,6 +279,8 @@ fn current_request_url(request: &HttpRequest) -> Result<Url, Error> {
     Url::parse(&url).map_err(|err| Error::internal(format!("failed to build request URL: {err}")))
 }
 
+/// Log the cursor rejection, record it through the injected metrics port, and
+/// map it to the matching client-facing error.
 fn map_cursor_error(
     error: CursorError,
     pagination_error_metrics: &dyn PaginationErrorMetrics,
@@ -347,6 +349,7 @@ mod tests {
         }
     }
 
+    /// Parse a cursor and assert the HTTP adapter recorded the expected code.
     fn assert_cursor_error_is_recorded(cursor: &str, expected_detail_code: &'static str) {
         let metrics = RecordingPaginationErrorMetrics::default();
         let params = UsersListQueryParams {
@@ -372,6 +375,7 @@ mod tests {
     // This opaque fixture decodes to a users cursor with `dir: "Sideways"`.
     const UNSUPPORTED_DIRECTION_CURSOR: &str = "eyJrZXkiOnsiY3JlYXRlZF9hdCI6IjIwMjYtMDMtMjJUMTA6MzA6MDBaIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifSwiZGlyIjoiU2lkZXdheXMifQ";
 
+    /// Assert each rejected cursor records the expected detail code.
     #[rstest]
     #[case::invalid_cursor("not-a-cursor", "invalid_cursor")]
     #[case::unsupported_direction(UNSUPPORTED_DIRECTION_CURSOR, "unsupported_direction")]

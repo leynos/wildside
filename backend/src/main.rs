@@ -183,6 +183,7 @@ mod pagination_metrics_exposition_tests {
 
     use super::{HealthState, ServerConfig, create_server};
 
+    /// Drive the real server and assert `/metrics` exposes the injected counter.
     #[actix_rt::test]
     async fn create_server_exposes_injected_pagination_errors() -> Result<(), Box<dyn StdError>> {
         let listener = TcpListener::bind(("127.0.0.1", 0))?;
@@ -233,6 +234,7 @@ mod pagination_metrics_exposition_tests {
         Ok(())
     }
 
+    /// Log in with the fixture account and return the session cookie pair.
     async fn login_session_cookie(
         client: &awc::Client,
         base_url: &str,
@@ -260,6 +262,7 @@ mod pagination_metrics_exposition_tests {
         Ok(session_cookie.to_owned())
     }
 
+    /// Send an invalid cursor, then return the raw `/metrics` body.
     async fn invalid_cursor_metrics_text(
         client: &awc::Client,
         base_url: &str,

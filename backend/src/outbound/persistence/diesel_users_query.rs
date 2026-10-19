@@ -39,6 +39,7 @@ impl DieselUsersQuery {
         }
     }
 
+    /// Build a test adapter over a repository, discarding pagination metrics.
     #[cfg(test)]
     fn from_repository(user_repository: Arc<dyn UserRepository>) -> Self {
         Self {

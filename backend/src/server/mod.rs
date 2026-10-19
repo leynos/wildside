@@ -134,6 +134,11 @@ pub(crate) fn build_route_submission_service(
     }
 }
 
+/// Build the injected pagination-error metrics recorder for the server.
+///
+/// Uses the configured Prometheus registry when metrics are enabled and
+/// configured, otherwise falls back to a no-op recorder that still emits the
+/// structured log through the port's provided `record` method.
 fn build_pagination_error_metrics(
     config: &ServerConfig,
 ) -> std::io::Result<Arc<dyn PaginationErrorMetrics>> {

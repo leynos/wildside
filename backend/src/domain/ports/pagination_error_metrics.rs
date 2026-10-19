@@ -1,4 +1,12 @@
-//! Domain port for pagination-error metrics and their structured log.
+//! Injected port for pagination-error metrics and their structured log.
+//!
+//! The domain owns this port so use cases can report mapped cursor errors
+//! without depending on Prometheus or any other metrics backend. It defines
+//! the [`PaginationErrorMetrics`] trait, the [`PaginationErrorSource`] label
+//! vocabulary, and a [`NoOpPaginationErrorMetrics`] default. The provided
+//! [`PaginationErrorMetrics::record`] method emits the structured `info` log
+//! for every build and then delegates counting to the adapter's `increment`
+//! hook, so metrics-disabled builds keep the same log-based observability.
 
 use tracing::info;
 
@@ -88,6 +96,7 @@ mod tests {
     use rstest::rstest;
     use tracing_test::traced_test;
 
+    /// Assert the no-op recorder still emits the structured log fields.
     #[traced_test]
     #[rstest]
     #[case::users_http(PaginationErrorSource::UsersHttp, "invalid_cursor", "users_http")]

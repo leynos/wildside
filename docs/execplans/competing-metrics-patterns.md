@@ -12,10 +12,12 @@ adapter makes all four pass. With default features disabled, 789 backend
 library tests and the focused no-op/persistence cases pass. The full backend
 integration suite remains limited by embedded PostgreSQL admin-database
 bootstrap failures; those failures are recorded below. The completed roadmap
-task is checked in `docs/backend-roadmap.md` §1.3.4. PR #460 remains open and
-draft. Candidate-bound completeness/correctness assessment is clear through the
-wording-correction response below; hosted CI remains pending and is lifecycle
-work, not a local implementation gate.
+task is checked in `docs/backend-roadmap.md` §1.3.4. PR #460 is ready for
+review; hosted `build`, `coverage`, CodeScene, Gecko, and the CodeRabbit status
+context pass on `35163ba`. Candidate-bound completeness/correctness assessment
+is clear through the wording-correction response below. CodeRabbit's pre-merge
+checks raised one documentation error and three warnings; their dispositions
+are recorded in the review-round entry below.
 
 ## Purpose / big picture
 
@@ -460,6 +462,30 @@ removing it.
   its pre-merge check was skipped for the draft PR; Kody and automerge were
   skipped. No completed failure was observed. Hosted CI remains pending; no
   readiness or merge action is authorized.
+- (2026-10-19) CodeRabbit's ready-PR pre-merge checks on
+  `35163ba887f2c8467a3bb9df14989a395e5bf427` reported one error and three
+  warnings. Each row was dispositioned against live source:
+  - Module-Level Documentation (error) is valid. Both new modules now carry
+    expanded `//!` docs stating their purpose, the port/adapter relationship,
+    the injected `Registry`, and composition-time wiring.
+  - Docstring Coverage (warning) is diff-scoped, so it can only be re-read
+    from CodeRabbit after the repair. The new composition builders, mapping
+    functions, adapter test constructors, and test helpers now have `///`
+    docs.
+  - User-Facing Documentation (warning) is not applicable. `backend` remains
+    an unpublished `0.1.0` workspace crate with no out-of-crate consumer; the
+    `/api/v1/users` pagination contract and the metric wire format are
+    unchanged; and the tolerance below records deleting
+    `register_pagination_error_metrics` without a migration shim.
+  - Domain Architecture (warning) is not applicable. `tracing` is the
+    sanctioned cross-cutting observability crate; architecture lint forbids
+    `prometheus`, not `tracing`, in `domain`; the base revision emitted the
+    same structured log; and the provided-method decision keeps that log
+    available in metrics-disabled builds. CodeRabbit's own Unit Architecture
+    and Observability rows pass and accept this design.
+
+  The focused pre-merge reconciliation was posted after this repair wave's
+  gates; it is not a request for a fresh whole-PR review.
 
 ## Surprises & discoveries
 
@@ -607,12 +633,14 @@ integration run remain blocked by embedded PostgreSQL bootstrap. The mutation
 confirms the counter tests fail when incrementing is removed. No proof changed,
 so proof assessment is N/A. The hosted assessment found no in-scope production
 defect and its two evidence requests are addressed here. Roadmap 1.3.4 is
-checked complete. PR #460 remains open/draft. The candidate-bound assessment
-accepted the requested evidence; its follow-up confirmed the V-LOG-ALWAYS
-correction and found no further in-scope issue. The broad metrics-disabled
-database integration run remains an open verification limitation. No proof
-changed, so proof assessment is N/A. Hosted CI remains under `pr-babysitting`
-and the delivery ledger. No readiness or merge action is authorized.
+checked complete. PR #460 is ready for review with hosted `build` and
+`coverage` green on `35163ba`. The candidate-bound assessment accepted the
+requested evidence; its follow-up confirmed the V-LOG-ALWAYS correction and
+found no further in-scope issue. The broad metrics-disabled database
+integration run remains an open verification limitation. No proof changed, so
+proof assessment is N/A. CodeRabbit's four pre-merge rows are dispositioned in
+the 2026-10-19 progress entry; merge remains gated on the reconciliation reply
+and a final CI observation under `pr-babysitting`.
 
 ## Context and orientation
 

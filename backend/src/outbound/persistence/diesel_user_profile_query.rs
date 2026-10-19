@@ -33,6 +33,7 @@ impl DieselUserProfileQuery {
         }
     }
 
+    /// Build a test adapter that discards pagination metrics.
     #[cfg(test)]
     fn with_noop_metrics(user_repository: Arc<dyn UserRepository>) -> Self {
         Self::new(user_repository, Arc::new(NoOpPaginationErrorMetrics))

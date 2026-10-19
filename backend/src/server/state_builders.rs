@@ -121,6 +121,8 @@ fn build_profile_interests_pair_with_pool<Pool>(
     }
 }
 
+/// Build the login and users-query pair, injecting the pagination-error
+/// recorder into both Diesel adapters.
 fn build_login_users_pair(
     config: &ServerConfig,
     pagination_error_metrics: &Arc<dyn PaginationErrorMetrics>,
@@ -252,6 +254,8 @@ build_idempotent_pair!(
     FixtureRouteAnnotationsQuery
 );
 
+/// Assemble every HTTP user-state port into one bundle so DB-present and
+/// fixture-backed wiring stay consistent.
 fn compose_user_state_ports(
     config: &ServerConfig,
     pagination_error_metrics: &Arc<dyn PaginationErrorMetrics>,

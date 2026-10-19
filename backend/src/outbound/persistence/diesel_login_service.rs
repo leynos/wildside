@@ -41,6 +41,7 @@ impl DieselLoginService {
         }
     }
 
+    /// Build a test service over a repository, discarding pagination metrics.
     #[cfg(test)]
     fn from_repository(user_repository: Arc<dyn UserRepository>) -> Self {
         Self {
