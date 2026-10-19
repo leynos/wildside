@@ -14,10 +14,15 @@ integration suite remains limited by embedded PostgreSQL admin-database
 bootstrap failures; those failures are recorded below. The completed roadmap
 task is checked in `docs/backend-roadmap.md` §1.3.4. PR #460 is ready for
 review; hosted `build`, `coverage`, CodeScene, Gecko, and the CodeRabbit status
-context pass on `35163ba`. Candidate-bound completeness/correctness assessment
+context pass on `e72fd35`. Candidate-bound completeness/correctness assessment
 is clear through the wording-correction response below. CodeRabbit's pre-merge
 checks raised one documentation error and three warnings; their dispositions
-are recorded in the review-round entry below.
+are recorded in the review-round entry below, and CodeRabbit's focused
+reconciliation reply accepted every disposition. CodeRabbit then auto-paused
+automatic reviews after the documentation repair commit, so its only `e72fd35`
+coverage is that reconciliation reply plus the paused status; one formal
+recovery review was enqueued through `comenq` because the pause is a diagnosed
+review gap, not a rate limit.
 
 ## Purpose / big picture
 
@@ -486,6 +491,27 @@ removing it.
 
   The focused pre-merge reconciliation was posted after this repair wave's
   gates; it is not a request for a fresh whole-PR review.
+- (2026-10-19) CodeRabbit's focused reconciliation reply (issue comment
+  `6271904392`) confirmed every row: Module-Level Documentation "valid;
+  repaired … treat the original error as addressed"; Docstring Coverage "accept
+  the proportionate source repair" while leaving the numerical threshold
+  unverified; User-Facing Documentation and Domain Architecture both "not
+  applicable; withdraw the warning". It restated that the reply is not a
+  whole-PR review or merge approval and that the hosted table still shows the
+  pre-repair 1 error · 3 warnings.
+- (2026-10-19) The final approval request (`@coderabbitai approve`, issue
+  comment `6273144959`) produced no review submission or decision; the PR's only
+  `APPROVED` reviews remain `codescene-access[bot]`'s, including one on
+  `e72fd35`. Diagnosis: the first issue comment carries CodeRabbit's
+  `review paused by coderabbit.ai` banner, whose body states the branch is
+  under active development and names `35163ba` as the last reviewed commit with
+  `e72fd35` "not reviewed". The `CodeRabbit` check on `e72fd35` is therefore
+  `success / Review paused`, not a completed inspection. Because this is a
+  diagnosed formal-review gap rather than a rate limit, one managed recovery
+  review was enqueued with
+  `comenq put leynos/wildside 460 "@coderabbitai review"` (queue ID `550b2871`,
+  posted ETA 1h 38m). No manual review command or duplicate queue entry was
+  used; `comenq list` and `comenq hist` showed no prior wildside request.
 
 ## Surprises & discoveries
 
@@ -639,8 +665,11 @@ requested evidence; its follow-up confirmed the V-LOG-ALWAYS correction and
 found no further in-scope issue. The broad metrics-disabled database
 integration run remains an open verification limitation. No proof changed, so
 proof assessment is N/A. CodeRabbit's four pre-merge rows are dispositioned in
-the 2026-10-19 progress entry; merge remains gated on the reconciliation reply
-and a final CI observation under `pr-babysitting`.
+the 2026-10-19 progress entry, and CodeRabbit's focused reconciliation reply
+accepted every disposition. CodeRabbit auto-paused automatic reviews after the
+documentation repair, so its `e72fd35` check records a pause rather than a
+completed inspection; one managed recovery review is queued. Merge remains
+gated on that review outcome and a final CI observation under `pr-babysitting`.
 
 ## Context and orientation
 
