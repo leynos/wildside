@@ -35,6 +35,17 @@ import workflow_inventory as inv
 #: The expression field that is true only for a pull request from a fork.
 FORK_FIELD: typ.Final[str] = "github.event.pull_request.head.repo.fork"
 
+#: The pull request's author, not `github.actor`: the actor is whoever
+#: triggered the run, so a person pushing to a Dependabot branch would flip the
+#: runner. Hosted minutes cost nothing on a public repository, so Dependabot's
+#: pull requests take the hosted arm too.
+DEPENDABOT_FIELD: typ.Final[str] = (
+    "github.event.pull_request.user.login == 'dependabot[bot]'"
+)
+
+#: The exact condition under which a pull request takes the hosted arm.
+HOSTED_CONDITION: typ.Final[str] = f"({FORK_FIELD} || {DEPENDABOT_FIELD})"
+
 #: The runner a fork falls back to. GitHub-hosted minutes are free on a
 #: public repository, so the fallback costs nothing beyond its wall clock.
 FORK_RUNNER: typ.Final[str] = "ubuntu-latest"
@@ -47,7 +58,7 @@ UBICLOUD_PREFIX: typ.Final[str] = "ubicloud-"
 #: would pass on an expression that named it and then ignored it, and one
 #: that searched for `ubuntu-latest` would pass with the two arms swapped.
 _FALLBACK = re.compile(
-    r"^\$\{\{\s*(?P<condition>[A-Za-z0-9_.]+)\s*"
+    r"^\$\{\{\s*(?P<condition>[A-Za-z0-9_.]+|\(.+?\))\s*"
     r"&&\s*'(?P<fork>[^']*)'\s*"
     r"\|\|\s*'(?P<trusted>[^']*)'\s*\}\}$"
 )
@@ -185,9 +196,9 @@ def test_a_paid_lane_a_fork_can_reach_falls_back_to_a_hosted_runner(
         f"fork's pull request cannot obtain one, so the label must be the "
         f"event-keyed expression"
     )
-    assert parsed["condition"] == FORK_FIELD, (
+    assert parsed["condition"] == HOSTED_CONDITION, (
         f"{filename} job {job_id!r} keys its runner on "
-        f"{parsed['condition']!r}; only {FORK_FIELD} distinguishes a fork's "
+        f"{parsed['condition']!r}; only {HOSTED_CONDITION} distinguishes a fork's "
         f"pull request from every other event"
     )
     assert parsed["fork"] == FORK_RUNNER, (

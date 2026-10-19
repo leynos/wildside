@@ -243,17 +243,24 @@ A pull request from a fork cannot obtain an Ubicloud runner, so a job that
 named one unconditionally would have no runner at all and would fail for a
 reason with nothing to do with the change under review. The two jobs in
 `ci.yml` therefore key their label on the event, falling back to a hosted
-runner for a fork and keeping the managed one for everything else:
+runner for a fork and for a pull request Dependabot opened, and keeping the
+managed one for everything else:
 
 ```yaml
 runs-on: >-
-  ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
-  || 'ubicloud-standard-8' }}
+  ${{ (github.event.pull_request.head.repo.fork
+  || github.event.pull_request.user.login == 'dependabot[bot]')
+  && 'ubuntu-latest' || 'ubicloud-standard-8' }}
 ```
 
-`github.event.pull_request` is null outside a pull request, so a push and a
-manual dispatch both take the trusted arm. GitHub-hosted minutes are free on a
-public repository, so the fallback costs only its own wall clock.
+The Dependabot test reads the pull request's author, not `github.actor`,
+because the actor is whoever triggered the run, so a person pushing to a
+Dependabot branch would flip the runner. Dependabot opens many pull requests,
+and GitHub-hosted minutes are free on a public repository, so the fallback
+costs only its own wall clock: a Dependabot pull request builds cold on the
+hosted pool. `github.event.pull_request` is absent outside a pull request, so
+its properties are empty strings (falsy) and a push and a manual dispatch both
+take the trusted arm.
 
 `coverage-main.yml` is deliberately outside the rule. It fires on a push to
 `main`, which a fork cannot perform, so a fallback there would be a branch that
