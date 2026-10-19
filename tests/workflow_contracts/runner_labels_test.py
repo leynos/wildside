@@ -23,8 +23,9 @@ import runner_shapes
     [
         pytest.param("ubuntu-latest", {"ubuntu-latest"}, id="label"),
         pytest.param(
-            "${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'"
-            " || 'ubicloud-standard-8' }}",
+            "${{ (github.event.pull_request.head.repo.fork"
+            " || github.event.pull_request.user.login == 'dependabot[bot]')"
+            " && 'ubuntu-latest' || 'ubicloud-standard-8' }}",
             {"ubuntu-latest", "ubicloud-standard-8"},
             id="expression",
         ),
