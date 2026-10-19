@@ -1163,8 +1163,11 @@ the two caret requirements.
   adjustment resolve the two baseline gate failures. The exact pins resolve
   only Apalis core rc.9, postgres rc.8, and SQL rc.9 as required by AXIOM-PIN.
   The runtime probe remains.
-- [ ] (2026-10-19) M0 runtime probe: test AXIOM-DURABLE against embedded
-  PostgreSQL, record all five predictions, and remove the scratch test.
+- [ ] (2026-10-19) M0 runtime probe is inconclusive: the scratch test failed
+  before invoking its handler on two runs because embedded PostgreSQL could not
+  connect to its admin database. All five predictions remain untested; the
+  scratch test was removed. See the evidence below and do not start EP-M1 until
+  the probe can run against a healthy embedded database.
 - [ ] EP-M0 baseline gates, exact pins (AXIOM-PIN), and AXIOM-DURABLE
   runtime probe.
 - [ ] EP-M1 domain retry policy and classification.
@@ -1191,6 +1194,20 @@ the two caret requirements.
   branch-specific `/tmp/*-3.out` files. Impact: the pins and narrowly scoped
   harness repairs are ready for the M0 commit; AXIOM-DURABLE still requires its
   runtime probe before the milestone is complete.
+
+- Observation (2026-10-19 AXIOM-DURABLE probe): both runtime attempts failed
+  before the handler ran. `provision_template_database` exhausted its five
+  built-in attempts with `failed to connect to admin database: db error` from
+  `pg-embed-setup-unpriv`'s `cluster/connection.rs`; the test binary's 13
+  support-module tests passed in each run. Evidence:
+  `/tmp/probe-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-2.out`
+  and
+  `/tmp/probe-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-3.out`.
+  None of the five predictions was exercised, so AXIOM-DURABLE is neither
+  confirmed nor falsified. The scratch test was removed. Impact: EP-M0 remains
+  incomplete, and implementation must stop here until embedded PostgreSQL
+  provisioning succeeds; do not add retry middleware or alter the pins to work
+  around the unavailable test precondition.
 
 - Observation: apalis-postgres 1.0.0-rc.6 does not persist abort errors as
   `Killed` (the `calculate_status` arm is commented out upstream), so a fatal
