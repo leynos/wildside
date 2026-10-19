@@ -810,7 +810,12 @@ The user approved D10 and D11 on 2026-10-17. Steps:
 1. Run `scrutineer` for a baseline gate run on the branch as it stands, and
    record the results in `Progress`. Known issue: an orphaned postmaster can
    hold the shared embedded-PostgreSQL lock and make local `make test` time
-   out; record it if it occurs, rather than chasing it.
+   out; record it if it occurs, rather than chasing it. The 2026-10-19 baseline
+   completed without that timeout. Its two unrelated blockers were repaired
+   narrowly in the M0 candidate: `mbake validate Makefile` rejected the six-line
+   `fmt` recipe, and the temporary TypeDoc fixture inherited ambient type
+   discovery and failed with TS2688 for `minimatch`. The fixture now disables
+   ambient `@types`; main’s `fmt-python` target keeps the `fmt` recipe within the validator limit.
 2. Pin `apalis-core = "=1.0.0-rc.9"` and `apalis-postgres = "=1.0.0-rc.8"`
    in `backend/Cargo.toml`. These are the versions already in `Cargo.lock`, so
    no code change is expected. Run
@@ -1134,6 +1139,32 @@ the two caret requirements.
   around durable scheduling (see `Read this first`), and issue
   [#550](https://github.com/leynos/wildside/issues/550) was opened for the
   Apalis 1.0.0 upgrade.
+- [x] (2026-10-19) Baseline `scrutineer` gates completed at `dfe1b55`:
+  `check-fmt`, `typecheck`, `markdownlint`, `nixie`, and `spelling` passed;
+  `lint` stopped at the `fmt` recipe line-count check; `test` passed 1,788 Rust
+  tests (four skipped), the trybuild case, and frontend tests, then had 21
+  workflow-contract failures caused by the same TypeDoc TS2688 `minimatch`
+  ambient-type error (585 passed, one skipped). Baseline logs are under
+  `/tmp/check-fmt-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/lint-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/typecheck-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/test-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/markdownlint-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/nixie-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/spelling-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-19) The corrected M0 candidate passed all seven full gates:
+  `check-fmt` (2s), `lint` (221s), `typecheck` (7s), `test` (489s),
+  `markdownlint` (20s), `nixie` (1s), and `spelling` (12s). `make test`
+  included 1,788 passing Rust tests (four skipped), trybuild, frontend tests,
+  606 workflow-contract tests (one skipped), and 115 Python tests (13 skipped).
+  Logs use the `-3.out` suffix under `/tmp` with the same branch-specific names
+  as the baseline logs above. The fixture isolation fix and Makefile recipe
+  adjustment resolve the two baseline gate failures. The exact pins resolve
+  only Apalis core rc.9, postgres rc.8, and SQL rc.9 as required by AXIOM-PIN.
+  The runtime probe remains.
+- [ ] (2026-10-19) M0 runtime probe: test AXIOM-DURABLE against embedded
+  PostgreSQL, record all five predictions, and remove the scratch test.
 - [ ] EP-M0 baseline gates, exact pins (AXIOM-PIN), and AXIOM-DURABLE
   runtime probe.
 - [ ] EP-M1 domain retry policy and classification.
@@ -1142,6 +1173,24 @@ the two caret requirements.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
 ## Surprises & discoveries
+
+- Observation (2026-10-19 baseline): the branch's unchanged full gate run
+  found two gate-harness issues unrelated to retry implementation.
+  `mbake validate Makefile` rejects `fmt` because it had six recipe lines; the
+  workflow-contract TypeDoc fixtures all failed before evaluating their
+  contracts because TypeScript tried to load implicit `minimatch` types. The
+  temporary fixture has no ambient-type dependency, so it now sets `types: []`;
+  main’s existing `fmt-python` target superseded the one-line workaround while preserving the line-count fix. Evidence:
+  the baseline `lint` and `test` logs named above. Impact: these minimal
+  repairs unblock a clean full gate run without changing runtime behaviour.
+
+- Observation (2026-10-19 corrected M0 candidate): all seven sequential gates
+  passed after the two baseline gate-harness repairs. The workflow-contract
+  suite completed with 606 passed and one skipped; the full Rust, frontend, and
+  Python test suites also passed. Candidate logs are the corresponding
+  branch-specific `/tmp/*-3.out` files. Impact: the pins and narrowly scoped
+  harness repairs are ready for the M0 commit; AXIOM-DURABLE still requires its
+  runtime probe before the milestone is complete.
 
 - Observation: apalis-postgres 1.0.0-rc.6 does not persist abort errors as
   `Killed` (the `calculate_status` arm is commented out upstream), so a fatal
