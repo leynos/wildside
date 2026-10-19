@@ -24,11 +24,11 @@ mod osm_ingestion_command;
 mod osm_ingestion_provenance_repository;
 mod osm_poi_repository;
 mod osm_source_repository;
+mod pagination_error_metrics;
 mod route_annotation_repository;
 mod route_annotations_command;
 mod route_annotations_query;
 mod route_cache;
-mod route_metrics;
 mod route_preferences;
 mod route_queue;
 mod route_queue_metrics;
@@ -152,6 +152,9 @@ pub use osm_source_repository::{
     FixtureOsmSourceRepository, OsmSourcePoi, OsmSourceReport, OsmSourceRepository,
     OsmSourceRepositoryError,
 };
+pub use pagination_error_metrics::{
+    NoOpPaginationErrorMetrics, PaginationErrorMetrics, PaginationErrorSource,
+};
 #[cfg(test)]
 pub use route_annotation_repository::MockRouteAnnotationRepository;
 pub use route_annotation_repository::{
@@ -167,7 +170,6 @@ pub use route_annotations_command::{
 pub use route_annotations_query::MockRouteAnnotationsQuery;
 pub use route_annotations_query::{FixtureRouteAnnotationsQuery, RouteAnnotationsQuery};
 pub use route_cache::{RouteCache, RouteCacheError};
-pub use route_metrics::{RouteMetrics, RouteMetricsError};
 pub use route_preferences::RoutePreferences;
 pub(crate) use route_preferences::{ROUTE_PREFERENCE_MAX_ITEMS, ROUTE_PREFERENCE_MAX_VALUE_BYTES};
 pub use route_queue::{JobDispatchError, RouteQueue};

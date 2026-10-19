@@ -28,7 +28,6 @@ fn make_metrics()
     let metrics = PrometheusMetricsBuilder::new("wildside")
         .endpoint("/metrics")
         .build()?;
-    backend::register_pagination_error_metrics(&metrics.registry)?;
     Ok(metrics)
 }
 
@@ -168,3 +167,118 @@ async fn main() -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, feature = "metrics"))]
+mod pagination_metrics_exposition_tests {
+    //! Verify that server composition exposes injected pagination errors.
+
+    use actix_web::cookie::{Key, SameSite};
+    use actix_web::http::header;
+    use actix_web::web;
+    use actix_web_prom::PrometheusMetricsBuilder;
+    use std::error::Error as StdError;
+    use std::io;
+    use std::net::TcpListener;
+    use tokio::time::{Duration, timeout};
+
+    use super::{HealthState, ServerConfig, create_server};
+
+    /// Drive the real server and assert `/metrics` exposes the injected counter.
+    #[actix_rt::test]
+    async fn create_server_exposes_injected_pagination_errors() -> Result<(), Box<dyn StdError>> {
+        let listener = TcpListener::bind(("127.0.0.1", 0))?;
+        let bind_addr = listener.local_addr()?;
+        drop(listener);
+
+        let prometheus = PrometheusMetricsBuilder::new("test")
+            .endpoint("/metrics")
+            .build()
+            .map_err(|error| io::Error::other(error.to_string()))?;
+        let config = ServerConfig::new(Key::generate(), false, SameSite::Lax, bind_addr)
+            .with_metrics(Some(prometheus));
+        let server = create_server(web::Data::new(HealthState::new()), config)?;
+        let handle = server.handle();
+        let server_task = actix_rt::spawn(server);
+        let base_url = format!("http://{bind_addr}");
+        let client = awc::Client::default();
+
+        let request_result: Result<(), Box<dyn StdError>> =
+            match timeout(Duration::from_secs(15), async {
+                let session_cookie = login_session_cookie(&client, &base_url).await?;
+                let metrics_text =
+                    invalid_cursor_metrics_text(&client, &base_url, &session_cookie).await?;
+                if !metrics_text.contains(
+                    "wildside_pagination_errors_total{code=\"invalid_cursor\",source=\"users_http\"} 1",
+                ) {
+                    return Err(io::Error::other(
+                        "metrics endpoint should expose the injected pagination error",
+                    )
+                    .into());
+                }
+                Ok::<(), Box<dyn StdError>>(())
+            })
+            .await
+            {
+                Ok(result) => result,
+                Err(error) => Err(Box::new(error)),
+            };
+
+        drop(client);
+        timeout(Duration::from_secs(5), handle.stop(true)).await?;
+        match timeout(Duration::from_secs(5), server_task).await? {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => return Err(error.into()),
+            Err(error) => return Err(error.into()),
+        }
+        request_result?;
+        Ok(())
+    }
+
+    /// Log in with the fixture account and return the session cookie pair.
+    async fn login_session_cookie(
+        client: &awc::Client,
+        base_url: &str,
+    ) -> Result<String, Box<dyn StdError>> {
+        let response = client
+            .post(format!("{base_url}/api/v1/login"))
+            .send_json(&serde_json::json!({
+                "username": "admin",
+                "password": "password"
+            }))
+            .await?;
+        if !response.status().is_success() {
+            return Err(io::Error::other("fixture login should succeed").into());
+        }
+
+        let cookie_header = response
+            .headers()
+            .get(header::SET_COOKIE)
+            .ok_or_else(|| io::Error::other("login response should set a session cookie"))?;
+        let session_cookie = cookie_header
+            .to_str()?
+            .split(';')
+            .next()
+            .ok_or_else(|| io::Error::other("session cookie should contain a value"))?;
+        Ok(session_cookie.to_owned())
+    }
+
+    /// Send an invalid cursor, then return the raw `/metrics` body.
+    async fn invalid_cursor_metrics_text(
+        client: &awc::Client,
+        base_url: &str,
+        session_cookie: &str,
+    ) -> Result<String, Box<dyn StdError>> {
+        let cursor_response = client
+            .get(format!("{base_url}/api/v1/users?cursor=not-a-cursor"))
+            .insert_header((header::COOKIE, session_cookie))
+            .send()
+            .await?;
+        if cursor_response.status() != actix_web::http::StatusCode::BAD_REQUEST {
+            return Err(io::Error::other("invalid cursor should return HTTP 400").into());
+        }
+
+        let mut metrics_response = client.get(format!("{base_url}/metrics")).send().await?;
+        let metrics_body = metrics_response.body().await?;
+        Ok(std::str::from_utf8(&metrics_body)?.to_owned())
+    }
+}

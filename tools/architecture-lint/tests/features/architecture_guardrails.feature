@@ -13,6 +13,11 @@ Feature: Architecture guardrails
     When the architecture lint runs
     Then the lint fails due to infrastructure crate usage
 
+  Scenario: Prometheus boundary
+    Given an inbound module that imports Prometheus directly
+    When the architecture lint runs
+    Then the lint rejects Prometheus
+
   Scenario: Domain code cannot depend on framework crates
     Given a domain module that imports Actix Web
     When the architecture lint runs

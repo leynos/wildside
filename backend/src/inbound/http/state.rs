@@ -6,9 +6,10 @@
 use std::sync::Arc;
 
 use crate::domain::ports::{
-    CatalogueRepository, DescriptorRepository, LoginService, RouteAnnotationsCommand,
-    RouteAnnotationsQuery, RouteSubmissionService, UserInterestsCommand, UserPreferencesCommand,
-    UserPreferencesQuery, UserProfileQuery, UsersQuery,
+    CatalogueRepository, DescriptorRepository, LoginService, NoOpPaginationErrorMetrics,
+    PaginationErrorMetrics, RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService,
+    UserInterestsCommand, UserPreferencesCommand, UserPreferencesQuery, UserProfileQuery,
+    UsersQuery,
 };
 use crate::domain::ports::{
     EnrichmentProvenanceRepository, FixtureEnrichmentProvenanceRepository,
@@ -74,6 +75,7 @@ pub struct HttpState {
     pub enrichment_provenance: Arc<dyn EnrichmentProvenanceRepository>,
     pub walk_sessions: Arc<dyn WalkSessionCommand>,
     pub walk_sessions_query: Arc<dyn WalkSessionQuery>,
+    pub pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
 }
 
 impl From<HttpStatePorts> for HttpState {
@@ -159,6 +161,35 @@ impl HttpState {
     /// let _walk_sessions = state.walk_sessions.clone();
     /// ```
     pub fn new_with_extra(ports: HttpStatePorts, extras: HttpStateExtraPorts) -> Self {
+        Self::new_with_extra_and_metrics(ports, extras, Arc::new(NoOpPaginationErrorMetrics))
+    }
+
+    /// Construct state with extra ports and the pagination-error metrics
+    /// recorder selected by the application composition root.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use std::sync::Arc;
+    ///
+    /// use backend::domain::ports::{
+    ///     NoOpPaginationErrorMetrics, PaginationErrorMetrics,
+    /// };
+    /// use backend::inbound::http::state::{
+    ///     HttpState, HttpStateExtraPorts, HttpStatePorts,
+    /// };
+    ///
+    /// # let ports: HttpStatePorts = todo!();
+    /// # let extras: HttpStateExtraPorts = todo!();
+    /// let metrics: Arc<dyn PaginationErrorMetrics> =
+    ///     Arc::new(NoOpPaginationErrorMetrics);
+    /// let state = HttpState::new_with_extra_and_metrics(ports, extras, metrics);
+    /// let _ = state.pagination_error_metrics.clone();
+    /// ```
+    pub fn new_with_extra_and_metrics(
+        ports: HttpStatePorts,
+        extras: HttpStateExtraPorts,
+        pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
+    ) -> Self {
         let HttpStatePorts {
             login,
             users,
@@ -196,6 +227,7 @@ impl HttpState {
             enrichment_provenance,
             walk_sessions,
             walk_sessions_query,
+            pagination_error_metrics,
         }
     }
 }

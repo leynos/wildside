@@ -81,9 +81,9 @@ mod offline_bundle_service_support;
 pub mod osm_ingestion;
 pub mod overpass_enrichment_worker;
 /// Pure pagination cursor error envelope constructors shared by inbound HTTP
-/// adapters and outbound persistence error mappers. Logging and Prometheus
-/// side-effects live in `crate::observability::pagination_errors` so the
-/// domain layer stays free of infrastructure dependencies.
+/// adapters and outbound persistence error mappers. Call sites record through
+/// the injected `PaginationErrorMetrics` port; these constructors return only
+/// domain values.
 pub(crate) mod pagination_errors;
 pub mod ports;
 pub mod preferences;

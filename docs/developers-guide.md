@@ -2338,6 +2338,13 @@ boundary, `OfflineValidationError::BoundingBox` wraps `BoundingBoxError`,
 including through the `From<BoundingBoxError>` conversion, so the offline error
 type preserves the underlying validation failure.
 
+### Metrics conventions
+
+Use ports in `domain::ports`, `NoOp` defaults, and Prometheus adapters in
+`outbound::metrics`. Inject them at server composition; keep metric state out
+of process globals and Prometheus out of domain/inbound code. Outbound adapter
+tests may use Prometheus to assert isolated registries.
+
 Queue observability:
 
 - `RouteQueueMetrics` – The domain-owned metrics port used by queue adapters

@@ -8,7 +8,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pagination::Direction;
 
-use crate::domain::ports::{ListUsersPageRequest, UserRepository, UsersPage, UsersQuery};
+#[cfg(test)]
+use crate::domain::ports::NoOpPaginationErrorMetrics;
+use crate::domain::ports::{
+    ListUsersPageRequest, PaginationErrorMetrics, UserRepository, UsersPage, UsersQuery,
+};
 use crate::domain::{Error, User, UserCursorKey, UserId};
 
 use super::diesel_user_repository::DieselUserRepository;
@@ -20,19 +24,28 @@ use crate::domain::ports::{UserPaginationError, UserPersistenceError};
 #[derive(Clone)]
 pub struct DieselUsersQuery {
     user_repository: Arc<dyn UserRepository>,
+    pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
 }
 
 impl DieselUsersQuery {
     /// Create a new query adapter backed by a Diesel user repository.
-    pub fn new(user_repository: DieselUserRepository) -> Self {
+    pub fn new(
+        user_repository: DieselUserRepository,
+        pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
+    ) -> Self {
         Self {
             user_repository: Arc::new(user_repository),
+            pagination_error_metrics,
         }
     }
 
+    /// Build a test adapter over a repository, discarding pagination metrics.
     #[cfg(test)]
     fn from_repository(user_repository: Arc<dyn UserRepository>) -> Self {
-        Self { user_repository }
+        Self {
+            user_repository,
+            pagination_error_metrics: Arc::new(NoOpPaginationErrorMetrics),
+        }
     }
 }
 
@@ -43,7 +56,9 @@ impl UsersQuery for DieselUsersQuery {
             .user_repository
             .find_by_id(authenticated_user)
             .await
-            .map_err(map_user_persistence_error)?;
+            .map_err(|error| {
+                map_user_persistence_error(error, self.pagination_error_metrics.as_ref())
+            })?;
 
         match maybe_user {
             Some(user) => Ok(vec![user]),
@@ -62,7 +77,9 @@ impl UsersQuery for DieselUsersQuery {
             .user_repository
             .list_page(request)
             .await
-            .map_err(map_user_persistence_error)?;
+            .map_err(|error| {
+                map_user_persistence_error(error, self.pagination_error_metrics.as_ref())
+            })?;
 
         let has_more = rows.len() > limit;
         if has_more {

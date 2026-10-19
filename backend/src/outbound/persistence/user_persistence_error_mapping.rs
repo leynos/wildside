@@ -4,18 +4,31 @@ use tracing::debug;
 
 use crate::domain::Error;
 use crate::domain::pagination_errors::{invalid_cursor_error, unsupported_direction_error};
-use crate::domain::ports::{UserPaginationError, UserPersistenceError};
-use crate::observability::pagination_errors::{PaginationErrorSource, record_pagination_error};
+use crate::domain::ports::{
+    PaginationErrorMetrics, PaginationErrorSource, UserPaginationError, UserPersistenceError,
+};
 
-pub(super) fn map_user_persistence_error(error: UserPersistenceError) -> Error {
+/// Map a persistence failure to the HTTP-safe domain error, recording any
+/// pagination error through the injected metrics port.
+pub(super) fn map_user_persistence_error(
+    error: UserPersistenceError,
+    pagination_error_metrics: &dyn PaginationErrorMetrics,
+) -> Error {
     match error {
         UserPersistenceError::Connection { message } => Error::service_unavailable(message),
         UserPersistenceError::Query { message } => Error::internal(message),
-        UserPersistenceError::Pagination { error } => map_user_pagination_error(error),
+        UserPersistenceError::Pagination { error } => {
+            map_user_pagination_error(error, pagination_error_metrics)
+        }
     }
 }
 
-fn map_user_pagination_error(error: UserPaginationError) -> Error {
+/// Log and record a repository pagination failure before returning the shared
+/// client-facing error envelope.
+fn map_user_pagination_error(
+    error: UserPaginationError,
+    pagination_error_metrics: &dyn PaginationErrorMetrics,
+) -> Error {
     match error {
         UserPaginationError::InvalidCursorFormat { message } => {
             debug!(
@@ -23,7 +36,8 @@ fn map_user_pagination_error(error: UserPaginationError) -> Error {
                 source = "user_persistence",
                 "rejected users cursor with invalid format from repository"
             );
-            record_pagination_error(PaginationErrorSource::UserPersistence, "invalid_cursor");
+            pagination_error_metrics
+                .record(PaginationErrorSource::UserPersistence, "invalid_cursor");
             invalid_cursor_error()
         }
         UserPaginationError::UnsupportedDirection { direction } => {
@@ -32,7 +46,7 @@ fn map_user_pagination_error(error: UserPaginationError) -> Error {
                 source = "user_persistence",
                 "rejected users cursor with unsupported direction from repository"
             );
-            record_pagination_error(
+            pagination_error_metrics.record(
                 PaginationErrorSource::UserPersistence,
                 "unsupported_direction",
             );
@@ -47,11 +61,22 @@ mod tests {
 
     use super::*;
     use crate::domain::ErrorCode;
+    use crate::domain::ports::{PaginationErrorMetrics, PaginationErrorSource};
     use rstest::rstest;
     use serde_json::json;
+    use std::sync::Mutex;
 
-    #[cfg(feature = "metrics")]
-    use serial_test::serial;
+    #[derive(Default)]
+    struct RecordingPaginationErrorMetrics(Mutex<Vec<(PaginationErrorSource, &'static str)>>);
+
+    impl PaginationErrorMetrics for RecordingPaginationErrorMetrics {
+        fn increment(&self, source: PaginationErrorSource, detail_code: &'static str) {
+            self.0
+                .lock()
+                .expect("pagination metrics lock should not be poisoned")
+                .push((source, detail_code));
+        }
+    }
 
     #[rstest]
     #[case(
@@ -64,19 +89,26 @@ mod tests {
         "cursor direction is unsupported",
         "unsupported_direction"
     )]
-    #[cfg_attr(feature = "metrics", serial)]
     fn pagination_errors_map_to_invalid_request(
         #[case] source: UserPersistenceError,
         #[case] expected_message: &str,
         #[case] expected_detail_code: &str,
     ) {
-        let error = map_user_persistence_error(source);
+        let metrics = RecordingPaginationErrorMetrics::default();
+        let error = map_user_persistence_error(source, &metrics);
 
         assert_eq!(error.code(), ErrorCode::InvalidRequest);
         assert_eq!(error.message(), expected_message);
         assert_eq!(
             error.details(),
             Some(&json!({ "field": "cursor", "code": expected_detail_code }))
+        );
+        assert_eq!(
+            *metrics
+                .0
+                .lock()
+                .expect("pagination metrics lock should not be poisoned"),
+            vec![(PaginationErrorSource::UserPersistence, expected_detail_code)]
         );
     }
 }

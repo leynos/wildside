@@ -48,6 +48,11 @@ fn inbound_imports_diesel(world: &Mutex<LintWorld>) {
     );
 }
 
+#[given("an inbound module that imports Prometheus directly")]
+fn inbound_imports_prometheus(world: &Mutex<LintWorld>) {
+    add_source(world, "inbound/http/users.rs", "use prometheus::Registry;");
+}
+
 #[given("a domain module that imports Actix Web")]
 fn domain_imports_actix(world: &Mutex<LintWorld>) {
     add_source(
@@ -192,6 +197,15 @@ fn lint_fails_due_to_infrastructure_crate(world: &Mutex<LintWorld>) {
     assert_violation_in_file_contains(world, "inbound/http/users.rs", "external crate `diesel`");
 }
 
+#[then("the lint rejects Prometheus")]
+fn lint_rejects_prometheus(world: &Mutex<LintWorld>) {
+    assert_violation_in_file_contains(
+        world,
+        "inbound/http/users.rs",
+        "external crate `prometheus`",
+    );
+}
+
 #[then("the lint fails due to framework crate usage in the domain")]
 fn lint_fails_due_to_framework_crate(world: &Mutex<LintWorld>) {
     assert_violation_in_file_contains(world, "domain/user.rs", "external crate `actix_web`");
@@ -234,5 +248,13 @@ fn extract_violations(outcome: &Result<(), ArchitectureLintError>) -> Option<Vec
 
 #[scenario(path = "tests/features/architecture_guardrails.feature")]
 fn architecture_guardrails(world: Mutex<LintWorld>) {
+    drop(world);
+}
+
+#[scenario(
+    "tests/features/architecture_guardrails.feature",
+    name = "Prometheus boundary"
+)]
+fn prometheus_boundary(world: Mutex<LintWorld>) {
     drop(world);
 }

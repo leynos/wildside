@@ -1,8 +1,7 @@
 //! Repo-local architectural lint for enforcing hexagonal boundaries.
 //!
-//! The Wildside backend is a hexagonal modular monolith. The "hexagon" is
-//! enforced at the Rust module level (`domain` + ports, inbound adapters,
-//! outbound adapters). This crate provides a lightweight lint that:
+//! The backend's module boundaries separate `domain` + ports, inbound
+//! adapters, and outbound adapters. This lint enforces them:
 //!
 //! - forbids `domain` code from depending on adapter modules (`inbound`,
 //!   `outbound`) or framework/infrastructure crates
@@ -173,13 +172,14 @@ impl ModuleLayer {
         }
     }
 
-    fn forbidden_crate_roots(self) -> BTreeSet<&'static str> {
-        match self {
+    fn forbidden_crate_roots(self, file: &Utf8Path) -> BTreeSet<&'static str> {
+        let mut forbidden = match self {
             Self::Domain => BTreeSet::from([
                 "actix",
                 "actix_service",
                 "actix_web",
                 "actix_web_actors",
+                "actix_web_prom",
                 "awc",
                 "diesel",
                 "diesel_async",
@@ -187,15 +187,18 @@ impl ModuleLayer {
                 "pg_embedded_setup_unpriv",
                 "postgres",
                 "postgresql_embedded",
+                "prometheus",
                 "utoipa",
             ]),
             Self::Inbound => BTreeSet::from([
+                "actix_web_prom",
                 "diesel",
                 "diesel_async",
                 "diesel_migrations",
                 "pg_embedded_setup_unpriv",
                 "postgres",
                 "postgresql_embedded",
+                "prometheus",
             ]),
             Self::Outbound => BTreeSet::from([
                 "actix",
@@ -203,14 +206,23 @@ impl ModuleLayer {
                 "actix_web",
                 "actix_web_actors",
                 "awc",
+                "prometheus",
             ]),
+        };
+
+        let is_metrics_or_test_path =
+            file.starts_with("outbound/metrics") || file.as_str().contains("/tests/");
+        if self == Self::Outbound && is_metrics_or_test_path {
+            forbidden.remove("prometheus");
         }
+
+        forbidden
     }
 }
 
 fn lint_parsed_source(file: &Utf8Path, layer: ModuleLayer, parsed: &syn::File) -> Vec<Violation> {
     let forbidden_modules = layer.forbidden_module_roots();
-    let forbidden_crates = layer.forbidden_crate_roots();
+    let forbidden_crates = layer.forbidden_crate_roots(file);
     let layer_name = layer_name(layer);
 
     let mut collector = PathCollector::default();
@@ -218,13 +230,17 @@ fn lint_parsed_source(file: &Utf8Path, layer: ModuleLayer, parsed: &syn::File) -
 
     let mut messages = BTreeSet::new();
     for segments in &collector.paths {
-        if let Some(root) = forbidden_internal_module_root(segments, &forbidden_modules) {
+        if let Some(root) =
+            internal_module_root(segments).and_then(|root| forbidden_modules.get(root).copied())
+        {
             messages.insert(format!(
                 "{layer_name} module must not depend on crate::{root}"
             ));
         }
 
-        if let Some(root) = forbidden_external_crate_root(segments, &forbidden_crates) {
+        if let Some(root) =
+            external_crate_root(segments).and_then(|root| forbidden_crates.get(root).copied())
+        {
             messages.insert(format!(
                 "{layer_name} module must not depend on external crate `{root}`"
             ));
@@ -246,22 +262,6 @@ const fn layer_name(layer: ModuleLayer) -> &'static str {
         ModuleLayer::Inbound => "inbound",
         ModuleLayer::Outbound => "outbound",
     }
-}
-
-fn forbidden_internal_module_root(
-    segments: &[String],
-    forbidden_roots: &BTreeSet<&'static str>,
-) -> Option<&'static str> {
-    let root = internal_module_root(segments)?;
-    forbidden_roots.get(root).copied()
-}
-
-fn forbidden_external_crate_root(
-    segments: &[String],
-    forbidden_roots: &BTreeSet<&'static str>,
-) -> Option<&'static str> {
-    let root = external_crate_root(segments)?;
-    forbidden_roots.get(root).copied()
 }
 
 fn is_relative_module_segment(segment: &str) -> bool {
