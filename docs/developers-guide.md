@@ -2386,6 +2386,11 @@ The queue adapter requires:
   pool used by `ApalisPostgresProvider`
 - `serde` / `serde_json` – Payload serialization
 
+The Apalis core and PostgreSQL dependencies are pinned to exact release
+candidates because their 1.0.0 final release changes the queue integration
+contract. The upgrade is tracked in
+[issue #550](https://github.com/leynos/wildside/issues/550).
+
 #### Test infrastructure
 
 - `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
