@@ -21,6 +21,10 @@
 - [Local Kubernetes preview and Nile Valley integration design](local-k8s-preview-design.md)
   – describes the backend health, container, Helm, and local preview contracts.
   _Audience: backend developers and platform engineers._
+- [Backend tile delivery design](backend-tile-delivery-design.md) – planned
+  Martin Helm deployment, engine integration, protected route tiles, and
+  observability; includes the engine roadmap follow-up proposal. _Audience:
+  backend developers and platform engineers._
 - [Values class diagram](values-class-diagram.mmd) – Mermaid diagram of Helm
   chart values. _Audience: platform engineers._
 
@@ -33,6 +37,10 @@
   taxonomy](adr-002-environment-seam-taxonomy.md) – how environment-dependent
   boundaries are injected and where a direct read is still allowed. _Audience:
   backend developers._
+
+- [ADR 003: Protected route tile delivery](adr-003-protected-route-tile-delivery.md)
+  – proposed backend authorization boundary for private Martin sources.
+  _Audience: backend developers and platform engineers._
 
 ## Frontend development
 

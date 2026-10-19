@@ -328,11 +328,65 @@ publish events and metrics through their ports only.
 
 ### 6.1. Tile service rollout
 
+The delivery contract and engine follow-up proposal are specified in
+[the tile delivery design](backend-tile-delivery-design.md). All items remain
+planned. Execute the data and authorization prerequisites before exposing route
+tiles; POI-only rollout can proceed independently of engine geometry.
+
 - [ ] 6.1.1. Deploy Martin with point of interest (POI) and route sources,
   read-only credentials, and ingress routing via `/tiles` or
   `tiles.wildside.app`.
+  - [ ] 6.1.1.1. Add PostGIS-backed tile read models and spatial indexes in
+    backend migrations, converting native PostgreSQL `POINT` explicitly and
+    retaining legacy `PATH` until verified route geometry is available.
+    Acceptance: fresh install and upgrade tests preserve POI identities,
+    reject invalid coordinates, and decode a fixture POI tile. Requires 3.1.1.
+  - [ ] 6.1.1.2. Implement the backend outbound `wildside-engine` integration
+    behind a domain route-inference port, reusing the route repository, queue,
+    cache, and event ports. Pin compatible engine packages, translate request
+    and result types, bound worker concurrency, and persist inferred geometry
+    atomically with ordered POIs and provenance before reporting completion.
+    Acceptance: deterministic adapter contracts and a real queued worker test
+    prove retry-safe persistence and failure mapping. Requires 5.3.1 and
+    6.1.1.1; route geometry also requires the engine follow-up in the design.
+  - [ ] 6.1.1.3. Extend `deploy/charts/wildside` with opt-in Martin Deployment,
+    Service, ConfigMap, dedicated Secret references, resources, probes, and
+    network policies. Pin an upstream image and explicitly allowlist sources;
+    provision a non-owner role with only required read and function grants.
+    Acceptance: Helm render tests cover disabled, POI-only, and route-enabled
+    modes, missing configuration, and absence of credentials in ConfigMaps.
+    Requires 6.1.1.1; route-enabled mode requires 6.1.2.2.
+  - [ ] 6.1.1.4. Route public POI traffic to Martin and protected route traffic
+    through the backend tile adapter, using standard Kubernetes Ingress for
+    either `/tiles` or the tile hostname, with TLS, explicit prefix handling,
+    and origin configuration. Acceptance: local preview decodes both sources,
+    checks TileJSON URLs, and proves direct route-source bypass is denied.
+    Document Nile Valley overlay requirements and rollback. Requires 6.1.1.3
+    for POI-only ingress; route ingress additionally requires 6.1.1.2 and
+    6.1.2.2. POI-only acceptance decodes POIs and denies all route paths.
 - [ ] 6.1.2. Add the `get_route_tile` PostGIS function, JSON Web Token (JWT)
   validation path, and Grafana dashboards covering tile latency and error rates.
+  - [ ] 6.1.2.1. Add `get_route_tile(z integer, x integer, y integer,
+    query_params json) RETURNS bytea`, exposed internally as Martin source
+    `routes`. Extract the authorized route UUID and revision from query JSON,
+    clip and transform geometry, and emit a Mapbox Vector Tile (MVT).
+    Acceptance: real PostGIS/Martin tests decode the expected layer, reject bad
+    coordinates and identifiers, return empty tiles outside the route, and
+    verify read-only grants. Requires 6.1.1.1 and 6.1.1.2.
+  - [ ] 6.1.2.2. Add session-authorized route tile grants and a fail-closed
+    backend JWT validator/proxy. Bind tokens to subject, route, revision,
+    issuer, audience, and expiry; enforce current access on every request and
+    construct the internal Martin URL without forwarding client query data.
+    Acceptance: expired, forged, wrong-route, revoked-access, and direct-source
+    requests fail, including after a successful cache warm-up; rotation and
+    both ingress modes pass end-to-end tests. Requires 6.1.2.1.
+  - [ ] 6.1.2.3. Add optional Prometheus scraping, Grafana dashboard resources,
+    and alerts with bounded source/status labels for tile request rates,
+    p50/p95/p99 latency, authorization failures, and server error ratios.
+    Acceptance: fixture traffic and injected upstream failures populate panels
+    and fire/resolve alerts; documents specify metric names, thresholds, and
+    runbooks for the pinned Martin version. Domain telemetry uses ports only.
+    Requires 6.1.1.4; share monitoring installation with 6.2.1.
 
 ### 6.2. Observability extensions
 
