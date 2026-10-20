@@ -1168,6 +1168,11 @@ the two caret requirements.
   connect to its admin database. All five predictions remain untested; the
   scratch test was removed. See the evidence below and do not start EP-M1 until
   the probe can run against a healthy embedded database.
+- [x] (2026-10-20) Diagnosed the probe setup failure with a controlled password
+  comparison: missing `PG_PASSWORD` produces SQLSTATE `28P01` and the original
+  five-attempt provisioning failure; the Makefile default makes both admin
+  connection and template provisioning succeed. The five Apalis predictions
+  still require a fresh probe run with the documented runner environment.
 - [ ] EP-M0 baseline gates, exact pins (AXIOM-PIN), and AXIOM-DURABLE
   runtime probe.
 - [ ] EP-M1 domain retry policy and classification.
@@ -1176,6 +1181,20 @@ the two caret requirements.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
 ## Surprises & discoveries
+
+- Observation (2026-10-20 provisioning diagnosis): the direct Cargo launch
+  omitted `PG_PASSWORD`, which Make exports for its tests. The setup helper
+  repairs password state but does not export the resolved default. A minimal
+  scratch diagnostic reproduced SQLSTATE `28P01` and the five-attempt admin
+  failure without the variable (3.70 seconds); the same executable and worker
+  succeeded with the Makefile password (1.23 seconds). The dependency's
+  `connect_admin` formats its error with Display, hiding the SQLSTATE behind
+  `db error`. This was a probe-launch error, not evidence against durable
+  scheduling. No shared-service repair or dependency change is required.
+  Evidence and experiment boundaries are recorded in
+  [the debugging plan](../debugging/debugging-plan-2026-10-20-probe-provisioning.md).
+  The scratch diagnostic was removed; all five Apalis predictions remain
+  untested.
 
 - Observation (2026-10-19 baseline): the branch's unchanged full gate run
   found two gate-harness issues unrelated to retry implementation.
@@ -1305,6 +1324,12 @@ the two caret requirements.
   `~/.cargo/registry/src/` and the 1.0.0 crate tarballs.
 
 ## Decision log
+
+- Operational decision (2026-10-20): run the replacement scratch probe with
+  the Makefile-equivalent PostgreSQL environment documented in the developer
+  guide. The controlled authentication comparison resolves the setup blocker;
+  it does not discharge AXIOM-DURABLE or change D9–D14. EP-M1 remains gated on
+  the five-prediction runtime probe.
 
 - D1 — *Superseded on 2026-10-17 by D11 and D14.* Adopt the upstream Apalis
   tower retry machinery, with a custom `tower::retry::Policy` that delegates to
