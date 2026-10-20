@@ -1440,11 +1440,14 @@ constraints([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fd
 It uses heuristics and algorithms to evaluate which POIs to include and in
 what order.
 
-**Integration of engine:** In the backend’s architecture, the engine is a pure
-function (or set of functions) that the domain layer can call to compute a
-route. Because this computation is CPU-intensive and can take significant time
-for non-trivial inputs, the design offloads this to a background worker rather
-than running it on the main Actix thread
+**Integration of engine:** The domain requests route computation through a
+backend-owned inference port. An outbound adapter translates to the engine
+crate API; engine types and provider I/O stay outside the backend domain. The
+planned integration and persistence contract is specified in the
+[tile delivery design](backend-tile-delivery-design.md). Because this
+computation is CPU-intensive and can take significant time for non-trivial
+inputs, the design offloads this to a background worker rather than running it
+on the main Actix thread
 pool([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L135-L143)).
 The domain defines a job (e.g. `GenerateRouteJob`) which essentially wraps the
 input parameters for route generation. When executed by a worker, the job’s
@@ -1464,43 +1467,28 @@ this design, backend-owned ingestion concerns remain explicit:
 - provenance persistence in PostgreSQL.
 - rerun determinism guarantees keyed by geofence and input digest.
 
-The engine relies on data about POIs and the road network. For the MVP, this
-data is stored in the **PostgreSQL/PostGIS** database and accessed via Diesel.
-For example, to generate a route, the engine might need to query “all POIs
-within a 2km radius of the starting point that match the user’s interests
-(history, nature, etc.)”. The design uses PostGIS to perform this spatial query
-efficiently in the
-database([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L270-L278)
-)(
-[1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L274-L282)),
-possibly filtering by tags (e.g. only include POIs where
-`tags->'category' = 'history'`). The POI details (like name, coordinates,
-descriptions) are stored in the DB and would be fetched via Diesel models. The
-engine then scores these candidate POIs (perhaps using a formula that accounts
-for user preferences and popularity) and selects a subset to form a route. It
-also may call external routing services or use algorithms to compute travel
-times/distances between POIs. (In future, integration with a routing engine
-like Valhalla or OSRM could provide travel distance matrices; currently, the
-assumption is that distance between POIs can be computed from coordinates or a
-precomputed graph in the DB).
+The engine consumes POIs and travel times through its own library interfaces.
+Backend outbound adapters supply compatible stores and providers; Diesel and
+PostGIS access remain backend persistence concerns. The engine roadmap already
+records a travel-time provider and native solver. The current public route
+result contains endpoints, ordered POIs, and duration, but no walkable line
+geometry. The [tile delivery design](backend-tile-delivery-design.md) records
+upstream evidence and the proposed geometry and identity contract amendments.
 
-The output of the engine is a sequence of waypoints (POIs) forming a tour,
-possibly with additional metadata like total distance or estimated time. The
-worker handling this job will take that result and save it to the database (so
-it can be retrieved via API) and also trigger a WebSocket event to notify the
-client that the route is ready. We store route results (temporarily) in a
-`routes` table keyed by the `request_id` so that a GET request or subsequent
-requests can retrieve them.
+The worker maps engine results into backend-owned values and persists route
+geometry, ordered POIs, revision, and provenance atomically through the route
+repository. Completion events are published through ports after commit, with
+WebSocket delivery handled by an adapter. Persist request/job identity for
+retry deduplication without assuming that the current `routes` table still
+contains the historical `request_id` column. Tile requests read persisted
+results and never run inference.
 
-**On-demand data enrichment:** If the engine determines that there aren’t
-enough POIs or data in the area to generate a good route (for example, if the
-user is in a less-documented region), the design includes an **on-demand
-enrichment** step. The route generation job can detect a “data sparse” scenario
-– e.g., fewer than X POIs found nearby – and then enqueue a secondary job, an
-`EnrichmentJob`, to fetch additional
-data([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L632-L640)
-)(
-[3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L664-L671)).
+**On-demand data enrichment:** Backend application policy may use inference
+outcomes or candidate counts to identify sparse data and dispatch an
+`EnrichmentJob` through its queue port. This is backend orchestration, not an
+engine dependency on Apalis, Overpass, or application tables. The proposed
+engine failure contract must distinguish insufficient feasible data from
+provider failures before automatic retry or enrichment decisions are enabled.
 This enrichment job uses the **Overpass API** (a read API for OpenStreetMap
 data) to query for more points of interest (e.g. all amenities or landmarks
 within the bounding box of the
@@ -1637,15 +1625,16 @@ takes for various
 requests([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L254-L262)).
 We also count successes vs failures of route jobs
 (`jobs_total{type="GenerateRoute",status="success|failure"}` )([3](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/wildside-backend-design.md#L729-L737)).
-If an external routing API or service is used within the engine, calls to it
-are timed and failures counted as well. The engine has a built-in timeout
-safeguard – if a route computation exceeds a certain threshold (say 30
-seconds), it will be aborted to free
-resources([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L258-L265)).
-When such a timeout occurs, the event is logged and the user is notified (via
-the WS status message showing `failed` with reason
-"timeout")([1](https://github.com/leynos/wildside/blob/9aa9fcecfdec116e4b35b2fde63f11fa7f495aaa/docs/backend-design.md#L234-L240)).
-These incidents could trigger alerts if frequent.
+Provider calls and job outcomes are observed through backend metrics ports and
+implemented by outbound telemetry adapters. Engine diagnostics are returned as
+values; exporter dependencies do not enter the domain or engine interfaces. The
+current synchronous solver API does not expose cancellation. A backend request
+timeout alone cannot stop its work or release the occupied capacity. Bound
+worker concurrency and retain capacity until completion, or isolate inference
+in a process that can be terminated. A cooperative cancellation contract is
+proposed in the engine roadmap follow-up. Timeout events reach clients through
+the same event ports as other job failures; adapter-owned alerts can detect
+sustained failures.
 
 From a product standpoint, we also track the results of the route generation.
 For example, when a route is successfully created, the system (or client) could
@@ -1663,10 +1652,11 @@ path”, etc., in a structured way.
 
 ### Data Persistence Layer (PostgreSQL with Diesel & PostGIS)
 
-Wildside stores both transactional and geospatial data in PostgreSQL with the
-PostGIS extension enabled. A single database keeps the system coherent while
-allowing spatial queries, JSONB enrichment, and transactional guarantees for
-user data, routes, and enrichment provenance.
+Wildside stores transactional and spatial data in PostgreSQL. The current
+baseline uses native `POINT` and `PATH`; roadmap section 6.1 adds PostGIS
+geometry read models and provisions the extension explicitly. A single database
+keeps spatial queries, JSONB enrichment, and transactional guarantees for user
+data, routes, and enrichment provenance together.
 
 #### Schema Overview
 
@@ -2120,57 +2110,28 @@ Future implementation stages:
 
 ### Map Tile Service (Martin)
 
-Wildside serves first-party vector tiles through a dedicated Martin service so
-the map experience is consistent with backend data and independent of external
-providers.
+Martin delivery is planned work tracked in backend roadmap section 6.1. The
+[backend tile delivery design](backend-tile-delivery-design.md) specifies the
+Helm resources, PostGIS migration, engine integration, function signature,
+protected request path, and observability acceptance criteria.
+[ADR 003](adr-003-protected-route-tile-delivery.md) records the proposed choice
+to validate route grants in a backend adapter before forwarding to Martin.
 
-#### Deployment Model
+Public POI requests reach an allowlisted Martin source. Private route requests
+reach the backend validator first; no public path exposes Martin's internal
+route source. Martin uses read-only database credentials and the function
+`get_route_tile(z integer, x integer, y integer, query_params json)` returning
+MVT bytes. The backend supplies authorized route and revision parameters. JWT
+verification does not run in PostGIS, and tile serving and telemetry remain
+adapter concerns. Domain services use event and metrics ports only.
 
-- Deploy Martin as a separate Kubernetes `Deployment` and `Service`, reusing
-  the same Postgres cluster but connecting with a read-only role restricted to
-  the schemas and views it needs.
-- Expose tiles via a Traefik `IngressRoute` on either a subdomain
-  (e.g. `tiles.wildside.app`) or a `/tiles` path prefix. Enable TLS and Brotli
-  or gzip compression.
-- Configure Martin with a managed `config.yaml` (mounted via `ConfigMap`)
-  that defines connection settings, pool size, cache behaviour, and the tile
-  sources listed below.
-
-#### Tile Sources
-
-- **`pois` table source:** Serves curated POIs through
-  `/tiles/pois/{z}/{x}/{y}.pbf`. Select only the columns needed for on-map
-  display (e.g. `element_type`, `id`, `name`, `popularity_score`) to keep tile
-  payloads small. The frontend fetches detailed POI data via REST when a user
-  interacts with a feature.
-- **`routes` function source:** Exposes per-route tiles at
-  `/tiles/routes/{route_id}/{z}/{x}/{y}.pbf`. Martin invokes a PostGIS function
-  such as `get_route_tile(route_id UUID, z INT, x INT, y INT)` that fetches the
-  route geometry and renders it via `ST_AsMVTGeom`. Requests must include a
-  short-lived JWT whose claims (`route_id`, `aud`, `iss`) are validated via
-  `pgjwt`.
-- **Optional base network:** Future iterations may add tables or functions for
-  road and land-use layers to provide a fully first-party basemap.
-
-#### Security and Operations
-
-- Lock Martin’s database credentials to read-only access and enforce SRID
-  consistency (`default_srid` set to 4326 or 3857 as appropriate).
-- Validate Web origins and configure CORS to prevent abuse. Apply rate limits
-  or edge caching (e.g. Cloudflare) if tile traffic spikes.
-- Publish Martin’s `/metrics` endpoint via the Prometheus Operator so tile
-  request latency, cache hit rate, and error counts feed dashboards and alerts.
-
-#### Implementation Tasks
-
-- [ ] Build or customize a Martin container image bundling `config.yaml`.
-- [ ] Add Kubernetes manifests for the Deployment, Service, and IngressRoute.
-- [ ] Provision the read-only Postgres role and rotate credentials via
-      Secrets.
-- [ ] Implement and test the `get_route_tile` PostGIS function inside a Diesel
-      migration.
-- [ ] Configure observability (Prometheus scrape, Grafana dashboard) and
-      document operational runbooks.
+The current chart uses standard Kubernetes Ingress, and the current schema uses
+native PostgreSQL `POINT` and `PATH`, not PostGIS geometry. Implementation must
+add explicit geometry read models and inferred route persistence before
+enabling route tiles. The engine currently returns ordered POIs and duration;
+the linked design proposes a separate engine roadmap PR for walkable geometry,
+identity, and inference failure contracts. Neither a sequence of POIs nor a
+legacy placeholder path is sufficient evidence of a walkable route.
 
 ### Background Job Execution (Apalis Workers)
 
@@ -2690,10 +2651,13 @@ workflows ensuring declarative, reproducible environments.
 
 ### Networking and Ingress
 
-- Use Traefik (per existing manifests) as the ingress controller. Terminate TLS
-  with cert-manager and Let’s Encrypt. Route `/api` and `/ws` to the API
-  service, `/tiles` to Martin, and static assets to the frontend hosting
-  solution (CDN or object storage).
+- Use standard Kubernetes Ingress with controller-specific overlays maintained
+  in Nile Valley. Terminate TLS with cert-manager and Let’s Encrypt. Route
+  `/api`, `/ws`, and protected `/tiles/routes` requests to the backend; expose
+  only the public POI source directly through Martin. Route static assets to
+  the frontend hosting solution (CDN or object storage). See the
+  [tile delivery design](backend-tile-delivery-design.md) for path rewriting
+  and source allowlisting.
 - Expose `/health/live` and `/health/ready` endpoints for liveness and
   readiness probes. Keep timeouts conservative to avoid restarting pods during
   normal start-up.
