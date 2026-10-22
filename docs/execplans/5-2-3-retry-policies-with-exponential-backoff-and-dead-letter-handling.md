@@ -5,8 +5,8 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (EP-M0 resumed on 2026-10-17 after the user accepted
-Decisions D10 and D11)
+Status: IN PROGRESS (EP-M0 complete on 2026-10-23; EP-M1 awaits the M0 CLI
+review)
 
 This plan covers backend roadmap item 5.2.3 only:
 
@@ -1164,16 +1164,16 @@ the two caret requirements.
   adjustment resolve the two baseline gate failures. The exact pins resolve
   only Apalis core rc.9, postgres rc.8, and SQL rc.9 as required by AXIOM-PIN.
   The runtime probe remains.
-- [ ] (2026-10-19) M0 runtime probe is inconclusive: the scratch test failed
-  before invoking its handler on two runs because embedded PostgreSQL could not
-  connect to its admin database. All five predictions remain untested; the
-  scratch test was removed. See the evidence below and do not start EP-M1 until
-  the probe can run against a healthy embedded database.
+- [x] (2026-10-19) The initial M0 runtime probe was inconclusive: the scratch
+  test failed before invoking its handler on two runs because embedded
+  PostgreSQL could not connect to its admin database. The cause was diagnosed
+  on 2026-10-20 and the five predictions were exercised successfully on
+  2026-10-23; see the later entries below.
 - [x] (2026-10-20) Diagnosed the probe setup failure with a controlled password
   comparison: missing `PG_PASSWORD` produces SQLSTATE `28P01` and the original
   five-attempt provisioning failure; the Makefile default makes both admin
-  connection and template provisioning succeed. The five Apalis predictions
-  still require a fresh probe run with the documented runner environment.
+  connection and template provisioning succeed. At that point the five Apalis
+  predictions still required a fresh probe run with the documented environment.
 - [x] (2026-10-23) Prevent recurrence of the provisioning launch error with
   non-forcing Cargo PostgreSQL defaults and regression coverage. Both new
   environment-policy cases failed before the fix because Cargo supplied no
@@ -1184,9 +1184,50 @@ the two caret requirements.
   preserves explicit caller settings. All eight candidate gates passed:
   `make fmt`, `check-fmt`, `lint`, `typecheck`, `test`, `markdownlint`,
   `nixie`, and `spelling`; logs use the `/tmp/wildside-pg-defaults-*` prefix.
-  The five AXIOM-DURABLE predictions remain untested.
-- [ ] EP-M0 baseline gates, exact pins (AXIOM-PIN), and AXIOM-DURABLE
-  runtime probe.
+  The five AXIOM-DURABLE predictions remained untested at this checkpoint; the
+  later runtime result is recorded below.
+- [x] (2026-10-23) Rebased the branch onto `origin/main` at
+  `380e7e8ec87892a34ab9a37c499762e83e95cf48`. Resolved the Makefile and
+  TypeDoc-fixture conflict by keeping main's dedicated `fmt-python` target and
+  its `types: []` fixture rationale while retaining the exact Apalis pins and
+  issue #550 documentation. The rebased candidate passed `make check-fmt`,
+  `make test` (1,851 passed, four skipped, including compile-fail, frontend,
+  workflow-contract, and Python suites), `make typecheck`, and `make lint`.
+  Logs: `/tmp/wildside-post-rebase-check-fmt-20261023.out`,
+  `/tmp/wildside-post-rebase-test-20261023.out`,
+  `/tmp/wildside-post-rebase-typecheck-20261023.out`, and
+  `/tmp/wildside-post-rebase-lint-20261023.out`.
+- [x] (2026-10-23) The five-part AXIOM-DURABLE scratch probe passed against
+  embedded PostgreSQL and the pinned Apalis worker/storage. It observed attempt
+  values 1 and 2; no retry within 1.5 seconds and redelivery after the full
+  two-second `run_at` delay; `Killed`, `attempts = 2`, `max_attempts = 2` after
+  the second failure with no third invocation for three seconds; and, for a
+  second job, `Failed`, `attempts = 1`, `max_attempts = 1` after shrinking a
+  three-attempt budget, with no redelivery for three seconds. The temporary
+  test source was removed after the run. Evidence:
+  `/tmp/axiom-durable-probe-wildside-20261023-final-2.out`.
+- [x] (2026-10-23) Confirmed AXIOM-PIN with `cargo tree -p backend -e normal`:
+  core rc.9, postgres rc.8, and SQL rc.9 are the only Apalis releases.
+  Confirmed AXIOM-ACK against the same pinned source: `ack.sql` updates only
+  `status`, `attempts`, `last_result`, and `done_at`, guarded by both `id` and
+  `lock_by`; `calculate_status` derives `Done`, `Failed`, or `Killed` from the
+  result and the in-memory attempt and max-attempt values. The runtime probe
+  observed the resulting persisted states. Tree evidence:
+  `/tmp/wildside-epm0-apalis-tree-20261023.out`.
+- [x] (2026-10-23) Final M0 candidate passed all seven gates sequentially:
+  `check-fmt`, `lint`, `typecheck`, `test`, `markdownlint`, `nixie`, and
+  `spelling`. `make test` passed 1,851 Nextest cases (four skipped), both
+  compile-fail suites, frontend tests, workflow contracts (606 passed, one
+  skipped), and Python tests. Logs are under
+  `/tmp/wildside-epm0-*-20261023-1.out`. EP-M0's baseline, exact pins, and all
+  three axioms are confirmed; only the required M0 CLI review remains before
+  EP-M1 work begins.
+- [x] (2026-10-23) The final status-only ExecPlan update was formatted with
+  `make fmt` and passed `check-fmt`, `markdownlint`, `nixie`, and `spelling`.
+  Logs: `/tmp/wildside-epm0-plan-format-20261023.out` and
+  `/tmp/wildside-epm0-finaldoc-{check-fmt,markdownlint,nixie,spelling}.out`.
+- [x] EP-M0 baseline gates, exact pins (AXIOM-PIN), AXIOM-DURABLE runtime
+  probe, and AXIOM-ACK source contract.
 - [ ] EP-M1 domain retry policy and classification.
 - [ ] EP-M2 durable retry wiring, bounded attempts, fatal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
@@ -1205,8 +1246,8 @@ the two caret requirements.
   scheduling. No shared-service repair or dependency change is required.
   Evidence and experiment boundaries are recorded in
   [the debugging plan](../debugging/debugging-plan-2026-10-20-probe-provisioning.md).
-  The scratch diagnostic was removed; all five Apalis predictions remain
-  untested.
+  The scratch diagnostic was removed. The five Apalis predictions were still
+  untested at that checkpoint; the later probe result supersedes that status.
 
 - Observation (2026-10-19 baseline): the branch's unchanged full gate run
   found two gate-harness issues unrelated to retry implementation.
@@ -1235,11 +1276,35 @@ the two caret requirements.
   `/tmp/probe-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-2.out`
   and
   `/tmp/probe-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-3.out`.
-  None of the five predictions was exercised, so AXIOM-DURABLE is neither
-  confirmed nor falsified. The scratch test was removed. Impact: EP-M0 remains
-  incomplete, and implementation must stop here until embedded PostgreSQL
-  provisioning succeeds; do not add retry middleware or alter the pins to work
-  around the unavailable test precondition.
+  None of the five predictions was exercised in those two attempts. The
+  missing-password cause was confirmed on 2026-10-20, and the successful
+  replacement probe is recorded below. This historical setup failure does not
+  count as evidence against AXIOM-DURABLE.
+
+- Observation (2026-10-23 AXIOM-DURABLE probe): all five predictions passed
+  against the pinned Apalis PostgreSQL worker. The Cargo configuration supplied
+  the stable non-forcing `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` defaults;
+  the test command supplied the worker path from `make test`. The handler
+  recorded attempts 1 then 2, and the second invocation began at least two
+  seconds after the first. The row then persisted `Killed` with `attempts = 2`
+  and `max_attempts = 2`; no third invocation arrived in the following three
+  seconds. A second job started with `max_attempts = 3`, changed its guarded
+  running row to `max_attempts = 1`, and persisted `Failed`, `attempts = 1`,
+  `max_attempts = 1`, without another invocation during the next three seconds.
+  The scratch harness waited for Apalis's ack to persist after observing the
+  handler event, and queried by the Apalis task ID because this schema stores
+  the encoded job payload as `bytea`. Evidence:
+  `/tmp/axiom-durable-probe-wildside-20261023-final-2.out`; the scratch source
+  was deleted. Impact: AXIOM-DURABLE is confirmed for the pinned versions and
+  EP-M1 is no longer blocked by this external assumption.
+
+- Observation (2026-10-23 AXIOM-ACK source check): at pinned rc.8,
+  `PgAck::ack` computes result status from `parts.attempt.current()` and
+  `parts.ctx.max_attempts()`. `queries/task/ack.sql` writes only the result
+  status, attempt count, last result, and completion timestamp, and matches
+  both the task ID and worker lock. The durable probe separately observed the
+  terminal rows produced by these rules. Impact: AXIOM-ACK is confirmed at the
+  pinned version; the V8 canaries will preserve this contract in EP-M2.
 
 - Observation: apalis-postgres 1.0.0-rc.6 does not persist abort errors as
   `Killed` (the `calculate_status` arm is commented out upstream), so a fatal
@@ -1341,8 +1406,15 @@ the two caret requirements.
 - Operational decision (2026-10-20): run the replacement scratch probe with
   the Makefile-equivalent PostgreSQL environment documented in the developer
   guide. The controlled authentication comparison resolves the setup blocker;
-  it does not discharge AXIOM-DURABLE or change D9–D14. EP-M1 remains gated on
-  the five-prediction runtime probe.
+  at that checkpoint it did not discharge AXIOM-DURABLE or change D9–D14. EP-M1
+  remained gated on the five-prediction runtime probe until the successful
+  2026-10-23 result below.
+
+- Operational decision (2026-10-23): AXIOM-DURABLE is confirmed at the exact
+  Apalis pins, including the persisted delay and both terminal-state paths.
+  AXIOM-PIN and AXIOM-ACK are also confirmed. The complete M0 gate sequence is
+  green; proceed to EP-M1 after the required milestone CLI review. No design
+  decision or dependency pin changes are needed.
 
 - D1 — *Superseded on 2026-10-17 by D11 and D14.* Adopt the upstream Apalis
   tower retry machinery, with a custom `tower::retry::Policy` that delegates to
@@ -1491,12 +1563,22 @@ the two caret requirements.
 
 ## Outcomes & retrospective
 
-To be completed at milestone boundaries and at closure. Before marking the plan
-`COMPLETE`, reconcile the architecture document's "Background Job Execution"
-prose with the implemented mechanism and confirm no upstream assumption in
-`Conformance basis` was falsified.
+EP-M0 is complete on the 2026-10-23 candidate: the pinned dependency graph,
+acknowledgement source contract, durable scheduling probe, and all seven gates
+are confirmed. The M0 CLI review remains a transition check before EP-M1 code
+changes. Before marking the plan `COMPLETE`, reconcile the architecture
+document's "Background Job Execution" prose with the implemented mechanism and
+confirm no upstream assumption in `Conformance basis` was falsified.
 
 ## Revision note
+
+2026-10-23: recorded the missing-`PG_PASSWORD` diagnosis and the successful
+five-prediction AXIOM-DURABLE probe after the non-forcing Cargo defaults were
+added. The branch was rebased onto `origin/main`, preserving main's formatter
+target and TypeDoc fixture improvements; the four requested post-rebase gates
+passed. The scratch probe was removed. A final M0 sequence passed all seven
+gates, and source inspection plus the resolved tree confirm AXIOM-ACK and
+AXIOM-PIN. EP-M0 is complete; its CLI review precedes EP-M1.
 
 2026-08-16: revised after the expert-panel design review. Material changes:
 fatal dead-lettering is now an explicit storage-level action (D4 rewritten; V5
