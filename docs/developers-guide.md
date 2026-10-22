@@ -1029,29 +1029,36 @@ Three pieces cooperate here:
   the dedicated `atexit_cleanup_tests` target, which drives them entirely from
   stub readers and sandbox directories.
 - **`PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are composed by the runner**,
-  not by test code: Make exports them to its child processes (with `?=`
-  defaults that an existing value overrides), and in CI every step that runs
-  the suite sets them in its `env:` block. That is the coverage steps in
-  `ci.yml` and `coverage-main.yml`, and also `ci.yml`'s guarded `Rust tests`
-  step, which is the Dependabot lane's only backend run and so the only
-  producer of these values on a Dependabot pull request.
+  not by test code: `.cargo/config.toml` supplies non-forcing defaults for
+  direct Cargo runs from the workspace root or a member directory. Explicit
+  parent environment values take precedence. Make also exports these defaults
+  to its child processes, and in CI every step that runs the suite sets them in
+  its `env:` block. That is the coverage steps in `ci.yml` and
+  `coverage-main.yml`, and also `ci.yml`'s guarded `Rust tests` step, which is
+  the Dependabot lane's only backend run and so the only producer of these
+  values on a Dependabot pull request.
   `backend/tests/environment_policy_contract.rs` fails if the Make recipe stops
   doing so, and `tests/workflow_contracts/embedded_postgres_env_test.py` fails
   if any of those steps does.
-- **Direct Cargo integration-test runs need the same runner environment.**
-  Before running a scratch embedded PostgreSQL test, run
-  `make prepare-pg-worker`, then supply the configuration explicitly:
+- **Direct Cargo integration-test runs inherit PostgreSQL defaults.** Cargo
+  supplies the stable test password and release mirror before launching test
+  processes, including scratch integration targets and Nextest. Run
+  `make prepare-pg-worker` once, then launch the desired target:
 
   ```sh
-  PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" \
-  POSTGRESQL_RELEASES_URL="${POSTGRESQL_RELEASES_URL:-https://github.com/theseus-rs/postgresql-binaries}" \
   PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
     cargo test -p backend --test TEST_TARGET -- --nocapture
   ```
 
-  Replace `TEST_TARGET` with the integration-test target. Calling
-  `ensure_stable_cluster_environment` only reconciles password state; it does
-  not export `PG_PASSWORD` for the embedded PostgreSQL dependency.
+  Replace `TEST_TARGET` with the integration-test target. The worker path above
+  assumes the workspace root. Explicit `PG_PASSWORD` and
+  `POSTGRESQL_RELEASES_URL` values remain supported. Cargo discovers workspace
+  configuration from the current directory and its ancestors; invoking it from
+  elsewhere with `--manifest-path` alone does not load these defaults. Supply
+  the environment explicitly in that case or when invoking a test binary
+  directly. `ensure_stable_cluster_environment` only reconciles password state;
+  it does not mutate the test process environment. The environment policy
+  contract tests guard both defaults and their non-forcing precedence.
 
 ## Environment seams
 

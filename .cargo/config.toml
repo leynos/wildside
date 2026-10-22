@@ -1,3 +1,9 @@
+# Compose test defaults before Cargo launches any test process. Keep explicit
+# caller settings authoritative, just as the Makefile's defaults do.
+[env]
+PG_PASSWORD = { value = "wildside_embedded_test", force = false }
+POSTGRESQL_RELEASES_URL = { value = "https://github.com/theseus-rs/postgresql-binaries", force = false }
+
 [profile.dev]
 opt-level = 1          # default is 0; 1 shrinks a bit without killing compile times
 debug = 1              # 2 is “full debuginfo”; 1 is usually enough
