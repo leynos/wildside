@@ -815,7 +815,8 @@ The user approved D10 and D11 on 2026-10-17. Steps:
    narrowly in the M0 candidate: `mbake validate Makefile` rejected the six-line
    `fmt` recipe, and the temporary TypeDoc fixture inherited ambient type
    discovery and failed with TS2688 for `minimatch`. The fixture now disables
-   ambient `@types`; main’s `fmt-python` target keeps the `fmt` recipe within the validator limit.
+   ambient `@types`; main’s `fmt-python` target keeps the `fmt` recipe within
+   the validator limit.
 2. Pin `apalis-core = "=1.0.0-rc.9"` and `apalis-postgres = "=1.0.0-rc.8"`
    in `backend/Cargo.toml`. These are the versions already in `Cargo.lock`, so
    no code change is expected. Run
@@ -1213,9 +1214,10 @@ the two caret requirements.
   workflow-contract TypeDoc fixtures all failed before evaluating their
   contracts because TypeScript tried to load implicit `minimatch` types. The
   temporary fixture has no ambient-type dependency, so it now sets `types: []`;
-  main’s existing `fmt-python` target superseded the one-line workaround while preserving the line-count fix. Evidence:
-  the baseline `lint` and `test` logs named above. Impact: these minimal
-  repairs unblock a clean full gate run without changing runtime behaviour.
+  main’s existing `fmt-python` target superseded the one-line workaround while
+  preserving the line-count fix. Evidence: the baseline `lint` and `test` logs
+  named above. Impact: these minimal repairs unblock a clean full gate run
+  without changing runtime behaviour.
 
 - Observation (2026-10-19 corrected M0 candidate): all seven sequential gates
   passed after the two baseline gate-harness repairs. The workflow-contract
