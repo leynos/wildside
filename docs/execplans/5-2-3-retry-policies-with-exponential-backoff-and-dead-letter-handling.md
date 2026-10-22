@@ -154,13 +154,13 @@ Repository state relevant to this task:
   evidence of retry and dead-letter behaviour requires driving job execution in
   tests.
 
-Apalis versions: `backend/Cargo.toml:34-35` declares `apalis-core` and
-`apalis-postgres` with caret requirements (`"1.0.0-rc.7"` and `"1.0.0-rc.6"`).
-`Cargo.lock` resolves them to `apalis-core 1.0.0-rc.9` and
-`apalis-postgres 1.0.0-rc.8`, and the caret requirements also admit the breaking
-`1.0.0` final release. EP-M0 replaces them with exact pins on the resolved
-versions (Decision D10). All facts below are verified against rc.9/rc.8, the
-code that actually compiles. The cached sources are under
+Apalis versions: the current `backend/Cargo.toml:34-35` pins
+`apalis-core = "=1.0.0-rc.9"` and `apalis-postgres = "=1.0.0-rc.8"`, matching
+`Cargo.lock`. The earlier caret requirements (`"1.0.0-rc.7"` and
+`"1.0.0-rc.6"`) also admitted the breaking `1.0.0` final release; EP-M0
+replaced them with exact pins on the resolved versions (Decision D10). All
+facts below are verified against rc.9/rc.8, the code that actually compiles.
+The cached sources are under
 `~/.cargo/registry/src/*/apalis-{core-1.0.0-rc.9,postgres-1.0.0-rc.8,sql-1.0.0-rc.9}`.
 They are external axioms for this plan:
 
@@ -1237,16 +1237,24 @@ the two caret requirements.
 - [x] (2026-10-23) The local CodeRabbit CLI review completed at version
   0.9.1 against `origin/main` (`380e7e8`) through `bff8ada`, covering all seven
   changed paths. The five findings comprised one style issue, one stale date
-  concern, and three substantive findings (including two duplicates): the date
-  concern is invalid because both the environment date and commit timestamp are
-  2026-10-23; the `list_dead` scenario could not observe a `Done` row and now
-  checks the row's metadata after acknowledgement; two duplicate findings
-  correctly identified that Apalis overwrites `last_result` on acknowledgement.
-  A namespaced JSONB metadata counter survives that ack, but writing `metadata`
-  exceeds the approved column allow-list. Proposed D15 records that deviation,
-  and the plan is `BLOCKED` pending the user's decision. The second-person
-  style finding is also corrected. Review evidence:
+  concern, and three substantive findings (including two duplicates). The date
+  concern is invalid because the environment date, commit timestamp, and gate
+  records all establish 2026-10-23. The `list_dead` scenario could not observe a
+  `Done` row and now checks the row's metadata after acknowledgement; two
+  duplicate findings correctly identified that Apalis overwrites `last_result`
+  on acknowledgement. A namespaced JSONB metadata counter survives that ack,
+  but writing `metadata` exceeds the approved column allow-list. Proposed D15
+  records that deviation, and the plan is `BLOCKED` pending the user's
+  decision. The second-person style finding is also corrected. Review evidence:
   `/tmp/wildside-epm0-coderabbit-20261023-JRwEDL/review.out`.
+- [x] (2026-10-23) The D15 reassessment completed at CodeRabbit CLI 0.9.1
+  against `origin/main` (`380e7e8`) through `096c679`, reviewing all seven
+  changed paths. It found that the Apalis-version paragraph still described the
+  historical caret requirements; that text now distinguishes the exact current
+  pins from the earlier requirements. Its second date finding is invalid for
+  the same evidence above: the environment, commit, and gate records establish
+  2026-10-23, not 2026-10-22. Review evidence:
+  `/tmp/wildside-epm0-d15-reassessment-p6Rhb8/review.out`.
 - [x] (2026-10-23) The final status-only ExecPlan update was formatted with
   `make fmt` and passed `check-fmt`, `markdownlint`, `nixie`, and `spelling`.
   Logs: `/tmp/wildside-epm0-plan-format-20261023.out` and
@@ -1696,3 +1704,9 @@ metadata is a technically viable location for the requeue counter, but its
 write is outside the approved column allow-list. Proposed D15 is explicitly
 pending user approval, the accepted invariant remains unchanged, and the plan
 is blocked before EP-M1.
+
+2026-10-23: the D15 reassessment corrected the stale current-version paragraph
+to state the exact rc.9/rc.8 manifest pins and identify the caret requirements
+as historical. Its October 22 date finding is invalid: the environment, commit,
+and gate records show October 23. The candidate awaits refreshed documentation
+gates and CLI reassessment.
