@@ -241,3 +241,25 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
     }
     Ok(())
 }
+
+/// Direct Cargo runs must compose stable settings without replacing explicit
+/// caller configuration or mutating the environment inside test processes.
+#[rstest::rstest]
+#[case::password("PG_PASSWORD", "wildside_embedded_test")]
+#[case::releases(
+    "POSTGRESQL_RELEASES_URL",
+    "https://github.com/theseus-rs/postgresql-binaries"
+)]
+fn cargo_supplies_non_forcing_postgres_defaults(
+    #[case] name: &str,
+    #[case] expected: &str,
+) -> TestResult {
+    let config: Value = toml::from_str(include_str!("../../.cargo/config.toml"))?;
+    let setting = config
+        .get("env")
+        .and_then(|env| env.get(name))
+        .ok_or("Cargo must supply embedded PostgreSQL defaults for direct test runs")?;
+    assert_eq!(setting.get("value").and_then(Value::as_str), Some(expected));
+    assert_eq!(setting.get("force").and_then(Value::as_bool), Some(false));
+    Ok(())
+}

@@ -1173,6 +1173,17 @@ the two caret requirements.
   five-attempt provisioning failure; the Makefile default makes both admin
   connection and template provisioning succeed. The five Apalis predictions
   still require a fresh probe run with the documented runner environment.
+- [x] (2026-10-23) Prevent recurrence of the provisioning launch error with
+  non-forcing Cargo PostgreSQL defaults and regression coverage. Both new
+  environment-policy cases failed before the fix because Cargo supplied no
+  defaults (`/tmp/wildside-pg-defaults-red.out`). After adding the defaults, a
+  direct `cargo test -p backend --test route_queue_apalis_bdd` run passed all
+  14 cases with `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` removed from the
+  parent environment (`/tmp/wildside-pg-defaults-runtime.out`). `force = false`
+  preserves explicit caller settings. All eight candidate gates passed:
+  `make fmt`, `check-fmt`, `lint`, `typecheck`, `test`, `markdownlint`,
+  `nixie`, and `spelling`; logs use the `/tmp/wildside-pg-defaults-*` prefix.
+  The five AXIOM-DURABLE predictions remain untested.
 - [ ] EP-M0 baseline gates, exact pins (AXIOM-PIN), and AXIOM-DURABLE
   runtime probe.
 - [ ] EP-M1 domain retry policy and classification.
