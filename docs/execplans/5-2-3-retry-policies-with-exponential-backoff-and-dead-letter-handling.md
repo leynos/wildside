@@ -188,7 +188,10 @@ They are external axioms for this plan:
   property D11 relies on.
 - Hydration (`apalis-sql` `src/from_row.rs`): a fetched row becomes a task
   whose `Attempt` starts at the persisted `attempts` and whose context
-  `max_attempts` is the persisted `max_attempts` (default 25 if null).
+  `max_attempts` is the persisted `max_attempts` (default 25 if null). This
+  fallback happens only after fetch; `get_jobs` compares
+  `attempts < max_attempts`, so a nullable legacy `Failed` row is not fetched
+  at all.
 - Ack (`apalis-postgres` `src/ack.rs`, `queries/task/ack.sql`): after the
   handler returns, the ack writes `status`, `attempts = Attempt::current()`,
   `last_result`, and `done_at`, guarded by `id` and `lock_by`. It never touches
@@ -238,16 +241,19 @@ Terms used in this plan:
 
   ```sql
   status = 'Killed'
-  OR (status = 'Failed' AND attempts >= COALESCE(max_attempts, 25))
+  OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts))
   ```
 
   The pinned PostgreSQL migration declares `max_attempts` non-null, but Apalis
-  hydration accepts null and defaults it to 25; the listing predicate matches
-  that fallback for legacy tables that permit null values. If D15 is approved,
-  its namespaced metadata key records whether a wrapper-originated terminal
-  failure was fatal or exhausted. Rows without a recognized reason key are
-  `Unclassified` because status and attempts cannot reliably distinguish their
-  terminal cause.
+  hydration accepts null and defaults it to 25 only after a row is fetched. The
+  fetch query's `attempts < max_attempts` comparison cannot select a row with a
+  null limit, regardless of its attempt count. The listing therefore includes
+  every nullable legacy `Failed` row so it remains visible for operator
+  inspection and optional requeue; without a recognized reason key, it is
+  `Unclassified`. If D15 is approved, its namespaced metadata key records
+  whether a wrapper-originated terminal failure was fatal or exhausted. Rows
+  without a recognized reason key are `Unclassified` because status and
+  attempts cannot reliably distinguish their terminal cause.
 - "Fatal error": a job-execution failure that retrying cannot fix (for
   example, a payload that fails decoding or validation). It is classified so
   the job dead-letters immediately rather than burning attempts.
@@ -619,13 +625,15 @@ D12).
 
   ```sql
   status = 'Killed'
-  OR (status = 'Failed' AND attempts >= COALESCE(max_attempts, 25))
+  OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts))
   ```
 
 - For wrapper-originated terminal failures, `DeadReason` comes from a
   namespaced JSONB metadata key if D15 is approved. Legacy dead rows without a
-  recognized key map to `Unclassified`; neither `Killed` nor `Failed` alone
-  distinguishes fatal failure from retry exhaustion.
+  recognized key map to `Unclassified`; this includes nullable legacy `Failed`
+  rows, which Apalis cannot fetch because its SQL comparison with a null limit
+  is not true. Neither `Killed` nor `Failed` alone distinguishes fatal failure
+  from retry exhaustion.
 - `list_dead` orders by `done_at DESC` and applies `LIMIT`.
 - `requeue` reads the row's `job_type` to look up its budget (returning
   `UnknownQueue` if none is configured), then executes one guarded update. The
@@ -682,8 +690,9 @@ wrapper):
      independently of whether the limit needs shrinking. Without D15,
      implementation remains blocked because status alone cannot preserve the
      reason for all cases. The wrapper records the matching metric label and
-     returns the bounded plain failure message, leaving Apalis's `last_result`
-     unchanged.
+     returns the bounded plain failure message. Apalis serializes that returned
+     error into `last_result` during acknowledgement, replacing its previous
+     value; the library's existing JSON representation is unchanged.
   5. Emits one structured log line (job id, job type, attempt, error kind,
      decision; never the payload).
 - Enqueue side: `ApalisPostgresProvider::push_job` switches from
@@ -825,26 +834,28 @@ Obligations:
   dead job appears in `DeadLetterQueue::list_dead` with its reason, attempt
   count, and bounded last error; it includes a requeue count only if D15 is
   approved. A compatibility test inserts a failed legacy row with a null
-  `max_attempts` into a disposable schema that permits nulls and verifies that
-  `list_dead` includes it using Apalis's hydration fallback of 25. If D15 is
-  approved, unit tests cover the metadata reason key and verify that legacy
-  `Killed` and `Failed` rows without a reason key map to `Unclassified`.
-  `requeue` makes it run again and succeed (proven by observing execution, not
-  a status flip) and restores `max_attempts` to the queue's configured budget.
-  If D15 is approved, requeue also increments its provenance count, and after
-  the successful acknowledgement a job-row query verifies the metadata count
-  because a `Done` row is excluded from `list_dead`. A requeued *fatal* job
-  that then fails retryably must get the full budget again and, if D15 is
-  approved, its dead listing must retain the requeue count across the later
-  acknowledgement. D15 also clears the prior dead-reason key at requeue and
-  sets it again on the next terminal failure. `discard` removes the row.
-  Requeuing a live or absent job returns `NotDead` and changes nothing, and
-  requeuing a dead row from an unconfigured queue returns `UnknownQueue`.
-  Listing ignores live jobs. Method: behavioural test (`rstest-bdd`) with
-  embedded PostgreSQL. Non-vacuity: listing before any failure must be empty (a
-  witness that the query filters live jobs), the guard scenarios are negative
-  controls by construction, and omitting the `max_attempts` restoration fails
-  the requeued-fatal scenario.
+  `max_attempts` and fewer than 25 attempts into a disposable schema that
+  permits nulls. It verifies that Apalis cannot fetch the row, while
+  `list_dead` includes it as `Unclassified` for operator inspection. The
+  hydration fallback of 25 does not apply because the fetch query rejects the
+  null comparison before hydration. If D15 is approved, unit tests cover the
+  metadata reason key and verify that legacy `Killed` and `Failed` rows without
+  a reason key map to `Unclassified`. `requeue` makes it run again and succeed
+  (proven by observing execution, not a status flip) and restores
+  `max_attempts` to the queue's configured budget. If D15 is approved, requeue
+  also increments its provenance count, and after the successful
+  acknowledgement a job-row query verifies the metadata count because a `Done`
+  row is excluded from `list_dead`. A requeued *fatal* job that then fails
+  retryably must get the full budget again and, if D15 is approved, its dead
+  listing must retain the requeue count across the later acknowledgement. D15
+  also clears the prior dead-reason key at requeue and sets it again on the
+  next terminal failure. `discard` removes the row. Requeuing a live or absent
+  job returns `NotDead` and changes nothing, and requeuing a dead row from an
+  unconfigured queue returns `UnknownQueue`. Listing ignores live jobs. Method:
+  behavioural test (`rstest-bdd`) with embedded PostgreSQL. Non-vacuity:
+  listing before any failure must be empty (a witness that the query filters
+  live jobs), the guard scenarios are negative controls by construction, and
+  omitting the `max_attempts` restoration fails the requeued-fatal scenario.
 - Obligation V7 (snapshot stability): V1 job envelope snapshots from 5.2.2
   are byte-identical after this plan, and any new operator-facing rendering of
   dead jobs is snapshot-pinned with `insta`. Method: re-run the existing
@@ -1031,7 +1042,10 @@ behaviour is unchanged except that enqueued rows now carry the bounded
 per-row value, and deployed rows with the default 25 remain valid; the
 wrapper's terminal path also dead-letters such rows once the policy bound is
 reached and stores the reason in the namespaced metadata key if D15 is
-approved. The raw `last_result` error remains unchanged. Gates; commit.
+approved. On failure, Apalis continues to serialize the returned error into
+`last_result`; the wrapper supplies its bounded message, replacing the prior
+value without changing Apalis's JSON representation. D15 stores the terminal
+reason separately in `metadata`. Gates; commit.
 
 ### Milestone EP-M3 — dead-letter port and PostgreSQL adapter
 
@@ -1074,9 +1088,10 @@ Feature: Dead-letter listing, requeue, and discard
 
   Scenario: A legacy failed row with a null attempt limit is listed
     Given a disposable legacy schema permits a null max_attempts value
-    And a failed row has attempts equal to Apalis's null fallback of 25
+    And a failed row has 3 attempts, below Apalis's null fallback of 25
     When the operator lists dead jobs
-    Then the listing contains the row
+    Then Apalis does not fetch the row
+    And the dead listing contains it as Unclassified
 
   Scenario: A requeued fatal job regains its full retry budget
     Given a job has been dead-lettered by a fatal error
@@ -1455,11 +1470,23 @@ the two caret requirements.
 - Observation (2026-10-23 follow-up CodeRabbit review): V6 required a requeue
   count even though D15's JSONB writes remain unapproved. The V6 and feature
   specification now make that assertion conditional on D15. The dead-row
-  predicate also uses Apalis's effective null limit of 25: pinned rc.9 hydrates
-  nullable `max_attempts` with that fallback, while the canonical rc.8 schema
-  declares the column `NOT NULL`. V6 now requires a disposable legacy-schema
-  compatibility test for a failed row with a null limit. Evidence:
+  predicate now includes nullable `Failed` rows: pinned rc.9's fetch query
+  compares attempts directly with `max_attempts`, so a null limit prevents
+  fetch before the hydrator's fallback of 25 can apply. Such legacy rows are
+  listed as `Unclassified`; V6 tests one below 25 attempts. The canonical rc.8
+  schema declares the column `NOT NULL`. Evidence:
   `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-2.out`.
+
+- Observation (2026-10-23 final plan review): the prior null-limit compatibility
+  predicate incorrectly relied on the hydrator's fallback of 25. Source review
+  confirmed that `get_jobs` applies `attempts < max_attempts` first, so a null
+  limit makes a failed row invisible to both retries and the old dead listing.
+  The selected policy lists every nullable failed row as `Unclassified` and
+  tests one below 25 attempts. The review also found that the wrapper's bounded
+  error is serialized into `last_result` by every acknowledgement; the plan now
+  states that this replaces the previous result while preserving Apalis's JSON
+  representation. Evidence:
+  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-7.out`.
 
 - Observation (2026-10-23 final plan review): terminal metadata must be written
   even when the current attempt already reaches Apalis's limit and the ack will
@@ -1620,15 +1647,15 @@ the two caret requirements.
   wait approaches `TOTAL_BACKOFF_BUDGET`, or if 5.3.1 load tests observe
   worker-slot exhaustion during backoff. Date/author: 2026-08-16, planning
   agent.
-- D3 — Dead letters are rows in `apalis.jobs` (`Killed`, or `Failed` with
-  `attempts >= COALESCE(max_attempts, 25)`), surfaced through a domain
-  `DeadLetterQueue` port; no separate table. Dead-letter surfaces never expose
-  raw payloads (privacy stance inherited from `decode_job`); operators
-  correlate via job id, job type, and the bounded last-error text. Rationale:
-  matches Apalis's model and graphile-worker prior art; avoids schema
-  divergence from library-managed tables; the port isolates the representation
-  so a future table swap stays adapter-local. Date/author: 2026-08-16, planning
-  agent.
+- D3 — Dead letters are rows in `apalis.jobs` (`Killed`, `Failed` with a null
+  `max_attempts`, or `Failed` with `attempts >= max_attempts`), surfaced
+  through a domain `DeadLetterQueue` port; no separate table. Dead-letter
+  surfaces never expose raw payloads (privacy stance inherited from
+  `decode_job`); operators correlate via job id, job type, and the bounded
+  last-error text. Rationale: matches Apalis's model and graphile-worker prior
+  art; avoids schema divergence from library-managed tables; the port isolates
+  the representation so a future table swap stays adapter-local. Date/author:
+  2026-08-16, planning agent.
 - D4 — Terminal errors are made dead at the storage level by our wiring, not
   by relying on Apalis abort persistence. *Mechanism settled on 2026-10-17
   under D11: before the ack, the handler wrapper shrinks the locked row's
@@ -1887,14 +1914,16 @@ reassessment.
 2026-10-23 Europe/Berlin: the final D15 reassessment found that status alone
 cannot distinguish policy exhaustion from a fatal error when the stored Apalis
 limit exceeds the current policy. Proposed D15 now records the reason in
-`wildside.retry.dead_reason` alongside the requeue counter; `last_result`
-remains unchanged. The requested PR #457 rebase onto `origin/main` was an
-up-to-date no-op: the branch's first commit already directly followed the
-target, so no commits replayed and no conflicts arose. The post-rebase
-candidate passed `make check-fmt`, `make test` (1,851 Nextest passed, four
-skipped, plus the compile-fail, frontend, workflow-contract, and Python suites),
-`make typecheck`, `make lint`, `make markdownlint`, `make nixie`, and
-`make spelling`. The local CLI reassessment remains pending. D15 requires
-explicit user approval before any implementation milestone begins. Its October
-22 review date is UTC; the recorded commits and review use Europe/Berlin
-(`+02:00`) and are ordered by their exact timestamps.
+`wildside.retry.dead_reason` alongside the requeue counter. Apalis's
+`last_result` JSON representation remains unchanged; acknowledgements replace
+its value with the bounded error string returned by the wrapper. The requested
+PR #457 rebase onto `origin/main` was an up-to-date no-op: the branch's first
+commit already directly followed the target, so no commits replayed and no
+conflicts arose. The post-rebase candidate passed `make check-fmt`, `make test`
+(1,851 Nextest passed, four skipped, plus the compile-fail, frontend,
+workflow-contract, and Python suites), `make typecheck`, `make lint`,
+`make markdownlint`, `make nixie`, and `make spelling`. The local CLI
+reassessment remains pending. D15 requires explicit user approval before any
+implementation milestone begins. Its October 22 review date is UTC; the
+recorded commits and review use Europe/Berlin (`+02:00`) and are ordered by
+their exact timestamps.
