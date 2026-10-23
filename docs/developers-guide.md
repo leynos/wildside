@@ -235,7 +235,7 @@ run through `make test-workflow-contracts`.
 
 ### Job placement
 
-Build and test work runs on the managed `ubicloud-standard-8` label: `ci.yml`'s
+Build and test work runs on the managed `ubicloud-standard-4` label: `ci.yml`'s
 `build` and `coverage` jobs, and `coverage-main.yml`'s `coverage-upload` job.
 Every managed job declares `timeout-minutes`.
 
@@ -248,7 +248,7 @@ runner for a fork and keeping the managed one for everything else:
 ```yaml
 runs-on: >-
   ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest'
-  || 'ubicloud-standard-8' }}
+  || 'ubicloud-standard-4' }}
 ```
 
 `github.event.pull_request` is null outside a pull request, so a push and a
@@ -272,11 +272,30 @@ leaves a newline inside the expression. GitHub evaluates the broken value
 regardless, so a green run is not evidence that the label is well formed. Keep
 the continuation at the same indent as the line it continues.
 
-That `-8` shape is inherited rather than measured. It predates the managed
-runner work and no job here has yet been sampled for peak memory or disk, so
-there is no evidence for or against a smaller shape. Add a sampler to the two
-Rust jobs and read it before proposing a change; the default elsewhere in the
-estate is `ubicloud-standard-2`, with `-4` only on measured disk evidence.
+The shape is `-4` on measurement, taken on 2026-10-17 with a sampler that read
+`/proc/stat` every 10 seconds on a measurement branch (the sampler is not
+merged). The jobs were previously on `ubicloud-standard-8`, a shape that was
+inherited rather than measured.
+
+| Job        | Cache state                | Wall time | Busy cores (avg / p95 / max) | Peak memory | sccache hits |
+| ---------- | -------------------------- | --------- | ---------------------------- | ----------- | ------------ |
+| `build`    | warm                       | 21m03s    | 1.41 / 2.20 / 2.85 of 4      | 2,423 MiB   | 99.78%       |
+| `build`    | cold (no cache to restore) | 86m46s    | 0.88 / 1.74 / 3.88 of 4      | 5,650 MiB   | 7.81%        |
+| `coverage` | warm                       | 8m15s     | 1.70 / 3.99 / 4.00 of 4      | 4,060 MiB   | 99.87%       |
+| `coverage` | cold                       | 17m02s    | 1.46 / 2.64 / 3.49 of 4      | 3,394 MiB   | 0.38%        |
+
+*Table: `ubicloud-standard-4` trial runs, warm
+([39038438142](https://github.com/leynos/wildside/actions/runs/39038438142))
+and cold
+([39061927189](https://github.com/leynos/wildside/actions/runs/39061927189)).*
+
+Ubicloud bills per vCPU, so a job that keeps fewer than half of its cores busy
+gains little from a larger shape; none of these did. Minimum free disk was at
+least 65 GiB throughout. The cold `build` is the longest run the job will ever
+have, because the first run on a new generation misses almost everything, so its
+`timeout-minutes` is 120 rather than the 90 it had on eight vCPU. The cold
+`coverage` run is far inside its 120 minutes and its 5,400 second cargo
+watchdog.
 
 Everything else stays on GitHub-hosted `ubuntu-latest`. Scheduled, delayed,
 metadata, label, review-bot, and release-orchestration work sits off the
@@ -2459,7 +2478,7 @@ until this was written the outermost one was set wrong.
 | Per-test `slow-timeout`  | one test                           | `.config/nextest.toml`                                                                                    | 60 s default; 300 s for the database-backed overrides |
 | nextest `global-timeout` | the whole test run                 | `.config/nextest.toml`                                                                                    | 3,600 s (60 m)                                        |
 | Cargo watchdog           | one `cargo` invocation, wall clock | `RUN_RUST_CARGO_WAIT_TIMEOUT`, read from the step, then the job, then the workflow; set at job level here | 5,400 s (90 m)                                        |
-| Job `timeout-minutes`    | the whole job                      | job level in `ci.yml` and `coverage-main.yml`                                                             | 120 m                                                 |
+| Job `timeout-minutes`    | the whole job                      | job level in `ci.yml` and `coverage-main.yml`                                                             | 120 m (`build` too, since its cold run took 86m46s)   |
 
 *Table: the timers that can end a run, innermost first.*
 

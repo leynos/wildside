@@ -9,7 +9,7 @@ workflow file: an absent token skips the upload, and so does any ref but
 `main`, on a push or a dispatch alike.
 
 Running the workflow itself, under `act` or on a runner, would need the
-CodeScene token and the `ubicloud-standard-8` label; the upload's real proof
+CodeScene token and the `ubicloud-standard-4` label; the upload's real proof
 is the publisher run on the merge commit.
 
 Run via ``make test-workflow-contracts``.
