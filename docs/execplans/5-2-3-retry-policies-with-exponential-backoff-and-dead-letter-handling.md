@@ -671,11 +671,12 @@ wrapper):
      `Exhausted` for a retryable failure at the policy limit. If
      `attempt < context max_attempts`, it must shrink the persisted limit so
      the ack writes an unfetchable `Failed` row; otherwise the ack writes
-     `Killed`. If D15 is approved, the same guarded terminal update also writes
-     the namespaced reason key before the ack. Without D15, implementation
-     remains blocked because status alone cannot preserve the reason for all
-     cases. The wrapper records the matching metric label and returns the
-     bounded plain failure message, leaving Apalis's `last_result` unchanged.
+     `Killed`. If D15 is approved, a guarded terminal update always writes the
+     namespaced reason key before the ack, and shrinks the persisted limit only
+     when required. Without D15, implementation remains blocked because status
+     alone cannot preserve the reason for all cases. The wrapper records the
+     matching metric label and returns the bounded plain failure message,
+     leaving Apalis's `last_result` unchanged.
   5. Emits one structured log line (job id, job type, attempt, error kind,
      decision; never the payload).
 - Enqueue side: `ApalisPostgresProvider::push_job` switches from
@@ -765,17 +766,19 @@ Obligations:
 - Obligation V3b (wrapper decision table): the handler wrapper maps every
   combination of (classification, `Attempt::current()` relative to the policy
   bound, `Attempt::current()` relative to the in-memory context `max_attempts`)
-  to exactly one action: `schedule_retry`, record a terminal outcome (and
-  shrink the persisted attempt limit when required), or make no scheduling
-  write. It also records the matching retry/dead-letter metric label and a
-  terminal reason (`Fatal` for fatal failures, `Exhausted` for retryable
-  failures at the policy bound). If D15 is approved, it persists that reason in
-  the namespaced metadata key. Method: `rstest` parameterized unit tests of the
-  wrapper's decision function (factored out as a pure adapter-local function),
-  with the scheduler behind a test double. Rationale: an off-by-one here
-  silently grants or steals an attempt, mislabels the dead reason, or leaves a
-  fatal row re-fetchable. Non-vacuity: shifting either comparison by one must
-  fail at least one case.
+  to exactly one action: `schedule_retry` or `record_terminal_outcome`, which
+  shrinks the persisted attempt limit only when required. Successful handlers
+  make no scheduling write. The wrapper records the matching retry/dead-letter
+  metric label and a terminal reason (`Fatal` for fatal failures, `Exhausted`
+  for retryable failures at the policy bound). If D15 is approved, every
+  terminal outcome persists that reason in the namespaced metadata key,
+  including when the ack will write `Killed` because the attempt limit is
+  already reached. Method: `rstest` parameterized unit tests of the wrapper's
+  decision function (factored out as a pure adapter-local function), with the
+  scheduler behind a test double. Rationale: an off-by-one here silently grants
+  or steals an attempt, mislabels the dead reason, or leaves a fatal row
+  re-fetchable. Non-vacuity: shifting either comparison by one must fail at
+  least one case.
 - Obligation V4 (lifetime retry bound with durable backoff): a job enqueued
   through the adapter carries the policy's `max_attempts` in
   `apalis.jobs.max_attempts`. A handler that always fails retryably runs exactly
@@ -800,11 +803,13 @@ Obligations:
   claim than "the harness stopped polling". The listing reports
   `DeadReason::Fatal` even when Apalis status and attempts alone would imply
   exhaustion. If D15 is approved, the metadata reason key preserves that
-  distinction. Method: behavioural test as V4 with a fatal-classified failure,
-  including a post-failure polling phase and a dead-list assertion.
-  Non-vacuity: misclassifying fatal as retryable fails the run-count and reason
-  assertions, and omitting the terminal limit update when required fails the
-  redelivery assertion.
+  distinction. Include a one-attempt policy case at the in-memory Apalis
+  attempt limit: the ack writes `Killed`, no limit shrink is needed, and the
+  metadata still reports `Fatal`. Method: behavioural test as V4 with a
+  fatal-classified failure, including a post-failure polling phase and a
+  dead-list assertion. Non-vacuity: misclassifying fatal as retryable fails the
+  run-count and reason assertions, and omitting the terminal limit update when
+  required fails the redelivery assertion.
 - Obligation V6 (dead-letter round trip, guards, and budget restoration): a
   dead job appears in `DeadLetterQueue::list_dead` with its reason, attempt
   count, and bounded last error; it includes a requeue count only if D15 is
@@ -1443,6 +1448,13 @@ the two caret requirements.
   declares the column `NOT NULL`. V6 now requires a disposable legacy-schema
   compatibility test for a failed row with a null limit. Evidence:
   `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-2.out`.
+
+- Observation (2026-10-23 final plan review): terminal metadata must be written
+  even when the current attempt already reaches Apalis's limit and the ack will
+  store `Killed`; only the persisted limit shrink is conditional. Otherwise a
+  fatal one-attempt job loses its `Fatal` reason. The D15 wrapper contract and
+  V3b/V5 now require the reason update on every terminal outcome. Evidence:
+  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-3.out`.
 
 - Observation: apalis-postgres 1.0.0-rc.6 does not persist abort errors as
   `Killed` (the `calculate_status` arm is commented out upstream), so a fatal
