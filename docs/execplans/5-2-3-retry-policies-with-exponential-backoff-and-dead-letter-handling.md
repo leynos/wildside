@@ -77,7 +77,8 @@ This plan adds the retry and dead-letter policy layer:
   backoff and the dead state.
 - A `DeadLetterQueue` driven port and a PostgreSQL adapter that lists,
   requeues, and discards dead jobs, with guarded state transitions, distinct
-  fatal and exhausted reasons, restoration of the retry budget on requeue, and
+  fatal and exhausted reasons for rows with D15 metadata, an unclassified
+  fallback for legacy rows, restoration of the retry budget on requeue, and
   requeue provenance if D15 is approved.
 - Enqueue-side persistence of the policy's `max_attempts` on every job, and
   retry and dead-letter event counters through dedicated `RouteQueueMetrics`
@@ -244,8 +245,9 @@ Terms used in this plan:
   hydration accepts null and defaults it to 25; the listing predicate matches
   that fallback for legacy tables that permit null values. If D15 is approved,
   its namespaced metadata key records whether a wrapper-originated terminal
-  failure was fatal or exhausted; legacy rows without that key use the
-  status-based fallback (Decision D4).
+  failure was fatal or exhausted. Rows without a recognized reason key are
+  `Unclassified`, because status and attempts cannot reliably distinguish their
+  terminal cause.
 - "Fatal error": a job-execution failure that retrying cannot fix (for
   example, a payload that fails decoding or validation). It is classified so
   the job dead-letters immediately rather than burning attempts.
@@ -560,9 +562,11 @@ pub enum DeadReason {
     Exhausted,
     /// A fatal error short-circuited retries.
     Fatal,
+    /// A legacy row has no persisted reason, and its status cannot identify it.
+    Unclassified,
 }
 
-/// A job parked after exhausting retries or failing fatally.
+/// A job parked after a terminal outcome.
 #[non_exhaustive]
 pub struct DeadJob {
     pub id: DeadJobId,
@@ -620,7 +624,8 @@ D12).
 
 - For wrapper-originated terminal failures, `DeadReason` comes from a
   namespaced JSONB metadata key if D15 is approved. Legacy dead rows without a
-  recognized key fall back to `Killed` as `Exhausted` and `Failed` as `Fatal`.
+  recognized key map to `Unclassified`; neither `Killed` nor `Failed` alone
+  distinguishes fatal failure from retry exhaustion.
 - `list_dead` orders by `done_at DESC` and applies `LIMIT`.
 - `requeue` reads the row's `job_type` to look up its budget (returning
   `UnknownQueue` if none is configured), then executes one guarded update. The
@@ -816,7 +821,8 @@ Obligations:
   approved. A compatibility test inserts a failed legacy row with a null
   `max_attempts` into a disposable schema that permits nulls and verifies that
   `list_dead` includes it using Apalis's hydration fallback of 25. If D15 is
-  approved, unit tests cover the metadata reason key and legacy status fallback.
+  approved, unit tests cover the metadata reason key and verify that legacy
+  `Killed` and `Failed` rows without a reason key map to `Unclassified`.
   `requeue` makes it run again and succeed (proven by observing execution, not
   a status flip) and restores `max_attempts` to the queue's configured budget.
   If D15 is approved, requeue also increments its provenance count, and after
@@ -1451,7 +1457,7 @@ the two caret requirements.
 
 - Observation (2026-10-23 final plan review): terminal metadata must be written
   even when the current attempt already reaches Apalis's limit and the ack will
-  store `Killed`; only the persisted limit shrink is conditional. Otherwise a
+  store `Killed`; only the persisted limit shrink is conditional. Otherwise, a
   fatal one-attempt job loses its `Fatal` reason. The D15 wrapper contract and
   V3b/V5 now require the reason update on every terminal outcome. Evidence:
   `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-3.out`.
@@ -1721,22 +1727,23 @@ the two caret requirements.
   guarded terminal-failure update writes `fatal` or `exhausted` to the reason
   key and, when needed, shrinks `max_attempts` in the same statement. This lets
   `list_dead` distinguish a fatal failure from policy exhaustion even when both
-  become an unfetchable `Failed` row. Rows without the key use the legacy
-  status fallback. Rationale: Apalis replaces `last_result` on every
-  acknowledgement, so requeue provenance there disappears after the next run;
-  status and attempt counts alone cannot distinguish all terminal reasons.
-  Keeping both values in namespaced metadata preserves the existing bounded
-  plain error string in `last_result`. The pinned rc.8 hydrator carries
-  metadata into `PgContext`, and its ack leaves the column untouched. This adds
-  no schema object and preserves the ban on a separate dead-letter table (D3).
-  The retry budget remains sourced from `RequeueBudgets` (D12), never metadata.
-  These writes exceed the approved writable-column list, so D15 is a proposed
-  mechanism change and not implementation permission. If accepted, preserve all
-  unrelated keys, initialize an absent counter to zero, validate it as `u32`,
-  and treat both keys as rc-coupled contracts covered by V8 before the 1.0.0
-  upgrade (#550). An application-owned envelope in `last_result` was considered
-  and rejected because this plan forbids an unapproved persisted-format change.
-  Date/author: 2026-10-23 Europe/Berlin, implementation review.
+  become an unfetchable row. Rows without the key are `Unclassified`, because
+  status and attempts cannot identify their terminal cause. Rationale: Apalis
+  replaces `last_result` on every acknowledgement, so requeue provenance there
+  disappears after the next run; status and attempt counts alone cannot
+  distinguish all terminal reasons. Keeping both values in namespaced metadata
+  preserves the existing bounded plain error string in `last_result`. The
+  pinned rc.8 hydrator carries metadata into `PgContext`, and its ack leaves
+  the column untouched. This adds no schema object and preserves the ban on a
+  separate dead-letter table (D3). The retry budget remains sourced from
+  `RequeueBudgets` (D12), never metadata. These writes exceed the approved
+  writable-column list, so D15 is a proposed mechanism change and not
+  implementation permission. If accepted, preserve all unrelated keys,
+  initialize an absent counter to zero, validate it as `u32`, and treat both
+  keys as rc-coupled contracts covered by V8 before the 1.0.0 upgrade (#550).
+  An application-owned envelope in `last_result` was considered and rejected
+  because this plan forbids an unapproved persisted-format change. Date/author:
+  2026-10-23 Europe/Berlin, implementation review.
 
 ## Outcomes & retrospective
 
