@@ -354,6 +354,22 @@ def test_build_jobs_keep_their_reviewed_label_and_a_timeout(
     )
 
 
+def test_the_build_ceiling_clears_the_cold_standard_4_run() -> None:
+    """The first run on a new cache generation is the longest the job has.
+
+    Measured on ``ubicloud-standard-4`` with no cache to restore (7.81% of
+    sccache requests hit), ``build`` took 86m46s: leynos/wildside run
+    39061927189. A ceiling of 90 leaves four minutes, and a cancelled job
+    discards the generation the next run would have read, so the ceiling is
+    held to 120 minutes, which is the cold run plus a margin.
+    """
+    job = inv.load_workflow("ci.yml")["jobs"]["build"]
+    assert job.get("timeout-minutes", 0) >= 120, (
+        "ci.yml:build must allow 120 minutes; its cold run on standard-4 "
+        f"took 86m46s and it declares {job.get('timeout-minutes')!r}"
+    )
+
+
 def test_the_coverage_tool_cache_key_tracks_the_shared_action_pin() -> None:
     """The coverage lane's executables are chosen by the pinned action.
 
