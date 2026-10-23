@@ -1027,7 +1027,8 @@ Feature: Queue retry policy with durable exponential backoff
     When the worker processes the queue
     Then the handler runs exactly three times in total
     And the row is stored as Failed and satisfies the dead predicate
-    And the dead listing reports Exhausted rather than Fatal
+    And if D15 is approved, the dead listing reports Exhausted rather than Fatal
+    And if D15 is not approved, the dead listing reports Unclassified
     And further polling delivers no more runs
 
   Scenario: An enqueued job carries the queue's retry budget
@@ -1487,6 +1488,12 @@ the two caret requirements.
   states that this replaces the previous result while preserving Apalis's JSON
   representation. Evidence:
   `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-7.out`.
+
+- Observation (2026-10-23 final review correction): the policy-exhaustion
+  feature scenario asserted an `Exhausted` reason while proposed D15 remains
+  unapproved. It now expects `Exhausted` if D15 is approved and `Unclassified`
+  otherwise. Evidence:
+  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-8.out`.
 
 - Observation (2026-10-23 final plan review): terminal metadata must be written
   even when the current attempt already reaches Apalis's limit and the ack will
