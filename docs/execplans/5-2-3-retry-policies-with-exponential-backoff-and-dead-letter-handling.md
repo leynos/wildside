@@ -6,7 +6,10 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: BLOCKED (EP-M0 implementation and gates complete; awaiting approval for
-the proposed durable requeue-provenance storage deviation)
+the proposed D15 metadata writes for requeue provenance and terminal reason)
+
+Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
+Review metadata may use UTC and therefore show the previous calendar date.
 
 This plan covers backend roadmap item 5.2.3 only:
 
@@ -30,9 +33,12 @@ For readers of an earlier version, these are the changes that matter:
   in-process retry layer races with the storage fetcher (see
   `Surprises & discoveries`, 2026-10-14).
 - Backoff is **durable**. When a job fails, a handler wrapper writes the next
-  `run_at` (or, for a fatal error, shrinks `max_attempts`) on the still-locked
-  row *before* the ack runs. The library's ack then records `Failed` or
-  `Killed`, and the existing fetch predicate does the rest (Decision D11).
+  `run_at` for a retry, or shrinks `max_attempts` for a terminal failure on the
+  still-locked row *before* the ack runs. The library's ack then records
+  `Failed` or `Killed`, and the existing fetch predicate does the rest
+  (Decision D11). Proposed D15 also records a namespaced terminal reason in
+  JSONB `metadata`, because those statuses alone cannot distinguish fatality
+  from exhaustion when the current policy is lower than a stored limit.
 - Apalis is **pinned exactly**, to `apalis-core = "=1.0.0-rc.9"` and
   `apalis-postgres = "=1.0.0-rc.8"` (Decision D10). The 1.0.0 upgrade is issue
   #550, which is out of scope here.
@@ -40,8 +46,8 @@ For readers of an earlier version, these are the changes that matter:
   AXIOM-ACK replace them, and EP-M0 discharges them.
 - `TOTAL_BACKOFF_BUDGET` is retired. Workers no longer hold a slot during
   backoff, so the per-delay cap `MAX_BACKOFF_DELAY` replaces it (Decision D13).
-- `requeue` must restore the queue's configured `max_attempts`, because the
-  fatal path shrinks it (Decision D12).
+- `requeue` must restore the queue's configured `max_attempts`, because a
+  terminal path may shrink it (Decision D12).
 - EP-M1 (the pure domain policy) is unaffected in shape. EP-M2 has been
   rewritten. EP-M3 gains the budget restoration. EP-M4 names the renamed ADRs.
 
@@ -66,12 +72,13 @@ This plan adds the retry and dead-letter policy layer:
   fatal), following the precedent of `EnrichmentSourceError::is_retryable()`.
 - Durable retry scheduling in the outbound queue adapter. A handler wrapper
   turns each failure into a guarded update on the still-locked `apalis.jobs`
-  row: a future `run_at` for a retry, or a shrunken `max_attempts` for a fatal
-  error. The library's own ack and fetch predicate then enforce the backoff and
-  the dead state.
+  row: a future `run_at` for a retry, or a shrunken `max_attempts` for a
+  terminal failure. The library's own ack and fetch predicate then enforce the
+  backoff and the dead state.
 - A `DeadLetterQueue` driven port and a PostgreSQL adapter that lists,
-  requeues, and discards dead jobs, with guarded state transitions, requeue
-  provenance, and restoration of the retry budget on requeue.
+  requeues, and discards dead jobs, with guarded state transitions, distinct
+  fatal and exhausted reasons, requeue provenance, and restoration of the retry
+  budget on requeue.
 - Enqueue-side persistence of the policy's `max_attempts` on every job, and
   retry and dead-letter event counters through dedicated `RouteQueueMetrics`
   methods.
@@ -226,8 +233,11 @@ Terms used in this plan:
 
 - "Dead-letter" a job: stop retrying it and park it in a state the storage
   fetcher can never redeliver, for operator inspection and optional requeue.
-  Dead rows are `Killed` (retry budget exhausted) or `Failed` with
-  `attempts >= max_attempts` (fatal failure, Decision D4).
+  Dead rows satisfy
+  `status = 'Killed' OR (status = 'Failed' AND attempts >= max_attempts)`. If
+  D15 is approved, its namespaced metadata key records whether a
+  wrapper-originated terminal failure was fatal or exhausted; legacy rows
+  without that key use the status-based fallback (Decision D4).
 - "Fatal error": a job-execution failure that retrying cannot fix (for
   example, a payload that fails decoding or validation). It is classified so
   the job dead-letters immediately rather than burning attempts.
@@ -286,15 +296,15 @@ Hard invariants. Violation requires escalation, not workarounds.
   statuses, functions), and do not add Diesel migrations for Apalis tables. The
   scheduling and dead-letter adapters may *write* existing columns (`run_at`,
   `max_attempts`, `status`, `attempts`, `last_result`) through guarded
-  statements. Proposed D15 would add a write to the existing JSONB `metadata`
-  column for the namespaced requeue counter while preserving every other key.
-  That exceeds the approved write allow-list and needs the user's approval;
-  until then, it is not implementation permission. One additive exception is
-  pre-authorized: the dead-letter adapter may create a partial index supporting
-  the dead-jobs predicate, through the adapter's setup path alongside
-  `PostgresStorage::setup`, if and only if milestone EP-M3's `EXPLAIN` check
-  shows a sequential scan (Decision D6). A separate dead-letter table is out of
-  scope (Decision D3).
+  statements. Proposed D15 would add guarded writes to the existing JSONB
+  `metadata` column for the namespaced requeue counter and terminal reason,
+  preserving every other key. Those writes exceed the approved write allow-list
+  and need the user's approval; until then, they are not implementation
+  permission. One additive exception is pre-authorized: the dead-letter adapter
+  may create a partial index supporting the dead-jobs predicate, through the
+  adapter's setup path alongside `PostgresStorage::setup`, if and only if
+  milestone EP-M3's `EXPLAIN` check shows a sequential scan (Decision D6). A
+  separate dead-letter table is out of scope (Decision D3).
 - Dead-letter state transitions must be guarded compare-and-swap updates.
   `requeue` and `discard` take effect only when the row currently satisfies the
   dead predicate, and an ineffective update surfaces as a port error, never as
@@ -536,10 +546,9 @@ pub struct DeadJobId(String);
 /// Why a job is dead.
 #[non_exhaustive]
 pub enum DeadReason {
-    /// The retry budget was exhausted (`Killed` row).
+    /// A retryable failure reached this queue's retry-policy limit.
     Exhausted,
-    /// A fatal error short-circuited retries (`Failed` row whose
-    /// `max_attempts` was shrunk to its attempt count).
+    /// A fatal error short-circuited retries.
     Fatal,
 }
 
@@ -593,7 +602,9 @@ D12).
 
 - The dead predicate is
   `status = 'Killed' OR (status = 'Failed' AND attempts >= max_attempts)`.
-  `DeadReason` is `Exhausted` for `Killed` rows and `Fatal` for `Failed` rows.
+- For wrapper-originated terminal failures, `DeadReason` comes from a
+  namespaced JSONB metadata key if D15 is approved. Legacy dead rows without a
+  recognized key fall back to `Killed` as `Exhausted` and `Failed` as `Fatal`.
 - `list_dead` orders by `done_at DESC` and applies `LIMIT`.
 - `requeue` reads the row's `job_type` to look up its budget (returning
   `UnknownQueue` if none is configured), then executes one guarded update. The
@@ -603,8 +614,11 @@ D12).
   proposed D15, the same guarded statement also atomically increments
   `metadata['wildside.retry.requeue_count']`. Under that design, the counter
   starts at zero when absent, is bounded to `u32`, and preserves all other
-  metadata keys. Never store provenance in `last_result`: Apalis replaces that
-  field on the next acknowledgement. Zero rows affected maps to `NotDead`.
+  metadata keys. It also removes `metadata['wildside.retry.dead_reason']` so a
+  requeued row cannot expose a stale terminal reason. The terminal handler
+  writes `fatal` or `exhausted` to that key before the ack. Never store either
+  value in `last_result`: Apalis replaces that field on the next
+  acknowledgement. Zero rows affected maps to `NotDead`.
 - `discard` is a guarded `DELETE ... RETURNING`, logging the returned row
   (without payload) for forensics.
 
@@ -617,8 +631,10 @@ wrapper):
   `WHERE id = $task_id AND lock_by = $worker AND status = 'Running'`:
   - `schedule_retry(task_id, worker, delay)`:
     `UPDATE apalis.jobs SET run_at = now() + $delay`.
-  - `mark_fatal(task_id, worker, attempt)`:
-    `UPDATE apalis.jobs SET max_attempts = $attempt`.
+  - `record_terminal_failure(task_id, worker, attempt, reason, shrink_limit)`:
+    conditionally sets `max_attempts = $attempt` and writes the reason to
+    `metadata['wildside.retry.dead_reason']` in one guarded statement if D15 is
+    approved. Without D15, this method is not authorized; do not implement it.
   Each returns whether exactly one row was updated.
 - The handler wrapper is a `tower::Service<PgTask<Value>>` passed to
   `WorkerBuilder::build`. A plain service is accepted through the blanket
@@ -635,16 +651,17 @@ wrapper):
      from `rand`.
   3. On `Retry { delay }`: calls `schedule_retry` and records the retry
      counter.
-  4. On `DeadLetter` with `attempt < context max_attempts` (a fatal error, or
-     a row persisted with a larger budget than the current policy): calls
-     `mark_fatal(attempt)` and records the dead-letter counter. The ack will
-     write `Failed` with `attempts = attempt = max_attempts`, which is
-     permanently unfetchable.
-  5. On `DeadLetter` with `attempt >= context max_attempts`: writes nothing
-     (the ack writes `Killed`) and records the dead-letter counter.
-  6. Emits one structured log line (job id, job type, attempt, error kind,
-     decision; never the payload), then returns the bounded failure message
-     as the error, so the ack persists it in `last_result`.
+  4. On `DeadLetter`, chooses reason `Fatal` for a fatal failure and
+     `Exhausted` for a retryable failure at the policy limit. If
+     `attempt < context max_attempts`, it must shrink the persisted limit so
+     the ack writes an unfetchable `Failed` row; otherwise the ack writes
+     `Killed`. If D15 is approved, the same guarded terminal update also writes
+     the namespaced reason key before the ack. Without D15, implementation
+     remains blocked because status alone cannot preserve the reason for all
+     cases. The wrapper records the matching metric label and returns the
+     bounded plain failure message, leaving Apalis's `last_result` unchanged.
+  5. Emits one structured log line (job id, job type, attempt, error kind,
+     decision; never the payload).
 - Enqueue side: `ApalisPostgresProvider::push_job` switches from
   `push(payload)` to `push_task` with a `PgContext` built via
   `with_max_attempts(policy.max_attempts())`. One `JobRetryPolicy` is carried
@@ -732,13 +749,17 @@ Obligations:
 - Obligation V3b (wrapper decision table): the handler wrapper maps every
   combination of (classification, `Attempt::current()` relative to the policy
   bound, `Attempt::current()` relative to the in-memory context `max_attempts`)
-  to exactly one action: `schedule_retry`, `mark_fatal`, or no write. It also
-  records the matching metric label. Method: `rstest` parameterized unit tests
-  of the wrapper's decision function (factored out as a pure adapter-local
-  function), with the scheduler behind a test double. Rationale: an off-by-one
-  here silently grants or steals an attempt or leaves a fatal row re-fetchable,
-  and no other obligation localizes it. Non-vacuity: shifting either comparison
-  by one must fail at least one case.
+  to exactly one action: `schedule_retry`, record a terminal outcome (and
+  shrink the persisted attempt limit when required), or make no scheduling
+  write. It also records the matching retry/dead-letter metric label and a
+  terminal reason (`Fatal` for fatal failures, `Exhausted` for retryable
+  failures at the policy bound). If D15 is approved, it persists that reason in
+  the namespaced metadata key. Method: `rstest` parameterized unit tests of the
+  wrapper's decision function (factored out as a pure adapter-local function),
+  with the scheduler behind a test double. Rationale: an off-by-one here
+  silently grants or steals an attempt, mislabels the dead reason, or leaves a
+  fatal row re-fetchable. Non-vacuity: shifting either comparison by one must
+  fail at least one case.
 - Obligation V4 (lifetime retry bound with durable backoff): a job enqueued
   through the adapter carries the policy's `max_attempts` in
   `apalis.jobs.max_attempts`. A handler that always fails retryably runs exactly
@@ -749,36 +770,44 @@ Obligations:
   magnitude). Method: behavioural test (`rstest-bdd`) against embedded
   PostgreSQL with the capped harness, asserting the observed run count, per-run
   `Attempt::current()` values (1, 2, …), the row's `attempts` and `status`, the
-  `run_at` ordering, and that continued polling delivers nothing. Non-vacuity:
-  the scenario asserts that the handler ran more than once (a policy that never
-  retries fails) and that extra polling after death yields no runs (an
-  unbounded loop fails). A control scenario with a succeeding handler must end
-  `Done` with one attempt.
+  `run_at` ordering, and that continued polling delivers nothing. If D15 is
+  approved, it also verifies `DeadReason::Exhausted` when a pre-existing row's
+  stored `max_attempts` exceeds the current policy limit and the policy-limit
+  failure is stored as `Failed`; the reason key in metadata distinguishes it
+  from a fatal failure. Non-vacuity: the scenarios assert that the handler ran
+  more than once (a policy that never retries fails) and that extra polling
+  after death yields no runs (an unbounded loop fails). A control scenario with
+  a succeeding handler must end `Done` with one attempt.
 - Obligation V5 (fatal short-circuit is storage-dead): a handler returning
-  a fatal failure runs exactly once. The resulting row is `Failed` with
-  `attempts >= max_attempts`, satisfies the dead predicate, and is never
-  redelivered by continued polling, which is a stronger claim than "the harness
-  stopped polling". Method: behavioural test as V4 with a fatal-classified
-  failure, including a post-failure polling phase. Non-vacuity: misclassifying
-  fatal as retryable fails the run-count assertion, and removing `mark_fatal`
-  fails the redelivery assertion.
+  a fatal failure runs exactly once. The resulting row satisfies the dead
+  predicate and is never redelivered by continued polling, which is a stronger
+  claim than "the harness stopped polling". The listing reports
+  `DeadReason::Fatal` even when Apalis status and attempts alone would imply
+  exhaustion. If D15 is approved, the metadata reason key preserves that
+  distinction. Method: behavioural test as V4 with a fatal-classified failure,
+  including a post-failure polling phase and a dead-list assertion.
+  Non-vacuity: misclassifying fatal as retryable fails the run-count and reason
+  assertions, and omitting the terminal limit update when required fails the
+  redelivery assertion.
 - Obligation V6 (dead-letter round trip, guards, and budget restoration): a
   dead job appears in `DeadLetterQueue::list_dead` with its reason, attempt
-  count, bounded last error, and requeue count. `requeue` makes it run again
-  and succeed (proven by observing execution, not a status flip), increments
-  its provenance count, and restores `max_attempts` to the queue's configured
-  budget. If D15 is approved, after the successful acknowledgement a job-row
-  query verifies the metadata count because a `Done` row is excluded from
-  `list_dead`. A requeued *fatal* job that then fails retryably must get the
-  full budget again and, if D15 is approved, its dead listing must retain the
-  requeue count across the later acknowledgement. `discard` removes the row.
-  Requeuing a live or absent job returns `NotDead` and changes nothing, and
-  requeuing a dead row from an unconfigured queue returns `UnknownQueue`.
-  Listing ignores live jobs. Method: behavioural test (`rstest-bdd`) with
-  embedded PostgreSQL. Non-vacuity: listing before any failure must be empty (a
-  witness that the query filters live jobs), the guard scenarios are negative
-  controls by construction, and omitting the `max_attempts` restoration fails
-  the requeued-fatal scenario.
+  count, bounded last error, and requeue count. If D15 is approved, unit tests
+  cover the metadata reason key and legacy status fallback. `requeue` makes it
+  run again and succeed (proven by observing execution, not a status flip),
+  increments its provenance count, and restores `max_attempts` to the queue's
+  configured budget. If D15 is approved, after the successful acknowledgement a
+  job-row query verifies the metadata count because a `Done` row is excluded
+  from `list_dead`. A requeued *fatal* job that then fails retryably must get
+  the full budget again and, if D15 is approved, its dead listing must retain
+  the requeue count across the later acknowledgement. D15 also clears the prior
+  dead-reason key at requeue and sets it again on the next terminal failure.
+  `discard` removes the row. Requeuing a live or absent job returns `NotDead`
+  and changes nothing, and requeuing a dead row from an unconfigured queue
+  returns `UnknownQueue`. Listing ignores live jobs. Method: behavioural test
+  (`rstest-bdd`) with embedded PostgreSQL. Non-vacuity: listing before any
+  failure must be empty (a witness that the query filters live jobs), the guard
+  scenarios are negative controls by construction, and omitting the
+  `max_attempts` restoration fails the requeued-fatal scenario.
 - Obligation V7 (snapshot stability): V1 job envelope snapshots from 5.2.2
   are byte-identical after this plan, and any new operator-facing rendering of
   dead jobs is snapshot-pinned with `insta`. Method: re-run the existing
@@ -792,12 +821,15 @@ Obligations:
   `max_attempts`, and `metadata` untouched; and a fetched task's `Attempt`
   starts at the persisted `attempts`. Method: cheap embedded-PostgreSQL
   integration tests that promote EP-M0's probe assertions into permanent tests.
-  Rationale: issue #550 or any other pin change must fail tests rather than
-  silently corrupt retry or dead-letter behaviour, and ADR-002 and ADR-003 list
-  these assumptions with an "on 1.0 upgrade, re-verify" note. Non-vacuity: each
-  canary asserts a positive and a negative case (fetchable versus not
-  fetchable), so a vacuously green canary would require both sides to break in
-  tandem.
+  If D15 is approved, they also assert that a terminal reason written to
+  `metadata` survives the Apalis acknowledgement and that requeue clears that
+  key while preserving all unrelated metadata. The ack continues to store the
+  plain bounded error string in `last_result`. Rationale: issue #550 or any
+  other pin change must fail tests rather than silently corrupt retry or
+  dead-letter behaviour, and ADR-002 and ADR-003 list these assumptions with an
+  "on 1.0 upgrade, re-verify" note. Non-vacuity: each canary asserts a positive
+  and a negative case (fetchable versus not fetchable), so a vacuously green
+  canary would require both sides to break in tandem.
 - Obligation V9 (no in-process retry middleware): no production or test
   code installs a retry layer on an Apalis worker, and `backend/Cargo.toml` has
   no `apalis` facade dependency. Method: a conformance check recorded at each
@@ -885,7 +917,7 @@ Plateau: domain policy fully tested and inert. Nothing consumes it yet, which
 is coherent because it is a pure library addition. Gates via `scrutineer`;
 commit.
 
-### Milestone EP-M2 — durable retry wiring, bounded attempts, fatal dead-lettering
+### Milestone EP-M2 — durable retry wiring, bounded attempts, terminal dead-lettering
 
 Red: add the BDD feature `backend/tests/features/queue_retry_policy.feature`
 (embedded below) and step bindings in
@@ -898,13 +930,13 @@ tests. The scenarios fail because no wiring exists.
 
 Green, in this order:
 
-1. `PostgresRetryScheduler` with the two guarded statements.
-2. The wrapper's pure decision function (V3b) and the async wrapper around it,
-   including jitter sampling, payload-free structured logging, and the bounded
-   error message returned to the ack.
-3. Enqueue-side `max_attempts` persistence through `push_task` with a
+  1. `PostgresRetryScheduler` with the two guarded statements.
+  2. The wrapper's pure decision function (V3b) and the async wrapper around it,
+  including jitter sampling, payload-free structured logging, and the bounded
+  plain error message returned to the ack when a job is dead.
+  3. Enqueue-side `max_attempts` persistence through `push_task` with a
    `PgContext` built from the adapter's policy (D7).
-4. `observe_retry` and `observe_dead_letter` on `RouteQueueMetrics`, with
+  4. `observe_retry` and `observe_dead_letter` on `RouteQueueMetrics`, with
    Prometheus adapter counters, keeping `observe_enqueue` and its latency
    labels restricted to enqueue outcomes (D8).
 
@@ -940,6 +972,16 @@ Feature: Queue retry policy with durable exponential backoff
     And the job is recorded as dead because of a fatal error
     And further polling delivers no more runs
 
+  Scenario: Policy exhaustion keeps its reason when the stored limit is higher
+    Given a pre-existing job permits 25 attempts
+    And the current queue policy permits 3 attempts
+    And its handler always fails with a retryable error
+    When the worker processes the queue
+    Then the handler runs exactly three times in total
+    And the row is stored as Failed and satisfies the dead predicate
+    And the dead listing reports Exhausted rather than Fatal
+    And further polling delivers no more runs
+
   Scenario: An enqueued job carries the queue's retry budget
     Given a queue with a retry policy of 5 attempts
     When a job is enqueued through the route queue adapter
@@ -949,9 +991,10 @@ Feature: Queue retry policy with durable exponential backoff
 Plateau: the retry policy is enforced end to end under test. Production
 behaviour is unchanged except that enqueued rows now carry the bounded
 `max_attempts`. Persisted-format note: this only tightens the existing column's
-per-row value, and deployed rows with the default 25 remain valid; the wrapper's
-`mark_fatal` path also dead-letters such rows once the policy bound is
-reached. Gates; commit.
+per-row value, and deployed rows with the default 25 remain valid; the
+wrapper's terminal path also dead-letters such rows once the policy bound is
+reached and stores the reason in the namespaced metadata key if D15 is
+approved. The raw `last_result` error remains unchanged. Gates; commit.
 
 ### Milestone EP-M3 — dead-letter port and PostgreSQL adapter
 
@@ -965,8 +1008,8 @@ Green: define the `DeadLetterQueue` port, then implement
 
 - the guarded compare-and-swap updates;
 - budget restoration from `RequeueBudgets` (D12);
-- if D15 is approved, durable requeue provenance in the namespaced JSONB
-  metadata key, which survives Apalis acknowledgements;
+- if D15 is approved, durable requeue provenance and terminal reasons in
+  namespaced JSONB metadata keys, which survive Apalis acknowledgements;
 - discard-as-delete (D5);
 - ordered and limited listing;
 - a size-bounded, payload-free `last_error`.
@@ -1074,16 +1117,18 @@ At each milestone boundary, check that:
 - AXIOM-PIN holds (`cargo tree` shows only the pinned Apalis versions);
 - there is no unapproved dependency, public-interface, or persisted-format
   change beyond the `max_attempts` tightening, the guarded scheduling writes,
-  and (if triggered) the D6 partial index named in this plan;
+  and (if triggered) the D6 partial index named in this plan. If the user
+  approves D15, its only additional persisted values are the two namespaced
+  metadata keys described in that decision;
 - the V1 envelope snapshots are unchanged;
 - the trace links in `Conformance basis` are current.
 
-Compatibility decision: none required. All touched APIs are pre-1.0,
-application-internal surfaces, and no aliases, shims, or dual implementations
-are permitted. The persisted-format question is confined to `apalis.jobs`
-values that this plan writes through existing columns (`max_attempts`,
-`run_at`, and the requeue reset) and to the optional additive partial index
-(D6).
+Compatibility decision: no public API compatibility change is required. All
+touched APIs are pre-1.0 and application-internal; no aliases, shims, or dual
+implementations are permitted. D15 would extend the persisted `metadata` value
+format beyond the currently approved `max_attempts`, `run_at`, and requeue
+reset writes. It remains blocked until explicit user approval; the optional
+additive partial index is separately pre-authorized by D6.
 
 ## Concrete steps
 
@@ -1238,31 +1283,44 @@ the two caret requirements.
   0.9.1 against `origin/main` (`380e7e8`) through `bff8ada`, covering all seven
   changed paths. The five findings comprised one style issue, one stale date
   concern, and three substantive findings (including two duplicates). The date
-  concern is invalid because the environment date, commit timestamp, and gate
-  records all establish 2026-10-23. The `list_dead` scenario could not observe a
-  `Done` row and now checks the row's metadata after acknowledgement; two
-  duplicate findings correctly identified that Apalis overwrites `last_result`
-  on acknowledgement. A namespaced JSONB metadata counter survives that ack,
-  but writing `metadata` exceeds the approved column allow-list. Proposed D15
-  records that deviation, and the plan is `BLOCKED` pending the user's
-  decision. The second-person style finding is also corrected. Review evidence:
+  concern compared its UTC date (2026-10-22) with this plan's Europe/Berlin
+  date (2026-10-23); the M0 gates completed by 01:03+02 and the review began at
+  01:08+02. The `list_dead` scenario could not observe a `Done` row and now
+  checks the row's metadata after acknowledgement; two duplicate findings
+  correctly identified that Apalis overwrites `last_result` on acknowledgement.
+  A namespaced JSONB metadata counter survives that ack, but writing `metadata`
+  exceeds the approved column allow-list. Proposed D15 records that deviation,
+  and the plan is `BLOCKED` pending the user's decision. The second-person
+  style finding is also corrected. Review evidence:
   `/tmp/wildside-epm0-coderabbit-20261023-JRwEDL/review.out`.
 - [x] (2026-10-23) The D15 reassessment completed at CodeRabbit CLI 0.9.1
   against `origin/main` (`380e7e8`) through `096c679`, reviewing all seven
   changed paths. It found that the Apalis-version paragraph still described the
   historical caret requirements; that text now distinguishes the exact current
-  pins from the earlier requirements. Its second date finding is invalid for
-  the same evidence above: the environment, commit, and gate records establish
-  2026-10-23, not 2026-10-22. Review evidence:
-  `/tmp/wildside-epm0-d15-reassessment-p6Rhb8/review.out`.
+  pins from the earlier requirements. Its date concern has the same timezone
+  cause: the review ran at 01:25–01:28+02 on 2026-10-23, while the UTC date was
+  still 2026-10-22; the reviewed commit predates it at 01:23+02. Review
+  evidence: `/tmp/wildside-epm0-d15-reassessment-p6Rhb8/review.out`.
 - [x] (2026-10-23) The final status-only ExecPlan update was formatted with
   `make fmt` and passed `check-fmt`, `markdownlint`, `nixie`, and `spelling`.
   Logs: `/tmp/wildside-epm0-plan-format-20261023.out` and
   `/tmp/wildside-epm0-finaldoc-{check-fmt,markdownlint,nixie,spelling}.out`.
+- [x] (2026-10-23 Europe/Berlin) The final M0 CodeRabbit review at CLI 0.9.1
+  covered the committed range from `origin/main` (`380e7e8`) through `2be12e4`
+  and all seven changed paths. Its major finding was valid: a retryable failure
+  at a lower current policy bound can become an unfetchable `Failed` row and
+  must not be reported as `Fatal`. The proposed D15 metadata key now preserves
+  that reason alongside the requeue counter; V4–V6 and V8 specify the related
+  assertions if approved. The date finding is a UTC/local date boundary: the
+  review ran 01:32–01:37+02 on October 23, while its UTC date was October 22,
+  after commit `2be12e4` at 01:31+02. Review evidence:
+  `/tmp/wildside-epm0-d15-final-review-a3rPku/review.out`. EP-M1 remains
+  blocked pending approval of the two D15 metadata writes. The raw
+  `last_result` format remains unchanged.
 - [x] EP-M0 baseline gates, exact pins (AXIOM-PIN), AXIOM-DURABLE runtime
   probe, and AXIOM-ACK source contract.
 - [ ] EP-M1 domain retry policy and classification.
-- [ ] EP-M2 durable retry wiring, bounded attempts, fatal dead-lettering.
+- [ ] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
@@ -1338,6 +1396,16 @@ the two caret requirements.
   both the task ID and worker lock. The durable probe separately observed the
   terminal rows produced by these rules. Impact: AXIOM-ACK is confirmed at the
   pinned version; the V8 canaries will preserve this contract in EP-M2.
+
+- Observation (2026-10-23 CodeRabbit review): when an existing row's stored
+  attempt limit exceeds the current queue policy, a retryable failure at the
+  policy limit is made unfetchable by shrinking the stored limit, but the ack
+  can persist it as `Failed` because the hydrated in-memory limit is still
+  higher. Status-based mapping then labels it `Fatal`. This is distinct from a
+  fatal failure at the same attempt and cannot always be recovered from status
+  or attempts. Proposed D15 adds a namespaced metadata reason key alongside
+  requeue count; until approved, the plan remains blocked. Evidence:
+  `/tmp/wildside-epm0-d15-final-review-a3rPku/review.out`.
 
 - Observation: apalis-postgres 1.0.0-rc.6 does not persist abort errors as
   `Killed` (the `calculate_status` arm is commented out upstream), so a fatal
@@ -1428,10 +1496,10 @@ the two caret requirements.
   (`apalis-core` `src/task_fn/mod.rs:239`), so the wrapper can read `parts.ctx`
   directly. `PgContext::with_max_attempts` exists for the enqueue side, and
   `rand` 0.8 is already a dependency for jitter. One gap needed closing: the
-  fatal path shrinks `max_attempts`, so `requeue` must restore it (Decision
-  D12). Apalis 1.0.0's `get_jobs` also still filters on `run_at`, so D11 is
-  expected to survive issue #550. Note, however, that 1.0.0 requires `sqlx`
-  0.9, and the backend is on 0.8. Evidence: cached rc sources under
+  terminal path may shrink `max_attempts`, so `requeue` must restore it
+  (Decision D12). Apalis 1.0.0's `get_jobs` also still filters on `run_at`, so
+  D11 is expected to survive issue #550. Note, however, that 1.0.0 requires
+  `sqlx` 0.9, and the backend is on 0.8. Evidence: cached rc sources under
   `~/.cargo/registry/src/` and the 1.0.0 crate tarballs.
 
 ## Decision log
@@ -1446,9 +1514,9 @@ the two caret requirements.
 - Operational decision (2026-10-23): AXIOM-DURABLE is confirmed at the exact
   Apalis pins, including the persisted delay and both terminal-state paths.
   AXIOM-PIN and AXIOM-ACK are also confirmed. The complete M0 gate sequence is
-  green. The completed milestone CLI review identified an unresolved
-  provenance-storage deviation. EP-M1 remains blocked pending the user's
-  decision; proposed D15 would expand the approved write allow-list.
+  green. The completed milestone CLI review identified an unresolved provenance
+  and terminal-reason storage deviation. EP-M1 remains blocked pending the
+  user's decision; proposed D15 would expand the approved write allow-list.
 
 - D1 — *Superseded on 2026-10-17 by D11 and D14.* Adopt the upstream Apalis
   tower retry machinery, with a custom `tower::retry::Policy` that delegates to
@@ -1473,28 +1541,29 @@ the two caret requirements.
   wait approaches `TOTAL_BACKOFF_BUDGET`, or if 5.3.1 load tests observe
   worker-slot exhaustion during backoff. Date/author: 2026-08-16, planning
   agent.
-- D3 — Dead letters are rows in `apalis.jobs` (status `Killed` or
-  exhausted `Failed`), surfaced through a domain `DeadLetterQueue` port; no
-  separate table. Dead-letter surfaces never expose raw payloads (privacy
-  stance inherited from `decode_job`); operators correlate via job id, job
-  type, and the bounded last-error text. Rationale: matches Apalis's model and
-  graphile-worker prior art; avoids schema divergence from library-managed
+- D3 — Dead letters are rows in `apalis.jobs` (`Killed`, or `Failed` with
+  `attempts >= max_attempts`), surfaced through a domain `DeadLetterQueue`
+  port; no separate table. Dead-letter surfaces never expose raw payloads
+  (privacy stance inherited from `decode_job`); operators correlate via job id,
+  job type, and the bounded last-error text. Rationale: matches Apalis's model
+  and graphile-worker prior art; avoids schema divergence from library-managed
   tables; the port isolates the representation so a future table swap stays
   adapter-local. Date/author: 2026-08-16, planning agent.
-- D4 — Fatal errors are made dead at the storage level by our wiring, not
+- D4 — Terminal errors are made dead at the storage level by our wiring, not
   by relying on Apalis abort persistence. *Mechanism settled on 2026-10-17
   under D11: before the ack, the handler wrapper shrinks the locked row's
-  `max_attempts` to the current attempt, so the ack's `Failed` row satisfies
+  `max_attempts` to the current attempt when its in-memory limit has not
+  already been reached, so the ack's `Failed` row satisfies
   `attempts >= max_attempts` and is never fetched. The alternatives sketched
   below (setting `Killed` directly, or driving the attempt counter) are
   rejected: the ack overwrites `status`, and inflating `attempts` would
   misreport how often the job ran.* Original rationale: the abort-to-`Killed`
-  path is incomplete at rc.6, and a fatal `Failed` row with spare attempts
+  path is incomplete at rc.6, and a terminal `Failed` row with spare attempts
   would be re-delivered by the storage fetcher. The wiring must perform a
-  guarded kill (or drive the attempt counter to exhaustion, per the
-  AXIOM-ATTEMPT probe); either way the dead predicate holds and re-delivery is
-  impossible. This also keeps behaviour stable if 1.0-final restores the abort
-  arm. Date/author: 2026-08-16, planning agent.
+  guarded retry-limit shrink (or drive the attempt counter to exhaustion, per
+  the AXIOM-ATTEMPT probe); either way the dead predicate holds and re-delivery
+  is impossible. This also keeps behaviour stable if 1.0-final restores the
+  abort arm. Date/author: 2026-08-16, planning agent.
 - D5 — `discard` deletes the dead row (guarded, `RETURNING`, logged
   without payload). Rationale: the earlier marker-based sketch was
   self-contradictory — a discarded-but-`Killed` row would still match the dead
@@ -1581,9 +1650,9 @@ the two caret requirements.
   `JobRetryPolicy`, and it refuses with `UnknownQueue` rather than guess. A
   budget lookup keeps the port signature operator-friendly. Keep the queue's
   original budget out of metadata: the column is Apalis-managed and its shape
-  may change in 1.0.0. Proposed D15 concerns only the distinct requeue count;
-  it would require the V8 upgrade canary to verify that key. Date/author:
-  2026-10-17, planning agent; clarified 2026-10-23.
+  may change in 1.0.0. Proposed D15 concerns the distinct requeue count and
+  terminal reason; V8 must verify both keys before the 1.0.0 upgrade.
+  Date/author: 2026-10-17, planning agent; clarified 2026-10-23.
 - D13 — Replace `TOTAL_BACKOFF_BUDGET` with a per-delay ceiling,
   `MAX_BACKOFF_DELAY` (one hour). Rationale: the total budget existed to bound
   worker-slot occupancy and to stay below the orphan-recovery threshold. Under
@@ -1595,35 +1664,49 @@ the two caret requirements.
   fetcher. The V9 conformance check enforces this rule, and ADR-002 records it.
   Issue #550 may revisit it under 1.0.0's changed middleware order, but only
   with evidence. Date/author: 2026-10-17, planning agent.
-- Proposed D15 (awaiting user approval) — Store the bounded requeue count
-  in the existing Apalis JSONB `metadata` field under
-  `wildside.retry.requeue_count`, incremented in the same guarded update that
-  requeues a dead job. Rationale: Apalis replaces `last_result` on every
-  acknowledgement, so a marker there disappears after the next run. The pinned
-  rc.8 hydrator carries metadata into `PgContext`, and its ack leaves the
-  column untouched. This adds no schema object and preserves the ban on a
-  separate dead-letter table (D3). The count is distinct from the queue's retry
-  budget, which remains sourced from `RequeueBudgets` (D12). This exceeds the
-  approved writable-column list, so it is a proposed mechanism change and is
-  not implementation permission. If accepted, treat the metadata key as an
-  rc-coupled contract and re-verify it with V8 before the 1.0.0 upgrade (#550).
-  Date/author: 2026-10-23, implementation review.
+- Proposed D15 (awaiting user approval) — Use the existing Apalis JSONB
+  `metadata` field for two namespaced keys: `wildside.retry.requeue_count` and
+  `wildside.retry.dead_reason`. A guarded requeue increments the bounded
+  counter, preserves unrelated metadata, and removes the prior dead reason. A
+  guarded terminal-failure update writes `fatal` or `exhausted` to the reason
+  key and, when needed, shrinks `max_attempts` in the same statement. This lets
+  `list_dead` distinguish a fatal failure from policy exhaustion even when both
+  become an unfetchable `Failed` row. Rows without the key use the legacy
+  status fallback. Rationale: Apalis replaces `last_result` on every
+  acknowledgement, so requeue provenance there disappears after the next run;
+  status and attempt counts alone cannot distinguish all terminal reasons.
+  Keeping both values in namespaced metadata preserves the existing bounded
+  plain error string in `last_result`. The pinned rc.8 hydrator carries
+  metadata into `PgContext`, and its ack leaves the column untouched. This adds
+  no schema object and preserves the ban on a separate dead-letter table (D3).
+  The retry budget remains sourced from `RequeueBudgets` (D12), never metadata.
+  These writes exceed the approved writable-column list, so D15 is a proposed
+  mechanism change and not implementation permission. If accepted, preserve all
+  unrelated keys, initialize an absent counter to zero, validate it as `u32`,
+  and treat both keys as rc-coupled contracts covered by V8 before the 1.0.0
+  upgrade (#550). An application-owned envelope in `last_result` was considered
+  and rejected because this plan forbids an unapproved persisted-format change.
+  Date/author: 2026-10-23 Europe/Berlin, implementation review.
 
 ## Outcomes & retrospective
 
 EP-M0 implementation and deterministic gates are complete on the 2026-10-23
-candidate: the pinned dependency graph, acknowledgement source contract, and
-durable scheduling probe are confirmed. The local M0 CLI review completed and
-exposed a valid provenance issue. `list_dead` cannot contain a job after its
-successful acknowledgement, and `last_result` cannot preserve a requeue marker
-across another acknowledgement. The plan now describes a proposed JSONB
-metadata counter, but that write exceeds the approved column allow-list. The
-plan is `BLOCKED` until the user accepts or rejects this mechanism deviation;
-EP-M1 must not begin before then. The review's date finding was invalid: the
-environment and commit timestamps both establish 2026-10-23. Before marking the
-plan `COMPLETE`, reconcile the architecture document's "Background Job
-Execution" prose with the implemented mechanism and confirm no upstream
-assumption in `Conformance basis` was falsified.
+Europe/Berlin candidate: the pinned dependency graph, acknowledgement source
+contract, and durable scheduling probe are confirmed. The local M0 CLI review
+completed and exposed two related persistence needs. `list_dead` cannot contain
+a job after its successful acknowledgement, and `last_result` cannot preserve a
+requeue marker across another acknowledgement. Apalis status and attempt counts
+also cannot distinguish a fatal error from policy exhaustion when the stored
+attempt limit exceeds the current policy. Proposed D15 records both values in
+namespaced JSONB metadata, preserving the existing `last_result` format. That
+write exceeds the approved column allow-list. The plan is `BLOCKED` until the
+user accepts or rejects D15; EP-M1 must not begin before then. The apparent
+date discrepancy came from comparing UTC review metadata (`2026-10-22`) with
+Europe/Berlin plan dates (`2026-10-23`); the recorded gate and commit
+timestamps precede the reviews. Before marking the plan `COMPLETE`, reconcile
+the architecture document's "Background Job Execution" prose with the
+implemented mechanism and confirm no upstream assumption in `Conformance basis`
+was falsified.
 
 ## Revision note
 
@@ -1695,18 +1778,36 @@ storage-scheduled backoff). The plan is rewritten around them, and a
 - Issue [#550](https://github.com/leynos/wildside/issues/550) tracks the
   Apalis 1.0.0 upgrade.
 
-The next step is EP-M0.
+The next step is to resolve proposed D15. After approval, begin EP-M1; if it is
+rejected, revise the design and obtain approval before implementation.
 
-2026-10-23: reconciled the M0 local CodeRabbit findings. Corrected the
-post-acknowledgement provenance assertion, marked the stale date finding
-invalid with current timestamp evidence, and fixed the style finding. Apalis
-metadata is a technically viable location for the requeue counter, but its
+2026-10-23 Europe/Berlin: reconciled the M0 local CodeRabbit findings.
+Corrected the post-acknowledgement provenance assertion, clarified that the
+review's October 22 UTC date and the plan's October 23 Europe/Berlin date refer
+to the same period, and fixed the style finding. Apalis metadata is a
+technically viable location for the requeue counter and dead reason, but its
 write is outside the approved column allow-list. Proposed D15 is explicitly
 pending user approval, the accepted invariant remains unchanged, and the plan
 is blocked before EP-M1.
 
-2026-10-23: the D15 reassessment corrected the stale current-version paragraph
-to state the exact rc.9/rc.8 manifest pins and identify the caret requirements
-as historical. Its October 22 date finding is invalid: the environment, commit,
-and gate records show October 23. The candidate awaits refreshed documentation
-gates and CLI reassessment.
+2026-10-23 Europe/Berlin: the D15 reassessment corrected the stale
+current-version paragraph to state the exact rc.9/rc.8 manifest pins and
+identify the caret requirements as historical. Its October 22 UTC date and the
+plan's October 23 local date are consistent; the review completed after the
+commit it assessed. The candidate awaits refreshed documentation gates and CLI
+reassessment.
+
+2026-10-23 Europe/Berlin: the final D15 reassessment found that status alone
+cannot distinguish policy exhaustion from a fatal error when the stored Apalis
+limit exceeds the current policy. Proposed D15 now records the reason in
+`wildside.retry.dead_reason` alongside the requeue counter; `last_result`
+remains unchanged. The requested PR #457 rebase onto `origin/main` was an
+up-to-date no-op: the branch's first commit already directly followed the
+target, so no commits replayed and no conflicts arose. The post-rebase
+candidate passed `make check-fmt`, `make test` (1,851 Nextest passed, four
+skipped, plus the compile-fail, frontend, workflow-contract, and Python suites),
+`make typecheck`, `make lint`, `make markdownlint`, `make nixie`, and
+`make spelling`. The local CLI reassessment remains pending. D15 requires
+explicit user approval before any implementation milestone begins. Its October
+22 review date is UTC; the recorded commits and review use Europe/Berlin
+(`+02:00`) and are ordered by their exact timestamps.
