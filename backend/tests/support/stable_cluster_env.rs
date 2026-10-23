@@ -138,7 +138,7 @@ pub(crate) const DEFAULT_PG_PASSWORD: &str = "wildside_embedded_test";
 /// otherwise yields [`DEFAULT_PG_PASSWORD`]. Nothing here writes to the
 /// process. The value that the embedded PostgreSQL layer itself reads is
 /// composed by the test runner — see the `[env]` table in
-/// `.config/nextest.toml`, which supplies `PG_PASSWORD` and
+/// `.cargo/config.toml`, which supplies `PG_PASSWORD` and
 /// `POSTGRESQL_RELEASES_URL` without overriding a value already present in the
 /// parent environment.
 ///
