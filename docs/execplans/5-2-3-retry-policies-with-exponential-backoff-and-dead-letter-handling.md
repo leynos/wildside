@@ -37,7 +37,7 @@ For readers of an earlier version, these are the changes that matter:
   still-locked row *before* the ack runs. The library's ack then records
   `Failed` or `Killed`, and the existing fetch predicate does the rest
   (Decision D11). Proposed D15 also records a namespaced terminal reason in
-  JSONB `metadata`, because those statuses alone cannot distinguish fatality
+  JSONB `metadata` because those statuses alone cannot distinguish fatality
   from exhaustion when the current policy is lower than a stored limit.
 - Apalis is **pinned exactly**, to `apalis-core = "=1.0.0-rc.9"` and
   `apalis-postgres = "=1.0.0-rc.8"` (Decision D10). The 1.0.0 upgrade is issue
@@ -46,7 +46,7 @@ For readers of an earlier version, these are the changes that matter:
   AXIOM-ACK replace them, and EP-M0 discharges them.
 - `TOTAL_BACKOFF_BUDGET` is retired. Workers no longer hold a slot during
   backoff, so the per-delay cap `MAX_BACKOFF_DELAY` replaces it (Decision D13).
-- `requeue` must restore the queue's configured `max_attempts`, because a
+- `requeue` must restore the queue's configured `max_attempts` because a
   terminal path may shrink it (Decision D12).
 - EP-M1 (the pure domain policy) is unaffected in shape. EP-M2 has been
   rewritten. EP-M3 gains the budget restoration. EP-M4 names the renamed ADRs.
