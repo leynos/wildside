@@ -246,7 +246,7 @@ Terms used in this plan:
   that fallback for legacy tables that permit null values. If D15 is approved,
   its namespaced metadata key records whether a wrapper-originated terminal
   failure was fatal or exhausted. Rows without a recognized reason key are
-  `Unclassified`, because status and attempts cannot reliably distinguish their
+  `Unclassified` because status and attempts cannot reliably distinguish their
   terminal cause.
 - "Fatal error": a job-execution failure that retrying cannot fix (for
   example, a payload that fails decoding or validation). It is classified so
@@ -1727,7 +1727,7 @@ the two caret requirements.
   guarded terminal-failure update writes `fatal` or `exhausted` to the reason
   key and, when needed, shrinks `max_attempts` in the same statement. This lets
   `list_dead` distinguish a fatal failure from policy exhaustion even when both
-  become an unfetchable row. Rows without the key are `Unclassified`, because
+  become an unfetchable row. Rows without the key are `Unclassified` because
   status and attempts cannot identify their terminal cause. Rationale: Apalis
   replaces `last_result` on every acknowledgement, so requeue provenance there
   disappears after the next run; status and attempt counts alone cannot
