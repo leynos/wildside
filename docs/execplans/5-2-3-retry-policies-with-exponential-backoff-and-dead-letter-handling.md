@@ -673,15 +673,17 @@ wrapper):
   3. On `Retry { delay }`: calls `schedule_retry` and records the retry
      counter.
   4. On `DeadLetter`, chooses reason `Fatal` for a fatal failure and
-     `Exhausted` for a retryable failure at the policy limit. If
-     `attempt < context max_attempts`, it must shrink the persisted limit so
-     the ack writes an unfetchable `Failed` row; otherwise the ack writes
-     `Killed`. If D15 is approved, a guarded terminal update always writes the
-     namespaced reason key before the ack, and shrinks the persisted limit only
-     when required. Without D15, implementation remains blocked because status
-     alone cannot preserve the reason for all cases. The wrapper records the
-     matching metric label and returns the bounded plain failure message,
-     leaving Apalis's `last_result` unchanged.
+     `Exhausted` for a retryable failure at the policy limit. Every terminal
+     failure takes the guarded terminal-update path. If
+     `attempt < context max_attempts`, it shrinks the persisted limit to the
+     current attempt so the ack writes an unfetchable `Failed` row; otherwise
+     no shrink is needed because the ack writes `Killed`. If D15 is approved,
+     that update also writes the namespaced reason key before the ack,
+     independently of whether the limit needs shrinking. Without D15,
+     implementation remains blocked because status alone cannot preserve the
+     reason for all cases. The wrapper records the matching metric label and
+     returns the bounded plain failure message, leaving Apalis's `last_result`
+     unchanged.
   5. Emits one structured log line (job id, job type, attempt, error kind,
      decision; never the payload).
 - Enqueue side: `ApalisPostgresProvider::push_job` switches from
@@ -796,25 +798,29 @@ Obligations:
   `Attempt::current()` values (1, 2, …), the row's `attempts` and `status`, the
   `run_at` ordering, and that continued polling delivers nothing. If D15 is
   approved, it also verifies `DeadReason::Exhausted` when a pre-existing row's
-  stored `max_attempts` exceeds the current policy limit and the policy-limit
-  failure is stored as `Failed`; the reason key in metadata distinguishes it
-  from a fatal failure. Non-vacuity: the scenarios assert that the handler ran
+  stored `max_attempts` exceeds the current policy limit and a retryable
+  failure reaches that policy limit. The guarded terminal update shrinks the
+  stored limit to the current attempt; the ack may store `Failed` because its
+  in-memory limit is still higher, while the dead predicate prevents another
+  fetch. Without D15, the listing reports `Unclassified` because the row has no
+  persisted reason key. Non-vacuity: the scenarios assert that the handler ran
   more than once (a policy that never retries fails) and that extra polling
   after death yields no runs (an unbounded loop fails). A control scenario with
   a succeeding handler must end `Done` with one attempt.
 - Obligation V5 (fatal short-circuit is storage-dead): a handler returning
   a fatal failure runs exactly once. The resulting row satisfies the dead
   predicate and is never redelivered by continued polling, which is a stronger
-  claim than "the harness stopped polling". The listing reports
-  `DeadReason::Fatal` even when Apalis status and attempts alone would imply
-  exhaustion. If D15 is approved, the metadata reason key preserves that
-  distinction. Include a one-attempt policy case at the in-memory Apalis
-  attempt limit: the ack writes `Killed`, no limit shrink is needed, and the
-  metadata still reports `Fatal`. Method: behavioural test as V4 with a
-  fatal-classified failure, including a post-failure polling phase and a
-  dead-list assertion. Non-vacuity: misclassifying fatal as retryable fails the
-  run-count and reason assertions, and omitting the terminal limit update when
-  required fails the redelivery assertion.
+  claim than "the harness stopped polling". If D15 is approved, the listing
+  reports `DeadReason::Fatal` even when Apalis status and attempts alone would
+  imply exhaustion; without D15, it reports `Unclassified`. Include a
+  one-attempt policy case at the in-memory Apalis attempt limit: the ack writes
+  `Killed`, no limit shrink is needed, and the metadata reports `Fatal` only
+  when D15 is approved. Method: behavioural test as V4 with a fatal-classified
+  failure, including a post-failure polling phase and a dead-list assertion.
+  Non-vacuity: with spare attempts, misclassifying fatal as retryable fails the
+  post-failure run-count assertion; when D15 is approved, it also fails the
+  reason assertion. Omitting the terminal limit update when required fails the
+  redelivery assertion.
 - Obligation V6 (dead-letter round trip, guards, and budget restoration): a
   dead job appears in `DeadLetterQueue::list_dead` with its reason, attempt
   count, and bounded last error; it includes a requeue count only if D15 is
@@ -1462,6 +1468,24 @@ the two caret requirements.
   V3b/V5 now require the reason update on every terminal outcome. Evidence:
   `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-3.out`.
 
+- Observation (2026-10-23 follow-up plan review): a retryable failure at the
+  policy limit also needs a guarded limit shrink when a pre-existing row's
+  stored limit is higher than the current queue policy. D15 reason persistence
+  is independent of that conditional shrink. V4/V5 now require reason-specific
+  assertions only when D15 is approved and use `Unclassified` otherwise.
+  Evidence:
+  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-6.out`.
+
+- Observation (2026-10-23 post-rebase validation): `make check-fmt`,
+  `make typecheck`, `make lint`, `make markdownlint`, `make nixie`, and
+  `make spelling` passed on HEAD `736c298f`. `make test` exited 1 after 1,085
+  seconds because
+  `backend::diesel_offline_bundle_repository::offline_repository_maps_missing_schema_to_query_error`
+  failed at case 995/1,851. The captured nested output contains no underlying
+  diagnostic. This candidate changes only this ExecPlan, and the same test
+  passed in earlier runs, so the failure's cause remains unknown. No retry was
+  made. Evidence: `/tmp/wildside-pg-defaults-last-test-20261023.out`.
+
 - Observation: apalis-postgres 1.0.0-rc.6 does not persist abort errors as
   `Killed` (the `calculate_status` arm is commented out upstream), so a fatal
   failure acked with spare attempts becomes a re-deliverable `Failed` row.
@@ -1670,34 +1694,40 @@ the two caret requirements.
   returns `Err`, it issues one guarded update while the row is still `Running`
   and locked by this worker
   (`WHERE id = $1 AND lock_by = $2 AND status = 'Running'`). For a retryable
-  error below the budget, it sets
-  `run_at = now() + JobRetryPolicy::delay(attempt, jitter)`. For a fatal error,
-  it sets `max_attempts` to the in-memory `Attempt::current()` value, which is
-  exactly the `attempts` value the ack is about to persist. When
-  `Attempt::current() >= max_attempts`, no update is made, because the ack
-  already writes `Killed`. Because the ack does not touch `run_at` or
-  `max_attempts`, the row becomes `Failed` and is either invisible to
-  `get_jobs` until the delay elapses or permanently dead under the existing
-  dead predicate. Exhaustion still falls to the library: the ack writes
-  `Killed` when `attempt >= max_attempts`, and the fetch path rehydrates
-  `Attempt` from the persisted `attempts`. Rationale: at rc.7–rc.9 the
-  in-process alternative is racy (see `Surprises & discoveries`). The durable
-  form closes the race, because the row is never fetchable during the delay. It
-  also frees worker slots during backoff, survives worker crashes with attempt
-  history intact, makes `max_attempts` a lifetime bound rather than a per-lease
-  bound, and removes the `apalis` facade dependency, AXIOM-FACADE, the
-  `TOTAL_BACKOFF_BUDGET` coupling to orphan recovery, and the custom
-  `tower::retry::Policy`. The cost is one extra SQL statement per failure, and
-  backoff precision bounded below by the poll interval. Panel prior art
-  (graphile-worker, sidekiq) uses this model. The domain `JobRetryPolicy`
-  remains the executed policy. Consequences to apply before EP-M1 if approved:
-  rewrite D1, D2, D4, the "Interfaces and dependencies" adapter section,
-  obligations V1b, V4, and V8, the EP-M2 green step, and the Risks entries tied
-  to in-process backoff. Replace AXIOM-ATTEMPT with AXIOM-DURABLE, the
-  five-part runtime probe in EP-M0. Date/author: 2026-10-14, planning review.
-  These consequences were applied on 2026-10-17. The wrapper is a
-  `tower::Service` over the task, so it reads the in-memory `max_attempts` from
-  `parts.ctx` rather than an extractor.
+  error below the policy limit, it sets
+  `run_at = now() + JobRetryPolicy::delay(attempt, jitter)`. A fatal error or a
+  retryable error at the policy limit takes the terminal path. If
+  `Attempt::current() < context max_attempts`, the guarded update sets the
+  persisted `max_attempts` to `Attempt::current()`, exactly the `attempts`
+  value the ack will persist. This also handles a pre-existing row whose stored
+  limit exceeds the current policy: the retryable failure at the policy limit
+  must become unfetchable even though the in-memory limit still permits another
+  attempt. When `Attempt::current() >= context max_attempts`, no limit shrink
+  is needed because the ack already writes `Killed`. If D15 is approved, the
+  terminal update also writes the namespaced reason key before the ack, whether
+  or not a limit shrink is needed. Without D15, the status and attempt fields
+  cannot distinguish every terminal reason, so implementation remains blocked.
+  The ack does not touch `run_at` or `max_attempts`; after a terminal shrink,
+  the row may be `Failed` but is permanently dead under the existing dead
+  predicate. Otherwise the ack writes `Killed` at the in-memory attempt limit.
+  The fetch path rehydrates `Attempt` from persisted `attempts`. Rationale: at
+  rc.7–rc.9 the in-process alternative is racy (see `Surprises & discoveries`).
+  The durable form closes the race, because the row is never fetchable during
+  the delay. It also frees worker slots during backoff, survives worker crashes
+  with attempt history intact, makes `max_attempts` a lifetime bound rather
+  than a per-lease bound, and removes the `apalis` facade dependency,
+  AXIOM-FACADE, the `TOTAL_BACKOFF_BUDGET` coupling to orphan recovery, and the
+  custom `tower::retry::Policy`. The cost is one extra SQL statement per
+  failure, and backoff precision bounded below by the poll interval. Panel
+  prior art (graphile-worker, sidekiq) uses this model. The domain
+  `JobRetryPolicy` remains the executed policy. Consequences to apply before
+  EP-M1 if approved: rewrite D1, D2, D4, the "Interfaces and dependencies"
+  adapter section, obligations V1b, V4, and V8, the EP-M2 green step, and the
+  Risks entries tied to in-process backoff. Replace AXIOM-ATTEMPT with
+  AXIOM-DURABLE, the five-part runtime probe in EP-M0. Date/author: 2026-10-14,
+  planning review. These consequences were applied on 2026-10-17. The wrapper
+  is a `tower::Service` over the task, so it reads the in-memory `max_attempts`
+  from `parts.ctx` rather than an extractor.
 - D12 — `requeue` restores the queue's configured retry budget. Rationale:
   under D4 and D11, a fatally dead row has `max_attempts` equal to its attempt
   count. Resetting only `attempts = 0` would leave a requeued job with a budget
