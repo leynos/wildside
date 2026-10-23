@@ -1487,13 +1487,19 @@ the two caret requirements.
   error is serialized into `last_result` by every acknowledgement; the plan now
   states that this replaces the previous result while preserving Apalis's JSON
   representation. Evidence:
-  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-7.out`.
+
+  ```plaintext
+  /tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-7.out
+  ```
 
 - Observation (2026-10-23 final review correction): the policy-exhaustion
   feature scenario asserted an `Exhausted` reason while proposed D15 remains
   unapproved. It now expects `Exhausted` if D15 is approved and `Unclassified`
   otherwise. Evidence:
-  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-8.out`.
+
+  ```plaintext
+  /tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-8.out
+  ```
 
 - Observation (2026-10-23 final plan review): terminal metadata must be written
   even when the current attempt already reaches Apalis's limit and the ack will
