@@ -1,4 +1,8 @@
 //! Support types and step definitions for example data startup seeding scenarios.
+#![expect(
+    clippy::redundant_field_names,
+    reason = "diesel's `QueryableByName` expansion initialises fields as `count: count`"
+)]
 
 use std::path::PathBuf;
 use std::sync::Arc;

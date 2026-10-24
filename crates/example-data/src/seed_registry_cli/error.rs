@@ -1,4 +1,8 @@
 //! Error types for the seed registry CLI.
+#![expect(
+    clippy::redundant_field_names,
+    reason = "thiserror's `#[from]` expansion initialises the field as `source: source`"
+)]
 
 use thiserror::Error;
 
