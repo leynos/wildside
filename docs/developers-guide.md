@@ -581,9 +581,9 @@ make test
 enabled so `pnpm` is available locally and in CI, and it requires `cargo-audit`
 for the Rust dependency check.
 
-The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.5`,
+The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.7`,
 React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`, Zod
-3, TypeScript 5, Vitest `^4.1.8`, and Orval 8. TanStack Router, Radix UI,
+3, TypeScript 5, Vitest `^4.1.12`, and Orval 8. TanStack Router, Radix UI,
 i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
 target-stack items until a roadmap task adds them to
 `frontend-pwa/package.json` and the lockfile.

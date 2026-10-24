@@ -19,6 +19,7 @@ module exists to prevent.
 
 from __future__ import annotations
 
+import json
 import typing as typ
 from fnmatch import fnmatch
 
@@ -92,6 +93,39 @@ def read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
         message = f"{path}: cannot be read: {error}"
+        raise RepositoryReadError(message, path=path) from error
+
+
+def parse_json(text: str, path: Path) -> object:
+    """Return one JSON document's value.
+
+    Parameters
+    ----------
+    text : str
+        The file's text.
+    path : Path
+        The file it came from, for the message.
+
+    Returns
+    -------
+    object
+        The parsed value; the caller narrows it.
+
+    Raises
+    ------
+    RepositoryReadError
+        If the text is not valid JSON.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> parse_json('{"zod": "^3"}', Path("package.json"))
+    {'zod': '^3'}
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as error:
+        message = f"{path}: is not valid JSON: {error}"
         raise RepositoryReadError(message, path=path) from error
 
 
