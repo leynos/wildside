@@ -10,8 +10,8 @@ only: it holds `chromium-bidi` (Puppeteer's build-time tooling) and never the
 workspace's own packages. The workspace's own use is therefore read separately,
 from the workspace manifests: `frontend-pwa` and `packages/types` declare zod
 directly, for `UsersSchema` and the fetcher. These tests fail when the
-migration lands or when either half gains a parent the reason does not cover. The shared checks over the whole
-ledger stay in `audit_exception_test.py`.
+migration lands or when either half gains a parent the reason does not cover.
+The shared checks over the whole ledger stay in `audit_exception_test.py`.
 """
 
 from __future__ import annotations
