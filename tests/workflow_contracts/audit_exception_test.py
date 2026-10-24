@@ -145,10 +145,18 @@ VULNERABLE_PICOMATCH_RANGES = (
 #: identifier is registered here so the check below still sees every entry.
 BRACES_EXCEPTION_IDS = ("BRACES_NESTED_PATTERN_DOS_2026_10",)
 
+#: GHSA-mrhx-c7xc-m3w5, memory exhaustion in zod below 4.6.6. Its removal
+#: invariants live in `zod_exception_test.py`; the identifier is registered here
+#: so the check below still sees every entry.
+ZOD_EXCEPTION_IDS = ("ZOD_ARRAY_MEMORY_EXHAUSTION_2026_10",)
+
 #: Every ledger entry must appear here, so that adding an exception means
 #: writing the condition that retires it rather than only a date.
 EXCEPTIONS_WITH_REMOVAL_INVARIANTS = frozenset(
-    EXTRACT_ZIP_EXCEPTION_IDS + PICOMATCH_EXCEPTION_IDS + BRACES_EXCEPTION_IDS
+    EXTRACT_ZIP_EXCEPTION_IDS
+    + PICOMATCH_EXCEPTION_IDS
+    + BRACES_EXCEPTION_IDS
+    + ZOD_EXCEPTION_IDS
 )
 
 #: A removal condition is an issue reference, either bare or as a full URL. An

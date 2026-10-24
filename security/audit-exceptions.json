@@ -41,5 +41,14 @@
     "reason": "Development-time tooling only. braces reaches the tree through chokidar@3.6.0 and micromatch@4.0.8, which both pin braces@3.0.3 in pnpm-lock.yaml. The brace patterns come from repository-controlled configuration, not runtime user input, but pull requests can change that configuration and cause their own CI build to fail. The advisory (published 2026-09-18, stack exhaustion on deeply nested patterns) covers every release up to 3.0.3, which is the latest published, so there is no patched release to move to. Tracked in https://github.com/leynos/wildside/issues/527; remove this entry once a patched braces exists or chokidar and micromatch drop braces 3.",
     "addedAt": "2026-10-04",
     "expiresAt": "2026-12-04"
+  },
+  {
+    "id": "ZOD_ARRAY_MEMORY_EXHAUSTION_2026_10",
+    "package": "frontend-pwa",
+    "advisory": "GHSA-mrhx-c7xc-m3w5",
+    "introducedBy": "zod",
+    "reason": "zod is patched only in 4.6.6 and above, and the workspace is on zod 3.25.76 (`^3` in frontend-pwa and packages/types), so the fix is a major-version migration that needs its own change and verification rather than a pin bump. The advisory is memory exhaustion while validating a very large array against an array schema with no length constraint. The only array schema is UsersSchema in packages/types/src/user.ts, applied by customFetchParsed in frontend-pwa/src/api/fetcher.ts to responses from the project's own backend and running in the user's browser tab, so an attacker would need to control the backend response, and the impact is a client-side memory exhaustion of one tab, not a server compromise. The other path, puppeteer > chromium-bidi > zod, is build-time Mermaid rendering tooling that never parses untrusted input. The entry expires after 14 days. Tracked in https://github.com/leynos/wildside/issues/561.",
+    "addedAt": "2026-10-24",
+    "expiresAt": "2026-11-07"
   }
 ]
