@@ -10,8 +10,8 @@
     "typedoc": "0.28.20",
     "typescript": "5.9.2",
     "validator": "^13.15.23",
-    "vite": "^7.3.5",
-    "vitest": "^4.1.11"
+    "vite": "^7.3.7",
+    "vitest": "^4.1.12"
   },
   "name": "myapp",
   "private": true,
@@ -43,15 +43,15 @@
     "basic-ftp": "6.2.1",
     "brace-expansion": "5.0.12",
     "browserslist": "4.28.7",
-    "dompurify": "3.4.16",
+    "dompurify": "3.4.17",
     "esbuild": "0.28.1",
-    "fast-uri": "3.1.8",
+    "fast-uri": "3.1.9",
     "glob": "13.0.6",
-    "ip-address": "10.7.2",
+    "ip-address": "10.7.4",
     "js-yaml": "4.3.2",
     "katex": "0.18.2",
     "linkify-it": "5.0.2",
-    "markdown-it": "14.3.2",
+    "markdown-it": "14.3.3",
     "mermaid": "11.16.1",
     "nanoid": "3.3.18",
     "postcss": "8.5.23",
@@ -66,7 +66,7 @@
     "overrides": {
       "@isaacs/brace-expansion": "5.0.1",
       "brace-expansion@<5.0.12": "5.0.12",
-      "fast-uri": "3.1.8",
+      "fast-uri": "3.1.9",
       "ajv": "8.20.0",
       "glob": "13.0.6",
       "@babel/core": "7.29.7",
@@ -75,7 +75,7 @@
       "katex": "0.18.2",
       "linkify-it": "5.0.2",
       "lodash": "4.18.1",
-      "markdown-it": "14.3.2",
+      "markdown-it": "14.3.3",
       "mermaid": "11.16.1",
       "minimatch": "10.2.3",
       "lodash-es": "4.18.1",
@@ -85,8 +85,8 @@
       "browserslist": "4.28.7",
       "postcss-selector-parser": "7.1.6",
       "basic-ftp": "6.2.1",
-      "dompurify": "3.4.16",
-      "ip-address": "10.7.2",
+      "dompurify": "3.4.17",
+      "ip-address": "10.7.4",
       "nanoid@<3.3.18": "3.3.18",
       "tar-fs": "3.1.1",
       "validator": "13.15.23",
@@ -102,7 +102,7 @@
       "uuid": "14.0.0",
       "postcss": "8.5.23",
       "launch-editor": "2.14.1",
-      "vite": "7.3.5"
+      "vite": "7.3.7"
     }
   }
 }
