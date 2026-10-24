@@ -95,7 +95,7 @@ def _read_json_object(path: Path) -> dict[str, object]:
     if not isinstance(value, dict):
         message = f"{path}: must hold a JSON object"
         raise RepositoryReadError(message, path=path)
-    return value
+    return typ.cast("dict[str, object]", value)
 
 
 def _manifest_of(path: Path) -> Manifest:
