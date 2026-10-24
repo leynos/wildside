@@ -3,11 +3,14 @@
 GHSA-mrhx-c7xc-m3w5 (memory exhaustion validating a large unconstrained array)
 is patched only in zod 4.6.6 and above. The workspace is on zod 3, so the
 exception in `security/audit-exceptions.json` is a fourteen-day stopgap for a
-major-version migration, argued from reach: the only dependent in the Bun
-lockfile is `chromium-bidi`, which is Puppeteer's build-time tooling, while the
-workspace's own use is declared in `frontend-pwa` and `packages/types`. These
-tests fail when the migration lands or when a new package starts depending on
-zod, either of which retires the argument. The shared checks over the whole
+major-version migration, argued from reach, and reach has two halves that are
+read from different places. The registry packages that depend on zod are read
+from the Bun lockfile's package table, which lists resolved registry packages
+only: it holds `chromium-bidi` (Puppeteer's build-time tooling) and never the
+workspace's own packages. The workspace's own use is therefore read separately,
+from the workspace manifests: `frontend-pwa` and `packages/types` declare zod
+directly, for `UsersSchema` and the fetcher. These tests fail when the
+migration lands or when either half gains a parent the reason does not cover. The shared checks over the whole
 ledger stay in `audit_exception_test.py`.
 """
 
@@ -31,10 +34,18 @@ ZOD_TRACKING_ISSUE = "https://github.com/leynos/wildside/issues/561"
 #: what the exception exists to tolerate.
 FIRST_PATCHED_ZOD = (4, 6, 6)
 
-#: The only resolved package the reasoning permits as a parent: Puppeteer's
-#: tooling, which never parses untrusted input. A parent outside this set is a
-#: new way to reach the code, which the entry's reason does not cover.
+#: The only resolved registry package the reasoning permits as a parent:
+#: Puppeteer's tooling, which never parses untrusted input. A parent outside
+#: this set is a new way to reach the code, which the entry's reason does not
+#: cover. Workspace packages are not in the lockfile's package table, so they
+#: are checked against the next constant instead.
 ZOD_PERMITTED_DEPENDENTS = frozenset({"chromium-bidi"})
+
+#: The workspace manifests, relative to the repository root, that the reason
+#: names as declaring zod: `frontend-pwa` parses API responses through it and
+#: `packages/types` defines the schemas. A third manifest declaring zod is a new
+#: consumer the argument about `UsersSchema` was not written for.
+ZOD_PERMITTED_WORKSPACES = frozenset({"frontend-pwa", "packages/types"})
 
 
 @pytest.fixture(scope="module")
@@ -50,6 +61,28 @@ def ledger_ids() -> frozenset[str]:
 def packages() -> lock.PackageTable:
     """Return the package table of the repository's Bun lockfile."""
     return lock.parse_packages(BUN_LOCK_PATH.read_text(encoding="utf-8"))
+
+
+def _workspaces_declaring_zod() -> frozenset[str]:
+    """Return the workspace directories whose manifest declares zod.
+
+    Examples
+    --------
+        >>> isinstance(_workspaces_declaring_zod(), frozenset)
+        True
+    """
+    manifests = [
+        REPOSITORY_ROOT / "package.json",
+        *sorted(REPOSITORY_ROOT.glob("frontend-pwa/package.json")),
+        *sorted(REPOSITORY_ROOT.glob("packages/*/package.json")),
+    ]
+    declaring = set()
+    for manifest in manifests:
+        data: dict[str, typ.Any] = json.loads(manifest.read_text(encoding="utf-8"))
+        fields = ("dependencies", "devDependencies", "peerDependencies")
+        if any("zod" in data.get(field, {}) for field in fields):
+            declaring.add(manifest.parent.relative_to(REPOSITORY_ROOT).as_posix())
+    return frozenset(declaring)
 
 
 def test_the_zod_exception_is_void_once_only_patched_releases_resolve(
@@ -94,4 +127,25 @@ def test_the_zod_exception_is_void_once_anything_else_pulls_it(
         f"{sorted(ZOD_PERMITTED_DEPENDENTS)} reach it, but "
         f"{sorted(unexpected)} now depend on it too. The exception is "
         f"repository-wide, so it would cover those callers."
+    )
+
+
+def test_the_zod_exception_is_void_once_another_workspace_declares_zod(
+    ledger_ids: frozenset[str],
+) -> None:
+    """The workspace's own use of zod is argued about, so it is pinned too.
+
+    `bun.lock`'s package table never lists workspace packages, so the check
+    above cannot see a new workspace that declares zod. This one reads the
+    manifests, and also fails if a named workspace stops declaring zod, which
+    is the migration's first sign and means the argument needs rewriting.
+    """
+    if ZOD_EXCEPTION_ID not in ledger_ids:
+        pytest.skip("the zod advisory is no longer excepted")
+
+    declaring = _workspaces_declaring_zod()
+    assert declaring == ZOD_PERMITTED_WORKSPACES, (
+        f"{ZOD_EXCEPTION_ID} argues from {sorted(ZOD_PERMITTED_WORKSPACES)} "
+        f"being the workspaces that declare zod, but {sorted(declaring)} do. "
+        f"Rewrite the entry's reason or remove it, and see {ZOD_TRACKING_ISSUE}."
     )
