@@ -35,7 +35,7 @@ family would need them.
 The current `frontend-pwa/package.json` declares:
 
 - Bun,
-- Vite `^7.3.5`,
+- Vite `^7.3.7`,
 - React 19,
 - React DOM 18,
 - TanStack Query 5,
@@ -44,7 +44,7 @@ The current `frontend-pwa/package.json` declares:
 - Zod 3,
 - clsx 2,
 - TypeScript 5,
-- Vitest 3,
+- Vitest `^4.1.12`,
 - Orval 8, and
 - the current build, linting, token generation, and type checking toolchain
   described below.
@@ -69,7 +69,7 @@ state architecture.
 
 - **Package manager and runner:** Bun drives local scripts, tests, and token
   generation via `package.json` and `bunfig.toml`.
-- **Bundler and dev server:** Vite `^7.3.5` is the application bundler and
+- **Bundler and dev server:** Vite `^7.3.7` is the application bundler and
   development server.
 - **React integration:** `@vitejs/plugin-react` handles JSX and React Fast
   Refresh.
@@ -323,7 +323,7 @@ For the shortest accurate summary of the checked-in mockup, the current
 front-end stack is:
 
 - Bun for scripts and package-manager-adjacent tooling,
-- Vite `^7.3.5` for bundling and development,
+- Vite `^7.3.7` for bundling and development,
 - React 19 for the SPA runtime,
 - React DOM 18 for rendering,
 - TanStack Query 5 for server-state caching,

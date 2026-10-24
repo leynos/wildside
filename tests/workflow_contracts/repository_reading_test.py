@@ -21,6 +21,7 @@ import typing as typ
 import pytest
 from repository_reading import (
     RepositoryReadError,
+    parse_json,
     parse_workflow,
     read_text,
     workflow_documents,
@@ -286,3 +287,15 @@ def test_a_workflow_directory_that_cannot_be_listed_is_refused(
     assert caught.value.path == locked, (
         "the failure names the directory whose listing was refused"
     )
+
+
+def test_a_json_file_that_is_not_json_names_the_file(tmp_path: Path) -> None:
+    """Scenario: a manifest is truncated mid-edit.
+
+    Invariant: the failure carries the manifest's path, not only the line and
+    column `json` reports for a document it does not name.
+    """
+    path = tmp_path / "package.json"
+    with pytest.raises(RepositoryReadError, match=r"package\.json") as caught:
+        parse_json('{"dependencies": ', path)
+    assert caught.value.path == path

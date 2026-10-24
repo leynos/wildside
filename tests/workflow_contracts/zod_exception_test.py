@@ -12,16 +12,20 @@ from the workspace manifests: `frontend-pwa` and `packages/types` declare zod
 directly, for `UsersSchema` and the fetcher. These tests fail when the
 migration lands or when either half gains a parent the reason does not cover.
 The shared checks over the whole ledger stay in `audit_exception_test.py`.
+
+Every file is opened by a fixture through `repository_reading`, so a missing or
+malformed file fails there with its path. The queries below take what the
+fixtures parsed and open nothing.
 """
 
 from __future__ import annotations
 
-import json
 import typing as typ
 from pathlib import Path
 
 import bun_lockfile as lock
 import pytest
+from repository_reading import RepositoryReadError, parse_json, read_text
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 LEDGER_PATH = REPOSITORY_ROOT / "security" / "audit-exceptions.json"
@@ -47,42 +51,173 @@ ZOD_PERMITTED_DEPENDENTS = frozenset({"chromium-bidi"})
 #: consumer the argument about `UsersSchema` was not written for.
 ZOD_PERMITTED_WORKSPACES = frozenset({"frontend-pwa", "packages/types"})
 
+#: Every manifest field through which a workspace can declare a dependency,
+#: optional ones included: a consumer that lists zod only as an optional
+#: dependency still parses with it when it is installed.
+DEPENDENCY_FIELDS = (
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies",
+)
+
+
+class LedgerEntry(typ.TypedDict):
+    """The part of an audit exception entry this contract reads."""
+
+    id: str
+
+
+#: A manifest narrowed to its dependency tables: field name to package name to
+#: version range. Fields a manifest does not declare are absent.
+Manifest = dict[str, dict[str, str]]
+
+
+def _read_json_object(path: Path) -> dict[str, object]:
+    """Return the JSON object a repository file holds.
+
+    Parameters
+    ----------
+    path : Path
+        The file to read.
+
+    Returns
+    -------
+    dict[str, object]
+        The file's top-level object.
+
+    Raises
+    ------
+    RepositoryReadError
+        If the file cannot be read, is not JSON, or is not an object.
+    """
+    value = parse_json(read_text(path), path)
+    if not isinstance(value, dict):
+        message = f"{path}: must hold a JSON object"
+        raise RepositoryReadError(message, path=path)
+    return value
+
+
+def _manifest_of(path: Path) -> Manifest:
+    """Return one package manifest narrowed to its dependency tables.
+
+    Parameters
+    ----------
+    path : Path
+        The `package.json` to read.
+
+    Returns
+    -------
+    Manifest
+        Only the dependency fields the manifest declares, each a table of
+        package name to range.
+
+    Raises
+    ------
+    RepositoryReadError
+        If the manifest cannot be read or a dependency field is not a table.
+    """
+    data = _read_json_object(path)
+    manifest: Manifest = {}
+    for field in DEPENDENCY_FIELDS:
+        table = data.get(field)
+        if table is None:
+            continue
+        if not isinstance(table, dict):
+            message = f"{path}: {field} must be an object"
+            raise RepositoryReadError(message, path=path)
+        manifest[field] = {str(name): str(rng) for name, rng in table.items()}
+    return manifest
+
+
+def _workspace_directories(root: Path) -> list[Path]:
+    """Return the repository root and every workspace directory below it.
+
+    The directory under `packages` is listed with `iterdir` rather than
+    matched with `glob`, because `glob` reports a missing directory as an empty
+    result, and an empty result would read as a workspace set that declares
+    nothing.
+
+    Parameters
+    ----------
+    root : Path
+        The repository root.
+
+    Returns
+    -------
+    list[Path]
+        The root, `frontend-pwa` and each directory under `packages`, by name.
+
+    Raises
+    ------
+    RepositoryReadError
+        If `packages` cannot be listed.
+    """
+    packages = root / "packages"
+    try:
+        children = sorted(entry for entry in packages.iterdir() if entry.is_dir())
+    except OSError as error:
+        message = f"{packages}: cannot be listed: {error}"
+        raise RepositoryReadError(message, path=packages) from error
+    return [root, root / "frontend-pwa", *children]
+
+
+def workspaces_declaring_zod(manifests: dict[str, Manifest]) -> frozenset[str]:
+    """Return the workspaces whose manifest declares zod in any field.
+
+    Parameters
+    ----------
+    manifests : dict[str, Manifest]
+        Workspace directory, relative to the root, to its parsed manifest.
+
+    Returns
+    -------
+    frozenset[str]
+        The workspace directories that declare zod.
+
+    Examples
+    --------
+    >>> workspaces_declaring_zod({"a": {"dependencies": {"zod": "^3"}}, "b": {}})
+    frozenset({'a'})
+
+    An optional dependency counts:
+
+    >>> workspaces_declaring_zod({"a": {"optionalDependencies": {"zod": "^3"}}})
+    frozenset({'a'})
+    """
+    return frozenset(
+        workspace
+        for workspace, manifest in manifests.items()
+        if any("zod" in manifest.get(field, {}) for field in DEPENDENCY_FIELDS)
+    )
+
 
 @pytest.fixture(scope="module")
 def ledger_ids() -> frozenset[str]:
     """Return the identifiers of every entry in the audit exception ledger."""
-    ledger: list[dict[str, typ.Any]] = json.loads(
-        LEDGER_PATH.read_text(encoding="utf-8")
-    )
-    return frozenset(entry["id"] for entry in ledger)
+    value = parse_json(read_text(LEDGER_PATH), LEDGER_PATH)
+    if not isinstance(value, list):
+        message = f"{LEDGER_PATH}: must hold a JSON array"
+        raise RepositoryReadError(message, path=LEDGER_PATH)
+    entries: list[LedgerEntry] = typ.cast("list[LedgerEntry]", value)
+    return frozenset(entry["id"] for entry in entries)
 
 
 @pytest.fixture(scope="module")
 def packages() -> lock.PackageTable:
     """Return the package table of the repository's Bun lockfile."""
-    return lock.parse_packages(BUN_LOCK_PATH.read_text(encoding="utf-8"))
+    return lock.parse_packages(read_text(BUN_LOCK_PATH))
 
 
-def _workspaces_declaring_zod() -> frozenset[str]:
-    """Return the workspace directories whose manifest declares zod.
-
-    Examples
-    --------
-        >>> isinstance(_workspaces_declaring_zod(), frozenset)
-        True
-    """
-    manifests = [
-        REPOSITORY_ROOT / "package.json",
-        *sorted(REPOSITORY_ROOT.glob("frontend-pwa/package.json")),
-        *sorted(REPOSITORY_ROOT.glob("packages/*/package.json")),
-    ]
-    declaring = set()
-    for manifest in manifests:
-        data: dict[str, typ.Any] = json.loads(manifest.read_text(encoding="utf-8"))
-        fields = ("dependencies", "devDependencies", "peerDependencies")
-        if any("zod" in data.get(field, {}) for field in fields):
-            declaring.add(manifest.parent.relative_to(REPOSITORY_ROOT).as_posix())
-    return frozenset(declaring)
+@pytest.fixture(scope="module")
+def workspace_manifests() -> dict[str, Manifest]:
+    """Return every workspace manifest, keyed by directory from the root."""
+    return {
+        directory.relative_to(REPOSITORY_ROOT).as_posix() or ".": _manifest_of(
+            directory / "package.json"
+        )
+        for directory in _workspace_directories(REPOSITORY_ROOT)
+    }
 
 
 def test_the_zod_exception_is_void_once_only_patched_releases_resolve(
@@ -131,7 +266,7 @@ def test_the_zod_exception_is_void_once_anything_else_pulls_it(
 
 
 def test_the_zod_exception_is_void_once_another_workspace_declares_zod(
-    ledger_ids: frozenset[str],
+    ledger_ids: frozenset[str], workspace_manifests: dict[str, Manifest]
 ) -> None:
     """The workspace's own use of zod is argued about, so it is pinned too.
 
@@ -143,9 +278,36 @@ def test_the_zod_exception_is_void_once_another_workspace_declares_zod(
     if ZOD_EXCEPTION_ID not in ledger_ids:
         pytest.skip("the zod advisory is no longer excepted")
 
-    declaring = _workspaces_declaring_zod()
+    declaring = workspaces_declaring_zod(workspace_manifests)
     assert declaring == ZOD_PERMITTED_WORKSPACES, (
         f"{ZOD_EXCEPTION_ID} argues from {sorted(ZOD_PERMITTED_WORKSPACES)} "
         f"being the workspaces that declare zod, but {sorted(declaring)} do. "
         f"Rewrite the entry's reason or remove it, and see {ZOD_TRACKING_ISSUE}."
     )
+
+
+def test_an_optional_dependency_on_zod_is_a_declaration(
+    tmp_path: Path,
+) -> None:
+    """Scenario: a new workspace lists zod only under `optionalDependencies`.
+
+    Invariant: the manifest reader keeps that field, and the query reports the
+    workspace, so the removal test above cannot be bypassed by choosing it.
+    """
+    manifest_path = tmp_path / "package.json"
+    manifest_path.write_text(
+        '{"optionalDependencies": {"zod": "^3"}}', encoding="utf-8"
+    )
+    manifests = {"packages/extra": _manifest_of(manifest_path)}
+    assert workspaces_declaring_zod(manifests) == frozenset({"packages/extra"})
+
+
+def test_a_manifest_that_is_not_json_names_the_file(tmp_path: Path) -> None:
+    """Scenario: a workspace manifest is truncated.
+
+    Invariant: the failure names that manifest, not a key several frames later.
+    """
+    manifest_path = tmp_path / "package.json"
+    manifest_path.write_text('{"dependencies": ', encoding="utf-8")
+    with pytest.raises(RepositoryReadError, match=r"package\.json"):
+        _manifest_of(manifest_path)
