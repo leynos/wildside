@@ -271,17 +271,17 @@ impl JobRetryPolicy {
     /// };
     ///
     /// let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
-    ///     max_attempts: NonZeroU32::new(3).unwrap(),
+    ///     max_attempts: NonZeroU32::new(3).expect("positive attempt limit"),
     ///     base_delay: Duration::from_secs(1),
     ///     multiplier: 2.0,
     ///     max_delay: Duration::from_secs(10),
     ///     jitter_fraction: 0.0,
     /// })
-    /// .unwrap();
+    /// .expect("valid policy configuration");
     /// let decision = policy.decide(
-    ///     NonZeroU32::new(1).unwrap(),
+    ///     NonZeroU32::new(1).expect("positive attempt"),
     ///     JobErrorKind::Retryable,
-    ///     JitterSample::new(0.5).unwrap(),
+    ///     JitterSample::new(0.5).expect("midpoint is valid"),
     /// );
     /// assert_eq!(decision, RetryDecision::Retry { delay: Duration::from_secs(1) });
     /// ```
@@ -316,15 +316,18 @@ impl JobRetryPolicy {
     /// };
     ///
     /// let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
-    ///     max_attempts: NonZeroU32::new(4).unwrap(),
+    ///     max_attempts: NonZeroU32::new(4).expect("positive attempt limit"),
     ///     base_delay: Duration::from_secs(1),
     ///     multiplier: 2.0,
     ///     max_delay: Duration::from_secs(8),
     ///     jitter_fraction: 0.0,
     /// })
-    /// .unwrap();
+    /// .expect("valid policy configuration");
     /// assert_eq!(
-    ///     policy.backoff_delay(NonZeroU32::new(4).unwrap(), JitterSample::new(0.5).unwrap()),
+    ///     policy.backoff_delay(
+    ///         NonZeroU32::new(4).expect("positive attempt"),
+    ///         JitterSample::new(0.5).expect("midpoint is valid"),
+    ///     ),
     ///     Duration::from_secs(8),
     /// );
     /// ```
@@ -355,13 +358,13 @@ impl JobRetryPolicy {
     /// use backend::domain::jobs::retry::{JobRetryPolicy, JobRetryPolicyConfig};
     ///
     /// let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
-    ///     max_attempts: NonZeroU32::new(3).unwrap(),
+    ///     max_attempts: NonZeroU32::new(3).expect("positive attempt limit"),
     ///     base_delay: Duration::from_millis(100),
     ///     multiplier: 2.0,
     ///     max_delay: Duration::from_secs(10),
     ///     jitter_fraction: 0.0,
     /// })
-    /// .unwrap();
+    /// .expect("valid policy configuration");
     /// assert_eq!(policy.max_attempts().get(), 3);
     /// ```
     pub fn max_attempts(&self) -> NonZeroU32 {
