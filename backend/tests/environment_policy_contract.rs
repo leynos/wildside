@@ -246,6 +246,7 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
 /// caller configuration or mutating the environment inside test processes.
 #[rstest::rstest]
 #[case::password("PG_PASSWORD", "wildside_embedded_test")]
+#[case::version("PG_VERSION_REQ", "=16.10.0")]
 #[case::releases(
     "POSTGRESQL_RELEASES_URL",
     "https://github.com/theseus-rs/postgresql-binaries"
