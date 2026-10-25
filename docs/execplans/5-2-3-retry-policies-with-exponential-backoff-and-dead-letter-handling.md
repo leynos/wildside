@@ -1502,6 +1502,14 @@ the two caret requirements.
 - [ ] Run `coderabbit review --agent` through the scrutineer against the
   committed EP-M1 milestone range, then resolve any valid findings before
   accepting the milestone.
+- [x] (2026-10-25 Europe/Berlin) The first EP-M1 CodeRabbit CLI review
+  completed on commit `17e3ea8` against `origin/main` at `e7ab91e`. It reported
+  three overlapping trivial/minor style findings: tests and doctests used
+  `.unwrap()`, and three plan passages used first-person possessives. The
+  findings are addressed in the current candidate; the duplicate optional
+  diagnostic finding is covered by the same `.expect(...)` edits. Reassessment
+  remains pending. Evidence:
+  `/tmp/coderabbit-393f0df6-4a19-41c6-a76a-35fb9e814fa0--5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-.out`.
 - [ ] EP-M1 domain retry policy and classification.
 - [ ] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
@@ -1653,9 +1661,9 @@ the two caret requirements.
   failure acked with spare attempts becomes a re-deliverable `Failed` row.
   Evidence: published crate source for rc.6 (`ack.rs`), and the `get_jobs`
   predicate re-fetching `Failed` rows with `attempts < max_attempts`. Impact:
-  fatal dead-lettering requires an explicit storage-level action by our wiring;
-  the dead predicate alone cannot see an early fatal failure (Decisions D4;
-  obligation V5).
+  fatal dead-lettering requires an explicit storage-level action by the adapter
+  wiring; the dead predicate alone cannot see an early fatal failure (Decisions
+  D4; obligation V5).
 - Observation: the Apalis retry layer performs backoff in-process while
   the job row stays locked; `run_at` is not rescheduled on failure, and
   attempts persist only at final acknowledgement. Evidence: `ack.sql` in the
@@ -1688,7 +1696,7 @@ the two caret requirements.
   the custom retry policy immediately before it returns a retry future. Then
   verify that the next handler invocation observes the increment and that final
   acknowledgement persists the same total. This retains the facade retry layer
-  while making attempt accounting explicit in our adapter policy. Rejected
+  while making attempt accounting explicit in the adapter policy. Rejected
   2026-10-14 (Decision D9).
 - Observation (2026-10-14 review): the tracker is the innermost worker layer,
   so `Attempt` advances once per in-process attempt. Evidence: the worker's
@@ -1791,7 +1799,7 @@ the two caret requirements.
   art; avoids schema divergence from library-managed tables; the port isolates
   the representation so a future table swap stays adapter-local. Date/author:
   2026-08-16, planning agent.
-- D4 — Terminal errors are made dead at the storage level by our wiring, not
+- D4 — Terminal errors are made dead at the storage level by adapter wiring, not
   by relying on Apalis abort persistence. *Mechanism settled on 2026-10-17
   under D11: before the ack, the handler wrapper shrinks the locked row's
   `max_attempts` to the current attempt when its in-memory limit has not
