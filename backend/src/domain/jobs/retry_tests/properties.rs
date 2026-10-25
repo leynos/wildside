@@ -84,8 +84,9 @@ proptest! {
         prop_assert!(actual + 2e-9 >= lower_bound);
         prop_assert!(actual <= upper_bound + 2e-9);
 
-        let largest_attempt = NonZeroU32::new(u32::MAX).unwrap();
-        let midpoint = JitterSample::new(0.5).unwrap();
+        let largest_attempt = NonZeroU32::new(u32::MAX)
+            .expect("maximum attempt is positive");
+        let midpoint = JitterSample::new(0.5).expect("midpoint is valid");
         prop_assert!(policy.backoff_delay(largest_attempt, midpoint) <= max_delay);
     }
 
@@ -117,14 +118,15 @@ proptest! {
         sample_basis_points in 0u32..=10_000,
     ) {
         let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
-            max_attempts: NonZeroU32::new(max_attempts).unwrap(),
+            max_attempts: NonZeroU32::new(max_attempts)
+                .expect("generated attempt limit is positive"),
             base_delay: Duration::from_millis(10),
             multiplier: 2.0,
             max_delay: Duration::from_secs(60),
             jitter_fraction: 0.25,
         })
         .expect("test policy remains well below the hard delay ceiling");
-        let attempt = NonZeroU32::new(attempt).unwrap();
+        let attempt = NonZeroU32::new(attempt).expect("generated attempt is positive");
         let kind = if is_fatal {
             JobErrorKind::Fatal
         } else {
@@ -155,7 +157,7 @@ proptest! {
         let largest_valid_secs = (3599.0 / (1.0 + jitter_fraction)).floor() as u64;
         let max_delay_secs = 1 + delay_offset % largest_valid_secs;
         let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
-            max_attempts: NonZeroU32::new(3).unwrap(),
+            max_attempts: NonZeroU32::new(3).expect("positive attempt limit"),
             base_delay: Duration::from_secs(1),
             multiplier: 1.0,
             max_delay: Duration::from_secs(max_delay_secs),
@@ -172,7 +174,7 @@ proptest! {
         let jitter_fraction = f64::from(jitter_percent) / 100.0;
         let first_invalid_secs = (3600.0 / (1.0 + jitter_fraction)).floor() as u64 + 2;
         let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
-            max_attempts: NonZeroU32::new(3).unwrap(),
+            max_attempts: NonZeroU32::new(3).expect("positive attempt limit"),
             base_delay: Duration::from_secs(1),
             multiplier: 1.0,
             max_delay: Duration::from_secs(first_invalid_secs),
@@ -224,14 +226,14 @@ fn midpoint_monotonicity_generator_records_capped_and_uncapped_cases() {
                 prop_assert_eq!(is_capped, should_be_capped);
 
                 let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
-                    max_attempts: NonZeroU32::new(5).unwrap(),
+                    max_attempts: NonZeroU32::new(5).expect("positive attempt limit"),
                     base_delay,
                     multiplier,
                     max_delay,
                     jitter_fraction: 0.0,
                 })
                 .expect("generated policy is valid");
-                let midpoint = JitterSample::new(0.5).unwrap();
+                let midpoint = JitterSample::new(0.5).expect("midpoint is valid");
                 let current = policy.backoff_delay(attempt, midpoint);
                 let next = policy.backoff_delay(next_attempt, midpoint);
                 prop_assert!(next >= current);
