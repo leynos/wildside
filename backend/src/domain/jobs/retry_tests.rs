@@ -22,7 +22,7 @@ fn policy(config: JobRetryPolicyConfig) -> Result<JobRetryPolicy, JobRetryPolicy
 
 fn valid_policy_config() -> JobRetryPolicyConfig {
     JobRetryPolicyConfig {
-        max_attempts: NonZeroU32::new(3).unwrap(),
+        max_attempts: NonZeroU32::new(3).expect("positive attempt limit"),
         base_delay: Duration::from_secs(1),
         multiplier: 2.0,
         max_delay: Duration::from_secs(10),
@@ -148,7 +148,7 @@ fn jitter_maps_linearly_around_the_nominal_delay(#[case] sample: f64, #[case] ex
     let jitter = JitterSample::new(sample).expect("case sample should be valid");
 
     assert_eq!(
-        policy.backoff_delay(NonZeroU32::new(1).unwrap(), jitter),
+        policy.backoff_delay(NonZeroU32::new(1).expect("positive attempt"), jitter),
         expected
     );
 }
@@ -167,7 +167,11 @@ fn decision_table_is_total_and_respects_failure_class_and_attempt_bound(
 ) {
     let policy = policy(valid_policy_config()).expect("valid policy should build");
     let jitter = JitterSample::new(0.5).expect("midpoint is valid");
-    let actual = policy.decide(NonZeroU32::new(attempt).unwrap(), kind, jitter);
+    let actual = policy.decide(
+        NonZeroU32::new(attempt).expect("case attempt is positive"),
+        kind,
+        jitter,
+    );
     let expected = if should_dead_letter {
         RetryDecision::DeadLetter
     } else {
@@ -218,7 +222,7 @@ fn failure_message_at_the_limit_is_preserved() {
 #[test]
 fn policy_handles_a_saturated_exponential_curve_without_exceeding_its_cap() {
     let policy = policy(JobRetryPolicyConfig {
-        max_attempts: NonZeroU32::new(10).unwrap(),
+        max_attempts: NonZeroU32::new(10).expect("positive attempt limit"),
         max_delay: Duration::from_secs(8),
         ..valid_policy_config()
     })
@@ -226,30 +230,43 @@ fn policy_handles_a_saturated_exponential_curve_without_exceeding_its_cap() {
     let jitter = JitterSample::new(0.5).expect("midpoint is valid");
 
     assert_eq!(
-        policy.backoff_delay(NonZeroU32::new(4).unwrap(), jitter),
+        policy.backoff_delay(NonZeroU32::new(4).expect("positive attempt"), jitter),
         Duration::from_secs(8)
     );
     assert_eq!(
-        policy.backoff_delay(NonZeroU32::new(5).unwrap(), jitter),
+        policy.backoff_delay(NonZeroU32::new(5).expect("positive attempt"), jitter),
         Duration::from_secs(8)
     );
     assert_eq!(
-        policy.backoff_delay(NonZeroU32::new(u32::MAX).unwrap(), jitter),
+        policy.backoff_delay(
+            NonZeroU32::new(u32::MAX).expect("maximum attempt is positive"),
+            jitter,
+        ),
         Duration::from_secs(8)
     );
-    assert!(policy.backoff_delay(NonZeroU32::new(u32::MAX).unwrap(), jitter) <= MAX_BACKOFF_DELAY);
+    assert!(
+        policy.backoff_delay(
+            NonZeroU32::new(u32::MAX).expect("maximum attempt is positive"),
+            jitter,
+        ) <= MAX_BACKOFF_DELAY
+    );
 }
 
 #[test]
 fn exponential_curve_grows_until_the_cap_then_stays_flat() {
     let policy = policy(JobRetryPolicyConfig {
-        max_attempts: NonZeroU32::new(5).unwrap(),
+        max_attempts: NonZeroU32::new(5).expect("positive attempt limit"),
         max_delay: Duration::from_secs(4),
         ..valid_policy_config()
     })
     .expect("valid policy should build");
     let jitter = JitterSample::new(0.5).expect("midpoint is valid");
-    let delay = |attempt| policy.backoff_delay(NonZeroU32::new(attempt).unwrap(), jitter);
+    let delay = |attempt| {
+        policy.backoff_delay(
+            NonZeroU32::new(attempt).expect("positive test attempt"),
+            jitter,
+        )
+    };
 
     assert!(delay(1) < delay(2));
     assert!(delay(2) < delay(3));
