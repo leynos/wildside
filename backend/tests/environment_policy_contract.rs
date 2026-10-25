@@ -3,15 +3,17 @@
 //!
 //! This target asserts what the repository *declares*: the prohibited APIs in
 //! `clippy.toml`, the deny that turns them into hard errors in every workspace
-//! package, and the embedded PostgreSQL settings the runner composes now that
-//! test support no longer writes them. That the lint actually fires on those
-//! entries is proved separately, in `environment_policy_lint.rs`.
+//! package, and the embedded PostgreSQL settings the runners compose now that
+//! test support no longer writes them. Cargo supplies non-secret version and
+//! mirror defaults; Make and CI supply the test password. That the lint
+//! actually fires on those entries is proved separately, in
+//! `environment_policy_lint.rs`.
 //!
 //! Every file is read with `include_str!`, so moving or deleting one is a
 //! compile failure rather than a runtime surprise, and each assertion matches
 //! the mechanism rather than prose about it: the entries and levels come from
-//! the parsed tables, and the Make assertion matches the assignments on the
-//! `cargo nextest run` command line.
+//! the parsed tables, and the Make assertion checks the recipe-scoped test
+//! environment exports.
 //!
 //! # Mutation proof
 //!
@@ -54,6 +56,7 @@ const PAGINATION_MANIFEST: &str = include_str!("../crates/pagination/Cargo.toml"
 const EXAMPLE_DATA_MANIFEST: &str = include_str!("../../crates/example-data/Cargo.toml");
 const ARCHITECTURE_LINT_MANIFEST: &str = include_str!("../../tools/architecture-lint/Cargo.toml");
 const MAKEFILE: &str = include_str!("../../Makefile");
+const CARGO_CONFIG: &str = include_str!("../../.cargo/config.toml");
 
 /// Every `std::env` API the policy prohibits.
 const PROHIBITED_ENVIRONMENT_APIS: [&str; 6] = [
@@ -211,27 +214,41 @@ fn a_local_deny_carries_the_companion_attribute_lints() -> TestResult {
 fn makefile_declares(statement: &str) -> bool {
     MAKEFILE
         .lines()
-        .map(str::trim_end)
+        .map(str::trim)
         .filter(|line| !line.trim_start().starts_with('#'))
         .any(|line| line == statement)
 }
 
-/// Scenario: the embedded PostgreSQL settings stop reaching the test runner,
-/// so nothing supplies them once test support no longer writes them.
+/// Report whether an active Makefile line globally exports one environment
+/// variable rather than scoping it to a target.
+fn makefile_globally_exports(name: &str) -> bool {
+    let prefix = format!("export {name}");
+    MAKEFILE
+        .lines()
+        .filter(|line| !line.starts_with('\t'))
+        .map(str::trim)
+        .filter(|line| !line.starts_with('#'))
+        .any(|line| {
+            line.strip_prefix(&prefix).is_some_and(|suffix| {
+                suffix.is_empty() || suffix.chars().next().is_some_and(char::is_whitespace)
+            })
+        })
+}
+
+/// Scenario: test-runner settings stop reaching the Rust test processes.
 ///
-/// Invariant: the Makefile still declares both overridable defaults and still
-/// exports both names, so every recipe passes them to its children verbatim.
-/// Each of the four directives is matched as a whole, uncommented line: a
-/// substring search would pass on a commented-out default, and a recipe-level
-/// `NAME=$(NAME)` prefix would be re-parsed by the shell and lose a value
-/// containing whitespace.
+/// Invariant: the Makefile declares both overridable defaults and exports
+/// them only inside the `test-rust` recipe, while unrelated recipes do not
+/// inherit them. Each Make directive is matched as a whole, uncommented line:
+/// a substring search would accept text inside a comment or global export.
 #[test]
 fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
     for statement in [
         "PG_PASSWORD ?= wildside_embedded_test",
-        "export PG_PASSWORD",
         "POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries",
-        "export POSTGRESQL_RELEASES_URL",
+        "shell_quote = '$(subst ','\"'\"',$(value $(1)))'",
+        "test-rust: workspace-sync prepare-pg-worker",
+        "export PG_PASSWORD=$(call shell_quote,PG_PASSWORD) POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)",
     ] {
         assert!(
             makefile_declares(statement),
@@ -239,13 +256,18 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
              inside a comment"
         );
     }
+    for name in ["PG_PASSWORD", "POSTGRESQL_RELEASES_URL"] {
+        assert!(
+            !makefile_globally_exports(name),
+            "{name} must not be exported to unrelated Make recipes"
+        );
+    }
     Ok(())
 }
 
-/// Direct Cargo runs must compose stable settings without replacing explicit
-/// caller configuration or mutating the environment inside test processes.
+/// Cargo may compose non-secret settings without replacing explicit caller
+/// configuration or mutating the environment inside test processes.
 #[rstest::rstest]
-#[case::password("PG_PASSWORD", "wildside_embedded_test")]
 #[case::version("PG_VERSION_REQ", "=16.10.0")]
 #[case::releases(
     "POSTGRESQL_RELEASES_URL",
@@ -255,12 +277,27 @@ fn cargo_supplies_non_forcing_postgres_defaults(
     #[case] name: &str,
     #[case] expected: &str,
 ) -> TestResult {
-    let config: Value = toml::from_str(include_str!("../../.cargo/config.toml"))?;
+    let config: Value = toml::from_str(CARGO_CONFIG)?;
     let setting = config
         .get("env")
         .and_then(|env| env.get(name))
-        .ok_or("Cargo must supply embedded PostgreSQL defaults for direct test runs")?;
+        .ok_or("Cargo must supply the non-secret PostgreSQL defaults")?;
     assert_eq!(setting.get("value").and_then(Value::as_str), Some(expected));
     assert_eq!(setting.get("force").and_then(Value::as_bool), Some(false));
+    Ok(())
+}
+
+/// Cargo's process-wide environment must not expose the test password to
+/// non-test commands such as the cluster initializer.
+#[test]
+fn cargo_does_not_supply_the_test_password_to_non_test_commands() -> TestResult {
+    let config: Value = toml::from_str(CARGO_CONFIG)?;
+    assert!(
+        config
+            .get("env")
+            .and_then(|environment| environment.get("PG_PASSWORD"))
+            .is_none(),
+        "Cargo config must not apply the test password to every Cargo command"
+    );
     Ok(())
 }
