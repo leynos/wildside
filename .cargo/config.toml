@@ -2,6 +2,7 @@
 # caller settings authoritative, just as the Makefile's defaults do.
 [env]
 PG_PASSWORD = { value = "wildside_embedded_test", force = false }
+PG_VERSION_REQ = { value = "=16.10.0", force = false }
 POSTGRESQL_RELEASES_URL = { value = "https://github.com/theseus-rs/postgresql-binaries", force = false }
 
 [profile.dev]
