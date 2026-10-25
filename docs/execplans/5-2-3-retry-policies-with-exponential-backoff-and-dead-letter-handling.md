@@ -1238,15 +1238,21 @@ Quality criteria:
 
 ## Idempotence and recovery
 
-All steps are additive and re-runnable. Embedded PostgreSQL tests provision
-throwaway clusters; re-running is safe. If a milestone fails mid-way,
-`git status` and the committed plateau of the previous milestone define the
-recovery point; revert uncommitted changes rather than patching forward. The
-only destructive operation introduced is `discard` (a guarded delete of a dead
-row), which exists solely behind the port and its tests. The scheduling writes
-(`run_at`, `max_attempts`) are guarded to the row the worker holds and are
-idempotent for a given attempt. The EP-M0 pin change is reverted by restoring
-the two caret requirements.
+Milestone changes and validation steps are additive and re-runnable. Embedded
+PostgreSQL tests provision throwaway clusters; re-running is safe. If a
+milestone fails mid-way, `git status` and the committed plateau of the previous
+milestone define the recovery point; revert uncommitted changes rather than
+patching forward. The only destructive operation introduced is `discard` (a
+guarded delete of a dead row), which exists solely behind the port and its
+tests. The scheduling writes (`run_at`, `max_attempts`) are guarded to the row
+the worker holds. Shrinking `max_attempts` is idempotent for a given attempt;
+`run_at = now() + $delay` is not, because each execution advances the deadline.
+Issue that relative scheduling update once and do not retry it after an
+ambiguous database response. If a future design retries scheduling writes,
+compute one absolute deadline and reuse it, or add a guard that proves the
+attempt has not already been scheduled. The scheduling-error recovery behaviour
+is recorded under Risks. The EP-M0 pin change is reverted by restoring the two
+caret requirements.
 
 ## Progress
 
@@ -1499,23 +1505,67 @@ the two caret requirements.
   `/tmp/epm1-rebased-typecheck.out`, `/tmp/epm1-rebased-lint.out`,
   `/tmp/epm1-rebased-markdownlint.out`, `/tmp/epm1-rebased-nixie.out`, and
   `/tmp/epm1-rebased-spelling.out`.
-- [ ] Run `coderabbit review --agent` through the scrutineer against the
-  committed EP-M1 milestone range, then resolve any valid findings before
-  accepting the milestone.
 - [x] (2026-10-25 Europe/Berlin) The first EP-M1 CodeRabbit CLI review
   completed on commit `17e3ea8` against `origin/main` at `e7ab91e`. It reported
   three overlapping trivial/minor style findings: tests and doctests used
   `.unwrap()`, and three plan passages used first-person possessives. The
   findings are addressed in the current candidate; the duplicate optional
-  diagnostic finding is covered by the same `.expect(...)` edits. Reassessment
-  remains pending. Evidence:
+  diagnostic finding is covered by the same `.expect(...)` edits. Evidence:
   `/tmp/coderabbit-393f0df6-4a19-41c6-a76a-35fb9e814fa0--5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-.out`.
+- [x] (2026-10-25 Europe/Berlin) CodeRabbit reassessed commit `3bcf1b0`
+  against `origin/main` at `e7ab91e` and identified two minor issues: the plan
+  overstated relative `run_at` idempotence, and Cargo's global environment
+  exposed the test password to non-test commands. Both are corrected in the
+  current candidate: the plan prohibits blind retries after ambiguous writes;
+  Cargo no longer supplies the password globally, and the test recipe provides
+  it only to its Rust test processes. All seven full gates passed on the fix6
+  candidate; CodeRabbit reassessment remains pending. Evidence:
+  `/tmp/coderabbit-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) All seven sequential gates passed on the
+  frozen fix6 candidate: check-fmt, test, typecheck, lint, markdownlint, nixie,
+  and spelling. The tree SHA was `7c8e701`; the diff SHA was
+  `1507c4d30763cd6c3df0ea71287531757358da3cf67917268ee7c618d6b160c1`. Evidence:
+  `/tmp/epm1-review-fix6-check-fmt.out`, `/tmp/epm1-review-fix6-test.out`,
+  `/tmp/epm1-review-fix6-typecheck.out`, `/tmp/epm1-review-fix6-lint.out`,
+  `/tmp/epm1-review-fix6-markdownlint.out`, `/tmp/epm1-review-fix6-nixie.out`,
+  and `/tmp/epm1-review-fix6-spelling.out`.
+- [ ] Commit the gated candidate, request CodeRabbit reassessment through the
+  scrutineer, and resolve any valid findings before accepting EP-M1.
 - [ ] EP-M1 domain retry policy and classification.
 - [ ] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
 ## Surprises & discoveries
+
+- Observation (2026-10-25 Makefile validation): `mbake validate Makefile`
+  rejects repeated declarations of `test-rust`, including target-specific
+  variable assignments. The test-only PostgreSQL settings therefore belong in
+  the single `test-rust` recipe. Its shell-quoted exports use `.ONESHELL` so
+  they reach all three Cargo test commands while preserving values containing
+  whitespace, quotes, dollar signs, or shell metacharacters. The environment
+  contract test guards the one target declaration, both recipe exports, and the
+  absence of global Make exports. One lint run found the duplicate target
+  declarations. The corrected-candidate test run then found that the contract
+  helper stripped trailing whitespace but not recipe indentation; 1,899 other
+  Nextest cases passed and four were skipped. The helper now trims indentation
+  too. The preceding candidate's complete test and typecheck gates passed. The
+  next lint run found the recipe body exceeded `mbake`'s five-line limit; its
+  two exports are now one shell command. The fix6 candidate passed all seven
+  sequential gates; the available space remained above 200 GB. Evidence:
+  `/tmp/epm1-review-fix3-lint.out`, `/tmp/epm1-review-fix4-test.out`,
+  `/tmp/epm1-review-fix5-lint.out`, and the fix6 logs above.
+
+- Observation (2026-10-25 initial Make target-scope experiment): GNU Make
+  parsed a target-specific `export NAME` without an assignment as a
+  prerequisite named `export`; the first candidate therefore stopped at
+  `make test` before any tests or builds ran. The valid form is
+  `target: export NAME := $(NAME)`. An isolated Make check verified that this
+  passes the default only into the Rust test target's scope, keeps unrelated
+  targets unset, and preserves a caller override. `mbake` later rejected the
+  resulting repeated target declarations, so the final recipe uses the
+  single-rule `.ONESHELL` approach described above. Evidence:
+  `/tmp/epm1-review-fix-test.out` and `/tmp/epm1-review-fix3-lint.out`.
 
 - Observation (2026-10-20 provisioning diagnosis): the direct Cargo launch
   omitted `PG_PASSWORD`, which Make exports for its tests. The setup helper
