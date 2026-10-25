@@ -503,10 +503,20 @@ pub enum JobErrorKind {
     Fatal,
 }
 
+/// Maximum UTF-8 byte length retained in a job failure message.
+pub const MAX_JOB_FAILURE_MESSAGE_BYTES: usize = 1024;
+
 /// A classified, payload-free job execution failure returned by handlers.
 pub struct JobFailure {
     kind: JobErrorKind,
-    message: String, // size-bounded at construction; never contains payload data
+    message: String, // at most MAX_JOB_FAILURE_MESSAGE_BYTES, on a character boundary
+}
+
+impl JobFailure {
+    /// Construct a payload-free failure, truncating at a UTF-8 character boundary.
+    pub fn new(kind: JobErrorKind, message: impl Into<String>) -> Self;
+    pub fn kind(&self) -> JobErrorKind;
+    pub fn message(&self) -> &str;
 }
 
 /// A jitter sample in the unit interval, validated at construction.
@@ -514,6 +524,15 @@ pub struct JitterSample(f64); // JitterSample::new(x) errors unless 0.0 <= x <= 
 
 /// Upper bound on any single backoff delay (Decision D13).
 pub const MAX_BACKOFF_DELAY: Duration = Duration::from_secs(60 * 60);
+
+/// Configuration values validated when building a [`JobRetryPolicy`].
+pub struct JobRetryPolicyConfig {
+    pub max_attempts: NonZeroU32,
+    pub base_delay: Duration,
+    pub multiplier: f64,
+    pub max_delay: Duration,
+    pub jitter_fraction: f64,
+}
 
 /// Bounded exponential backoff policy for background jobs.
 pub struct JobRetryPolicy {
@@ -532,9 +551,10 @@ pub enum RetryDecision {
 }
 
 impl JobRetryPolicy {
-    /// Errors unless attempts are non-zero, multiplier >= 1.0, jitter in
-    /// [0, 1], and the capped delay (including jitter) fits MAX_BACKOFF_DELAY.
-    pub fn new(...) -> Result<Self, JobRetryPolicyBuildError>;
+    /// Errors unless multiplier >= 1.0, jitter is in [0, 1], and the capped
+    /// delay (including jitter) fits MAX_BACKOFF_DELAY. `max_attempts` is a
+    /// `NonZeroU32`, so zero attempts cannot be configured.
+    pub fn new(config: JobRetryPolicyConfig) -> Result<Self, JobRetryPolicyBuildError>;
     pub fn decide(&self, attempt: NonZeroU32, kind: JobErrorKind, jitter: JitterSample) -> RetryDecision;
     pub fn backoff_delay(&self, attempt: NonZeroU32, jitter: JitterSample) -> Duration;
     pub fn max_attempts(&self) -> NonZeroU32;
@@ -714,7 +734,7 @@ apalis-core = "=1.0.0-rc.9"
 apalis-postgres = "=1.0.0-rc.8"
 
 # [dev-dependencies]
-googletest = "0.13" # or the current compatible release
+googletest = "0.14" # resolved to 0.14.3 in Cargo.lock
 ```
 
 ## Verification plan
@@ -738,12 +758,11 @@ Obligations:
   property test (`proptest`) over generated policies, attempts, and jitter
   samples. Rationale: the invariant spans a continuous input domain that
   examples cannot cover. Artefact:
-  `backend/src/domain/jobs/retry/tests/properties.rs` (or an inline `tests`
-  module, matching house layout). Evidence: `cargo test -p backend retry` fails
-  before implementation (red) and passes after. Non-vacuity: generators emit
-  policies across base delays from 1 ms to minutes, multipliers 1.0–10.0, and
-  jitter 0.0–1.0; a seeded fault (temporarily removing the cap clamp) must make
-  the property fail.
+  `backend/src/domain/jobs/retry_tests/properties.rs`. Evidence:
+  `cargo test -p backend retry --lib` fails before implementation (red) and
+  passes after. Non-vacuity: generators emit policies across base delays from 1
+  ms to minutes, multipliers 1.0–10.0, and jitter 0.0–1.0; a seeded fault
+  (temporarily removing the cap clamp) must make the property fail.
 - Obligation V1b (delay ceiling): construction fails whenever
   `max_delay * (1 + jitter_fraction)` exceeds `MAX_BACKOFF_DELAY`, and for
   every successfully constructed policy,
@@ -757,8 +776,10 @@ Obligations:
   Method: property test plus parameterized `rstest` cases at the boundary (the
   attempt where the cap first binds). Non-vacuity: generator classification
   records the fraction of cases where the cap binds, and both classes (capped
-  and uncapped) must be exercised. As a negative control, inverting the
-  multiplier must fail the property.
+  and uncapped) must be exercised. The final 128-case run recorded 58 uncapped
+  and 70 capped cases; the test asserts both counts are non-zero. As a negative
+  control, inverting the multiplier failed the property, and the restored
+  implementation passed it.
 - Obligation V3 (decision totality and bounds): `decide` returns
   `DeadLetter` whenever `kind == Fatal` or `attempt >= max_attempts`, and
   `Retry` otherwise; no path yields a retry beyond `max_attempts`. Method:
@@ -945,8 +966,10 @@ Green: implement `backend/src/domain/jobs/retry.rs` (pure; no adapter imports)
 with constructor validation per the interface section, including the
 `MAX_BACKOFF_DELAY` check. Add the
 `From<&EnrichmentSourceError> for JobErrorKind` bridge, and give `JobFailure` a
-size-bounded message constructor. Update the `backend/src/domain/jobs/mod.rs`
-module documentation to cover policy as well as payloads.
+message constructor capped at `MAX_JOB_FAILURE_MESSAGE_BYTES` UTF-8 bytes,
+truncated only at a character boundary. Update the
+`backend/src/domain/jobs/mod.rs` module documentation to cover policy as well
+as payloads.
 
 Refactor: add documentation comments with examples per house style, and keep
 files under 400 lines.
@@ -1371,6 +1394,114 @@ the two caret requirements.
   authorizing guarded writes to the two namespaced Apalis `metadata` keys for
   bounded requeue provenance and terminal failure reason. This resolves the
   approval gate; EP-M1 is now active.
+- [x] (2026-10-25 Europe/Berlin) EP-M1 red test captured: the focused test
+  command failed to compile on the intentionally absent retry API (`E0432` for
+  both the unit and property modules), as expected. Cargo added `googletest`
+  0.14.3 to `Cargo.lock` and resolved compatible dependencies. Log:
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-25 Europe/Berlin) Implement the pure EP-M1 policy and
+  classification API, including the 1,024-byte UTF-8 failure bound. The refined
+  focused suite passed 50 tests, including the property tests, with 824
+  filtered out. Evidence:
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-green-2.out`.
+- [x] (2026-10-25 Europe/Berlin) Run the EP-M1 negative controls. Removing the
+  configured delay clamp failed V1 on the saved cap-shrink witness; restoring
+  it passed that property. Inverting the multiplier failed V2; restoring it
+  passed with both saved property seeds. Changing `attempt >= max_attempts` to
+  `>` failed the retryable-at-bound table case, and weakening the constructor's
+  jittered ceiling failed the above-ceiling case. The restored decision table
+  passed six cases and the restored constructor boundary passed three. Logs:
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-fault-cap-clamp.out`,
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-cap-restored.out`,
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-fault-inverted-multiplier.out`,
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-multiplier-restored.out`,
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-fault-attempt-bound.out`,
+  `/tmp/epm1-attempt-bound-restored.out`,
+  `/tmp/epm1-fault-constructor-ceiling.out`, and
+  `/tmp/epm1-constructor-ceiling-restored.out`.
+- [x] (2026-10-25 Europe/Berlin) The focused EP-M1 suite passed 51 tests with
+  824 filtered out. A 128-case generated midpoint run included 58 uncapped and
+  70 capped curves; a later run included 53 uncapped and 75 capped curves. The
+  test asserts both classes occur rather than fixing the random distribution. A
+  first attempt to add this classification check failed to compile with E0689
+  because the generated multiplier needed an explicit `f64` type; after that
+  annotation the focused suite passed. Evidence:
+  `/tmp/epm1-focused-generated-coverage-typefix.out`.
+- [x] (2026-10-25 Europe/Berlin) The first full-gate attempt passed
+  `check-fmt` and `typecheck`, but `lint` identified that the five-parameter
+  constructor exceeded the repository's four-parameter Clippy limit. A named
+  `JobRetryPolicyConfig` value now keeps settings explicit at call sites and
+  reduces the constructor to one argument (D17). The started test gate stopped
+  before compilation because the gate runner's `PATH` omitted the installed
+  `pg_worker`; the next run explicitly supplies the shared Cargo bin directory.
+  Logs: `/tmp/epm1-final-lint.out`, `/tmp/epm1-final-typecheck.out`, and
+  `/tmp/epm1-final-test.out`.
+- [x] (2026-10-25 Europe/Berlin) After changing the constructor to accept
+  `JobRetryPolicyConfig`, the focused retry suite passed again: 51 passed, 824
+  filtered out. This run recorded 53 uncapped and 75 capped generated curves.
+  Evidence: `/tmp/epm1-config-focused.out`.
+- [x] (2026-10-25 Europe/Berlin) The next full-gate attempt passed
+  `check-fmt` and stopped at `lint`: Clippy also flags the parameterized
+  invalid-configuration test's five separate inputs. The test now accepts one
+  `JobRetryPolicyConfig` plus the expected error, with a four-parameter helper
+  constructing named configurations. This keeps the test readable without a
+  lint suppression. The focused suite then passed all 51 tests (824 filtered;
+  this run generated 66 uncapped and 62 capped curves). Evidence:
+  `/tmp/epm1-final-env-lint.out` and `/tmp/epm1-test-arity-focused.out`.
+- [x] (2026-10-25 Europe/Berlin) The next sequential gate run passed
+  `check-fmt`, `lint`, and `typecheck`, then `make test` reached 1,017 of 1,899
+  Nextest cases before interruption. Database-backed tests repeatedly failed at
+  setup with `invalid value for parameter "TimeZone": "UTC"`. Inspection found
+  that wildcard resolution selected embedded PostgreSQL 18.6.1, whose installed
+  timezone directory contains `UCT` but no `UTC`; SQLx 0.8.6 sends
+  `TimeZone=UTC` during connection startup. The repository's cache warm-up
+  already pins 16.10.0, but direct Cargo test processes had no `PG_VERSION_REQ`
+  default. `.cargo/config.toml` now supplies non-forcing `PG_VERSION_REQ` at
+  `=16.10.0`, and the environment policy contract guards that default. The
+  interrupted log was briefly shared by a duplicate gate invocation and is
+  treated only as failure evidence. Evidence: `/tmp/epm1-arity-check-fmt.out`,
+  `/tmp/epm1-arity-lint.out`, `/tmp/epm1-arity-typecheck.out`, and
+  `/tmp/epm1-arity-test.out`.
+- [x] (2026-10-25 Europe/Berlin) The PostgreSQL version-default contract passed
+  all seven tests, including the non-forcing `PG_VERSION_REQ` case. The first
+  focused Apalis run waited on the shared cluster lock retained by the orphaned
+  PostgreSQL 18 process from the interrupted full suite. A retry with isolated
+  `TMPDIR` and `PG_DATA_DIR` then exposed a missing `target/pg_worker`; after
+  `make prepare-pg-worker`, the fresh-cluster Apalis BDD target passed all 14
+  tests, including SQLx connection startup with `TimeZone=UTC`. The orphaned
+  server was left untouched. Logs:
+  `/tmp/test-epm1-environment-policy-contract.out`,
+  `/tmp/test-epm1-pg16-apalis-bdd.out`,
+  `/tmp/test-epm1-pg16-apalis-bdd-isolated-lock.out`,
+  `/tmp/prepare-pg-worker-epm1.out`, and
+  `/tmp/test-epm1-pg16-apalis-bdd-ready.out`.
+- [x] (2026-10-25 Europe/Berlin) Rebase the branch onto the refreshed PR target
+  `origin/main` at `e7ab91e`, preserving the exact 25-commit series from its
+  verified base `380e7e8`. The PR base SHA and the first branch commit's parent
+  both identified that base; all commits were single-parent and the range
+  contained no merges. The rebase used Git's built-in `zdiff3` machinery
+  because Weave was selected only by the user-wide attributes file. It
+  completed without conflicts, and `git range-diff` matched all 25 old/new
+  commits. The staged EP-M1 candidate was saved and restored with its index.
+  The current target's `Cargo.lock` was used as the starting point, then
+  `cargo update --workspace` rebuilt the lock for `googletest` 0.14.3 and its
+  compatible dependency graph. The developers' guide retains both upstream
+  runner guidance and the PostgreSQL runner contract. Rebase receipt and
+  recovery materials are under `/tmp/rebase-epm1-20261025-*`.
+- [x] (2026-10-25 Europe/Berlin) The complete EP-M1 deterministic gate sequence
+  passed on staged candidate tree `2be4cfa` at rebased `HEAD` `1811f516`. The
+  test gate passed 1,900 Nextest cases (four skipped), both compile-fail
+  checks, 614 workflow-contract tests (one skipped), 115 script doctests (13
+  skipped), 14 action tests, and frontend tests. `typecheck`, `lint`, Markdown
+  lint, Mermaid validation, and spelling also passed. Lint emitted only
+  non-fatal existing Dependabot YAML and OpenAPI unused-schema warnings.
+  Evidence: `/tmp/epm1-rebased-check-fmt.out`, `/tmp/epm1-rebased-test.out`,
+  `/tmp/epm1-rebased-typecheck.out`, `/tmp/epm1-rebased-lint.out`,
+  `/tmp/epm1-rebased-markdownlint.out`, `/tmp/epm1-rebased-nixie.out`, and
+  `/tmp/epm1-rebased-spelling.out`.
+- [ ] Run `coderabbit review --agent` through the scrutineer against the
+  committed EP-M1 milestone range, then resolve any valid findings before
+  accepting the milestone.
 - [ ] EP-M1 domain retry policy and classification.
 - [ ] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
@@ -1734,31 +1865,31 @@ the two caret requirements.
   limit exceeds the current policy: the retryable failure at the policy limit
   must become unfetchable even though the in-memory limit still permits another
   attempt. When `Attempt::current() >= context max_attempts`, no limit shrink
-  is needed because the ack already writes `Killed`. If D15 is approved, the
+  is needed because the ack already writes `Killed`. Under accepted D15, the
   terminal update also writes the namespaced reason key before the ack, whether
-  or not a limit shrink is needed. Without D15, the status and attempt fields
-  cannot distinguish every terminal reason, so implementation remains blocked.
-  The ack does not touch `run_at` or `max_attempts`; after a terminal shrink,
-  the row may be `Failed` but is permanently dead under the existing dead
-  predicate. Otherwise the ack writes `Killed` at the in-memory attempt limit.
-  The fetch path rehydrates `Attempt` from persisted `attempts`. Rationale: at
-  rc.7–rc.9 the in-process alternative is racy (see `Surprises & discoveries`).
-  The durable form closes the race, because the row is never fetchable during
-  the delay. It also frees worker slots during backoff, survives worker crashes
-  with attempt history intact, makes `max_attempts` a lifetime bound rather
-  than a per-lease bound, and removes the `apalis` facade dependency,
-  AXIOM-FACADE, the `TOTAL_BACKOFF_BUDGET` coupling to orphan recovery, and the
-  custom `tower::retry::Policy`. The cost is one extra SQL statement per
-  failure, and backoff precision bounded below by the poll interval. Panel
-  prior art (graphile-worker, sidekiq) uses this model. The domain
-  `JobRetryPolicy` remains the executed policy. Consequences to apply before
-  EP-M1 if approved: rewrite D1, D2, D4, the "Interfaces and dependencies"
-  adapter section, obligations V1b, V4, and V8, the EP-M2 green step, and the
-  Risks entries tied to in-process backoff. Replace AXIOM-ATTEMPT with
-  AXIOM-DURABLE, the five-part runtime probe in EP-M0. Date/author: 2026-10-14,
-  planning review. These consequences were applied on 2026-10-17. The wrapper
-  is a `tower::Service` over the task, so it reads the in-memory `max_attempts`
-  from `parts.ctx` rather than an extractor.
+  or not a limit shrink is needed. Rows without that key remain `Unclassified`
+  because status and attempt fields cannot identify the cause of legacy
+  failures. The ack does not touch `run_at` or `max_attempts`; after a terminal
+  shrink, the row may be `Failed` but is permanently dead under the existing
+  dead predicate. Otherwise the ack writes `Killed` at the in-memory attempt
+  limit. The fetch path rehydrates `Attempt` from persisted `attempts`.
+  Rationale: at rc.7–rc.9 the in-process alternative is racy (see
+  `Surprises & discoveries`). The durable form closes the race, because the row
+  is never fetchable during the delay. It also frees worker slots during
+  backoff, survives worker crashes with attempt history intact, makes
+  `max_attempts` a lifetime bound rather than a per-lease bound, and removes the
+  `apalis` facade dependency, AXIOM-FACADE, the `TOTAL_BACKOFF_BUDGET`
+  coupling to orphan recovery, and the custom `tower::retry::Policy`. The cost
+  is one extra SQL statement per failure, and backoff precision bounded below
+  by the poll interval. Panel prior art (graphile-worker, sidekiq) uses this
+  model. The domain `JobRetryPolicy` remains the executed policy. Consequences
+  to apply before EP-M1 if approved: rewrite D1, D2, D4, the "Interfaces and
+  dependencies" adapter section, obligations V1b, V4, and V8, the EP-M2 green
+  step, and the Risks entries tied to in-process backoff. Replace AXIOM-ATTEMPT
+  with AXIOM-DURABLE, the five-part runtime probe in EP-M0. Date/author:
+  2026-10-14, planning review. These consequences were applied on 2026-10-17.
+  The wrapper is a `tower::Service` over the task, so it reads the in-memory
+  `max_attempts` from `parts.ctx` rather than an extractor.
 - D12 — `requeue` restores the queue's configured retry budget. Rationale:
   under D4 and D11, a fatally dead row has `max_attempts` equal to its attempt
   count. Resetting only `attempts = 0` would leave a requeued job with a budget
@@ -1767,9 +1898,9 @@ the two caret requirements.
   `JobRetryPolicy`, and it refuses with `UnknownQueue` rather than guess. A
   budget lookup keeps the port signature operator-friendly. Keep the queue's
   original budget out of metadata: the column is Apalis-managed and its shape
-  may change in 1.0.0. Proposed D15 concerns the distinct requeue count and
-  terminal reason; V8 must verify both keys before the 1.0.0 upgrade.
-  Date/author: 2026-10-17, planning agent; clarified 2026-10-23.
+  may change in 1.0.0. Accepted D15 records the distinct requeue count and
+  terminal reason in namespaced metadata; V8 must verify both keys before the
+  1.0.0 upgrade. Date/author: 2026-10-17, planning agent; clarified 2026-10-23.
 - D13 — Replace `TOTAL_BACKOFF_BUDGET` with a per-delay ceiling,
   `MAX_BACKOFF_DELAY` (one hour). Rationale: the total budget existed to bound
   worker-slot occupancy and to stay below the orphan-recovery threshold. Under
@@ -1804,6 +1935,18 @@ the two caret requirements.
   because it would change Apalis's serialized error representation. The user
   accepted the two metadata writes on 2026-10-25 Europe/Berlin. Date/author:
   2026-10-23 Europe/Berlin, implementation review; acceptance: user.
+- D16 — Cap `JobFailure` messages at 1,024 UTF-8 bytes and truncate only at a
+  character boundary. Rationale: the failure is payload-free and later becomes
+  the bounded plain Apalis `last_result`; a byte cap gives that boundary an
+  exact, reusable contract without producing invalid UTF-8. Date/author:
+  2026-10-25 Europe/Berlin, implementation refinement.
+- D17 — Group retry-policy constructor values in `JobRetryPolicyConfig` and
+  accept that value from `JobRetryPolicy::new`. Rationale: Clippy's configured
+  argument limit is four; named fields keep each policy setting clear at the
+  call site while preserving constructor validation and policy behaviour. The
+  invalid-configuration rstest cases also pass that value as a unit to keep the
+  test helper within the same limit. Date/author: 2026-10-25 Europe/Berlin,
+  implementation refinement.
 
 ## Outcomes & retrospective
 
@@ -1897,8 +2040,8 @@ storage-scheduled backoff). The plan is rewritten around them, and a
 - Issue [#550](https://github.com/leynos/wildside/issues/550) tracks the
   Apalis 1.0.0 upgrade.
 
-The next step is to resolve proposed D15. After approval, begin EP-M1; if it is
-rejected, revise the design and obtain approval before implementation.
+This paragraph records the plan state before D15 was accepted. The user's
+2026-10-25 acceptance resolved that approval gate; EP-M1 is now active.
 
 2026-10-23 Europe/Berlin: reconciled the M0 local CodeRabbit findings.
 Corrected the post-acknowledgement provenance assertion, clarified that the
