@@ -1645,6 +1645,25 @@ caret requirements.
   rerun had also exposed contention with an unrelated shared PostgreSQL lock;
   using an owned temporary root under `/var/tmp` let the complete suite pass
   without disturbing the lock owner.
+- Observation (2026-10-26, post-hook recovery rerun): the stop hook again
+  reported ENOSPC while Rustdoc wrote its target fingerprint and Nixie created
+  a temporary directory. After the user reported that storage had been
+  recovered, the complete sequential gate suite passed on clean HEAD
+  `b0df3de0251b63a3717ea1e72cdfc8de1a16a88c` (tree
+  `43510ecd4554890c722fc5cecc162e85ca0467a9`). Free space was 147 GiB at both
+  the beginning and end. `make test` passed 1,901 Nextest tests (four skipped),
+  both compile-fail checks, 614 workflow doctests (one skipped), 115 script
+  doctests (13 skipped), and the frontend and lint-actions suites. The test
+  used the owned PostgreSQL root `/var/tmp/wildside-b0df3de-thqa6ctq`; compiler
+  admission remained healthy. Evidence:
+  `/tmp/wildside-b0df3de-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/wildside-b0df3de-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
 - Observation (2026-10-25 Makefile validation): `mbake validate Makefile`
   rejects repeated declarations of `test-rust`, including target-specific
   variable assignments. The test-only PostgreSQL settings therefore belong in
