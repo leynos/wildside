@@ -214,23 +214,45 @@ fn a_local_deny_carries_the_companion_attribute_lints() -> TestResult {
 fn makefile_declares(statement: &str) -> bool {
     MAKEFILE
         .lines()
+        .filter(|line| !line.starts_with('\t'))
         .map(str::trim)
         .filter(|line| !line.trim_start().starts_with('#'))
         .any(|line| line == statement)
 }
 
+/// Report whether `statement` occurs in the recipe for the exact target.
+fn makefile_target_recipe_contains(target: &str, statement: &str) -> bool {
+    let mut is_target_recipe = false;
+
+    for line in MAKEFILE.lines() {
+        if line.starts_with('\t') {
+            if is_target_recipe && line.trim() == statement {
+                return true;
+            }
+        } else {
+            is_target_recipe = line.trim() == target;
+        }
+    }
+
+    false
+}
+
 /// Report whether an active Makefile line globally exports one environment
 /// variable rather than scoping it to a target.
-fn makefile_globally_exports(name: &str) -> bool {
+fn makefile_globally_exports(makefile: &str, name: &str) -> bool {
     let prefix = format!("export {name}");
-    MAKEFILE
+    makefile
         .lines()
         .filter(|line| !line.starts_with('\t'))
         .map(str::trim)
         .filter(|line| !line.starts_with('#'))
         .any(|line| {
             line.strip_prefix(&prefix).is_some_and(|suffix| {
-                suffix.is_empty() || suffix.chars().next().is_some_and(char::is_whitespace)
+                suffix.is_empty()
+                    || suffix
+                        .chars()
+                        .next()
+                        .is_some_and(|character| character == '=' || character.is_whitespace())
             })
         })
 }
@@ -248,7 +270,6 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
         "POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries",
         "shell_quote = '$(subst ','\"'\"',$(value $(1)))'",
         "test-rust: workspace-sync prepare-pg-worker",
-        "export PG_PASSWORD=$(call shell_quote,PG_PASSWORD) POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)",
     ] {
         assert!(
             makefile_declares(statement),
@@ -256,13 +277,37 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
              inside a comment"
         );
     }
+    assert!(makefile_target_recipe_contains(
+        "test-rust: workspace-sync prepare-pg-worker",
+        "export PG_PASSWORD=$(call shell_quote,PG_PASSWORD) POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)",
+    ));
     for name in ["PG_PASSWORD", "POSTGRESQL_RELEASES_URL"] {
         assert!(
-            !makefile_globally_exports(name),
+            !makefile_globally_exports(MAKEFILE, name),
             "{name} must not be exported to unrelated Make recipes"
         );
     }
     Ok(())
+}
+
+#[test]
+fn makefile_global_export_detection_requires_a_variable_boundary() {
+    assert!(makefile_globally_exports(
+        "export PG_PASSWORD=value\n",
+        "PG_PASSWORD"
+    ));
+    assert!(makefile_globally_exports(
+        "export PG_PASSWORD OTHER\n",
+        "PG_PASSWORD"
+    ));
+    assert!(!makefile_globally_exports(
+        "export PG_PASSWORD_EXTRA=value\n",
+        "PG_PASSWORD"
+    ));
+    assert!(!makefile_globally_exports(
+        "\texport PG_PASSWORD=value\n",
+        "PG_PASSWORD"
+    ));
 }
 
 /// Cargo may compose non-secret settings without replacing explicit caller
