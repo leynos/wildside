@@ -5,14 +5,18 @@
 //!
 //! - `FakeQueueProvider` records pushed job payloads for assertions.
 //! - `FailingQueueProvider` simulates queue dispatch failures.
-//! - `RecordingRouteQueueMetrics` captures enqueue outcomes and latencies.
+//! - `RecordingRouteQueueMetrics` captures enqueue, retry, and dead-letter
+//!   outcomes.
 
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::domain::ports::{JobDispatchError, RouteQueueMetrics, RouteQueueOutcome};
+use crate::domain::ports::{
+    JobDispatchError, RouteDeadLetterOutcome, RouteQueueMetrics, RouteQueueOutcome,
+    RouteRetryOutcome,
+};
 use crate::outbound::queue::apalis_route_queue::QueueProvider;
 
 /// Fake queue provider that records pushed payloads for assertion.
@@ -93,6 +97,8 @@ impl QueueProvider for FailingQueueProvider {
 #[derive(Debug, Clone, Default)]
 pub struct RecordingRouteQueueMetrics {
     observations: Arc<Mutex<Vec<(RouteQueueOutcome, Duration)>>>,
+    retry_observations: Arc<Mutex<Vec<RouteRetryOutcome>>>,
+    dead_letter_observations: Arc<Mutex<Vec<RouteDeadLetterOutcome>>>,
 }
 
 impl RecordingRouteQueueMetrics {
@@ -107,6 +113,36 @@ impl RecordingRouteQueueMetrics {
             .map(|guard| guard.clone())
             .map_err(|error| format!("failed to lock route queue metrics: {error}"))
     }
+
+    /// Return durable retry outcomes recorded by this test recorder.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// let retry_outcomes = metrics.retry_observations()?;
+    /// assert_eq!(retry_outcomes, [RouteRetryOutcome::Scheduled]);
+    /// ```
+    pub fn retry_observations(&self) -> Result<Vec<RouteRetryOutcome>, String> {
+        self.retry_observations
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|error| format!("failed to lock route retry metrics: {error}"))
+    }
+
+    /// Return terminal dead-letter outcomes recorded by this test recorder.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// let dead_letters = metrics.dead_letter_observations()?;
+    /// assert_eq!(dead_letters, [RouteDeadLetterOutcome::Exhausted]);
+    /// ```
+    pub fn dead_letter_observations(&self) -> Result<Vec<RouteDeadLetterOutcome>, String> {
+        self.dead_letter_observations
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|error| format!("failed to lock dead-letter metrics: {error}"))
+    }
 }
 
 impl RouteQueueMetrics for RecordingRouteQueueMetrics {
@@ -116,5 +152,21 @@ impl RouteQueueMetrics for RecordingRouteQueueMetrics {
             Err(error) => panic!("failed to lock route queue metrics: {error}"),
         };
         observations.push((outcome, latency));
+    }
+
+    fn observe_retry(&self, outcome: RouteRetryOutcome) {
+        let mut observations = match self.retry_observations.lock() {
+            Ok(observations) => observations,
+            Err(error) => panic!("failed to lock route retry metrics: {error}"),
+        };
+        observations.push(outcome);
+    }
+
+    fn observe_dead_letter(&self, outcome: RouteDeadLetterOutcome) {
+        let mut observations = match self.dead_letter_observations.lock() {
+            Ok(observations) => observations,
+            Err(error) => panic!("failed to lock dead-letter metrics: {error}"),
+        };
+        observations.push(outcome);
     }
 }

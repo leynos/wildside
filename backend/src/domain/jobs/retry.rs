@@ -108,6 +108,22 @@ impl JobFailure {
 pub struct JitterSample(f64);
 
 impl JitterSample {
+    /// Return a deterministic midpoint sample for failure-safe fallbacks.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::jobs::retry::JitterSample;
+    ///
+    /// assert_eq!(
+    ///     JitterSample::midpoint(),
+    ///     JitterSample::new(0.5).expect("the midpoint is valid")
+    /// );
+    /// ```
+    pub const fn midpoint() -> Self {
+        Self(0.5)
+    }
+
     /// Construct a sample in the inclusive range `[0, 1]`.
     ///
     /// # Examples
