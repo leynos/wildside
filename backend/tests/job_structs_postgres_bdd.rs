@@ -1,7 +1,10 @@
 //! Persisted-boundary BDD coverage for domain job envelopes.
 
+use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use backend::domain::jobs::retry::{JobRetryPolicy, JobRetryPolicyConfig};
 use backend::domain::jobs::{BoundingBox, EnrichmentJob, EnrichmentJobParams, GenerateRouteJob};
 use backend::domain::ports::{NoOpRouteQueueMetrics, RouteQueue, RouteSubmissionRequest};
 use backend::domain::{IdempotencyKey, UserId};
@@ -24,6 +27,17 @@ use support::embedded_postgres::provision_template_database;
 
 const REQUEST_ID: Uuid = Uuid::from_bytes([0x61; 16]);
 const ENRICHMENT_JOB_ID: Uuid = Uuid::from_bytes([0x62; 16]);
+
+fn persisted_job_retry_policy() -> JobRetryPolicy {
+    JobRetryPolicy::new(JobRetryPolicyConfig {
+        max_attempts: NonZeroU32::new(5).expect("positive test attempt limit"),
+        base_delay: Duration::from_millis(10),
+        multiplier: 2.0,
+        max_delay: Duration::from_secs(60),
+        jitter_fraction: 0.0,
+    })
+    .expect("valid persisted-job retry policy")
+}
 
 struct PersistedPayloads {
     route: Value,
@@ -135,9 +149,13 @@ fn enqueue_both_jobs_through_apalis_postgresql(world: &SharedContext) {
     };
 
     let results = handle.block_on(async move {
-        let provider = ApalisPostgresProvider::new(pool)
-            .await
-            .map_err(|error| error.to_string());
+        let provider = ApalisPostgresProvider::new(
+            pool,
+            "job-structs-postgres-bdd",
+            persisted_job_retry_policy(),
+        )
+        .await
+        .map_err(|error| error.to_string());
         match provider {
             Ok(provider) => {
                 let route_queue: GenericApalisRouteQueue<GenerateRouteJob, _> =

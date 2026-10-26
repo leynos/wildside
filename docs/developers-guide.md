@@ -2394,11 +2394,16 @@ tests may use Prometheus to assert isolated registries.
 Queue observability:
 
 - `RouteQueueMetrics` – The domain-owned metrics port used by queue adapters
-  to record enqueue outcomes without depending on Prometheus or process-global
-  state.
+  to record enqueue, retry, and dead-letter outcomes without depending on
+  Prometheus or process-global state.
 - `RouteQueueOutcome` – The bounded outcome label type for queue metrics. It
   currently exposes only `success` and `failure`, keeping metric cardinality
   predictable.
+- `RouteRetryOutcome` – The bounded durable retry label type. It distinguishes
+  `scheduled` from `schedule_failure` without adding queue or job identifiers
+  to metric labels.
+- `RouteDeadLetterOutcome` – The bounded terminal-reason label type. It
+  distinguishes `exhausted` from `fatal`.
 - `NoOpRouteQueueMetrics` – The no-op implementation used by tests and
   metrics-disabled builds. Prefer it whenever a test is not asserting metrics
   behaviour.
@@ -2416,6 +2421,15 @@ Queue observability:
 - `route_queue_enqueue_latency_seconds{outcome=success|failure}` – A
   feature-gated Prometheus histogram for end-to-end queue enqueue latency in
   seconds.
+- `route_queue_retry_total{outcome=scheduled|schedule_failure}` – A
+  feature-gated counter for durable retry scheduling results.
+- `route_queue_dead_letter_total{reason=exhausted|fatal}` – A feature-gated
+  counter for terminal retry outcomes.
+- Retry policy belongs to one queue/job family. The Apalis handler wrapper
+  persists `run_at` before returning the failure to the PostgreSQL
+  acknowledgement; it installs no in-process retry middleware. Terminal
+  outcomes persist `wildside.retry.dead_reason` in the existing Apalis JSONB
+  metadata, and acknowledgements preserve that value and other metadata.
 - `tracing` – The adapter emits `debug` on enqueue success and `warn` on
   failure points (serialization, push, and setup failures), including latency
   and the adapter outcome.

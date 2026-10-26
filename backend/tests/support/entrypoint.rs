@@ -52,6 +52,10 @@ macro_rules! declare_test_support {
         #[path = "../support/profile_interests.rs"]
         pub mod profile_interests;
     };
+    (@module queue_retry_worker) => {
+        #[path = "../support/queue_retry_worker.rs"]
+        pub mod queue_retry_worker;
+    };
     (@module redis) => {
         #[path = "../support/redis.rs"]
         pub mod redis;

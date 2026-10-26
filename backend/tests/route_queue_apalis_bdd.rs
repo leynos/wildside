@@ -10,8 +10,11 @@
 //! test context. This keeps queue operations deterministic and avoids recreating
 //! a runtime for each step.
 
+use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use backend::domain::jobs::retry::{JobRetryPolicy, JobRetryPolicyConfig};
 use backend::domain::ports::{JobDispatchError, NoOpRouteQueueMetrics, RouteQueue};
 use backend::outbound::queue::test_helpers::FailingQueueProvider;
 use backend::outbound::queue::{ApalisPostgresProvider, GenericApalisRouteQueue};
@@ -32,6 +35,17 @@ use support::embedded_postgres::provision_template_database;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TestPlan {
     name: String,
+}
+
+fn route_queue_retry_policy() -> JobRetryPolicy {
+    JobRetryPolicy::new(JobRetryPolicyConfig {
+        max_attempts: NonZeroU32::new(5).expect("positive test attempt limit"),
+        base_delay: Duration::from_millis(10),
+        multiplier: 2.0,
+        max_delay: Duration::from_secs(60),
+        jitter_fraction: 0.0,
+    })
+    .expect("valid route queue retry policy")
 }
 
 struct TestContext {
@@ -95,7 +109,14 @@ fn setup_test_context() -> Result<TestContext, String> {
 
     // Create the Apalis provider (which calls setup internally) and queue adapter.
     let provider = runtime
-        .block_on(async { ApalisPostgresProvider::new(pool.clone()).await })
+        .block_on(async {
+            ApalisPostgresProvider::new(
+                pool.clone(),
+                "route-queue-apalis-bdd",
+                route_queue_retry_policy(),
+            )
+            .await
+        })
         .map_err(|err| err.to_string())?;
     let queue = GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
 
@@ -142,7 +163,12 @@ fn the_queue_adapter_uses_an_invalid_database_connection(world: &Option<SharedCo
                 .expect("lazy pool creation should succeed");
 
             // Try to create the Apalis provider - this may fail at setup time.
-            ApalisPostgresProvider::new(broken_pool).await
+            ApalisPostgresProvider::new(
+                broken_pool,
+                "route-queue-apalis-bdd",
+                route_queue_retry_policy(),
+            )
+            .await
         },
         |ctx, provider_result| {
             match provider_result {
