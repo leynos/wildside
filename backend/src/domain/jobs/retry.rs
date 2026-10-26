@@ -187,7 +187,7 @@ pub struct JobRetryPolicy {
 pub struct JobRetryPolicyConfig {
     /// Maximum number of attempts, including the initial attempt.
     pub max_attempts: NonZeroU32,
-    /// Delay before the first retry.
+    /// Uncapped starting delay; the first retry is clamped to `max_delay`.
     pub base_delay: Duration,
     /// Exponential growth factor, at least `1.0`.
     pub multiplier: f64,
