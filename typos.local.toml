@@ -29,6 +29,9 @@ ignore = [
   "\\ \\ \\ Then\\ the\\ response\\ is\\ unauthorised\\ with\\ a\\ trace\\ id",
   "\\ \\ \\ \\ \"color\":\\ \"\\^5\\.0\\.0\",",
   "\\ \\ \\ \\ Microsegmentation\\ \\-\\ ColorTokens,",
+  # PostgreSQL requires ANALYZE in these exact test SQL fragments.
+  "sqlx::query\\(\"ANALYZE apalis\\.jobs\"\\)",
+  "EXPLAIN\\ \\(ANALYZE,\\ BUFFERS,\\ FORMAT\\ JSON\\)",
   "\\ \\ \\ \\ \\ \\ \\ \\ \"FROM\\ pg_catalog\\.pg_attribute\\ attr\\ \",",
   "\\ \\ \\ \\ \\ \\ \\ \\ \"FROM\\ pg_catalog\\.pg_class\\ cls\\ \",",
   "\\ \\ \\ \\ \\ \\ \\ \\ \"FROM\\ pg_catalog\\.pg_constraint\\ con\\ \",",
