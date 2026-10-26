@@ -1529,8 +1529,43 @@ caret requirements.
   `/tmp/epm1-review-fix6-typecheck.out`, `/tmp/epm1-review-fix6-lint.out`,
   `/tmp/epm1-review-fix6-markdownlint.out`, `/tmp/epm1-review-fix6-nixie.out`,
   and `/tmp/epm1-review-fix6-spelling.out`.
-- [ ] Commit the gated candidate, request CodeRabbit reassessment through the
-  scrutineer, and resolve any valid findings before accepting EP-M1.
+- [x] (2026-10-26 Europe/Berlin) CodeRabbit CLI 0.9.1 reviewed `fe1ca1d`
+  against `origin/main` and found four valid issues: clarify the uncapped
+  `base_delay`, scope the Make export assertion to the `test-rust` recipe,
+  recognize `=` as an export-name boundary, and use the implemented
+  `backoff_delay` API in D11. The current stop-hook run then failed because the
+  filesystem ran out of space while Cargo wrote a rustdoc fingerprint and Nixie
+  created its temporary directory. The user confirmed that disk capacity has
+  since been recovered; rerun all gates on the corrected candidate.
+- [x] (2026-10-26 Europe/Berlin) The first attempt to add a synthetic Make
+  export regression exposed an `E0061` helper-signature mismatch during
+  `make test`; the helper now accepts the Makefile source used by both the real
+  contract and synthetic boundary cases. `check-fmt` passed before the compile
+  failure. Evidence: `/tmp/epm1-coderabbit-fix1-check-fmt.out` and
+  `/tmp/epm1-coderabbit-fix1-test.out`. The full sequence must be rerun.
+- [x] (2026-10-26 Europe/Berlin) Fixed the four CodeRabbit findings on the
+  current candidate: clarified the uncapped `base_delay`, scoped the Make
+  export contract to the `test-rust` recipe, recognized `=` as an export-name
+  boundary, and corrected D11 to call `backoff_delay`. All seven sequential
+  gates then passed: `check-fmt` (3s), `test` (610s), `typecheck` (7s), `lint`
+  (233s), `markdownlint` (28s), `nixie` (5s), and `spelling` (18s). The test
+  run used `/var/tmp/wildside-epm1-full-igo1j3xy` for isolated PostgreSQL
+  state; it passed 1,901 Nextest cases (four skipped), both trybuild checks,
+  614 workflow doctests (one skipped), 115 script doctests (13 skipped), and
+  the frontend and lint-actions suites. Candidate HEAD/tree/diff were
+  `fe1ca1dcfdc65677c6acd9e92f052c4fc4e17333`,
+  `cb016e25228e20b8d4e9c77df7ed33f7ab93d36c`, and
+  `92fb496de77d660549f3e37826bf97629f438136031525d74c36ea1a86b2bbe6`. Evidence:
+  `/tmp/epm1-full2-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/epm1-full2-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [ ] Commit the gated candidate, request CodeRabbit reassessment, and resolve
+  valid findings before accepting EP-M1.
 - [ ] EP-M1 domain retry policy and classification.
 - [ ] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
@@ -1538,6 +1573,15 @@ caret requirements.
 
 ## Surprises & discoveries
 
+- Observation (2026-10-26, stop-hook validation): `make lint` could not write
+  `target/.rustdoc_fingerprint.json`, and Nixie could not create a temporary
+  directory because the filesystem was full. These infrastructure errors did
+  not establish source failures. After the user reported recovery, `df` showed
+  184 GB free; all seven sequential gates subsequently passed, including
+  rustdoc and Nixie, with 175 GB still free after validation. The first test
+  rerun had also exposed contention with an unrelated shared PostgreSQL lock;
+  using an owned temporary root under `/var/tmp` let the complete suite pass
+  without disturbing the lock owner.
 - Observation (2026-10-25 Makefile validation): `mbake validate Makefile`
   rejects repeated declarations of `test-rust`, including target-specific
   variable assignments. The test-only PostgreSQL settings therefore belong in
@@ -1915,8 +1959,8 @@ caret requirements.
   and locked by this worker
   (`WHERE id = $1 AND lock_by = $2 AND status = 'Running'`). For a retryable
   error below the policy limit, it sets
-  `run_at = now() + JobRetryPolicy::delay(attempt, jitter)`. A fatal error or a
-  retryable error at the policy limit takes the terminal path. If
+  `run_at = now() + JobRetryPolicy::backoff_delay(attempt, jitter)`. A fatal
+  error or a retryable error at the policy limit takes the terminal path. If
   `Attempt::current() < context max_attempts`, the guarded update sets the
   persisted `max_attempts` to `Attempt::current()`, exactly the `attempts`
   value the ack will persist. This also handles a pre-existing row whose stored
