@@ -7,6 +7,7 @@ import type {
   ConfigEnv,
   ConfigPluginContext,
   Logger,
+  MinimalPluginContextWithoutEnvironment,
   Plugin,
   ResolvedConfig,
   UserConfig,
@@ -15,63 +16,36 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
 import type { spawnSync } from 'node:child_process';
 import type { PathLike } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
 
 import { designTokensPlugin } from '../vite/plugins/design-tokens';
-import { pathToString } from './test-helpers';
 import { createMockLogger } from './test-logger';
 
 const existsSyncMock = mock();
 const spawnSyncMock = mock();
 
-mock.module('node:fs', () => ({
+await mock.module('node:fs', () => ({
   existsSync: existsSyncMock,
 }));
 
-mock.module('node:child_process', () => ({
+await mock.module('node:child_process', () => ({
   spawnSync: spawnSyncMock,
 }));
 
-type ConfigHook = NonNullable<Plugin['config']>;
-type ConfigHookHandler = Extract<
-  ConfigHook,
-  (this: ConfigPluginContext, config: UserConfig, env: ConfigEnv) => unknown
->;
-type ConfigHookDescriptor = Extract<
-  ConfigHook,
-  { handler: (this: ConfigPluginContext, config: UserConfig, env: ConfigEnv) => unknown }
->;
-
-function isConfigHookHandler(hook: Plugin['config']): hook is ConfigHookHandler {
-  return typeof hook === 'function';
-}
-
-function isConfigHookDescriptor(hook: Plugin['config']): hook is ConfigHookDescriptor {
-  return (
-    typeof hook === 'object' &&
-    hook !== null &&
-    'handler' in hook &&
-    typeof hook.handler === 'function'
-  );
-}
-
-async function invokeConfigHook(plugin: Plugin) {
+function invokeConfigHook(plugin: Plugin) {
   const hook = plugin.config;
-  if (!hook) return undefined;
-  const initialConfig = {} satisfies UserConfig;
+  if (!hook) return;
+  const initialConfig: UserConfig = {};
   const env: ConfigEnv = { command: 'serve', mode: 'development' };
-  if (isConfigHookHandler(hook)) {
-    return hook.bind({} as ConfigPluginContext)(initialConfig, env);
+  if ('handler' in hook) {
+    // SAFETY: This plugin's config hook closes over its dependencies and does not read Vite context.
+    return hook.handler.call({} as ConfigPluginContext, initialConfig, env);
   }
-  if (isConfigHookDescriptor(hook)) {
-    return hook.handler.bind({} as ConfigPluginContext)(initialConfig, env);
-  }
-  return hook;
+  // SAFETY: This plugin's config hook closes over its dependencies and does not read Vite context.
+  return hook.call({} as ConfigPluginContext, initialConfig, env);
 }
 
-type ConfigResolvedHook = (config: ResolvedConfig) => void | Promise<void>;
-
-function assertResolvedConfig(config: Partial<ResolvedConfig>): asserts config is ResolvedConfig {
+function assertResolvedConfig(config: Partial<ResolvedConfig>): void {
   if (!config.logger) {
     throw new Error('Resolved config mock must define a logger.');
   }
@@ -81,8 +55,12 @@ function invokeConfigResolved(plugin: Plugin, resolvedConfig: Partial<ResolvedCo
   const hook = plugin.configResolved;
   if (!hook) return;
   assertResolvedConfig(resolvedConfig);
-  const handler: ConfigResolvedHook = typeof hook === 'function' ? hook : hook.handler;
-  return handler(resolvedConfig);
+  const handler = 'handler' in hook ? hook.handler : hook;
+  // SAFETY: The design tokens hook reads only logger, which this fixture verifies above.
+  return handler.call(
+    {} as MinimalPluginContextWithoutEnvironment,
+    resolvedConfig as ResolvedConfig,
+  );
 }
 
 /**
@@ -97,7 +75,7 @@ function createResolvedConfig(logger?: Logger): Partial<ResolvedConfig> {
 
 describe('designTokensPlugin', () => {
   const workspaceRoot = '/workspace/project';
-  const distPath = resolve(workspaceRoot, 'packages/tokens/dist');
+  const distPath = path.resolve(workspaceRoot, 'packages/tokens/dist');
 
   beforeEach(() => {
     existsSyncMock.mockReset();
@@ -114,7 +92,7 @@ describe('designTokensPlugin', () => {
   function mockDistMissing() {
     let distExists = false;
     const fallback = (path: PathLike) => {
-      const target = pathToString(path);
+      const target = String(path);
       if (target.endsWith('pnpm-lock.yaml')) return true;
       if (target === distPath) return distExists;
       return false;
@@ -129,16 +107,15 @@ describe('designTokensPlugin', () => {
 
   it('exposes a @app/tokens alias from the config hook', async () => {
     const plugin = designTokensPlugin({ workspaceRoot });
-    const config = (await invokeConfigHook(plugin)) as {
-      resolve?: { alias?: Record<string, string> };
-    };
-    expect(config.resolve?.alias?.['@app/tokens']).toBe(distPath);
+    const config = await invokeConfigHook(plugin);
+    expect(config).toMatchObject({ resolve: { alias: { '@app/tokens': distPath } } });
   });
 
   it('runs the build when the dist directory is missing', () => {
     const distController = mockDistMissing();
     spawnSyncMock.mockImplementation(() => {
       distController.setDistExists(true);
+      // SAFETY: The plugin reads only the mocked child process status and error fields.
       return { status: 0 } as ReturnType<typeof spawnSync>;
     });
 
@@ -158,6 +135,7 @@ describe('designTokensPlugin', () => {
   it('throws when the rebuild fails', () => {
     mockDistMissing();
     const logger = createMockLogger();
+    // SAFETY: The plugin reads only the mocked child process status and error fields.
     spawnSyncMock.mockReturnValue({ status: 1 } as ReturnType<typeof spawnSync>);
 
     const plugin = designTokensPlugin({ workspaceRoot });

@@ -9,7 +9,7 @@ import { UserIdSchema, UsersSchema } from '@app/types';
 
 const mockCustomFetchParsed = mock();
 
-mock.module('./fetcher', () => ({
+await mock.module('./fetcher', () => ({
   customFetchParsed: mockCustomFetchParsed,
 }));
 

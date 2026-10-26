@@ -2,46 +2,50 @@
  * @file Fetch helper that augments requests with common defaults.
  */
 
-import type { z } from 'zod';
+import { z } from 'zod';
 
-// --- Small helpers to keep complexity low and intent clear ---
+type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
+interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+type FetchBody = BodyInit | JsonValue | null;
+type FetchRequestInit = Omit<RequestInit, 'body'> & { body?: FetchBody };
+
+interface NormalizedBody {
+  body?: BodyInit | null;
+  isJson: boolean;
+}
+
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ]),
+);
+
+const stringBodySchema = z.string();
+const nullBodySchema = z.null();
+const undefinedBodySchema = z.undefined();
 
 const apiBase = (): string => import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
 
-// Content-type predicates kept small and explicit to reduce complexity
-const isFormData = (body: unknown): boolean =>
-  typeof FormData !== 'undefined' && body instanceof FormData;
-const isBlob = (body: unknown): boolean => typeof Blob !== 'undefined' && body instanceof Blob;
-const isUrlEncoded = (body: unknown): boolean =>
-  typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams;
-const isBinary = (body: unknown): boolean =>
-  typeof ArrayBuffer !== 'undefined' &&
-  (body instanceof ArrayBuffer || ArrayBuffer.isView(body as ArrayBufferView));
-const isStringBody = (body: unknown): boolean => typeof body === 'string';
-
-// Decide whether we should set JSON Content‑Type for this request.
-const shouldSetJsonContentType = (
-  headers: Headers,
-  bodyInfo: { isJson: boolean },
-  rawBody: unknown,
-): boolean => {
-  if (headers.has('Content-Type')) return false;
-  if (bodyInfo.isJson) return true;
-  return getContentTypeForBody(rawBody) !== null;
-};
-
-// (former shouldAddJsonContentType) merged into defaultHeaders to keep logic in one place
-
-/** Predicate: does value represent a native non-JSON body type? */
-const isNativeBodyType = (value: unknown): boolean => {
-  return isFormData(value) || isBlob(value) || isUrlEncoded(value) || isBinary(value);
-};
+const isFormData = (body: FetchBody | undefined): body is FormData => body instanceof FormData;
+const isBlob = (body: FetchBody | undefined): body is Blob => body instanceof Blob;
+const isUrlEncoded = (body: FetchBody | undefined): body is URLSearchParams =>
+  body instanceof URLSearchParams;
+const isBinary = (
+  body: FetchBody | undefined,
+): body is ArrayBuffer | ArrayBufferView<ArrayBuffer> =>
+  body instanceof ArrayBuffer || ArrayBuffer.isView(body);
 
 /** Predicate: treat POJOs and arrays as JSON serializable structures. */
-const isPlainObjectLike = (value: unknown): boolean =>
-  typeof value === 'object' &&
-  value !== null &&
-  (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype);
+const isPlainObjectLike = (value: FetchBody | undefined): value is JsonObject | JsonValue[] =>
+  Array.isArray(value) || (Boolean(value) && Object.getPrototypeOf(value) === Object.prototype);
 
 /** Heuristic for strings that look like JSON payloads. */
 const looksLikeJsonString = (text: string): boolean => {
@@ -53,48 +57,63 @@ const looksLikeJsonString = (text: string): boolean => {
 };
 
 /**
- * Normalize the request body for JSON APIs.
- * - Auto-JSON-stringify plain objects to reduce caller friction and header mistakes.
- * - Preserve native body types (FormData, Blob, URLSearchParams, ArrayBuffer/View).
- *
- * Returns the possibly transformed body and whether we produced JSON.
+ * Normalize the request body for JSON APIs while preserving native body types.
+ * Plain objects and arrays are serialized; string bodies remain untouched.
  */
-const normalizeBody = (body: unknown): { body: BodyInit | null | undefined; isJson: boolean } => {
-  // Be explicit to satisfy strict‑equality lint rules and avoid coercion.
-  if (body === null || body === undefined) {
-    return { body: body as null | undefined, isJson: false };
+const normalizeBody = (body: FetchBody | undefined): NormalizedBody => {
+  if (undefinedBodySchema.safeParse(body).success) return { isJson: false };
+
+  const nullBody = nullBodySchema.safeParse(body);
+  if (nullBody.success) return { body: nullBody.data, isJson: false };
+
+  if (isFormData(body) || isBlob(body) || isUrlEncoded(body) || isBinary(body)) {
+    return { body, isJson: false };
   }
 
-  if (isNativeBodyType(body)) return { body: body as BodyInit, isJson: false };
+  if (isPlainObjectLike(body)) {
+    return { body: stringBodySchema.parse(JSON.stringify(body)), isJson: true };
+  }
 
-  if (isPlainObjectLike(body)) return { body: JSON.stringify(body), isJson: true };
+  const stringBody = stringBodySchema.safeParse(body);
+  if (stringBody.success) {
+    return { body: stringBody.data, isJson: looksLikeJsonString(stringBody.data) };
+  }
 
-  if (typeof body === 'string') return { body, isJson: looksLikeJsonString(body) };
+  const numericBody = z.union([z.number(), z.boolean()]).safeParse(body);
+  if (numericBody.success) return { body: String(numericBody.data), isJson: false };
 
-  return { body: body as BodyInit, isJson: false };
+  const streamBody = z.instanceof(ReadableStream).safeParse(body);
+  if (streamBody.success) return { body: streamBody.data, isJson: false };
+
+  return { body: String(body), isJson: false };
 };
 
-/**
- * Build default headers and attach JSON content-type when appropriate.
- * Keeps header logic centralized so callers do not need to manage it.
- */
-const defaultHeaders = (init: RequestInit | undefined, bodyInfo: { isJson: boolean }): Headers => {
-  const headers = new Headers(init?.headers as HeadersInit | undefined);
+/** Build default headers and attach JSON content type when appropriate. */
+const defaultHeaders = (
+  init: FetchRequestInit | undefined,
+  bodyInfo: Pick<NormalizedBody, 'isJson'>,
+): Headers => {
+  const headers = new Headers(init?.headers);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
 
-  // Only set Content-Type if not specified by caller and it's clearly JSON.
-  // We consider both auto-JSON (plain objects) and string bodies for legacy compatibility.
-  const rawBody = init?.body as unknown;
-  if (shouldSetJsonContentType(headers, bodyInfo, rawBody)) {
+  const rawBody = init?.body;
+  if (!headers.has('Content-Type') && (bodyInfo.isJson || isStringBody(rawBody))) {
     headers.set('Content-Type', 'application/json; charset=utf-8');
   }
   return headers;
 };
 
-const parseErrorDetail = async (res: Response): Promise<unknown> => {
-  const ct = (res.headers.get('content-type') ?? '').trim().toLowerCase();
+function isStringBody(body: FetchBody | undefined): boolean {
+  return stringBodySchema.safeParse(body).success;
+}
+
+type ErrorDetail = JsonValue | string;
+
+const parseErrorDetail = async (res: Response): Promise<ErrorDetail | undefined> => {
+  const contentType = (res.headers.get('content-type') ?? '').trim().toLowerCase();
   try {
-    return ct.includes('json') ? await res.json() : await res.text();
+    if (!contentType.includes('json')) return await res.text();
+    return jsonValueSchema.parse(await res.json());
   } catch {
     return undefined;
   }
@@ -102,53 +121,19 @@ const parseErrorDetail = async (res: Response): Promise<unknown> => {
 
 const shouldParseJson = (res: Response): boolean => {
   if (res.status === 204 || res.status === 205) return false;
-  const ct = (res.headers.get('content-type') ?? '').trim().toLowerCase();
-  const len = res.headers.get('content-length');
-  const hasBody = len == null || len !== '0';
-  return ct.includes('json') && hasBody;
+  const contentType = (res.headers.get('content-type') ?? '').trim().toLowerCase();
+  const contentLength = res.headers.get('content-length');
+  return contentType.includes('json') && contentLength !== '0';
 };
 
-/**
- * Decide the appropriate Content-Type for a given raw request body.
- *
- * Returns 'application/json' only when the body is a string and not one of
- * the native non-JSON body types (FormData, Blob, URLSearchParams, or
- * ArrayBuffer/View). Returns null when the Content-Type should not be set
- * automatically.
- *
- * This helper centralizes body type detection to reduce cognitive complexity
- * in the request code while preserving existing behaviour exactly.
- *
- * @param body - The raw `RequestInit.body` value provided by the caller.
- * @returns The mime type string or null when no automatic header should be set.
- * @example
- * getContentTypeForBody('{"a":1}') //=> 'application/json'
- * getContentTypeForBody(new FormData()) //=> null
- */
-function getContentTypeForBody(body: unknown): string | null {
-  if (!isStringBody(body)) return null;
-  if (isFormData(body)) return null;
-  if (isBlob(body)) return null;
-  if (isUrlEncoded(body)) return null;
-  if (isBinary(body)) return null;
-  return 'application/json';
-}
-/**
- * Fetch wrapper used by the generated Orval client.
- *
- * Plain-object bodies are serialized to JSON. The JSON content type is set for
- * those and for any string body, since a string is assumed to be pre-serialized
- * JSON; native body types (`FormData`, `Blob`, `URLSearchParams`, and binary)
- * are sent unchanged with no content type. A `Content-Type` the caller supplies
- * is never overwritten. Rejects on a non-2xx response.
- */
-export const customFetch = async <T>(input: string, init?: RequestInit): Promise<T> => {
+/** Fetch a JSON response after validating its wire representation. */
+export const customFetch = async (
+  input: string,
+  init?: FetchRequestInit,
+): Promise<JsonValue | undefined> => {
   const url = new URL(input, apiBase());
-
-  // Normalize body upfront so header logic sees the final representation.
-  const { body, isJson } = normalizeBody(init?.body as unknown);
+  const { body, isJson } = normalizeBody(init?.body);
   const headers = defaultHeaders(init, { isJson });
-
   const res = await fetch(url, { credentials: 'include', ...init, body, headers });
 
   if (!res.ok) {
@@ -157,8 +142,8 @@ export const customFetch = async <T>(input: string, init?: RequestInit): Promise
     throw new Error(`${res.status} ${res.statusText} ${res.url}${suffix}`, { cause: detail });
   }
 
-  if (!shouldParseJson(res)) return undefined as unknown as T;
-  return res.json() as Promise<T>;
+  if (!shouldParseJson(res)) return;
+  return jsonValueSchema.parse(await res.json());
 };
 
 /**
@@ -167,29 +152,27 @@ export const customFetch = async <T>(input: string, init?: RequestInit): Promise
  * @example
  * import { z } from 'zod';
  * const UserSchema = z.object({ id: z.string() });
- * // Inferred: z.output<typeof UserSchema>
  * const user = await customFetchParsed('/api/user', UserSchema);
  * user.id; // string
  */
 export const customFetchParsed = async <Schema extends z.ZodTypeAny>(
   input: string,
   schema: Schema,
-  init?: RequestInit,
+  init?: FetchRequestInit,
 ): Promise<z.output<Schema>> => {
-  const data = await customFetch<unknown>(input, init);
-  return schema.parse(data);
+  return schema.parse(await customFetch(input, init));
 };
 
 /**
  * Like `customFetchParsed`, but returns Zod's safe-parse result for schema
  * validation failures so callers can branch on them. Transport errors and
- * non-2xx responses from `customFetch` still reject.
+ * non-2xx responses still reject.
  */
 export const customFetchParsedSafe = async <Schema extends z.ZodTypeAny>(
   input: string,
   schema: Schema,
-  init?: RequestInit,
+  init?: FetchRequestInit,
 ): Promise<z.SafeParseReturnType<unknown, z.output<Schema>>> => {
-  const data = await customFetch<unknown>(input, init);
+  const data = await customFetch(input, init);
   return schema.safeParse(data);
 };

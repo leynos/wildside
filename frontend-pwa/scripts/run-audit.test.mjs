@@ -38,16 +38,15 @@ function spyOnConsole(method) {
   return spy;
 }
 
-function setLedgerEntries(mutator) {
-  // Allow tests to layer mutations while still supporting easy resets.
-  if (typeof mutator === 'function') {
-    const snapshot = cloneLedgerEntries(nextLedgerEntries);
-    const result = mutator(snapshot);
-    nextLedgerEntries = Array.isArray(result) ? result : snapshot;
+function setLedgerEntries(updateEntries) {
+  if (updateEntries === undefined) {
+    nextLedgerEntries = cloneLedgerEntries(baselineLedgerEntries);
     return;
   }
 
-  nextLedgerEntries = cloneLedgerEntries(baselineLedgerEntries);
+  const snapshot = cloneLedgerEntries(nextLedgerEntries);
+  const result = updateEntries(snapshot);
+  nextLedgerEntries = Array.isArray(result) ? result : snapshot;
 }
 
 mock.module('../../security/audit-exceptions.json', () => ({
@@ -134,7 +133,7 @@ describe('evaluateAudit', () => {
     const exitCode = evaluateAudit({ advisories, status: 1 }, { now: DEFAULT_NOW });
 
     expect(exitCode).toBe(expectedExitCode);
-    if (typeof expectedValidatorCalls === 'number') {
+    if (expectedValidatorCalls !== undefined) {
       expect(validatorPatchMock).toHaveBeenCalledTimes(expectedValidatorCalls);
     }
     assertSpy(consoleSpy);

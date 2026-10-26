@@ -17,7 +17,7 @@ const queryClient = new QueryClient({
     },
   },
 });
-const rootElem = document.getElementById('root');
+const rootElem = document.querySelector('#root');
 if (!rootElem) throw new Error('#root element not found');
 
 createRoot(rootElem).render(

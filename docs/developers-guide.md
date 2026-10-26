@@ -596,10 +596,11 @@ compression library to generate these names.
 
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.7`,
 React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`, Zod
-3, TypeScript 5, Vitest `^4.1.12`, and Orval 8. TanStack Router, Radix UI,
-i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
-target-stack items until a roadmap task adds them to
-`frontend-pwa/package.json` and the lockfile.
+3, TypeScript 5, Vitest `^4.1.12`, and Orval 8. Biome owns formatting and
+general lint; Oxlint applies the pinned Unicorn and `ai-deslop` rule profiles to
+`frontend-pwa`. TanStack Router, Radix UI, i18next, Fluent, MapLibre GL JS,
+Dexie, Tailwind CSS v4, and DaisyUI v5 are target-stack items until a roadmap
+task adds them to `frontend-pwa/package.json` and the lockfile.
 
 ### Build and preview workflow
 

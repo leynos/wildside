@@ -8,20 +8,19 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
 import type { spawnSync } from 'node:child_process';
 import type { PathLike } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
 
 import { detectPackageManager, ensureTokensDist } from '../vite/plugins/design-tokens';
-import { pathToString } from './test-helpers';
 import { createMockLogger } from './test-logger';
 
 const existsSyncMock = mock();
 const spawnSyncMock = mock();
 
-mock.module('node:fs', () => ({
+await mock.module('node:fs', () => ({
   existsSync: existsSyncMock,
 }));
 
-mock.module('node:child_process', () => ({
+await mock.module('node:child_process', () => ({
   spawnSync: spawnSyncMock,
 }));
 
@@ -54,13 +53,13 @@ describe('detectPackageManager', () => {
   });
 
   it('falls back to yarn lockfile discovery when user agent is missing', () => {
-    existsSyncMock.mockImplementation((path: PathLike) => pathToString(path).endsWith('yarn.lock'));
+    existsSyncMock.mockImplementation((path: PathLike) => String(path).endsWith('yarn.lock'));
     expect(detectPackageManager(workspaceRoot)).toBe('yarn');
   });
 
   it('falls back to npm lockfile discovery when user agent is missing', () => {
     existsSyncMock.mockImplementation((path: PathLike) =>
-      pathToString(path).endsWith('package-lock.json'),
+      String(path).endsWith('package-lock.json'),
     );
     expect(detectPackageManager(workspaceRoot)).toBe('npm');
   });
@@ -73,7 +72,7 @@ describe('detectPackageManager', () => {
 
 describe('ensureTokensDist', () => {
   const workspaceRoot = '/workspace/project';
-  const distPath = resolve(workspaceRoot, 'packages/tokens/dist');
+  const distPath = path.resolve(workspaceRoot, 'packages/tokens/dist');
   let logger: Logger;
 
   beforeEach(() => {
@@ -92,7 +91,7 @@ describe('ensureTokensDist', () => {
    */
   function mockDistMissing(lockfileCheck?: (path: string) => boolean): void {
     existsSyncMock.mockImplementation((path: PathLike) => {
-      const target = pathToString(path);
+      const target = String(path);
       if (lockfileCheck?.(target)) return true;
       return false;
     });
@@ -126,7 +125,7 @@ describe('ensureTokensDist', () => {
     }
 
     existsSyncMock.mockImplementation((path: PathLike) => {
-      const target = pathToString(path);
+      const target = String(path);
       if (lockfileCheck?.(target)) return true;
       if (target === distPath) return distExists;
       return false;
@@ -134,6 +133,7 @@ describe('ensureTokensDist', () => {
 
     spawnSyncMock.mockImplementation(() => {
       distExists = true;
+      // SAFETY: The plugin reads only the mocked child process status and error fields.
       return { status: 0 } as ReturnType<typeof spawnSync>;
     });
 
@@ -150,7 +150,7 @@ describe('ensureTokensDist', () => {
   }
 
   it('returns immediately when the dist directory already exists', () => {
-    existsSyncMock.mockImplementation((path: PathLike) => pathToString(path) === distPath);
+    existsSyncMock.mockImplementation((path: PathLike) => String(path) === distPath);
 
     expect(ensureTokensDist({ workspaceRoot, logger })).toBe(distPath);
     expect(spawnSyncMock).not.toHaveBeenCalled();
@@ -167,7 +167,7 @@ describe('ensureTokensDist', () => {
   });
 
   it('runs the bun build from the package directory when bun is detected', () => {
-    const packagePath = resolve(workspaceRoot, 'packages/tokens');
+    const packagePath = path.resolve(workspaceRoot, 'packages/tokens');
     testPackageManagerBuild({
       packageManager: 'bun',
       userAgent: 'bun/1.0.0 npm/? node/?',
@@ -200,6 +200,7 @@ describe('ensureTokensDist', () => {
 
   it('throws when the build command fails', () => {
     mockDistMissing((path) => path.endsWith('pnpm-lock.yaml'));
+    // SAFETY: The plugin reads only the mocked child process status and error fields.
     spawnSyncMock.mockReturnValue({ status: 1 } as ReturnType<typeof spawnSync>);
 
     expect(() => ensureTokensDist({ workspaceRoot, logger })).toThrow(
@@ -209,6 +210,7 @@ describe('ensureTokensDist', () => {
 
   it('throws when the dist directory is still missing after a successful build', () => {
     mockDistMissing((path) => path.endsWith('pnpm-lock.yaml'));
+    // SAFETY: The plugin reads only the mocked child process status and error fields.
     spawnSyncMock.mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>);
 
     expect(() => ensureTokensDist({ workspaceRoot, logger })).toThrow(

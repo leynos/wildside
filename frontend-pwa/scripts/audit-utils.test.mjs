@@ -22,10 +22,10 @@ const originalFetch = globalThis.fetch;
  * @param {string} [options.stdout=''] Command stdout payload.
  * @param {Error | undefined} [options.error=undefined] Spawn error to surface.
  * @param {string | null} [options.signal=null] Signal that terminated the process.
- * @returns {{ error: Error | undefined, signal: string | null, status: number | null, stdout: string }} Mocked pnpm result object.
+ * @returns {{ error: Error | undefined, signal: string | null | undefined, status: number | null, stdout: string }} Mocked pnpm result object.
  * @example createPnpmResult({ status: 1, stdout: 'foo', error: new Error('boom'), signal: null }); // { error: Error('boom'), signal: null, status: 1, stdout: 'foo' }
  */
-function createPnpmResult({ status = 0, stdout = '', error = undefined, signal = null } = {}) {
+function createPnpmResult({ status = 0, stdout = '', error, signal } = {}) {
   return { error, signal, status, stdout };
 }
 
@@ -166,7 +166,7 @@ describe('runAuditJson', () => {
     {
       command: 'audit',
       expectedError: 'pnpm audit was terminated by signal SIGTERM.',
-      firstResult: createPnpmResult({ status: null, signal: 'SIGTERM' }),
+      firstResult: createPnpmResult({ signal: 'SIGTERM' }),
     },
     {
       command: 'ls',
@@ -181,7 +181,7 @@ describe('runAuditJson', () => {
           },
         }),
       }),
-      secondResult: createPnpmResult({ status: null, signal: 'SIGTERM' }),
+      secondResult: createPnpmResult({ signal: 'SIGTERM' }),
     },
   ])('throws when pnpm $command is signalled', async ({
     expectedError,
@@ -226,7 +226,7 @@ describe('runAuditJson', () => {
         JSON.stringify({
           validator: [
             {
-              id: 100000,
+              id: 100_000,
               url: 'https://github.com/advisories/GHSA-vghf-hv5q-vc2g',
               title: 'Validator SSRF',
               severity: 'high',
@@ -257,7 +257,7 @@ describe('runAuditJson', () => {
         advisories: {
           'GHSA-vghf-hv5q-vc2g': {
             [githubAdvisoryIdKey]: 'GHSA-vghf-hv5q-vc2g',
-            id: 100000,
+            id: 100_000,
             [packageNameKey]: 'validator',
             severity: 'high',
             title: 'Validator SSRF',
@@ -324,7 +324,7 @@ describe('runAuditJson', () => {
         JSON.stringify({
           validator: [
             {
-              id: 100000,
+              id: 100_000,
               url: 'https://github.com/advisories/GHSA-Vghf-HV5Q-vC2G',
               title: 'Validator SSRF',
             },
@@ -358,7 +358,7 @@ describe('runAuditJson', () => {
         JSON.stringify({
           validator: [
             {
-              id: 100000,
+              id: 100_000,
               url: 'https://example.test/advisories/100000',
               title: 'Registry advisory',
             },
@@ -371,7 +371,7 @@ describe('runAuditJson', () => {
 
     expect(result.json.advisories).toEqual({
       'validator:100000': expect.objectContaining({
-        id: 100000,
+        id: 100_000,
         [packageNameKey]: 'validator',
         title: 'Registry advisory',
         url: 'https://example.test/advisories/100000',
