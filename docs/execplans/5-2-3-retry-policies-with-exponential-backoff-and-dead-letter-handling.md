@@ -1564,8 +1564,36 @@ caret requirements.
   `/tmp/epm1-full2-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
   and
   `/tmp/epm1-full2-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
-- [ ] Commit the gated candidate, request CodeRabbit reassessment, and resolve
-  valid findings before accepting EP-M1.
+- [x] (2026-10-26 Europe/Berlin) Committed the gated M1 candidate as `1c329be`
+  and completed CodeRabbit CLI 0.9.1 review against `origin/main` at `e7ab91e`.
+  The committed review covered all 14 paths and reported the same
+  Makefile-contract gap twice: a bare `export` directive globally exports all
+  Make variables, but the helper only recognized named exports. The current
+  Makefile has no bare directive; this is a missing regression guard. Review
+  log: `/tmp/coderabbit-epm1-1c329be-3ShJIM-review.out`.
+- [x] (2026-10-26 Europe/Berlin) Added detection and synthetic cases for bare
+  global `export`, including a trailing comment and named exports that list the
+  sensitive variable after another name. The focused test failed against the
+  previous helper exactly at the bare-export assertion. Replacing the helper
+  with the corrected implementation then passed. All seven sequential gates
+  passed: `check-fmt` (4s), `test` (715s), `typecheck` (7s), `lint` (180s),
+  `markdownlint` (26s), `nixie` (6s), and `spelling` (16s). The test run used
+  `/var/tmp/wildside-epm1-cr-fix-81leewbf`; all 1,901 Nextest cases passed
+  (four skipped), as did both trybuild checks, workflow and script doctests,
+  frontend tests, and lint-actions tests. Candidate HEAD/tree/diff were
+  `1c329be4243a7992a6f1777734de9e5d72d90839`,
+  `a2313f1f3413a62f5d5f5933ce30842095725f53`, and
+  `9de37767b7788940919e0c38182cd26d5a520235fdb848b327386fa9d97d0b8e`. Evidence:
+  `/tmp/epm1-coderabbit-fix3-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/epm1-coderabbit-fix3-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [ ] Commit the gated regression fix and request CodeRabbit reassessment before
+  accepting EP-M1.
 - [ ] EP-M1 domain retry policy and classification.
 - [ ] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
