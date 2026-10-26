@@ -5,12 +5,13 @@ use std::num::NonZeroU32;
 
 use crate::domain::jobs::retry::JobRetryPolicy;
 use chrono::{DateTime, Utc};
-use sqlx::{FromRow, PgPool, Row};
+use sqlx::{FromRow, PgPool};
 
 use crate::domain::ports::{DeadJob, DeadJobId, DeadLetterError, DeadLetterQueue, DeadReason};
 
 const MAX_LAST_ERROR_BYTES: usize = 1024;
 const DEAD_PREDICATE: &str = "status = 'Killed' OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts))";
+const DEAD_LISTING_SQL: &str = include_str!("sql/dead_listing.sql");
 
 /// Per-queue attempt limits restored when an operator requeues a dead job.
 #[derive(Clone, Debug, Default)]
@@ -67,33 +68,20 @@ struct DeadJobRow {
 #[derive(FromRow)]
 struct LockedDeadJob {
     job_type: String,
+    attempts: i32,
     requeue_count: Option<String>,
 }
 
 #[async_trait::async_trait]
 impl DeadLetterQueue for PostgresDeadLetterQueue {
     async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError> {
-        let query = format!(
-            "SELECT id, job_type, attempts,
-                    metadata->>'wildside.retry.dead_reason' AS dead_reason,
-                    metadata->>'wildside.retry.requeue_count' AS requeue_count,
-                    CASE WHEN metadata->>'wildside.retry.dead_reason'
-                                  IN ('fatal', 'exhausted')
-                              AND jsonb_typeof(last_result->'Err') = 'string'
-                         THEN last_result->>'Err' END AS last_error,
-                    done_at AS dead_at
-             FROM apalis.jobs
-             WHERE {DEAD_PREDICATE}
-             ORDER BY done_at DESC NULLS LAST, id DESC
-             LIMIT $1"
-        );
-        let rows = sqlx::query_as::<_, DeadJobRow>(&query)
+        let rows = sqlx::query_as::<_, DeadJobRow>(DEAD_LISTING_SQL)
             .bind(i64::from(limit))
             .fetch_all(&self.pool)
             .await
             .map_err(|error| unavailable("list dead jobs", error))?;
 
-        rows.into_iter().map(dead_job_from_row).collect()
+        Ok(rows.into_iter().filter_map(dead_job_from_row).collect())
     }
 
     async fn requeue(&self, id: &DeadJobId) -> Result<(), DeadLetterError> {
@@ -103,7 +91,7 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
             .await
             .map_err(|error| unavailable("begin dead-job requeue", error))?;
         let select = format!(
-            "SELECT job_type,
+            "SELECT job_type, attempts,
                     metadata->>'wildside.retry.requeue_count' AS requeue_count
              FROM apalis.jobs
              WHERE id = $1 AND ({DEAD_PREDICATE})
@@ -115,6 +103,11 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
             .await
             .map_err(|error| unavailable("lock dead job for requeue", error))?
             .ok_or_else(|| DeadLetterError::not_dead(id.as_str()))?;
+        if dead_job.attempts < 0 {
+            return Err(DeadLetterError::invalid_job_data(
+                "attempt count is negative",
+            ));
+        }
         let budget = self
             .requeue_budgets
             .get(&dead_job.job_type)
@@ -126,7 +119,7 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
             ))
         })?;
         let next_count = next_requeue_count(dead_job.requeue_count.as_deref())
-            .map_err(|()| DeadLetterError::unavailable("invalid requeue count metadata"))?;
+            .map_err(|()| DeadLetterError::invalid_job_data("requeue count is not numeric"))?;
         let update = format!(
             "UPDATE apalis.jobs
              SET status = 'Pending', attempts = 0, max_attempts = $2,
@@ -157,34 +150,49 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
     async fn discard(&self, id: &DeadJobId) -> Result<(), DeadLetterError> {
         let query = format!(
             "DELETE FROM apalis.jobs
-             WHERE id = $1 AND ({DEAD_PREDICATE})
-             RETURNING id, job_type, status"
+             WHERE id = $1 AND ({DEAD_PREDICATE})"
         );
-        let row = sqlx::query(&query)
+        let result = sqlx::query(&query)
             .bind(id.as_str())
-            .fetch_optional(&self.pool)
+            .execute(&self.pool)
             .await
-            .map_err(|error| unavailable("discard dead job", error))?
-            .ok_or_else(|| DeadLetterError::not_dead(id.as_str()))?;
+            .map_err(|error| unavailable("discard dead job", error))?;
+        if result.rows_affected() != 1 {
+            return Err(DeadLetterError::not_dead(id.as_str()));
+        }
         tracing::info!(
-            job_id = %row.get::<String, _>("id"),
-            queue = %row.get::<String, _>("job_type"),
-            status = %row.get::<String, _>("status"),
+            job_id = %id.as_str(),
             "discarded dead-lettered job"
         );
         Ok(())
     }
 }
 
-fn dead_job_from_row(row: DeadJobRow) -> Result<DeadJob, DeadLetterError> {
-    let attempts = u32::try_from(row.attempts)
-        .map_err(|_| DeadLetterError::unavailable("dead job has a negative attempt count"))?;
-    let requeue_count = next_count_value(row.requeue_count.as_deref())
-        .map_err(|()| DeadLetterError::unavailable("invalid requeue count metadata"))?;
+fn dead_job_from_row(row: DeadJobRow) -> Option<DeadJob> {
+    let attempts = match u32::try_from(row.attempts) {
+        Ok(attempts) => attempts,
+        Err(_) => {
+            tracing::warn!(
+                job_id = %row.id,
+                "omitting dead-letter row with a negative attempt count"
+            );
+            return None;
+        }
+    };
+    let requeue_count = match next_count_value(row.requeue_count.as_deref()) {
+        Ok(count) => count,
+        Err(()) => {
+            tracing::warn!(
+                job_id = %row.id,
+                "omitting dead-letter row with invalid requeue-count metadata"
+            );
+            return None;
+        }
+    };
     let last_error = row
         .last_error
         .map(|error| truncate_utf8(&error, MAX_LAST_ERROR_BYTES));
-    Ok(DeadJob {
+    Some(DeadJob {
         id: DeadJobId::new(row.id),
         job_type: row.job_type,
         reason: dead_reason_from_metadata(row.dead_reason.as_deref()),

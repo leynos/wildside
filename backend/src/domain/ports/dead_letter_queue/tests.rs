@@ -36,3 +36,13 @@ fn unavailable_error_preserves_storage_context() {
         "dead-letter storage is unavailable: connection lost"
     );
 }
+
+#[test]
+fn invalid_job_data_error_identifies_corrupt_persisted_fields() {
+    let error = DeadLetterError::invalid_job_data("requeue count is not numeric");
+
+    assert_eq!(
+        error.to_string(),
+        "dead job has invalid data: requeue count is not numeric"
+    );
+}
