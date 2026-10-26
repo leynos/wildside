@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (EP-M0 and EP-M1 complete; EP-M2 active)
+Status: IN PROGRESS (EP-M0, EP-M1, and EP-M2 complete; EP-M3 active)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -1402,6 +1402,52 @@ caret requirements.
   authorizing guarded writes to the two namespaced Apalis `metadata` keys for
   bounded requeue provenance and terminal failure reason. This resolves the
   approval gate; EP-M1 is now active.
+- [x] (2026-10-26) EP-M2 implementation completed. The red integration
+  test first failed on the missing retry APIs
+  (`/tmp/test-wildside-epm2-red-5.out`). The provider now persists each queue's
+  attempt cap, the wrapper makes the V3b decision and guarded PostgreSQL
+  updates, and bounded retry/dead-letter metrics are wired. The focused BDD run
+  passed all six scenarios (19 tests including support linkage), the
+  decision-table run passed nine cases, and the all-features Prometheus counter
+  test passed. BDD assertions cover stored attempt/run time after
+  acknowledgement, unrelated JSONB metadata survival, and metric outcomes. The
+  first run queued behind a long-lived PostgreSQL process holding the shared
+  test lock; no external process was disturbed. The focused run passed using an
+  owned `/var/tmp` data root. Full gates and V9 conformance remain pending. The
+  first frozen full gate run passed six gates; Clippy alone found an
+  unnecessary suppression and excessive positional arguments in the wrapper and
+  scheduler. The candidate now groups retry inputs, queue dependencies, failure
+  context, and terminal update values in named structs. The focused retry
+  decision tests passed (9), and the database-backed BDD target passed (19,
+  including test-support linkage). The second full sequence passed six gates,
+  but Clippy found five test-only issues: excessive nesting in the decision
+  oracle and BDD handler, missing `Default` on the BDD world, and long
+  rstest/worker argument lists. The final focused run passes nine decision
+  tests and all 19 BDD tests. The probe handler now lives in its own module,
+  named case and worker configuration structs replace positional test inputs,
+  and the BDD world implements `Default`. V9 and the exact Apalis pins were
+  rechecked successfully. The third full sequence passed six gates; Whitaker
+  alone required inner module documentation in the new configuration and
+  decision modules. Those comments were added, then the following full sequence
+  passed `check-fmt`, `typecheck`, `test` (1,930 passed, four skipped; both
+  compile-fail checks, 614 workflow contracts with one skipped, and 115 script
+  doctests with 13 skipped), `markdownlint`, `nixie`, and `spelling`. `lint`
+  found three more missing inner docs in the retry BDD fixture module, its
+  handler module, and the retry wrapper's unit-test module. The disk has been
+  recovered; no space or PostgreSQL provisioning failures occurred. Added the
+  three inner module comments. The final4 sequential gate run passed all seven
+  gates on the unchanged implementation candidate: `check-fmt` (2s), `lint`
+  (289s), `typecheck` (1s), `test` (443s), `markdownlint` (16s), `nixie` (4s),
+  and `spelling` (12s). Tests passed 1,930 Nextest cases (four skipped), both
+  compile-fail checks, 614 workflow contracts (one skipped), 115 script
+  doctests (13 skipped), and all 14 lint-action checks. The embedded PostgreSQL
+  retry scenarios passed. Final4 logs use the `/tmp/wildside-epm2-final4-`
+  prefix. This plan update and the final inner-doc fixes are now going through
+  their post-run documentation gates before the milestone commit. Evidence is in
+  `/tmp/wildside-epm2-final4-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  and the corresponding `-final4-` gate logs. Earlier evidence is in
+  `/tmp/wildside-epm2-final3-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  and the corresponding `-final3-` gate logs.
 - [x] (2026-10-25 Europe/Berlin) EP-M1 red test captured: the focused test
   command failed to compile on the intentionally absent retry API (`E0432` for
   both the unit and property modules), as expected. Cargo added `googletest`
@@ -1632,11 +1678,21 @@ caret requirements.
   `e7ab91e` completed with zero findings and covered all 14 PR paths. Evidence:
   `/tmp/coderabbit-epm1-d1f57de-BYpnlQ-review.out`.
 - [x] EP-M1 domain retry policy and classification.
-- [ ] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
+- [x] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
 ## Surprises & discoveries
+
+- Observation (2026-10-26 EP-M2 focused run): the shared test lock remains
+  held by an older PostgreSQL process under the user systemd manager, so the
+  first focused invocation waited before test setup. A run using owned `TMPDIR`
+  and `PG_DATA_DIR` at `/var/tmp/wildside-epm2-393f0df6-pg` exercised the same
+  embedded PostgreSQL code path and passed all six retry scenarios. This
+  preserved the lock owner's process and data. The isolated root is not a Cargo
+  target or cache. Logs: `/tmp/test-wildside-epm2-bdd-isolated-2.out`,
+  `/tmp/test-wildside-epm2-retry-wrapper-unit.out`, and
+  `/tmp/test-wildside-epm2-retry-metrics-unit-all-features.out`.
 
 - Observation (2026-10-26, stop-hook validation): `make lint` could not write
   `target/.rustdoc_fingerprint.json`, and Nixie could not create a temporary

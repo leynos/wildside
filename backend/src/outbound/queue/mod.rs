@@ -35,6 +35,12 @@ pub use stub_route_queue::StubRouteQueue;
 mod apalis_route_queue;
 pub use apalis_route_queue::{ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue};
 
+mod postgres_retry_scheduler;
+pub use postgres_retry_scheduler::{PostgresRetryScheduler, TerminalRetryReason};
+
+mod retrying_handler;
+pub use retrying_handler::{RetryingJobService, RetryingJobServiceConfig};
+
 mod job_decode;
 pub use job_decode::decode_job;
 
