@@ -39,6 +39,13 @@ impl QueueDeadLetterWorld {
         assert_eq!(count, Some(u64::from(expected)));
     }
 
+    pub fn assert_invalid_job_data_error(&self) {
+        assert!(matches!(
+            self.take_operation_result(),
+            Err(DeadLetterError::InvalidJobData { .. })
+        ));
+    }
+
     pub fn assert_requeue_restored_state(&self) {
         self.take_operation_result()
             .expect("dead-job requeue succeeds");
@@ -55,8 +62,23 @@ impl QueueDeadLetterWorld {
         assert_eq!(metadata["operator.note"], "preserve-me");
     }
 
-    pub fn assert_no_handler_runs(&self) {
-        assert_eq!(*self.handler_calls.lock().expect("handler calls mutex"), 0);
+    pub fn assert_legacy_row_not_fetched(&self) {
+        let snapshot = self.snapshot(&self.current_id());
+        assert_eq!(snapshot.status, "Failed");
+        assert_eq!(snapshot.attempts, 3);
+        assert_eq!(snapshot.max_attempts, None);
+    }
+
+    pub fn assert_control_row_processed(&self) {
+        let id = self
+            .poll_control_job_id
+            .lock()
+            .expect("poll control job id mutex")
+            .clone()
+            .expect("poll control row id");
+        assert_eq!(self.snapshot(&id).status, "Done");
+        assert_eq!(*self.handler_calls.lock().expect("handler calls mutex"), 1);
+        assert!(self.worker_was_registered());
     }
 
     pub fn assert_unclassified(&self) {
@@ -112,6 +134,18 @@ impl QueueDeadLetterWorld {
     pub fn assert_listing_empty(&self) {
         self.list_dead(100);
         assert!(self.listing.lock().expect("listing mutex").is_empty());
+    }
+
+    pub fn assert_listing_contains_only_valid_dead_job(&self) {
+        let valid_id = self
+            .newest_job_id
+            .lock()
+            .expect("newest job id mutex")
+            .clone()
+            .expect("valid dead job id");
+        let listing = self.listing.lock().expect("dead-job listing mutex");
+        assert_eq!(listing.len(), 1);
+        assert_eq!(listing[0].id, valid_id);
     }
 
     pub fn assert_job_absent(&self) {

@@ -1,6 +1,7 @@
 //! Scenario state and real PostgreSQL operations for dead-letter behaviour.
 
 mod assertions;
+mod dead_job_fixtures;
 mod plan;
 mod rows;
 use self::rows::JobSeed;
@@ -27,9 +28,13 @@ use tokio::runtime::Runtime;
 
 use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use crate::support::embedded_postgres::provision_template_database;
-use crate::support::queue_retry_worker::{QueueRetryWorkerConfig, run_queue_retry_worker};
+use crate::support::queue_retry_worker::{
+    QueueRetryWorkerConfig, WorkerRunReport, run_queue_retry_worker,
+};
 
 const QUEUE_NAME: &str = "wildside.dead-letter-bdd";
+const WORKER_NAME: &str = "queue-retry-policy-bdd";
+const LEGACY_ROW_POLL_INTERVALS: usize = 10;
 
 #[derive(Clone, Copy)]
 enum HandlerMode {
@@ -50,6 +55,7 @@ pub struct QueueDeadLetterWorld {
     handler_mode: Mutex<HandlerMode>,
     handler_calls: Mutex<usize>,
     current_job_id: Mutex<Option<DeadJobId>>,
+    poll_control_job_id: Mutex<Option<DeadJobId>>,
     newest_job_id: Mutex<Option<DeadJobId>>,
     listing: Mutex<Vec<DeadJob>>,
     operation_result: Mutex<Option<Result<(), DeadLetterError>>>,
@@ -96,6 +102,7 @@ impl QueueDeadLetterWorld {
             handler_mode: Mutex::new(HandlerMode::RetryableFailure),
             handler_calls: Mutex::new(0),
             current_job_id: Mutex::new(None),
+            poll_control_job_id: Mutex::new(None),
             newest_job_id: Mutex::new(None),
             listing: Mutex::new(Vec::new()),
             operation_result: Mutex::new(None),
@@ -124,7 +131,7 @@ impl QueueDeadLetterWorld {
     }
 
     pub fn insert_legacy_failed_row(&self, attempts: i32) {
-        self.insert_job(JobSeed {
+        let id = self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Failed",
             attempts,
@@ -133,6 +140,40 @@ impl QueueDeadLetterWorld {
             last_error: Some("legacy failure"),
             done_age_seconds: 0,
         });
+        *self.current_job_id.lock().expect("current job id mutex") = Some(id);
+    }
+
+    pub fn insert_pending_poll_control(&self) {
+        self.fix_fault();
+        let id = self.insert_job(JobSeed {
+            job_type: QUEUE_NAME,
+            status: "Pending",
+            attempts: 0,
+            max_attempts: Some(3),
+            reason: None,
+            last_error: None,
+            done_age_seconds: 0,
+        });
+        *self
+            .poll_control_job_id
+            .lock()
+            .expect("poll control job id mutex") = Some(id);
+    }
+
+    pub fn poll_queue_for_bounded_period(&self) {
+        let report = self.run_worker(Some(LEGACY_ROW_POLL_INTERVALS));
+        assert_eq!(report.poll_intervals_elapsed, LEGACY_ROW_POLL_INTERVALS);
+        assert!(self.worker_was_registered());
+    }
+
+    fn worker_was_registered(&self) -> bool {
+        self.runtime
+            .block_on(
+                sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM apalis.workers WHERE id = $1)")
+                    .bind(WORKER_NAME)
+                    .fetch_one(&self.pool),
+            )
+            .expect("check bounded-poll worker registration")
     }
 
     pub fn fatal_job(&self) {
@@ -180,55 +221,6 @@ impl QueueDeadLetterWorld {
         });
     }
 
-    pub fn insert_unclassified_dead_row(&self) {
-        let id = self.insert_job(JobSeed {
-            job_type: QUEUE_NAME,
-            status: "Failed",
-            attempts: 3,
-            max_attempts: Some(3),
-            reason: Some("unknown"),
-            last_error: Some("legacy failure"),
-            done_age_seconds: 0,
-        });
-        *self.current_job_id.lock().expect("current id mutex") = Some(id);
-    }
-
-    pub fn insert_two_dead_jobs(&self) {
-        self.insert_job(JobSeed {
-            job_type: QUEUE_NAME,
-            status: "Failed",
-            attempts: 3,
-            max_attempts: Some(3),
-            reason: Some("exhausted"),
-            last_error: None,
-            done_age_seconds: 60,
-        });
-        let newest = self.insert_job(JobSeed {
-            job_type: QUEUE_NAME,
-            status: "Killed",
-            attempts: 1,
-            max_attempts: Some(3),
-            reason: Some("fatal"),
-            last_error: Some("permanent failure"),
-            done_age_seconds: 1,
-        });
-        *self.newest_job_id.lock().expect("newest id mutex") = Some(newest.clone());
-        *self.current_job_id.lock().expect("current id mutex") = Some(newest);
-    }
-
-    pub fn insert_unconfigured_dead_job(&self) {
-        let id = self.insert_job(JobSeed {
-            job_type: "wildside.unconfigured-queue",
-            status: "Failed",
-            attempts: 3,
-            max_attempts: Some(3),
-            reason: Some("exhausted"),
-            last_error: None,
-            done_age_seconds: 0,
-        });
-        *self.current_job_id.lock().expect("current id mutex") = Some(id);
-    }
-
     pub fn list_dead(&self, limit: u32) {
         let result = self.runtime.block_on(self.dead_letters.list_dead(limit));
         *self.listing.lock().expect("listing mutex") = result.expect("list dead jobs");
@@ -252,6 +244,10 @@ impl QueueDeadLetterWorld {
             .operation_result
             .lock()
             .expect("operation result mutex") = Some(result);
+    }
+
+    pub fn requeue_current_dead_job(&self) {
+        self.requeue_current_job();
     }
 
     pub fn add_requeue_metadata(&self) {
@@ -294,6 +290,11 @@ impl QueueDeadLetterWorld {
     }
 
     pub fn process_queue(&self) {
+        let report = self.run_worker(None);
+        assert!(report.reached_terminal, "worker reached a terminal state");
+    }
+
+    fn run_worker(&self, stop_after_poll_intervals: Option<usize>) -> WorkerRunReport {
         let mode = *self.handler_mode.lock().expect("handler mode mutex");
         let calls = Arc::new(AtomicUsize::new(0));
         let handler_calls = Arc::clone(&calls);
@@ -322,12 +323,13 @@ impl QueueDeadLetterWorld {
                     probe_id: self.probe_id.clone(),
                     policy: self.policy.clone(),
                     metrics: Arc::new(NoOpRouteQueueMetrics),
+                    stop_after_poll_intervals,
                 },
                 handler,
             ))
             .expect("run bounded retry worker");
         *self.handler_calls.lock().expect("handler calls mutex") = calls.load(Ordering::SeqCst);
-        assert!(report.reached_terminal, "worker reached a terminal state");
+        report
     }
 
     fn enqueue_probe_job(&self) {

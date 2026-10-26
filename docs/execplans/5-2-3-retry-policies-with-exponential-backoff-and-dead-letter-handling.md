@@ -325,7 +325,7 @@ Hard invariants. Violation requires escalation, not workarounds.
   dead predicate, and an ineffective update surfaces as a port error, never as
   silence.
 - Automated requeue is forbidden. `requeue` is an operator action, and any
-  future automation must carry a per-job requeue budget (recorded in ADR-003).
+  future automation must carry a per-job requeue budget (recorded in ADR-004).
   Accepted D15 records requeue provenance so repeat offenders are visible.
 - Retry and dead-letter surfaces (the `DeadJob` type, the error text the
   wrapper returns to the ack, logs, and metrics) must not expose raw job
@@ -397,7 +397,7 @@ Hard invariants. Violation requires escalation, not workarounds.
 - Risk: backoff precision is bounded below by the storage poll interval,
   because failed rows are rediscovered only by polling (the notify trigger
   fires on insert only). Severity: low. Likelihood: certain. Mitigation:
-  documented in ADR-002; production delays are seconds or longer, and tests
+  documented in ADR-003; production delays are seconds or longer, and tests
   configure a short poll interval.
 - Risk: behavioural tests need test-only job consumption, which could drift
   into building 5.3.1's worker early, or diverge from what 5.3.1 builds.
@@ -466,14 +466,15 @@ the roadmap and architecture document are the governing artefacts):
   scope reservations (EP-522-SCOPE): job envelope stability and deferred
   retry/dead-letter ownership.
 - New ADRs produced by this plan:
-  `docs/adr-002-durable-retry-scheduling-for-apalis-jobs.md` (ADR-002, the
+  `docs/adr-003-durable-retry-scheduling-for-apalis-jobs.md` (ADR-003, the
   retry mechanism: durable `run_at` scheduling by a handler wrapper, the ban on
   in-process retry middleware at the rc pins, fatal dead-lettering by shrinking
   `max_attempts`, and the exact-pin policy) and
-  `docs/adr-003-dead-letters-as-apalis-rows-behind-a-domain-port.md` (ADR-003,
+  `docs/adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md` (ADR-004,
   the dead-letter representation, guarded transitions, budget restoration,
   requeue provenance, and the no-automated-requeue rule). The split follows the
-  style guide's one-decision-per-ADR rule.
+  style guide's one-decision-per-ADR rule. ADR-002 already records the
+  environment-seam taxonomy and is not renumbered.
 
 Trace links:
 
@@ -484,7 +485,7 @@ ROAD-5.2.3 -> ARCH-JOBS -> EP-M3 -> DeadLetterQueue port + PostgreSQL adapter (B
 ROAD-5-PORTS -> EP-M1..M3 -> domain imports audit (no adapter types in domain)
 EP-522-SCOPE -> EP-M2 -> insta snapshots unchanged for V1 envelopes (V7)
 AXIOM-PIN/AXIOM-DURABLE/AXIOM-ACK -> EP-M0 pin + runtime probe -> EP-M2 V8 rc-canary tests
-ADR-002/ADR-003 -> EP-M4 -> docs updates + contents.md registration
+ADR-003/ADR-004 -> EP-M4 -> docs updates + contents.md registration
 ```
 
 ## Interfaces and dependencies
@@ -890,7 +891,7 @@ Obligations:
   unrelated metadata. The ack continues to store the plain bounded error string
   in `last_result`. Rationale: issue #550 or any other pin change must fail
   tests rather than silently corrupt retry or dead-letter behaviour, and
-  ADR-002 and ADR-003 list these assumptions with an "on 1.0 upgrade,
+  ADR-003 and ADR-004 list these assumptions with an "on 1.0 upgrade,
   re-verify" note. Non-vacuity: each canary asserts a positive and a negative
   case (fetchable versus not fetchable), so a vacuously green canary would
   require both sides to break in tandem.
@@ -1171,10 +1172,10 @@ a domain port. Gates; commit.
 
 ### Milestone EP-M4 — documentation, ADRs, runbook, roadmap closure
 
-Write ADR-002 and ADR-003 (named under "Conformance basis") per the style-guide
-template and the `arch-decision-records` skill. ADR-002 records D10, D11, D13,
+Write ADR-003 and ADR-004 (named under "Conformance basis") per the style-guide
+template and the `arch-decision-records` skill. ADR-003 records D10, D11, D13,
 and D14, including the 2026-10-14 race evidence that ruled out in-process retry
-at the rc pins. ADR-003 records D3–D6 and D12. Both list the rc-coupled
+at the rc pins. ADR-004 records D3–D6 and D12. Both list the rc-coupled
 assumptions with an "on 1.0 upgrade (#550), re-verify" note naming the V8
 canaries.
 
@@ -1737,12 +1738,12 @@ caret requirements.
   and
   `/tmp/test-epm3-dead-letter-bdd-red-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
 - [x] (2026-10-26 Europe/Berlin) The focused EP-M3 port and adapter tests
-  passed (14 tests), and the database-backed target passed all 15 tests. Its 11
-  BDD scenarios cover listing, the null-limit legacy row, restored retry
-  budgets, D15 metadata preservation, requeue and discard guards, unknown
-  queues, ordering, and terminal reason mapping. A 5,000-pending/50-dead-row
-  `EXPLAIN` run used the existing `sidx` bitmap path with no sequential scan,
-  so D6 did not trigger index creation. Logs:
+  passed (14 tests). The first database-backed target reported 15 Rust tests,
+  but its single `#[scenario(path = ...)]` binding ran only the first of the 11
+  feature scenarios; the earlier claim that all scenarios ran was incorrect.
+  The corrected binding coverage and complete run are recorded below. The
+  5,000-pending/50-dead-row `EXPLAIN` run used the existing `sidx` bitmap path
+  with no sequential scan, so D6 did not trigger index creation. Logs:
   `/tmp/wildside-epm3-dead-letter-unit-1.out` and
   `/tmp/wildside-epm3-dead-letter-bdd-1.out`.
 - [x] (2026-10-26 Europe/Berlin) The first full gate run passed `check-fmt`
@@ -1802,7 +1803,40 @@ caret requirements.
   `/tmp/epm3-rebased-fix1-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
 - [x] EP-M3 dead-letter port and PostgreSQL adapter; implementation commit
   `e910c53` and spelling repair `31a03c2` are gated.
-- [ ] EP-M3 milestone CLI review and publication.
+- [x] (2026-10-26 Europe/Berlin) Initial EP-M3 CodeRabbit CLI review completed
+  at 0.9.1 against M2 boundary `425b018` through `284e25d`. It covered all 16
+  expected paths and returned six findings. Review evidence:
+  `/tmp/wildside-epm3-coderabbit-284e25d.out`.
+- [x] (2026-10-26 Europe/Berlin) Strengthened the legacy-null-limit BDD case
+  with a bounded worker poll, a registered-worker check, and a successfully
+  handled control row. Initial verification of this edit was superseded after
+  discovering that `#[scenario(path = ...)]` defaults to feature scenario 0.
+- [x] (2026-10-26 Europe/Berlin) Added one named `#[scenario]` binding for each
+  of the 15 dead-letter feature scenarios. Seed rows now use Apalis ULIDs and
+  valid V1 envelopes. The expanded red run exposed the malformed-metadata
+  listing failures, an invalid worker control row, and an inconsistent requeue
+  counter expectation. The corrected full target passed all 29 tests (15 BDD
+  scenarios, the EXPLAIN canary, and 13 support tests). The three repaired
+  scenarios also passed independently. Evidence:
+  `/tmp/test-wildside-epm3-bdd-scenario-coverage-red-serial-isolated.out`,
+  `/tmp/test-wildside-epm3-review-repairs-targeted-red.out`,
+  `/tmp/test-wildside-epm3-review-repairs-bdd-green.out`.
+- [x] (2026-10-26 Europe/Berlin) The first full gate pass on the M3 review
+  repairs found two deterministic issues: Whitaker rejected the 453-line BDD
+  world module, and spelling found one `behavior` in this plan. The dead-row
+  fixture methods now live in `world/dead_job_fixtures.rs`, leaving the world
+  module at 362 lines; the plan uses Oxford spelling. The corrected candidate
+  passed all seven gates at `HEAD 284e25d` plus worktree fingerprint
+  `beb59610bbbecc2deacfebe8ab808be234fc862d784fae2081c9251683b2d73b`:
+  `check-fmt`, `lint`, `typecheck`, `test`, `markdownlint`, `nixie`, and
+  `spelling`. Tests passed 1,974 Nextest cases (four skipped), both
+  compile-fail checks, Vitest (90), workspace JavaScript (43), tokens (3),
+  workflow contracts (614, one skipped), and script tests (115, 13 skipped).
+  Logs use the `/tmp/epm3-gate-fixes-*` prefix. The earlier red logs are
+  `/tmp/epm3-review-repairs-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  and
+  `/tmp/epm3-review-repairs-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [ ] EP-M3 final committed CLI reassessment and publication.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
 ## Surprises & discoveries
@@ -1840,6 +1874,31 @@ caret requirements.
   preserve the required SQL spelling without accepting the word generally;
   `make spelling` regenerated the corresponding `typos.toml` entries, and the
   complete rebased gate sequence then passed.
+
+- Observation (2026-10-26 EP-M3 CodeRabbit review): the review found that the
+  nullable-attempt legacy scenario asserted a zero handler count without ever
+  running a worker. It also found that malformed numeric row data could abort
+  an entire listing, the discard log decoded returned columns after deletion,
+  and the EXPLAIN canary duplicated the production SQL. These findings require
+  a bounded worker-poll witness, per-row malformed-data handling, a decode-free
+  discard path, and one shared SQL source for the adapter and canary.
+
+- Observation (2026-10-26 EP-M3 scenario coverage repair):
+  `#[scenario(path = "...")]` in rstest-bdd selects only feature scenario 0
+  unless a name or index is supplied. The previous target count of 15 included
+  only one BDD scenario, so its other feature cases had not run. Explicit named
+  bindings now cover all 15 scenarios. Compile-time step validation also found
+  two stale step phrases; runtime execution found that Apalis worker fixtures
+  must use ULID identifiers and a valid V1 envelope. Those corrected tests
+  exposed and now verify per-row malformed-data handling.
+
+- Observation (2026-10-26 EP-M4 preparation): the planned ADR-002 filename
+  collides with the existing environment-seam ADR-002. The sequential ADR
+  convention forbids renumbering it, so retry scheduling and dead-letter
+  representation will be recorded as ADR-003 and ADR-004. The Apalis rc.8
+  orphan query also increments `attempts` and writes a stable heartbeat-timeout
+  error marker; the runbook must describe that observable signature instead of
+  calling attempts stale.
 
 - Observation (2026-10-26, stop-hook validation): `make lint` could not write
   `target/.rustdoc_fingerprint.json`, and Nixie could not create a temporary
@@ -2056,7 +2115,7 @@ caret requirements.
 - Observation: nothing in this repository configures Apalis orphan
   recovery today. Evidence: `reenqueue_orphaned_after` appears nowhere in
   `backend/src`. Impact: until 5.3.1, a dead worker leaves its job `Running`
-  indefinitely; recorded in "Context and orientation" and in ADR-002 rather
+  indefinitely; recorded in "Context and orientation" and in ADR-003 rather
   than assumed away.
 - Observation: the pinned Apalis worker tracker increments a task's shared
   `Attempt` once around the complete user-middleware future. Its retry policy
@@ -2134,6 +2193,27 @@ caret requirements.
 
 ## Decision log
 
+- M3 review repair decision (2026-10-26): a nullable legacy `max_attempts`
+  scenario must run an Apalis worker for a bounded polling interval, verify
+  worker registration, and then assert that the handler was not called. For
+  malformed numeric Apalis state, `list_dead` will warn and omit only the bad
+  row; `requeue` will return a typed invalid-row error without modifying it.
+  Coercing corrupt attempts or provenance to zero would misstate history.
+  `discard` will log the caller-supplied opaque id after a guarded delete
+  without decoding values returned after the mutation. The EXPLAIN canary and
+  adapter will include the same SQL file so their predicate and ordering cannot
+  drift independently.
+
+- BDD coverage decision (2026-10-26): every scenario in the dead-letter feature
+  file receives an explicit named `#[scenario]` binding. A default path-only
+  binding runs only the first scenario and is insufficient evidence for the
+  feature contract.
+
+- ADR numbering decision (2026-10-26): preserve existing ADR-002 and allocate
+  ADR-003 to durable retry scheduling and ADR-004 to dead-letter rows. This
+  corrects the earlier plan filenames without changing either accepted
+  mechanism or its requirements.
+
 - Verification refinement (2026-10-26): EP-M2 introduces the retry wrapper but
   EP-M3 introduces `DeadLetterQueue::list_dead`. The M2 feature therefore
   asserts the guarded row state and D15's persisted terminal reason directly;
@@ -2174,7 +2254,7 @@ caret requirements.
   The strongest alternative — durable graphile-worker-style rescheduling — buys
   crash-durable backoff and freed worker slots at that cost; at the mandated
   small delay caps the durability delta is marginal. Revisit trigger, recorded
-  in ADR-002: revisit if any production policy's worst-case total in-process
+  in ADR-003: revisit if any production policy's worst-case total in-process
   wait approaches `TOTAL_BACKOFF_BUDGET`, or if 5.3.1 load tests observe
   worker-slot exhaustion during backoff. Date/author: 2026-08-16, planning
   agent.
@@ -2305,7 +2385,7 @@ caret requirements.
   multiplier) parking jobs for days. Date/author: 2026-10-17, planning agent.
 - D14 — Forbid in-process retry middleware on Apalis workers at the rc
   pins. Rationale: the 2026-10-14 evidence shows it races with the storage
-  fetcher. The V9 conformance check enforces this rule, and ADR-002 records it.
+  fetcher. The V9 conformance check enforces this rule, and ADR-003 records it.
   Issue #550 may revisit it under 1.0.0's changed middleware order, but only
   with evidence. Date/author: 2026-10-17, planning agent.
 - D15 — Use the existing Apalis JSONB `metadata` field for two namespaced
@@ -2364,13 +2444,14 @@ across another acknowledgement. Apalis status and attempt counts also cannot
 distinguish a fatal error from policy exhaustion when the stored attempt limit
 exceeds the current policy. The user accepted D15 on 2026-10-25, authorizing
 the two namespaced JSONB metadata keys while preserving the existing
-`last_result` format. EP-M1 and EP-M2 are complete, and EP-M3 is active. Its
-port, adapter, 11 BDD scenarios, and EXPLAIN canary pass their focused tests;
-the complete sequential gates and milestone review remain pending. EP-M4 still
-owns the ADRs, operator runbook, architecture and roadmap updates. Before
-marking the plan `COMPLETE`, reconcile the architecture document's "Background
-Job Execution" prose with the implemented mechanism and confirm no upstream
-assumption in `Conformance basis` was falsified.
+`last_result` format. EP-M1 and EP-M2 are complete. EP-M3's port, adapter, BDD
+scenarios, EXPLAIN canary, and all seven rebased gates passed. Its initial CLI
+review completed and found six items now being repaired; final reassessment and
+publication remain pending. EP-M4 still owns the ADRs, operator runbook,
+architecture and roadmap updates. Before marking the plan `COMPLETE`, reconcile
+the architecture document's "Background Job Execution" prose with the
+implemented mechanism and confirm no upstream assumption in `Conformance basis`
+was falsified.
 
 ## Revision note
 
@@ -2483,3 +2564,10 @@ reassessment remains pending. D15 requires explicit user approval before any
 implementation milestone begins. Its October 22 review date is UTC; the
 recorded commits and review use Europe/Berlin (`+02:00`) and are ordered by
 their exact timestamps.
+
+2026-10-26 Europe/Berlin: the M3 CodeRabbit review found a vacuous legacy-null
+attempt scenario and malformed-row, post-delete decoding, and duplicated-SQL
+gaps. The M3 repairs now require bounded worker polling, conservative handling
+of corrupt persisted counters, and a shared production/test SQL source. ADRs
+were renumbered to preserve existing ADR-002. These findings extend M3
+verification and do not change accepted retry or D15 behaviour.

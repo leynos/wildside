@@ -27,6 +27,7 @@ pub struct WorkerRunReport {
     pub runs_at_terminal: usize,
     pub runs_after_quiet: usize,
     pub quiet_period_elapsed: bool,
+    pub poll_intervals_elapsed: usize,
 }
 
 /// Inputs for the bounded PostgreSQL worker used by retry BDD scenarios.
@@ -36,6 +37,7 @@ pub struct QueueRetryWorkerConfig {
     pub probe_id: String,
     pub policy: JobRetryPolicy,
     pub metrics: Arc<dyn RouteQueueMetrics>,
+    pub stop_after_poll_intervals: Option<usize>,
 }
 
 /// Build and run the worker wiring that 5.3.1 can promote, with hard test caps.
@@ -53,7 +55,13 @@ where
         probe_id,
         policy,
         metrics,
+        stop_after_poll_intervals,
     } = config;
+    if stop_after_poll_intervals.is_some_and(|polls| polls == 0 || polls > MAX_POLL_ITERATIONS) {
+        return Err(format!(
+            "bounded poll count must be between 1 and {MAX_POLL_ITERATIONS}"
+        ));
+    }
     let runs = Arc::new(AtomicUsize::new(0));
     let counted_handler = {
         let runs = Arc::clone(&runs);
@@ -90,23 +98,35 @@ where
             let mut reached_terminal = false;
             let mut runs_at_terminal = 0;
             let mut quiet_period_elapsed = false;
-            for _ in 0..MAX_POLL_ITERATIONS {
-                if is_terminal(&worker_pool, &worker_queue, &worker_probe).await {
-                    reached_terminal = true;
-                    runs_at_terminal = worker_runs.load(Ordering::SeqCst);
-                    for _ in 0..QUIET_POLL_ITERATIONS {
+            let mut poll_intervals_elapsed = 0;
+            match stop_after_poll_intervals {
+                Some(required_intervals) => {
+                    for _ in 0..required_intervals {
+                        tokio::time::sleep(POLL_INTERVAL).await;
+                        poll_intervals_elapsed += 1;
+                    }
+                }
+                None => {
+                    for _ in 0..MAX_POLL_ITERATIONS {
+                        if is_terminal(&worker_pool, &worker_queue, &worker_probe).await {
+                            reached_terminal = true;
+                            runs_at_terminal = worker_runs.load(Ordering::SeqCst);
+                            for _ in 0..QUIET_POLL_ITERATIONS {
+                                tokio::time::sleep(POLL_INTERVAL).await;
+                            }
+                            quiet_period_elapsed = true;
+                            break;
+                        }
                         tokio::time::sleep(POLL_INTERVAL).await;
                     }
-                    quiet_period_elapsed = true;
-                    break;
                 }
-                tokio::time::sleep(POLL_INTERVAL).await;
             }
             let report = WorkerRunReport {
                 reached_terminal,
                 runs_at_terminal,
                 runs_after_quiet: worker_runs.load(Ordering::SeqCst),
                 quiet_period_elapsed,
+                poll_intervals_elapsed,
             };
             if let Ok(mut slot) = worker_result.lock() {
                 *slot = Some(report);

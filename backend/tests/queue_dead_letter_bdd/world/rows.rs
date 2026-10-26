@@ -52,7 +52,7 @@ impl QueueDeadLetterWorld {
     }
 
     pub(super) fn insert_job(&self, seed: JobSeed<'_>) -> DeadJobId {
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = ulid::Ulid::new().to_string();
         let metadata = seed
             .reason
             .map(|reason| json!({"wildside.retry.dead_reason": reason}));
@@ -68,7 +68,7 @@ impl QueueDeadLetterWorld {
                 )
                 .bind(&id)
                 .bind(seed.job_type)
-                .bind(json!({"probeId": self.probe_id}).to_string())
+                .bind(json!({"v": "v1", "probeId": self.probe_id}).to_string())
                 .bind(seed.status)
                 .bind(seed.attempts)
                 .bind(seed.max_attempts)
@@ -101,5 +101,23 @@ impl QueueDeadLetterWorld {
                 .fetch_one(&self.pool),
             )
             .expect("read Apalis job snapshot")
+    }
+
+    pub(super) fn set_requeue_count(&self, id: &DeadJobId, value: &str) {
+        self.runtime
+            .block_on(
+                sqlx::query(
+                    "UPDATE apalis.jobs
+                     SET metadata = jsonb_set(
+                         COALESCE(metadata, '{}'::jsonb),
+                         '{wildside.retry.requeue_count}', to_jsonb($2::text), true
+                     )
+                     WHERE id = $1",
+                )
+                .bind(id.as_str())
+                .bind(value)
+                .execute(&self.pool),
+            )
+            .expect("set requeue-count test metadata");
     }
 }

@@ -6,6 +6,7 @@ use super::{QUEUE_NAME, QueueDeadLetterWorld};
 
 const PENDING_ROW_COUNT: i32 = 5_000;
 const DEAD_ROW_COUNT: i32 = 50;
+const DEAD_LISTING_SQL: &str = include_str!("../../../src/outbound/queue/sql/dead_listing.sql");
 
 impl QueueDeadLetterWorld {
     pub fn assert_listing_plan_avoids_sequential_scan(&self) {
@@ -66,26 +67,12 @@ impl QueueDeadLetterWorld {
     }
 
     fn explain_dead_listing(&self) -> Value {
+        let query = format!("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {DEAD_LISTING_SQL}");
         self.runtime
             .block_on(
-                sqlx::query_scalar(
-                    "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
-                 SELECT id, job_type, attempts,
-                        metadata->>'wildside.retry.dead_reason' AS dead_reason,
-                        metadata->>'wildside.retry.requeue_count' AS requeue_count,
-                        CASE WHEN metadata->>'wildside.retry.dead_reason'
-                                           IN ('fatal', 'exhausted')
-                                  AND jsonb_typeof(last_result->'Err') = 'string'
-                             THEN last_result->>'Err' END AS last_error,
-                        done_at AS dead_at
-                 FROM apalis.jobs
-                 WHERE status = 'Killed'
-                    OR (status = 'Failed'
-                        AND (max_attempts IS NULL OR attempts >= max_attempts))
-                 ORDER BY done_at DESC NULLS LAST, id DESC
-                 LIMIT 100",
-                )
-                .fetch_one(&self.pool),
+                sqlx::query_scalar(&query)
+                    .bind(100_i64)
+                    .fetch_one(&self.pool),
             )
             .expect("explain bounded dead listing")
     }
