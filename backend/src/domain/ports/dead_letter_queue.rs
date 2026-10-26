@@ -12,6 +12,8 @@ define_port_error! {
         NotDead { message: String } => "dead job is not dead: {message}",
         /// The dead job's queue has no configured retry budget.
         UnknownQueue { message: String } => "dead job queue has no retry budget: {message}",
+        /// The dead row has invalid attempt or requeue metadata.
+        InvalidJobData { message: String } => "dead job has invalid data: {message}",
         /// PostgreSQL could not complete the operation.
         Unavailable { message: String } => "dead-letter storage is unavailable: {message}",
     }

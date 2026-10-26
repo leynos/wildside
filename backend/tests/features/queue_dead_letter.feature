@@ -16,9 +16,12 @@ Feature: Dead-letter listing, requeue, and discard
   Scenario: A legacy failed row with a null attempt limit is listed
     Given a disposable legacy schema permits a null max_attempts value
     And a failed row has 3 attempts, below Apalis's null fallback of 25
+    And a pending control row exists
+    When the worker polls the queue for a bounded period
+    Then the pending control row is processed
+    And Apalis does not fetch the legacy row
     When the operator lists dead jobs
-    Then Apalis does not fetch the row
-    And the dead listing contains it as Unclassified
+    Then the dead listing contains the legacy row as Unclassified
 
   Scenario: A requeued fatal job regains its full retry budget
     Given a job has been dead-lettered by a fatal error
@@ -28,7 +31,7 @@ Feature: Dead-letter listing, requeue, and discard
     Then the requeue restores its budget and preserves unrelated metadata
     When the worker processes the queue
     Then the job is dead because its retries were exhausted
-    And the requeue count remains one
+    And the requeue counter advances to five
     And the fatal reason has been replaced with exhausted
     And the handler runs the queue's full number of attempts
 
@@ -58,7 +61,29 @@ Feature: Dead-letter listing, requeue, and discard
   Scenario: A legacy or malformed terminal reason is unclassified
     Given a failed dead row has no recognized terminal reason
     When the operator lists dead jobs
-    Then the dead listing contains it as Unclassified
+    Then the dead listing contains the legacy row as Unclassified
+
+  Scenario: A malformed requeue count does not hide valid dead jobs
+    Given a malformed requeue count and another dead job exist
+    When the operator lists dead jobs
+    Then the listing contains only the valid dead job
+
+  Scenario: A negative attempt count does not fail the dead-job listing
+    Given a dead row has a negative attempt count
+    When the operator lists dead jobs
+    Then the listing is empty
+
+  Scenario: Requeue rejects malformed counter metadata without changing the row
+    Given a dead job has a malformed requeue count
+    When the operator requeues the invalid dead job
+    Then the operation fails because the dead job data is invalid
+    And the job's state is unchanged
+
+  Scenario: Requeue rejects negative attempts without changing the row
+    Given a dead row has a negative attempt count
+    When the operator requeues the invalid dead job
+    Then the operation fails because the dead job data is invalid
+    And the job's state is unchanged
 
   Scenario: Dead-job listing is newest first and respects its limit
     Given two dead jobs exist
@@ -67,5 +92,5 @@ Feature: Dead-letter listing, requeue, and discard
 
   Scenario: Requeue rejects a dead job from an unknown queue
     Given a dead job belongs to an unconfigured queue
-    When the operator requeues that dead job
+    When the operator requeues the dead job
     Then the operation fails because its queue has no retry budget

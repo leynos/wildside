@@ -35,6 +35,11 @@ fn a_legacy_failed_row_has_three_attempts(world: &QueueDeadLetterWorld) {
     world.insert_legacy_failed_row(3);
 }
 
+#[given("a pending control row exists")]
+fn a_pending_control_row_exists(world: &QueueDeadLetterWorld) {
+    world.insert_pending_poll_control();
+}
+
 #[given("a job has been dead-lettered by a fatal error")]
 fn a_job_has_been_dead_lettered_by_fatal_error(world: &QueueDeadLetterWorld) {
     world.fatal_job();
@@ -65,6 +70,21 @@ fn a_failed_dead_row_has_no_recognized_reason(world: &QueueDeadLetterWorld) {
     world.insert_unclassified_dead_row();
 }
 
+#[given("a malformed requeue count and another dead job exist")]
+fn a_malformed_requeue_count_and_another_dead_job_exist(world: &QueueDeadLetterWorld) {
+    world.insert_malformed_requeue_count_and_valid_dead_jobs();
+}
+
+#[given("a dead row has a negative attempt count")]
+fn a_dead_row_has_a_negative_attempt_count(world: &QueueDeadLetterWorld) {
+    world.insert_negative_attempt_dead_row();
+}
+
+#[given("a dead job has a malformed requeue count")]
+fn a_dead_job_has_a_malformed_requeue_count(world: &QueueDeadLetterWorld) {
+    world.insert_malformed_requeue_count_dead_job();
+}
+
 #[given("two dead jobs exist")]
 fn two_dead_jobs_exist(world: &QueueDeadLetterWorld) {
     world.insert_two_dead_jobs();
@@ -90,6 +110,11 @@ fn the_operator_requeues_the_dead_job(world: &QueueDeadLetterWorld) {
     world.requeue_dead_job();
 }
 
+#[when("the operator requeues the invalid dead job")]
+fn the_operator_requeues_the_invalid_dead_job(world: &QueueDeadLetterWorld) {
+    world.requeue_current_dead_job();
+}
+
 #[when("the operator requeues that job")]
 fn the_operator_requeues_that_job(world: &QueueDeadLetterWorld) {
     world.requeue_current_job();
@@ -110,6 +135,11 @@ fn the_worker_processes_the_queue(world: &QueueDeadLetterWorld) {
     world.process_queue();
 }
 
+#[when("the worker polls the queue for a bounded period")]
+fn the_worker_polls_the_queue_for_a_bounded_period(world: &QueueDeadLetterWorld) {
+    world.poll_queue_for_bounded_period();
+}
+
 #[then("the listing contains the job with its reason, attempt count and last error")]
 fn the_listing_contains_failure_context(world: &QueueDeadLetterWorld) {
     world.assert_failure_context();
@@ -117,7 +147,7 @@ fn the_listing_contains_failure_context(world: &QueueDeadLetterWorld) {
 
 #[then("the job completes with status {status}")]
 fn the_job_completes_with_status(world: &QueueDeadLetterWorld, status: String) {
-    world.assert_status(&status);
+    world.assert_status(status.trim_matches('"'));
 }
 
 #[then("the job retains one requeue in its metadata")]
@@ -125,14 +155,29 @@ fn the_job_retains_one_requeue_in_metadata(world: &QueueDeadLetterWorld) {
     world.assert_requeue_count(1);
 }
 
-#[then("Apalis does not fetch the row")]
+#[then("Apalis does not fetch the legacy row")]
 fn apalis_does_not_fetch_the_row(world: &QueueDeadLetterWorld) {
-    world.assert_no_handler_runs();
+    world.assert_legacy_row_not_fetched();
 }
 
-#[then("the dead listing contains it as Unclassified")]
-fn the_dead_listing_contains_unclassified(world: &QueueDeadLetterWorld) {
+#[then("the pending control row is processed")]
+fn the_pending_control_row_is_processed(world: &QueueDeadLetterWorld) {
+    world.assert_control_row_processed();
+}
+
+#[then("the dead listing contains the legacy row as Unclassified")]
+fn the_dead_listing_contains_the_legacy_row_unclassified(world: &QueueDeadLetterWorld) {
     world.assert_unclassified();
+}
+
+#[then("the listing contains only the valid dead job")]
+fn the_listing_contains_only_the_valid_dead_job(world: &QueueDeadLetterWorld) {
+    world.assert_listing_contains_only_valid_dead_job();
+}
+
+#[then("the operation fails because the dead job data is invalid")]
+fn the_operation_fails_because_dead_job_data_is_invalid(world: &QueueDeadLetterWorld) {
+    world.assert_invalid_job_data_error();
 }
 
 #[then("the handler runs the queue's full number of attempts")]
@@ -158,6 +203,11 @@ fn the_fatal_reason_has_been_replaced(world: &QueueDeadLetterWorld) {
 #[then("the requeue count remains one")]
 fn the_requeue_count_remains_one(world: &QueueDeadLetterWorld) {
     world.assert_requeue_count(1);
+}
+
+#[then("the requeue counter advances to five")]
+fn the_requeue_counter_advances_to_five(world: &QueueDeadLetterWorld) {
+    world.assert_requeue_count(5);
 }
 
 #[then("the operation fails because the job is not dead")]
@@ -190,8 +240,95 @@ fn the_operation_fails_for_unknown_queue(world: &QueueDeadLetterWorld) {
     world.assert_unknown_queue_error();
 }
 
-#[scenario(path = "tests/features/queue_dead_letter.feature")]
-fn dead_letter_behaviour(world: QueueDeadLetterWorld) {}
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Dead jobs are listed with their failure context"
+)]
+fn dead_jobs_are_listed_with_failure_context(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "A requeued dead job runs again and can succeed"
+)]
+fn requeued_dead_job_runs_again_and_succeeds(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "A legacy failed row with a null attempt limit is listed"
+)]
+fn legacy_failed_row_with_null_attempt_limit_is_listed(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "A requeued fatal job regains its full retry budget"
+)]
+fn requeued_fatal_job_regains_its_full_retry_budget(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Discard rejects a live job without changing it"
+)]
+fn discard_rejects_live_job_without_changing_it(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Requeuing a live job is rejected"
+)]
+fn requeuing_live_job_is_rejected(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "A discarded dead job is gone"
+)]
+fn discarded_dead_job_is_gone(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Listing dead jobs ignores live jobs"
+)]
+fn listing_dead_jobs_ignores_live_jobs(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "A legacy or malformed terminal reason is unclassified"
+)]
+fn legacy_or_malformed_terminal_reason_is_unclassified(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "A malformed requeue count does not hide valid dead jobs"
+)]
+fn malformed_requeue_count_does_not_hide_valid_dead_jobs(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "A negative attempt count does not fail the dead-job listing"
+)]
+fn negative_attempt_count_does_not_fail_listing(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Dead-job listing is newest first and respects its limit"
+)]
+fn dead_job_listing_is_newest_first_and_respects_limit(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Requeue rejects a dead job from an unknown queue"
+)]
+fn requeue_rejects_dead_job_from_unknown_queue(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Requeue rejects malformed counter metadata without changing the row"
+)]
+fn requeue_rejects_malformed_counter_without_changing_row(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Requeue rejects negative attempts without changing the row"
+)]
+fn requeue_rejects_negative_attempts_without_changing_row(world: QueueDeadLetterWorld) {}
 
 #[test]
 fn dead_letter_listing_plan_uses_a_bounded_index_path() {
