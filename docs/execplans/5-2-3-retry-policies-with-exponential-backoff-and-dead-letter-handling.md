@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (EP-M0 complete; EP-M1 active after D15 acceptance)
+Status: IN PROGRESS (EP-M0 and EP-M1 complete; EP-M2 active)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -1625,9 +1625,11 @@ caret requirements.
   `/tmp/epm1-assignment-fix-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
   and
   `/tmp/epm1-assignment-fix-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
-- [ ] Commit the gated matcher update and request a fresh CodeRabbit review
-  before accepting EP-M1.
-- [ ] EP-M1 domain retry policy and classification.
+- [x] (2026-10-26 Europe/Berlin) Committed the gated matcher update as
+  `d1f57de`. Fresh CodeRabbit CLI 0.9.1 review against `origin/main` at
+  `e7ab91e` completed with zero findings and covered all 14 PR paths. Evidence:
+  `/tmp/coderabbit-epm1-d1f57de-BYpnlQ-review.out`.
+- [x] EP-M1 domain retry policy and classification.
 - [ ] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
