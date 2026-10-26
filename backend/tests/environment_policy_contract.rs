@@ -237,23 +237,37 @@ fn makefile_target_recipe_contains(target: &str, statement: &str) -> bool {
     false
 }
 
-/// Report whether an active Makefile line globally exports one environment
-/// variable rather than scoping it to a target.
+/// Report whether an active Makefile directive exports `name` globally.
+///
+/// A bare `export` exports every Make variable to child processes, so it also
+/// violates the test-only environment boundary.
 fn makefile_globally_exports(makefile: &str, name: &str) -> bool {
-    let prefix = format!("export {name}");
     makefile
         .lines()
         .filter(|line| !line.starts_with('\t'))
         .map(str::trim)
         .filter(|line| !line.starts_with('#'))
         .any(|line| {
-            line.strip_prefix(&prefix).is_some_and(|suffix| {
-                suffix.is_empty()
-                    || suffix
-                        .chars()
-                        .next()
-                        .is_some_and(|character| character == '=' || character.is_whitespace())
-            })
+            let Some(arguments) = line.strip_prefix("export") else {
+                return false;
+            };
+            if !arguments.is_empty() && !arguments.chars().next().is_some_and(char::is_whitespace) {
+                return false;
+            }
+
+            let names: Vec<_> = arguments
+                .split('#')
+                .next()
+                .unwrap_or_default()
+                .split_whitespace()
+                .collect();
+            names.is_empty()
+                || names.iter().any(|exported| {
+                    *exported == name
+                        || exported
+                            .strip_prefix(name)
+                            .is_some_and(|suffix| suffix.starts_with('='))
+                })
         })
 }
 
@@ -291,7 +305,12 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
 }
 
 #[test]
-fn makefile_global_export_detection_requires_a_variable_boundary() {
+fn makefile_global_export_detection_handles_bare_and_named_exports() {
+    assert!(makefile_globally_exports("export\n", "PG_PASSWORD"));
+    assert!(makefile_globally_exports(
+        "export # export all Make variables\n",
+        "PG_PASSWORD"
+    ));
     assert!(makefile_globally_exports(
         "export PG_PASSWORD=value\n",
         "PG_PASSWORD"
@@ -300,8 +319,16 @@ fn makefile_global_export_detection_requires_a_variable_boundary() {
         "export PG_PASSWORD OTHER\n",
         "PG_PASSWORD"
     ));
+    assert!(makefile_globally_exports(
+        "export OTHER PG_PASSWORD\n",
+        "PG_PASSWORD"
+    ));
     assert!(!makefile_globally_exports(
         "export PG_PASSWORD_EXTRA=value\n",
+        "PG_PASSWORD"
+    ));
+    assert!(!makefile_globally_exports(
+        "exported PG_PASSWORD=value\n",
         "PG_PASSWORD"
     ));
     assert!(!makefile_globally_exports(
