@@ -201,6 +201,7 @@ impl QueueRetryPolicyWorld {
             probe_id: self.probe_id.clone(),
             policy,
             metrics: Arc::new(self.metrics.clone()),
+            stop_after_poll_intervals: None,
         };
         let report = self
             .runtime
