@@ -1413,23 +1413,24 @@ caret requirements.
   acknowledgement, unrelated JSONB metadata survival, and metric outcomes. The
   first run queued behind a long-lived PostgreSQL process holding the shared
   test lock; no external process was disturbed. The focused run passed using an
-  owned `/var/tmp` data root. Full gates and V9 conformance remain pending. The
-  first frozen full gate run passed six gates; Clippy alone found an
-  unnecessary suppression and excessive positional arguments in the wrapper and
-  scheduler. The candidate now groups retry inputs, queue dependencies, failure
-  context, and terminal update values in named structs. The focused retry
-  decision tests passed (9), and the database-backed BDD target passed (19,
-  including test-support linkage). The second full sequence passed six gates,
-  but Clippy found five test-only issues: excessive nesting in the decision
-  oracle and BDD handler, missing `Default` on the BDD world, and long
-  rstest/worker argument lists. The final focused run passes nine decision
-  tests and all 19 BDD tests. The probe handler now lives in its own module,
-  named case and worker configuration structs replace positional test inputs,
-  and the BDD world implements `Default`. V9 and the exact Apalis pins were
-  rechecked successfully. The third full sequence passed six gates; Whitaker
-  alone required inner module documentation in the new configuration and
-  decision modules. Those comments were added, then the following full sequence
-  passed `check-fmt`, `typecheck`, `test` (1,930 passed, four skipped; both
+  owned `/var/tmp` data root. At that checkpoint, full gates and V9 conformance
+  remained pending; later V9 and gate results are recorded below. The first
+  frozen full gate run passed six gates; Clippy alone found an unnecessary
+  suppression and excessive positional arguments in the wrapper and scheduler.
+  The candidate now groups retry inputs, queue dependencies, failure context,
+  and terminal update values in named structs. The focused retry decision tests
+  passed (9), and the database-backed BDD target passed (19, including
+  test-support linkage). The second full sequence passed six gates, but Clippy
+  found five test-only issues: excessive nesting in the decision oracle and BDD
+  handler, missing `Default` on the BDD world, and long rstest/worker argument
+  lists. The final focused run passes nine decision tests and all 19 BDD tests.
+  The probe handler now lives in its own module, named case and worker
+  configuration structs replace positional test inputs, and the BDD world
+  implements `Default`. V9 and the exact Apalis pins were rechecked
+  successfully. The third full sequence passed six gates; Whitaker alone
+  required inner module documentation in the new configuration and decision
+  modules. Those comments were added, then the following full sequence passed
+  `check-fmt`, `typecheck`, `test` (1,930 passed, four skipped; both
   compile-fail checks, 614 workflow contracts with one skipped, and 115 script
   doctests with 13 skipped), `markdownlint`, `nixie`, and `spelling`. `lint`
   found three more missing inner docs in the retry BDD fixture module, its
@@ -1442,12 +1443,28 @@ caret requirements.
   compile-fail checks, 614 workflow contracts (one skipped), 115 script
   doctests (13 skipped), and all 14 lint-action checks. The embedded PostgreSQL
   retry scenarios passed. Final4 logs use the `/tmp/wildside-epm2-final4-`
-  prefix. This plan update and the final inner-doc fixes are now going through
-  their post-run documentation gates before the milestone commit. Evidence is in
+  prefix. The post-run documentation gates passed, and the milestone was
+  committed as `c0a66b6`. CodeRabbit then recommended splitting the failure
+  orchestration helpers and time-qualifying an earlier pending-status sentence;
+  the first follow-up full run found a missing `Duration` import in the new
+  scheduler helper (`make lint` and `make test` failed during compilation;
+  `typecheck`, formatting, and the documentation gates passed). The import has
+  been added. The next run passed six gates, including all 1,930 Nextest cases,
+  both compile-fail checks, the workflow contracts, and the script doctests;
+  Clippy found that the terminal helper still accepted five parameters. Grouped
+  its related terminal fields in `TerminalRetryPlan`. The final7 full
+  sequential run passed all seven gates: `check-fmt`, `lint`, `typecheck`,
+  `test` (1,930 passed, four skipped; both compile-fail checks, 614 workflow
+  contracts with one skipped, 115 script doctests with 13 skipped, 14
+  lint-action tests, and three frontend Node tests), `markdownlint`, `nixie`,
+  and `spelling`. The refactor and its plan record are ready for the follow-up
+  commit; a second CodeRabbit pass will verify its two finding resolutions.
+  Evidence is in
+  `/tmp/wildside-epm2-final7-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  and the corresponding `-final7-` gate logs. Earlier evidence is in
   `/tmp/wildside-epm2-final4-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
-  and the corresponding `-final4-` gate logs. Earlier evidence is in
-  `/tmp/wildside-epm2-final3-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
-  and the corresponding `-final3-` gate logs.
+  and the corresponding `-final4-` gate logs; final3 logs are preserved under
+  the corresponding `-final3-` prefix.
 - [x] (2026-10-25 Europe/Berlin) EP-M1 red test captured: the focused test
   command failed to compile on the intentionally absent retry API (`E0432` for
   both the unit and property modules), as expected. Cargo added `googletest`

@@ -3,6 +3,7 @@
 use std::future::Future;
 use std::num::NonZeroU32;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use apalis_core::{error::BoxDynError, layers::Service, worker::context::WorkerContext};
 use apalis_postgres::PgTask;
@@ -133,140 +134,202 @@ async fn handle_failure(
     failure: JobFailure,
     context: &RetryFailureContext<'_>,
 ) -> Result<(), BoxDynError> {
+    let kind = failure.kind();
     let jitter = random_jitter();
     let decision = decide_retry_wrapper_action(
         context.policy,
         RetryDecisionContext {
             attempt: context.attempt,
             context_max_attempts: context.context_max_attempts,
-            kind: failure.kind(),
+            kind,
             jitter,
         },
     );
     let error_message = failure.message().to_owned();
-    let (Some(task_id), Some(worker_id)) = (context.task_id, context.worker_id) else {
-        if matches!(decision, RetryWrapperDecision::Schedule { .. }) {
-            context
-                .metrics
-                .observe_retry(RouteRetryOutcome::ScheduleFailure);
+    let identity = match (context.task_id, context.worker_id) {
+        (Some(task_id), Some(worker_id)) => RetryJobIdentity { task_id, worker_id },
+        _ => {
+            record_missing_retry_metadata(context, kind, decision);
+            return Err(Box::new(RetryAckError(error_message)));
         }
-        error!(
-            queue = context.queue_name,
-            attempt = context.attempt.get(),
-            error_kind = error_kind_label(failure.kind()),
-            decision = decision_label(decision),
-            "retry metadata missing; cannot persist failure outcome"
-        );
-        return Err(Box::new(RetryAckError(error_message)));
     };
 
     match decision {
         RetryWrapperDecision::Schedule { delay } => {
-            match context
-                .scheduler
-                .schedule_retry(task_id, worker_id, delay)
-                .await
-            {
-                Ok(true) => {
-                    context.metrics.observe_retry(RouteRetryOutcome::Scheduled);
-                    warn!(
-                        queue = context.queue_name,
-                        task_id,
-                        worker_id,
-                        attempt = context.attempt.get(),
-                        error_kind = error_kind_label(failure.kind()),
-                        decision = "scheduled",
-                        delay_micros = delay.as_micros(),
-                        "job failure scheduled for durable retry"
-                    );
-                }
-                Ok(false) => {
-                    context
-                        .metrics
-                        .observe_retry(RouteRetryOutcome::ScheduleFailure);
-                    warn!(
-                        queue = context.queue_name,
-                        task_id,
-                        worker_id,
-                        attempt = context.attempt.get(),
-                        error_kind = error_kind_label(failure.kind()),
-                        decision = "schedule_failure",
-                        "job retry update no longer owns a running row"
-                    );
-                }
-                Err(error) => {
-                    context
-                        .metrics
-                        .observe_retry(RouteRetryOutcome::ScheduleFailure);
-                    warn!(
-                        queue = context.queue_name,
-                        task_id,
-                        worker_id,
-                        attempt = context.attempt.get(),
-                        error_kind = error_kind_label(failure.kind()),
-                        decision = "schedule_failure",
-                        error = %error,
-                        "job retry scheduling failed"
-                    );
-                }
-            }
+            persist_retry_schedule(context, identity, kind, delay).await;
         }
         RetryWrapperDecision::Terminal {
             reason,
             shrink_limit,
-        } => match context
-            .scheduler
-            .record_terminal_failure(TerminalRetryUpdate {
-                task_id,
-                worker_id,
-                attempt: context.attempt,
-                reason,
-                shrink_limit,
-            })
-            .await
-        {
-            Ok(true) => {
-                context.metrics.observe_dead_letter(match reason {
-                    TerminalRetryReason::Fatal => RouteDeadLetterOutcome::Fatal,
-                    TerminalRetryReason::Exhausted => RouteDeadLetterOutcome::Exhausted,
-                });
-                warn!(
-                    queue = context.queue_name,
-                    task_id,
-                    worker_id,
-                    attempt = context.attempt.get(),
-                    error_kind = error_kind_label(failure.kind()),
-                    decision = "dead_lettered",
-                    reason = reason.as_label(),
+        } => {
+            persist_terminal_failure(
+                context,
+                identity,
+                kind,
+                TerminalRetryPlan {
+                    reason,
                     shrink_limit,
-                    "job failure recorded as terminal"
-                );
-            }
-            Ok(false) => warn!(
-                queue = context.queue_name,
-                task_id,
-                worker_id,
-                attempt = context.attempt.get(),
-                error_kind = error_kind_label(failure.kind()),
-                decision = "terminal_write_failure",
-                reason = reason.as_label(),
-                "job terminal update no longer owns a running row"
-            ),
-            Err(error) => warn!(
-                queue = context.queue_name,
-                task_id,
-                worker_id,
-                attempt = context.attempt.get(),
-                error_kind = error_kind_label(failure.kind()),
-                decision = "terminal_write_failure",
-                reason = reason.as_label(),
-                error = %error,
-                "job terminal update failed"
-            ),
-        },
+                },
+            )
+            .await;
+        }
     }
 
     Err(Box::new(RetryAckError(error_message)))
+}
+
+struct RetryJobIdentity<'a> {
+    task_id: &'a str,
+    worker_id: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct TerminalRetryPlan {
+    reason: TerminalRetryReason,
+    shrink_limit: bool,
+}
+
+fn record_missing_retry_metadata(
+    context: &RetryFailureContext<'_>,
+    kind: JobErrorKind,
+    decision: RetryWrapperDecision,
+) {
+    if matches!(decision, RetryWrapperDecision::Schedule { .. }) {
+        context
+            .metrics
+            .observe_retry(RouteRetryOutcome::ScheduleFailure);
+    }
+    error!(
+        queue = context.queue_name,
+        attempt = context.attempt.get(),
+        error_kind = error_kind_label(kind),
+        decision = decision_label(decision),
+        "retry metadata missing; cannot persist failure outcome"
+    );
+}
+
+async fn persist_retry_schedule(
+    context: &RetryFailureContext<'_>,
+    identity: RetryJobIdentity<'_>,
+    kind: JobErrorKind,
+    delay: Duration,
+) {
+    match context
+        .scheduler
+        .schedule_retry(identity.task_id, identity.worker_id, delay)
+        .await
+    {
+        Ok(true) => {
+            context.metrics.observe_retry(RouteRetryOutcome::Scheduled);
+            warn!(
+                queue = context.queue_name,
+                task_id = identity.task_id,
+                worker_id = identity.worker_id,
+                attempt = context.attempt.get(),
+                error_kind = error_kind_label(kind),
+                decision = "scheduled",
+                delay_micros = delay.as_micros(),
+                "job failure scheduled for durable retry"
+            );
+        }
+        Ok(false) => {
+            context
+                .metrics
+                .observe_retry(RouteRetryOutcome::ScheduleFailure);
+            warn!(
+                queue = context.queue_name,
+                task_id = identity.task_id,
+                worker_id = identity.worker_id,
+                attempt = context.attempt.get(),
+                error_kind = error_kind_label(kind),
+                decision = "schedule_failure",
+                "job retry update no longer owns a running row"
+            );
+        }
+        Err(error) => {
+            context
+                .metrics
+                .observe_retry(RouteRetryOutcome::ScheduleFailure);
+            warn!(
+                queue = context.queue_name,
+                task_id = identity.task_id,
+                worker_id = identity.worker_id,
+                attempt = context.attempt.get(),
+                error_kind = error_kind_label(kind),
+                decision = "schedule_failure",
+                error = %error,
+                "job retry scheduling failed"
+            );
+        }
+    }
+}
+
+async fn persist_terminal_failure(
+    context: &RetryFailureContext<'_>,
+    identity: RetryJobIdentity<'_>,
+    kind: JobErrorKind,
+    plan: TerminalRetryPlan,
+) {
+    let TerminalRetryPlan {
+        reason,
+        shrink_limit,
+    } = plan;
+    let result = context
+        .scheduler
+        .record_terminal_failure(TerminalRetryUpdate {
+            task_id: identity.task_id,
+            worker_id: identity.worker_id,
+            attempt: context.attempt,
+            reason,
+            shrink_limit,
+        })
+        .await;
+    match result {
+        Ok(true) => {
+            context
+                .metrics
+                .observe_dead_letter(dead_letter_outcome(reason));
+            warn!(
+                queue = context.queue_name,
+                task_id = identity.task_id,
+                worker_id = identity.worker_id,
+                attempt = context.attempt.get(),
+                error_kind = error_kind_label(kind),
+                decision = "dead_lettered",
+                reason = reason.as_label(),
+                shrink_limit,
+                "job failure recorded as terminal"
+            );
+        }
+        Ok(false) => warn!(
+            queue = context.queue_name,
+            task_id = identity.task_id,
+            worker_id = identity.worker_id,
+            attempt = context.attempt.get(),
+            error_kind = error_kind_label(kind),
+            decision = "terminal_write_failure",
+            reason = reason.as_label(),
+            "job terminal update no longer owns a running row"
+        ),
+        Err(error) => warn!(
+            queue = context.queue_name,
+            task_id = identity.task_id,
+            worker_id = identity.worker_id,
+            attempt = context.attempt.get(),
+            error_kind = error_kind_label(kind),
+            decision = "terminal_write_failure",
+            reason = reason.as_label(),
+            error = %error,
+            "job terminal update failed"
+        ),
+    }
+}
+
+fn dead_letter_outcome(reason: TerminalRetryReason) -> RouteDeadLetterOutcome {
+    match reason {
+        TerminalRetryReason::Fatal => RouteDeadLetterOutcome::Fatal,
+        TerminalRetryReason::Exhausted => RouteDeadLetterOutcome::Exhausted,
+    }
 }
 
 fn running_worker_id(task: &PgTask<Value>) -> Option<String> {
