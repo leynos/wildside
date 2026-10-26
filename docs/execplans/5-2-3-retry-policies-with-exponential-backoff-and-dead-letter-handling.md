@@ -1592,8 +1592,41 @@ caret requirements.
   `/tmp/epm1-coderabbit-fix3-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
   and
   `/tmp/epm1-coderabbit-fix3-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
-- [ ] Commit the gated regression fix and request CodeRabbit reassessment before
-  accepting EP-M1.
+- [x] (2026-10-26 Europe/Berlin) Committed the bare-export guard as `20c72d2`.
+  The first reassessment attempt returned a 403 ownership error before review
+  began. CLI health and identity checks confirmed the signed-in `leynos`
+  account and organization; a fresh committed review then completed against
+  `origin/main` at `e7ab91e`, covering all 14 paths. It reported two trivial
+  variants of one remaining gap: the matcher did not recognize Make assignment
+  operators `:=`, `::=`, `:::=`, `?=`, `+=`, and `!=`, and the synthetic cases
+  should cover both protected variables. Review log:
+  `/tmp/coderabbit-epm1-20c72d2-fresh-fnsZNP-review.out`.
+- [x] (2026-10-26 Europe/Berlin) Expanded the synthetic cases to cover every
+  supported assignment operator for both protected variables, alongside
+  negative checks for longer variable names. The focused test failed against
+  the previous matcher at `export PG_PASSWORD:=secret`; the matcher now checks
+  explicit Make assignment operators. Red-test evidence:
+  `/tmp/epm1-make-operators-red.out`.
+- [x] (2026-10-26 Europe/Berlin) The expanded focused test passed. All seven
+  sequential gates passed: `check-fmt` (4s), `test` (573s), `typecheck` (7s),
+  `lint` (320s), `markdownlint` (22s), `nixie` (6s), and `spelling` (16s). The
+  test run used `/var/tmp/wildside-epm1-opfix-ffk23reg`; it passed 1,901
+  Nextest cases (four skipped), both trybuild checks, 614 workflow doctests
+  (one skipped), 115 script doctests (13 skipped), and the frontend and
+  lint-actions suites. Candidate HEAD/tree/diff were
+  `20c72d2c201496216cea93d77d6459802c58e0fa`,
+  `d69af07c9e83e3331444a8b3be5cbf87e49a3386`, and
+  `6399975b6ab05ac94f82aa54ade71e6b59df05a176f4f23e5aa7e1613888a944`. Evidence:
+  `/tmp/epm1-assignment-fix-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/epm1-assignment-fix-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [ ] Commit the gated matcher update and request a fresh CodeRabbit review
+  before accepting EP-M1.
 - [ ] EP-M1 domain retry policy and classification.
 - [ ] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
 - [ ] EP-M3 dead-letter port and PostgreSQL adapter.
