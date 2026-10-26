@@ -820,24 +820,26 @@ Obligations:
   PostgreSQL with the capped harness, asserting the observed run count, per-run
   `Attempt::current()` values (1, 2, …), the row's `attempts` and `status`, the
   `run_at` ordering, and that continued polling delivers nothing. It also
-  verifies `DeadReason::Exhausted` when a pre-existing row's stored
-  `max_attempts` exceeds the current policy limit and a retryable failure
-  reaches that policy limit. The guarded terminal update shrinks the stored
-  limit to the current attempt; the ack may store `Failed` because its
-  in-memory limit is still higher, while the dead predicate prevents another
-  fetch. Non-vacuity: the scenarios assert that the handler ran more than once
-  (a policy that never retries fails) and that extra polling after death yields
-  no runs (an unbounded loop fails). A control scenario with a succeeding
-  handler must end `Done` with one attempt.
+  verifies the persisted D15 reason is `exhausted` when a pre-existing row's
+  stored `max_attempts` exceeds the current policy limit and a retryable
+  failure reaches that policy limit. EP-M3's V6 checks that the dead-letter
+  port maps this stored reason to `DeadReason::Exhausted`. The guarded terminal
+  update shrinks the stored limit to the current attempt; the ack may store
+  `Failed` because its in-memory limit is still higher, while the dead
+  predicate prevents another fetch. Non-vacuity: the scenarios assert that the
+  handler ran more than once (a policy that never retries fails) and that extra
+  polling after death yields no runs (an unbounded loop fails). A control
+  scenario with a succeeding handler must end `Done` with one attempt.
 - Obligation V5 (fatal short-circuit is storage-dead): a handler returning
   a fatal failure runs exactly once. The resulting row satisfies the dead
   predicate and is never redelivered by continued polling, which is a stronger
-  claim than "the harness stopped polling". The listing reports
-  `DeadReason::Fatal` even when Apalis status and attempts alone would imply
-  exhaustion. Include a one-attempt policy case at the in-memory Apalis attempt
-  limit: the ack writes `Killed`, no limit shrink is needed, and the metadata
-  reports `Fatal`. Method: behavioural test as V4 with a fatal-classified
-  failure, including a post-failure polling phase and a dead-list assertion.
+  claim than "the harness stopped polling". The D15 metadata contains `fatal`
+  even when Apalis status and attempts alone would imply exhaustion. Include a
+  one-attempt policy case at the in-memory Apalis attempt limit: the ack writes
+  `Killed`, no limit shrink is needed, and the metadata reports `fatal`.
+  Method: behavioural test as V4 with a fatal-classified failure, including a
+  post-failure polling phase and a raw metadata assertion. EP-M3's V6 verifies
+  that the dead-letter listing maps that value to `DeadReason::Fatal`.
   Non-vacuity: with spare attempts, misclassifying fatal as retryable fails the
   post-failure run-count assertion; incorrect reason persistence fails the
   reason assertion. Omitting the terminal limit update when required fails the
@@ -1040,7 +1042,7 @@ Feature: Queue retry policy with durable exponential backoff
     When the worker processes the queue
     Then the handler runs exactly three times in total
     And the row is stored as Failed and satisfies the dead predicate
-    And the dead listing reports Exhausted rather than Fatal
+    And the persisted terminal reason is Exhausted rather than Fatal
     And further polling delivers no more runs
 
   Scenario: An enqueued job carries the queue's retry budget
@@ -1928,6 +1930,13 @@ caret requirements.
   `~/.cargo/registry/src/` and the 1.0.0 crate tarballs.
 
 ## Decision log
+
+- Verification refinement (2026-10-26): EP-M2 introduces the retry wrapper but
+  EP-M3 introduces `DeadLetterQueue::list_dead`. The M2 feature therefore
+  asserts the guarded row state and D15's persisted terminal reason directly;
+  V6 verifies that the later listing maps the reason to the domain enum. This
+  keeps M2 test-first without duplicating the dead-letter adapter early or
+  weakening either acceptance check.
 
 - Operational decision (2026-10-20): run the replacement scratch probe with
   the Makefile-equivalent PostgreSQL environment documented in the developer
