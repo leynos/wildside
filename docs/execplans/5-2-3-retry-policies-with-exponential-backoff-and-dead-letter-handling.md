@@ -1774,8 +1774,35 @@ caret requirements.
   `/tmp/epm3-retry2-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
   `/tmp/epm3-retry2-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
   `/tmp/epm3-retry2-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
-- [x] EP-M3 dead-letter port and PostgreSQL adapter; full gates are green.
-- [ ] EP-M3 milestone CLI review and commit.
+- [x] (2026-10-26 Europe/Berlin) Rebased onto live `origin/main`
+  `9d899f2`. The exclusive replay boundary was `e7ab91e`, the parent of the
+  branch's first commit and the target recorded by the previous rebase. All 38
+  linear commits matched one-for-one in `range-diff`; no conflicts or patch
+  changes occurred. M3 was replayed as `e910c53`. The only target-only change
+  was the Rust toolchain bump; no branch commit modified `rust-toolchain.toml`.
+  The tracked Weave attribute was bypassed with the scoped built-in `zdiff3`
+  merge driver for this unattended replay. Receipt:
+  `/tmp/rebase-epm3-20261026.md`.
+- [x] (2026-10-26 Europe/Berlin) All seven gates passed on the rebased
+  candidate using isolated PostgreSQL roots: `check-fmt` 2.2s, `lint` 54.7s,
+  `typecheck` 4.1s, `test` 400.1s, `markdownlint` 17.4s, `nixie` 8.7s, and
+  `spelling` 12.8s. Test counts: 1,959 Nextest passed (four skipped), both
+  trybuild targets passed, 614 workflow contracts passed (one skipped), 115
+  scripts doctests passed (13 skipped), and 14 lint-actions tests passed. The
+  committed test source exposed PostgreSQL's required `ANALYZE` spelling; two
+  SQL-fragment-specific exceptions were added to `typos.local.toml`, and
+  `make spelling` regenerated `typos.toml`. The spelling fix is commit
+  `31a03c2`. Logs:
+  `/tmp/epm3-rebased-fix1-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] EP-M3 dead-letter port and PostgreSQL adapter; implementation commit
+  `e910c53` and spelling repair `31a03c2` are gated.
+- [ ] EP-M3 milestone CLI review and publication.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
 ## Surprises & discoveries
@@ -1805,6 +1832,14 @@ caret requirements.
   `PG_DATA_DIR` paths under `/var/tmp`; Cargo will continue using its shared
   default cache. The rerun with isolated roots completed successfully, with no
   PostgreSQL timeout or foreign process intervention.
+
+- Observation (2026-10-26 EP-M3 spelling gate): the first green spelling pass
+  happened while the new BDD source was untracked, so it was not included in
+  the tracked-file scope. After commit, Typos correctly flagged PostgreSQL's
+  `ANALYZE` keyword. Two exact SQL-fragment patterns in `typos.local.toml`
+  preserve the required SQL spelling without accepting the word generally;
+  `make spelling` regenerated the corresponding `typos.toml` entries, and the
+  complete rebased gate sequence then passed.
 
 - Observation (2026-10-26, stop-hook validation): `make lint` could not write
   `target/.rustdoc_fingerprint.json`, and Nixie could not create a temporary
