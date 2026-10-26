@@ -1457,9 +1457,14 @@ caret requirements.
   `test` (1,930 passed, four skipped; both compile-fail checks, 614 workflow
   contracts with one skipped, 115 script doctests with 13 skipped, 14
   lint-action tests, and three frontend Node tests), `markdownlint`, `nixie`,
-  and `spelling`. The refactor and its plan record are ready for the follow-up
-  commit; a second CodeRabbit pass will verify its two finding resolutions.
-  Evidence is in
+  and `spelling`. The refactor and its plan record were committed as `00f415e`.
+  CodeRabbit's first review of the milestone found two items: split the failure
+  orchestration and time-qualify an earlier pending checkpoint. The follow-up
+  committed-diff review from `c0a66b6` to `00f415e` returned zero findings.
+  Evidence:
+  `/tmp/wildside-epm2-coderabbit-c0a66b62382ab046191f120920e1103c6f8f723c.out`
+  and `/tmp/wildside-epm2-coderabbit-followup-00f415e.out`. EP-M2 is complete;
+  EP-M3 is active. Evidence is in
   `/tmp/wildside-epm2-final7-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
   and the corresponding `-final7-` gate logs. Earlier evidence is in
   `/tmp/wildside-epm2-final4-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
