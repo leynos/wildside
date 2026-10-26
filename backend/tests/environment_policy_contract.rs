@@ -242,6 +242,8 @@ fn makefile_target_recipe_contains(target: &str, statement: &str) -> bool {
 /// A bare `export` exports every Make variable to child processes, so it also
 /// violates the test-only environment boundary.
 fn makefile_globally_exports(makefile: &str, name: &str) -> bool {
+    const MAKE_ASSIGNMENT_OPERATORS: &[&str] = &["=", ":=", "::=", ":::=", "?=", "+=", "!="];
+
     makefile
         .lines()
         .filter(|line| !line.starts_with('\t'))
@@ -264,9 +266,11 @@ fn makefile_globally_exports(makefile: &str, name: &str) -> bool {
             names.is_empty()
                 || names.iter().any(|exported| {
                     *exported == name
-                        || exported
-                            .strip_prefix(name)
-                            .is_some_and(|suffix| suffix.starts_with('='))
+                        || exported.strip_prefix(name).is_some_and(|suffix| {
+                            MAKE_ASSIGNMENT_OPERATORS
+                                .iter()
+                                .any(|operator| suffix.starts_with(*operator))
+                        })
                 })
         })
 }
@@ -335,6 +339,20 @@ fn makefile_global_export_detection_handles_bare_and_named_exports() {
         "\texport PG_PASSWORD=value\n",
         "PG_PASSWORD"
     ));
+    for name in ["PG_PASSWORD", "POSTGRESQL_RELEASES_URL"] {
+        for operator in ["=", ":=", "::=", ":::=", "?=", "+=", "!="] {
+            let directive = format!("export {name}{operator}secret\n");
+            assert!(
+                makefile_globally_exports(&directive, name),
+                "the export contract must detect `{directive}`"
+            );
+            let longer_name = format!("export {name}_EXTRA{operator}secret\n");
+            assert!(
+                !makefile_globally_exports(&longer_name, name),
+                "the export contract must not match `{longer_name}` as `{name}`"
+            );
+        }
+    }
 }
 
 /// Cargo may compose non-secret settings without replacing explicit caller
