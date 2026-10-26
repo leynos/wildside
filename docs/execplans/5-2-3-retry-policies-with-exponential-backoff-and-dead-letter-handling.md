@@ -864,10 +864,13 @@ Obligations:
   next terminal failure sets it again. `discard` removes the row. Requeuing a
   live or absent job returns `NotDead` and changes nothing, and requeuing a
   dead row from an unconfigured queue returns `UnknownQueue`. Listing ignores
-  live jobs. Method: behavioural test (`rstest-bdd`) with embedded PostgreSQL.
-  Non-vacuity: listing before any failure must be empty (a witness that the
-  query filters live jobs), the guard scenarios are negative controls by
-  construction, and omitting the `max_attempts` restoration fails the
+  live jobs. Discarding a live row is also rejected with `NotDead` and a full
+  row snapshot proves that its state is unchanged. An unclassified legacy row
+  exposes no `last_error`, because its `last_result` has no trusted failure
+  provenance (D18). Method: behavioural test (`rstest-bdd`) with embedded
+  PostgreSQL. Non-vacuity: listing before any failure must be empty (a witness
+  that the query filters live jobs), the guard scenarios are negative controls
+  by construction, and omitting the `max_attempts` restoration fails the
   requeued-fatal scenario.
 - Obligation V7 (snapshot stability): V1 job envelope snapshots from 5.2.2
   are byte-identical after this plan, and any new operator-facing rendering of
@@ -1100,6 +1103,7 @@ Feature: Dead-letter listing, requeue, and discard
     When the operator requeues the dead job
     And the worker processes the queue
     Then the job completes with status "Done"
+    And the job retains one requeue in its metadata
 
   Scenario: A legacy failed row with a null attempt limit is listed
     Given a disposable legacy schema permits a null max_attempts value
@@ -1110,11 +1114,21 @@ Feature: Dead-letter listing, requeue, and discard
 
   Scenario: A requeued fatal job regains its full retry budget
     Given a job has been dead-lettered by a fatal error
+    And the dead job has an existing requeue count and operator metadata
     And the job now fails with a retryable error
     When the operator requeues the dead job
-    And the worker processes the queue
-    Then the handler runs the queue's full number of attempts
-    And the job is recorded as dead because its retries were exhausted
+    Then the requeue restores its budget and preserves unrelated metadata
+    When the worker processes the queue
+    Then the job is dead because its retries were exhausted
+    And the requeue count remains one
+    And the fatal reason has been replaced with exhausted
+    And the handler runs the queue's full number of attempts
+
+  Scenario: Discard rejects a live job without changing it
+    Given a pending job exists
+    When the operator discards that job
+    Then the operation fails because the job is not dead
+    And the job's state is unchanged
 
   Scenario: Requeuing a live job is rejected
     Given a pending job exists
@@ -1126,12 +1140,27 @@ Feature: Dead-letter listing, requeue, and discard
     Given a job has been dead-lettered after exhausting its retries
     When the operator discards the dead job
     Then the listing is empty
-    And further polling delivers no runs
+    And the dead job row is gone
 
   Scenario: Listing dead jobs ignores live jobs
     Given a pending job and a running job exist
     When the operator lists dead jobs
     Then the listing is empty
+
+  Scenario: A legacy or malformed terminal reason is unclassified
+    Given a failed dead row has no recognized terminal reason
+    When the operator lists dead jobs
+    Then the dead listing contains it as Unclassified
+
+  Scenario: Dead-job listing is newest first and respects its limit
+    Given two dead jobs exist
+    When the operator lists dead jobs with a limit of 1
+    Then only the newest dead job is listed
+
+  Scenario: Requeue rejects a dead job from an unknown queue
+    Given a dead job belongs to an unconfigured queue
+    When the operator requeues that dead job
+    Then the operation fails because its queue has no retry budget
 ```
 
 The successful requeue scenario also asserts that the job row retains one prior
@@ -1701,7 +1730,52 @@ caret requirements.
   `/tmp/coderabbit-epm1-d1f57de-BYpnlQ-review.out`.
 - [x] EP-M1 domain retry policy and classification.
 - [x] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
-- [ ] EP-M3 dead-letter port and PostgreSQL adapter.
+- [x] (2026-10-26 Europe/Berlin) EP-M3 red tests were captured: unit and BDD
+  compile attempts failed on the intentionally absent port and adapter exports.
+  Evidence:
+  `/tmp/test-epm3-dead-letter-port-red-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  and
+  `/tmp/test-epm3-dead-letter-bdd-red-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) The focused EP-M3 port and adapter tests
+  passed (14 tests), and the database-backed target passed all 15 tests. Its 11
+  BDD scenarios cover listing, the null-limit legacy row, restored retry
+  budgets, D15 metadata preservation, requeue and discard guards, unknown
+  queues, ordering, and terminal reason mapping. A 5,000-pending/50-dead-row
+  `EXPLAIN` run used the existing `sidx` bitmap path with no sequential scan,
+  so D6 did not trigger index creation. Logs:
+  `/tmp/wildside-epm3-dead-letter-unit-1.out` and
+  `/tmp/wildside-epm3-dead-letter-bdd-1.out`.
+- [x] (2026-10-26 Europe/Berlin) The first full gate run passed `check-fmt`
+  and `typecheck`; lint found that the BDD `insert_job` seed helper exceeded
+  Clippy's argument limit. The full test target then stalled on the unrelated
+  shared PostgreSQL lock after 991 passes, one failure, and four timeouts; it
+  was stopped with 963 cases not run. No foreign process was signalled.
+  `insert_job` now accepts a named `JobSeed` value, and the formatter passed.
+  Evidence:
+  `/tmp/lint-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-epm3.out`
+  and
+  `/tmp/test-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-epm3.out`.
+- [x] (2026-10-26 Europe/Berlin) The next lint pass cleared Clippy and found
+  Whitaker's required inner documentation on the new dead-letter BDD module.
+  The module now documents its purpose. The following full sequential rerun
+  passed all seven gates on base HEAD `05b89ad`; its tracked diff SHA was
+  `9088cea3e143ced7093e50ec351ac4abbb4510c2210967bd4e82037ee87e15a7` and
+  untracked-content SHA was
+  `f794478b1aa0de968f7f263dc4727af80c2a4cf275a965b10a04e29e857f719a`. Nextest
+  passed 1,959 cases (four skipped); trybuild passed both targets, workflow
+  contracts passed 614 (one skipped), scripts doctests passed 115 (13 skipped),
+  and action-lint tests passed 14. Markdown lint and Nixie also passed. Fresh
+  `TMPDIR` and `PG_DATA_DIR` roots under `/var/tmp` avoided the unrelated
+  shared PostgreSQL lock. Logs:
+  `/tmp/epm3-retry2-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] EP-M3 dead-letter port and PostgreSQL adapter; full gates are green.
+- [ ] EP-M3 milestone CLI review and commit.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
 ## Surprises & discoveries
@@ -1715,6 +1789,22 @@ caret requirements.
   target or cache. Logs: `/tmp/test-wildside-epm2-bdd-isolated-2.out`,
   `/tmp/test-wildside-epm2-retry-wrapper-unit.out`, and
   `/tmp/test-wildside-epm2-retry-metrics-unit-all-features.out`.
+
+- Observation (2026-10-26 EP-M3 focused run): the original shared PostgreSQL
+  test lock was held by a long-lived server from another run. No process was
+  signalled. The BDD target passed with an owned `PG_DATA_DIR` and `TMPDIR`
+  under `/var/tmp`. It also showed why `last_error` must be gated by D15's
+  recognized reason: a legacy or malformed `last_result` is not guaranteed to
+  contain only the wrapper's bounded, payload-free message. The unclassified
+  row scenario now asserts that no error string is exposed.
+
+- Observation (2026-10-26 EP-M3 full gate run): another long-lived PostgreSQL
+  process owned the default shared-cluster lock. A read-model integration test
+  waited on that lock, so the test run was interrupted after it stopped making
+  progress. The next full gate run will use fresh, task-owned `TMPDIR` and
+  `PG_DATA_DIR` paths under `/var/tmp`; Cargo will continue using its shared
+  default cache. The rerun with isolated roots completed successfully, with no
+  PostgreSQL timeout or foreign process intervention.
 
 - Observation (2026-10-26, stop-hook validation): `make lint` could not write
   `target/.rustdoc_fingerprint.json`, and Nixie could not create a temporary
@@ -2218,6 +2308,15 @@ caret requirements.
   invalid-configuration rstest cases also pass that value as a unit to keep the
   test helper within the same limit. Date/author: 2026-10-25 Europe/Berlin,
   implementation refinement.
+- D18 — `list_dead` exposes `last_error` only when the row also carries a
+  recognized D15 terminal reason (`fatal` or `exhausted`) and Apalis's
+  `last_result.Err` is a JSON string. Legacy and malformed rows without that
+  provenance remain visible as `Unclassified` with `last_error = None`.
+  Rationale: status, attempts, and an arbitrary legacy `last_result` do not
+  prove that its contents are a payload-free `JobFailure` message; applying the
+  D16 byte bound alone would not make such data safe to expose. This is a
+  read-side filter and adds no metadata key or schema object. Date/author:
+  2026-10-26 Europe/Berlin, implementation refinement.
 
 ## Outcomes & retrospective
 
@@ -2230,10 +2329,13 @@ across another acknowledgement. Apalis status and attempt counts also cannot
 distinguish a fatal error from policy exhaustion when the stored attempt limit
 exceeds the current policy. The user accepted D15 on 2026-10-25, authorizing
 the two namespaced JSONB metadata keys while preserving the existing
-`last_result` format. EP-M1 is active. Before marking the plan `COMPLETE`,
-reconcile the architecture document's "Background Job Execution" prose with the
-implemented mechanism and confirm no upstream assumption in `Conformance basis`
-was falsified.
+`last_result` format. EP-M1 and EP-M2 are complete, and EP-M3 is active. Its
+port, adapter, 11 BDD scenarios, and EXPLAIN canary pass their focused tests;
+the complete sequential gates and milestone review remain pending. EP-M4 still
+owns the ADRs, operator runbook, architecture and roadmap updates. Before
+marking the plan `COMPLETE`, reconcile the architecture document's "Background
+Job Execution" prose with the implemented mechanism and confirm no upstream
+assumption in `Conformance basis` was falsified.
 
 ## Revision note
 

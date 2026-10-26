@@ -35,6 +35,9 @@ pub use stub_route_queue::StubRouteQueue;
 mod apalis_route_queue;
 pub use apalis_route_queue::{ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue};
 
+mod postgres_dead_letter;
+pub use postgres_dead_letter::{PostgresDeadLetterQueue, RequeueBudgets};
+
 mod postgres_retry_scheduler;
 pub use postgres_retry_scheduler::{PostgresRetryScheduler, TerminalRetryReason};
 
