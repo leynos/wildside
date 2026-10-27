@@ -6,7 +6,6 @@
 
 use std::fmt;
 
-use base_d::{WordDictionary, word, wordlists};
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::{ambient_authority, fs::Dir};
 use rand::random;
@@ -15,7 +14,9 @@ use crate::error::RegistryError;
 use crate::registry::{SeedDefinition, SeedRegistry};
 
 mod error;
+mod seed_name;
 pub use error::CliError;
+use seed_name::{eff_long_dictionary, seed_name_from_value};
 
 const DEFAULT_USER_COUNT: usize = 12;
 const MAX_NAME_ATTEMPTS: usize = 5;
@@ -289,7 +290,7 @@ fn registry_file_name(path: &Utf8Path) -> Result<&Utf8Path, CliError> {
 /// ```
 pub fn seed_name_for_seed(seed: u64) -> Result<String, CliError> {
     let dictionary = eff_long_dictionary()?;
-    Ok(seed_name_from_value(seed, &dictionary))
+    seed_name_from_value(seed, dictionary)
 }
 
 /// Formats the success message emitted by the CLI.
@@ -348,7 +349,7 @@ struct SeedSelection {
 fn select_seed_and_name(
     registry: &SeedRegistry,
     options: &Options,
-    dictionary_opt: Option<WordDictionary>,
+    dictionary_opt: Option<&[&str]>,
 ) -> Result<SeedSelection, CliError> {
     if let Some(name) = options.name.clone() {
         let seed = options.seed.unwrap_or_else(random_seed);
@@ -364,7 +365,7 @@ fn select_seed_and_name(
     let mut seed = supplied_seed.unwrap_or_else(random_seed);
 
     for _ in 0..MAX_NAME_ATTEMPTS {
-        let name = seed_name_from_value(seed, &dictionary);
+        let name = seed_name_from_value(seed, dictionary)?;
         if !has_name_in_registry(registry, &name) {
             return Ok(SeedSelection { name, seed });
         }
@@ -378,23 +379,11 @@ fn select_seed_and_name(
         attempts: MAX_NAME_ATTEMPTS,
     })
 }
-fn seed_name_from_value(seed: u64, dictionary: &WordDictionary) -> String {
-    let seed_str = seed.to_string();
-    word::encode(seed_str.as_bytes(), dictionary)
-}
 fn has_name_in_registry(registry: &SeedRegistry, name: &str) -> bool {
     registry.seeds().iter().any(|seed| seed.name() == name)
 }
 fn random_seed() -> u64 {
     random()
-}
-fn eff_long_dictionary() -> Result<WordDictionary, CliError> {
-    WordDictionary::builder()
-        .words_from_str(wordlists::EFF_LONG)
-        .delimiter("-")
-        .case_sensitive(false)
-        .build()
-        .map_err(|err| CliError::WordListError { message: err })
 }
 #[cfg(test)]
 mod tests;

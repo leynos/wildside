@@ -6,7 +6,8 @@ description = "Deterministic example user data generation for demonstration purp
 license = "MIT"
 
 [dependencies]
-base-d = "3.0.31"
+diceware_wordlists = "1.2.3"
+num-bigint = "0.4"
 camino = "1"
 cap-std = "4"
 fake = "4.4"

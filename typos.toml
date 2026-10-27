@@ -150,6 +150,7 @@ extend-ignore-re = [
     "`[^`\\n]+`",
     "`color`",
     "`var\\.iamge_id` instead of `var\\.image_id`",
+    "backspace\\-pulverize\\-grime",
     "currentColor",
     "cursor\\ =\\ Cursor::new\\(NotSerialisable\\ \\{\\ value:\\ 42\\ \\}\\);",
     "describe\\(\"isRecognisedOptionWithValue\",\\ \\(\\)\\ =>\\ ",

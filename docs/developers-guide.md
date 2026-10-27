@@ -588,6 +588,12 @@ make test
 enabled so `pnpm` is available locally and in CI, and it requires `cargo-audit`
 for the Rust dependency check.
 
+The example-data seed registry encodes the decimal UTF-8 representation of a
+seed using the EFF long word list from `diceware_wordlists`. Preserve the word
+order and byte-to-radix conversion when changing its dependencies: existing
+seed values must keep their generated names. The CLI does not need a general
+compression library to generate these names.
+
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.7`,
 React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`, Zod
 3, TypeScript 5, Vitest `^4.1.12`, and Orval 8. TanStack Router, Radix UI,
