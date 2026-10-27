@@ -191,9 +191,9 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     loop {
         match pg_embedded_setup_unpriv::test_support::shared_cluster_handle() {
             Ok(handle) => {
-                ensure_utc_timezone_alias(handle)?;
                 #[cfg(unix)]
                 exit_handler::register_process_exit_cleanup(handle);
+                ensure_utc_timezone_alias(handle)?;
                 return Ok(handle);
             }
             Err(error) => {
@@ -207,30 +207,9 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
     }
 }
 
-/// Adds PostgreSQL's canonical UTC name when the bundled timezone data only
-/// contains its equivalent UCT entry.
+/// Check PostgreSQL UTC readiness, repairing verified bundled data if needed.
 fn ensure_utc_timezone_alias(handle: &ClusterHandle) -> BootstrapResult<()> {
-    use color_eyre::eyre::eyre;
-
-    let timezone_dir = handle
-        .settings()
-        .installation_dir
-        .join("share")
-        .join("timezone");
-    let timezone_dir_handle =
-        cap_std::fs::Dir::open_ambient_dir(&timezone_dir, cap_std::ambient_authority()).map_err(
-            |error| {
-                BootstrapError::from(eyre!(
-                    "open embedded PostgreSQL timezone data in '{}': {error}",
-                    timezone_dir.display()
-                ))
-            },
-        )?;
-
-    postgres_timezone::ensure_utc_alias(&timezone_dir_handle).map_err(|error| {
-        BootstrapError::from(eyre!(
-            "prepare embedded PostgreSQL UTC timezone data in '{}': {error}",
-            timezone_dir.display()
-        ))
-    })
+    let url = handle.connection().database_url("postgres");
+    postgres_timezone::ensure_utc_ready(&url, &handle.settings().installation_dir)
+        .map_err(BootstrapError::from)
 }

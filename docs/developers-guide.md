@@ -852,6 +852,14 @@ database-level isolation. Only use direct per-test cluster construction when a
 suite truly needs cluster-level isolation (for example, server-wide settings or
 lifecycle-specific assertions).
 
+The shared cluster wrapper checks that PostgreSQL accepts the `UTC` timezone
+before returning its handle. On Unix, it registers process-exit cleanup before
+that check. If the server rejects `UTC`, the test support may add a `UTC` alias
+from `UCT` only after installation metadata confirms that PostgreSQL uses
+bundled timezone data. Reuse the shared cluster wrapper rather than calling the
+readiness helper from individual suites; it is scoped to this test harness and
+never changes host system timezone data.
+
 ### v0.5.0 migration usage rules
 
 When migrating to `pg-embed-setup-unpriv` `v0.5.0`, apply these conventions so

@@ -29,61 +29,36 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 );
 
 const stringBodySchema = z.string();
-const nullBodySchema = z.null();
-const undefinedBodySchema = z.undefined();
+const emptyBodySchema = z.union([z.null(), z.undefined()]);
+const nativeBodySchema = z.union([
+  z.instanceof(FormData),
+  z.instanceof(Blob),
+  z.instanceof(URLSearchParams),
+  z.instanceof(ArrayBuffer),
+  z.custom<ArrayBufferView<ArrayBuffer>>((value) => ArrayBuffer.isView(value)),
+  z.instanceof(ReadableStream),
+]);
 
 const apiBase = (): string => import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
-
-const isFormData = (body: FetchBody | undefined): body is FormData => body instanceof FormData;
-const isBlob = (body: FetchBody | undefined): body is Blob => body instanceof Blob;
-const isUrlEncoded = (body: FetchBody | undefined): body is URLSearchParams =>
-  body instanceof URLSearchParams;
-const isBinary = (
-  body: FetchBody | undefined,
-): body is ArrayBuffer | ArrayBufferView<ArrayBuffer> =>
-  body instanceof ArrayBuffer || ArrayBuffer.isView(body);
 
 /** Predicate: treat POJOs and arrays as JSON serializable structures. */
 const isPlainObjectLike = (value: FetchBody | undefined): value is JsonObject | JsonValue[] =>
   Array.isArray(value) || (Boolean(value) && Object.getPrototypeOf(value) === Object.prototype);
-
-/** Heuristic for strings that look like JSON payloads. */
-const looksLikeJsonString = (text: string): boolean => {
-  const trimmed = text.trim();
-  return (
-    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-    (trimmed.startsWith('[') && trimmed.endsWith(']'))
-  );
-};
 
 /**
  * Normalize the request body for JSON APIs while preserving native body types.
  * Plain objects and arrays are serialized; string bodies remain untouched.
  */
 const normalizeBody = (body: FetchBody | undefined): NormalizedBody => {
-  if (undefinedBodySchema.safeParse(body).success) return { isJson: false };
+  const emptyBody = emptyBodySchema.safeParse(body);
+  if (emptyBody.success) return { body: emptyBody.data, isJson: false };
 
-  const nullBody = nullBodySchema.safeParse(body);
-  if (nullBody.success) return { body: nullBody.data, isJson: false };
-
-  if (isFormData(body) || isBlob(body) || isUrlEncoded(body) || isBinary(body)) {
-    return { body, isJson: false };
-  }
+  const nativeBody = nativeBodySchema.safeParse(body);
+  if (nativeBody.success) return { body: nativeBody.data, isJson: false };
 
   if (isPlainObjectLike(body)) {
     return { body: stringBodySchema.parse(JSON.stringify(body)), isJson: true };
   }
-
-  const stringBody = stringBodySchema.safeParse(body);
-  if (stringBody.success) {
-    return { body: stringBody.data, isJson: looksLikeJsonString(stringBody.data) };
-  }
-
-  const numericBody = z.union([z.number(), z.boolean()]).safeParse(body);
-  if (numericBody.success) return { body: String(numericBody.data), isJson: false };
-
-  const streamBody = z.instanceof(ReadableStream).safeParse(body);
-  if (streamBody.success) return { body: streamBody.data, isJson: false };
 
   return { body: String(body), isJson: false };
 };
@@ -96,16 +71,13 @@ const defaultHeaders = (
   const headers = new Headers(init?.headers);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
 
-  const rawBody = init?.body;
-  if (!headers.has('Content-Type') && (bodyInfo.isJson || isStringBody(rawBody))) {
+  const shouldSetJsonContentType =
+    bodyInfo.isJson || stringBodySchema.safeParse(init?.body).success;
+  if (shouldSetJsonContentType && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json; charset=utf-8');
   }
   return headers;
 };
-
-function isStringBody(body: FetchBody | undefined): boolean {
-  return stringBodySchema.safeParse(body).success;
-}
 
 type ErrorDetail = JsonValue | string;
 

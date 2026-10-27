@@ -7,10 +7,14 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { UserIdSchema, UsersSchema } from '@app/types';
 
+import { customFetch, customFetchParsedSafe } from './fetcher';
+
 const mockCustomFetchParsed = mock();
 
 await mock.module('./fetcher', () => ({
+  customFetch,
   customFetchParsed: mockCustomFetchParsed,
+  customFetchParsedSafe,
 }));
 
 describe('client wrappers', () => {
