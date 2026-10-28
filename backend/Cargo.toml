@@ -103,7 +103,6 @@ rstest = "0.26"
 googletest = "0.14"
 rstest-bdd = "0.5.0"
 rstest-bdd-macros = { version = "0.5.0", features = ["strict-compile-time-validation"] }
-ulid = "1.2.1"
 tracing-test = { version = "0.2", features = ["no-env-filter"] }
 insta = { version = "1", features = ["json", "redactions"] }
 serial_test = "3"
