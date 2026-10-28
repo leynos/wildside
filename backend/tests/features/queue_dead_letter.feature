@@ -64,8 +64,8 @@ Feature: Dead-letter listing, requeue, and discard
     Then the dead listing contains the legacy row as Unclassified
 
   Scenario: A malformed requeue count does not hide valid dead jobs
-    Given a malformed requeue count and another dead job exist
-    When the operator lists dead jobs
+    Given malformed requeue counts and another dead job exist
+    When the operator lists dead jobs with a limit of 1
     Then the listing contains only the valid dead job
 
   Scenario: A negative attempt count does not fail the dead-job listing

@@ -11,4 +11,4 @@ WHERE status = 'Killed'
    OR (status = 'Failed'
        AND (max_attempts IS NULL OR attempts >= max_attempts))
 ORDER BY done_at DESC NULLS LAST, id DESC
-LIMIT $1
+LIMIT $1 OFFSET $2
