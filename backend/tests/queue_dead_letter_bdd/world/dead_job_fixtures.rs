@@ -20,7 +20,12 @@ impl QueueDeadLetterWorld {
     }
 
     pub fn insert_malformed_requeue_count_and_valid_dead_jobs(&self) {
-        let malformed = self.insert_malformed_requeue_count_dead_job();
+        // Fill one raw SQL page with rows the adapter rejects before a valid
+        // row so this scenario exercises offset pagination, not just overfetch.
+        const MALFORMED_ROWS_BEFORE_VALID: usize = 101;
+        for _ in 0..MALFORMED_ROWS_BEFORE_VALID {
+            self.insert_malformed_requeue_count_dead_job();
+        }
         let valid = self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Failed",
@@ -28,9 +33,8 @@ impl QueueDeadLetterWorld {
             max_attempts: Some(3),
             reason: Some("exhausted"),
             last_error: Some("valid row"),
-            done_age_seconds: 1,
+            done_age_seconds: 60,
         });
-        *self.current_job_id.lock().expect("current id mutex") = Some(malformed);
         *self.newest_job_id.lock().expect("newest job id mutex") = Some(valid);
     }
 
