@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (EP-M0 through EP-M4 complete; rebase and delivery pending)
+Status: IN PROGRESS (implementation and rebase validated; delivery pending)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -1896,6 +1896,22 @@ caret requirements.
   `/tmp/coderabbit-wildside-epm3-d05ac43-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
   Publication remains pending the final implementation and rebase.
 - [ ] Publish the completed implementation after the requested rebase and gates.
+- [x] (2026-10-28 Europe/Berlin) Rebased the 45-commit topic from exclusive
+  boundary `9d899f2` onto fetched `origin/main` `ede1a2b`, with recovery refs
+  for the old head `83f9f98`, boundary, and target. The rebase completed
+  without conflicts. `git range-diff` paired every old commit with an unchanged
+  patch, and the only tree difference from the old head is the target's
+  `rust-toolchain.toml` update. Evidence:
+  `/tmp/wildside-523-rebase-range-diff-20261028.out`. The rebased candidate
+  still requires its full gates and publication.
+- [x] (2026-10-28 Europe/Berlin) The rebased candidate at `b212dc13`, with
+  the rebase evidence above, passed `check-fmt`, `test`, `typecheck`, `lint`,
+  `markdownlint`, `nixie`, and `spelling` on the target's updated nightly.
+  Tests included 1,975 Nextest cases (four skipped), both compile-fail checks,
+  614 workflow contracts (one skipped), and 115 Python tests (13 skipped). Logs
+  use the `/tmp/rebase-final-b212dc13-` prefix. Lint reported existing
+  non-fatal OpenAPI and workflow warnings. The implementation is locally
+  validated; publication and hosted review remain pending.
 - [x] (2026-10-28 Europe/Berlin) Drafted ADRs 003 and 004, updated the queue
   architecture, developer guidance, roadmap, and documentation index, and added
   an operator runbook. Its four SQL blocks were exercised against an isolated
@@ -2551,10 +2567,13 @@ the two namespaced JSONB metadata keys while preserving the existing
 BDD scenarios, EXPLAIN canary, and all seven gates passed; its committed CLI
 reassessment returned zero findings. EP-M4's documentation and gates are
 complete, and its two CLI concerns were checked against the reviewed commit and
-found inconsistent with the source. Publication, final validation after the
-requested rebase, and the PR delivery handoff remain pending. Before marking
-the plan `COMPLETE`, confirm no upstream assumption in `Conformance basis` was
-falsified.
+found inconsistent with the source. The requested rebase and subsequent full
+gates passed. The pin, durable scheduling, and acknowledgement assumptions were
+exercised by the M0 probe and V8 canaries; none was falsified. V1–V6 and V9 are
+covered by policy, behavioural, negative-control, and boundary checks, and the
+V1 job snapshots remain unchanged (V7). No formal proof artefact was introduced
+or materially changed. Publication and the hosted PR delivery handoff remain
+pending.
 
 ## Revision note
 
