@@ -126,6 +126,6 @@ Repeated sightings of the same job with rising attempts, together with worker
 restarts or missed heartbeats, indicate a possible crash loop. One sighting can
 be ordinary orphan recovery. A later acknowledgement replaces `last_result`, so
 a missing marker in a later snapshot does not establish that a worker was
-healthy. Investigate the worker and the underlying fault before requeueing a
+healthy. Investigate the worker and the underlying fault before requeuing a
 terminal job. Retention and pruning of accumulated history need a separate
 operational policy; see roadmap section 6.
