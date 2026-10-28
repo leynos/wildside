@@ -10,6 +10,7 @@ use sqlx::{FromRow, PgPool};
 use crate::domain::ports::{DeadJob, DeadJobId, DeadLetterError, DeadLetterQueue, DeadReason};
 
 const MAX_LAST_ERROR_BYTES: usize = 1024;
+const DEAD_LISTING_BATCH_SIZE: usize = 100;
 const DEAD_PREDICATE: &str = "status = 'Killed' OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts))";
 const DEAD_LISTING_SQL: &str = include_str!("sql/dead_listing.sql");
 
@@ -75,13 +76,48 @@ struct LockedDeadJob {
 #[async_trait::async_trait]
 impl DeadLetterQueue for PostgresDeadLetterQueue {
     async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError> {
-        let rows = sqlx::query_as::<_, DeadJobRow>(DEAD_LISTING_SQL)
-            .bind(i64::from(limit))
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|error| unavailable("list dead jobs", error))?;
+        let requested = usize::try_from(limit).map_err(|_| {
+            DeadLetterError::unavailable("dead-letter listing limit exceeds platform range")
+        })?;
+        let mut dead_jobs = Vec::new();
+        let mut offset = 0_i64;
 
-        Ok(rows.into_iter().filter_map(dead_job_from_row).collect())
+        while dead_jobs.len() < requested {
+            let batch_limit = i64::try_from(DEAD_LISTING_BATCH_SIZE).map_err(|_| {
+                DeadLetterError::unavailable("dead-list batch size exceeds PostgreSQL bigint")
+            })?;
+            let rows = sqlx::query_as::<_, DeadJobRow>(DEAD_LISTING_SQL)
+                .bind(batch_limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|error| unavailable("list dead jobs", error))?;
+            let raw_row_count = rows.len();
+
+            if raw_row_count == 0 {
+                break;
+            }
+
+            let rows_read = i64::try_from(raw_row_count).map_err(|_| {
+                DeadLetterError::unavailable("dead-list row count exceeds PostgreSQL bigint")
+            })?;
+            offset = offset.checked_add(rows_read).ok_or_else(|| {
+                DeadLetterError::unavailable("dead-list pagination offset exceeds bigint range")
+            })?;
+
+            let remaining = requested - dead_jobs.len();
+            dead_jobs.extend(
+                rows.into_iter()
+                    .filter_map(dead_job_from_row)
+                    .take(remaining),
+            );
+
+            if raw_row_count < DEAD_LISTING_BATCH_SIZE {
+                break;
+            }
+        }
+
+        Ok(dead_jobs)
     }
 
     async fn requeue(&self, id: &DeadJobId) -> Result<(), DeadLetterError> {

@@ -70,7 +70,7 @@ fn a_failed_dead_row_has_no_recognized_reason(world: &QueueDeadLetterWorld) {
     world.insert_unclassified_dead_row();
 }
 
-#[given("a malformed requeue count and another dead job exist")]
+#[given("malformed requeue counts and another dead job exist")]
 fn a_malformed_requeue_count_and_another_dead_job_exist(world: &QueueDeadLetterWorld) {
     world.insert_malformed_requeue_count_and_valid_dead_jobs();
 }

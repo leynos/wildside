@@ -872,7 +872,10 @@ Obligations:
   PostgreSQL. Non-vacuity: listing before any failure must be empty (a witness
   that the query filters live jobs), the guard scenarios are negative controls
   by construction, and omitting the `max_attempts` restoration fails the
-  requeued-fatal scenario.
+  requeued-fatal scenario. Malformed rows are omitted individually, and
+  pagination continues until the requested number of valid jobs is collected or
+  no raw rows remain. The BDD regression places more malformed rows than one
+  SQL batch ahead of a valid row and requests a limit of one.
 - Obligation V7 (snapshot stability): V1 job envelope snapshots from 5.2.2
   are byte-identical after this plan, and any new operator-facing rendering of
   dead jobs is snapshot-pinned with `insta`. Method: re-run the existing
@@ -1121,7 +1124,7 @@ Feature: Dead-letter listing, requeue, and discard
     Then the requeue restores its budget and preserves unrelated metadata
     When the worker processes the queue
     Then the job is dead because its retries were exhausted
-    And the requeue count remains one
+    And the requeue count remains five
     And the fatal reason has been replaced with exhausted
     And the handler runs the queue's full number of attempts
 
@@ -1836,6 +1839,20 @@ caret requirements.
   `/tmp/epm3-review-repairs-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
   and
   `/tmp/epm3-review-repairs-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) Implemented the three distinct findings from
+  the committed M3 CodeRabbit review: `list_dead` now pages through raw rows
+  until it collects the requested number of valid jobs; the unauthorized `ulid`
+  development dependency is removed in favour of a tested encoder using the
+  existing `uuid` dependency; and the embedded requeue example now expects a
+  count of five. The focused regression first passed with the valid row
+  accidentally seeded newest; after correcting ordering, the isolated red run
+  failed as expected (`left: 0`, `right: 1`) and the 101-malformed-row green
+  run passed (1 passed, 29 skipped). The identifier-shape unit test also passed
+  (1 passed, 29 skipped). Cargo regenerated the backend lock entry to remove
+  only its direct `ulid` edge. Evidence:
+  `/tmp/epm3-pagination-red-isolated.out`,
+  `/tmp/epm3-pagination-green-101.out`, and `/tmp/epm3-ulid-shape-unit.out`.
+  Full gates and committed CLI reassessment remain pending.
 - [ ] EP-M3 final committed CLI reassessment and publication.
 - [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
 
@@ -1882,6 +1899,15 @@ caret requirements.
   and the EXPLAIN canary duplicated the production SQL. These findings require
   a bounded worker-poll witness, per-row malformed-data handling, a decode-free
   discard path, and one shared SQL source for the adapter and canary.
+
+- Observation (2026-10-26 EP-M3 final review regression): the first limit-one
+  test edit remained green because the valid row sorted ahead of the malformed
+  row. A corrected row age made the malformed row sort first; the first
+  isolated-cluster attempt then failed during PostgreSQL startup before the
+  assertion. Running with task-owned `PG_DATA_DIR`, `PG_RUNTIME_DIR`, and
+  `TMPDIR` reached the expected red assertion. The final fixture places 101
+  malformed rows before the valid row so it also proves the adapter advances
+  beyond a full raw-row page.
 
 - Observation (2026-10-26 EP-M3 scenario coverage repair):
   `#[scenario(path = "...")]` in rstest-bdd selects only feature scenario 0
@@ -2203,6 +2229,17 @@ caret requirements.
   without decoding values returned after the mutation. The EXPLAIN canary and
   adapter will include the same SQL file so their predicate and ordering cannot
   drift independently.
+
+- M3 final review repair (2026-10-26): fetch dead rows in bounded batches of
+  100, advance the SQL offset by the raw row count, and filter each row before
+  counting it toward the caller's valid-result limit. Keep the batch query in
+  `dead_listing.sql` so the EXPLAIN canary exercises the production statement.
+  A SQL-only malformed-metadata predicate was rejected because it would need to
+  duplicate Rust's numeric parsing and bounds. Preserve the plan's single
+  permitted development-dependency addition by encoding fixture IDs with the
+  already-present `uuid` crate; a focused test checks canonical ULID syntax.
+  The regression includes more than one raw page of malformed rows to exercise
+  offset advancement.
 
 - BDD coverage decision (2026-10-26): every scenario in the dead-letter feature
   file receives an explicit named `#[scenario]` binding. A default path-only

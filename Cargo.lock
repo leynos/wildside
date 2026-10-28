@@ -689,7 +689,6 @@ dependencies = [
  "tracing-subscriber",
  "tracing-test",
  "trybuild",
- "ulid",
  "url",
  "utoipa",
  "utoipa-swagger-ui",

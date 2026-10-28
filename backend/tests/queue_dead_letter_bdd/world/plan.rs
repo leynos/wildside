@@ -72,6 +72,7 @@ impl QueueDeadLetterWorld {
             .block_on(
                 sqlx::query_scalar(&query)
                     .bind(100_i64)
+                    .bind(0_i64)
                     .fetch_one(&self.pool),
             )
             .expect("explain bounded dead listing")
