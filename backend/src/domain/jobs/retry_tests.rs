@@ -50,6 +50,18 @@ fn policy_config_with(
     policy_config_with(Duration::ZERO, 2.0, Duration::from_secs(10), 0.0),
     JobRetryPolicyBuildError::ZeroBaseDelay
 )]
+#[case::base_delay_precedes_other_errors(
+    policy_config_with(Duration::ZERO, 0.0, Duration::ZERO, -0.1),
+    JobRetryPolicyBuildError::ZeroBaseDelay
+)]
+#[case::multiplier_precedes_maximum_and_jitter_errors(
+    policy_config_with(Duration::from_secs(1), 0.0, Duration::ZERO, -0.1),
+    JobRetryPolicyBuildError::InvalidMultiplier
+)]
+#[case::maximum_precedes_jitter_errors(
+    policy_config_with(Duration::from_secs(1), 1.0, Duration::ZERO, -0.1),
+    JobRetryPolicyBuildError::ZeroMaxDelay
+)]
 #[case::zero_multiplier(
     policy_config_with(Duration::from_secs(1), 0.0, Duration::from_secs(10), 0.0),
     JobRetryPolicyBuildError::InvalidMultiplier
