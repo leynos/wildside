@@ -43,6 +43,9 @@
 //! `backend/Cargo.toml denies disallowed_methods locally, so it must deny
 //! clippy::allow_attributes too`.
 
+#[path = "environment_policy_contract/export_tests.rs"]
+mod export_tests;
+
 use std::error::Error as StdError;
 
 use toml::Value;
@@ -68,17 +71,35 @@ const PROHIBITED_ENVIRONMENT_APIS: [&str; 6] = [
     "std::env::remove_var",
 ];
 
-/// Manifests that must make `clippy::disallowed_methods` a hard error, paired
-/// with the name used in failure messages.
-const MANIFESTS_DENYING_DISALLOWED_METHODS: [(&str, &str); 5] = [
-    ("Cargo.toml", WORKSPACE_MANIFEST),
-    ("backend/Cargo.toml", BACKEND_MANIFEST),
-    ("backend/crates/pagination/Cargo.toml", PAGINATION_MANIFEST),
-    ("crates/example-data/Cargo.toml", EXAMPLE_DATA_MANIFEST),
-    (
-        "tools/architecture-lint/Cargo.toml",
-        ARCHITECTURE_LINT_MANIFEST,
-    ),
+/// A manifest's source and diagnostic name belong to the same test input.
+#[derive(Clone, Copy)]
+struct Manifest<'a> {
+    path: &'a str,
+    contents: &'a str,
+}
+
+/// Manifests that must make `clippy::disallowed_methods` a hard error.
+const MANIFESTS_DENYING_DISALLOWED_METHODS: [Manifest<'_>; 5] = [
+    Manifest {
+        path: "Cargo.toml",
+        contents: WORKSPACE_MANIFEST,
+    },
+    Manifest {
+        path: "backend/Cargo.toml",
+        contents: BACKEND_MANIFEST,
+    },
+    Manifest {
+        path: "backend/crates/pagination/Cargo.toml",
+        contents: PAGINATION_MANIFEST,
+    },
+    Manifest {
+        path: "crates/example-data/Cargo.toml",
+        contents: EXAMPLE_DATA_MANIFEST,
+    },
+    Manifest {
+        path: "tools/architecture-lint/Cargo.toml",
+        contents: ARCHITECTURE_LINT_MANIFEST,
+    },
 ];
 
 /// Manifests that restate the deny locally because they do not yet inherit the
@@ -87,12 +108,15 @@ const MANIFESTS_DENYING_DISALLOWED_METHODS: [(&str, &str); 5] = [
 /// A package-level deny is only half the guard: without `allow_attributes` a
 /// contributor could silence a prohibited call with a bare `#[allow]`, which
 /// never warns once the site is migrated.
-const MANIFESTS_WITH_A_LOCAL_DENY: [(&str, &str); 2] = [
-    ("backend/Cargo.toml", BACKEND_MANIFEST),
-    (
-        "tools/architecture-lint/Cargo.toml",
-        ARCHITECTURE_LINT_MANIFEST,
-    ),
+const MANIFESTS_WITH_A_LOCAL_DENY: [Manifest<'_>; 2] = [
+    Manifest {
+        path: "backend/Cargo.toml",
+        contents: BACKEND_MANIFEST,
+    },
+    Manifest {
+        path: "tools/architecture-lint/Cargo.toml",
+        contents: ARCHITECTURE_LINT_MANIFEST,
+    },
 ];
 
 /// Lints a locally denying package must also deny.
@@ -114,9 +138,9 @@ fn disallowed_method_paths() -> TestResult<Vec<String>> {
 }
 
 /// Return the level a manifest table assigns to one Clippy lint.
-fn lint_level(document: &Value, table: &str, lint: &str) -> Option<String> {
+fn lint_level(document: &Value, lint: &str) -> Option<String> {
     document
-        .get(table)
+        .get("lints")
         .and_then(|lints| lints.get("clippy"))
         .and_then(|clippy| clippy.get(lint))
         .and_then(Value::as_str)
@@ -128,9 +152,9 @@ fn lint_level(document: &Value, table: &str, lint: &str) -> Option<String> {
 /// A package-level entry wins; otherwise a package that inherits the shared
 /// baseline (`[lints] workspace = true`) resolves to the workspace level, as
 /// does the workspace manifest itself.
-fn resolved_lint_level(manifest: &str, contents: &str, lint: &str) -> TestResult<Option<String>> {
-    let document: Value = toml::from_str(contents)?;
-    if let Some(level) = lint_level(&document, "lints", lint) {
+fn resolved_lint_level(manifest: Manifest<'_>, lint: &str) -> TestResult<Option<String>> {
+    let document: Value = toml::from_str(manifest.contents)?;
+    if let Some(level) = lint_level(&document, lint) {
         return Ok(Some(level));
     }
 
@@ -139,12 +163,12 @@ fn resolved_lint_level(manifest: &str, contents: &str, lint: &str) -> TestResult
         .and_then(|lints| lints.get("workspace"))
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    if inherits_workspace || manifest == "Cargo.toml" {
+    if inherits_workspace || manifest.path == "Cargo.toml" {
         let workspace: Value = toml::from_str(WORKSPACE_MANIFEST)?;
         let workspace_table = workspace
             .get("workspace")
             .ok_or("the workspace manifest must declare [workspace]")?;
-        return Ok(lint_level(workspace_table, "lints", lint));
+        return Ok(lint_level(workspace_table, lint));
     }
 
     Ok(None)
@@ -174,11 +198,12 @@ fn clippy_configuration_disallows_every_ambient_environment_api() -> TestResult 
 /// `clippy::disallowed_methods` to `deny`.
 #[test]
 fn every_workspace_member_denies_disallowed_methods() -> TestResult {
-    for (manifest, contents) in MANIFESTS_DENYING_DISALLOWED_METHODS {
+    for manifest in MANIFESTS_DENYING_DISALLOWED_METHODS {
         assert_eq!(
-            resolved_lint_level(manifest, contents, "disallowed_methods")?.as_deref(),
+            resolved_lint_level(manifest, "disallowed_methods")?.as_deref(),
             Some("deny"),
-            "{manifest} must deny clippy::disallowed_methods"
+            "{} must deny clippy::disallowed_methods",
+            manifest.path
         );
     }
     Ok(())
@@ -191,14 +216,15 @@ fn every_workspace_member_denies_disallowed_methods() -> TestResult {
 /// and `allow_attributes_without_reason`.
 #[test]
 fn a_local_deny_carries_the_companion_attribute_lints() -> TestResult {
-    for (manifest, contents) in MANIFESTS_WITH_A_LOCAL_DENY {
-        let document: Value = toml::from_str(contents)?;
+    for manifest in MANIFESTS_WITH_A_LOCAL_DENY {
+        let document: Value = toml::from_str(manifest.contents)?;
         for lint in COMPANION_ATTRIBUTE_LINTS {
             assert_eq!(
-                lint_level(&document, "lints", lint).as_deref(),
+                lint_level(&document, lint).as_deref(),
                 Some("deny"),
-                "{manifest} denies disallowed_methods locally, so it must deny \
-                 clippy::{lint} too"
+                "{} denies disallowed_methods locally, so it must deny \
+                 clippy::{lint} too",
+                manifest.path
             );
         }
     }
@@ -306,53 +332,6 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
         );
     }
     Ok(())
-}
-
-#[test]
-fn makefile_global_export_detection_handles_bare_and_named_exports() {
-    assert!(makefile_globally_exports("export\n", "PG_PASSWORD"));
-    assert!(makefile_globally_exports(
-        "export # export all Make variables\n",
-        "PG_PASSWORD"
-    ));
-    assert!(makefile_globally_exports(
-        "export PG_PASSWORD=value\n",
-        "PG_PASSWORD"
-    ));
-    assert!(makefile_globally_exports(
-        "export PG_PASSWORD OTHER\n",
-        "PG_PASSWORD"
-    ));
-    assert!(makefile_globally_exports(
-        "export OTHER PG_PASSWORD\n",
-        "PG_PASSWORD"
-    ));
-    assert!(!makefile_globally_exports(
-        "export PG_PASSWORD_EXTRA=value\n",
-        "PG_PASSWORD"
-    ));
-    assert!(!makefile_globally_exports(
-        "exported PG_PASSWORD=value\n",
-        "PG_PASSWORD"
-    ));
-    assert!(!makefile_globally_exports(
-        "\texport PG_PASSWORD=value\n",
-        "PG_PASSWORD"
-    ));
-    for name in ["PG_PASSWORD", "POSTGRESQL_RELEASES_URL"] {
-        for operator in ["=", ":=", "::=", ":::=", "?=", "+=", "!="] {
-            let directive = format!("export {name}{operator}secret\n");
-            assert!(
-                makefile_globally_exports(&directive, name),
-                "the export contract must detect `{directive}`"
-            );
-            let longer_name = format!("export {name}_EXTRA{operator}secret\n");
-            assert!(
-                !makefile_globally_exports(&longer_name, name),
-                "the export contract must not match `{longer_name}` as `{name}`"
-            );
-        }
-    }
 }
 
 /// Cargo may compose non-secret settings without replacing explicit caller

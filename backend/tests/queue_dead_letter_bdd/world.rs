@@ -43,6 +43,12 @@ enum HandlerMode {
     FatalFailure,
 }
 
+#[derive(Clone, Copy)]
+enum DeadJobOperation {
+    Requeue,
+    Discard,
+}
+
 /// A scenario owns a disposable Apalis database and exercises the public port.
 pub struct QueueDeadLetterWorld {
     runtime: Runtime,
@@ -145,15 +151,7 @@ impl QueueDeadLetterWorld {
 
     pub fn insert_pending_poll_control(&self) {
         self.fix_fault();
-        let id = self.insert_job(JobSeed {
-            job_type: QUEUE_NAME,
-            status: "Pending",
-            attempts: 0,
-            max_attempts: Some(3),
-            reason: None,
-            last_error: None,
-            done_age_seconds: 0,
-        });
+        let id = self.insert_pending_row();
         *self
             .poll_control_job_id
             .lock()
@@ -188,19 +186,11 @@ impl QueueDeadLetterWorld {
     }
 
     pub fn insert_pending_job(&self) {
-        let id = self.insert_job(JobSeed {
-            job_type: QUEUE_NAME,
-            status: "Pending",
-            attempts: 0,
-            max_attempts: Some(3),
-            reason: None,
-            last_error: None,
-            done_age_seconds: 0,
-        });
+        let id = self.insert_pending_row();
         *self.current_job_id.lock().expect("current id mutex") = Some(id);
     }
 
-    pub fn insert_pending_and_running_jobs(&self) {
+    fn insert_pending_row(&self) -> DeadJobId {
         self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Pending",
@@ -209,7 +199,11 @@ impl QueueDeadLetterWorld {
             reason: None,
             last_error: None,
             done_age_seconds: 0,
-        });
+        })
+    }
+
+    pub fn insert_pending_and_running_jobs(&self) {
+        self.insert_pending_row();
         self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Running",
@@ -227,23 +221,12 @@ impl QueueDeadLetterWorld {
     }
 
     pub fn requeue_dead_job(&self) {
-        let id = self.current_id();
-        let result = self.runtime.block_on(self.dead_letters.requeue(&id));
-        *self
-            .operation_result
-            .lock()
-            .expect("operation result mutex") = Some(result);
+        self.run_dead_job_operation(DeadJobOperation::Requeue);
     }
 
     pub fn requeue_current_job(&self) {
-        let id = self.current_id();
-        let before = self.snapshot(&id);
-        *self.state_before_operation.lock().expect("snapshot mutex") = Some(before);
-        let result = self.runtime.block_on(self.dead_letters.requeue(&id));
-        *self
-            .operation_result
-            .lock()
-            .expect("operation result mutex") = Some(result);
+        self.record_current_job_state();
+        self.requeue_dead_job();
     }
 
     pub fn requeue_current_dead_job(&self) {
@@ -270,19 +253,28 @@ impl QueueDeadLetterWorld {
     }
 
     pub fn discard_dead_job(&self) {
-        let id = self.current_id();
-        let result = self.runtime.block_on(self.dead_letters.discard(&id));
-        *self
-            .operation_result
-            .lock()
-            .expect("operation result mutex") = Some(result);
+        self.run_dead_job_operation(DeadJobOperation::Discard);
     }
 
     pub fn discard_current_job(&self) {
+        self.record_current_job_state();
+        self.discard_dead_job();
+    }
+
+    fn record_current_job_state(&self) {
         let id = self.current_id();
         let before = self.snapshot(&id);
         *self.state_before_operation.lock().expect("snapshot mutex") = Some(before);
-        let result = self.runtime.block_on(self.dead_letters.discard(&id));
+    }
+
+    fn run_dead_job_operation(&self, operation: DeadJobOperation) {
+        let id = self.current_id();
+        let result = self.runtime.block_on(async {
+            match operation {
+                DeadJobOperation::Requeue => self.dead_letters.requeue(&id).await,
+                DeadJobOperation::Discard => self.dead_letters.discard(&id).await,
+            }
+        });
         *self
             .operation_result
             .lock()
