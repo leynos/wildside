@@ -213,6 +213,35 @@ pub struct JobRetryPolicyConfig {
     pub jitter_fraction: f64,
 }
 
+impl JobRetryPolicyConfig {
+    fn validate_delays(&self) -> Result<(), JobRetryPolicyBuildError> {
+        if self.base_delay.is_zero() {
+            return Err(JobRetryPolicyBuildError::ZeroBaseDelay);
+        }
+        if !self.multiplier.is_finite() || self.multiplier < 1.0 {
+            return Err(JobRetryPolicyBuildError::InvalidMultiplier);
+        }
+        if self.max_delay.is_zero() {
+            return Err(JobRetryPolicyBuildError::ZeroMaxDelay);
+        }
+        if self.max_delay > MAX_BACKOFF_DELAY {
+            return Err(JobRetryPolicyBuildError::MaxDelayExceedsMaximum);
+        }
+        Ok(())
+    }
+
+    fn validate_jitter(&self) -> Result<(), JobRetryPolicyBuildError> {
+        if !self.jitter_fraction.is_finite() || !(0.0..=1.0).contains(&self.jitter_fraction) {
+            return Err(JobRetryPolicyBuildError::InvalidJitterFraction);
+        }
+        let largest_jittered_delay = self.max_delay.as_secs_f64() * (1.0 + self.jitter_fraction);
+        if largest_jittered_delay > MAX_BACKOFF_DELAY.as_secs_f64() {
+            return Err(JobRetryPolicyBuildError::JitteredDelayExceedsMaximum);
+        }
+        Ok(())
+    }
+}
+
 impl JobRetryPolicy {
     /// Build a retry policy whose largest jittered delay does not exceed the
     /// one-hour hard ceiling.
@@ -236,6 +265,8 @@ impl JobRetryPolicy {
     /// assert_eq!(policy.max_attempts().get(), 5);
     /// ```
     pub fn new(config: JobRetryPolicyConfig) -> Result<Self, JobRetryPolicyBuildError> {
+        config.validate_delays()?;
+        config.validate_jitter()?;
         let JobRetryPolicyConfig {
             max_attempts,
             base_delay,
@@ -243,27 +274,6 @@ impl JobRetryPolicy {
             max_delay,
             jitter_fraction,
         } = config;
-
-        if base_delay.is_zero() {
-            return Err(JobRetryPolicyBuildError::ZeroBaseDelay);
-        }
-        if !multiplier.is_finite() || multiplier < 1.0 {
-            return Err(JobRetryPolicyBuildError::InvalidMultiplier);
-        }
-        if max_delay.is_zero() {
-            return Err(JobRetryPolicyBuildError::ZeroMaxDelay);
-        }
-        if max_delay > MAX_BACKOFF_DELAY {
-            return Err(JobRetryPolicyBuildError::MaxDelayExceedsMaximum);
-        }
-        if !jitter_fraction.is_finite() || !(0.0..=1.0).contains(&jitter_fraction) {
-            return Err(JobRetryPolicyBuildError::InvalidJitterFraction);
-        }
-
-        let largest_jittered_delay = max_delay.as_secs_f64() * (1.0 + jitter_fraction);
-        if largest_jittered_delay > MAX_BACKOFF_DELAY.as_secs_f64() {
-            return Err(JobRetryPolicyBuildError::JitteredDelayExceedsMaximum);
-        }
 
         Ok(Self {
             max_attempts,
