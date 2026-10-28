@@ -94,12 +94,26 @@ Example structure:
 }
 ```
 
-### Named seeds and base-d
+### Named seeds
 
-Each seed entry has a memorable name. The CLI tool uses `base-d` with the
-`eff_long` word list to generate hyphen-joined passphrase names when no
-explicit name is supplied, keeping identifiers stable and human-friendly while
-avoiding licence concerns.
+Each seed entry has a memorable name. When no explicit name is supplied, the
+CLI derives one from the seed value and the EFF long word list, keeping
+identifiers stable and human-friendly while avoiding licence concerns.
+
+The derivation reproduces the encoding that the retired `base-d` dependency
+produced, so seed values keep the names they already had:
+
+- Render the seed as its decimal ASCII string and treat those bytes as one
+  big-endian integer.
+- Convert that integer to base 7,776, the number of EFF long words, by repeated
+  division. Each remainder is a zero-based index into the word list.
+- Emit the resulting words most significant first, joined with `-`.
+
+The conversion is therefore decimal UTF-8 input with big-endian radix output,
+not a byte-oriented base such as base64. A seed of `0` yields the single word
+at index zero, because the decimal string `"0"` is not a string of zero bytes.
+Seed names are a compatibility surface: changing the word list, its order, or
+the conversion changes names for existing seed values.
 
 ### Seed creation CLI
 
@@ -107,7 +121,7 @@ Provide a small CLI tool (the `example-data-seed` binary) that:
 
 - Reads the registry JSON file.
 - Accepts an optional `--name` override; when omitted, generates a memorable
-  `base-d` `eff_long`-encoded name as a fallback.
+  EFF-long-encoded name as a fallback.
 - Accepts optional `--seed` and `--user-count` overrides.
 - Writes the updated registry back to disk.
 
@@ -205,17 +219,22 @@ environments.
 
 ### CLI tests
 
-- Adding a seed without `--name` generates a unique `base-d` `eff_long`-encoded
-  name and updates the registry file.
+- Adding a seed without `--name` generates a unique EFF-long-encoded name and
+  updates the registry file.
 - Adding a seed with an explicit `--name` uses that name verbatim.
 - Existing seeds remain stable after update.
+
+Property tests in `crates/example-data/tests/properties/seed_names.rs` compare
+the encoder with an independent reference implementation of the same
+decimal-byte, big-endian radix algorithm across arbitrary `u64` seeds, so the
+range-wide compatibility contract is exercised rather than sampled.
 
 ## Dependencies
 
 - `fake = "2.10.0"` for name generation.
 - Deterministic RNG provided by `rand = "0.8.5"`.
-- Memorable seed naming uses `base-d = "3.0.30"` with the `eff_long` word
-  list.
+- Memorable seed naming uses `diceware_wordlists = "1.2.3"` for the EFF long
+  word list and `num-bigint = "0.4"` for the radix conversion.
 - `ortho-config = "<latest stable>"` for hierarchical configuration.
 - Existing workspace `uuid` and `chrono` versions.
 

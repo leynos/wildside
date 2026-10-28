@@ -43,6 +43,15 @@
     "expiresAt": "2026-12-04"
   },
   {
+    "id": "DEEPMERGE_PROTOTYPE_POISONING_2026_10",
+    "package": "frontend-pwa",
+    "advisory": "GHSA-gcqx-w48m-w2h4",
+    "introducedBy": "deepmerge",
+    "reason": "Build-time design-token generation only, reported by both pnpm and Bun, so the entry is scoped to the frontend-pwa workspace ledger. deepmerge reaches the tree only through style-dictionary@5.6.0 via @bundled-es-modules/deepmerge@4.3.2, which packages/tokens runs from its postinstall and build scripts to emit tokens. The advisory (prototype poisoning of the returned object, low severity, published 2026-09-18) covers every release from 4.2.0 to 4.3.1, and 4.3.1 is the latest published, so no patched release exists to move to. Every style-dictionary release through 5.7.1 still declares @bundled-es-modules/deepmerge ^4.3.2, so bumping it does not help. The merged objects are repository-controlled token definitions rather than runtime user input, and nothing from this path is served to a browser tab. Remove this entry once deepmerge publishes a patch and style-dictionary adopts it, or once tokens stop depending on style-dictionary.",
+    "addedAt": "2026-10-28",
+    "expiresAt": "2026-11-11"
+  },
+  {
     "id": "ZOD_ARRAY_MEMORY_EXHAUSTION_2026_10",
     "package": "frontend-pwa",
     "advisory": "GHSA-mrhx-c7xc-m3w5",

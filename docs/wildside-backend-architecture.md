@@ -337,6 +337,19 @@ Module boundaries are enforced by a repo-local lint that runs during
   hyphen-joined seed names for the seed registry CLI, replacing `lexis` to
   avoid licence concerns. The CLI writes registry updates atomically via a
   temporary file and rename to prevent partial writes.
+- **2026-10-28:** The 2026-01-18 decision is superseded for the dependency
+  only; its naming contract still holds. `base-d` was exchanged for
+  `diceware_wordlists` (EFF long word list) plus `num-bigint` (radix
+  conversion) to clear a reported advisory, and the encoder in
+  `crates/example-data/src/seed_registry_cli/seed_name.rs` reproduces the
+  retired implementation: the seed's decimal UTF-8 bytes are read as one
+  big-endian integer and converted to base 7,776, emitting words most
+  significant first and joining them with `-`. Every `u64` seed therefore keeps
+  the name it already had, which property tests in
+  `crates/example-data/tests/properties/seed_names.rs` check against an
+  independent reference implementation. Names are opaque labels: the word list
+  contains its own hyphens (`felt-tip`), so consumers must not split a name to
+  recover its words. Atomic registry writes are unchanged.
 - **2026-02-15:** `GET /api/v1/catalogue/explore` and
   `GET /api/v1/catalogue/descriptors` are session-authenticated read endpoints
   consuming `CatalogueRepository` and `DescriptorRepository` ports. Responses

@@ -346,6 +346,8 @@ struct SeedSelection {
     seed: u64,
 }
 
+/// Chooses the name and seed for a new entry, erroring rather than silently
+/// renaming when a supplied seed's generated name is already taken.
 fn select_seed_and_name(
     registry: &SeedRegistry,
     options: &Options,
@@ -379,9 +381,14 @@ fn select_seed_and_name(
         attempts: MAX_NAME_ATTEMPTS,
     })
 }
+
+/// Reports whether `name` is taken, compared whole: the EFF long list has
+/// hyphenated entries such as `felt-tip`, so names must not be split on `-`.
 fn has_name_in_registry(registry: &SeedRegistry, name: &str) -> bool {
     registry.seeds().iter().any(|seed| seed.name() == name)
 }
+
+/// Draws a random seed when none is supplied, then records it for reproduction.
 fn random_seed() -> u64 {
     random()
 }
