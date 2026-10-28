@@ -19,13 +19,11 @@
 //! receives them. This keeps version rejection and domain validation at the
 //! queue boundary rather than duplicating it in each handler.
 //!
-//! # Future Implementation
+//! # Delivery scope
 //!
-//! The full queue system will include:
-//! - Worker consumption of enqueued jobs
-//! - Retry policies with exponential backoff
-//! - Dead-letter handling for failed jobs
-//! - Trace ID propagation through job metadata
+//! Durable retry scheduling and dead-letter operations are implemented here.
+//! Worker deployment and request-path dispatch remain roadmap work, as does
+//! trace ID propagation through job metadata.
 //!
 //! See `docs/backend-roadmap.md` section 5.2 for the implementation roadmap.
 

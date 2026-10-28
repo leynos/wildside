@@ -1051,17 +1051,24 @@ Three pieces cooperate here:
   supplies the pinned test-server version and release mirror before launching
   test processes, including scratch integration targets and Nextest. Run
   `make prepare-pg-worker` once, then launch the desired target with the
-  disposable test-cluster password:
+  disposable test-cluster password. Separate paths give a direct run its own
+  cluster and temporary files when other test processes are active:
 
   ```sh
+  pg_test_root="$(mktemp -d /var/tmp/wildside-pg.XXXXXX)"
+  mkdir -p "$pg_test_root/tmp"
   PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" \
+  POSTGRESQL_RELEASES_URL="${POSTGRESQL_RELEASES_URL:-https://github.com/theseus-rs/postgresql-binaries}" \
   PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  PG_DATA_DIR="$pg_test_root/data" PG_RUNTIME_DIR="$pg_test_root/runtime" \
+  TMPDIR="$pg_test_root/tmp" \
     cargo test -p backend --test TEST_TARGET -- --nocapture
   ```
 
   Replace `TEST_TARGET` with the integration-test target. The worker path above
-  assumes the workspace root. Use this test-only password only for disposable
-  embedded test clusters; the
+  assumes the workspace root. Keep the task-owned root until its test and
+  PostgreSQL processes have exited, then remove it if it is no longer needed.
+  Use this test-only password only for disposable embedded test clusters; the
   [cluster initializer guide](pg-embed-setup-unpriv-users-guide.md) requires a
   strong secret for non-test use. Explicit `PG_PASSWORD`, `PG_VERSION_REQ`, and
   `POSTGRESQL_RELEASES_URL` values remain supported. Cargo discovers workspace
@@ -2230,6 +2237,26 @@ Domain code depends only on the `RouteQueue` port trait. The Apalis adapter
 implements this port without exposing `apalis-postgres` or `sqlx` types in the
 public API.
 
+The domain owns `JobRetryPolicy` and its validated `JobRetryPolicyConfig`,
+`JobErrorKind`, and the payload-free, 1,024-byte-bounded `JobFailure`. The
+`DeadLetterQueue` port exchanges `DeadJob`, `DeadJobId`, `DeadReason`, and
+`DeadLetterError` values without exposing Apalis rows.
+`PostgresDeadLetterQueue` implements that port and receives `RequeueBudgets`
+built from the configured queue policies. A requeue restores the appropriate
+policy limit and records its bounded count under
+`wildside.retry.requeue_count`; terminal failures record
+`wildside.retry.dead_reason`. Both updates preserve unrelated metadata.
+
+`RetryingJobService`, configured with `RetryingJobServiceConfig` and
+`PostgresRetryScheduler`, applies one policy to one queue. It schedules
+`run_at` with an ownership guard before returning a failure for Apalis to
+acknowledge. Backoff frees the worker slot, and the polling interval is a
+precision floor. A crash between the in-memory attempt increment and its
+acknowledgement can lose that one in-flight attempt. Do not install an
+in-process retry layer on these pinned release candidates. See
+[ADR-003](adr-003-durable-retry-scheduling-for-apalis-jobs.md), [ADR-004](adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md),
+and the [operator runbook](runbooks/queue-retry-and-dead-letter-operations.md).
+
 ### Queue architecture and public API
 
 Public production API:
@@ -2352,14 +2379,14 @@ UTF-8 bytes of the version; this diagnostic limit is unrelated to the V1
 enrichment limits of 64 tags and 64 UTF-8 bytes per tag. The raw payload is
 never logged. `decode_job` emits no warnings or metrics: roadmap item 5.2.2
 defines no decode metric. The future 5.3.1 worker/consumer boundary owns safe
-warning and rejection metrics. Retry and dead-letter policy remain owned by
+warning and rejection metrics. Retry and dead-letter policy are implemented by
 roadmap item 5.2.3.
 
 The payloads carry `idempotency_key` as part of the domain job contract. The
 current `Cargo.lock` resolves `apalis-core` 1.0.0-rc.9 and `apalis-postgres`
 1.0.0-rc.8, whose framework-native task identity is available. The adapter
-nevertheless currently serializes the payload and calls
-`storage.push(payload)`; mapping the V1 field to `TaskBuilder::id(...)` is
+nevertheless currently builds a task with the queue's attempt limit and calls
+`storage.push_task(task)`; mapping the V1 field to `TaskBuilder::id(...)` is
 deferred. Until that adapter mapping is deliberately introduced, the V1
 `idempotency_key` is authoritative and remains the only documented source of
 truth. Trace IDs are intentionally absent from V1; roadmap item 5.2.4 owns
@@ -2446,9 +2473,10 @@ The queue adapter requires:
   pool used by `ApalisPostgresProvider`
 - `serde` / `serde_json` – Payload serialization
 
-The Apalis core and PostgreSQL dependencies are pinned to exact release
-candidates because their 1.0.0 final release changes the queue integration
-contract. The upgrade is tracked in
+The Apalis dependencies are pinned exactly to `apalis-core = "=1.0.0-rc.9"` and
+`apalis-postgres = "=1.0.0-rc.8"` because their 1.0.0 final release changes the
+queue integration contract. Re-run the V8 storage and acknowledgement canaries
+before changing the pins. The upgrade is tracked in
 [issue #550](https://github.com/leynos/wildside/issues/550).
 
 #### Test infrastructure
@@ -2458,15 +2486,22 @@ contract. The upgrade is tracked in
 - No feature flags required; BDD tests are in the `tests/` integration
   harness and run unconditionally with `cargo test`
 
-To run BDD tests locally:
+To run BDD tests locally, first prepare the worker as described in
+[embedded PostgreSQL integration tests](#embedded-postgresql-integration-tests).
+For example, select either target with the disposable test password:
 
 ```bash
 # Run the Apalis BDD suite
-cargo test -p backend --test route_queue_apalis_bdd
+PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  cargo test -p backend --test route_queue_apalis_bdd
 
 # Exercise typed payload persistence and decode
-cargo test -p backend --test job_structs_postgres_bdd
+PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  cargo test -p backend --test job_structs_postgres_bdd
 ```
+
+For concurrent direct runs, also apply the separate data, runtime, and
+temporary paths from the earlier example to each command.
 
 ### Queue test infrastructure
 

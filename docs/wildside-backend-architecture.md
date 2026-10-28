@@ -2211,18 +2211,31 @@ hexagonal boundary – specifically the `QueueProvider` trait and the domain-own
 is a contained adapter change if queue throughput or routing requirements
 outgrow PostgreSQL `NOTIFY`/`SKIP LOCKED` capabilities.
 
-Each job type will have its own queue; for example, the configuration will
-define a high-priority queue for route generation jobs and a lower-priority
-queue for enrichment jobs. The Apalis configuration will register job types and
-their handlers, and set up consumers for each queue. Retry policies will also
-be configured: if a job fails, Apalis will retry it a limited number of times
-with exponential backoff delays. If a job continues to fail (e.g., bad data or
-a persistent issue), it will be moved to a **dead-letter queue** after max
-retries, so that failed jobs can be inspected or manually requeued once the
-issue is resolved. Each job will also have a **timeout** – for instance, the
-system will enforce that `GenerateRouteJob` must complete within 30 seconds,
-otherwise it is considered failed (to avoid stuck threads). Apalis allows
-setting such time limits per job or globally.
+Each job family has a queue-specific retry policy. The implemented
+`RetryingJobService` classifies a failure and, while the worker owns the row,
+writes its next `run_at` before returning the error for acknowledgement.
+PostgreSQL makes the row eligible after that durable delay; waiting does not
+occupy a worker slot. The polling interval limits timing precision, and load
+can delay delivery further. `max_attempts` bounds deliveries across worker
+leases, with one exception: a worker crash between its in-memory attempt
+increment and acknowledgement can lose that in-flight attempt.
+
+Fatal failures and exhausted retry budgets leave dead rows in `apalis.jobs`. The
+`DeadLetterQueue` port lists them and provides guarded requeue and discard
+operations. Requeue restores the current queue budget and records bounded
+provenance in namespaced metadata. The
+[operator runbook](runbooks/queue-retry-and-dead-letter-operations.md)
+describes the SQL fallback. ADRs
+[003](adr-003-durable-retry-scheduling-for-apalis-jobs.md) and
+[004](adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md) record the
+storage and retry decisions.
+
+Worker composition, queue priorities, and job timeouts remain part of the
+future deployment work. At the pinned Apalis release candidates, item 5.3.1
+must use the durable wrapper without installing in-process retry middleware;
+the fetcher and that middleware race at these versions. Re-evaluate the rule
+with the V8 canaries during the 1.0 upgrade tracked by
+[issue #550](https://github.com/leynos/wildside/issues/550).
 
 **Roadmap item 5.2.1 scope:** As of roadmap item 5.2.1, the backend includes an
 Apalis-backed `RouteQueue` driven adapter with PostgreSQL storage
@@ -2238,10 +2251,10 @@ Importantly, 5.2.1 delivers the driven adapter itself but does not yet enable
 request-path queue dispatch or worker consumption. The `TODO(#276)` markers in
 `backend/src/domain/route_submission/mod.rs` (lines 241 and 295) remain
 unchanged. Roadmap item 5.2.2 now supplies the job struct definitions;
-request-path dispatch remains deferred. Item 5.2.3 adds retry and dead-letter
-handling, item 5.2.4 adds trace propagation, and item 5.3.1 adds worker
-consumption and deployment. The roadmap's reference to replacing the stub
-applies to the production queue implementation; the stub adapter
+request-path dispatch remains deferred. Item 5.2.3 supplies retry and
+dead-letter handling, item 5.2.4 adds trace propagation, and item 5.3.1 adds
+worker consumption and deployment. The roadmap's reference to replacing the
+stub applies to the production queue implementation; the stub adapter
 (`StubRouteQueue`) remains available for tests that do not require PostgreSQL.
 
 **Job definitions:** Roadmap item 5.2.2 defines the durable domain payloads in
@@ -2286,9 +2299,9 @@ variant such as V2 and a reviewed snapshot update.
 
 The idempotency key remains in the job payload as the durable wire-level source
 of truth. Although the resolved dependency graph includes an `apalis-core`
-release with framework-native task identity, queue dispatch currently only
-serializes the payload and calls `storage.push(payload)`; it does not map the
-V1 field into that task identity. Adapter mapping is deferred, and V1
+release with framework-native task identity, queue dispatch builds a task with
+the queue's attempt limit and calls `storage.push_task(task)`; it does not map
+the V1 field into that task identity. Adapter mapping is deferred, and V1
 `idempotency_key` remains authoritative until that future integration makes an
 explicit source-of-truth decision.
 
