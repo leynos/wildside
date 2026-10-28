@@ -2245,7 +2245,9 @@ The domain owns `JobRetryPolicy` and its validated `JobRetryPolicyConfig`,
 built from the configured queue policies. A requeue restores the appropriate
 policy limit and records its bounded count under
 `wildside.retry.requeue_count`; terminal failures record
-`wildside.retry.dead_reason`. Both updates preserve unrelated metadata.
+`wildside.retry.dead_reason`. Both updates preserve unrelated metadata. The
+policy constructor validates delay parameters before jitter so a configuration
+with several invalid fields reports the same first error.
 
 `RetryingJobService`, configured with `RetryingJobServiceConfig` and
 `PostgresRetryScheduler`, applies one policy to one queue. It schedules
@@ -2256,6 +2258,12 @@ acknowledgement can lose that one in-flight attempt. Do not install an
 in-process retry layer on these pinned release candidates. See
 [ADR-003](adr-003-durable-retry-scheduling-for-apalis-jobs.md), [ADR-004](adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md),
 and the [operator runbook](runbooks/queue-retry-and-dead-letter-operations.md).
+
+The queue BDD suites share `WorkerObservation` within their test worker harness
+to run bounded polling and capture terminal and quiet-period counts. It is test
+support, not a production worker abstraction. The environment-policy contract
+similarly pairs each manifest's path and contents in a test-only `Manifest`
+value so diagnostics refer to the source being checked.
 
 ### Queue architecture and public API
 

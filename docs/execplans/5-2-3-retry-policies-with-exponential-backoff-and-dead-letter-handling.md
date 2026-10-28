@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (implementation and rebase validated; delivery pending)
+Status: IN PROGRESS (hosted code-health remediation and delivery pending)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -1912,6 +1912,21 @@ caret requirements.
   use the `/tmp/rebase-final-b212dc13-` prefix. Lint reported existing
   non-fatal OpenAPI and workflow warnings. The implementation is locally
   validated; publication and hosted review remain pending.
+- [ ] (2026-10-28 Europe/Berlin) The published head `186b80c` received one
+  critical CodeScene finding in the shared BDD worker and advisory findings in
+  the retry constructor, dead-letter scenario state, and environment-policy
+  contract. The candidate separates bounded worker observation, groups manifest
+  inputs, shares repeated scenario operations, and splits constructor
+  validation while preserving error precedence. Focused local CodeScene review
+  reports no findings in those files. The first focused test build failed with
+  `E0583` because the moved integration-test module needed an explicit path;
+  that path is now specified. The focused rerun passed all 108 selected policy,
+  environment-contract, and PostgreSQL BDD tests (887 unselected). Evidence:
+  `/tmp/test-codescene-focused2-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+  Full gates, a complete delta review, and hosted reassessment remain pending.
+  The hosted CI Audit step failed on `qs` and `deepmerge` advisories inherited
+  from `main`; separate prerequisite PR #567 already owns that audit work and
+  is blocked on its exception's tracking and removal-condition checks.
 - [x] (2026-10-28 Europe/Berlin) Drafted ADRs 003 and 004, updated the queue
   architecture, developer guidance, roadmap, and documentation index, and added
   an operator runbook. Its four SQL blocks were exercised against an isolated
