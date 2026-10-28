@@ -66,8 +66,13 @@ def test_the_deepmerge_exception_is_void_once_a_patched_release_resolves(
         pytest.skip("the deepmerge advisory is no longer excepted")
 
     resolved = lock.resolved_versions(packages, "deepmerge")
-    if not resolved:
-        pytest.skip("bun.lock no longer resolves deepmerge")
+    assert resolved, (
+        f"{DEEPMERGE_EXCEPTION_ID} still excepts GHSA-gcqx-w48m-w2h4, but "
+        f"bun.lock no longer resolves deepmerge at all. The entry is "
+        f"repository-wide while its reason argues from reach, so it now "
+        f"ignores the advisory for every caller. Remove the entry and close "
+        f"{DEEPMERGE_TRACKING_ISSUE}."
+    )
 
     vulnerable = [
         version for version in resolved if version <= LAST_VULNERABLE_DEEPMERGE
