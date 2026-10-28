@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (EP-M0 through EP-M3 complete; EP-M4 active)
+Status: IN PROGRESS (EP-M0 through EP-M4 complete; rebase and delivery pending)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -1905,7 +1905,17 @@ caret requirements.
   directory removed. The pinned-version integration canaries remain part of the
   full milestone gates and cover Apalis's actual schema and worker behaviour.
   EP-M4 gates and committed review remain pending.
-- [ ] EP-M4 documentation, ADRs, runbook, roadmap closure.
+- [x] (2026-10-28 Europe/Berlin) EP-M4 passed all seven gates on the
+  candidate committed as `ae58fe2`: `check-fmt`, `test` (1,975 passed, four
+  skipped, both compile-fail checks and the Python suites), `typecheck`, `lint`,
+  `markdownlint`, `nixie`, and `spelling`. Logs use the `/tmp/epm4-` prefix.
+  The committed CodeRabbit review of `d05ac43..ae58fe2` reported two minor
+  concerns, both contradicted by the reviewed commit: the provider builds a
+  task with `with_max_attempts` and calls `push_task`, and the queue module
+  contains and exports the retry scheduler, service, and dead-letter adapter.
+  The architecture also explicitly defers request-path dispatch and worker
+  consumption. No change is warranted for those concerns. Review log:
+  `/tmp/coderabbit-wildside-epm4-ae58fe2-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
 
 ## Surprises & discoveries
 
@@ -2537,13 +2547,14 @@ across another acknowledgement. Apalis status and attempt counts also cannot
 distinguish a fatal error from policy exhaustion when the stored attempt limit
 exceeds the current policy. The user accepted D15 on 2026-10-25, authorizing
 the two namespaced JSONB metadata keys while preserving the existing
-`last_result` format. EP-M1 through EP-M3 are complete. EP-M3's port, adapter,
-BDD scenarios, EXPLAIN canary, and all seven gates passed; the committed CLI
-reassessment returned zero findings. EP-M4 is documenting the ADRs, operator
-runbook, architecture, and roadmap updates. Publication, final validation after
-the requested rebase, and the PR delivery handoff remain pending. Before
-marking the plan `COMPLETE`, confirm no upstream assumption in
-`Conformance basis` was falsified.
+`last_result` format. EP-M1 through EP-M4 are complete. EP-M3's port, adapter,
+BDD scenarios, EXPLAIN canary, and all seven gates passed; its committed CLI
+reassessment returned zero findings. EP-M4's documentation and gates are
+complete, and its two CLI concerns were checked against the reviewed commit and
+found inconsistent with the source. Publication, final validation after the
+requested rebase, and the PR delivery handoff remain pending. Before marking
+the plan `COMPLETE`, confirm no upstream assumption in `Conformance basis` was
+falsified.
 
 ## Revision note
 
