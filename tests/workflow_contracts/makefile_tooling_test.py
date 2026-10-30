@@ -48,7 +48,7 @@ def fake_tool_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     _write_executable(fake_bin / "tool", FAKE_TOOL)
-    for tool_name in ("bun", "pnpm", "uv", "nixie", "merman-cli"):
+    for tool_name in ("bun", "pnpm", "uv", "nixie", "merman-cli", "biome"):
         (fake_bin / tool_name).symlink_to(fake_bin / "tool")
 
     temporary = tmp_path / TMPDIR_SENTINEL
@@ -335,6 +335,33 @@ NO_PROJECT_TARGETS = (
         ),
     ),
 )
+
+
+def test_lint_frontend_runs_biome_before_the_package_linter(
+    fake_tool_environment: tuple[dict[str, str], Path],
+) -> None:
+    """The front-end lint target runs the pinned Biome check, then Oxlint."""
+    env, log_path = fake_tool_environment
+
+    completed = _run_make("lint-frontend", env)
+
+    assert completed.returncode == 0, completed.stderr
+    assert [invocation[0] for invocation in _read_invocations(log_path)] == [
+        "biome",
+        "pnpm",
+    ], "lint-frontend must run Biome first and the package linter second"
+    (biome,) = _tool_arguments(log_path, "biome")
+    assert biome == (
+        "ci",
+        "--formatter-enabled=true",
+        "--reporter=github",
+        "frontend-pwa",
+        "packages",
+    ), "the formatter gate must run the pinned Biome check over both workspaces"
+    (oxlint,) = _tool_arguments(log_path, "pnpm")
+    assert oxlint == ("--filter", "frontend-pwa", "lint"), (
+        "the pinned Oxlint profiles must run through the workspace script"
+    )
 
 
 @pytest.mark.parametrize(("target", "expected_arguments"), NO_PROJECT_TARGETS)
