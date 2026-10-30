@@ -35,7 +35,7 @@ env:
   NIXIE_VERSION: '1.1.0'
   # 0.12.19 is the first uv that ships PyPy 3.12, which the Pylint gate pins.
   UV_VERSION: '0.12.19'
-  WHITAKER_INSTALLER_VERSION: '0.2.9'
+  WHITAKER_INSTALLER_VERSION: '0.2.11'
   YAMLLINT_VERSION: '1.35.1'
 
 # Default GITHUB_TOKEN to no access; each job re-grants only what it needs.
@@ -443,7 +443,7 @@ jobs:
         run: make lint-clippy
 
       - name: Install Whitaker
-        uses: leynos/shared-actions/.github/actions/install-whitaker@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/install-whitaker@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
