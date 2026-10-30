@@ -5,7 +5,8 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (hosted code-health remediation and delivery pending)
+Status: IN PROGRESS (approved for execution 2026-10-30; implementation
+complete, hosted code-health remediation and delivery pending)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -1947,6 +1948,12 @@ caret requirements.
   The architecture also explicitly defers request-path dispatch and worker
   consumption. No change is warranted for those concerns. Review log:
   `/tmp/coderabbit-wildside-epm4-ae58fe2-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-30 Europe/Berlin) The user approved the plan for this
+  publication run and requested a rebase onto the PR's remote target
+  (`origin/main`), the four implementation gates, and a force-push with lease.
+  The branch's first commit (`2066701`) has parent `ede1a2b`, which is the live
+  `origin/main` head, so the branch already directly follows the target and no
+  commit replay or conflict resolution was required.
 
 ## Surprises & discoveries
 
@@ -2708,3 +2715,9 @@ gaps. The M3 repairs now require bounded worker polling, conservative handling
 of corrupt persisted counters, and a shared production/test SQL source. ADRs
 were renumbered to preserve existing ADR-002. These findings extend M3
 verification and do not change accepted retry or D15 behaviour.
+
+2026-10-30 Europe/Berlin: the user approved the plan for publication and
+requested a rebase onto `origin/main`, the four implementation gates, and a
+force-push with lease. The target was already an ancestor of the branch head,
+so the rebase was an up-to-date no-op; no commits replayed and no conflicts
+arose.
