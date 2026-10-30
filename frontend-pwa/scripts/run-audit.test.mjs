@@ -468,7 +468,7 @@ describe('CLI entrypoint', () => {
     expect(result.stderr).toContain('Unexpected vulnerabilities detected by pnpm audit:');
   });
 
-  it('exits non-zero and reports the error when the audit output is unparseable', () => {
+  it('exits non-zero and reports the error when the audit output is unparsable', () => {
     installFakePnpm('not-json', 0);
 
     const result = runAuditCli();

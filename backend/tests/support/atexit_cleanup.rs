@@ -209,7 +209,7 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
 
 /// Check PostgreSQL UTC readiness, repairing verified bundled data if needed.
 ///
-/// A successful check is memoised for the process: UTC support cannot regress
+/// A successful check is memoized for the process: UTC support cannot regress
 /// once the server has accepted `SET TIME ZONE 'UTC'`, and every call site
 /// otherwise pays for a fresh connection and probe. Failures stay uncached so
 /// a later call can retry once the cluster is healthy.
