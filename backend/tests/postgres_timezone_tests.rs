@@ -168,27 +168,29 @@ fn invalid_connection_configuration_reports_the_parse_failure() {
     );
 }
 
+/// Copy the bundled `UCT` file to `UTC` unless an alias already exists.
+///
+/// Both cases call `ensure_utc_alias` twice so the idempotent second call is
+/// covered alongside the repair.
 #[rstest]
-fn creates_utc_alias_from_the_bundled_uct_timezone(
+#[case::copies_bundled_uct(None, b"UCT data".as_slice())]
+#[case::preserves_existing_utc(
+    Some(b"existing UTC data".as_slice()),
+    b"existing UTC data".as_slice()
+)]
+fn ensures_utc_alias_from_the_bundled_uct_timezone(
     timezone_sandbox: io::Result<(tempfile::TempDir, Dir)>,
-) -> io::Result<()> {
-    let (_sandbox, timezone_dir) = timezone_sandbox?;
-    timezone_dir.write("UCT", b"zero-offset timezone data")?;
-    postgres_timezone::ensure_utc_alias(&timezone_dir)?;
-    postgres_timezone::ensure_utc_alias(&timezone_dir)?;
-    assert_eq!(timezone_dir.read("UTC")?, b"zero-offset timezone data");
-    Ok(())
-}
-
-#[rstest]
-fn preserves_an_existing_utc_timezone_file(
-    timezone_sandbox: io::Result<(tempfile::TempDir, Dir)>,
+    #[case] existing_utc: Option<&[u8]>,
+    #[case] expected: &[u8],
 ) -> io::Result<()> {
     let (_sandbox, timezone_dir) = timezone_sandbox?;
     timezone_dir.write("UCT", b"UCT data")?;
-    timezone_dir.write("UTC", b"existing UTC data")?;
+    if let Some(existing) = existing_utc {
+        timezone_dir.write("UTC", existing)?;
+    }
     postgres_timezone::ensure_utc_alias(&timezone_dir)?;
-    assert_eq!(timezone_dir.read("UTC")?, b"existing UTC data");
+    postgres_timezone::ensure_utc_alias(&timezone_dir)?;
+    assert_eq!(timezone_dir.read("UTC")?, expected);
     Ok(())
 }
 
