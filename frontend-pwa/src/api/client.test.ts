@@ -4,22 +4,43 @@
  * query key helpers and delegates requests through the shared fetcher.
  */
 
-import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { UserIdSchema, UsersSchema } from '@app/types';
+import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { UserIdSchema, type Users, UsersSchema } from '@app/types';
+import { ZodError } from 'zod';
 
-import { customFetch, customFetchParsedSafe } from './fetcher';
+/** A single wire-shaped user record before schema validation. */
+interface WireUser {
+  id: string;
+  // biome-ignore lint/style/useNamingConvention: serialized wire payload key.
+  display_name: string | number;
+}
 
-const mockCustomFetchParsed = mock();
+// The runtime schema validates the wire payload's snake_case `display_name`
+// even though the generated TypeScript type names the field `displayName`.
+// Parsing the fixtures through the published schema keeps these tests on the
+// same wire contract the client actually consumes.
+const users = UsersSchema.parse([
+  {
+    id: '11111111-2222-3333-4444-555555555555',
+    // biome-ignore lint/style/useNamingConvention: serialized wire payload key.
+    display_name: 'Test User',
+  },
+]);
 
-await mock.module('./fetcher', () => ({
-  customFetch,
-  customFetchParsed: mockCustomFetchParsed,
-  customFetchParsedSafe,
-}));
+const invalidUsers: WireUser[] = [
+  {
+    id: 'not-a-uuid',
+    // biome-ignore lint/style/useNamingConvention: serialized wire payload key.
+    display_name: 42,
+  },
+];
+
+/** Build a JSON response so the real fetcher can decode it. */
+const jsonResponse = (body: Users | WireUser[]): Response => Response.json(body);
 
 describe('client wrappers', () => {
   afterEach(() => {
-    mockCustomFetchParsed.mockReset();
+    mock.restore();
   });
 
   it('exposes stable query keys for user listings', async () => {
@@ -40,37 +61,28 @@ describe('client wrappers', () => {
   it('delegates listUsers to the shared fetcher with schema validation', async () => {
     const { listUsers } = await import('./client');
     const controller = new AbortController();
-    const expected = [
-      {
-        id: UserIdSchema.parse('11111111-2222-3333-4444-555555555555'),
-        displayName: 'Test User',
-      },
-    ];
-
-    mockCustomFetchParsed.mockResolvedValueOnce(expected);
+    const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(users));
 
     const result = await listUsers(controller.signal);
 
-    expect(mockCustomFetchParsed).toHaveBeenCalledWith('/api/users', UsersSchema, {
-      signal: controller.signal,
-    });
-    expect(result).toBe(expected);
+    expect(result).toEqual(users);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [requestUrl, requestInit] = fetchSpy.mock.calls[0];
+    expect(new URL(String(requestUrl)).pathname).toBe('/api/users');
+    expect(requestInit?.signal).toBe(controller.signal);
+    expect(new Headers(requestInit?.headers).get('Accept')).toBe('application/json');
   });
 
   it('propagates schema validation failures from the fetcher', async () => {
     const { listUsers } = await import('./client');
-    const validationError = new Error('Invalid user schema');
+    spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(invalidUsers));
 
-    mockCustomFetchParsed.mockRejectedValueOnce(validationError);
-
-    await expect(listUsers()).rejects.toThrow('Invalid user schema');
+    await expect(listUsers()).rejects.toBeInstanceOf(ZodError);
   });
 
   it('surfaces network errors to the caller', async () => {
     const { listUsers } = await import('./client');
-    const networkError = new Error('Network failure');
-
-    mockCustomFetchParsed.mockRejectedValueOnce(networkError);
+    spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network failure'));
 
     await expect(listUsers()).rejects.toThrow('Network failure');
   });
@@ -81,10 +93,10 @@ describe('client wrappers', () => {
 
     controller.abort();
 
-    const abortError = new DOMException('AbortError', 'AbortError');
+    spyOn(globalThis, 'fetch').mockRejectedValue(
+      new DOMException('The operation was aborted.', 'AbortError'),
+    );
 
-    mockCustomFetchParsed.mockRejectedValueOnce(abortError);
-
-    await expect(listUsers(controller.signal)).rejects.toThrow('AbortError');
+    await expect(listUsers(controller.signal)).rejects.toThrow('aborted');
   });
 });

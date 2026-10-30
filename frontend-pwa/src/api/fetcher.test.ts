@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { z } from 'zod';
 
-import { customFetch } from './fetcher';
+import { customFetch, customFetchParsed, customFetchParsedSafe } from './fetcher';
+
+const userSchema = z.object({ id: z.string() });
 
 let capturedRequest: RequestInit | undefined;
 let response: Response;
@@ -12,25 +14,25 @@ function request(): RequestInit {
   return capturedRequest;
 }
 
+beforeEach(() => {
+  capturedRequest = undefined;
+  response = Response.json({ ok: true });
+  spyOn(globalThis, 'fetch').mockImplementation(
+    Object.assign(
+      (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        capturedRequest = init;
+        return Promise.resolve(response.clone());
+      },
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+});
+
+afterEach(() => {
+  mock.restore();
+});
+
 describe('customFetch', () => {
-  beforeEach(() => {
-    capturedRequest = undefined;
-    response = Response.json({ ok: true });
-    spyOn(globalThis, 'fetch').mockImplementation(
-      Object.assign(
-        (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-          capturedRequest = init;
-          return Promise.resolve(response.clone());
-        },
-        { preconnect: globalThis.fetch.preconnect },
-      ),
-    );
-  });
-
-  afterEach(() => {
-    mock.restore();
-  });
-
   it.each([
     ['object', { values: [1, 2] }, '{"values":[1,2]}', true],
     ['array', [true, 'x'], '[true,"x"]', true],
@@ -100,5 +102,81 @@ describe('customFetch', () => {
     response = Response.json({ error: 'invalid request' }, { status: 400 });
 
     await expect(customFetch('/api/example')).rejects.toThrow('invalid request');
+  });
+
+  it('includes plain-text error details in rejected responses', async () => {
+    response = new Response('service unavailable', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'content-type': 'text/plain' },
+    });
+
+    await expect(customFetch('/api/example')).rejects.toThrow('service unavailable');
+  });
+
+  it('drops the detail when a JSON error body is malformed', async () => {
+    response = new Response('not json', {
+      status: 502,
+      statusText: 'Bad Gateway',
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const rejection: Error = await customFetch('/api/example').then(
+      () => {
+        throw new Error('expected the request to be rejected');
+      },
+      (error: Error) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection.message).toContain('502 Bad Gateway');
+    expect(rejection.message).not.toContain('not json');
+  });
+
+  it('rejects a successful response that is not valid JSON', async () => {
+    response = new Response('not json', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    await expect(customFetch('/api/example')).rejects.toThrow(SyntaxError);
+  });
+
+  it('returns no value for an empty JSON body', async () => {
+    response = new Response(undefined, {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'content-length': '0' },
+    });
+
+    await expect(customFetch('/api/example')).resolves.toBeUndefined();
+  });
+});
+
+describe('customFetchParsed', () => {
+  it('returns the payload validated by the caller schema', async () => {
+    response = Response.json({ id: 'user-1', extra: true });
+
+    await expect(customFetchParsed('/api/user', userSchema)).resolves.toEqual({ id: 'user-1' });
+  });
+
+  it('rejects when the payload does not match the schema', async () => {
+    response = Response.json({ id: 7 });
+
+    await expect(customFetchParsed('/api/user', userSchema)).rejects.toThrow();
+  });
+});
+
+describe('customFetchParsedSafe', () => {
+  it('reports a schema mismatch without rejecting', async () => {
+    response = Response.json({ id: 7 });
+
+    const result = await customFetchParsedSafe('/api/user', userSchema);
+
+    expect(result.success).toBe(false);
+  });
+
+  it('still rejects non-2xx responses', async () => {
+    response = Response.json({ error: 'nope' }, { status: 500 });
+
+    await expect(customFetchParsedSafe('/api/user', userSchema)).rejects.toThrow('nope');
   });
 });
