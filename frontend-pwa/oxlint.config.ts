@@ -1,3 +1,12 @@
+/**
+ * @file Pins the Oxlint profiles enforced on `frontend-pwa`.
+ *
+ * The `ai-deslop` recommended profile and an explicit Unicorn rule set are
+ * applied verbatim, and every category is switched off so a tool upgrade
+ * cannot silently widen enforcement. The single override below relaxes
+ * `unicorn/filename-case` for the two PascalCase entry modules.
+ */
+
 import { configs as deslopConfigs } from 'ai-deslop';
 import { defineConfig } from 'oxlint';
 

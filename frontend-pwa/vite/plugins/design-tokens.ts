@@ -50,6 +50,7 @@ interface ResolvedPaths {
   distPath: string;
 }
 
+/** Resolve the tokens package name and its absolute source and dist paths. */
 function resolveTokensPaths(options: EnsureTokensDistOptions): ResolvedPaths {
   const packageName = options.packageName ?? defaultPackageName;
   const packagePath = path.resolve(
@@ -61,6 +62,7 @@ function resolveTokensPaths(options: EnsureTokensDistOptions): ResolvedPaths {
   return { packageName, packagePath, distPath };
 }
 
+/** Detect the package manager from the `npm_config_user_agent` hint. */
 function detectFromUserAgent(): PackageManager | undefined {
   // biome-ignore lint/style/noProcessEnv: environment hints come from npm.
   const agent = process.env.npm_config_user_agent;
@@ -76,6 +78,7 @@ function detectFromUserAgent(): PackageManager | undefined {
   return undefined;
 }
 
+/** Detect the package manager from the first recognized lockfile. */
 function detectFromLockfile(workspaceRoot: string): PackageManager | undefined {
   for (const [manager, lockfile] of lockfileLookup) {
     if (existsSync(path.resolve(workspaceRoot, lockfile))) {
@@ -86,14 +89,19 @@ function detectFromLockfile(workspaceRoot: string): PackageManager | undefined {
   return undefined;
 }
 
+/**
+ * Choose the package manager from the environment hint, a lockfile, or pnpm.
+ */
 export function detectPackageManager(workspaceRoot: string): PackageManager {
   return detectFromUserAgent() ?? detectFromLockfile(workspaceRoot) ?? 'pnpm';
 }
 
+/** Decide whether a spawn result represents a failed tokens build. */
 function buildFailed(result: SpawnSyncReturns<Buffer>): boolean {
   return Boolean(result.error) || result.status !== 0;
 }
 
+/** Compose the operator-facing message for a failed tokens build. */
 function buildFailureMessage(command: BuildCommand, result: SpawnSyncReturns<Buffer>): string {
   const segments = [
     'Design tokens build failed.',
@@ -105,6 +113,7 @@ function buildFailureMessage(command: BuildCommand, result: SpawnSyncReturns<Buf
   return segments.filter((segment): segment is string => Boolean(segment)).join(' ');
 }
 
+/** Build the package-manager-specific command that compiles the tokens. */
 function buildCommandFor(
   packageManager: PackageManager,
   packageName: string,
@@ -147,6 +156,11 @@ function buildCommandFor(
   }
 }
 
+/**
+ * Build the tokens package when its dist output is missing.
+ *
+ * @returns The absolute path to the built dist directory.
+ */
 export function ensureTokensDist(options: EnsureTokensDistOptions): string {
   const { packageName, packagePath, distPath } = resolveTokensPaths(options);
 
@@ -182,6 +196,10 @@ export function ensureTokensDist(options: EnsureTokensDistOptions): string {
   return distPath;
 }
 
+/**
+ * Provide the Vite plugin that builds tokens before the PWA is served or
+ * bundled, and aliases the tokens package to its dist output.
+ */
 export function designTokensPlugin(options: DesignTokensPluginOptions): Plugin {
   const packageName = options.packageName ?? defaultPackageName;
   const alias = options.alias ?? defaultAlias;

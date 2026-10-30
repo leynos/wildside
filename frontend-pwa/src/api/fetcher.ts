@@ -96,6 +96,11 @@ const defaultHeaders = (
 
 type ErrorDetail = JsonValue | string;
 
+/**
+ * Read the error body as JSON when the response advertises it, otherwise as
+ * text. A body that cannot be decoded becomes an absent detail rather than
+ * masking the HTTP status.
+ */
 const parseErrorDetail = async (res: Response): Promise<ErrorDetail | undefined> => {
   const contentType = (res.headers.get('content-type') ?? '').trim().toLowerCase();
   try {
@@ -106,6 +111,12 @@ const parseErrorDetail = async (res: Response): Promise<ErrorDetail | undefined>
   }
 };
 
+/**
+ * Decide whether a successful response carries a JSON document.
+ *
+ * `204` and `205` responses never carry a body, and an explicit zero length
+ * marks an empty body even when the content type claims JSON.
+ */
 const shouldParseJson = (res: Response): boolean => {
   if (res.status === 204 || res.status === 205) return false;
   const contentType = (res.headers.get('content-type') ?? '').trim().toLowerCase();

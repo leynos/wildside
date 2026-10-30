@@ -760,6 +760,38 @@ own user-facing behaviour, shared query hooks should own server-state access,
 and durable offline writes should pass through the outbox boundary described in
 `docs/wildside-pwa-data-model.md`.
 
+### Shared API fetcher
+
+`frontend-pwa/src/api/fetcher.ts` is the single boundary between the PWA and
+the backend JSON API. Call it rather than `fetch` directly so request defaults,
+body handling, and response validation stay consistent.
+
+- `customFetch(input, init?)` sends the request and resolves with the validated
+  `JsonValue` payload, or `undefined` when the response carries no body. It
+  serializes plain objects, arrays, and JSON scalar bodies, labels a string
+  body as JSON only when it already parses as JSON, and forwards native
+  `BodyInit` values unchanged. Cookies are sent because requests default to
+  `credentials: 'include'`, and `Accept: application/json` is added unless the
+  caller sets it. A JSON content type is added only when the body is JSON and
+  the caller has not set one.
+- Response bodies are validated before use. `204` and `205` responses, and
+  bodies with an explicit zero `content-length`, resolve to `undefined`.
+- Non-2xx responses reject with an `Error` naming the status and URL. Its
+  `cause` carries the error detail: the JSON body when the response advertises
+  JSON, otherwise the response text. An undecodable detail is omitted rather
+  than masking the status.
+- `customFetchParsed(input, schema, init?)` validates the payload with a Zod
+  schema and resolves with the parsed value; a mismatch rejects.
+- `customFetchParsedSafe(...)` returns Zod's safe-parse result instead, so
+  callers can branch on schema failures while transport and non-2xx failures
+  still reject.
+
+The compile-time contract for these helpers is asserted by
+`frontend-pwa/src/api/fetcher.type-contract.ts`, which `make typecheck`
+compiles. Runtime behaviour is covered by unit tests and by
+`fetcher.behaviour.test.ts`, which drives a real HTTP server rather than a
+`fetch` mock.
+
 ### Quality gates
 
 Documentation-only front-end planning changes must pass:
