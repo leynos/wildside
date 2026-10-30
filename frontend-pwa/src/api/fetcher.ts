@@ -30,6 +30,17 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 
 const stringBodySchema = z.string();
 const emptyBodySchema = z.union([z.null(), z.undefined()]);
+// JSON scalars are legal wire bodies even though they are not structures.
+const jsonScalarSchema = z.union([z.number(), z.boolean()]);
+
+/** Predicate: does this string already hold a valid JSON document? */
+const isJsonString = (value: string): boolean => {
+  try {
+    return jsonValueSchema.safeParse(JSON.parse(value)).success;
+  } catch {
+    return false;
+  }
+};
 const nativeBodySchema = z.union([
   z.instanceof(FormData),
   z.instanceof(Blob),
@@ -47,7 +58,8 @@ const isPlainObjectLike = (value: FetchBody | undefined): value is JsonObject | 
 
 /**
  * Normalize the request body for JSON APIs while preserving native body types.
- * Plain objects and arrays are serialized; string bodies remain untouched.
+ * Plain objects, arrays, and JSON scalars are serialized; a string body is
+ * forwarded untouched and labelled JSON only when it already parses as JSON.
  */
 const normalizeBody = (body: FetchBody | undefined): NormalizedBody => {
   const emptyBody = emptyBodySchema.safeParse(body);
@@ -56,8 +68,13 @@ const normalizeBody = (body: FetchBody | undefined): NormalizedBody => {
   const nativeBody = nativeBodySchema.safeParse(body);
   if (nativeBody.success) return { body: nativeBody.data, isJson: false };
 
-  if (isPlainObjectLike(body)) {
+  if (isPlainObjectLike(body) || jsonScalarSchema.safeParse(body).success) {
     return { body: stringBodySchema.parse(JSON.stringify(body)), isJson: true };
+  }
+
+  const stringBody = stringBodySchema.safeParse(body);
+  if (stringBody.success) {
+    return { body: stringBody.data, isJson: isJsonString(stringBody.data) };
   }
 
   return { body: String(body), isJson: false };
@@ -71,9 +88,7 @@ const defaultHeaders = (
   const headers = new Headers(init?.headers);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
 
-  const shouldSetJsonContentType =
-    bodyInfo.isJson || stringBodySchema.safeParse(init?.body).success;
-  if (shouldSetJsonContentType && !headers.has('Content-Type')) {
+  if (bodyInfo.isJson && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json; charset=utf-8');
   }
   return headers;
@@ -98,7 +113,12 @@ const shouldParseJson = (res: Response): boolean => {
   return contentType.includes('json') && contentLength !== '0';
 };
 
-/** Fetch a JSON response after validating its wire representation. */
+/**
+ * Fetch a JSON response after validating its wire representation.
+ *
+ * The repository's ai-deslop policy rejects `unknown` returns, so this
+ * boundary validates the payload once and hands callers a named JSON type.
+ */
 export const customFetch = async (
   input: string,
   init?: FetchRequestInit,

@@ -112,7 +112,12 @@ fn probe_connection(config: &Config) -> Result<ProbeOutcome> {
 }
 
 fn repair_bundled_utc(installation: &Path) -> Result<()> {
-    let root = Dir::open_ambient_dir(installation, cap_std::ambient_authority())
+    // `pg_config --sharedir` reports the share directory with symlinks resolved
+    // (it derives it from the realpath'd executable), so compare like with like.
+    let installation = installation
+        .canonicalize()
+        .wrap_err("resolve embedded PostgreSQL installation path")?;
+    let root = Dir::open_ambient_dir(&installation, cap_std::ambient_authority())
         .wrap_err("open embedded PostgreSQL installation")?;
     let executable = root
         .canonicalize("bin/pg_config")
@@ -120,7 +125,7 @@ fn repair_bundled_utc(installation: &Path) -> Result<()> {
     let executable = installation.join(executable);
     let configure = pg_config_output(&executable, "--configure")?;
     let sharedir = pg_config_output(&executable, "--sharedir")?;
-    let relative_share = bundled_share_path(installation, &configure, &sharedir)?;
+    let relative_share = bundled_share_path(&installation, &configure, &sharedir)?;
     let timezone_dir = root
         .open_dir(relative_share.join("timezone"))
         .wrap_err("open verified bundled PostgreSQL timezone data")?;

@@ -208,8 +208,20 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
 }
 
 /// Check PostgreSQL UTC readiness, repairing verified bundled data if needed.
+///
+/// A successful check is memoised for the process: UTC support cannot regress
+/// once the server has accepted `SET TIME ZONE 'UTC'`, and every call site
+/// otherwise pays for a fresh connection and probe. Failures stay uncached so
+/// a later call can retry once the cluster is healthy.
 fn ensure_utc_timezone_alias(handle: &ClusterHandle) -> BootstrapResult<()> {
+    static UTC_READY: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    if UTC_READY.get().is_some() {
+        return Ok(());
+    }
+
     let url = handle.connection().database_url("postgres");
     postgres_timezone::ensure_utc_ready(&url, &handle.settings().installation_dir)
-        .map_err(BootstrapError::from)
+        .map_err(BootstrapError::from)?;
+    let _ = UTC_READY.set(());
+    Ok(())
 }

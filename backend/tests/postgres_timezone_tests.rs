@@ -12,6 +12,17 @@ use color_eyre::eyre::Result;
 use color_eyre::eyre::eyre;
 use postgres::error::SqlState;
 use postgres_timezone::ProbeOutcome;
+use rstest::{fixture, rstest};
+
+/// A temporary directory paired with an ambient-authority handle to it.
+///
+/// The guard travels with the handle so the directory outlives the test body.
+#[fixture]
+fn timezone_sandbox() -> io::Result<(tempfile::TempDir, Dir)> {
+    let sandbox = tempfile::tempdir()?;
+    let dir = Dir::open_ambient_dir(sandbox.path(), cap_std::ambient_authority())?;
+    Ok((sandbox, dir))
+}
 
 #[test]
 fn successful_probe_does_not_repair_the_installation() -> Result<()> {
@@ -61,10 +72,11 @@ fn failed_probe_does_not_trigger_repair() {
     assert_eq!(repairs.get(), 0);
 }
 
-#[test]
-fn unsupported_utc_repairs_bundled_data_and_reprobes() -> Result<()> {
-    let sandbox = tempfile::tempdir()?;
-    let timezone_dir = Dir::open_ambient_dir(sandbox.path(), cap_std::ambient_authority())?;
+#[rstest]
+fn unsupported_utc_repairs_bundled_data_and_reprobes(
+    timezone_sandbox: io::Result<(tempfile::TempDir, Dir)>,
+) -> Result<()> {
+    let (_sandbox, timezone_dir) = timezone_sandbox?;
     timezone_dir.write("UCT", b"zero-offset timezone data")?;
     let probes = Cell::new(0);
 
@@ -156,10 +168,11 @@ fn invalid_connection_configuration_reports_the_parse_failure() {
     );
 }
 
-#[test]
-fn creates_utc_alias_from_the_bundled_uct_timezone() -> io::Result<()> {
-    let sandbox = tempfile::tempdir()?;
-    let timezone_dir = Dir::open_ambient_dir(sandbox.path(), cap_std::ambient_authority())?;
+#[rstest]
+fn creates_utc_alias_from_the_bundled_uct_timezone(
+    timezone_sandbox: io::Result<(tempfile::TempDir, Dir)>,
+) -> io::Result<()> {
+    let (_sandbox, timezone_dir) = timezone_sandbox?;
     timezone_dir.write("UCT", b"zero-offset timezone data")?;
     postgres_timezone::ensure_utc_alias(&timezone_dir)?;
     postgres_timezone::ensure_utc_alias(&timezone_dir)?;
@@ -167,10 +180,11 @@ fn creates_utc_alias_from_the_bundled_uct_timezone() -> io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn preserves_an_existing_utc_timezone_file() -> io::Result<()> {
-    let sandbox = tempfile::tempdir()?;
-    let timezone_dir = Dir::open_ambient_dir(sandbox.path(), cap_std::ambient_authority())?;
+#[rstest]
+fn preserves_an_existing_utc_timezone_file(
+    timezone_sandbox: io::Result<(tempfile::TempDir, Dir)>,
+) -> io::Result<()> {
+    let (_sandbox, timezone_dir) = timezone_sandbox?;
     timezone_dir.write("UCT", b"UCT data")?;
     timezone_dir.write("UTC", b"existing UTC data")?;
     postgres_timezone::ensure_utc_alias(&timezone_dir)?;
@@ -178,10 +192,11 @@ fn preserves_an_existing_utc_timezone_file() -> io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn reports_when_neither_timezone_name_is_available() -> io::Result<()> {
-    let sandbox = tempfile::tempdir()?;
-    let timezone_dir = Dir::open_ambient_dir(sandbox.path(), cap_std::ambient_authority())?;
+#[rstest]
+fn reports_when_neither_timezone_name_is_available(
+    timezone_sandbox: io::Result<(tempfile::TempDir, Dir)>,
+) -> io::Result<()> {
+    let (_sandbox, timezone_dir) = timezone_sandbox?;
     let error = postgres_timezone::ensure_utc_alias(&timezone_dir)
         .expect_err("missing UTC and UCT data must stop test setup");
     assert_eq!(error.kind(), io::ErrorKind::NotFound);

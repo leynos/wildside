@@ -32,18 +32,21 @@ describe('customFetch', () => {
   });
 
   it.each([
-    ['object', { values: [1, 2] }, '{"values":[1,2]}'],
-    ['array', [true, 'x'], '[true,"x"]'],
-    ['string', 'plain text', 'plain text'],
-    ['JSON string', '{"ok":true}', '{"ok":true}'],
-  ])('sends a %s body with JSON headers', async (_label, body, expected) => {
+    ['object', { values: [1, 2] }, '{"values":[1,2]}', true],
+    ['array', [true, 'x'], '[true,"x"]', true],
+    ['number', 5, '5', true],
+    ['boolean', true, 'true', true],
+    ['JSON string', '{"ok":true}', '{"ok":true}', true],
+    ['plain text string', 'plain text', 'plain text', false],
+  ])('sends a %s body with matching headers', async (_label, body, expected, isJson) => {
     await customFetch('/api/example', { method: 'POST', body });
 
     expect(request().body).toBe(expected);
     expect(request().credentials).toBe('include');
     const headers = new Headers(request().headers);
     expect(headers.get('Accept')).toBe('application/json');
-    expect(headers.get('Content-Type')).toBe('application/json; charset=utf-8');
+    expect(headers.has('Content-Type')).toBe(isJson);
+    if (isJson) expect(headers.get('Content-Type')).toBe('application/json; charset=utf-8');
   });
 
   it.each([

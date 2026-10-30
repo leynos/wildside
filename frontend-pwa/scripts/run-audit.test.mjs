@@ -1,6 +1,10 @@
 /** @file Exercises the audit wrapper to ensure ledger exceptions behave as expected. */
 
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { VALIDATOR_ADVISORY_ID, VALIDATOR_MIN_SAFE_VERSION } from '../../security/constants.js';
 
@@ -395,5 +399,81 @@ describe('evaluateAudit', () => {
     expect(failureCode).toBe(1);
     expect(infoSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('CLI entrypoint', () => {
+  const auditScript = path.join(path.dirname(fileURLToPath(import.meta.url)), 'run-audit.mjs');
+  let fakeBinDirectory;
+
+  /**
+   * Put a deterministic stand-in for `pnpm` on the child process's PATH so the
+   * entrypoint exercises its own argument plumbing and exit-code handling
+   * without reaching the network or the workspace dependency tree.
+   */
+  function installFakePnpm(stdout, exitCode) {
+    fakeBinDirectory = mkdtempSync(path.join(tmpdir(), 'run-audit-cli-'));
+    const executable = path.join(fakeBinDirectory, 'pnpm');
+    writeFileSync(
+      executable,
+      `#!/bin/sh\ncat <<'AUDIT_JSON'\n${stdout}\nAUDIT_JSON\nexit ${exitCode}\n`,
+    );
+    chmodSync(executable, 0o755);
+  }
+
+  // biome-ignore lint/style/noProcessEnv: the child process must inherit the host PATH.
+  const inheritedPath = process.env.PATH ?? '';
+
+  function runAuditCli() {
+    // Bun's own spawner is deliberate: a sibling test file replaces
+    // `node:child_process` with mocks for the whole Bun test process, and the
+    // CLI entrypoint must be a real child process for its exit code to mean
+    // anything.
+    const result = globalThis.Bun.spawnSync({
+      cmd: ['node', auditScript],
+      env: {
+        // biome-ignore lint/style/noProcessEnv: Node needs the inherited environment.
+        ...process.env,
+        // biome-ignore lint/style/useNamingConvention: POSIX environment key.
+        PATH: `${fakeBinDirectory}${path.delimiter}${inheritedPath}`,
+      },
+    });
+    return { status: result.exitCode, stderr: result.stderr.toString() };
+  }
+
+  afterEach(() => {
+    if (fakeBinDirectory !== undefined) {
+      rmSync(fakeBinDirectory, { recursive: true, force: true });
+      fakeBinDirectory = undefined;
+    }
+  });
+
+  it('exits zero when pnpm reports no advisories', () => {
+    installFakePnpm('{"advisories":{}}', 0);
+
+    const result = runAuditCli();
+
+    expect(result.status).toBe(0);
+  });
+
+  it('exits non-zero when pnpm reports an unexpected advisory', () => {
+    installFakePnpm(
+      '{"advisories":{"GHSA-cli1-0000-0001":{"github_advisory_id":"GHSA-cli1-0000-0001","title":"unexpected"}}}',
+      1,
+    );
+
+    const result = runAuditCli();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Unexpected vulnerabilities detected by pnpm audit:');
+  });
+
+  it('exits non-zero and reports the error when the audit output is unparseable', () => {
+    installFakePnpm('not-json', 0);
+
+    const result = runAuditCli();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr.trim()).not.toBe('');
   });
 });
