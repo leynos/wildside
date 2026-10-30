@@ -1954,6 +1954,19 @@ caret requirements.
   The branch's first commit (`2066701`) has parent `ede1a2b`, which is the live
   `origin/main` head, so the branch already directly follows the target and no
   commit replay or conflict resolution was required.
+- [x] (2026-10-30 Europe/Berlin) All seven gates passed sequentially on
+  `d37db0f` through the exclusive scrutineer: `check-fmt`, `test`, `typecheck`,
+  `lint`, `markdownlint`, `nixie`, and `spelling`. `make test` reported 1,978
+  Nextest cases passed (four skipped), both compile-fail suites, 90 frontend
+  tests, 614 workflow contracts passed (one skipped), 115 Python tests passed
+  (13 skipped), and 14 action-lint cases. `make lint` reported clean Clippy
+  under `-D warnings`, a clean whitaker and `cargo doc` run, and pylint
+  10.00/10; one pre-existing advisory (`dependabot-automerge.yml` truthy
+  warning) is outside this change surface and non-fatal. The gate logs use the
+  `/tmp/<gate>-393f0df6-2-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  naming, with the exact paths recorded in the delivery ledger. This
+  plan-record edit is documentation-only, so the final publication candidate
+  was rechecked with the Markdown gates.
 
 ## Surprises & discoveries
 
@@ -2720,4 +2733,6 @@ verification and do not change accepted retry or D15 behaviour.
 requested a rebase onto `origin/main`, the four implementation gates, and a
 force-push with lease. The target was already an ancestor of the branch head,
 so the rebase was an up-to-date no-op; no commits replayed and no conflicts
-arose.
+arose. All seven repository gates then passed on `d37db0f`, and only the
+Markdown gates were repeated for this documentation-only record edit before
+publication.
