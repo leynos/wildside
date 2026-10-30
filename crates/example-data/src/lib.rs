@@ -37,6 +37,7 @@ mod error;
 mod generator;
 mod registry;
 mod seed;
+mod seed_name;
 pub mod seed_registry_cli;
 mod validation;
 
@@ -44,4 +45,5 @@ pub use error::{GenerationError, RegistryError};
 pub use generator::generate_example_users;
 pub use registry::{SeedDefinition, SeedRegistry};
 pub use seed::{ExampleUserSeed, UnitSystemSeed};
+pub use seed_name::{SeedNameError, seed_name_from_value};
 pub use validation::{DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, is_valid_display_name};

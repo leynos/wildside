@@ -12,11 +12,12 @@ use rand::random;
 
 use crate::error::RegistryError;
 use crate::registry::{SeedDefinition, SeedRegistry};
+use crate::seed_name_from_value;
 
 mod error;
 mod seed_name;
 pub use error::CliError;
-use seed_name::{eff_long_dictionary, seed_name_from_value};
+use seed_name::eff_long_dictionary;
 
 const DEFAULT_USER_COUNT: usize = 12;
 const MAX_NAME_ATTEMPTS: usize = 5;
@@ -290,7 +291,7 @@ fn registry_file_name(path: &Utf8Path) -> Result<&Utf8Path, CliError> {
 /// ```
 pub fn seed_name_for_seed(seed: u64) -> Result<String, CliError> {
     let dictionary = eff_long_dictionary()?;
-    seed_name_from_value(seed, dictionary)
+    seed_name_from_value(seed, dictionary).map_err(CliError::from)
 }
 
 /// Formats the success message emitted by the CLI.
