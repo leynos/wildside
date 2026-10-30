@@ -20,7 +20,7 @@ use rstest_bdd_macros::{ScenarioState, given, then, when};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-use super::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use super::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use super::cluster_skip::handle_cluster_setup_failure;
 use super::embedded_postgres::provision_template_database;
 
@@ -68,7 +68,7 @@ impl ExampleDataSeedingWorld {
         ensure_stable_cluster_environment()
             .expect("reconcile stable cluster environment before cluster access");
         let runtime = Runtime::new().expect("create runtime");
-        let cluster = match shared_cluster_handle() {
+        let cluster = match bootstrap_shared_cluster() {
             Ok(c) => c,
             Err(reason) => {
                 let message = reason.to_string();

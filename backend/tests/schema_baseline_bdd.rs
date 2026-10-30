@@ -10,7 +10,7 @@ use uuid::Uuid;
 include!("support/entrypoint.rs");
 declare_test_support!(atexit_cleanup, embedded_postgres);
 
-use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::format_postgres_error;
 
@@ -71,7 +71,8 @@ impl BaselineWorld {
 fn world() -> BaselineWorld {
     ensure_stable_cluster_environment()
         .expect("reconcile stable cluster environment before cluster access");
-    let cluster = shared_cluster_handle().expect("embedded postgres cluster should be available");
+    let cluster =
+        bootstrap_shared_cluster().expect("embedded postgres cluster should be available");
     let database = provision_template_database(cluster)
         .map_err(|error: UserPersistenceError| error.to_string())
         .expect("template database should be provisioned");

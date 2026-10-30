@@ -5,13 +5,14 @@ mod postgres_timezone;
 
 use std::cell::Cell;
 use std::io;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use cap_std::fs::Dir;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::eyre;
 use postgres::error::SqlState;
 use postgres_timezone::ProbeOutcome;
+use proptest::prelude::*;
 use rstest::{fixture, rstest};
 
 /// A temporary directory paired with an ambient-authority handle to it.
@@ -203,4 +204,194 @@ fn reports_when_neither_timezone_name_is_available(
         .expect_err("missing UTC and UCT data must stop test setup");
     assert_eq!(error.kind(), io::ErrorKind::NotFound);
     Ok(())
+}
+
+/// Stand-in `pg_config` that reports the metadata written beside it.
+#[cfg(unix)]
+const PG_CONFIG_SCRIPT: &str = concat!(
+    "#!/bin/sh\n",
+    "case \"$1\" in\n",
+    "  --configure) cat \"$(dirname \"$0\")/configure.txt\" ;;\n",
+    "  --sharedir) cat \"$(dirname \"$0\")/sharedir.txt\" ;;\n",
+    "  *) exit 2 ;;\n",
+    "esac\n",
+);
+
+/// Write a stand-in `bin/pg_config` reporting the supplied metadata.
+///
+/// The script reads its answers from files beside it, so the repair path can
+/// be exercised without a real PostgreSQL build. Writes go through a `Dir`
+/// handle to keep the fixture inside the capability-based filesystem policy.
+#[cfg(unix)]
+fn install_fake_pg_config(installation: &Path, configure: &str, sharedir: &Path) -> io::Result<()> {
+    use cap_std::fs::PermissionsExt;
+
+    let dir = Dir::open_ambient_dir(installation, cap_std::ambient_authority())?;
+    dir.create_dir_all("bin")?;
+    dir.write("bin/configure.txt", configure)?;
+    dir.write("bin/sharedir.txt", sharedir.to_string_lossy().as_bytes())?;
+    dir.write("bin/pg_config", PG_CONFIG_SCRIPT)?;
+    dir.set_permissions("bin/pg_config", cap_std::fs::Permissions::from_mode(0o755))
+}
+
+/// Build a throwaway installation with bundled `UCT` timezone data.
+///
+/// `sharedir` overrides what the stand-in `pg_config` reports; `None` reports
+/// the installation's own `share` directory. The bundled `share/timezone/UCT`
+/// file is always created so a refused repair can be shown to leave no alias.
+#[cfg(unix)]
+fn bundled_installation(
+    configure: &str,
+    sharedir: Option<&Path>,
+) -> io::Result<(tempfile::TempDir, PathBuf)> {
+    let sandbox = tempfile::tempdir()?;
+    let installation = sandbox.path().canonicalize()?;
+    let reported = sharedir.map_or_else(|| installation.join("share"), Path::to_path_buf);
+    install_fake_pg_config(&installation, configure, &reported)?;
+    let dir = Dir::open_ambient_dir(&installation, cap_std::ambient_authority())?;
+    dir.create_dir_all("share/timezone")?;
+    dir.write("share/timezone/UCT", b"bundled UCT data")?;
+    Ok((sandbox, installation))
+}
+
+/// Repair runs the installation's `pg_config` and hard-links `UCT` to `UTC`.
+#[cfg(unix)]
+#[test]
+fn repair_links_utc_beside_the_verified_bundled_data() -> Result<()> {
+    use cap_std::fs::MetadataExt;
+
+    let (_sandbox, installation) =
+        bundled_installation("--prefix=/opt/postgres --enable-debug", None)?;
+    let dir = Dir::open_ambient_dir(&installation, cap_std::ambient_authority())?;
+
+    postgres_timezone::repair_bundled_utc(&installation)?;
+
+    assert_eq!(
+        dir.read("share/timezone/UTC")?,
+        b"bundled UCT data".to_vec()
+    );
+    let uct = dir.metadata("share/timezone/UCT")?;
+    let utc = dir.metadata("share/timezone/UTC")?;
+    assert_eq!(
+        uct.ino(),
+        utc.ino(),
+        "UTC must be a hard link to the bundled UCT data"
+    );
+    Ok(())
+}
+
+/// Repair refuses metadata that names a system or outside share directory.
+#[cfg(unix)]
+#[test]
+fn repair_refuses_metadata_outside_the_installation() -> Result<()> {
+    let outside = tempfile::tempdir()?;
+    let outside = outside.path().canonicalize()?;
+    let cases = [
+        (
+            "--prefix=/opt/postgres --with-system-tzdata=/usr/share/zoneinfo",
+            None,
+            "uses system timezone data",
+        ),
+        (
+            "--prefix=/opt/postgres",
+            Some(outside.as_path()),
+            "lies outside its installation",
+        ),
+        (
+            "--prefix=/opt/postgres",
+            Some(Path::new("share")),
+            "non-absolute share directory",
+        ),
+        ("not configure metadata", None, "invalid configure metadata"),
+    ];
+
+    for (configure, sharedir, expected) in cases {
+        let (_sandbox, installation) = bundled_installation(configure, sharedir)?;
+        let dir = Dir::open_ambient_dir(&installation, cap_std::ambient_authority())?;
+
+        let error = postgres_timezone::repair_bundled_utc(&installation)
+            .expect_err("unsafe metadata must not authorize a repair");
+        assert!(
+            format!("{error:#}").contains(expected),
+            "expected {expected:?} for {configure:?}, got {error:#}"
+        );
+        assert!(
+            !dir.exists("share/timezone/UTC"),
+            "a refused repair must not create the UTC alias"
+        );
+    }
+    Ok(())
+}
+
+proptest! {
+    /// Accepted metadata always yields a path inside the installation.
+    #[test]
+    fn accepted_share_paths_stay_inside_the_installation(
+        segments in prop::collection::vec("[a-z][a-z0-9_.-]{0,11}", 1..5),
+        extra_option in prop::option::of("--[a-z-]{1,12}"),
+    ) {
+        let installation = Path::new("/opt/postgres");
+        let relative: PathBuf = segments.iter().collect();
+        let sharedir = installation.join(&relative);
+        let configure = extra_option.map_or_else(
+            || "--prefix=/opt/postgres".to_owned(),
+            |option| format!("--prefix=/opt/postgres {option}"),
+        );
+
+        let accepted = postgres_timezone::bundled_share_path(
+            installation,
+            &configure,
+            &sharedir.to_string_lossy(),
+        )
+        .unwrap_or_else(|error| panic!("valid metadata was rejected: {error:#}"));
+
+        prop_assert!(!accepted.is_absolute());
+        prop_assert!(
+            accepted
+                .components()
+                .all(|component| matches!(component, Component::Normal(_)))
+        );
+        prop_assert_eq!(installation.join(&accepted), sharedir);
+    }
+
+    /// Unsafe or invalid metadata never authorizes a repair path.
+    #[test]
+    fn unsafe_share_metadata_is_rejected(
+        segments in prop::collection::vec("[a-z][a-z0-9_.-]{0,11}", 1..5),
+        suffix in "[a-z][a-z0-9_.-]{0,11}",
+    ) {
+        let installation = Path::new("/opt/postgres");
+        let inside = installation.join(segments.iter().collect::<PathBuf>());
+        let mut escaping = inside.clone();
+        escaping.push("..");
+        escaping.push(&suffix);
+
+        let cases = [
+            (String::new(), inside.to_string_lossy().into_owned()),
+            (
+                "--with-system-tzdata=/usr/share/zoneinfo".to_owned(),
+                inside.to_string_lossy().into_owned(),
+            ),
+            (
+                "--prefix=/opt/postgres".to_owned(),
+                format!("/usr/share/{suffix}"),
+            ),
+            (
+                "--prefix=/opt/postgres".to_owned(),
+                format!("share/{suffix}"),
+            ),
+            (
+                "--prefix=/opt/postgres".to_owned(),
+                escaping.to_string_lossy().into_owned(),
+            ),
+        ];
+
+        for (configure, sharedir) in cases {
+            prop_assert!(
+                postgres_timezone::bundled_share_path(installation, &configure, &sharedir)
+                    .is_err(),
+                "unsafe metadata must be rejected: {configure:?}, {sharedir:?}"
+            );
+        }
+    }
 }

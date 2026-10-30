@@ -19,7 +19,7 @@ use uuid::Uuid;
 include!("support/entrypoint.rs");
 declare_test_support!(atexit_cleanup, embedded_postgres);
 
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use support::embedded_postgres::provision_template_database;
 
 const REQUEST_ID: Uuid = Uuid::from_bytes([0x61; 16]);
@@ -90,7 +90,7 @@ fn enrichment_job() -> EnrichmentJob {
 fn setup_world() -> Result<JobPersistenceWorld, String> {
     ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|error| error.to_string())?;
-    let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
+    let cluster = bootstrap_shared_cluster().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let pool = runtime
         .block_on(PgPool::connect(database.url()))

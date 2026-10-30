@@ -16,7 +16,7 @@ use postgres::{Client, NoTls};
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use super::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use super::support::embedded_postgres::provision_template_database;
 use super::support::format_postgres_error;
 use super::support::profile_interests::FIXTURE_AUTH_ID;
@@ -117,7 +117,7 @@ pub(crate) fn is_skipped(world: &World) -> bool {
 
 pub(crate) fn setup_db_context() -> Result<DbContext, String> {
     ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
-    let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
+    let cluster = bootstrap_shared_cluster().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();
     let pool = run_async(DbPool::new(

@@ -25,7 +25,7 @@ declare_test_support!(
     seed_helpers
 );
 
-use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use crate::support::cluster_skip::handle_cluster_setup_failure;
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::seed_connection_helpers::seed_user_and_route;
@@ -42,7 +42,7 @@ fn setup_context() -> Result<TestContext, String> {
     // Repair stale shared-cluster password state before acquiring the cluster.
     ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|err| err.to_string())?;
-    let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
+    let cluster = bootstrap_shared_cluster().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|err| err.to_string())?;
     let database_url = temp_db.url().to_string();
 

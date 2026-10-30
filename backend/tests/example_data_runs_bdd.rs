@@ -17,7 +17,7 @@ use tokio::runtime::Runtime;
 include!("support/entrypoint.rs");
 declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::provision_template_database;
 
@@ -64,7 +64,7 @@ impl ExampleDataRunsWorld {
         }
         let runtime = Runtime::new().expect("create runtime");
 
-        let cluster = match shared_cluster_handle() {
+        let cluster = match bootstrap_shared_cluster() {
             Ok(c) => c,
             Err(reason) => {
                 let message = reason.to_string();

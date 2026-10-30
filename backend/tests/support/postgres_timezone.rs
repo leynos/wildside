@@ -111,7 +111,19 @@ fn probe_connection(config: &Config) -> Result<ProbeOutcome> {
     Ok(ProbeOutcome::Ready)
 }
 
-fn repair_bundled_utc(installation: &Path) -> Result<()> {
+/// Add the `UTC` alias to the installation's own bundled timezone data.
+///
+/// Repair deliberately trusts nothing from the installation's configuration
+/// without cross-checking it against the installation directory: `pg_config`
+/// may name a system timezone directory or a path outside the installation,
+/// and either would mutate host state or write through an unexpected path.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// repair_bundled_utc(Path::new("/opt/postgres"))?;
+/// ```
+pub(crate) fn repair_bundled_utc(installation: &Path) -> Result<()> {
     // `pg_config --sharedir` reports the share directory with symlinks resolved
     // (it derives it from the realpath'd executable), so compare like with like.
     let installation = installation

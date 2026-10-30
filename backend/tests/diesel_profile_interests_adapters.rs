@@ -29,7 +29,7 @@ declare_test_support!(
     session_middleware
 );
 
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::provision_template_database;
 use support::format_postgres_error;
@@ -209,7 +209,7 @@ async fn run_flow(
 fn setup_db_context() -> Option<DbContext> {
     ensure_stable_cluster_environment()
         .expect("reconcile stable cluster environment before cluster access");
-    let cluster = match shared_cluster_handle() {
+    let cluster = match bootstrap_shared_cluster() {
         Ok(cluster) => cluster,
         Err(error) => {
             let _: Option<()> = handle_cluster_setup_failure(error);
