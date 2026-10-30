@@ -35,7 +35,18 @@ env:
   NIXIE_VERSION: '1.1.0'
   # 0.12.19 is the first uv that ships PyPy 3.12, which the Pylint gate pins.
   UV_VERSION: '0.12.19'
-  WHITAKER_INSTALLER_VERSION: '0.2.9'
+  # 0.2.11 is the first release whose lockfile carries dylint_internal 6.3.0.
+  # Earlier releases pin 6.0.1, whose dylint_driver build script clones
+  # rust-lang/rust-clippy at "master"; that repository now has only "main", so
+  # the driver build fails with `revspec 'master' not found` before any lint
+  # runs. The failure is independent of the code under review.
+  WHITAKER_INSTALLER_VERSION: '0.2.11'
+  # The pinned install-whitaker commit predates 0.2.11, so its digest manifest
+  # has no entry for it. Both runner labels this job can select are x86_64
+  # Linux, so one digest covers every arm. This is the published release
+  # digest, matching the `.sha256` sidecar published beside the archive:
+  # https://github.com/leynos/whitaker/releases/download/v0.2.11/whitaker-installer-x86_64-unknown-linux-gnu-v0.2.11.tgz.sha256
+  WHITAKER_INSTALLER_SHA256: 'a32a665d01c4a2eb03a87c584d57329fc72a3aac421c8c2b15bbdb19e5410236'
   YAMLLINT_VERSION: '1.35.1'
 
 # Default GITHUB_TOKEN to no access; each job re-grants only what it needs.
@@ -446,6 +457,7 @@ jobs:
         uses: leynos/shared-actions/.github/actions/install-whitaker@6cec89bac47a21cf756d68d638a9a510998e57f8
         with:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
+          installer-sha256: ${{ env.WHITAKER_INSTALLER_SHA256 }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
           cache-provider: external
       - name: Whitaker lint
