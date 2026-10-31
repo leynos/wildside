@@ -74,7 +74,21 @@ endef
 
 RUSTFLAGS_STRICT := -D warnings
 RUST_FLAGS ?= $(RUSTFLAGS_STRICT)
+# The build standard (Concordat `rust-build-defaults`): the parallel `rustc`
+# frontend and, on Linux, the `mold` linker. An assigned `RUSTFLAGS` replaces
+# every `rustflags` source in `.cargo/config.toml`, so each gate recipe that
+# assigns it restates both through `GATE_RUST_FLAGS_ENV`, keeping any inherited
+# value (CI's setup-rust exports one). `RUST_FLAGS_ENV` stays free of them for
+# Whitaker, which builds its lint driver on a different toolchain that must not
+# inherit development flags.
+BUILD_HOST_OS := $(shell uname -s)
+STANDARD_RUSTFLAGS := -Zthreads=8$(if $(filter Linux,$(BUILD_HOST_OS)), -Clink-arg=-fuse-ld=mold)
+# The linker flag is chosen from the host, so a gate that compiles for another
+# target would get the wrong one. Refuse that rather than guess; run a
+# cross-compiling build with `cargo` directly.
+STANDARD_TARGET_GUARD = $(if $(strip $(CARGO_BUILD_TARGET)),$(error the build standard picks `mold` from the host; unset CARGO_BUILD_TARGET, or run cargo directly))
 RUST_FLAGS_ENV := RUSTFLAGS="$(RUST_FLAGS)"
+GATE_RUST_FLAGS_ENV = $(STANDARD_TARGET_GUARD)RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(RUST_FLAGS) $(STANDARD_RUSTFLAGS)"
 RUSTDOC_FLAGS ?= --cfg docsrs -D warnings
 
 ASYNCAPI_CLI_VERSION ?= 3.4.2
@@ -279,7 +293,7 @@ lint-python:
 	$(PYLINT) $(PYLINT_TARGETS)
 
 lint-architecture:
-	$(RUST_FLAGS_ENV) cargo run -p architecture-lint --quiet
+	$(GATE_RUST_FLAGS_ENV) cargo run -p architecture-lint --quiet
 
 # Lint AsyncAPI spec if present. Split to keep `lint` target concise per checkmake rules.
 lint-asyncapi:
@@ -356,10 +370,10 @@ docs-check: deps
 test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
 
 test-rust: workspace-sync prepare-pg-worker
-	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
+	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(GATE_RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
 		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail))'
-	$(RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features
-	$(RUST_FLAGS_ENV) cargo test -p backend --test sha2_digest_formatting_compile_fail --all-features
+	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features
+	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --test sha2_digest_formatting_compile_fail --all-features
 
 test-frontend: deps typecheck
 	pnpm run test

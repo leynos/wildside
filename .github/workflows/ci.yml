@@ -277,6 +277,12 @@ jobs:
           # server with a 60 s startup timeout, and falls back to an uncached
           # build, with a `sccache-fallback` warning, if the server will not start.
           expect-cache: any
+          # The build standard (.cargo/config.toml): the parallel frontend and
+          # the `mold` linker. The exported RUSTFLAGS displaces the Cargo
+          # configuration's sources, so it restates both after `-D warnings`.
+          # The Whitaker lint assigns its own value and is unaffected.
+          install-mold: 'true'
+          rustflags: -D warnings -Zthreads=8 -Clink-arg=-fuse-ld=mold
 
       - name: Install uv
         id: setup-uv
@@ -542,7 +548,7 @@ jobs:
         run: |
           # Clean stale pg-embed directories that may conflict with new runs.
           find target/ -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} + 2>/dev/null || true
-          RUSTFLAGS="-D warnings" cargo nextest run --locked \
+          RUSTFLAGS="-D warnings -Zthreads=8 -Clink-arg=-fuse-ld=mold" cargo nextest run --locked \
             --manifest-path backend/Cargo.toml \
             --all-targets --all-features \
             -E "$NEXTEST_EXCLUSION"

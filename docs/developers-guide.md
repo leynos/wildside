@@ -504,6 +504,80 @@ Four consequences follow from the table.
   where its `coverage` job is skipped because `coverage-main.yml` already
   covers that branch.
 
+## Rust build standard and development build footprint
+
+Two Concordat rules set the estate's Rust build defaults, and
+`.cargo/config.toml` carries both, so a bare `cargo build` gets them.
+
+### Development build footprint
+
+The `rust-dev-build-footprint` rule keeps default development builds small.
+`[profile.dev]` sets `incremental = false` and `debug = 0`, so builds keep no
+incremental compilation state and no debug information. The trade-off is that a
+debugger sees no source-level debug information or line tables in a default
+development build and every rebuild recompiles whole crates. To debug, run with
+`CARGO_PROFILE_DEV_DEBUG=true`; to rebuild incrementally, set
+`CARGO_INCREMENTAL=1`. `[unstable] embed-metadata = false` is the native Cargo
+key for dated nightlies from 2026-07-31, so Cargo coordinates metadata output
+itself. No raw `rustc` metadata flags are used.
+
+### Rust build standard
+
+The `rust-build-defaults` rule sets the compiler and linker defaults:
+
+- Every `rustflags` source enables the parallel `rustc` frontend with
+  `-Zthreads=8`.
+- The `cfg(target_os = "linux")` source also links with `mold`. macOS and
+  Windows keep their platform linker. CI installs `mold` through `setup-rust`'s
+  `install-mold` input, and through the mutation workflow's input of the same
+  name.
+
+Cargo applies a single `rustflags` source rather than merging them, and an
+assigned `RUSTFLAGS` replaces every source. So each source repeats the frontend
+flag, and the places that assign `RUSTFLAGS` restate both flags:
+
+- The Makefile's `lint-architecture` and `test-rust` recipes go through
+  `GATE_RUST_FLAGS_ENV`, which composes `-D warnings`, any inherited
+  `RUSTFLAGS` and the standard flags. It refuses `CARGO_BUILD_TARGET`, because
+  the linker flag is chosen from the host; run `cargo` directly to
+  cross-compile.
+- The `build` job's `setup-rust` step exports the same value through its
+  `rustflags` input, and the Dependabot `Rust tests` step restates it. The
+  mutation workflow's `setup-commands` writes it to `GITHUB_ENV`, because
+  `setup-rust` exports `-D warnings` alone there.
+- The Whitaker recipes keep `RUST_FLAGS_ENV` (`-D warnings` only), because
+  Whitaker builds its lint driver on a different toolchain that must not
+  inherit these flags. The coverage jobs also assign `-D warnings` alone, so a
+  measurement stays on the platform linker.
+
+The first run after this change misses the compiler cache for every crate,
+because the flags are part of the cache key, so it takes as long as a cold
+build (about 87 minutes on `ubicloud-standard-4`, within the 120-minute
+ceiling). `tests/workflow_contracts/build_standard_test.py` holds the
+configuration, the footprint settings, the Makefile composition, the target
+refusal and the CI provisioning.
+
+### Cranelift is not the development backend
+
+The Cranelift codegen backend is not part of this repository's standard,
+because the repository's own suite does not pass under it. Measured on
+2026-10-31 on the pinned `nightly-2026-10-28`, running `make test-rust` with
+`CARGO_UNSTABLE_CODEGEN_BACKEND=true`,
+`CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift` and
+`CARGO_PROFILE_TEST_CODEGEN_BACKEND=cranelift` and nothing else changed, a
+Cranelift-compiled panic does not find its unwind handler. The run was stopped
+at 1,218 of 1,849 tests: 52 tests aborted with `SIGABRT` (for example
+`domain::ports::cache_key::tests::coordinate_bound_is_inclusive`,
+`domain::offline_bundle_service::tests::upsert_persists_bundle_without_idempotency_key`
+and the `inbound::http::offline` and `inbound::http::routes` rejection tests)
+and `domain::user::tests::new_panics_when_invalid_id` failed. The same suite
+passes on the LLVM backend. The pin is now `nightly-2026-10-31`; the
+measurement above was taken on `nightly-2026-10-28` and has not been repeated
+on the newer pin, and Dependabot moves the pin daily. Re-measure on the next
+deliberate toolchain bump or by 2026-11-30, whichever is first, and adopt the
+backend, through `[unstable] codegen-backend` and
+`[profile.dev] codegen-backend = "cranelift"`, when the suite passes under it.
+
 ## Local Kubernetes preview
 
 Use the repository-local Kubernetes preview when validating the backend image

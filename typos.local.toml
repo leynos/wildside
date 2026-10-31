@@ -10,6 +10,10 @@ accepted = []
 
 [patterns]
 ignore = [
+  # `mold` names the linker (https://github.com/rui314/mold), not the English
+  # word; match only the identifiers that carry it, so prose stays checked.
+  "-fuse-ld=mold",
+  "\\binstall-mold\\b",
   "backspace\\-pulverize\\-grime",
   "types:\\ \\[opened,\\ reopened,\\ synchronize,\\ labeled,\\ ready_for_review\\]",
   ",\\ SVG_FILENAME,\\ SnapshotArtifacts,\\ SnapshotGenerationErro",
