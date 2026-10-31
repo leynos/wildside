@@ -66,16 +66,26 @@ jobs:
     runs-on: >-
       ${{ (github.event.pull_request.head.repo.fork
       || github.event.pull_request.user.login == 'dependabot[bot]')
-      && 'ubuntu-latest' || 'ubicloud-standard-8' }}
-    # 90, which is this job's own figure and no longer the coverage jobs':
-    # both of those went to 120 in #486 to clear the 5,400 s cargo watchdog,
-    # and this job has no watchdog to clear. A cold sccache pays about 1.4 s
-    # to store each miss, and a run with no trunk generation to restore
-    # misses almost everything, so the first run on a new generation is the
-    # longest this job ever gets. 60 cancelled it mid compile-fail suite with
-    # every step passing, which loses the generation the next run would have
-    # read.
-    timeout-minutes: 90
+      && 'ubuntu-latest' || 'ubicloud-standard-4' }}
+    # Four vCPU, not eight, on measurement. Sampled every 10 s on 2026-10-17
+    # (https://github.com/leynos/wildside/actions/runs/39038438142), a warm
+    # run (99.78% sccache hits) took 21m03s on `ubicloud-standard-4` at 1.41
+    # busy cores on average (p95 2.20, peak memory 2.4 GiB), and a cold run
+    # with no cache to restore
+    # (https://github.com/leynos/wildside/actions/runs/39061927189) took
+    # 86m46s at 0.88 busy cores (7.81% hits, peak memory 5.7 GiB of 16). A
+    # job that keeps fewer than half of four cores busy gains little from
+    # eight, and Ubicloud bills per vCPU.
+    #
+    # 120, because the cold run above took 86m46s: a run with no trunk
+    # generation to restore misses almost everything and pays about 1.4 s to
+    # store each miss, so the first run on a new generation is the longest
+    # this job ever gets. 90 would have left four minutes; 60 cancelled it
+    # mid compile-fail suite with every step passing, which loses the
+    # generation the next run would have read. This job has no cargo
+    # watchdog to clear, and nextest's own 60 minute global timeout bounds
+    # the test run inside it.
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -683,10 +693,15 @@ jobs:
   coverage:
     if: github.actor != 'dependabot[bot]' && github.event_name != 'push'
     # The same fork fallback as `build`; see the comment there.
+    #
+    # Four vCPU on measurement (see `build`): a warm run took 8m15s at 1.70
+    # busy cores on average (peak memory 4.0 GiB;
+    # https://github.com/leynos/wildside/actions/runs/39038438142) and a
+    # cold one 17m02s at 1.46 (https://github.com/leynos/wildside/actions/runs/39061927189).
     runs-on: >-
       ${{ (github.event.pull_request.head.repo.fork
       || github.event.pull_request.user.login == 'dependabot[bot]')
-      && 'ubuntu-latest' || 'ubicloud-standard-8' }}
+      && 'ubuntu-latest' || 'ubicloud-standard-4' }}
     # Above the 5,400 s cargo watchdog below plus the work either side of
     # the coverage step, which reached 59 s here and 522 s on the trunk
     # lane. At 90 minutes the ceiling equalled the watchdog exactly, so a

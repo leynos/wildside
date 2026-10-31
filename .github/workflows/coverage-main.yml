@@ -36,7 +36,13 @@ permissions:
 
 jobs:
   coverage-upload:
-    runs-on: ubicloud-standard-8
+    # Four vCPU, as for `ci.yml`'s `coverage` job, whose work this lane
+    # repeats on a push to `main`: 8m15s warm and 17m02s cold at 1.46 to
+    # 1.70 busy cores on average, peak memory 4.0 GiB (runs 39038438142 and
+    # 39061927189 in leynos/wildside). This lane adds the upload, which
+    # reached 522 s of work outside the coverage step on run 33921794186; the
+    # 120 minute ceiling and 5,400 s watchdog below are unchanged.
+    runs-on: ubicloud-standard-4
     # The CodeScene token lives in this environment, whose deployment policy
     # admits `main` alone; the codescene environment contract holds it to
     # this job.
