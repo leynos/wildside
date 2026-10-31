@@ -37,6 +37,7 @@
         "@vitejs/plugin-react": "^4",
         "ai-deslop": "0.4.9",
         "daisyui": "^4",
+        "fast-check": "^4.8.0",
         "orval": "~8.27.0",
         "oxlint": "1.82.0",
         "oxlint-tsgolint": "7.0.2005",

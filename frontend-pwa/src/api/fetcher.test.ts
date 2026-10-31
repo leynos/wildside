@@ -1,5 +1,6 @@
 /** @file Request and response contracts for the shared fetcher. */
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import fc from 'fast-check';
 import { z } from 'zod';
 
 import { customFetch, customFetchOrval, customFetchParsed, customFetchParsedSafe } from './fetcher';
@@ -148,6 +149,105 @@ describe('customFetch', () => {
     });
 
     await expect(customFetch('/api/example')).resolves.toBeUndefined();
+  });
+});
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+// Keys that cannot collide with `Object.prototype` members, so generated
+// objects survive `JSON.parse` as ordinary own properties.
+const jsonKey = fc.stringMatching(/^[a-z][a-z0-9_]{0,7}$/);
+
+/**
+ * `fc.dictionary` builds null-prototype objects. Rebuilding through
+ * `Object.fromEntries` yields a plain object, which is what the fetcher
+ * serializes as a JSON structure.
+ */
+const jsonDictionary = (value: fc.Arbitrary<JsonValue>): fc.Arbitrary<JsonValue> =>
+  fc
+    .dictionary(jsonKey, value, { maxKeys: 4 })
+    .map((entries) => Object.fromEntries(Object.entries(entries)));
+
+/** Arbitrary recursive JSON document, including nested strings. */
+const jsonValue = fc.letrec<{ value: JsonValue }>((tie) => ({
+  value: fc.oneof(
+    fc.integer(),
+    fc.boolean(),
+    fc.string(),
+    fc.array(tie('value'), { maxLength: 4 }),
+    jsonDictionary(tie('value')),
+  ),
+})).value;
+
+/**
+ * Structured and scalar bodies the fetcher must serialize. Top-level strings
+ * and `null` take the explicit cases above instead.
+ */
+const jsonStructure = (): fc.Arbitrary<JsonValue> =>
+  fc.oneof(
+    fc.integer(),
+    fc.boolean(),
+    fc.array(jsonValue, { maxLength: 4 }),
+    jsonDictionary(jsonValue),
+  );
+
+/** Mirror of the fetcher's own test for "this string is a JSON document". */
+const parsesAsJson = (value: string): boolean => {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+describe('customFetch body properties', () => {
+  it('round-trips every JSON structure through its canonical serialization', async () => {
+    await fc.assert(
+      fc.asyncProperty(jsonStructure(), async (value) => {
+        await customFetch('/api/example', { method: 'POST', body: value });
+
+        // `JSON.stringify` is the canonical form, so byte equality here also
+        // proves the parsed body preserves the original value.
+        expect(String(request().body)).toBe(JSON.stringify(value));
+        expect(new Headers(request().headers).get('Content-Type')).toBe(
+          'application/json; charset=utf-8',
+        );
+      }),
+    );
+  });
+
+  it('forwards string bodies verbatim and labels only JSON documents', async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.string(), async (value) => {
+        await customFetch('/api/example', { method: 'POST', body: value });
+
+        expect(String(request().body)).toBe(value);
+        const headers = new Headers(request().headers);
+        expect(headers.has('Content-Type')).toBe(parsesAsJson(value));
+      }),
+    );
+  });
+
+  it('keeps a caller-supplied content type for any JSON body', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        jsonStructure(),
+        fc.stringMatching(/^[a-z]+\/[a-z0-9.+-]{1,20}$/),
+        async (value, contentType) => {
+          await customFetch('/api/example', {
+            method: 'POST',
+            body: value,
+            headers: { 'Content-Type': contentType },
+          });
+
+          const headers = new Headers(request().headers);
+          expect(headers.get('Content-Type')).toBe(contentType);
+          expect(headers.get('Accept')).toBe('application/json');
+          expect(String(request().body)).toBe(JSON.stringify(value));
+        },
+      ),
+    );
   });
 });
 
