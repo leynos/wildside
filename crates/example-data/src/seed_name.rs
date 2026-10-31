@@ -12,9 +12,15 @@ use thiserror::Error;
 /// Errors raised while encoding a seed as a word name.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SeedNameError {
-    /// The supplied dictionary was empty, which would make the radix zero.
-    #[error("seed-name dictionary is empty")]
-    EmptyDictionary,
+    /// The supplied dictionary had fewer than two words.
+    ///
+    /// Radix one is not a base: `number /= radix` would leave the value
+    /// unchanged, so the digit loop would never terminate.
+    #[error("seed-name dictionary needs at least two words, got {len}")]
+    DictionaryTooSmall {
+        /// Number of words supplied.
+        len: usize,
+    },
     /// A computed base-N digit fell outside the supplied dictionary.
     #[error("seed-name word index {index} is outside a {len}-word dictionary")]
     IndexOutOfRange {
@@ -43,8 +49,9 @@ pub enum SeedNameError {
 ///
 /// # Errors
 ///
-/// Returns [`SeedNameError::EmptyDictionary`] when the dictionary is empty,
-/// which would otherwise divide by zero, or
+/// Returns [`SeedNameError::DictionaryTooSmall`] when the dictionary has fewer
+/// than two words, which would otherwise divide by zero or never terminate the
+/// digit loop, or
 /// [`SeedNameError::IndexOutOfRange`] when a computed index falls outside it.
 ///
 /// # Example
@@ -57,8 +64,10 @@ pub enum SeedNameError {
 /// assert!(!name.is_empty());
 /// ```
 pub fn seed_name_from_value(seed: u64, dictionary: &[&str]) -> Result<String, SeedNameError> {
-    if dictionary.is_empty() {
-        return Err(SeedNameError::EmptyDictionary);
+    if dictionary.len() < 2 {
+        return Err(SeedNameError::DictionaryTooSmall {
+            len: dictionary.len(),
+        });
     }
     let radix = BigUint::from(dictionary.len());
 
@@ -80,4 +89,68 @@ pub fn seed_name_from_value(seed: u64, dictionary: &[&str]) -> Result<String, Se
     }
     words.reverse();
     Ok(words.join("-"))
+}
+
+#[cfg(test)]
+mod tests {
+    //! Coverage for the encoder's error paths and digit ordering.
+
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::empty(&[], 0)]
+    #[case::single_word(&["solo"], 1)]
+    fn a_dictionary_that_is_not_a_base_is_rejected(
+        #[case] dictionary: &[&str],
+        #[case] expected_len: usize,
+    ) {
+        // Radix one would divide by one forever, so this must fail rather than
+        // hang. The length is carried so the message can name the real input.
+        assert_eq!(
+            seed_name_from_value(2026, dictionary),
+            Err(SeedNameError::DictionaryTooSmall { len: expected_len })
+        );
+    }
+
+    #[test]
+    fn seed_zero_still_encodes_a_multi_digit_name() {
+        // The decimal string "0" is the single byte 0x30, read as the integer
+        // 48, which in base 3 is 1,2,1,0. A byte-oriented base such as base64
+        // would instead treat seed 0 as no bytes at all and emit nothing, so
+        // this pins the decimal-bytes reading that kept the retired `base-d`
+        // names.
+        let dictionary = ["first", "second", "third"];
+        assert_eq!(
+            seed_name_from_value(0, &dictionary).expect("seed 0 encodes"),
+            "second-third-second-first"
+        );
+    }
+
+    #[test]
+    fn digits_are_emitted_most_significant_first() {
+        // "2026" is the bytes 0x32 0x30 0x32 0x36, which as a big-endian
+        // integer is 842_019_382. Its base-3 digits are
+        // 2,0,1,1,2,0,0,1,0,2,0,0,0,1,1,0,0,0,1, emitted with the highest
+        // power of three first.
+        let dictionary = ["a", "b", "c"];
+        let expected = "c-a-b-b-c-a-a-b-a-c-a-a-a-b-b-a-a-a-b";
+        assert_eq!(
+            seed_name_from_value(2026, &dictionary).expect("seed 2026 encodes"),
+            expected
+        );
+    }
+
+    #[test]
+    fn every_digit_stays_inside_the_dictionary() {
+        // A dictionary of length n can only ever yield digits below n, so a
+        // short list is not a source of out-of-range indices for any seed.
+        let dictionary = ["x", "y"];
+        let name = seed_name_from_value(u64::MAX, &dictionary).expect("wider seed encodes");
+        assert!(
+            name.split('-').all(|word| dictionary.contains(&word)),
+            "unexpected digit in {name}"
+        );
+    }
 }

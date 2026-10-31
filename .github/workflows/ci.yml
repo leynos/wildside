@@ -108,7 +108,11 @@ jobs:
         env:
           # Concatenated tool pins. Any change to a pin changes the tool
           # archive's key, so a stale binary can never be restored under a
-          # newer pin.
+          # newer pin. The installer digest belongs here as well as its
+          # version: the installer action treats a matching version marker as
+          # proof of a good cache entry and skips installation, so restoring
+          # that marker from an older key would silently keep a binary whose
+          # digest no longer matches the pin.
           TOOL_PINS: >-
             actionlint=${{ env.ACTIONLINT_VERSION }}
             action-validator=${{ env.ACTION_VALIDATOR_VERSION }}
@@ -119,6 +123,7 @@ jobs:
             nixie=${{ env.NIXIE_VERSION }}
             uv=${{ env.UV_VERSION }}
             whitaker-installer=${{ env.WHITAKER_INSTALLER_VERSION }}
+            whitaker-installer-sha256=${{ env.WHITAKER_INSTALLER_SHA256 }}
             yamllint=${{ env.YAMLLINT_VERSION }}
           # The Makefile pins every `uv tool run` version, so its digest owns
           # the repository-local uv layers, and dylint.toml selects the
@@ -242,7 +247,6 @@ jobs:
             .uv-cache
             .uv-tools
           key: ${{ env.TOOLS_CACHE_KEY }}
-          restore-keys: tools-v1-${{ env.CACHE_SCOPE }}-
 
       # Only the Dependabot test lane below reads these, so the restore
       # carries the same guard: a normal pull request runs no database.
