@@ -2736,3 +2736,33 @@ so the rebase was an up-to-date no-op; no commits replayed and no conflicts
 arose. All seven repository gates then passed on `d37db0f`, and only the
 Markdown gates were repeated for this documentation-only record edit before
 publication.
+
+2026-10-31 Europe/Berlin: the hosted `build` job on `391ac22` failed at the
+audit step on advisories inherited from `main`, so the user directed a restack
+onto PR [#567](https://github.com/leynos/wildside/pull/567) instead of a
+separate prerequisite pull request. #567's branch `fix-zstd-audit` already
+carries both audit fixes and is green. The exclusive replay boundary was the
+old target `ede1a2b5523e7d179ac8fde62f284e93cf0e0ccc` and the new target was
+#567's head `3125fa569ad17de04a0ee4d3b640922a0d7c9cd9`; the old head was
+`391ac22c244a3bf368c24f4f5318bc5b77e2a18d`. Replay used `--merge
+--no-fork-point --no-update-refs --no-autostash --reapply-cherry-picks
+--keep-empty --empty=stop` with `zdiff3` and an explicit Weave driver bypass
+(`-c core.attributesFile=/dev/null`), because `~/.config/git/attributes`
+selects Weave ambiently and the repository does not opt in. All 49 commits
+replayed with no conflicts and no merge commits, producing the new head
+`1cdff78659ed5f3d96bc3d962312207b9a3587ef`; recovery refs are
+`refs/codex/rebase/wildside-523-restack-567-1793405621/{old-head,old-base,target}`.
+`git diff --check 3125fa5 HEAD` is clean, and `git range-diff` compares 40
+patch-distinct entries with 39 identical. The single difference is `Add pure
+queue retry policy`, whose `Cargo.lock` hunks that moved `windows-sys` from
+0.60.2 to 0.61.2 no longer apply because the new base already resolves 0.61.2.
+
+The lockfile follows the standing instruction to take target packaging
+changes and rebuild: the branch's series carries the target's `Cargo.lock`
+plus only what the branch itself adds. Against the new target the delta is
+`googletest` 0.14.3 and `googletest_macro` 0.14.3, together with the version
+lifts those crates require (`regex` 1.13.1, `regex-automata` 0.4.18,
+`regex-syntax` 0.8.11, `proc-macro2` 1.0.107, `quote` 1.0.47). No stale
+`windows-sys` or `socket2` entries remain, and `cargo metadata --locked`
+exits 0. The full sequential commit gates and the force-with-lease
+publication over SSH against this candidate remain to be run and recorded.
