@@ -767,13 +767,17 @@ the backend JSON API. Call it rather than `fetch` directly so request defaults,
 body handling, and response validation stay consistent.
 
 - `customFetch(input, init?)` sends the request and resolves with the validated
-  `JsonValue` payload, or `undefined` when the response carries no body. It
-  serializes plain objects, arrays, and JSON scalar bodies, labels a string
+  `JsonValue` payload, or `undefined` when the response does not carry a JSON
+  document. Only a JSON content type is parsed, so a successful response with a
+  non-JSON or missing content type resolves to `undefined` even when it has a
+  body; callers must not mistake that discarded content for an empty response.
+  It serializes plain objects, arrays, and JSON scalar bodies, labels a string
   body as JSON only when it already parses as JSON, and forwards native
-  `BodyInit` values unchanged. Cookies are sent because requests default to
-  `credentials: 'include'`, and `Accept: application/json` is added unless the
-  caller sets it. A JSON content type is added only when the body is JSON and
-  the caller has not set one.
+  `BodyInit` values unchanged. A `body: null` sends no body rather than JSON
+  `null`; pass the string `'null'` to send an explicit JSON null. Cookies are
+  sent because requests default to `credentials: 'include'`, and
+  `Accept: application/json` is added unless the caller sets it. A JSON content
+  type is added only when the body is JSON and the caller has not set one.
 - Response bodies are validated before use. `204` and `205` responses, and
   bodies with an explicit zero `content-length`, resolve to `undefined`.
 - Non-2xx responses reject with an `Error` naming the status and URL. Its
@@ -789,7 +793,10 @@ body handling, and response validation stay consistent.
   generated client calls. Orval emits a response type argument, so this adapter
   accepts one and delegates to `customFetch`; generated clients keep the same
   status and JSON validation. Handwritten code should call `customFetch`
-  directly. `frontend-pwa/orval.config.cjs` names this export as the mutator.
+  directly. `frontend-pwa/orval.config.cjs` names this export as the mutator
+  and sets `override.fetch.includeHttpResponseReturnType` to `false`, so
+  generated operations resolve to the bare body instead of an HTTP envelope
+  that the adapter never returns.
 
 The compile-time contract for these helpers is asserted by
 `frontend-pwa/src/api/fetcher.type-contract.ts`, which `make typecheck`
