@@ -156,6 +156,12 @@ ZOD_EXCEPTION_IDS = ("ZOD_ARRAY_MEMORY_EXHAUSTION_2026_10",)
 #: below still sees every entry.
 DEEPMERGE_EXCEPTION_IDS = ("DEEPMERGE_PROTOTYPE_POISONING_2026_10",)
 
+#: GHSA-g3hv-75wg-m249, denial of service in `minimatch` below 11.0.1, which
+#: `typedoc` and `markdownlint-cli` cannot yet take. Its removal invariants live
+#: in `minimatch_exception_test.py`; the identifier is registered here so the
+#: check below still sees every entry.
+MINIMATCH_EXCEPTION_IDS = ("MINIMATCH_GLOBPARTS_DOS_2026_10",)
+
 #: Every ledger entry must appear here, so that adding an exception means
 #: writing the condition that retires it rather than only a date.
 EXCEPTIONS_WITH_REMOVAL_INVARIANTS = frozenset(
@@ -164,6 +170,7 @@ EXCEPTIONS_WITH_REMOVAL_INVARIANTS = frozenset(
     + BRACES_EXCEPTION_IDS
     + ZOD_EXCEPTION_IDS
     + DEEPMERGE_EXCEPTION_IDS
+    + MINIMATCH_EXCEPTION_IDS
 )
 
 #: A removal condition is an issue reference, either bare or as a full URL. An

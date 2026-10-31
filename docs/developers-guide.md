@@ -2073,11 +2073,13 @@ indefensible fails the test suite instead of waiting for its expiry:
   `resolutions`, `packages/tokens` takes `^5.4.4`, and the exception was
   removed (#471). The glob CLI command-injection advisory the old pin existed
   for (GHSA-5j98-mcp5-4vw2) does not reach 13.x. The `glob` resolution later
-  moved on to 14.0.2 and `minimatch` to 11.0.1, which patch GHSA-3g3m-2fjr-6pw4
-  and GHSA-g3hv-75wg-m249. `packages/tokens/test` holds the generated token
-  files byte for byte, so a later Style Dictionary change that alters the CSS
-  variables, the Tailwind preset or the daisyUI theme fails a test instead of
-  passing unseen.
+  moved on to 14.0.2, which takes the patched `minimatch` 11
+  (GHSA-g3hv-75wg-m249) and patches GHSA-3g3m-2fjr-6pw4. `typedoc` and
+  `markdownlint-cli` still declare `minimatch` 10 (and `typedoc` fails on 11),
+  so that advisory carries a short exception with its own removal test (#575).
+  `packages/tokens/test` holds the generated token files byte for byte, so a
+  later Style Dictionary change that alters the CSS variables, the Tailwind
+  preset or the daisyUI theme fails a test instead of passing unseen.
 - Entries that rest on one argument stand or fall together. The two
   `extract-zip` entries and the two Picomatch entries are each checked as a
   group, so a ledger holding one of a pair fails rather than quietly keeping an

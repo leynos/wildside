@@ -59,5 +59,14 @@
     "reason": "zod is patched only in 4.6.6 and above, and the workspace is on zod 3.25.76 (`^3` in frontend-pwa and packages/types), so the fix is a major-version migration that needs its own change and verification rather than a pin bump. The advisory is memory exhaustion while validating a very large array against an array schema with no length constraint. The only array schema is UsersSchema in packages/types/src/user.ts, applied by customFetchParsed in frontend-pwa/src/api/fetcher.ts to responses from the project's own backend and running in the user's browser tab, so an attacker would need to control the backend response, and the impact is a client-side memory exhaustion of one tab, not a server compromise. The other path, puppeteer > chromium-bidi > zod, is build-time Mermaid rendering tooling that never parses untrusted input. The entry expires after 14 days. Tracked in https://github.com/leynos/wildside/issues/561.",
     "addedAt": "2026-10-24",
     "expiresAt": "2026-11-07"
+  },
+  {
+    "id": "MINIMATCH_GLOBPARTS_DOS_2026_10",
+    "package": "frontend-pwa",
+    "advisory": "GHSA-g3hv-75wg-m249",
+    "introducedBy": "minimatch",
+    "reason": "Development-time tooling only, reported by both pnpm and Bun, so the entry is scoped to the frontend-pwa workspace ledger. The advisory (denial of service through globparts amplification) is patched only in minimatch 11.0.1, and glob 14 already takes the patched copy. The two other consumers declare the 10.x line: typedoc 0.28.20 (`^10.2.5`, the latest release) and markdownlint-cli 0.48.0 (`~10.2.6`, the latest release). Forcing typedoc onto 11 fails its documentation gate (`mini.matchOne is not a function`), so a pin bump is not available. Both match glob patterns taken from repository-controlled configuration (typedoc entry points, markdownlint file selections), not runtime user input, and nothing from either path is served to a browser tab or runs in production. Tracked in https://github.com/leynos/wildside/issues/575; remove this entry once typedoc and markdownlint-cli accept minimatch 11 or drop it.",
+    "addedAt": "2026-10-31",
+    "expiresAt": "2026-11-14"
   }
 ]
