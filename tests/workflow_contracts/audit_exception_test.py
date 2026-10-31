@@ -150,6 +150,23 @@ BRACES_EXCEPTION_IDS = ("BRACES_NESTED_PATTERN_DOS_2026_10",)
 #: so the check below still sees every entry.
 ZOD_EXCEPTION_IDS = ("ZOD_ARRAY_MEMORY_EXHAUSTION_2026_10",)
 
+#: GHSA-gcqx-w48m-w2h4, prototype poisoning in `deepmerge` at or below 4.3.1,
+#: which has no patched release. Its removal invariants live in
+#: `deepmerge_exception_test.py`; the identifier is registered here so the check
+#: below still sees every entry.
+DEEPMERGE_EXCEPTION_IDS = ("DEEPMERGE_PROTOTYPE_POISONING_2026_10",)
+
+#: GHSA-g3hv-75wg-m249 and GHSA-3g3m-2fjr-6pw4, denial of service in
+#: `minimatch` below 11.0.1 and an AbortSignal bypass in `glob` below 14.0.2.
+#: Neither fix is reachable because `glob` 14 needs `minimatch ^11` while every
+#: consumer declares 10.x. Their removal invariants live in
+#: `minimatch_glob_exception_test.py`; the identifiers are registered here so
+#: the check below still sees every entry.
+MINIMATCH_GLOB_EXCEPTION_IDS = (
+    "MINIMATCH_GLOBPARTS_AMPLIFICATION_2026_10",
+    "GLOB_ABORTSIGNAL_BYPASS_2026_10",
+)
+
 #: Every ledger entry must appear here, so that adding an exception means
 #: writing the condition that retires it rather than only a date.
 EXCEPTIONS_WITH_REMOVAL_INVARIANTS = frozenset(
@@ -157,6 +174,8 @@ EXCEPTIONS_WITH_REMOVAL_INVARIANTS = frozenset(
     + PICOMATCH_EXCEPTION_IDS
     + BRACES_EXCEPTION_IDS
     + ZOD_EXCEPTION_IDS
+    + DEEPMERGE_EXCEPTION_IDS
+    + MINIMATCH_GLOB_EXCEPTION_IDS
 )
 
 #: A removal condition is an issue reference, either bare or as a full URL. An

@@ -43,6 +43,15 @@
     "expiresAt": "2026-12-04"
   },
   {
+    "id": "DEEPMERGE_PROTOTYPE_POISONING_2026_10",
+    "package": "frontend-pwa",
+    "advisory": "GHSA-gcqx-w48m-w2h4",
+    "introducedBy": "deepmerge",
+    "reason": "Build-time design-token generation only, reported by both pnpm and Bun, so the entry is scoped to the frontend-pwa workspace ledger. deepmerge reaches the tree only through style-dictionary@5.6.0 via @bundled-es-modules/deepmerge@4.3.2, which packages/tokens runs from its postinstall and build scripts to emit tokens. The advisory (prototype poisoning of the returned object, low severity, published 2026-09-18) covers every release from 4.2.0 to 4.3.1, and 4.3.1 is the latest published, so no patched release exists to move to. Every style-dictionary release through 5.7.1 still declares @bundled-es-modules/deepmerge ^4.3.2, so bumping it does not help. The merged objects are repository-controlled token definitions rather than runtime user input, and nothing from this path is served to a browser tab. Tracked in https://github.com/leynos/wildside/issues/570; remove this entry once deepmerge publishes a patch and style-dictionary adopts it, or once tokens stop depending on style-dictionary.",
+    "addedAt": "2026-10-28",
+    "expiresAt": "2026-11-11"
+  },
+  {
     "id": "ZOD_ARRAY_MEMORY_EXHAUSTION_2026_10",
     "package": "frontend-pwa",
     "advisory": "GHSA-mrhx-c7xc-m3w5",
@@ -50,5 +59,23 @@
     "reason": "zod is patched only in 4.6.6 and above, and the workspace is on zod 3.25.76 (`^3` in frontend-pwa and packages/types), so the fix is a major-version migration that needs its own change and verification rather than a pin bump. The advisory is memory exhaustion while validating a very large array against an array schema with no length constraint. The only array schema is UsersSchema in packages/types/src/user.ts, applied by customFetchParsed in frontend-pwa/src/api/fetcher.ts to responses from the project's own backend and running in the user's browser tab, so an attacker would need to control the backend response, and the impact is a client-side memory exhaustion of one tab, not a server compromise. The other path, puppeteer > chromium-bidi > zod, is build-time Mermaid rendering tooling that never parses untrusted input. The entry expires after 14 days. Tracked in https://github.com/leynos/wildside/issues/561.",
     "addedAt": "2026-10-24",
     "expiresAt": "2026-11-07"
+  },
+  {
+    "id": "MINIMATCH_GLOBPARTS_AMPLIFICATION_2026_10",
+    "package": "frontend-pwa",
+    "advisory": "GHSA-g3hv-75wg-m249",
+    "introducedBy": "minimatch",
+    "reason": "Build- and development-time tooling only. minimatch is patched only in 11.0.1 and above, which is a major bump: every consumer in the tree declares minimatch 10.x, including the latest releases of those consumers, so a resolution to 11 breaks them rather than fixing the tree. pnpm-lock.yaml resolves minimatch@10.2.3 through glob@13.0.6, markdownlint-cli@0.48.0 and typedoc@0.28.20, while markdownlint-cli@0.50.0 still declares ~10.2.6 and typedoc@0.28.20 declares ^10.2.5. bun.lock is on 10.2.5 for the same reason and cannot be moved by a ranged `resolutions` key, which Bun ignores. Nothing here parses runtime user input: glob expands repository-controlled paths during token and documentation builds, markdownlint runs over committed Markdown, and typedoc generates API docs. The advisory is a denial of service through globparts amplification, so the exposure is a slow build, not a broken artefact. Tracked in https://github.com/leynos/wildside/issues/576; remove this entry once the consumers above move to minimatch 11.",
+    "addedAt": "2026-10-30",
+    "expiresAt": "2026-11-27"
+  },
+  {
+    "id": "GLOB_ABORTSIGNAL_BYPASS_2026_10",
+    "package": "frontend-pwa",
+    "advisory": "GHSA-3g3m-2fjr-6pw4",
+    "introducedBy": "glob",
+    "reason": "Build-time design-token generation and development tooling only. glob is patched only in 14.0.2 and above, which is a major bump that is not available to us yet: glob 14 requires minimatch ^11, while style-dictionary@5.7.1, the latest release, still depends on @bundled-es-modules/glob ^13, which pins glob ^13.0.6, and packages/tokens runs style-dictionary to emit tokens. The advisory is an AbortSignal cancellation bypass that lets a glob keep traversing the filesystem after its timeout fires; nothing in this tree passes an attacker-controlled pattern or relies on that cancellation for a security boundary, and the traversals cover repository-controlled directories during a build. It resolves with the same consumer upgrade as GHSA-g3hv-75wg-m249. Tracked in https://github.com/leynos/wildside/issues/576; remove this entry once the consumers above move to glob 14.",
+    "addedAt": "2026-10-30",
+    "expiresAt": "2026-11-27"
   }
 ]

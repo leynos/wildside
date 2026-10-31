@@ -101,6 +101,3 @@ globs = [
     "frontend/*",
     "cli/*",
 ]
-
-[patch.crates-io]
-shellexpand = { path = "third_party/shellexpand" }

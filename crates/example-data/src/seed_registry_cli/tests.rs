@@ -339,3 +339,17 @@ fn write_registry(json: &str) -> Result<Utf8PathBuf, Box<dyn std::error::Error>>
     dir.write(file_name, json)?;
     Ok(path)
 }
+#[test]
+fn generated_seed_names_preserve_the_existing_encoding() {
+    for (seed, expected) in [
+        (0, "activist"),
+        (1, "activity"),
+        (2026, "abroad-unmanaged-greasily"),
+        (
+            u64::MAX,
+            "ability-sharper-edging-harmony-backspace-pulverize-grime-blinks-apple-gorged-privacy-acre-untaken",
+        ),
+    ] {
+        assert_eq!(seed_name_for_seed(seed).expect("seed name"), expected);
+    }
+}

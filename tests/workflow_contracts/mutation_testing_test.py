@@ -35,8 +35,7 @@ USES_RE = re.compile(
     r"^leynos/shared-actions/\.github/workflows/mutation-cargo\.yml@[0-9a-f]{40}$"
 )
 
-#: The exact caller configuration: workspace source prefixes (the
-#: vendored third_party/shellexpand patch crate stays out of scope),
+#: The exact caller configuration: workspace source prefixes,
 #: feature-gated test-support scaffolding excluded, workspace-wide
 #: tests with all features to mirror the CI baseline, and the embedded
 #: PostgreSQL version pin so the baseline skips postgresql_archive's
