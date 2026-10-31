@@ -2,9 +2,16 @@
  * @file Pins the Oxlint profiles enforced on `frontend-pwa`.
  *
  * The `ai-deslop` recommended profile and an explicit Unicorn rule set are
- * applied verbatim, and every category is switched off so a tool upgrade
- * cannot silently widen enforcement. The single override below relaxes
- * `unicorn/filename-case` for the two PascalCase entry modules.
+ * applied verbatim to the `frontend-pwa` workspace. Every category is switched
+ * off, so only the rules named here run and a tool upgrade cannot silently
+ * widen enforcement. The single override below relaxes
+ * `unicorn/filename-case` for the two PascalCase entry modules, and is the
+ * only filename exception.
+ *
+ * `frontend-pwa/package.json` runs this configuration through its `lint`
+ * script (`oxlint .`), and the repository's `make lint-frontend` target invokes
+ * that script. Keeping the invocation out of this file lets the same
+ * configuration run locally and in CI.
  */
 
 import { configs as deslopConfigs } from 'ai-deslop';
