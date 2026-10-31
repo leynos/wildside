@@ -38,7 +38,7 @@ sqlx = { version = "0.8", default-features = false, features = ["postgres", "run
 
 # Diesel ORM with PostgreSQL and async support
 diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }
-diesel-async = { version = "0.8", features = ["bb8", "postgres"] }
+diesel-async = { version = "0.9", features = ["bb8", "postgres"] }
 diesel_migrations = "2.3"
 chrono = { version = "0.4", features = ["serde"] }
 mockable = { version = "3.0", features = ["clock"] }
