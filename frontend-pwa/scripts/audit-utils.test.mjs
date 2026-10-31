@@ -183,19 +183,18 @@ describe('runAuditJson', () => {
       }),
       secondResult: createPnpmResult({ signal: 'SIGTERM' }),
     },
-  ])('throws when pnpm $command is signalled', async ({
-    expectedError,
-    firstResult,
-    secondResult,
-  }) => {
-    spawnSyncMock.mockReturnValueOnce(firstResult);
-    if (secondResult) {
-      spawnSyncMock.mockReturnValueOnce(secondResult);
-    }
-    const { runAuditJson } = await loadAuditUtils();
+  ])(
+    'throws when pnpm $command is signalled',
+    async ({ expectedError, firstResult, secondResult }) => {
+      spawnSyncMock.mockReturnValueOnce(firstResult);
+      if (secondResult) {
+        spawnSyncMock.mockReturnValueOnce(secondResult);
+      }
+      const { runAuditJson } = await loadAuditUtils();
 
-    await expect(runAuditJson()).rejects.toThrow(expectedError);
-  });
+      await expect(runAuditJson()).rejects.toThrow(expectedError);
+    },
+  );
 
   it('falls back to the bulk advisory endpoint when pnpm audit hits the retired endpoint', async () => {
     setupRetiredPnpmAudit([

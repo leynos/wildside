@@ -124,24 +124,21 @@ describe('evaluateAudit', () => {
     }
   });
 
-  it.each(evaluateAuditScenarios)('$name', async ({
-    advisories,
-    spyFactory,
-    expectedExitCode,
-    expectedValidatorCalls,
-    assertSpy,
-  }) => {
-    const evaluateAudit = await loadEvaluateAudit();
-    const consoleSpy = spyFactory();
+  it.each(evaluateAuditScenarios)(
+    '$name',
+    async ({ advisories, spyFactory, expectedExitCode, expectedValidatorCalls, assertSpy }) => {
+      const evaluateAudit = await loadEvaluateAudit();
+      const consoleSpy = spyFactory();
 
-    const exitCode = evaluateAudit({ advisories, status: 1 }, { now: DEFAULT_NOW });
+      const exitCode = evaluateAudit({ advisories, status: 1 }, { now: DEFAULT_NOW });
 
-    expect(exitCode).toBe(expectedExitCode);
-    if (expectedValidatorCalls !== undefined) {
-      expect(validatorPatchMock).toHaveBeenCalledTimes(expectedValidatorCalls);
-    }
-    assertSpy(consoleSpy);
-  });
+      expect(exitCode).toBe(expectedExitCode);
+      if (expectedValidatorCalls !== undefined) {
+        expect(validatorPatchMock).toHaveBeenCalledTimes(expectedValidatorCalls);
+      }
+      assertSpy(consoleSpy);
+    },
+  );
 
   it('fails when validator advisory is present but mitigation is missing', async () => {
     const evaluateAudit = await loadEvaluateAudit();
@@ -316,26 +313,25 @@ describe('evaluateAudit', () => {
     },
   ];
 
-  it.each(ledgerExpiryErrorScenarios)('$name', async ({
-    setupAction,
-    expectedErrorMessage,
-    referenceDate,
-  }) => {
-    setupAction();
-    const evaluateAudit = await loadEvaluateAudit();
-    const errorSpy = spyOnConsole('error');
+  it.each(ledgerExpiryErrorScenarios)(
+    '$name',
+    async ({ setupAction, expectedErrorMessage, referenceDate }) => {
+      setupAction();
+      const evaluateAudit = await loadEvaluateAudit();
+      const errorSpy = spyOnConsole('error');
 
-    const exitCode = evaluateAudit(
-      {
-        advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
-        status: 1,
-      },
-      { now: referenceDate ?? DEFAULT_NOW },
-    );
+      const exitCode = evaluateAudit(
+        {
+          advisories: [createAdvisory(VALIDATOR_ADVISORY_ID, 'validator vulnerability')],
+          status: 1,
+        },
+        { now: referenceDate ?? DEFAULT_NOW },
+      );
 
-    expect(exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(expectedErrorMessage);
-  });
+      expect(exitCode).toBe(1);
+      expect(errorSpy).toHaveBeenCalledWith(expectedErrorMessage);
+    },
+  );
 
   it('allows date-only expiry on the same day', async () => {
     setLedgerEntries((entries) => {
