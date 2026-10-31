@@ -10,6 +10,13 @@ const config = {
       target: 'src/api/generated/client.ts',
       client: 'fetch',
       override: {
+        // `customFetchOrval` resolves to the validated body, not an HTTP
+        // envelope, so generated operations must return the bare response
+        // type. Otherwise callers would read `data`/`status` off a body that
+        // never carries them.
+        fetch: {
+          includeHttpResponseReturnType: false,
+        },
         mutator: {
           path: 'src/api/fetcher.ts',
           // Use the named export to avoid generating a default import.
