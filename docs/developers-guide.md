@@ -805,6 +805,31 @@ compiles. Runtime behaviour is covered by unit tests and by
 `fetcher.behaviour.test.ts`, which drives a real HTTP server rather than a
 `fetch` mock.
 
+#### Bounded fetch diagnostics
+
+`frontend-pwa/src/api/diagnostics.ts` is the observation seam for that
+boundary. The fetcher emits one event when a logical request starts and one
+when it finishes or fails, and `setFetchDiagnostics(sink)` installs the
+application-wide receiver; with no sink installed the fetcher behaves exactly
+as before.
+
+An event carries only bounded fields: the upper-cased method, a route template
+with identifier-shaped segments masked (`/api/users/:id`), whole milliseconds
+elapsed, the status class (`2xx`, `5xx`), a failure category (`transport`,
+`http`, `json`, or `schema`), and the backend `trace-id` header when present.
+It never carries the URL, query string, body, credential, or a free-form error
+message, so a sink can forward it without a privacy review per destination.
+`customFetch`, `customFetchParsed`, and `customFetchParsedSafe` all report
+through this seam; `customFetchOrval` reports via `customFetch`.
+
+A sink fault is swallowed, because diagnostics must not change the outcome of a
+request. `frontend-pwa/src/Main.tsx` installs the application sink, which sends
+failure events to `reportError` so the browser's global error pipeline
+(devtools and window error handlers) observes them. The PWA has no telemetry
+destination yet; a future exporter replaces that sink without touching the
+fetcher. Contracts are covered by `diagnostics.test.ts`, and the fetcher-side
+events by `fetcher.diagnostics.test.ts`.
+
 ### Quality gates
 
 Documentation-only front-end planning changes must pass:

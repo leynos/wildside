@@ -4,6 +4,14 @@
 
 import { z } from 'zod';
 
+import {
+  describeOperation,
+  elapsedSince,
+  emitFetchDiagnostic,
+  requestMethod,
+  statusClassOf,
+} from './diagnostics';
+
 type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
 interface JsonObject {
   [key: string]: JsonValue;
@@ -124,6 +132,36 @@ const shouldParseJson = (res: Response): boolean => {
   return contentType.includes('json') && contentLength !== '0';
 };
 
+interface FetchContext {
+  readonly method: string;
+  readonly operation: string;
+  readonly startedAt: number;
+}
+
+/**
+ * Perform the request, reporting transport failures without masking them.
+ *
+ * `fetch` rejects with a network error that callers still need to observe, so
+ * the original error is rethrown after the failure is reported.
+ */
+const fetchGuarded = async (
+  request: () => Promise<Response>,
+  context: FetchContext,
+): Promise<Response> => {
+  try {
+    return await request();
+  } catch (error) {
+    emitFetchDiagnostic({
+      kind: 'failure',
+      method: context.method,
+      operation: context.operation,
+      durationMs: elapsedSince(context.startedAt),
+      failureCategory: 'transport',
+    });
+    throw error;
+  }
+};
+
 /**
  * Fetch a JSON response after validating its wire representation.
  *
@@ -135,18 +173,47 @@ export const customFetch = async (
   init?: FetchRequestInit,
 ): Promise<JsonValue | undefined> => {
   const url = new URL(input, apiBase());
+  const operation = describeOperation(url);
+  const method = requestMethod(init?.method);
+  const startedAt = performance.now();
+  emitFetchDiagnostic({ kind: 'request', method, operation });
+  const context = { method, operation, startedAt };
+
   const { body, isJson } = normalizeBody(init?.body);
   const headers = defaultHeaders(init, { isJson });
-  const res = await fetch(url, { credentials: 'include', ...init, body, headers });
+  const res = await fetchGuarded(
+    () => fetch(url, { credentials: 'include', ...init, body, headers }),
+    context,
+  );
+
+  const timing = {
+    method,
+    operation,
+    durationMs: elapsedSince(startedAt),
+    statusClass: statusClassOf(res.status),
+    traceId: res.headers.get('trace-id') ?? undefined,
+  };
 
   if (!res.ok) {
+    emitFetchDiagnostic({ ...timing, kind: 'failure', failureCategory: 'http' });
     const detail = await parseErrorDetail(res);
     const suffix = detail ? `: ${JSON.stringify(detail)}` : '';
     throw new Error(`${res.status} ${res.statusText} ${res.url}${suffix}`, { cause: detail });
   }
 
-  if (!shouldParseJson(res)) return;
-  return jsonValueSchema.parse(await res.json());
+  if (!shouldParseJson(res)) {
+    emitFetchDiagnostic({ ...timing, kind: 'response' });
+    return;
+  }
+
+  try {
+    const payload = jsonValueSchema.parse(await res.json());
+    emitFetchDiagnostic({ ...timing, kind: 'response' });
+    return payload;
+  } catch (error) {
+    emitFetchDiagnostic({ ...timing, kind: 'failure', failureCategory: 'json' });
+    throw error;
+  }
 };
 
 /**
@@ -193,7 +260,21 @@ export const customFetchParsed = async <Schema extends z.ZodTypeAny>(
   schema: Schema,
   init?: FetchRequestInit,
 ): Promise<z.output<Schema>> => {
-  return schema.parse(await customFetch(input, init));
+  const startedAt = performance.now();
+  const operation = describeOperation(new URL(input, apiBase()));
+  const method = requestMethod(init?.method);
+
+  const result = schema.safeParse(await customFetch(input, init));
+  if (result.success) return result.data;
+
+  emitFetchDiagnostic({
+    kind: 'failure',
+    method,
+    operation,
+    durationMs: elapsedSince(startedAt),
+    failureCategory: 'schema',
+  });
+  throw result.error;
 };
 
 /**
@@ -206,6 +287,19 @@ export const customFetchParsedSafe = async <Schema extends z.ZodTypeAny>(
   schema: Schema,
   init?: FetchRequestInit,
 ): Promise<z.SafeParseReturnType<unknown, z.output<Schema>>> => {
-  const data = await customFetch(input, init);
-  return schema.safeParse(data);
+  const startedAt = performance.now();
+  const operation = describeOperation(new URL(input, apiBase()));
+  const method = requestMethod(init?.method);
+
+  const result = schema.safeParse(await customFetch(input, init));
+  if (!result.success) {
+    emitFetchDiagnostic({
+      kind: 'failure',
+      method,
+      operation,
+      durationMs: elapsedSince(startedAt),
+      failureCategory: 'schema',
+    });
+  }
+  return result;
 };
