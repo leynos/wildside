@@ -162,6 +162,80 @@ const fetchGuarded = async (
   }
 };
 
+interface PreparedRequest {
+  readonly url: URL;
+  readonly context: FetchContext;
+  readonly body: BodyInit | null | undefined;
+  readonly headers: Headers;
+}
+
+/** Record the request start, then normalize its body and headers. */
+const prepareRequest = (input: string, init: FetchRequestInit | undefined): PreparedRequest => {
+  const url = new URL(input, apiBase());
+  const operation = describeOperation(url);
+  const method = requestMethod(init?.method);
+  const startedAt = performance.now();
+  emitFetchDiagnostic({ kind: 'request', method, operation });
+
+  const { body, isJson } = normalizeBody(init?.body);
+  return {
+    url,
+    context: { method, operation, startedAt },
+    body,
+    headers: defaultHeaders(init, { isJson }),
+  };
+};
+
+interface ResponseTiming {
+  readonly method: string;
+  readonly operation: string;
+  readonly durationMs: number;
+  readonly statusClass: string;
+  readonly traceId?: string;
+}
+
+/** Describe a response in the bounded terms a diagnostics sink may receive. */
+const responseTiming = (res: Response, context: FetchContext): ResponseTiming => ({
+  method: context.method,
+  operation: context.operation,
+  durationMs: elapsedSince(context.startedAt),
+  statusClass: statusClassOf(res.status),
+  traceId: res.headers.get('trace-id') ?? undefined,
+});
+
+/** Report an HTTP failure, then reject with the status and error detail. */
+const rejectHttpFailure = async (res: Response, timing: ResponseTiming): Promise<never> => {
+  emitFetchDiagnostic({ ...timing, kind: 'failure', failureCategory: 'http' });
+  const detail = await parseErrorDetail(res);
+  const suffix = detail ? `: ${JSON.stringify(detail)}` : '';
+  throw new Error(`${res.status} ${res.statusText} ${res.url}${suffix}`, { cause: detail });
+};
+
+/** Decode and validate a JSON payload, reporting decoding faults as `json`. */
+const readJsonPayload = async (res: Response, timing: ResponseTiming): Promise<JsonValue> => {
+  try {
+    const payload = jsonValueSchema.parse(await res.json());
+    emitFetchDiagnostic({ ...timing, kind: 'response' });
+    return payload;
+  } catch (error) {
+    emitFetchDiagnostic({ ...timing, kind: 'failure', failureCategory: 'json' });
+    throw error;
+  }
+};
+
+/** Classify a response and resolve with its validated payload when present. */
+const handleResponse = async (
+  res: Response,
+  timing: ResponseTiming,
+): Promise<JsonValue | undefined> => {
+  if (!res.ok) return rejectHttpFailure(res, timing);
+  if (!shouldParseJson(res)) {
+    emitFetchDiagnostic({ ...timing, kind: 'response' });
+    return undefined;
+  }
+  return readJsonPayload(res, timing);
+};
+
 /**
  * Fetch a JSON response after validating its wire representation.
  *
@@ -172,48 +246,13 @@ export const customFetch = async (
   input: string,
   init?: FetchRequestInit,
 ): Promise<JsonValue | undefined> => {
-  const url = new URL(input, apiBase());
-  const operation = describeOperation(url);
-  const method = requestMethod(init?.method);
-  const startedAt = performance.now();
-  emitFetchDiagnostic({ kind: 'request', method, operation });
-  const context = { method, operation, startedAt };
-
-  const { body, isJson } = normalizeBody(init?.body);
-  const headers = defaultHeaders(init, { isJson });
+  const { url, context, body, headers } = prepareRequest(input, init);
   const res = await fetchGuarded(
     () => fetch(url, { credentials: 'include', ...init, body, headers }),
     context,
   );
 
-  const timing = {
-    method,
-    operation,
-    durationMs: elapsedSince(startedAt),
-    statusClass: statusClassOf(res.status),
-    traceId: res.headers.get('trace-id') ?? undefined,
-  };
-
-  if (!res.ok) {
-    emitFetchDiagnostic({ ...timing, kind: 'failure', failureCategory: 'http' });
-    const detail = await parseErrorDetail(res);
-    const suffix = detail ? `: ${JSON.stringify(detail)}` : '';
-    throw new Error(`${res.status} ${res.statusText} ${res.url}${suffix}`, { cause: detail });
-  }
-
-  if (!shouldParseJson(res)) {
-    emitFetchDiagnostic({ ...timing, kind: 'response' });
-    return;
-  }
-
-  try {
-    const payload = jsonValueSchema.parse(await res.json());
-    emitFetchDiagnostic({ ...timing, kind: 'response' });
-    return payload;
-  } catch (error) {
-    emitFetchDiagnostic({ ...timing, kind: 'failure', failureCategory: 'json' });
-    throw error;
-  }
+  return handleResponse(res, responseTiming(res, context));
 };
 
 /**
