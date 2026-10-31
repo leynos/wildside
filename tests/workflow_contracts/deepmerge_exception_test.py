@@ -38,6 +38,11 @@ LAST_VULNERABLE_DEEPMERGE = (4, 3, 1)
 #: does not cover.
 DEEPMERGE_PERMITTED_DEPENDENTS = frozenset({"@bundled-es-modules/deepmerge"})
 
+#: The only package the reasoning permits as a parent of the wrapper above.
+#: `packages/tokens` drives Style Dictionary, which bundles its own copy of
+#: `deepmerge`; a second parent of the wrapper is a new way to reach the code.
+DEEPMERGE_PERMITTED_WRAPPER_DEPENDENTS = frozenset({"style-dictionary"})
+
 
 @pytest.fixture(scope="module")
 def ledger_ids() -> frozenset[str]:
@@ -137,4 +142,33 @@ def test_the_deepmerge_exception_is_void_once_anything_else_pulls_it(
         f"{sorted(DEEPMERGE_PERMITTED_DEPENDENTS)} reach it, but "
         f"{sorted(unexpected)} now depend on it too. The exception is "
         f"repository-wide, so it would cover those callers."
+    )
+
+
+def test_the_deepmerge_exception_is_void_once_the_wrapper_gains_a_parent(
+    ledger_ids: frozenset[str], packages: lock.PackageTable
+) -> None:
+    """The permitted parent is one layer further out than the check above.
+
+    ``dependents_of(packages, "deepmerge")`` only sees packages that name
+    ``deepmerge`` directly, and today that is ``@bundled-es-modules/deepmerge``
+    alone. A new consumer of that wrapper would not change the result at all,
+    so the check above would keep passing while a second caller reached the
+    vulnerable code. Walk the wrapper's parents as well, so the argument stays
+    about ``style-dictionary`` driving it from ``packages/tokens`` build
+    scripts rather than about whatever happens to be one edge away.
+    """
+    if DEEPMERGE_EXCEPTION_ID not in ledger_ids:
+        pytest.skip("the deepmerge advisory is no longer excepted")
+
+    wrapper_dependents: set[str] = set()
+    for wrapper in DEEPMERGE_PERMITTED_DEPENDENTS:
+        wrapper_dependents |= lock.dependents_of(packages, wrapper)
+    unexpected = wrapper_dependents - DEEPMERGE_PERMITTED_WRAPPER_DEPENDENTS
+    assert not unexpected, (
+        f"{DEEPMERGE_EXCEPTION_ID} excepts deepmerge on the grounds that "
+        f"{sorted(DEEPMERGE_PERMITTED_DEPENDENTS)} is reached only by "
+        f"{sorted(DEEPMERGE_PERMITTED_WRAPPER_DEPENDENTS)}, but "
+        f"{sorted(unexpected)} now reach it too. Those callers are covered by "
+        f"a repository-wide exception whose reason names neither of them."
     )
