@@ -120,3 +120,26 @@ def dependents_of(packages: PackageTable, package: str) -> set[str]:
         if specifier is not None and package in _declared_dependencies(entry):
             dependents.add(parse_specifier(specifier)[0])
     return dependents
+
+
+def workspace_dependents(text: str, package: str) -> set[str]:
+    """Return every workspace whose own manifest declares `package`.
+
+    `parse_packages` reads the resolved table, which omits the dependencies a
+    workspace declares for itself, so a workspace that starts depending on
+    `package` directly is invisible to `dependents_of`.
+
+    Examples
+    --------
+        >>> workspace_dependents(
+        ...     '{"workspaces": {"app": {"name": "app", "dependencies": {"b": "^1"}}}}',
+        ...     "b",
+        ... )
+        {'app'}
+    """
+    workspaces = json.loads(_TRAILING_COMMA.sub(r"\1", text)).get("workspaces", {})
+    declaring = set()
+    for key, manifest in workspaces.items():
+        if any(package in manifest.get(field, {}) for field in _DEPENDENCY_FIELDS):
+            declaring.add(manifest.get("name") or key or "<root>")
+    return declaring

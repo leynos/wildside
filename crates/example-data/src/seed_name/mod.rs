@@ -15,6 +15,14 @@ pub enum SeedNameError {
     /// The supplied dictionary was empty, which would make the radix zero.
     #[error("seed-name dictionary is empty")]
     EmptyDictionary,
+    /// The supplied dictionary held a single word, which would make the radix
+    /// one: dividing by one never shrinks the number, so the conversion would
+    /// never end.
+    #[error("seed-name dictionary must hold at least two words (got {len})")]
+    DictionaryTooShort {
+        /// Number of words supplied.
+        len: usize,
+    },
     /// A computed base-N digit fell outside the supplied dictionary.
     #[error("seed-name word index {index} is outside a {len}-word dictionary")]
     IndexOutOfRange {
@@ -34,8 +42,9 @@ pub enum SeedNameError {
 /// most significant first and joined with `-`.
 ///
 /// Note that this is decimal-byte input, not a byte-oriented base such as
-/// base64: a seed of `0` yields the single word at index zero, because the
-/// decimal string `"0"` is not a string of zero bytes.
+/// base64: the decimal string `"0"` is the byte `0x30`, not a string of zero
+/// bytes, so a seed of `0` encodes the integer 48 and never yields an empty
+/// name.
 ///
 /// The word list is a parameter rather than a lookup so that the order is
 /// pinned by the caller: reordering or swapping the provider renames every
@@ -44,7 +53,9 @@ pub enum SeedNameError {
 /// # Errors
 ///
 /// Returns [`SeedNameError::EmptyDictionary`] when the dictionary is empty,
-/// which would otherwise divide by zero, or
+/// which would otherwise divide by zero,
+/// [`SeedNameError::DictionaryTooShort`] when it holds a single word, whose
+/// radix of one would make the conversion loop forever, or
 /// [`SeedNameError::IndexOutOfRange`] when a computed index falls outside it.
 ///
 /// # Example
@@ -57,8 +68,10 @@ pub enum SeedNameError {
 /// assert!(!name.is_empty());
 /// ```
 pub fn seed_name_from_value(seed: u64, dictionary: &[&str]) -> Result<String, SeedNameError> {
-    if dictionary.is_empty() {
-        return Err(SeedNameError::EmptyDictionary);
+    match dictionary.len() {
+        0 => return Err(SeedNameError::EmptyDictionary),
+        1 => return Err(SeedNameError::DictionaryTooShort { len: 1 }),
+        _ => {}
     }
     let radix = BigUint::from(dictionary.len());
 
@@ -81,3 +94,6 @@ pub fn seed_name_from_value(seed: u64, dictionary: &[&str]) -> Result<String, Se
     words.reverse();
     Ok(words.join("-"))
 }
+
+#[cfg(test)]
+mod tests;

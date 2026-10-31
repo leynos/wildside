@@ -36,6 +36,11 @@ LAST_VULNERABLE_DEEPMERGE = (4, 3, 1)
 #: does not cover.
 DEEPMERGE_PERMITTED_DEPENDENTS = frozenset({"@bundled-es-modules/deepmerge"})
 
+#: The only parent of that bundled copy the reasoning permits. Another parent
+#: reaches `deepmerge` through a path the entry's reason does not describe.
+BUNDLED_DEEPMERGE = "@bundled-es-modules/deepmerge"
+BUNDLED_DEEPMERGE_PERMITTED_DEPENDENTS = frozenset({"style-dictionary"})
+
 
 @pytest.fixture(scope="module")
 def ledger_ids() -> frozenset[str]:
@@ -106,4 +111,46 @@ def test_the_deepmerge_exception_is_void_once_anything_else_pulls_it(
         f"{sorted(DEEPMERGE_PERMITTED_DEPENDENTS)} reach it, but "
         f"{sorted(unexpected)} now depend on it too. The exception is "
         f"repository-wide, so it would cover those callers."
+    )
+
+
+def test_the_deepmerge_exception_is_void_once_a_workspace_declares_it() -> None:
+    """A workspace's own declaration is not in the resolved package table.
+
+    `lock.dependents_of` reads resolved packages only, so a workspace that
+    declared `deepmerge` itself would reach the excepted code with no parent
+    for the previous test to see.
+    """
+    ledger = json.loads(LEDGER_PATH.read_text(encoding="utf-8"))
+    if DEEPMERGE_EXCEPTION_ID not in {entry["id"] for entry in ledger}:
+        pytest.skip("the deepmerge advisory is no longer excepted")
+
+    lockfile = BUN_LOCK_PATH.read_text(encoding="utf-8")
+    declaring = lock.workspace_dependents(
+        lockfile, "deepmerge"
+    ) | lock.workspace_dependents(lockfile, BUNDLED_DEEPMERGE)
+    assert not declaring, (
+        f"{DEEPMERGE_EXCEPTION_ID} argues from Style Dictionary reaching "
+        f"deepmerge at build time, but workspaces {sorted(declaring)} declare "
+        f"it or its bundled copy themselves."
+    )
+
+
+def test_the_deepmerge_exception_is_void_once_the_bundled_copy_has_a_new_parent(
+    ledger_ids: frozenset[str], packages: lock.PackageTable
+) -> None:
+    """Only Style Dictionary may pull the bundled copy that carries `deepmerge`.
+
+    The previous parent check stops at `@bundled-es-modules/deepmerge`, so a
+    new package depending on that bundle would reach `deepmerge` unseen.
+    """
+    if DEEPMERGE_EXCEPTION_ID not in ledger_ids:
+        pytest.skip("the deepmerge advisory is no longer excepted")
+
+    dependents = lock.dependents_of(packages, BUNDLED_DEEPMERGE)
+    unexpected = dependents - BUNDLED_DEEPMERGE_PERMITTED_DEPENDENTS
+    assert not unexpected, (
+        f"{DEEPMERGE_EXCEPTION_ID} permits only "
+        f"{sorted(BUNDLED_DEEPMERGE_PERMITTED_DEPENDENTS)} to depend on "
+        f"{BUNDLED_DEEPMERGE}, but {sorted(unexpected)} do too."
     )
