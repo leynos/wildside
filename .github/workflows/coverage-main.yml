@@ -63,7 +63,7 @@ jobs:
           # workflow one, so it is read here in the shell.
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
-          SHARED_ACTIONS_PIN: 6cec89bac47a21cf756d68d638a9a510998e57f8
+          SHARED_ACTIONS_PIN: 5a99aed78ce68dcebd3052b75c31e6f173162b1e
           # The Makefile pins pg-embed-setup-unpriv, whose pg_worker binary
           # lands in the cargo bin directory this archive carries.
           MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
@@ -119,7 +119,7 @@ jobs:
 
       - name: Install Rust toolchain
         id: setup-rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/setup-rust@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
           cache-provider: external
@@ -144,7 +144,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/generate-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -188,7 +188,7 @@ jobs:
         # be uploaded as the trunk's and become the baseline every pull
         # request is ratcheted against.
         if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           # mode defaults to "upload", which is the only mode this estate
           # uses: under CV-005 no pull-request lane talks to CodeScene, so
