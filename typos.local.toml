@@ -10,6 +10,7 @@ accepted = []
 
 [patterns]
 ignore = [
+  "backspace\\-pulverize\\-grime",
   "types:\\ \\[opened,\\ reopened,\\ synchronize,\\ labeled,\\ ready_for_review\\]",
   ",\\ SVG_FILENAME,\\ SnapshotArtifacts,\\ SnapshotGenerationErro",
   "3\\ \\|\\ struct\\ NotDeserialisable\\ \\{",
