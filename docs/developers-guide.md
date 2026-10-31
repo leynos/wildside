@@ -2072,7 +2072,9 @@ indefensible fails the test suite instead of waiting for its expiry:
   `glob` resolution moved to 13.0.6 in both the pnpm overrides and the Bun
   `resolutions`, `packages/tokens` takes `^5.4.4`, and the exception was
   removed (#471). The glob CLI command-injection advisory the old pin existed
-  for (GHSA-5j98-mcp5-4vw2) does not reach 13.x. `packages/tokens/test` holds
+  for (GHSA-5j98-mcp5-4vw2) does not reach 13.x. The `glob` resolution later
+  moved on to 14.0.2 and `minimatch` to 11.0.1, which patch
+  GHSA-3g3m-2fjr-6pw4 and GHSA-g3hv-75wg-m249. `packages/tokens/test` holds
   the generated token files byte for byte, so a later Style Dictionary change
   that alters the CSS variables, the Tailwind preset or the daisyUI theme fails
   a test instead of passing unseen.
