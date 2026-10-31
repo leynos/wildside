@@ -18,7 +18,7 @@ import workflow_inventory as inv
 #: The shared-actions commit `setup-rust` must pin: #546, which sits on #523.
 #: Asserted by value, so a bump has to update it and someone has to confirm the
 #: new revision still leaves this repository the sole owner of its caches.
-SETUP_RUST_PIN = "6cec89bac47a21cf756d68d638a9a510998e57f8"
+SETUP_RUST_PIN = "5a99aed78ce68dcebd3052b75c31e6f173162b1e"
 
 #: The one `uses` value every Rust job must carry: the exact repository, action
 #: path and pin. A suffix match would accept another repository's, or another

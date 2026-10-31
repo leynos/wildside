@@ -39,14 +39,9 @@ env:
   # Earlier releases pin 6.0.1, whose dylint_driver build script clones
   # rust-lang/rust-clippy at "master"; that repository now has only "main", so
   # the driver build fails with `revspec 'master' not found` before any lint
-  # runs. The failure is independent of the code under review.
+  # runs. The pinned install-whitaker action carries 0.2.11's digests, so no
+  # digest is supplied here.
   WHITAKER_INSTALLER_VERSION: '0.2.11'
-  # The pinned install-whitaker commit predates 0.2.11, so its digest manifest
-  # has no entry for it. Both runner labels this job can select are x86_64
-  # Linux, so one digest covers every arm. This is the published release
-  # digest, matching the `.sha256` sidecar published beside the archive:
-  # https://github.com/leynos/whitaker/releases/download/v0.2.11/whitaker-installer-x86_64-unknown-linux-gnu-v0.2.11.tgz.sha256
-  WHITAKER_INSTALLER_SHA256: 'a32a665d01c4a2eb03a87c584d57329fc72a3aac421c8c2b15bbdb19e5410236'
   YAMLLINT_VERSION: '1.35.1'
 
 # Default GITHUB_TOKEN to no access; each job re-grants only what it needs.
@@ -123,7 +118,6 @@ jobs:
             nixie=${{ env.NIXIE_VERSION }}
             uv=${{ env.UV_VERSION }}
             whitaker-installer=${{ env.WHITAKER_INSTALLER_VERSION }}
-            whitaker-installer-sha256=${{ env.WHITAKER_INSTALLER_SHA256 }}
             yamllint=${{ env.YAMLLINT_VERSION }}
           # The Makefile pins every `uv tool run` version, so its digest owns
           # the repository-local uv layers, and dylint.toml selects the
@@ -266,7 +260,7 @@ jobs:
       # become a second owner of them.
       - name: Install Rust toolchain
         id: setup-rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/setup-rust@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           cache-provider: external
           # `setup-rust` owns sccache: it selects the backend by runner, starts the
@@ -323,7 +317,7 @@ jobs:
       # distribution; replaces the former `cargo binstall merman-cli` and
       # bare `uv tool install nixie-cli` steps.
       - name: Install Nixie and Merman
-        uses: leynos/shared-actions/.github/actions/install-nixie@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/install-nixie@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           nixie-version: ${{ env.NIXIE_VERSION }}
           merman-version: ${{ env.MERMAN_VERSION }}
@@ -429,7 +423,7 @@ jobs:
       - name: Install mdtablefix
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
-        uses: leynos/shared-actions/.github/actions/install-mdtablefix@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           version: "0.6.1"
 
@@ -458,10 +452,9 @@ jobs:
         run: make lint-clippy
 
       - name: Install Whitaker
-        uses: leynos/shared-actions/.github/actions/install-whitaker@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/install-whitaker@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
-          installer-sha256: ${{ env.WHITAKER_INSTALLER_SHA256 }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
           cache-provider: external
       - name: Whitaker lint
@@ -726,7 +719,7 @@ jobs:
           # workflow one, so it is read here in the shell.
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
-          SHARED_ACTIONS_PIN: 6cec89bac47a21cf756d68d638a9a510998e57f8
+          SHARED_ACTIONS_PIN: 5a99aed78ce68dcebd3052b75c31e6f173162b1e
           # The Makefile pins pg-embed-setup-unpriv, whose pg_worker binary
           # lands in the cargo bin directory this archive carries.
           MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
@@ -782,7 +775,7 @@ jobs:
 
       - name: Install Rust toolchain
         id: setup-rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/setup-rust@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           cache-provider: external
           # `setup-rust` owns sccache: it selects the backend by runner, starts the
@@ -806,7 +799,7 @@ jobs:
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
         run: bash scripts/warm-pg-embedded-cache.sh
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/generate-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
