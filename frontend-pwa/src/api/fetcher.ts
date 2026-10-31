@@ -150,6 +150,36 @@ export const customFetch = async (
 };
 
 /**
+ * Orval-compatible mutator that adapts {@link customFetch} to the generator's
+ * call shape.
+ *
+ * Orval's fetch client invokes its configured mutator as
+ * `mutator<ResponseType>(input, init)`, so the mutator must accept a response
+ * type argument. The generated types mirror the OpenAPI schema the backend
+ * serves, while `customFetch` still enforces the transport contract: non-2xx
+ * responses reject, and successful payloads must be valid JSON. The assertion
+ * only records the generator's compile-time view of that payload.
+ *
+ * Use {@link customFetch} directly in handwritten code; this adapter exists
+ * so generated clients keep compiling.
+ *
+ * @example
+ * // Generated clients call this as `customFetchOrval<ResponseType>(url, init)`.
+ * const users = await customFetchOrval<Array<{ id: string }>>('/api/users');
+ */
+export const customFetchOrval = async <ResponseType>(
+  input: string,
+  init?: FetchRequestInit,
+): Promise<ResponseType> => {
+  const payload = await customFetch(input, init);
+  // SAFETY: `customFetch` has already validated the payload as JSON, and the
+  // generated `ResponseType` mirrors the OpenAPI schema that same backend
+  // serves. No runtime check can reconcile the two cheaply here, so this cast
+  // records the generator's view rather than widening `customFetch` itself.
+  return payload as ResponseType;
+};
+
+/**
  * Fetch JSON and validate it against a provided Zod schema.
  *
  * @example

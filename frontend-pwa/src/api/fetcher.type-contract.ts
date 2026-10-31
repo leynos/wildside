@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 
-import { customFetch, customFetchParsed, customFetchParsedSafe } from './fetcher';
+import { customFetch, customFetchOrval, customFetchParsed, customFetchParsedSafe } from './fetcher';
 
 const userSchema = z.object({ id: z.string() });
 
@@ -29,6 +29,12 @@ export async function fetcherTypeContracts(): Promise<void> {
   await customFetch('/api/example', { method: 'POST', body: new URLSearchParams() });
   await customFetch('/api/example', { method: 'POST', body: new ArrayBuffer(1) });
   await customFetch('/api/example', { method: 'POST', body: new Uint8Array([1]) });
+
+  // Orval's generated clients pass the response type as a type argument, so the
+  // mutator adapter must accept one and surface it to the caller.
+  const orvalUsers = await customFetchOrval<Array<{ id: string }>>('/api/users');
+  const orvalUserId: string = orvalUsers[0]?.id ?? '';
+  orvalUserId.trim();
 
   // Schema output is inferred for the parsed helpers.
   const user = await customFetchParsed('/api/user', userSchema);

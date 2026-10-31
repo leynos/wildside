@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { z } from 'zod';
 
-import { customFetch, customFetchParsed, customFetchParsedSafe } from './fetcher';
+import { customFetch, customFetchOrval, customFetchParsed, customFetchParsedSafe } from './fetcher';
 
 const userSchema = z.object({ id: z.string() });
 
@@ -148,6 +148,20 @@ describe('customFetch', () => {
     });
 
     await expect(customFetch('/api/example')).resolves.toBeUndefined();
+  });
+});
+
+describe('customFetchOrval', () => {
+  it('surfaces the response type while keeping transport validation', async () => {
+    response = Response.json({ id: 'user-1' });
+
+    await expect(customFetchOrval<{ id: string }>('/api/user')).resolves.toEqual({
+      id: 'user-1',
+    });
+
+    response = new Response('missing', { status: 404 });
+
+    await expect(customFetchOrval('/api/user')).rejects.toThrow('404');
   });
 });
 

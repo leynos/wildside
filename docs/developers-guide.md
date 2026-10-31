@@ -785,6 +785,11 @@ body handling, and response validation stay consistent.
 - `customFetchParsedSafe(...)` returns Zod's safe-parse result instead, so
   callers can branch on schema failures while transport and non-2xx failures
   still reject.
+- `customFetchOrval<ResponseType>(input, init?)` is the mutator that Orval's
+  generated client calls. Orval emits a response type argument, so this adapter
+  accepts one and delegates to `customFetch`; generated clients keep the same
+  status and JSON validation. Handwritten code should call `customFetch`
+  directly. `frontend-pwa/orval.config.cjs` names this export as the mutator.
 
 The compile-time contract for these helpers is asserted by
 `frontend-pwa/src/api/fetcher.type-contract.ts`, which `make typecheck`
