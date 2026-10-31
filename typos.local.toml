@@ -163,6 +163,11 @@ ignore = [
 exclude = [
   "backend/crates/pagination/tests/ui/cursor_decode_no_deserialise_owned.rs",
   "backend/crates/pagination/tests/ui/cursor_decode_no_deserialise_owned.stderr",
+  # Golden copy of the published EFF long word list. Seed names are a
+  # compatibility surface derived from this data in this order, so the words
+  # must stay byte-for-byte as published; respelling `worshiper` would silently
+  # rename every seed that uses it. Excluded rather than corrected.
+  "crates/example-data/tests/fixtures/eff-long-wordlist.txt",
   "packages/tokens/build",
   "packages/tokens/test/golden",
   "packages/tokens/src/utils/color.js",
