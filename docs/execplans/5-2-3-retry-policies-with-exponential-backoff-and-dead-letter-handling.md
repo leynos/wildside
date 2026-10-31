@@ -2768,3 +2768,42 @@ crates require (`regex` 1.13.1, `regex-automata` 0.4.18, `regex-syntax` 0.8.11,
 entries remain, and `cargo metadata --locked` exits 0. The full sequential
 commit gates and the force-with-lease publication over SSH against this
 candidate remain to be run and recorded.
+
+2026-10-31 Europe/Berlin, later the same day: PR #567 was merged into `main` at
+05:08 UTC as squash commit `9206b8f099328bc6994a109a0a573201c1a7505b`, and its
+`fix-zstd-audit` branch was deleted. The attempted retarget of PR #457 to that
+branch was therefore rejected with "Proposed base branch 'fix-zstd-audit' was
+not found", and the pull request still targets `main`. Because the merged
+squash is not an ancestor of the superseded restack head, the branch was
+rebased again, this time from `OLD_BASE` `3125fa5` (the old PR #567 head) onto
+`origin/main` `9206b8f`, with `OLD_HEAD`
+`fe8a61fe629973324ce3233189f05b79fa209485`. The same replay options and Weave
+bypass were used; recovery refs are
+`refs/codex/rebase/wildside-523-ontomain-1793435700/{old-head,old-base,target}`.
+
+Of the 52 replayed commits, 51 applied with no conflicts and one became empty.
+The empty commit is `Regenerate typos.toml from the shared dictionary`: `main`
+now carries the same regenerated policy because #567 refreshed it, so the
+change was skipped rather than kept as an empty commit. `git range-diff`
+compares all 52 entries: 51 are identical and the 52nd is the dropped
+regeneration. The new head is `e74d4416d21982a43baf711319783d4591fc4ecd`;
+`git diff --check` is clean and there are no merge commits. The `Cargo.lock`
+delta against `main` is unchanged in content from the target-first rebuild:
+`googletest` and `googletest_macro` 0.14.3 plus the version lifts they require,
+and `cargo metadata --locked` exits 0.
+
+The merged prerequisite also closes the audit gap that appeared while this
+branch was in flight. Two advisories published at 2026-10-30 23:09 UTC,
+GHSA-g3hv-75wg-m249 (`minimatch` below 11.0.1) and GHSA-3g3m-2fjr-6pw4 (`glob`
+9.0.0 through 14.0.1), had made the earlier stack red. `main` now carries
+ledger entries and removal-invariant tests for both, tracked in issue
+[#576](https://github.com/leynos/wildside/issues/576), so `make audit` on this
+candidate exits 0 with 15 allowed warnings and no vulnerabilities, and
+`make spelling` reports `typos.toml` current.
+
+`make test` cannot complete in this environment: the shared embedded-PostgreSQL
+cluster lock is held through an orphaned postmaster on behalf of a dead PID, so
+four shared-cluster tests time out deterministically. The run reached 1,000 of
+1,981 cases with 995 passed, four timeouts, and no assertion failures before it
+was stopped. Hosted `coverage` on the published head is the authoritative test
+evidence; the remaining local gates are recorded separately.
