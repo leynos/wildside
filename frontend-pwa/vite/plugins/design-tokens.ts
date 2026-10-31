@@ -4,7 +4,7 @@
 import type { SpawnSyncReturns } from 'node:child_process';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
 import type { Logger, Plugin } from 'vite';
 
 type PackageManager = 'pnpm' | 'yarn' | 'npm' | 'bun';
@@ -50,21 +50,23 @@ interface ResolvedPaths {
   distPath: string;
 }
 
+/** Resolve the tokens package name and its absolute source and dist paths. */
 function resolveTokensPaths(options: EnsureTokensDistOptions): ResolvedPaths {
   const packageName = options.packageName ?? defaultPackageName;
-  const packagePath = resolve(
+  const packagePath = path.resolve(
     options.workspaceRoot,
     options.packageRelativePath ?? defaultPackagePath,
   );
-  const distPath = resolve(packagePath, options.distRelativePath ?? defaultDistPath);
+  const distPath = path.resolve(packagePath, options.distRelativePath ?? defaultDistPath);
 
   return { packageName, packagePath, distPath };
 }
 
-function detectFromUserAgent(): PackageManager | null {
+/** Detect the package manager from the `npm_config_user_agent` hint. */
+function detectFromUserAgent(): PackageManager | undefined {
   // biome-ignore lint/style/noProcessEnv: environment hints come from npm.
   const agent = process.env.npm_config_user_agent;
-  if (!agent) return null;
+  if (!agent) return undefined;
 
   const managers: PackageManager[] = ['pnpm', 'yarn', 'bun', 'npm'];
   for (const manager of managers) {
@@ -73,27 +75,33 @@ function detectFromUserAgent(): PackageManager | null {
     }
   }
 
-  return null;
+  return undefined;
 }
 
-function detectFromLockfile(workspaceRoot: string): PackageManager | null {
+/** Detect the package manager from the first recognized lockfile. */
+function detectFromLockfile(workspaceRoot: string): PackageManager | undefined {
   for (const [manager, lockfile] of lockfileLookup) {
-    if (existsSync(resolve(workspaceRoot, lockfile))) {
+    if (existsSync(path.resolve(workspaceRoot, lockfile))) {
       return manager;
     }
   }
 
-  return null;
+  return undefined;
 }
 
+/**
+ * Choose the package manager from the environment hint, a lockfile, or pnpm.
+ */
 export function detectPackageManager(workspaceRoot: string): PackageManager {
   return detectFromUserAgent() ?? detectFromLockfile(workspaceRoot) ?? 'pnpm';
 }
 
+/** Decide whether a spawn result represents a failed tokens build. */
 function buildFailed(result: SpawnSyncReturns<Buffer>): boolean {
-  return Boolean(result.error) || result.status === null || result.status !== 0;
+  return Boolean(result.error) || result.status !== 0;
 }
 
+/** Compose the operator-facing message for a failed tokens build. */
 function buildFailureMessage(command: BuildCommand, result: SpawnSyncReturns<Buffer>): string {
   const segments = [
     'Design tokens build failed.',
@@ -105,37 +113,42 @@ function buildFailureMessage(command: BuildCommand, result: SpawnSyncReturns<Buf
   return segments.filter((segment): segment is string => Boolean(segment)).join(' ');
 }
 
+/** Build the package-manager-specific command that compiles the tokens. */
 function buildCommandFor(
   packageManager: PackageManager,
   packageName: string,
   packagePath: string,
 ): BuildCommand {
   switch (packageManager) {
-    case 'pnpm':
+    case 'pnpm': {
       return {
         command: 'pnpm',
         args: ['--filter', packageName, 'build'],
         pretty: `pnpm --filter ${packageName} build`,
       };
-    case 'yarn':
+    }
+    case 'yarn': {
       return {
         command: 'yarn',
         args: ['workspace', packageName, 'run', 'build'],
         pretty: `yarn workspace ${packageName} run build`,
       };
-    case 'npm':
+    }
+    case 'npm': {
       return {
         command: 'npm',
         args: ['run', 'build', '--workspace', packageName],
         pretty: `npm run build --workspace ${packageName}`,
       };
-    case 'bun':
+    }
+    case 'bun': {
       return {
         command: 'bun',
         args: ['run', 'build'],
         pretty: `bun run build (from ${packageName})`,
         cwd: packagePath,
       };
+    }
     default: {
       const exhaustive: never = packageManager;
       throw new Error(`Unsupported package manager: ${exhaustive}`);
@@ -143,6 +156,11 @@ function buildCommandFor(
   }
 }
 
+/**
+ * Build the tokens package when its dist output is missing.
+ *
+ * @returns The absolute path to the built dist directory.
+ */
 export function ensureTokensDist(options: EnsureTokensDistOptions): string {
   const { packageName, packagePath, distPath } = resolveTokensPaths(options);
 
@@ -178,14 +196,18 @@ export function ensureTokensDist(options: EnsureTokensDistOptions): string {
   return distPath;
 }
 
+/**
+ * Provide the Vite plugin that builds tokens before the PWA is served or
+ * bundled, and aliases the tokens package to its dist output.
+ */
 export function designTokensPlugin(options: DesignTokensPluginOptions): Plugin {
   const packageName = options.packageName ?? defaultPackageName;
   const alias = options.alias ?? defaultAlias;
-  const packagePath = resolve(
+  const packagePath = path.resolve(
     options.workspaceRoot,
     options.packageRelativePath ?? defaultPackagePath,
   );
-  const distPath = resolve(packagePath, options.distRelativePath ?? defaultDistPath);
+  const distPath = path.resolve(packagePath, options.distRelativePath ?? defaultDistPath);
 
   return {
     name: 'wildside-design-tokens',

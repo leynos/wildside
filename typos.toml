@@ -198,6 +198,7 @@ extend-ignore-re = [
     "t\\ of\\ glob\\ patterns\\.\\ The\\ analyzer\\ will\\ handle\\ only\\ those\\ ",
     "ted`,\\ and\\ `private`\\ are\\ analyzed\\ by\\ the\\ rule\\.\",",
     "types:\\ \\[opened,\\ reopened,\\ synchronize,\\ labeled,\\ ready_for_review\\]",
+    "use\\ color_eyre::eyre::",
     "vg\\ \\.labelBkg\\{background\\-color:rgba\\(248\\.6666666666,\\ 25",
     "ws\\(\\(\\)\\ =>\\ resolveToken\\('\\{color\\.brand\\}',\\ null\\),\\ /tokens",
     "ws\\(\\(\\)\\ =>\\ resolveToken\\('\\{color\\.brand\\}',\\ null\\),\\ TypeErr",

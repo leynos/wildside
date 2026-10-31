@@ -184,7 +184,7 @@ where
 ///
 /// * **Cross-process** — concurrently starting nextest binaries share the
 ///   embedded cluster's data directory. `acquire_shared_cluster_process_lock`
-///   takes the same `flock`-based process lock that `shared_cluster_handle`
+///   takes the same `flock`-based process lock that `bootstrap_shared_cluster`
 ///   uses (it is idempotent within a process, short-circuiting once the fd is
 ///   stored), so repair in one process cannot overlap repair in another.
 /// * **Intra-process** — the `flock` guards distinct processes only; within a

@@ -8,7 +8,7 @@
  * fatal.
  */
 import { realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import auditExceptions from '../../security/audit-exceptions.json' with { type: 'json' };
@@ -22,8 +22,7 @@ import { VALIDATOR_ADVISORY_ID, VALIDATOR_MIN_SAFE_VERSION } from '../../securit
 import { isValidatorPatched } from '../../security/validator-patch.js';
 import packageJson from '../package.json' with { type: 'json' };
 
-const normalize = (path) =>
-  typeof realpathSync.native === 'function' ? realpathSync.native(path) : realpathSync(path);
+const normalize = (path) => realpathSync.native(path);
 
 const frontendPackageName = packageJson.name;
 const workspaceKeys = new Set([
@@ -36,6 +35,15 @@ const unexpectedHeading = 'Unexpected vulnerabilities detected by pnpm audit:';
 // biome-ignore lint/style/useNamingConvention: constant emphasizes unit size.
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Index the ledger entries that apply to this workspace by advisory id.
+ *
+ * @param {Set<string>} workspaceKeys Workspace names the ledger may cover.
+ * @param {Array<Record<string, unknown>>} auditEntries Ledger entries to filter.
+ * @param {Date} referenceDate Date the ledger is evaluated against; validated.
+ * @returns {{ ledgerByAdvisory: Map<string, Record<string, unknown>>, allowedIds: string[] }}
+ *   Lookup by advisory id plus the covered ids in ledger order.
+ */
 function buildLedgerMaps(workspaceKeys, auditEntries, referenceDate) {
   if (!(referenceDate instanceof Date) || Number.isNaN(referenceDate.getTime())) {
     throw new TypeError('Invalid reference date');
@@ -56,6 +64,12 @@ function buildLedgerMaps(workspaceKeys, auditEntries, referenceDate) {
   return { ledgerByAdvisory, allowedIds };
 }
 
+/**
+ * Describe why a ledger entry cannot cover an advisory.
+ *
+ * @returns {string | undefined} A failure message, or undefined when the entry
+ *   is present, dated, and unexpired at the reference time.
+ */
 function getLedgerExpiryError(entry, advisoryId, referenceDateValue) {
   if (!entry) {
     return `Audit ledger entry missing for advisory ${advisoryId ?? 'unknown'}.`;
@@ -82,10 +96,13 @@ function getLedgerExpiryError(entry, advisoryId, referenceDateValue) {
   if (expiryBoundary <= referenceDateValue) {
     return `Audit exception ${entryLabel} for advisory ${entry.advisory} expired on ${rawExpiry}.`;
   }
-
-  return null;
 }
 
+/**
+ * Collect expiry failures for every advisory reported by the audit.
+ *
+ * @returns {string[]} One message per advisory whose ledger entry is unusable.
+ */
 function collectAdvisoryExpiryErrors(advisories, ledgerByAdvisory, referenceDateValue) {
   const errors = [];
 
@@ -100,6 +117,11 @@ function collectAdvisoryExpiryErrors(advisories, ledgerByAdvisory, referenceDate
   return errors;
 }
 
+/**
+ * Report expiry failures to stderr.
+ *
+ * @returns {boolean} Whether any expiry failure was reported.
+ */
 function reportExpiryFailures(expected, ledgerByAdvisory, referenceDateValue) {
   const expiryErrors = collectAdvisoryExpiryErrors(expected, ledgerByAdvisory, referenceDateValue);
 
@@ -115,6 +137,12 @@ function reportExpiryFailures(expected, ledgerByAdvisory, referenceDateValue) {
   return true;
 }
 
+/**
+ * Report the validator advisory outcome and choose the exit code.
+ *
+ * @param {Array<Record<string, unknown>>} expected Advisories covered by the ledger.
+ * @returns {number} Zero when the validator is patched or absent, otherwise one.
+ */
 function reportValidatorOutcome(expected) {
   const sawValidator = expected.some(
     (advisory) => advisory.github_advisory_id === VALIDATOR_ADVISORY_ID,
@@ -156,14 +184,14 @@ function reportValidatorOutcome(expected) {
  * }
  */
 function isExecutedDirectly(meta) {
-  const invokedPath = process.argv?.[1];
+  const invokedPath = process.argv[1];
   if (!invokedPath) {
     return false;
   }
 
   try {
     const scriptPath = fileURLToPath(meta.url);
-    const absoluteInvokedPath = resolve(invokedPath);
+    const absoluteInvokedPath = path.resolve(invokedPath);
     return normalize(scriptPath) === normalize(absoluteInvokedPath);
   } catch {
     return false;
@@ -227,10 +255,10 @@ export async function main() {
 if (isExecutedDirectly(import.meta)) {
   try {
     const exitCode = await main();
-    process.exit(exitCode);
+    process.exitCode = exitCode;
   } catch (error) {
     // biome-ignore lint/suspicious/noConsole: CLI script reports failures via stderr.
     console.error(error);
-    process.exit(1);
+    process.exitCode = 1;
   }
 }

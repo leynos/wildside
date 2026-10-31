@@ -615,9 +615,11 @@ compression library to generate these names.
 
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.7`,
 React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`, Zod
-3, TypeScript 5, Vitest `^4.1.12`, and Orval 8. TanStack Router, Radix UI,
-i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
-target-stack items until a roadmap task adds them to
+3, TypeScript 5, Vitest `^4.1.12`, fast-check `^4.8.0` for property-based
+tests, and Orval 8. Biome owns formatting and general lint; Oxlint applies the
+pinned Unicorn and `ai-deslop` rule profiles to `frontend-pwa`. TanStack
+Router, Radix UI, i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and
+DaisyUI v5 are target-stack items until a roadmap task adds them to
 `frontend-pwa/package.json` and the lockfile.
 
 ### Build and preview workflow
@@ -778,6 +780,75 @@ own user-facing behaviour, shared query hooks should own server-state access,
 and durable offline writes should pass through the outbox boundary described in
 `docs/wildside-pwa-data-model.md`.
 
+### Shared API fetcher
+
+`frontend-pwa/src/api/fetcher.ts` is the single boundary between the PWA and
+the backend JSON API. Call it rather than `fetch` directly so request defaults,
+body handling, and response validation stay consistent.
+
+- `customFetch(input, init?)` sends the request and resolves with the validated
+  `JsonValue` payload, or `undefined` when the response does not carry a JSON
+  document. Only a JSON content type is parsed, so a successful response with a
+  non-JSON or missing content type resolves to `undefined` even when it has a
+  body; callers must not mistake that discarded content for an empty response.
+  It serializes plain objects, arrays, and JSON scalar bodies, labels a string
+  body as JSON only when it already parses as JSON, and forwards native
+  `BodyInit` values unchanged. A `body: null` sends no body rather than JSON
+  `null`; pass the string `'null'` to send an explicit JSON null. Cookies are
+  sent because requests default to `credentials: 'include'`, and
+  `Accept: application/json` is added unless the caller sets it. A JSON content
+  type is added only when the body is JSON and the caller has not set one.
+- Response bodies are validated before use. `204` and `205` responses, and
+  bodies with an explicit zero `content-length`, resolve to `undefined`.
+- Non-2xx responses reject with an `Error` naming the status and URL. Its
+  `cause` carries the error detail: the JSON body when the response advertises
+  JSON, otherwise the response text. An undecodable detail is omitted rather
+  than masking the status.
+- `customFetchParsed(input, schema, init?)` validates the payload with a Zod
+  schema and resolves with the parsed value; a mismatch rejects.
+- `customFetchParsedSafe(...)` returns Zod's safe-parse result instead, so
+  callers can branch on schema failures while transport and non-2xx failures
+  still reject.
+- `customFetchOrval<ResponseType>(input, init?)` is the mutator that Orval's
+  generated client calls. Orval emits a response type argument, so this adapter
+  accepts one and delegates to `customFetch`; generated clients keep the same
+  status and JSON validation. Handwritten code should call `customFetch`
+  directly. `frontend-pwa/orval.config.cjs` names this export as the mutator
+  and sets `override.fetch.includeHttpResponseReturnType` to `false`, so
+  generated operations resolve to the bare body instead of an HTTP envelope
+  that the adapter never returns.
+
+The compile-time contract for these helpers is asserted by
+`frontend-pwa/src/api/fetcher.type-contract.ts`, which `make typecheck`
+compiles. Runtime behaviour is covered by unit tests and by
+`fetcher.behaviour.test.ts`, which drives a real HTTP server rather than a
+`fetch` mock.
+
+#### Bounded fetch diagnostics
+
+`frontend-pwa/src/api/diagnostics.ts` is the observation seam for that
+boundary. The fetcher emits one event when a logical request starts and one
+when it finishes or fails, and `setFetchDiagnostics(sink)` installs the
+application-wide receiver; with no sink installed the fetcher behaves exactly
+as before.
+
+An event carries only bounded fields: the upper-cased method, a route template
+with identifier-shaped segments masked (`/api/users/:id`), whole milliseconds
+elapsed, the status class (`2xx`, `5xx`), a failure category (`transport`,
+`http`, `json`, or `schema`), and the backend `trace-id` header when present.
+It never carries the URL, query string, body, credential, or a free-form error
+message, so a sink can forward it without a privacy review per destination.
+`customFetch`, `customFetchParsed`, and `customFetchParsedSafe` all report
+through this seam; `customFetchOrval` reports via `customFetch`.
+
+A sink fault is swallowed, because diagnostics must not change the outcome of a
+request. `frontend-pwa/src/Main.tsx` installs the application sink, which sends
+failure events to `reportError` so the browser's global error pipeline
+(devtools and window error handlers) observes them. The PWA has no telemetry
+destination yet; a future exporter replaces that sink without touching the
+fetcher. Contracts are covered by `diagnostics.test.ts`, and the fetcher-side
+events by `fetcher.diagnostics.test.ts`.
+
 ### Quality gates
 
 Documentation-only front-end planning changes must pass:
@@ -869,6 +940,14 @@ This strategy is the default because it keeps test runtime low while preserving
 database-level isolation. Only use direct per-test cluster construction when a
 suite truly needs cluster-level isolation (for example, server-wide settings or
 lifecycle-specific assertions).
+
+The shared cluster wrapper checks that PostgreSQL accepts the `UTC` timezone
+before returning its handle. On Unix, it registers process-exit cleanup before
+that check. If the server rejects `UTC`, the test support may add a `UTC` alias
+from `UCT` only after installation metadata confirms that PostgreSQL uses
+bundled timezone data. Reuse the shared cluster wrapper rather than calling the
+readiness helper from individual suites; it is scoped to this test harness and
+never changes host system timezone data.
 
 ### v0.5.0 migration usage rules
 

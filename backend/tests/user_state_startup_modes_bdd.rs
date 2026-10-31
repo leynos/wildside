@@ -33,7 +33,7 @@ declare_test_support!(
     flow_helpers
 );
 
-use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use crate::support::cluster_skip::handle_cluster_setup_failure;
 use crate::support::embedded_postgres::drop_users_table;
 use crate::support::embedded_postgres::provision_template_database;
@@ -165,7 +165,7 @@ async fn run_flow(
 
 fn setup_db() -> Result<DbContext, String> {
     ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
-    let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
+    let cluster = bootstrap_shared_cluster().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();
     let pool = run_async(DbPool::new(

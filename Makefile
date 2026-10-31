@@ -266,6 +266,7 @@ lint-whitaker:
 
 lint-frontend:
 	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+	pnpm --filter frontend-pwa lint
 
 
 lint-specs: lint-asyncapi lint-openapi

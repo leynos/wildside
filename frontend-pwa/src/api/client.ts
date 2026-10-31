@@ -30,7 +30,7 @@ export const usersQueryKeys = {
   byId: (id: User['id']): readonly [...typeof usersQueryKey, User['id']] => {
     const key = [...usersQueryKey, id] as const;
 
-    return Object.freeze(key) as typeof key;
+    return Object.freeze(key);
   },
 } as const;
 Object.freeze(usersQueryKeys);

@@ -1,11 +1,11 @@
 //! Process-exit cleanup for the shared embedded PostgreSQL cluster.
 //!
-//! `pg-embed-setup-unpriv`'s [`shared_cluster_handle()`] intentionally leaks
-//! the [`ClusterGuard`] so the cluster persists for the process lifetime. In a
-//! single-binary test runner this is fine — the OS reclaims everything at exit.
-//! Under `nextest`, each test binary is a separate process, and a still-running
-//! PostgreSQL blocks subsequent binaries from bootstrapping on the same data
-//! directory.
+//! `pg-embed-setup-unpriv`'s `test_support::shared_cluster_handle()`
+//! intentionally leaks the [`ClusterGuard`] so the cluster persists for the
+//! process lifetime. In a single-binary test runner this is fine — the OS
+//! reclaims everything at exit. Under `nextest`, each test binary is a separate
+//! process, and a still-running PostgreSQL blocks subsequent binaries from
+//! bootstrapping on the same data directory.
 //!
 //! This module registers a `libc::atexit` handler that reads `postmaster.pid`,
 //! sends `SIGTERM`, and waits for graceful shutdown, bridging the gap until the
@@ -17,8 +17,10 @@
 //! importing `ensure_stable_cluster_environment` from here; the wrapper below
 //! injects the test binary's environment reader into those pure helpers.
 
-use pg_embedded_setup_unpriv::{BootstrapResult, ClusterHandle};
+use pg_embedded_setup_unpriv::{BootstrapError, BootstrapResult, ClusterHandle};
 
+#[path = "postgres_timezone.rs"]
+mod postgres_timezone;
 #[path = "stable_cluster_env.rs"]
 mod stable_cluster_env;
 
@@ -139,11 +141,18 @@ mod exit_handler {
     }
 }
 
-/// Returns the shared cluster handle and registers an atexit handler to stop
-/// PostgreSQL when the test binary exits.
+/// Bootstrap the shared embedded PostgreSQL cluster for the current binary.
 ///
-/// This is a thin wrapper around the library's `shared_cluster_handle()` that
-/// adds cross-process cleanup for nextest compatibility.
+/// This is deliberately not named after handle acquisition because it has
+/// observable effects beyond obtaining the handle:
+///
+/// - it takes a cross-process lock so only one test binary bootstraps at once;
+/// - it acquires the process-wide cluster handle and registers `atexit`
+///   cleanup for the postmaster;
+/// - it connects to the server and sets `UTC` to verify timezone support;
+/// - when `UTC` is missing from the bundled data, it runs the installation's
+///   `bin/pg_config` and creates a hard link from `UCT` to `UTC` inside the
+///   installation's bundled timezone directory.
 ///
 /// # Environment preconditions
 ///
@@ -169,7 +178,7 @@ mod exit_handler {
 ///
 /// ```rust,ignore
 /// ensure_stable_cluster_environment();
-/// let cluster = shared_cluster_handle()
+/// let cluster = bootstrap_shared_cluster()
 ///     .expect("embedded postgres cluster should be available");
 /// let temp_db = cluster
 ///     .create_temporary_database()
@@ -182,7 +191,7 @@ mod exit_handler {
 // group. The internal helpers (`ensure_stable_cluster_environment`,
 // `unix_atexit::read_postmaster_pid`, etc.) are unit-tested in the dedicated
 // `atexit_cleanup_tests` integration-test target.
-pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
+pub fn bootstrap_shared_cluster() -> BootstrapResult<&'static ClusterHandle> {
     #[cfg(unix)]
     stable_cluster_env::unix_atexit::acquire_shared_cluster_process_lock()?;
     let mut attempt = 1;
@@ -191,6 +200,7 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
             Ok(handle) => {
                 #[cfg(unix)]
                 exit_handler::register_process_exit_cleanup(handle);
+                ensure_utc_timezone_alias(handle)?;
                 return Ok(handle);
             }
             Err(error) => {
@@ -202,4 +212,23 @@ pub fn shared_cluster_handle() -> BootstrapResult<&'static ClusterHandle> {
             }
         }
     }
+}
+
+/// Check PostgreSQL UTC readiness, repairing verified bundled data if needed.
+///
+/// A successful check is memoized for the process: UTC support cannot regress
+/// once the server has accepted `SET TIME ZONE 'UTC'`, and every call site
+/// otherwise pays for a fresh connection and probe. Failures stay uncached so
+/// a later call can retry once the cluster is healthy.
+fn ensure_utc_timezone_alias(handle: &ClusterHandle) -> BootstrapResult<()> {
+    static UTC_READY: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    if UTC_READY.get().is_some() {
+        return Ok(());
+    }
+
+    let url = handle.connection().database_url("postgres");
+    postgres_timezone::ensure_utc_ready(&url, &handle.settings().installation_dir)
+        .map_err(BootstrapError::from)?;
+    let _ = UTC_READY.set(());
+    Ok(())
 }
