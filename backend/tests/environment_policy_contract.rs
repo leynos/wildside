@@ -3,15 +3,17 @@
 //!
 //! This target asserts what the repository *declares*: the prohibited APIs in
 //! `clippy.toml`, the deny that turns them into hard errors in every workspace
-//! package, and the embedded PostgreSQL settings the runner composes now that
-//! test support no longer writes them. That the lint actually fires on those
-//! entries is proved separately, in `environment_policy_lint.rs`.
+//! package, and the embedded PostgreSQL settings the runners compose now that
+//! test support no longer writes them. Cargo supplies non-secret version and
+//! mirror defaults; Make and CI supply the test password. That the lint
+//! actually fires on those entries is proved separately, in
+//! `environment_policy_lint.rs`.
 //!
 //! Every file is read with `include_str!`, so moving or deleting one is a
 //! compile failure rather than a runtime surprise, and each assertion matches
 //! the mechanism rather than prose about it: the entries and levels come from
-//! the parsed tables, and the Make assertion matches the assignments on the
-//! `cargo nextest run` command line.
+//! the parsed tables, and the Make assertion checks the recipe-scoped test
+//! environment exports.
 //!
 //! # Mutation proof
 //!
@@ -41,6 +43,9 @@
 //! `backend/Cargo.toml denies disallowed_methods locally, so it must deny
 //! clippy::allow_attributes too`.
 
+#[path = "environment_policy_contract/export_tests.rs"]
+mod export_tests;
+
 use std::error::Error as StdError;
 
 use toml::Value;
@@ -54,6 +59,7 @@ const PAGINATION_MANIFEST: &str = include_str!("../crates/pagination/Cargo.toml"
 const EXAMPLE_DATA_MANIFEST: &str = include_str!("../../crates/example-data/Cargo.toml");
 const ARCHITECTURE_LINT_MANIFEST: &str = include_str!("../../tools/architecture-lint/Cargo.toml");
 const MAKEFILE: &str = include_str!("../../Makefile");
+const CARGO_CONFIG: &str = include_str!("../../.cargo/config.toml");
 
 /// Every `std::env` API the policy prohibits.
 const PROHIBITED_ENVIRONMENT_APIS: [&str; 6] = [
@@ -65,17 +71,35 @@ const PROHIBITED_ENVIRONMENT_APIS: [&str; 6] = [
     "std::env::remove_var",
 ];
 
-/// Manifests that must make `clippy::disallowed_methods` a hard error, paired
-/// with the name used in failure messages.
-const MANIFESTS_DENYING_DISALLOWED_METHODS: [(&str, &str); 5] = [
-    ("Cargo.toml", WORKSPACE_MANIFEST),
-    ("backend/Cargo.toml", BACKEND_MANIFEST),
-    ("backend/crates/pagination/Cargo.toml", PAGINATION_MANIFEST),
-    ("crates/example-data/Cargo.toml", EXAMPLE_DATA_MANIFEST),
-    (
-        "tools/architecture-lint/Cargo.toml",
-        ARCHITECTURE_LINT_MANIFEST,
-    ),
+/// A manifest's source and diagnostic name belong to the same test input.
+#[derive(Clone, Copy)]
+struct Manifest<'a> {
+    path: &'a str,
+    contents: &'a str,
+}
+
+/// Manifests that must make `clippy::disallowed_methods` a hard error.
+const MANIFESTS_DENYING_DISALLOWED_METHODS: [Manifest<'_>; 5] = [
+    Manifest {
+        path: "Cargo.toml",
+        contents: WORKSPACE_MANIFEST,
+    },
+    Manifest {
+        path: "backend/Cargo.toml",
+        contents: BACKEND_MANIFEST,
+    },
+    Manifest {
+        path: "backend/crates/pagination/Cargo.toml",
+        contents: PAGINATION_MANIFEST,
+    },
+    Manifest {
+        path: "crates/example-data/Cargo.toml",
+        contents: EXAMPLE_DATA_MANIFEST,
+    },
+    Manifest {
+        path: "tools/architecture-lint/Cargo.toml",
+        contents: ARCHITECTURE_LINT_MANIFEST,
+    },
 ];
 
 /// Manifests that restate the deny locally because they do not yet inherit the
@@ -84,12 +108,15 @@ const MANIFESTS_DENYING_DISALLOWED_METHODS: [(&str, &str); 5] = [
 /// A package-level deny is only half the guard: without `allow_attributes` a
 /// contributor could silence a prohibited call with a bare `#[allow]`, which
 /// never warns once the site is migrated.
-const MANIFESTS_WITH_A_LOCAL_DENY: [(&str, &str); 2] = [
-    ("backend/Cargo.toml", BACKEND_MANIFEST),
-    (
-        "tools/architecture-lint/Cargo.toml",
-        ARCHITECTURE_LINT_MANIFEST,
-    ),
+const MANIFESTS_WITH_A_LOCAL_DENY: [Manifest<'_>; 2] = [
+    Manifest {
+        path: "backend/Cargo.toml",
+        contents: BACKEND_MANIFEST,
+    },
+    Manifest {
+        path: "tools/architecture-lint/Cargo.toml",
+        contents: ARCHITECTURE_LINT_MANIFEST,
+    },
 ];
 
 /// Lints a locally denying package must also deny.
@@ -111,9 +138,9 @@ fn disallowed_method_paths() -> TestResult<Vec<String>> {
 }
 
 /// Return the level a manifest table assigns to one Clippy lint.
-fn lint_level(document: &Value, table: &str, lint: &str) -> Option<String> {
+fn lint_level(document: &Value, lint: &str) -> Option<String> {
     document
-        .get(table)
+        .get("lints")
         .and_then(|lints| lints.get("clippy"))
         .and_then(|clippy| clippy.get(lint))
         .and_then(Value::as_str)
@@ -125,9 +152,9 @@ fn lint_level(document: &Value, table: &str, lint: &str) -> Option<String> {
 /// A package-level entry wins; otherwise a package that inherits the shared
 /// baseline (`[lints] workspace = true`) resolves to the workspace level, as
 /// does the workspace manifest itself.
-fn resolved_lint_level(manifest: &str, contents: &str, lint: &str) -> TestResult<Option<String>> {
-    let document: Value = toml::from_str(contents)?;
-    if let Some(level) = lint_level(&document, "lints", lint) {
+fn resolved_lint_level(manifest: Manifest<'_>, lint: &str) -> TestResult<Option<String>> {
+    let document: Value = toml::from_str(manifest.contents)?;
+    if let Some(level) = lint_level(&document, lint) {
         return Ok(Some(level));
     }
 
@@ -136,12 +163,12 @@ fn resolved_lint_level(manifest: &str, contents: &str, lint: &str) -> TestResult
         .and_then(|lints| lints.get("workspace"))
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    if inherits_workspace || manifest == "Cargo.toml" {
+    if inherits_workspace || manifest.path == "Cargo.toml" {
         let workspace: Value = toml::from_str(WORKSPACE_MANIFEST)?;
         let workspace_table = workspace
             .get("workspace")
             .ok_or("the workspace manifest must declare [workspace]")?;
-        return Ok(lint_level(workspace_table, "lints", lint));
+        return Ok(lint_level(workspace_table, lint));
     }
 
     Ok(None)
@@ -171,11 +198,12 @@ fn clippy_configuration_disallows_every_ambient_environment_api() -> TestResult 
 /// `clippy::disallowed_methods` to `deny`.
 #[test]
 fn every_workspace_member_denies_disallowed_methods() -> TestResult {
-    for (manifest, contents) in MANIFESTS_DENYING_DISALLOWED_METHODS {
+    for manifest in MANIFESTS_DENYING_DISALLOWED_METHODS {
         assert_eq!(
-            resolved_lint_level(manifest, contents, "disallowed_methods")?.as_deref(),
+            resolved_lint_level(manifest, "disallowed_methods")?.as_deref(),
             Some("deny"),
-            "{manifest} must deny clippy::disallowed_methods"
+            "{} must deny clippy::disallowed_methods",
+            manifest.path
         );
     }
     Ok(())
@@ -188,14 +216,15 @@ fn every_workspace_member_denies_disallowed_methods() -> TestResult {
 /// and `allow_attributes_without_reason`.
 #[test]
 fn a_local_deny_carries_the_companion_attribute_lints() -> TestResult {
-    for (manifest, contents) in MANIFESTS_WITH_A_LOCAL_DENY {
-        let document: Value = toml::from_str(contents)?;
+    for manifest in MANIFESTS_WITH_A_LOCAL_DENY {
+        let document: Value = toml::from_str(manifest.contents)?;
         for lint in COMPANION_ATTRIBUTE_LINTS {
             assert_eq!(
-                lint_level(&document, "lints", lint).as_deref(),
+                lint_level(&document, lint).as_deref(),
                 Some("deny"),
-                "{manifest} denies disallowed_methods locally, so it must deny \
-                 clippy::{lint} too"
+                "{} denies disallowed_methods locally, so it must deny \
+                 clippy::{lint} too",
+                manifest.path
             );
         }
     }
@@ -211,27 +240,80 @@ fn a_local_deny_carries_the_companion_attribute_lints() -> TestResult {
 fn makefile_declares(statement: &str) -> bool {
     MAKEFILE
         .lines()
-        .map(str::trim_end)
+        .filter(|line| !line.starts_with('\t'))
+        .map(str::trim)
         .filter(|line| !line.trim_start().starts_with('#'))
         .any(|line| line == statement)
 }
 
-/// Scenario: the embedded PostgreSQL settings stop reaching the test runner,
-/// so nothing supplies them once test support no longer writes them.
+/// Report whether `statement` occurs in the recipe for the exact target.
+fn makefile_target_recipe_contains(target: &str, statement: &str) -> bool {
+    let mut is_target_recipe = false;
+
+    for line in MAKEFILE.lines() {
+        if line.starts_with('\t') {
+            if is_target_recipe && line.trim() == statement {
+                return true;
+            }
+        } else {
+            is_target_recipe = line.trim() == target;
+        }
+    }
+
+    false
+}
+
+/// Report whether an active Makefile directive exports `name` globally.
 ///
-/// Invariant: the Makefile still declares both overridable defaults and still
-/// exports both names, so every recipe passes them to its children verbatim.
-/// Each of the four directives is matched as a whole, uncommented line: a
-/// substring search would pass on a commented-out default, and a recipe-level
-/// `NAME=$(NAME)` prefix would be re-parsed by the shell and lose a value
-/// containing whitespace.
+/// A bare `export` exports every Make variable to child processes, so it also
+/// violates the test-only environment boundary.
+fn makefile_globally_exports(makefile: &str, name: &str) -> bool {
+    const MAKE_ASSIGNMENT_OPERATORS: &[&str] = &["=", ":=", "::=", ":::=", "?=", "+=", "!="];
+
+    makefile
+        .lines()
+        .filter(|line| !line.starts_with('\t'))
+        .map(str::trim)
+        .filter(|line| !line.starts_with('#'))
+        .any(|line| {
+            let Some(arguments) = line.strip_prefix("export") else {
+                return false;
+            };
+            if !arguments.is_empty() && !arguments.chars().next().is_some_and(char::is_whitespace) {
+                return false;
+            }
+
+            let names: Vec<_> = arguments
+                .split('#')
+                .next()
+                .unwrap_or_default()
+                .split_whitespace()
+                .collect();
+            names.is_empty()
+                || names.iter().any(|exported| {
+                    *exported == name
+                        || exported.strip_prefix(name).is_some_and(|suffix| {
+                            MAKE_ASSIGNMENT_OPERATORS
+                                .iter()
+                                .any(|operator| suffix.starts_with(*operator))
+                        })
+                })
+        })
+}
+
+/// Scenario: test-runner settings stop reaching the Rust test processes.
+///
+/// Invariant: the Makefile declares both overridable defaults and exports
+/// them only inside the `test-rust` recipe, while unrelated recipes do not
+/// inherit them. Each Make directive is matched as a whole, uncommented line:
+/// a substring search would accept text inside a comment or global export.
 #[test]
 fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
     for statement in [
         "PG_PASSWORD ?= wildside_embedded_test",
-        "export PG_PASSWORD",
         "POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries",
-        "export POSTGRESQL_RELEASES_URL",
+        "shell_quote = '$(subst ','\"'\"',$(value $(1)))'",
+        "test-rust: workspace-sync prepare-pg-worker",
     ] {
         assert!(
             makefile_declares(statement),
@@ -239,5 +321,52 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
              inside a comment"
         );
     }
+    assert!(makefile_target_recipe_contains(
+        "test-rust: workspace-sync prepare-pg-worker",
+        "export PG_PASSWORD=$(call shell_quote,PG_PASSWORD) POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)",
+    ));
+    for name in ["PG_PASSWORD", "POSTGRESQL_RELEASES_URL"] {
+        assert!(
+            !makefile_globally_exports(MAKEFILE, name),
+            "{name} must not be exported to unrelated Make recipes"
+        );
+    }
+    Ok(())
+}
+
+/// Cargo may compose non-secret settings without replacing explicit caller
+/// configuration or mutating the environment inside test processes.
+#[rstest::rstest]
+#[case::version("PG_VERSION_REQ", "=16.10.0")]
+#[case::releases(
+    "POSTGRESQL_RELEASES_URL",
+    "https://github.com/theseus-rs/postgresql-binaries"
+)]
+fn cargo_supplies_non_forcing_postgres_defaults(
+    #[case] name: &str,
+    #[case] expected: &str,
+) -> TestResult {
+    let config: Value = toml::from_str(CARGO_CONFIG)?;
+    let setting = config
+        .get("env")
+        .and_then(|env| env.get(name))
+        .ok_or("Cargo must supply the non-secret PostgreSQL defaults")?;
+    assert_eq!(setting.get("value").and_then(Value::as_str), Some(expected));
+    assert_eq!(setting.get("force").and_then(Value::as_bool), Some(false));
+    Ok(())
+}
+
+/// Cargo's process-wide environment must not expose the test password to
+/// non-test commands such as the cluster initializer.
+#[test]
+fn cargo_does_not_supply_the_test_password_to_non_test_commands() -> TestResult {
+    let config: Value = toml::from_str(CARGO_CONFIG)?;
+    assert!(
+        config
+            .get("env")
+            .and_then(|environment| environment.get("PG_PASSWORD"))
+            .is_none(),
+        "Cargo config must not apply the test password to every Cargo command"
+    );
     Ok(())
 }

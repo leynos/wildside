@@ -323,24 +323,25 @@ PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.2
 NEXTEST_TEST_THREADS ?= 1
 
 # Embedded PostgreSQL configuration is composed by the runner, not mutated
-# in-process by test support (issue #464). `?=` leaves a value already present
-# in the environment untouched, so a developer or CI job can still override
-# either variable; Make supplies the stable default otherwise.
+# in-process by test support (issue #464). Make supplies the stable test
+# password only to `test-rust`; Cargo supplies the non-secret version and
+# release-mirror defaults from `.cargo/config.toml`. Caller-provided values
+# remain intact in both cases.
 #
 # PG_PASSWORD must be stable across test binaries:
 # `postgresql_embedded::Settings::default()` generates a random password on each
 # call, and `setup()` skips `initdb` when the data directory already exists, so
 # a random password makes later binaries fail with `28P01 password
-# authentication failed`. POSTGRESQL_RELEASES_URL is pinned to the Theseus
+# authentication failed`. Cargo pins POSTGRESQL_RELEASES_URL to the Theseus
 # binaries mirror so the download source cannot drift with crate defaults.
 #
-# Both are exported rather than assigned on the recipe's command line so a
-# value containing whitespace or shell metacharacters reaches the child
-# verbatim instead of being re-parsed by the shell.
+# The test recipe exports both settings once in its `.ONESHELL` script, keeping
+# Make's target namespace unique and the default password out of unrelated
+# recipes. `shell_quote` preserves caller values containing spaces, quotes,
+# dollar signs, or shell metacharacters.
 PG_PASSWORD ?= wildside_embedded_test
 POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries
-export PG_PASSWORD
-export POSTGRESQL_RELEASES_URL
+shell_quote = '$(subst ','"'"',$(value $(1)))'
 
 
 # Zero-tolerance documentation gate: TypeDoc's notDocumented validation over
@@ -356,6 +357,7 @@ docs-check: deps
 test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
 
 test-rust: workspace-sync prepare-pg-worker
+	export PG_PASSWORD=$(call shell_quote,PG_PASSWORD) POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
 		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail))'
 	$(RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features

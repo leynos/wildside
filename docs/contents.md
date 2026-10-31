@@ -33,6 +33,12 @@
   taxonomy](adr-002-environment-seam-taxonomy.md) – how environment-dependent
   boundaries are injected and where a direct read is still allowed. _Audience:
   backend developers._
+- [ADR-003: Durable retry scheduling for Apalis jobs](adr-003-durable-retry-scheduling-for-apalis-jobs.md)
+  – durable backoff and the pinned worker contract. _Audience: backend
+  developers and operators._
+- [ADR-004: Dead letters as Apalis rows behind a domain port](adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md)
+  – terminal jobs, guarded transitions, and requeue provenance. _Audience:
+  backend developers and operators._
 
 ## Frontend development
 
@@ -125,6 +131,9 @@
 - [Session signing key rotation](runbooks/session-key-rotation.md) – procedure
   for rotating backend session signing keys in Kubernetes. _Audience: platform
   engineers and operators._
+- [Queue retry and dead-letter operations](runbooks/queue-retry-and-dead-letter-operations.md)
+  – inspect, requeue, and discard terminal jobs and diagnose worker crash
+  loops. _Audience: backend operators and developers._
 
 ## Developer guidelines and tooling
 

@@ -19,13 +19,11 @@
 //! receives them. This keeps version rejection and domain validation at the
 //! queue boundary rather than duplicating it in each handler.
 //!
-//! # Future Implementation
+//! # Delivery scope
 //!
-//! The full queue system will include:
-//! - Worker consumption of enqueued jobs
-//! - Retry policies with exponential backoff
-//! - Dead-letter handling for failed jobs
-//! - Trace ID propagation through job metadata
+//! Durable retry scheduling and dead-letter operations are implemented here.
+//! Worker deployment and request-path dispatch remain roadmap work, as does
+//! trace ID propagation through job metadata.
 //!
 //! See `docs/backend-roadmap.md` section 5.2 for the implementation roadmap.
 
@@ -34,6 +32,15 @@ pub use stub_route_queue::StubRouteQueue;
 
 mod apalis_route_queue;
 pub use apalis_route_queue::{ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue};
+
+mod postgres_dead_letter;
+pub use postgres_dead_letter::{PostgresDeadLetterQueue, RequeueBudgets};
+
+mod postgres_retry_scheduler;
+pub use postgres_retry_scheduler::{PostgresRetryScheduler, TerminalRetryReason};
+
+mod retrying_handler;
+pub use retrying_handler::{RetryingJobService, RetryingJobServiceConfig};
 
 mod job_decode;
 pub use job_decode::decode_job;

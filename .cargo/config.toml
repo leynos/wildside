@@ -1,3 +1,10 @@
+# Keep the test password out of Cargo's process-wide defaults: Cargo also
+# launches the non-test cluster initializer, which must inherit an explicit
+# operator-supplied secret. Test runners provide the stable password instead.
+[env]
+PG_VERSION_REQ = { value = "=16.10.0", force = false }
+POSTGRESQL_RELEASES_URL = { value = "https://github.com/theseus-rs/postgresql-binaries", force = false }
+
 [profile.dev]
 opt-level = 1          # default is 0; 1 shrinks a bit without killing compile times
 debug = 1              # 2 is “full debuginfo”; 1 is usually enough

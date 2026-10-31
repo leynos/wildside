@@ -1047,17 +1047,57 @@ Three pieces cooperate here:
   `support::process_env` to those pure helpers. The helpers are unit-tested by
   the dedicated `atexit_cleanup_tests` target, which drives them entirely from
   stub readers and sandbox directories.
-- **`PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are composed by the runner**,
-  not by test code: the `test-rust` Make recipe passes them on the
-  `cargo nextest run` command line (with `?=` defaults that an existing value
-  overrides), and in CI every step that runs the suite sets them in its `env:`
-  block. That is the coverage steps in `ci.yml` and `coverage-main.yml`, and
-  also `ci.yml`'s guarded `Rust tests` step, which is the Dependabot lane's
-  only backend run and so the only producer of these values on a Dependabot
-  pull request. `backend/tests/environment_policy_contract.rs` fails if the
-  Make recipe stops doing so, and
-  `tests/workflow_contracts/embedded_postgres_env_test.py` fails if any of
-  those steps does.
+- **Embedded PostgreSQL settings are composed by the runner**, not by test
+  code. `.cargo/config.toml` supplies non-forcing defaults for `PG_VERSION_REQ`
+  and `POSTGRESQL_RELEASES_URL` on direct Cargo runs from the workspace root or
+  a member directory. It deliberately does not set `PG_PASSWORD`: Cargo applies
+  this file to every command, including the non-test cluster initializer, which
+  must receive an explicit operator-supplied secret. Make and CI set the stable
+  test password for test runs. The `PG_VERSION_REQ` default pins the test
+  server to `=16.10.0`, matching the warmed archive version. This matters
+  because SQLx requests the `UTC` timezone during connection setup, and newer
+  embedded archives may not include PostgreSQL's `UTC` alias. Explicit parent
+  environment values take precedence. Make exports the password and release URL
+  defaults only within the `test-rust` target scope. In CI, each step that runs
+  the suite sets them in its `env:` block. These are the coverage steps in
+  `ci.yml` and `coverage-main.yml`, plus `ci.yml`'s guarded `Rust tests` step,
+  which is the Dependabot lane's only backend run and so the only producer of
+  those values on a Dependabot pull request.
+  `backend/tests/environment_policy_contract.rs` fails if the Make recipe stops
+  doing so, and `tests/workflow_contracts/embedded_postgres_env_test.py` fails
+  if any of those steps does.
+- **Direct Cargo integration-test runs need an explicit test password.** Cargo
+  supplies the pinned test-server version and release mirror before launching
+  test processes, including scratch integration targets and Nextest. Run
+  `make prepare-pg-worker` once, then launch the desired target with the
+  disposable test-cluster password. Separate paths give a direct run its own
+  cluster and temporary files when other test processes are active:
+
+  ```sh
+  pg_test_root="$(mktemp -d /var/tmp/wildside-pg.XXXXXX)"
+  mkdir -p "$pg_test_root/tmp"
+  PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" \
+  POSTGRESQL_RELEASES_URL="${POSTGRESQL_RELEASES_URL:-https://github.com/theseus-rs/postgresql-binaries}" \
+  PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  PG_DATA_DIR="$pg_test_root/data" PG_RUNTIME_DIR="$pg_test_root/runtime" \
+  TMPDIR="$pg_test_root/tmp" \
+    cargo test -p backend --test TEST_TARGET -- --nocapture
+  ```
+
+  Replace `TEST_TARGET` with the integration-test target. The worker path above
+  assumes the workspace root. Keep the task-owned root until its test and
+  PostgreSQL processes have exited, then remove it if it is no longer needed.
+  Use this test-only password only for disposable embedded test clusters; the
+  [cluster initializer guide](pg-embed-setup-unpriv-users-guide.md) requires a
+  strong secret for non-test use. Explicit `PG_PASSWORD`, `PG_VERSION_REQ`, and
+  `POSTGRESQL_RELEASES_URL` values remain supported. Cargo discovers workspace
+  configuration from the current directory and its ancestors; invoking it from
+  elsewhere with `--manifest-path` alone does not load the version and mirror
+  defaults. Supply the environment explicitly in that case or when invoking a
+  test binary directly. `ensure_stable_cluster_environment` only reconciles
+  password state; it does not mutate the test process environment. The
+  environment policy contract tests guard the Makefile password and all
+  non-forcing defaults.
 
 ## Environment seams
 
@@ -2216,6 +2256,34 @@ Domain code depends only on the `RouteQueue` port trait. The Apalis adapter
 implements this port without exposing `apalis-postgres` or `sqlx` types in the
 public API.
 
+The domain owns `JobRetryPolicy` and its validated `JobRetryPolicyConfig`,
+`JobErrorKind`, and the payload-free, 1,024-byte-bounded `JobFailure`. The
+`DeadLetterQueue` port exchanges `DeadJob`, `DeadJobId`, `DeadReason`, and
+`DeadLetterError` values without exposing Apalis rows.
+`PostgresDeadLetterQueue` implements that port and receives `RequeueBudgets`
+built from the configured queue policies. A requeue restores the appropriate
+policy limit and records its bounded count under
+`wildside.retry.requeue_count`; terminal failures record
+`wildside.retry.dead_reason`. Both updates preserve unrelated metadata. The
+policy constructor validates delay parameters before jitter so a configuration
+with several invalid fields reports the same first error.
+
+`RetryingJobService`, configured with `RetryingJobServiceConfig` and
+`PostgresRetryScheduler`, applies one policy to one queue. It schedules
+`run_at` with an ownership guard before returning a failure for Apalis to
+acknowledge. Backoff frees the worker slot, and the polling interval is a
+precision floor. A crash between the in-memory attempt increment and its
+acknowledgement can lose that one in-flight attempt. Do not install an
+in-process retry layer on these pinned release candidates. See
+[ADR-003](adr-003-durable-retry-scheduling-for-apalis-jobs.md), [ADR-004](adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md),
+and the [operator runbook](runbooks/queue-retry-and-dead-letter-operations.md).
+
+The queue BDD suites share `WorkerObservation` within their test worker harness
+to run bounded polling and capture terminal and quiet-period counts. It is test
+support, not a production worker abstraction. The environment-policy contract
+similarly pairs each manifest's path and contents in a test-only `Manifest`
+value so diagnostics refer to the source being checked.
+
 ### Queue architecture and public API
 
 Public production API:
@@ -2338,14 +2406,14 @@ UTF-8 bytes of the version; this diagnostic limit is unrelated to the V1
 enrichment limits of 64 tags and 64 UTF-8 bytes per tag. The raw payload is
 never logged. `decode_job` emits no warnings or metrics: roadmap item 5.2.2
 defines no decode metric. The future 5.3.1 worker/consumer boundary owns safe
-warning and rejection metrics. Retry and dead-letter policy remain owned by
+warning and rejection metrics. Retry and dead-letter policy are implemented by
 roadmap item 5.2.3.
 
 The payloads carry `idempotency_key` as part of the domain job contract. The
 current `Cargo.lock` resolves `apalis-core` 1.0.0-rc.9 and `apalis-postgres`
 1.0.0-rc.8, whose framework-native task identity is available. The adapter
-nevertheless currently serializes the payload and calls
-`storage.push(payload)`; mapping the V1 field to `TaskBuilder::id(...)` is
+nevertheless currently builds a task with the queue's attempt limit and calls
+`storage.push_task(task)`; mapping the V1 field to `TaskBuilder::id(...)` is
 deferred. Until that adapter mapping is deliberately introduced, the V1
 `idempotency_key` is authoritative and remains the only documented source of
 truth. Trace IDs are intentionally absent from V1; roadmap item 5.2.4 owns
@@ -2380,11 +2448,16 @@ tests may use Prometheus to assert isolated registries.
 Queue observability:
 
 - `RouteQueueMetrics` – The domain-owned metrics port used by queue adapters
-  to record enqueue outcomes without depending on Prometheus or process-global
-  state.
+  to record enqueue, retry, and dead-letter outcomes without depending on
+  Prometheus or process-global state.
 - `RouteQueueOutcome` – The bounded outcome label type for queue metrics. It
   currently exposes only `success` and `failure`, keeping metric cardinality
   predictable.
+- `RouteRetryOutcome` – The bounded durable retry label type. It distinguishes
+  `scheduled` from `schedule_failure` without adding queue or job identifiers
+  to metric labels.
+- `RouteDeadLetterOutcome` – The bounded terminal-reason label type. It
+  distinguishes `exhausted` from `fatal`.
 - `NoOpRouteQueueMetrics` – The no-op implementation used by tests and
   metrics-disabled builds. Prefer it whenever a test is not asserting metrics
   behaviour.
@@ -2402,6 +2475,15 @@ Queue observability:
 - `route_queue_enqueue_latency_seconds{outcome=success|failure}` – A
   feature-gated Prometheus histogram for end-to-end queue enqueue latency in
   seconds.
+- `route_queue_retry_total{outcome=scheduled|schedule_failure}` – A
+  feature-gated counter for durable retry scheduling results.
+- `route_queue_dead_letter_total{reason=exhausted|fatal}` – A feature-gated
+  counter for terminal retry outcomes.
+- Retry policy belongs to one queue/job family. The Apalis handler wrapper
+  persists `run_at` before returning the failure to the PostgreSQL
+  acknowledgement; it installs no in-process retry middleware. Terminal
+  outcomes persist `wildside.retry.dead_reason` in the existing Apalis JSONB
+  metadata, and acknowledgements preserve that value and other metadata.
 - `tracing` – The adapter emits `debug` on enqueue success and `warn` on
   failure points (serialization, push, and setup failures), including latency
   and the adapter outcome.
@@ -2418,6 +2500,12 @@ The queue adapter requires:
   pool used by `ApalisPostgresProvider`
 - `serde` / `serde_json` – Payload serialization
 
+The Apalis dependencies are pinned exactly to `apalis-core = "=1.0.0-rc.9"` and
+`apalis-postgres = "=1.0.0-rc.8"` because their 1.0.0 final release changes the
+queue integration contract. Re-run the V8 storage and acknowledgement canaries
+before changing the pins. The upgrade is tracked in
+[issue #550](https://github.com/leynos/wildside/issues/550).
+
 #### Test infrastructure
 
 - `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
@@ -2425,15 +2513,22 @@ The queue adapter requires:
 - No feature flags required; BDD tests are in the `tests/` integration
   harness and run unconditionally with `cargo test`
 
-To run BDD tests locally:
+To run BDD tests locally, first prepare the worker as described in
+[embedded PostgreSQL integration tests](#embedded-postgresql-integration-tests).
+For example, select either target with the disposable test password:
 
 ```bash
 # Run the Apalis BDD suite
-cargo test -p backend --test route_queue_apalis_bdd
+PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  cargo test -p backend --test route_queue_apalis_bdd
 
 # Exercise typed payload persistence and decode
-cargo test -p backend --test job_structs_postgres_bdd
+PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  cargo test -p backend --test job_structs_postgres_bdd
 ```
+
+For concurrent direct runs, also apply the separate data, runtime, and
+temporary paths from the earlier example to each command.
 
 ### Queue test infrastructure
 
