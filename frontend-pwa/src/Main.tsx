@@ -6,22 +6,27 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { type FetchDiagnosticEvent, setFetchDiagnostics } from './api/diagnostics';
+import { createFetchMetrics, publishFetchMetrics } from './api/fetch-metrics';
 import { App } from './app/App';
 
 /**
- * Report bounded fetcher failures through the global error reporting channel.
+ * Feed fetcher diagnostics to the application's metrics and error channel.
  *
- * The PWA has no telemetry destination yet, so failures go to the browser's
- * own reporting pipeline: `reportError` raises a global `error` event that
- * devtools, window error handlers, and any future telemetry adapter observe.
- * The event carries a masked route template and bounded categories, never a
+ * Counts, latency, and failure categories stay in the bounded in-memory
+ * consumer, which devtools can read through `__wildsideFetchMetrics`. Failures
+ * also go through `reportError`, so the browser's global error pipeline sees
+ * them; the event carries a bounded route template and categories, never a
  * URL, query string, body, credential, or token.
  */
-const reportFetchFailure = (event: FetchDiagnosticEvent): void => {
+const fetchMetrics = createFetchMetrics();
+publishFetchMetrics(fetchMetrics);
+
+const observeFetchDiagnostic = (event: FetchDiagnosticEvent): void => {
+  fetchMetrics.sink(event);
   if (event.kind !== 'failure') return;
   reportError(new Error(`Fetch failure: ${event.failureCategory ?? 'unknown'}`, { cause: event }));
 };
-setFetchDiagnostics(reportFetchFailure);
+setFetchDiagnostics(observeFetchDiagnostic);
 
 // Use lower camelCase for module-level consts to satisfy lint rules.
 const queryClient = new QueryClient({

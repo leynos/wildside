@@ -142,7 +142,11 @@ interface FetchContext {
  * Perform the request, reporting transport failures without masking them.
  *
  * `fetch` rejects with a network error that callers still need to observe, so
- * the original error is rethrown after the failure is reported.
+ * the original error is rethrown after the failure is reported. A caller's own
+ * abort is not a transport fault: `customFetch` forwards `init.signal`, so
+ * excluding `AbortError` keeps a deliberate cancellation out of the failure
+ * counts and the global error pipeline. A `TimeoutError` is still reported,
+ * because a timeout is a genuine transport failure the caller did not choose.
  */
 const fetchGuarded = async (
   request: () => Promise<Response>,
@@ -151,6 +155,7 @@ const fetchGuarded = async (
   try {
     return await request();
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
     emitFetchDiagnostic({
       kind: 'failure',
       method: context.method,
@@ -194,7 +199,12 @@ interface ResponseTiming {
   readonly traceId?: string;
 }
 
-/** Describe a response in the bounded terms a diagnostics sink may receive. */
+/**
+ * Describe a response in the bounded terms a diagnostics sink may receive.
+ *
+ * Duration is measured here, at emission time, so a success or failure event
+ * covers body consumption and payload validation as well as the request.
+ */
 const responseTiming = (res: Response, context: FetchContext): ResponseTiming => ({
   method: context.method,
   operation: context.operation,
@@ -204,21 +214,29 @@ const responseTiming = (res: Response, context: FetchContext): ResponseTiming =>
 });
 
 /** Report an HTTP failure, then reject with the status and error detail. */
-const rejectHttpFailure = async (res: Response, timing: ResponseTiming): Promise<never> => {
-  emitFetchDiagnostic({ ...timing, kind: 'failure', failureCategory: 'http' });
+const rejectHttpFailure = async (res: Response, context: FetchContext): Promise<never> => {
+  emitFetchDiagnostic({
+    ...responseTiming(res, context),
+    kind: 'failure',
+    failureCategory: 'http',
+  });
   const detail = await parseErrorDetail(res);
   const suffix = detail ? `: ${JSON.stringify(detail)}` : '';
   throw new Error(`${res.status} ${res.statusText} ${res.url}${suffix}`, { cause: detail });
 };
 
 /** Decode and validate a JSON payload, reporting decoding faults as `json`. */
-const readJsonPayload = async (res: Response, timing: ResponseTiming): Promise<JsonValue> => {
+const readJsonPayload = async (res: Response, context: FetchContext): Promise<JsonValue> => {
   try {
     const payload = jsonValueSchema.parse(await res.json());
-    emitFetchDiagnostic({ ...timing, kind: 'response' });
+    emitFetchDiagnostic({ ...responseTiming(res, context), kind: 'response' });
     return payload;
   } catch (error) {
-    emitFetchDiagnostic({ ...timing, kind: 'failure', failureCategory: 'json' });
+    emitFetchDiagnostic({
+      ...responseTiming(res, context),
+      kind: 'failure',
+      failureCategory: 'json',
+    });
     throw error;
   }
 };
@@ -226,14 +244,60 @@ const readJsonPayload = async (res: Response, timing: ResponseTiming): Promise<J
 /** Classify a response and resolve with its validated payload when present. */
 const handleResponse = async (
   res: Response,
-  timing: ResponseTiming,
+  context: FetchContext,
 ): Promise<JsonValue | undefined> => {
-  if (!res.ok) return rejectHttpFailure(res, timing);
+  if (!res.ok) return rejectHttpFailure(res, context);
   if (!shouldParseJson(res)) {
-    emitFetchDiagnostic({ ...timing, kind: 'response' });
+    emitFetchDiagnostic({ ...responseTiming(res, context), kind: 'response' });
     return undefined;
   }
-  return readJsonPayload(res, timing);
+  return readJsonPayload(res, context);
+};
+
+interface FetchOutcome {
+  readonly payload: JsonValue | undefined;
+  readonly timing: ResponseTiming;
+  readonly startedAt: number;
+}
+
+/**
+ * Report a caller-schema failure against the response that carried the payload.
+ *
+ * The transport already reported its own completion, so this event carries the
+ * same status class and trace identifier plus a duration that includes schema
+ * validation, letting a consumer pair both events for one logical operation.
+ */
+const emitSchemaFailure = (outcome: FetchOutcome): void => {
+  emitFetchDiagnostic({
+    ...outcome.timing,
+    durationMs: elapsedSince(outcome.startedAt),
+    kind: 'failure',
+    failureCategory: 'schema',
+  });
+};
+
+/**
+ * Fetch a JSON response and return it with its bounded response timing.
+ *
+ * Callers that validate the payload further need the status class and trace
+ * identifier of the response they validated, so both travel with the payload.
+ */
+const customFetchOutcome = async (
+  input: string,
+  init?: FetchRequestInit,
+): Promise<FetchOutcome> => {
+  const { url, context, body, headers } = prepareRequest(input, init);
+  const res = await fetchGuarded(
+    () => fetch(url, { credentials: 'include', ...init, body, headers }),
+    context,
+  );
+
+  const payload = await handleResponse(res, context);
+  return {
+    payload,
+    timing: responseTiming(res, context),
+    startedAt: context.startedAt,
+  };
 };
 
 /**
@@ -246,13 +310,8 @@ export const customFetch = async (
   input: string,
   init?: FetchRequestInit,
 ): Promise<JsonValue | undefined> => {
-  const { url, context, body, headers } = prepareRequest(input, init);
-  const res = await fetchGuarded(
-    () => fetch(url, { credentials: 'include', ...init, body, headers }),
-    context,
-  );
-
-  return handleResponse(res, responseTiming(res, context));
+  const { payload } = await customFetchOutcome(input, init);
+  return payload;
 };
 
 /**
@@ -299,20 +358,11 @@ export const customFetchParsed = async <Schema extends z.ZodTypeAny>(
   schema: Schema,
   init?: FetchRequestInit,
 ): Promise<z.output<Schema>> => {
-  const startedAt = performance.now();
-  const operation = describeOperation(new URL(input, apiBase()));
-  const method = requestMethod(init?.method);
-
-  const result = schema.safeParse(await customFetch(input, init));
+  const outcome = await customFetchOutcome(input, init);
+  const result = schema.safeParse(outcome.payload);
   if (result.success) return result.data;
 
-  emitFetchDiagnostic({
-    kind: 'failure',
-    method,
-    operation,
-    durationMs: elapsedSince(startedAt),
-    failureCategory: 'schema',
-  });
+  emitSchemaFailure(outcome);
   throw result.error;
 };
 
@@ -326,19 +376,8 @@ export const customFetchParsedSafe = async <Schema extends z.ZodTypeAny>(
   schema: Schema,
   init?: FetchRequestInit,
 ): Promise<z.SafeParseReturnType<unknown, z.output<Schema>>> => {
-  const startedAt = performance.now();
-  const operation = describeOperation(new URL(input, apiBase()));
-  const method = requestMethod(init?.method);
-
-  const result = schema.safeParse(await customFetch(input, init));
-  if (!result.success) {
-    emitFetchDiagnostic({
-      kind: 'failure',
-      method,
-      operation,
-      durationMs: elapsedSince(startedAt),
-      failureCategory: 'schema',
-    });
-  }
+  const outcome = await customFetchOutcome(input, init);
+  const result = schema.safeParse(outcome.payload);
+  if (!result.success) emitSchemaFailure(outcome);
   return result;
 };

@@ -2,11 +2,17 @@
  * @file Bounded diagnostics for the shared API fetcher.
  *
  * The fetcher reports what happened at the HTTP boundary without reporting
- * what was sent. An event carries the method, a masked route template, the
+ * what was sent. An event carries the method, a bounded route template, the
  * elapsed time, the status class, a bounded failure category, and the backend
  * trace identifier. It never carries a URL, query string, body, credential, or
- * free-form error message, so the same record can be forwarded to any
- * destination without a privacy review per sink.
+ * free-form error message.
+ *
+ * Route templates are built from the vocabulary of known API resources
+ * declared in `spec/openapi.json`; any segment outside that vocabulary becomes
+ * `:id` when it looks like an identifier and `:other` otherwise. The result
+ * has bounded cardinality and cannot carry a caller-supplied name, address, or
+ * other path-embedded personal data. Add a new resource word here when the API
+ * gains one, otherwise its routes collapse to `:other`.
  *
  * The application installs a sink with {@link setFetchDiagnostics}. While no
  * sink is installed the fetcher still runs and simply emits nothing.
@@ -68,30 +74,73 @@ export const elapsedSince = (startedAt: number): number =>
 /** Map an HTTP status to its class label, for example `2xx`. */
 export const statusClassOf = (status: number): string => `${Math.trunc(status / 100)}xx`;
 
+/**
+ * Path words that may appear in an operation template.
+ *
+ * This mirrors the resource vocabulary in `spec/openapi.json`. A new endpoint
+ * whose words are absent here still reports, but its segments collapse to
+ * `:other`; extend this set when a resource is added to keep the template
+ * readable.
+ */
+const knownSegments: ReadonlySet<string> = new Set([
+  'admin',
+  'annotations',
+  'api',
+  'bundles',
+  'catalogue',
+  'descriptors',
+  'enrichment',
+  'explore',
+  'health',
+  'interests',
+  'live',
+  'login',
+  'me',
+  'notes',
+  'offline',
+  'preferences',
+  'progress',
+  'provenance',
+  'ready',
+  'routes',
+  'users',
+  'v1',
+  'walk-sessions',
+]);
+
 const numericSegment = /^\d+$/;
 const uuidSegment = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const longIdentifierSegment = /^[0-9a-f]{16,}$/i;
 
+const isIdentifierSegment = (segment: string): boolean =>
+  numericSegment.test(segment) || uuidSegment.test(segment) || longIdentifierSegment.test(segment);
+
 /**
- * Mask identifier-shaped path segments.
+ * Bound one path segment to a template word.
  *
- * Numeric identifiers, UUIDs, and long hexadecimal identifiers become `:id`,
- * which keeps the template bounded and free of request data.
+ * Known vocabulary survives, identifier shapes become `:id`, and anything else
+ * becomes `:other`. The empty leading segment is preserved so the template
+ * keeps its leading slash.
  */
-const boundSegment = (segment: string): string =>
-  numericSegment.test(segment) || uuidSegment.test(segment) || longIdentifierSegment.test(segment)
-    ? ':id'
-    : segment;
+const boundSegment = (segment: string): string => {
+  if (segment === '') return '';
+  if (knownSegments.has(segment)) return segment;
+  return isIdentifierSegment(segment) ? ':id' : ':other';
+};
 
 /**
  * Derive a bounded route template from a request URL.
  *
- * Only the path survives: the origin, query string, and fragment are dropped
- * and identifier-shaped segments are masked.
+ * Only the path survives: the origin, query string, and fragment are dropped,
+ * known resource words are kept, and every other segment is masked.
  *
  * @example
  * describeOperation(new URL('/api/users/42?expand=roles', 'http://host'));
  * // '/api/users/:id'
+ *
+ * @example
+ * describeOperation(new URL('/api/users/alice@example.com', 'http://host'));
+ * // '/api/users/:other'
  */
 export const describeOperation = (url: URL): string =>
   url.pathname

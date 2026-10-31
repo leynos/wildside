@@ -32,15 +32,35 @@ describe('describeOperation', () => {
   it.each([
     ['numeric', '/api/users/42', '/api/users/:id'],
     ['uuid', '/api/users/0f8fad5b-d9cb-469f-a165-70867728950e', '/api/users/:id'],
-    ['long hexadecimal', '/api/objects/0123456789abcdef01', '/api/objects/:id'],
+    ['long hexadecimal', '/api/routes/0123456789abcdef01', '/api/routes/:id'],
   ])('masks a %s identifier segment', (_label, path, expected) => {
     expect(describeOperation(new URL(path, 'http://host'))).toBe(expected);
   });
 
-  it('keeps readable route segments', () => {
-    expect(describeOperation(new URL('/api/walk-sessions/current', 'http://host'))).toBe(
-      '/api/walk-sessions/current',
+  it('keeps the known API vocabulary', () => {
+    expect(describeOperation(new URL('/api/v1/walk-sessions', 'http://host'))).toBe(
+      '/api/v1/walk-sessions',
     );
+  });
+
+  it('collapses an unknown route to a bounded fallback', () => {
+    expect(describeOperation(new URL('/internal/widgets', 'http://host'))).toBe('/:other/:other');
+  });
+
+  it('never forwards a personal-data-shaped segment', () => {
+    expect(describeOperation(new URL('/api/users/alice@example.com', 'http://host'))).toBe(
+      '/api/users/:other',
+    );
+  });
+
+  it('masks a token-shaped segment that is not in the vocabulary', () => {
+    expect(describeOperation(new URL('/api/users/eyJhbGciOiJIUzI1NiJ9', 'http://host'))).toBe(
+      '/api/users/:other',
+    );
+  });
+
+  it('masks a version segment the vocabulary does not list', () => {
+    expect(describeOperation(new URL('/api/v2/users', 'http://host'))).toBe('/api/:other/users');
   });
 });
 

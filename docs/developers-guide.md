@@ -808,27 +808,48 @@ compiles. Runtime behaviour is covered by unit tests and by
 #### Bounded fetch diagnostics
 
 `frontend-pwa/src/api/diagnostics.ts` is the observation seam for that
-boundary. The fetcher emits one event when a logical request starts and one
-when it finishes or fails, and `setFetchDiagnostics(sink)` installs the
-application-wide receiver; with no sink installed the fetcher behaves exactly
-as before.
+boundary. The fetcher emits one `request` event when a logical request starts
+and one `response` or `failure` event when the transport step ends. When
+`customFetchParsed` or `customFetchParsedSafe` rejects a payload it emits one
+further `failure` event with the `schema` category after the `response` event,
+so a sink must count terminal events by kind and category rather than assuming
+one per request. `setFetchDiagnostics(sink)` installs the application-wide
+receiver; with no sink installed the fetcher behaves exactly as before.
 
-An event carries only bounded fields: the upper-cased method, a route template
-with identifier-shaped segments masked (`/api/users/:id`), whole milliseconds
-elapsed, the status class (`2xx`, `5xx`), a failure category (`transport`,
-`http`, `json`, or `schema`), and the backend `trace-id` header when present.
-It never carries the URL, query string, body, credential, or a free-form error
-message, so a sink can forward it without a privacy review per destination.
+An event carries only bounded fields: the upper-cased method, a route template,
+whole milliseconds elapsed, the status class (`2xx`, `5xx`), a failure category
+(`transport`, `http`, `json`, or `schema`), and the backend `trace-id` header
+when present. It never carries the URL, query string, body, credential, or a
+free-form error message.
+
+Route templates are built from the resource vocabulary in `spec/openapi.json`.
+Known words survive, identifier shapes become `:id`, and every other segment
+becomes `:other`, so a path such as `/api/users/alice@example.com` reports as
+`/api/users/:other`. This keeps the label set bounded and stops caller-supplied
+names or addresses appearing in a metric label; add a new resource word to
+`diagnostics.ts` when the API gains one. Duration is measured when an event is
+emitted, so a success or failure event covers response-body consumption and
+payload validation as well as the round trip. A schema failure carries the same
+status class and trace identifier as the response it rejected, which pairs it
+with that response's completion event for one logical operation. A
+caller-initiated abort is not reported as a `transport` failure, because the
+caller chose to cancel the request; a timeout is still reported.
+
 `customFetch`, `customFetchParsed`, and `customFetchParsedSafe` all report
-through this seam; `customFetchOrval` reports via `customFetch`.
+through this seam; `customFetchOrval` reports via `customFetch`. A sink fault
+is swallowed, because diagnostics must not change the outcome of a request.
 
-A sink fault is swallowed, because diagnostics must not change the outcome of a
-request. `frontend-pwa/src/Main.tsx` installs the application sink, which sends
-failure events to `reportError` so the browser's global error pipeline
-(devtools and window error handlers) observes them. The PWA has no telemetry
-destination yet; a future exporter replaces that sink without touching the
-fetcher. Contracts are covered by `diagnostics.test.ts`, and the fetcher-side
-events by `fetcher.diagnostics.test.ts`.
+`frontend-pwa/src/api/fetch-metrics.ts` is the bounded consumer.
+`createFetchMetrics()` accumulates request counts, counts per failure category,
+and latency aggregates per operation template, and keeps the fifty most recent
+events for tracing. Trace identifiers stay in that recent buffer and never
+become metric labels. `frontend-pwa/src/Main.tsx` installs the consumer,
+publishes a snapshot accessor as `__wildsideFetchMetrics` for devtools, and
+sends failure events to `reportError` so the browser's global error pipeline
+observes them. The PWA has no telemetry destination yet; a future exporter
+replaces that composition without touching the fetcher. Contracts are covered by
+`diagnostics.test.ts`, the fetcher-side events by
+`fetcher.diagnostics.test.ts`, and the consumer by `fetch-metrics.test.ts`.
 
 ### Quality gates
 
