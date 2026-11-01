@@ -74,7 +74,9 @@ describe('customFetch diagnostics', () => {
       '/api/v1/users/alice@example.com?access_token=sk-query-token#fragment-marker',
       {
         method: 'post',
-        headers: { Authorization: 'Bearer sk-bearer-token' },
+        // A `Headers` instance keeps the wire-format header name without a
+        // non-camelCase object literal, which the pinned Biome version rejects.
+        headers: new Headers([['Authorization', 'Bearer sk-bearer-token']]),
         body: { secret: 'body-secret-value' },
       },
     );

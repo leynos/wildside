@@ -837,14 +837,19 @@ fewer and contains nothing but letters, digits, `_`, `.`, `:`, and `-`; an
 over-long or malformed value is discarded rather than truncated, because a
 shortened identifier would no longer match the backend's records.
 
-Duration is measured when an event is emitted, so a success or failure event
-covers response-body consumption and payload validation as well as the round
-trip. A schema failure carries the same status class and trace identifier as
-the response it rejected, which pairs it with that response's completion event
-for one logical operation. A caller-initiated abort, recognized from the
-caller's signal and its abort reason, is not reported as a `transport` or
-`json` failure, because the caller chose to cancel the request; a timeout is
-still reported.
+Duration is measured when an event is emitted, so each event covers the phase
+it actually spans rather than a fixed portion of the request. A `response`
+event follows a completed body read, and a `json` failure event follows the
+read that failed, so both include body consumption. An `http` failure event is
+emitted before the error body is parsed, so it stops at the response headers
+and does not include reading or formatting that body. Caller-schema validation
+runs after the `response` event has already been emitted, so validation time
+appears only in the `schema` failure event; that event also carries the same
+status class and trace identifier as the response it rejected, which pairs it
+with that response's completion event for one logical operation. A
+caller-initiated abort, recognized from the caller's signal and its abort
+reason, is not reported as a `transport` or `json` failure, because the caller
+chose to cancel the request; a timeout is still reported.
 
 Timing reads go through an injectable clock. `setFetchClock(clock)` installs a
 `() => number` millisecond source, `fetchClockNow()` reads it, and

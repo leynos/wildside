@@ -55,6 +55,12 @@ describe('describeOperation', () => {
     expect(describeOperation(new URL(path, 'http://host'))).toBe(expected);
   });
 
+  it('prefers a literal template over a per-resource one', () => {
+    // `me` also fits `/api/v1/users/:id`, so only literal precedence keeps the
+    // current user from being reported as an arbitrary per-user route.
+    expect(describeOperation(new URL('/api/v1/users/me', 'http://host'))).toBe('/api/v1/users/me');
+  });
+
   it('keeps a nested declared template', () => {
     expect(describeOperation(new URL('/api/v1/users/me/interests', 'http://host'))).toBe(
       '/api/v1/users/me/interests',

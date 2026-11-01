@@ -243,8 +243,9 @@ interface ResponseTiming {
 /**
  * Describe a response in the bounded terms a diagnostics sink may receive.
  *
- * Duration is measured here, at emission time, so a success or failure event
- * covers body consumption and payload validation as well as the request.
+ * Duration is measured here, at emission time, so each event covers the phase
+ * it spans: an HTTP failure event stops at the response headers, while a
+ * response event, or a `json` failure event, includes reading the body.
  */
 const responseTiming = (res: Response, context: FetchContext): ResponseTiming => ({
   method: context.method,

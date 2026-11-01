@@ -9,7 +9,8 @@
  *
  * Route templates come from the declared table below, mirroring the paths in
  * `spec/openapi.json`: a path either fits one template exactly or reports the
- * single `/unknown` fallback. The set of labels a consumer can ever see is
+ * single `/unknown` fallback, and a literal template takes precedence over a
+ * `:id` template that would also fit. The set of labels a consumer can ever see is
  * therefore finite and reviewable, and no label can carry a caller-supplied
  * name, address, token, or other path-embedded personal data. Add a template
  * here when the API gains one, otherwise its routes report `/unknown`.
@@ -184,6 +185,9 @@ const templateSegments: readonly (readonly string[])[] = knownRouteTemplates.map
   segmentsOf(template),
 );
 
+/** Literal templates, which win over a `:id` template that would also fit. */
+const literalTemplates: ReadonlySet<string> = new Set(knownRouteTemplates);
+
 /** Path segments for matching, with trailing slashes ignored. */
 const pathSegments = (url: URL): readonly string[] => {
   const trimmed = url.pathname.replace(/\/+$/, '');
@@ -212,6 +216,10 @@ const pathSegments = (url: URL): readonly string[] => {
  */
 export const describeOperation = (url: URL): string => {
   const path = pathSegments(url);
+  // A literal template wins over a `:id` template that would also fit, so
+  // `/api/v1/users/me` reports itself rather than the per-user route.
+  const exact = path.join('/');
+  if (literalTemplates.has(exact)) return exact;
   const match = templateSegments.findIndex((template) => fitsTemplate(template, path));
   return match === -1 ? fallbackOperation : knownRouteTemplates[match];
 };
