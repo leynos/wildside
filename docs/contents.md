@@ -36,10 +36,10 @@
 - [Architecture Decision Record (ADR) 003: Front-end linting strategy](adr-003-linting-strategy.md)
   – how Biome, Oxlint, TypeScript, and TypeDoc divide front-end quality checks.
   _Audience: front-end developers and tooling maintainers._
-- [ADR-003: Durable retry scheduling for Apalis jobs](adr-003-durable-retry-scheduling-for-apalis-jobs.md)
+- [ADR-004: Durable retry scheduling for Apalis jobs](adr-004-durable-retry-scheduling-for-apalis-jobs.md)
   – durable backoff and the pinned worker contract. _Audience: backend
   developers and operators._
-- [ADR-004: Dead letters as Apalis rows behind a domain port](adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md)
+- [ADR-005: Dead letters as Apalis rows behind a domain port](adr-005-dead-letters-as-apalis-rows-behind-a-domain-port.md)
   – terminal jobs, guarded transitions, and requeue provenance. _Audience:
   backend developers and operators._
 

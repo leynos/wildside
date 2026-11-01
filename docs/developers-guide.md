@@ -2535,7 +2535,7 @@ Backoff frees the worker slot, and the polling interval is a precision floor. A
 crash between the in-memory attempt increment and its acknowledgement can lose
 that one in-flight attempt. Do not install an in-process retry layer on these
 pinned release candidates. See
-[ADR-003](adr-003-durable-retry-scheduling-for-apalis-jobs.md), [ADR-004](adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md),
+[ADR-004](adr-004-durable-retry-scheduling-for-apalis-jobs.md), [ADR-005](adr-005-dead-letters-as-apalis-rows-behind-a-domain-port.md),
 and the [operator runbook](runbooks/queue-retry-and-dead-letter-operations.md).
 
 The queue BDD suites share `WorkerObservation` within their test worker harness

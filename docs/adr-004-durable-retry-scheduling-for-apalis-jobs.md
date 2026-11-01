@@ -1,4 +1,4 @@
-# ADR-003: Durable retry scheduling for Apalis jobs
+# ADR-004: Durable retry scheduling for Apalis jobs
 
 - Status: Accepted
 - Date: 2026-10-17

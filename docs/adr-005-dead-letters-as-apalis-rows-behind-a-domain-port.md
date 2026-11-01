@@ -1,4 +1,4 @@
-# ADR-004: Dead letters as Apalis rows behind a domain port
+# ADR-005: Dead letters as Apalis rows behind a domain port
 
 - Status: Accepted
 - Date: 2026-10-25
