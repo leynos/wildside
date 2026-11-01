@@ -194,7 +194,7 @@ const pathSegments = (url: URL): readonly string[] => {
  * Derive a bounded route template from a request URL.
  *
  * Only the path is consulted: the origin, query string, and fragment are
- * dropped, and an unlisted path reports {@link fallbackOperation}. Because the
+ * dropped, and an unlisted path reports `/unknown`. Because the
  * result is always one of a declared, finite set, an operation label cannot
  * carry a caller-supplied name, address, token, or other path-embedded data.
  *
