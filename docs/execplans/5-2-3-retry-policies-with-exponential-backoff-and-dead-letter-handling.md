@@ -2807,3 +2807,64 @@ four shared-cluster tests time out deterministically. The run reached 1,000 of
 1,981 cases with 995 passed, four timeouts, and no assertion failures before it
 was stopped. Hosted `coverage` on the published head is the authoritative test
 evidence; the remaining local gates are recorded separately.
+
+2026-11-01 Europe/Berlin: CodeRabbit's completeness assessment
+`WILDSIDE-457-COMPLETENESS-20261031-1` (assessed base `9206b8f`, assessed head
+`bf10e54`) raised four findings against the published candidate. All four were
+addressed on the same branch before the next gate run.
+
+The first finding asked for decoding into the queue's concrete job type before
+the handler runs. This was already the production behaviour:
+`RetryingJobService <J, F>` calls `decode_job::<J>` and converts a decode error
+into a `Fatal` `JobFailure`, so the handler is never invoked. What was missing
+was evidence.
+`backend/src/outbound/queue/retrying_handler/tests/service_decode.rs` now adds
+service-level cases for a malformed v1 body (`{"v":"v1"}`) and an unsupported
+version (`{"v":"v2",...}`), each asserting that the handler did not run and
+that exactly one terminal write was attempted. The doubles those tests share
+live in the sibling `tests/doubles.rs`, which keeps every file in the module
+under the repository's 400-line limit.
+`backend/tests/features/ queue_retry_policy.feature` gained the matching
+scenarios, which assert the row reaches the storage-dead predicate and records
+the terminal reason `fatal`.
+
+The second finding asked for non-vacuous durable-backoff evidence and the
+remaining V3b side-effect checks. The BDD world now records each invocation's
+`run_at`, and the scenario asserts that the stored deadline advances by at
+least the configured base delay between consecutive failed attempts, excluding
+the final observation because a successful attempt schedules nothing. That
+assertion fails if a scheduling write is swallowed or skipped, which the earlier
+`started_at >= run_at` check alone could not detect. V3b's side-effect checks
+are covered by a `RecordingPersistence` double that records every port call:
+exactly one scheduling write per retryable failure, exactly one terminal write
+per fatal or exhausted failure, no write after a successful handler, and no
+second write after a scheduling failure, together with the `schedule_failure`
+metric outcome and its warning (`decision = "schedule_failure"`, asserted with
+`tracing_test`). The rc-owned parts of the contract are pinned separately by
+`backend/tests/apalis_retry_canaries.rs` and its `apalis_retry_canaries/ack.rs`
+submodule, which exercise the real `apalis.get_jobs` predicate and the real
+`PgAck`: due, future, `Killed`, and attempt-capped rows, attempt-count
+preservation across fetch, and acknowledgement leaving `run_at`,
+`max_attempts`, and `metadata` intact. Each negative case also asserts the row
+was never claimed, so it cannot pass on a fetch that simply did not run.
+
+The third finding asked for the new PostgreSQL test binaries to join the shared
+cluster group. `.config/nextest.toml` now lists `apalis_retry_canaries`,
+`queue_retry_policy_bdd`, and `queue_dead_letter_bdd` in the `pg-embed`
+override, so each runs with `max-threads = 1` and a 300 s slow-timeout like the
+other shared-cluster binaries. The reported orphaned-postmaster incident is not
+attributed to this omission; it is an environment defect that predates the
+change.
+
+The fourth finding asked for the harness deadline to be enforced inside the
+harness. `backend/tests/support/queue_retry_worker.rs` now wraps the complete
+worker run, observation phase included, in `tokio::time::timeout`, keeps the
+poll-iteration cap as a second bound, and rejects a zero deadline. A dedicated
+`worker_deadline_bounds_a_non_completing_handler` test drives a handler that
+never completes and asserts the run fails with a deadline error instead of
+hanging.
+
+The candidate still needs the sequential repository gates and publication.
+`cargo check -p backend --tests` was started once and is queued behind the
+shared compile-admission pool; per the standing instruction it is left to queue
+rather than restarted.
