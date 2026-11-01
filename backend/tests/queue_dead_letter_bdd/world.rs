@@ -29,7 +29,8 @@ use tokio::runtime::Runtime;
 use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::queue_retry_worker::{
-    QueueRetryWorkerConfig, WorkerRunReport, run_queue_retry_worker,
+    DEFAULT_WORKER_DEADLINE, QueueRetryProbeJob, QueueRetryWorkerConfig, WorkerRunReport,
+    run_queue_retry_worker,
 };
 
 const QUEUE_NAME: &str = "wildside.dead-letter-bdd";
@@ -290,7 +291,7 @@ impl QueueDeadLetterWorld {
         let mode = *self.handler_mode.lock().expect("handler mode mutex");
         let calls = Arc::new(AtomicUsize::new(0));
         let handler_calls = Arc::clone(&calls);
-        let handler = move |_job: Value, _attempt: NonZeroU32| {
+        let handler = move |_job: QueueRetryProbeJob, _attempt: NonZeroU32| {
             handler_calls.fetch_add(1, Ordering::SeqCst);
             async move {
                 match mode {
@@ -316,6 +317,7 @@ impl QueueDeadLetterWorld {
                     policy: self.policy.clone(),
                     metrics: Arc::new(NoOpRouteQueueMetrics),
                     stop_after_poll_intervals,
+                    deadline: DEFAULT_WORKER_DEADLINE,
                 },
                 handler,
             ))
