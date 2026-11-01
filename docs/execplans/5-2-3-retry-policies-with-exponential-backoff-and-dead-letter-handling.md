@@ -326,7 +326,7 @@ Hard invariants. Violation requires escalation, not workarounds.
   dead predicate, and an ineffective update surfaces as a port error, never as
   silence.
 - Automated requeue is forbidden. `requeue` is an operator action, and any
-  future automation must carry a per-job requeue budget (recorded in ADR-004).
+  future automation must carry a per-job requeue budget (recorded in ADR-005).
   Accepted D15 records requeue provenance so repeat offenders are visible.
 - Retry and dead-letter surfaces (the `DeadJob` type, the error text the
   wrapper returns to the ack, logs, and metrics) must not expose raw job
@@ -398,7 +398,7 @@ Hard invariants. Violation requires escalation, not workarounds.
 - Risk: backoff precision is bounded below by the storage poll interval,
   because failed rows are rediscovered only by polling (the notify trigger
   fires on insert only). Severity: low. Likelihood: certain. Mitigation:
-  documented in ADR-003; production delays are seconds or longer, and tests
+  documented in ADR-004; production delays are seconds or longer, and tests
   configure a short poll interval.
 - Risk: behavioural tests need test-only job consumption, which could drift
   into building 5.3.1's worker early, or diverge from what 5.3.1 builds.
@@ -467,11 +467,11 @@ the roadmap and architecture document are the governing artefacts):
   scope reservations (EP-522-SCOPE): job envelope stability and deferred
   retry/dead-letter ownership.
 - New ADRs produced by this plan:
-  `docs/adr-003-durable-retry-scheduling-for-apalis-jobs.md` (ADR-003, the
+  `docs/adr-004-durable-retry-scheduling-for-apalis-jobs.md` (ADR-004, the
   retry mechanism: durable `run_at` scheduling by a handler wrapper, the ban on
   in-process retry middleware at the rc pins, fatal dead-lettering by shrinking
   `max_attempts`, and the exact-pin policy) and
-  `docs/adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md` (ADR-004,
+  `docs/adr-005-dead-letters-as-apalis-rows-behind-a-domain-port.md` (ADR-005,
   the dead-letter representation, guarded transitions, budget restoration,
   requeue provenance, and the no-automated-requeue rule). The split follows the
   style guide's one-decision-per-ADR rule. ADR-002 already records the
@@ -486,7 +486,7 @@ ROAD-5.2.3 -> ARCH-JOBS -> EP-M3 -> DeadLetterQueue port + PostgreSQL adapter (B
 ROAD-5-PORTS -> EP-M1..M3 -> domain imports audit (no adapter types in domain)
 EP-522-SCOPE -> EP-M2 -> insta snapshots unchanged for V1 envelopes (V7)
 AXIOM-PIN/AXIOM-DURABLE/AXIOM-ACK -> EP-M0 pin + runtime probe -> EP-M2 V8 rc-canary tests
-ADR-003/ADR-004 -> EP-M4 -> docs updates + contents.md registration
+ADR-004/ADR-005 -> EP-M4 -> docs updates + contents.md registration
 ```
 
 ## Interfaces and dependencies
@@ -897,7 +897,7 @@ Obligations:
   unrelated metadata. The ack continues to store the plain bounded error string
   in `last_result`. Rationale: issue #550 or any other pin change must fail
   tests rather than silently corrupt retry or dead-letter behaviour, and
-  ADR-003 and ADR-004 list these assumptions with an "on 1.0 upgrade,
+  ADR-004 and ADR-005 list these assumptions with an "on 1.0 upgrade,
   re-verify" note. Non-vacuity: each canary asserts a positive and a negative
   case (fetchable versus not fetchable), so a vacuously green canary would
   require both sides to break in tandem.
@@ -1203,10 +1203,10 @@ a domain port. Gates; commit.
 
 ### Milestone EP-M4 — documentation, ADRs, runbook, roadmap closure
 
-Write ADR-003 and ADR-004 (named under "Conformance basis") per the style-guide
-template and the `arch-decision-records` skill. ADR-003 records D10, D11, D13,
+Write ADR-004 and ADR-005 (named under "Conformance basis") per the style-guide
+template and the `arch-decision-records` skill. ADR-004 records D10, D11, D13,
 and D14, including the 2026-10-14 race evidence that ruled out in-process retry
-at the rc pins. ADR-004 records D3–D6 and D12. Both list the rc-coupled
+at the rc pins. ADR-005 records D3–D6 and D12. Both list the rc-coupled
 assumptions with an "on 1.0 upgrade (#550), re-verify" note naming the V8
 canaries.
 
@@ -2033,7 +2033,8 @@ caret requirements.
 - Observation (2026-10-26 EP-M4 preparation): the planned ADR-002 filename
   collides with the existing environment-seam ADR-002. The sequential ADR
   convention forbids renumbering it, so retry scheduling and dead-letter
-  representation will be recorded as ADR-003 and ADR-004. The Apalis rc.8
+  representation will be recorded as ADR-003 and ADR-004. (Renumbered to
+  ADR-004 and ADR-005 on 2026-11-01; see that observation.) The Apalis rc.8
   orphan query also increments `attempts` and writes a stable heartbeat-timeout
   error marker; the runbook must describe that observable signature instead of
   calling attempts stale.
@@ -2253,7 +2254,7 @@ caret requirements.
 - Observation: nothing in this repository configures Apalis orphan
   recovery today. Evidence: `reenqueue_orphaned_after` appears nowhere in
   `backend/src`. Impact: until 5.3.1, a dead worker leaves its job `Running`
-  indefinitely; recorded in "Context and orientation" and in ADR-003 rather
+  indefinitely; recorded in "Context and orientation" and in ADR-004 rather
   than assumed away.
 - Observation: the pinned Apalis worker tracker increments a task's shared
   `Attempt` once around the complete user-middleware future. Its retry policy
@@ -2363,6 +2364,13 @@ caret requirements.
   corrects the earlier plan filenames without changing either accepted
   mechanism or its requirements.
 
+- ADR renumbering (2026-11-01): main allocated ADR-003 to the front-end
+  linting strategy, which collides with the allocation recorded above. Durable
+  retry scheduling is now ADR-004 and dead letters are now ADR-005.
+  `docs/contents.md`, the developer guide, the backend architecture document,
+  and this plan's ADR links use the new numbers. Neither mechanism nor its
+  requirements changed.
+
 - Verification refinement (2026-10-26): EP-M2 introduces the retry wrapper but
   EP-M3 introduces `DeadLetterQueue::list_dead`. The M2 feature therefore
   asserts the guarded row state and D15's persisted terminal reason directly;
@@ -2403,7 +2411,7 @@ caret requirements.
   The strongest alternative — durable graphile-worker-style rescheduling — buys
   crash-durable backoff and freed worker slots at that cost; at the mandated
   small delay caps the durability delta is marginal. Revisit trigger, recorded
-  in ADR-003: revisit if any production policy's worst-case total in-process
+  in ADR-004: revisit if any production policy's worst-case total in-process
   wait approaches `TOTAL_BACKOFF_BUDGET`, or if 5.3.1 load tests observe
   worker-slot exhaustion during backoff. Date/author: 2026-08-16, planning
   agent.
@@ -2534,7 +2542,7 @@ caret requirements.
   multiplier) parking jobs for days. Date/author: 2026-10-17, planning agent.
 - D14 — Forbid in-process retry middleware on Apalis workers at the rc
   pins. Rationale: the 2026-10-14 evidence shows it races with the storage
-  fetcher. The V9 conformance check enforces this rule, and ADR-003 records it.
+  fetcher. The V9 conformance check enforces this rule, and ADR-004 records it.
   Issue #550 may revisit it under 1.0.0's changed middleware order, but only
   with evidence. Date/author: 2026-10-17, planning agent.
 - D15 — Use the existing Apalis JSONB `metadata` field for two namespaced
