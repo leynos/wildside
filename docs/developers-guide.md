@@ -884,6 +884,27 @@ property generates more operations than the admission bound can hold, so each
 run provably crosses it, and then checks that an operation admitted before the
 bound keeps accumulating.
 
+Client spans are the tracing half of the same boundary.
+`frontend-pwa/src/api/tracing.ts` starts one span per logical request and ends
+it exactly once on every exit path: `ok` when the response was read, `error`
+for a transport, HTTP, or decoding fault, and `cancelled` when the caller
+aborted, matching the diagnostics rule that a deliberate cancellation is not a
+fault. A span carries only the declared route template, the bounded method, the
+status class, the bounded `trace-id`, and its start and duration readings from
+the same injectable clock, so it cannot add request data the diagnostics seam
+has not already bounded. A caller-schema rejection happens after the span has
+ended, because that validation is application work rather than a network
+crossing; the schema failure event still records it.
+
+`frontend-pwa/src/api/span-log.ts` is the bounded consumer. `createSpanLog()`
+retains the hundred most recent spans, discards the oldest beyond that, and
+returns copies from `snapshot()`. `frontend-pwa/src/Main.tsx` installs its sink
+and publishes `__wildsideClientSpans` for devtools, so the composition can be
+replaced by a real exporter later without touching the fetcher. A sink fault is
+swallowed, and ending a span twice is ignored so one request yields one span.
+Contracts are covered by `tracing.test.ts`, `span-log.test.ts`, and
+`fetcher.tracing.test.ts`.
+
 ### Quality gates
 
 Documentation-only front-end planning changes must pass:

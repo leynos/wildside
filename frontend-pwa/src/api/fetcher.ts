@@ -23,6 +23,7 @@ import {
   requestMethod,
   statusClassOf,
 } from './diagnostics';
+import { type ClientSpanHandle, type SpanOutcome, startClientSpan } from './tracing';
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
 interface JsonObject {
@@ -150,6 +151,7 @@ interface FetchContext {
   readonly operation: string;
   readonly startedAt: number;
   readonly signal?: AbortSignal;
+  readonly span: ClientSpanHandle;
 }
 
 /**
@@ -218,7 +220,13 @@ const prepareRequest = (input: string, init: FetchRequestInit | undefined): Prep
   const { body, isJson } = normalizeBody(init?.body);
   return {
     url,
-    context: { method, operation, startedAt, signal: init?.signal ?? undefined },
+    context: {
+      method,
+      operation,
+      startedAt,
+      signal: init?.signal ?? undefined,
+      span: startClientSpan(method, operation),
+    },
     body,
     headers: defaultHeaders(init, { isJson }),
   };
@@ -246,6 +254,15 @@ const responseTiming = (res: Response, context: FetchContext): ResponseTiming =>
   // The header is network input, so it is bounded before it is retained.
   traceId: boundTraceId(res.headers.get('trace-id')),
 });
+
+/** Response facts a span may carry, or nothing when no response arrived. */
+const spanFacts = (res: Response | undefined): Pick<SpanOutcome, 'statusClass' | 'traceId'> => {
+  if (!res) return {};
+  return {
+    statusClass: statusClassOf(res.status),
+    traceId: boundTraceId(res.headers.get('trace-id')),
+  };
+};
 
 /** Report an HTTP failure, then reject with the status and error detail. */
 const rejectHttpFailure = async (res: Response, context: FetchContext): Promise<never> => {
@@ -328,17 +345,30 @@ const customFetchOutcome = async (
   init?: FetchRequestInit,
 ): Promise<FetchOutcome> => {
   const { url, context, body, headers } = prepareRequest(input, init);
-  const res = await fetchGuarded(
-    () => fetch(url, { credentials: 'include', ...init, body, headers }),
-    context,
-  );
+  let res: Response | undefined;
+  try {
+    res = await fetchGuarded(
+      () => fetch(url, { credentials: 'include', ...init, body, headers }),
+      context,
+    );
 
-  const payload = await handleResponse(res, context);
-  return {
-    payload,
-    timing: responseTiming(res, context),
-    startedAt: context.startedAt,
-  };
+    const payload = await handleResponse(res, context);
+    const timing = responseTiming(res, context);
+    context.span.end({
+      status: 'ok',
+      statusClass: timing.statusClass,
+      traceId: timing.traceId,
+    });
+    return { payload, timing, startedAt: context.startedAt };
+  } catch (error) {
+    // A caller's abort is a cancellation, not a fault, matching the diagnostics
+    // rule. A response that did arrive still contributes its status class and
+    // trace identifier, so a failure span carries the same correlation context
+    // as the failure event the diagnostics sink already received.
+    const isCancelled = error instanceof Error && isAbortError(error, context.signal);
+    context.span.end({ status: isCancelled ? 'cancelled' : 'error', ...spanFacts(res) });
+    throw error;
+  }
 };
 
 /**

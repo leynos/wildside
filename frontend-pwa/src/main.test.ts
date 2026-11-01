@@ -100,6 +100,7 @@ afterEach(() => {
 afterAll(() => {
   setFetchDiagnostics(undefined);
   globalThis.__wildsideFetchMetrics = undefined;
+  globalThis.__wildsideClientSpans = undefined;
   Reflect.deleteProperty(globalThis, 'document');
   Reflect.deleteProperty(globalThis, 'reportError');
 });
@@ -129,6 +130,12 @@ describe('Main entrypoint', () => {
 
   it('publishes the metrics snapshot accessor', () => {
     expect(globalThis.__wildsideFetchMetrics).toBeInstanceOf(Function);
+  });
+
+  it('publishes the client span accessor', () => {
+    const accessor = globalThis.__wildsideClientSpans;
+    if (!accessor) throw new Error('the entrypoint did not publish the span accessor');
+    expect(accessor().spans).toEqual([]);
   });
 
   it('counts requests and responses without reporting them as errors', () => {

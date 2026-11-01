@@ -319,6 +319,17 @@ entrypoint, and the bounded metrics consumer in `src/api/fetch-metrics.ts`
 folds those events into request, response, failure, and latency counters that
 the entrypoint publishes through `globalThis.__wildsideFetchMetrics`.
 
+The tracing half of the same boundary is `src/api/tracing.ts`. The fetcher
+starts one client span per logical request and ends it exactly once: `ok` when
+the response was read, `error` for a transport, HTTP, or decoding fault, and
+`cancelled` when the caller aborted. A span carries the declared route
+template, the bounded method, the status class, the bounded `trace-id`, and its
+start and duration readings from the same injectable clock as the diagnostics
+events. The bounded span log in `src/api/span-log.ts` retains the most recent
+spans, and the entrypoint installs its sink and publishes
+`globalThis.__wildsideClientSpans` for devtools; a future telemetry exporter
+replaces that composition without touching the fetcher.
+
 See the [shared API fetcher](developers-guide.md#shared-api-fetcher) section of
 the developers' guide for the full contract and its test coverage.
 

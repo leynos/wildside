@@ -100,7 +100,7 @@ describe('customFetch diagnostics', () => {
       'sk-query-token',
       'fragment-marker',
       'sk-bearer-token',
-      'sk-body-token',
+      'body-secret-value',
     ]) {
       expect(serialized).not.toContain(secret);
     }

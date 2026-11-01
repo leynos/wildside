@@ -3,8 +3,10 @@
  *
  * Importing this module boots the application exactly once. Booting publishes
  * the bounded fetch-metrics consumer for devtools, installs the diagnostics
- * sink that feeds it, forwards fetch failures to the browser's global error
- * channel through `reportError`, and renders the React tree into `#root`.
+ * sink that feeds it, records one client span per logical request in a bounded
+ * span log published as `__wildsideClientSpans`, forwards fetch failures to the
+ * browser's global error channel through `reportError`, and renders the React
+ * tree into `#root`.
  *
  * The boot step takes the document as an argument so the missing-root guard can
  * be exercised without a live DOM: a document without `#root` must fail loudly
@@ -16,11 +18,18 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import { type FetchDiagnosticEvent, setFetchDiagnostics } from './api/diagnostics';
 import { createFetchMetrics, publishFetchMetrics } from './api/fetch-metrics';
+import { createSpanLog, publishSpanLog } from './api/span-log';
+import { setSpanSink } from './api/tracing';
 import { App } from './app/App';
 
 /** Bounded in-memory consumer, published for devtools and tests to read. */
 const fetchMetrics = createFetchMetrics();
 publishFetchMetrics(fetchMetrics);
+
+/** Bounded span log, published for devtools and tests to read. */
+const spanLog = createSpanLog();
+publishSpanLog(spanLog);
+setSpanSink(spanLog.sink);
 
 /**
  * Feed fetcher diagnostics to the application's metrics and error channel.
