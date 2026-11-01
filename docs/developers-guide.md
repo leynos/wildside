@@ -836,6 +836,13 @@ caller-initiated abort, recognized from the caller's signal and its abort
 reason, is not reported as a `transport` or `json` failure, because the caller
 chose to cancel the request; a timeout is still reported.
 
+Timing reads go through an injectable clock. `setFetchClock(clock)` installs a
+`() => number` millisecond source, `fetchClockNow()` reads it, and
+`setFetchClock()` with no argument restores the platform `performance.now`. A
+test installs a controlled clock and advances it from inside a stubbed body
+read, so it can assert that a duration covers body consumption rather than only
+the transport step; production code never sets the clock.
+
 `customFetch`, `customFetchParsed`, and `customFetchParsedSafe` all report
 through this seam; `customFetchOrval` reports via `customFetch`. A sink fault
 is swallowed, because diagnostics must not change the outcome of a request.
@@ -850,7 +857,16 @@ sends failure events to `reportError` so the browser's global error pipeline
 observes them. The PWA has no telemetry destination yet; a future exporter
 replaces that composition without touching the fetcher. Contracts are covered by
 `diagnostics.test.ts`, the fetcher-side events by
-`fetcher.diagnostics.test.ts`, and the consumer by `fetch-metrics.test.ts`.
+`fetcher.diagnostics.test.ts`, and the consumer by `fetch-metrics.test.ts`. The
+entrypoint wiring is exercised by `main.test.ts`, which mocks the React root,
+the query client, and the application component, imports `Main` once, and
+asserts the mount, the published accessor, and the failure report. It emits
+through the real diagnostics seam rather than mocking it, so the test also
+proves that `Main` installed a sink on the same metrics instance it published.
+The consumer's contract is additionally checked by
+`fetch-metrics.property.test.ts`, which generates random event sequences and
+compares the consumer against an independent fold of the documented rules,
+including the operation and recent-buffer bounds.
 
 ### Quality gates
 

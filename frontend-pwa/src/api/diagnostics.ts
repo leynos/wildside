@@ -67,9 +67,38 @@ export const emitFetchDiagnostic = (event: FetchDiagnosticEvent): void => {
 /** Upper-case the request method, defaulting to `GET`. */
 export const requestMethod = (method?: string): string => (method ?? 'GET').toUpperCase();
 
-/** Whole milliseconds since `startedAt`, never negative. */
+/** Monotonic millisecond clock used to time fetcher operations. */
+export type FetchClock = () => number;
+
+const platformClock: FetchClock = () => performance.now();
+
+let clock: FetchClock = platformClock;
+
+/**
+ * Install or restore the clock that times fetcher operations.
+ *
+ * The fetcher measures logical requests with `performance.now` by default.
+ * Tests and embeddings install a deterministic clock instead, so a timing
+ * assertion does not depend on the host's wall clock. Passing `undefined`
+ * restores the platform clock.
+ *
+ * @example
+ * let nowMs = 0;
+ * setFetchClock(() => nowMs);
+ * nowMs = 40;
+ * elapsedSince(0); // 40
+ * setFetchClock();
+ */
+export const setFetchClock = (next?: FetchClock): void => {
+  clock = next ?? platformClock;
+};
+
+/** Current reading of the installed clock, in whole milliseconds. */
+export const fetchClockNow = (): number => clock();
+
+/** Whole milliseconds since `startedAt` on the installed clock, never negative. */
 export const elapsedSince = (startedAt: number): number =>
-  Math.max(0, Math.round(performance.now() - startedAt));
+  Math.max(0, Math.round(clock() - startedAt));
 
 /** Map an HTTP status to its class label, for example `2xx`. */
 export const statusClassOf = (status: number): string => `${Math.trunc(status / 100)}xx`;
@@ -112,6 +141,7 @@ const numericSegment = /^\d+$/;
 const uuidSegment = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const longIdentifierSegment = /^[0-9a-f]{16,}$/i;
 
+/** Whether a path segment looks like an opaque identifier rather than a name. */
 const isIdentifierSegment = (segment: string): boolean =>
   numericSegment.test(segment) || uuidSegment.test(segment) || longIdentifierSegment.test(segment);
 

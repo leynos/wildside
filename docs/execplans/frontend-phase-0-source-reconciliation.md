@@ -77,7 +77,15 @@ Markdown and Mermaid validation pass.
 - [x] Draft phase-level ExecPlan.
 - Planned: Catalogue authoritative sources and contradictions.
 - Planned: Reconcile source documents and Architecture Decision Record needs.
-- Planned: Import and document v2a lint and token requirements.
+- In progress: Import and document v2a lint and token requirements.
+  - Done: the Oxlint profiles are pinned in `frontend-pwa/package.json`, run by
+    `make lint-frontend`, and documented in
+    [the developers' guide](../developers-guide.md) together with the narrow
+    filename exceptions in `frontend-pwa/oxlint.config.ts`. This covers the
+    Oxlint part of roadmap item 0.2.4 only.
+  - Remaining for 0.2.4: the localization, accessibility, semantic-CSS,
+    testing-selector, and architectural rules still need importing and
+    documenting. The roadmap item stays unchecked until they land.
 - Planned: Refresh roadmap citations and dependencies.
 
 ## Surprises & Discoveries
@@ -88,6 +96,10 @@ None yet.
 
 - 2026-04-28: Keep this plan at phase granularity and keep task detail in
   `docs/frontend-roadmap.md` to avoid duplicating the roadmap.
+- 2026-11-01: Record roadmap 0.2.4 progress at both levels: the plan names the
+  gates already imported and those still outstanding, while the roadmap keeps
+  the item unchecked because its acceptance criteria are not yet all met. A
+  ticked item with partial gates would misreport the v2a lint posture.
 
 ## Outcomes & Retrospective
 

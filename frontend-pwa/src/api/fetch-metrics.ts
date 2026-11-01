@@ -61,6 +61,7 @@ const emptyFailures = (): Record<FetchFailureCategory, number> => ({
   schema: 0,
 });
 
+/** Fold one duration into an operation's latency aggregate. */
 const addLatency = (
   aggregate: OperationLatency | undefined,
   durationMs: number,
@@ -85,11 +86,13 @@ export const createFetchMetrics = (): FetchMetrics => {
   const latency = new Map<string, OperationLatency>();
   const recent: FetchDiagnosticEvent[] = [];
 
+  /** Retain the newest events while keeping the recent buffer bounded. */
   const remember = (event: FetchDiagnosticEvent): void => {
     recent.push(event);
     if (recent.length > MaxRecent) recent.shift();
   };
 
+  /** Record one latency observation, refusing new operations past the bound. */
   const observeLatency = (event: FetchDiagnosticEvent): void => {
     if (event.durationMs === undefined) return;
     // A schema failure follows the response event that already recorded this
@@ -100,6 +103,7 @@ export const createFetchMetrics = (): FetchMetrics => {
     latency.set(event.operation, addLatency(current, event.durationMs));
   };
 
+  /** Classify one event into counts and latency without keeping request data. */
   const sink: FetchDiagnosticsSink = (event) => {
     remember(event);
     if (event.kind === 'request') {
@@ -115,6 +119,7 @@ export const createFetchMetrics = (): FetchMetrics => {
     observeLatency(event);
   };
 
+  /** Return a defensive copy so callers cannot mutate the aggregates. */
   const snapshot = (): FetchMetricsSnapshot => ({
     requests,
     responses,

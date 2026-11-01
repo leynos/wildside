@@ -1,5 +1,15 @@
 /**
- * @file Fetch helper that augments requests with common defaults.
+ * @file JSON boundary between the PWA and its backend.
+ *
+ * Every request passes through one place so that transport defaults, payload
+ * validation, and diagnostics stay consistent. `normalizeBody` serializes plain
+ * objects, arrays, and JSON scalars while forwarding strings and native body
+ * types untouched; `defaultHeaders` adds the JSON content type only for bodies
+ * that were serialized. Responses must be valid JSON when the server advertises
+ * a JSON body, and `customFetchParsed`/`customFetchParsedSafe` validate the
+ * decoded payload against a caller-supplied schema. Failures and timings are
+ * reported through the bounded seam in `diagnostics.ts`; the timing clock is
+ * injectable there so tests can assert durations without the host clock.
  */
 
 import { z } from 'zod';
@@ -8,6 +18,7 @@ import {
   describeOperation,
   elapsedSince,
   emitFetchDiagnostic,
+  fetchClockNow,
   requestMethod,
   statusClassOf,
 } from './diagnostics';
@@ -199,7 +210,7 @@ const prepareRequest = (input: string, init: FetchRequestInit | undefined): Prep
   const url = new URL(input, apiBase());
   const operation = describeOperation(url);
   const method = requestMethod(init?.method);
-  const startedAt = performance.now();
+  const startedAt = fetchClockNow();
   emitFetchDiagnostic({ kind: 'request', method, operation });
 
   const { body, isJson } = normalizeBody(init?.body);

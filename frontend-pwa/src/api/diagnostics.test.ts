@@ -6,7 +6,9 @@ import {
   elapsedSince,
   emitFetchDiagnostic,
   type FetchDiagnosticEvent,
+  fetchClockNow,
   requestMethod,
+  setFetchClock,
   setFetchDiagnostics,
   statusClassOf,
 } from './diagnostics';
@@ -85,6 +87,30 @@ describe('requestMethod', () => {
 describe('elapsedSince', () => {
   it('never reports a negative duration', () => {
     expect(elapsedSince(performance.now() + 60_000)).toBe(0);
+  });
+});
+
+describe('setFetchClock', () => {
+  afterEach(() => {
+    setFetchClock();
+  });
+
+  it('times operations with the installed clock', () => {
+    let nowMs = 10;
+    setFetchClock(() => nowMs);
+
+    expect(fetchClockNow()).toBe(10);
+    nowMs = 35;
+    expect(elapsedSince(10)).toBe(25);
+  });
+
+  it('restores the platform clock when cleared', () => {
+    setFetchClock(() => 0);
+    setFetchClock();
+
+    const before = fetchClockNow();
+    expect(before).toBeGreaterThan(0);
+    expect(elapsedSince(before)).toBeGreaterThanOrEqual(0);
   });
 });
 

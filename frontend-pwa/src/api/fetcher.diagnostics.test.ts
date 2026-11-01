@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { z } from 'zod';
 
-import { type FetchDiagnosticEvent, setFetchDiagnostics } from './diagnostics';
+import { type FetchDiagnosticEvent, setFetchClock, setFetchDiagnostics } from './diagnostics';
 import { customFetch, customFetchParsed, customFetchParsedSafe } from './fetcher';
 
 const userSchema = z.object({ id: z.string() });
@@ -37,6 +37,7 @@ beforeEach(() => {
 
 afterEach(() => {
   setFetchDiagnostics(undefined);
+  setFetchClock();
   mock.restore();
 });
 
@@ -164,14 +165,15 @@ describe('customFetch diagnostics', () => {
   });
 
   it('includes body consumption in the reported duration', async () => {
-    // A controlled clock keeps the assertion exact: the request starts at 0
+    // The injected clock keeps the assertion exact: the request starts at 0
     // and reading the body advances the clock, so the response event must
     // report the full 40 ms rather than the sub-millisecond transport time.
-    const clock = spyOn(performance, 'now').mockReturnValue(0);
+    let nowMs = 0;
+    setFetchClock(() => nowMs);
     const slow = Response.json({ ok: true });
     const readJson = slow.json.bind(slow);
     slow.json = async () => {
-      clock.mockReturnValue(40);
+      nowMs = 40;
       return readJson();
     };
     response = slow;
