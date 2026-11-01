@@ -310,12 +310,14 @@ validates responses with Zod, and reports what happened without reporting what
 was sent.
 
 The diagnostics seam in `src/api/diagnostics.ts` carries only a method, a
-bounded route template, a duration, a status class, a failure category, and the
-backend `trace-id`. It never carries a URL, query string, body, credential, or
-free-form error text. The application installs a sink at the entrypoint, and
-the bounded metrics consumer in `src/api/fetch-metrics.ts` folds those events
-into request, response, failure, and latency counters that the entrypoint
-publishes through `globalThis.__wildsideFetchMetrics`.
+declared route template, a duration, a status class, a failure category, and a
+bounded backend `trace-id`. It never carries a URL, query string, body,
+credential, or free-form error text. A template must fit the table that mirrors
+`spec/openapi.json`, and an unlisted path reports `/unknown`, so the label set
+stays finite whatever the caller sends. The application installs a sink at the
+entrypoint, and the bounded metrics consumer in `src/api/fetch-metrics.ts`
+folds those events into request, response, failure, and latency counters that
+the entrypoint publishes through `globalThis.__wildsideFetchMetrics`.
 
 See the [shared API fetcher](developers-guide.md#shared-api-fetcher) section of
 the developers' guide for the full contract and its test coverage.

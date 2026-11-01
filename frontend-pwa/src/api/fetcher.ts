@@ -15,6 +15,7 @@
 import { z } from 'zod';
 
 import {
+  boundTraceId,
   describeOperation,
   elapsedSince,
   emitFetchDiagnostic,
@@ -242,7 +243,8 @@ const responseTiming = (res: Response, context: FetchContext): ResponseTiming =>
   operation: context.operation,
   durationMs: elapsedSince(context.startedAt),
   statusClass: statusClassOf(res.status),
-  traceId: res.headers.get('trace-id') ?? undefined,
+  // The header is network input, so it is bounded before it is retained.
+  traceId: boundTraceId(res.headers.get('trace-id')),
 });
 
 /** Report an HTTP failure, then reject with the status and error detail. */

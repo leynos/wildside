@@ -816,25 +816,35 @@ so a sink must count terminal events by kind and category rather than assuming
 one per request. `setFetchDiagnostics(sink)` installs the application-wide
 receiver; with no sink installed the fetcher behaves exactly as before.
 
-An event carries only bounded fields: the upper-cased method, a route template,
-whole milliseconds elapsed, the status class (`2xx`, `5xx`), a failure category
+An event carries only bounded fields: the method, a route template, whole
+milliseconds elapsed, the status class (`2xx`, `5xx`), a failure category
 (`transport`, `http`, `json`, or `schema`), and the backend `trace-id` header
 when present. It never carries the URL, query string, body, credential, or a
 free-form error message.
 
-Route templates are built from the resource vocabulary in `spec/openapi.json`.
-Known words survive, identifier shapes become `:id`, and every other segment
-becomes `:other`, so a path such as `/api/users/alice@example.com` reports as
-`/api/users/:other`. This keeps the label set bounded and stops caller-supplied
-names or addresses appearing in a metric label; add a new resource word to
-`diagnostics.ts` when the API gains one. Duration is measured when an event is
-emitted, so a success or failure event covers response-body consumption and
-payload validation as well as the round trip. A schema failure carries the same
-status class and trace identifier as the response it rejected, which pairs it
-with that response's completion event for one logical operation. A
-caller-initiated abort, recognized from the caller's signal and its abort
-reason, is not reported as a `transport` or `json` failure, because the caller
-chose to cancel the request; a timeout is still reported.
+Every one of those fields is bounded at the seam rather than trusted. The
+method is reduced to a known HTTP verb, or `OTHER` for anything else, so a
+caller cannot choose a metric label. The route template must fit one of the
+declared templates in `diagnostics.ts`, which mirror the paths in
+`spec/openapi.json`; a `:id` position accepts exactly one segment, so
+`/api/v1/users/alice@example.com` reports as `/api/v1/users/:id` while an
+unlisted path reports the single `/unknown` fallback. Nothing is derived by
+masking, so the set of labels a consumer can ever see is finite and reviewable;
+add a template to `diagnostics.ts` when the API gains a route.
+`diagnostics.test.ts` fails when a path in the OpenAPI document has no
+template. The `trace-id` header is retained only when it is 128 characters or
+fewer and contains nothing but letters, digits, `_`, `.`, `:`, and `-`; an
+over-long or malformed value is discarded rather than truncated, because a
+shortened identifier would no longer match the backend's records.
+
+Duration is measured when an event is emitted, so a success or failure event
+covers response-body consumption and payload validation as well as the round
+trip. A schema failure carries the same status class and trace identifier as
+the response it rejected, which pairs it with that response's completion event
+for one logical operation. A caller-initiated abort, recognized from the
+caller's signal and its abort reason, is not reported as a `transport` or
+`json` failure, because the caller chose to cancel the request; a timeout is
+still reported.
 
 Timing reads go through an injectable clock. `setFetchClock(clock)` installs a
 `() => number` millisecond source, `fetchClockNow()` reads it, and
@@ -854,19 +864,25 @@ events for tracing. Trace identifiers stay in that recent buffer and never
 become metric labels. `frontend-pwa/src/Main.tsx` installs the consumer,
 publishes a snapshot accessor as `__wildsideFetchMetrics` for devtools, and
 sends failure events to `reportError` so the browser's global error pipeline
-observes them. The PWA has no telemetry destination yet; a future exporter
-replaces that composition without touching the fetcher. Contracts are covered by
+observes them. Booting is exported as `boot(document)`, which resolves `#root`
+through `requireRootElement` and fails loudly when the document has none; the
+module calls it once at import, so the guard is testable without a live DOM.
+The PWA has no telemetry destination yet; a future exporter replaces that
+composition without touching the fetcher. Contracts are covered by
 `diagnostics.test.ts`, the fetcher-side events by
 `fetcher.diagnostics.test.ts`, and the consumer by `fetch-metrics.test.ts`. The
 entrypoint wiring is exercised by `main.test.ts`, which mocks the React root,
 the query client, and the application component, imports `Main` once, and
-asserts the mount, the published accessor, and the failure report. It emits
-through the real diagnostics seam rather than mocking it, so the test also
-proves that `Main` installed a sink on the same metrics instance it published.
-The consumer's contract is additionally checked by
-`fetch-metrics.property.test.ts`, which generates random event sequences and
-compares the consumer against an independent fold of the documented rules,
-including the operation and recent-buffer bounds.
+asserts the mount, the published accessor, the failure report, and the
+missing-root guard. It emits through the real diagnostics seam rather than
+mocking it, so the test also proves that `Main` installed a sink on the same
+metrics instance it published. The consumer's contract is additionally checked
+by `fetch-metrics.property.test.ts`, which generates random event sequences and
+compares the consumer against an independent fold of the documented rules after
+every event, including the operation and recent-buffer bounds. A second
+property generates more operations than the admission bound can hold, so each
+run provably crosses it, and then checks that an operation admitted before the
+bound keeps accumulating.
 
 ### Quality gates
 

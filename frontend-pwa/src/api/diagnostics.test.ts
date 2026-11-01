@@ -1,7 +1,10 @@
 /** @file Contracts for the bounded fetcher diagnostics seam. */
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { z } from 'zod';
 
 import {
+  boundTraceId,
   describeOperation,
   elapsedSince,
   emitFetchDiagnostic,
@@ -13,10 +16,15 @@ import {
   statusClassOf,
 } from './diagnostics';
 
+/** The parts of the OpenAPI document this test reads. */
+const openApiPathsSchema = z.object({
+  paths: z.record(z.string(), z.object({})),
+});
+
 const sampleEvent: FetchDiagnosticEvent = {
   kind: 'request',
   method: 'GET',
-  operation: '/api/users',
+  operation: '/api/v1/users',
 };
 
 afterEach(() => {
@@ -26,43 +34,98 @@ afterEach(() => {
 
 describe('describeOperation', () => {
   it('drops the origin, query string, and fragment', () => {
-    expect(describeOperation(new URL('https://api.example/api/users?expand=roles#top'))).toBe(
-      '/api/users',
+    expect(describeOperation(new URL('https://api.example/api/v1/users?expand=roles#top'))).toBe(
+      '/api/v1/users',
     );
   });
 
   it.each([
-    ['numeric', '/api/users/42', '/api/users/:id'],
-    ['uuid', '/api/users/0f8fad5b-d9cb-469f-a165-70867728950e', '/api/users/:id'],
-    ['long hexadecimal', '/api/routes/0123456789abcdef01', '/api/routes/:id'],
-  ])('masks a %s identifier segment', (_label, path, expected) => {
+    ['a numeric identifier', '/api/v1/users/42', '/api/v1/users/:id'],
+    [
+      'a UUID identifier',
+      '/api/v1/routes/0f8fad5b-d9cb-469f-a165-70867728950e/notes',
+      '/api/v1/routes/:id/notes',
+    ],
+    [
+      'a long hexadecimal identifier',
+      '/api/v1/offline/bundles/0123456789abcdef01',
+      '/api/v1/offline/bundles/:id',
+    ],
+  ])('keeps the declared template for %s', (_label, path, expected) => {
     expect(describeOperation(new URL(path, 'http://host'))).toBe(expected);
   });
 
-  it('keeps the known API vocabulary', () => {
-    expect(describeOperation(new URL('/api/v1/walk-sessions', 'http://host'))).toBe(
+  it('keeps a nested declared template', () => {
+    expect(describeOperation(new URL('/api/v1/users/me/interests', 'http://host'))).toBe(
+      '/api/v1/users/me/interests',
+    );
+  });
+
+  it('ignores trailing slashes', () => {
+    expect(describeOperation(new URL('/api/v1/walk-sessions/', 'http://host'))).toBe(
       '/api/v1/walk-sessions',
     );
   });
 
-  it('collapses an unknown route to a bounded fallback', () => {
-    expect(describeOperation(new URL('/internal/widgets', 'http://host'))).toBe('/:other/:other');
+  it.each([
+    ['an unlisted resource', '/internal/widgets'],
+    ['an unlisted API version', '/api/v2/users'],
+    ['a resource the spec does not declare', '/api/users/42'],
+    ['a path one segment too deep', '/api/v1/users/me/extra'],
+  ])('collapses %s to the fixed fallback', (_label, path) => {
+    expect(describeOperation(new URL(path, 'http://host'))).toBe('/unknown');
   });
 
-  it('never forwards a personal-data-shaped segment', () => {
-    expect(describeOperation(new URL('/api/users/alice@example.com', 'http://host'))).toBe(
-      '/api/users/:other',
-    );
+  it.each([
+    ['a personal-data-shaped identifier', '/api/v1/users/alice@example.com'],
+    ['a token-shaped identifier', '/api/v1/users/eyJhbGciOiJIUzI1NiJ9'],
+  ])('never forwards %s', (_label, path) => {
+    expect(describeOperation(new URL(path, 'http://host'))).toBe('/api/v1/users/:id');
   });
 
-  it('masks a token-shaped segment that is not in the vocabulary', () => {
-    expect(describeOperation(new URL('/api/users/eyJhbGciOiJIUzI1NiJ9', 'http://host'))).toBe(
-      '/api/users/:other',
-    );
+  it('bounds the template set to the declared table plus one fallback', () => {
+    const labels = new Set<string>();
+    for (const path of ['/a', '/a/b', '/api', '/api/v1', '/health', '/api/v1/users/me/x/y/z']) {
+      labels.add(describeOperation(new URL(path, 'http://host')));
+    }
+
+    expect([...labels]).toEqual(['/unknown']);
   });
 
-  it('masks a version segment the vocabulary does not list', () => {
-    expect(describeOperation(new URL('/api/v2/users', 'http://host'))).toBe('/api/:other/users');
+  it('reports a declared template for every path in the OpenAPI spec', () => {
+    const specPath = new URL('../../../spec/openapi.json', import.meta.url);
+    // Only the path keys matter here, so each path item is validated as an
+    // arbitrary object rather than modelling the whole document.
+    const spec = openApiPathsSchema.parse(JSON.parse(readFileSync(specPath, 'utf8')));
+    const declared = Object.keys(spec.paths);
+
+    // A path the table forgets would otherwise report `/unknown`, so this
+    // fails as soon as the spec grows a route the diagnostics seam cannot name.
+    expect(declared.length).toBeGreaterThan(0);
+    for (const path of declared) {
+      const sample = path.replaceAll(/\{[^}]+\}/g, 'sample-id');
+      expect(describeOperation(new URL(sample, 'http://host'))).not.toBe('/unknown');
+    }
+  });
+});
+
+describe('boundTraceId', () => {
+  it.each([
+    ['a plain identifier', 'trace-abc-123', 'trace-abc-123'],
+    ['a dotted and colon-separated identifier', '00-4bf9.2f:1', '00-4bf9.2f:1'],
+    ['surrounding whitespace', '  trace-1  ', 'trace-1'],
+  ])('keeps %s', (_label, value, expected) => {
+    expect(boundTraceId(value)).toBe(expected);
+  });
+
+  it.each([
+    ['an absent header', undefined],
+    ['an empty header', ''],
+    ['a whitespace-only header', '   '],
+    ['an over-long header', 'a'.repeat(129)],
+    ['a header with a script fragment', '<script>alert(1)</script>'],
+  ])('discards %s', (_label, value) => {
+    expect(boundTraceId(value)).toBeUndefined();
   });
 });
 
@@ -78,9 +141,16 @@ describe('statusClassOf', () => {
 });
 
 describe('requestMethod', () => {
-  it('defaults to GET and upper-cases a caller method', () => {
+  it('defaults to GET and upper-cases a known caller method', () => {
     expect(requestMethod()).toBe('GET');
     expect(requestMethod('post')).toBe('POST');
+  });
+
+  it.each([
+    ['an unknown verb', 'break-all'],
+    ['a caller-chosen label', 'GET /api/v1/users/alice@example.com'],
+  ])('bounds %s to OTHER', (_label, method) => {
+    expect(requestMethod(method)).toBe('OTHER');
   });
 });
 

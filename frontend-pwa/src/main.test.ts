@@ -8,6 +8,7 @@ import {
   setFetchDiagnostics,
 } from './api/diagnostics';
 import type { FetchMetricsSnapshot } from './api/fetch-metrics';
+import type { MountDocument } from './Main';
 
 /** Stand-in for the DOM element the entrypoint mounts into. */
 interface RootElement {
@@ -20,8 +21,15 @@ interface QueryClientOptions {
 }
 
 const rootElement: RootElement = { id: 'root' };
+
+/** A document with no elements, so the entrypoint sees a genuinely absent root. */
+const noElements = new Map<string, Element>();
+const rootlessDocument: MountDocument = {
+  querySelector: (selector: string) => noElements.get(selector),
+};
 let mountedOn: RootElement | undefined;
 let rendered: ReactElement | undefined;
+let boot: (doc: MountDocument) => void;
 const reportedErrors: Error[] = [];
 const reportError = mock((error: Error) => {
   reportedErrors.push(error);
@@ -78,7 +86,10 @@ beforeAll(async () => {
     reportError,
   });
 
-  await import('./Main');
+  // The entrypoint boots on import, so it is loaded only once its dependencies
+  // and the fake document are in place.
+  const entrypoint = await import('./Main');
+  boot = entrypoint.boot;
 });
 
 afterEach(() => {
@@ -96,7 +107,7 @@ afterAll(() => {
 const responseEvent: FetchDiagnosticEvent = {
   kind: 'response',
   method: 'GET',
-  operation: '/api/users',
+  operation: '/api/v1/users',
   durationMs: 5,
   statusClass: '2xx',
 };
@@ -104,7 +115,7 @@ const responseEvent: FetchDiagnosticEvent = {
 const failureEvent: FetchDiagnosticEvent = {
   kind: 'failure',
   method: 'GET',
-  operation: '/api/users',
+  operation: '/api/v1/users',
   durationMs: 7,
   statusClass: '5xx',
   failureCategory: 'http',
@@ -122,18 +133,27 @@ describe('Main entrypoint', () => {
 
   it('counts requests and responses without reporting them as errors', () => {
     const before = metrics();
-    emitFetchDiagnostic({ kind: 'request', method: 'GET', operation: '/api/users' });
+    emitFetchDiagnostic({ kind: 'request', method: 'GET', operation: '/api/v1/users' });
     emitFetchDiagnostic(responseEvent);
 
     expect(reportError).not.toHaveBeenCalled();
     const after = metrics();
     expect(after.requests).toBe(before.requests + 1);
     expect(after.responses).toBe(before.responses + 1);
-    expect(after.latencyByOperation['/api/users']).toEqual({
+    expect(after.latencyByOperation['/api/v1/users']).toEqual({
       count: 1,
       totalMs: 5,
       maxMs: 5,
     });
+  });
+
+  it('refuses to mount when the document has no root element', () => {
+    // The entrypoint already booted against the fake root, so this proves the
+    // guard alone: booting a document without `#root` must not reach createRoot.
+    mountedOn = undefined;
+
+    expect(() => boot(rootlessDocument)).toThrow('#root element not found');
+    expect(mountedOn).toBeUndefined();
   });
 
   it('reports failures with the bounded event as the cause', () => {

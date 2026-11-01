@@ -1,5 +1,14 @@
 /**
- * @file Entrypoint that mounts the PWA with a shared query client.
+ * @file Entrypoint that boots the PWA around a shared query client.
+ *
+ * Importing this module boots the application exactly once. Booting publishes
+ * the bounded fetch-metrics consumer for devtools, installs the diagnostics
+ * sink that feeds it, forwards fetch failures to the browser's global error
+ * channel through `reportError`, and renders the React tree into `#root`.
+ *
+ * The boot step takes the document as an argument so the missing-root guard can
+ * be exercised without a live DOM: a document without `#root` must fail loudly
+ * rather than render into nothing.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
@@ -39,13 +48,39 @@ const queryClient = new QueryClient({
     },
   },
 });
-const rootElem = document.querySelector('#root');
-if (!rootElem) throw new Error('#root element not found');
 
-createRoot(rootElem).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </React.StrictMode>,
-);
+/** The document surface the boot sequence needs to locate its mount point. */
+export interface MountDocument {
+  /** First element matching `selector`, or nothing when the document lacks one. */
+  querySelector(selector: string): Element | null | undefined;
+}
+
+/**
+ * Resolve the mount point, or fail loudly rather than render nowhere.
+ *
+ * @example
+ * requireRootElement(document); // the `#root` element
+ */
+export const requireRootElement = (doc: MountDocument): Element => {
+  const rootElem = doc.querySelector('#root');
+  if (!rootElem) throw new Error('#root element not found');
+  return rootElem;
+};
+
+/**
+ * Render the application into the document's root element.
+ *
+ * @example
+ * boot(document); // the PWA is mounted and the diagnostics sink is installed
+ */
+export const boot = (doc: MountDocument): void => {
+  createRoot(requireRootElement(doc)).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </React.StrictMode>,
+  );
+};
+
+boot(document);
