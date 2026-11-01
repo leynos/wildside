@@ -2501,13 +2501,23 @@ policy limit and records its bounded count under
 policy constructor validates delay parameters before jitter so a configuration
 with several invalid fields reports the same first error.
 
-`RetryingJobService`, configured with `RetryingJobServiceConfig` and
-`PostgresRetryScheduler`, applies one policy to one queue. It schedules
-`run_at` with an ownership guard before returning a failure for Apalis to
-acknowledge. Backoff frees the worker slot, and the polling interval is a
-precision floor. A crash between the in-memory attempt increment and its
-acknowledgement can lose that one in-flight attempt. Do not install an
-in-process retry layer on these pinned release candidates. See
+`RetryingJobService<J, F>`, configured with `RetryingJobServiceConfig`, applies
+one policy to one queue. It decodes the stored payload into the queue's concrete
+`v1` job type `J` before invoking `F`, so a handler never observes a body that
+passed the version check but failed the type check. It schedules `run_at` with
+an ownership guard before returning a failure for Apalis to acknowledge.
+
+All persistence goes through the `RetryPersistence` port: `schedule_retry` for
+a durable retry and `record_terminal_failure` for a dead-letter classification.
+`PostgresRetryScheduler` is its only production implementation, and the port
+exists so unit tests can use a recording double to assert the exactly-one-write
+contract without PostgreSQL. Do not add a second implementation speculatively;
+extend the trait only when a real second backend exists.
+
+Backoff frees the worker slot, and the polling interval is a precision floor. A
+crash between the in-memory attempt increment and its acknowledgement can lose
+that one in-flight attempt. Do not install an in-process retry layer on these
+pinned release candidates. See
 [ADR-003](adr-003-durable-retry-scheduling-for-apalis-jobs.md), [ADR-004](adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md),
 and the [operator runbook](runbooks/queue-retry-and-dead-letter-operations.md).
 

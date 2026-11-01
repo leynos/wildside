@@ -1,7 +1,9 @@
 //! Apalis service that applies the domain retry policy to one job delivery.
 
 use std::future::Future;
+use std::marker::PhantomData;
 use std::num::NonZeroU32;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -9,6 +11,7 @@ use apalis_core::{error::BoxDynError, layers::Service, worker::context::WorkerCo
 use apalis_postgres::PgTask;
 use futures_util::future::BoxFuture;
 use rand::Rng;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tracing::{error, warn};
 
@@ -20,21 +23,25 @@ use decision::{RetryDecisionContext, RetryWrapperDecision, decide_retry_wrapper_
 
 use crate::domain::jobs::retry::{JitterSample, JobErrorKind, JobFailure, JobRetryPolicy};
 use crate::domain::ports::{RouteDeadLetterOutcome, RouteQueueMetrics, RouteRetryOutcome};
+use crate::outbound::queue::RetryPersistence;
 use crate::outbound::queue::decode_job;
-use crate::outbound::queue::postgres_retry_scheduler::{
-    PostgresRetryScheduler, TerminalRetryReason, TerminalRetryUpdate,
-};
+use crate::outbound::queue::postgres_retry_scheduler::TerminalRetryReason;
 
 /// A queue-specific Apalis service that schedules retries in PostgreSQL.
-pub struct RetryingJobService<F> {
+///
+/// `J` is the queue's concrete `v1` job envelope. Decoding into it at this
+/// boundary ensures the handler only ever sees a payload that validated against
+/// the job type's required fields, not merely one with a supported version tag.
+pub struct RetryingJobService<J, F> {
     queue_name: String,
     policy: JobRetryPolicy,
-    scheduler: PostgresRetryScheduler,
-    metrics: std::sync::Arc<dyn RouteQueueMetrics>,
+    scheduler: Arc<dyn RetryPersistence>,
+    metrics: Arc<dyn RouteQueueMetrics>,
     handler: F,
+    job: PhantomData<fn() -> J>,
 }
 
-impl<F> RetryingJobService<F> {
+impl<J, F> RetryingJobService<J, F> {
     /// Build the production wrapper for one queue and its retry policy.
     ///
     /// The handler receives the decoded v1 job envelope and current Apalis
@@ -47,10 +54,10 @@ impl<F> RetryingJobService<F> {
     /// let config = RetryingJobServiceConfig::new(
     ///     queue_name,
     ///     queue_policy,
-    ///     PostgresRetryScheduler::new(pool.clone()),
+    ///     Arc::new(PostgresRetryScheduler::new(pool.clone())),
     ///     metrics,
     /// );
-    /// let service = RetryingJobService::new(config, handle_job);
+    /// let service = RetryingJobService::<GenerateRouteJob, _>::new(config, handle_job);
     /// let worker = WorkerBuilder::new(worker_name)
     ///     .backend(postgres_storage)
     ///     .build(service);
@@ -62,13 +69,15 @@ impl<F> RetryingJobService<F> {
             scheduler: config.scheduler,
             metrics: config.metrics,
             handler,
+            job: PhantomData,
         }
     }
 }
 
-impl<F, Fut> Service<PgTask<Value>> for RetryingJobService<F>
+impl<J, F, Fut> Service<PgTask<Value>> for RetryingJobService<J, F>
 where
-    F: Fn(Value, NonZeroU32) -> Fut + Clone + Send + Sync + 'static,
+    J: DeserializeOwned + Send + 'static,
+    F: Fn(J, NonZeroU32) -> Fut + Clone + Send + Sync + 'static,
     Fut: Future<Output = Result<(), JobFailure>> + Send + 'static,
 {
     type Response = ();
@@ -96,14 +105,14 @@ where
                 attempt,
                 context_max_attempts,
                 policy: &policy,
-                scheduler: &scheduler,
+                scheduler: scheduler.as_ref(),
                 metrics: metrics.as_ref(),
                 queue_name: &queue_name,
                 task_id: task_id.as_deref(),
                 worker_id: worker_id.as_deref(),
             };
 
-            let payload = match decode_job::<Value>(&task.args) {
+            let payload = match decode_job::<J>(&task.args) {
                 Ok(payload) => payload,
                 Err(error) => {
                     let failure = JobFailure::new(JobErrorKind::Fatal, error.to_string());
@@ -123,7 +132,7 @@ struct RetryFailureContext<'a> {
     attempt: NonZeroU32,
     context_max_attempts: u32,
     policy: &'a JobRetryPolicy,
-    scheduler: &'a PostgresRetryScheduler,
+    scheduler: &'a dyn RetryPersistence,
     metrics: &'a dyn RouteQueueMetrics,
     queue_name: &'a str,
     task_id: Option<&'a str>,
@@ -276,13 +285,13 @@ async fn persist_terminal_failure(
     } = plan;
     let result = context
         .scheduler
-        .record_terminal_failure(TerminalRetryUpdate {
-            task_id: identity.task_id,
-            worker_id: identity.worker_id,
-            attempt: context.attempt,
+        .record_terminal_failure(
+            identity.task_id,
+            identity.worker_id,
+            context.attempt,
             reason,
             shrink_limit,
-        })
+        )
         .await;
     match result {
         Ok(true) => {
