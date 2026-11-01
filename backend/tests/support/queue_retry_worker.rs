@@ -14,11 +14,33 @@ use backend::domain::ports::RouteQueueMetrics;
 use backend::outbound::queue::{
     PostgresRetryScheduler, RetryingJobService, RetryingJobServiceConfig,
 };
+use serde::Deserialize;
 use serde_json::Value;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(20);
 const MAX_POLL_ITERATIONS: usize = 250;
 const QUIET_POLL_ITERATIONS: usize = 5;
+
+/// Ceiling for one complete worker run, including observation and shutdown.
+///
+/// The iteration cap alone only bounds the number of poll cycles; a stalled
+/// database operation or handler would otherwise run unbounded under a plain
+/// `cargo test` invocation, which has no Nextest timeout.
+pub const DEFAULT_WORKER_DEADLINE: Duration = Duration::from_secs(20);
+
+/// Typed `v1` envelope decoded by the production retry wrapper under test.
+///
+/// The BDD payloads carry only an envelope version and a probe id. Handlers in
+/// this harness ignore the payload, but the decoded value still proves the
+/// wrapper validated it against a concrete job type rather than accepting any
+/// JSON object with a supported version tag.
+#[derive(Clone, Debug, Deserialize)]
+pub struct QueueRetryProbeJob {
+    /// The persisted probe identifier.
+    #[allow(dead_code)] // Observed through the database row, not the handler.
+    #[serde(rename = "probeId")]
+    pub probe_id: String,
+}
 
 /// Outcome captured while the worker remains active after a terminal row state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -38,10 +60,11 @@ pub struct QueueRetryWorkerConfig {
     pub policy: JobRetryPolicy,
     pub metrics: Arc<dyn RouteQueueMetrics>,
     pub stop_after_poll_intervals: Option<usize>,
+    pub deadline: Duration,
 }
 
 impl QueueRetryWorkerConfig {
-    fn validate_poll_limit(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), String> {
         if self
             .stop_after_poll_intervals
             .is_some_and(|polls| polls == 0 || polls > MAX_POLL_ITERATIONS)
@@ -49,6 +72,9 @@ impl QueueRetryWorkerConfig {
             return Err(format!(
                 "bounded poll count must be between 1 and {MAX_POLL_ITERATIONS}"
             ));
+        }
+        if self.deadline.is_zero() {
+            return Err("worker deadline must be greater than zero".to_owned());
         }
         Ok(())
     }
@@ -103,15 +129,20 @@ async fn wait_intervals(intervals: usize) {
 }
 
 /// Build and run the worker wiring that 5.3.1 can promote, with hard test caps.
+///
+/// The run is bounded by both the observation iteration cap and
+/// [`QueueRetryWorkerConfig::deadline`]. Expiring the deadline drops the worker
+/// future, which stops its in-flight handler and shuts the worker down rather
+/// than leaving a stalled task behind for the rest of the test process.
 pub async fn run_queue_retry_worker<F, Fut>(
     config: QueueRetryWorkerConfig,
     handler: F,
 ) -> Result<WorkerRunReport, String>
 where
-    F: Fn(Value, NonZeroU32) -> Fut + Clone + Send + Sync + 'static,
+    F: Fn(QueueRetryProbeJob, NonZeroU32) -> Fut + Clone + Send + Sync + 'static,
     Fut: Future<Output = Result<(), backend::domain::jobs::retry::JobFailure>> + Send + 'static,
 {
-    config.validate_poll_limit()?;
+    config.validate()?;
     let QueueRetryWorkerConfig {
         pool,
         queue_name,
@@ -119,22 +150,25 @@ where
         policy,
         metrics,
         stop_after_poll_intervals,
+        deadline,
     } = config;
     let runs = Arc::new(AtomicUsize::new(0));
     let counted_handler = {
         let runs = Arc::clone(&runs);
-        move |job, attempt| {
+        move |job: QueueRetryProbeJob, attempt| {
             runs.fetch_add(1, Ordering::SeqCst);
             handler(job, attempt)
         }
     };
+    let scheduler: Arc<dyn backend::outbound::queue::RetryPersistence> =
+        Arc::new(PostgresRetryScheduler::new(pool.clone()));
     let service_config = RetryingJobServiceConfig::new(
         queue_name.clone(),
         policy,
-        PostgresRetryScheduler::new(pool.clone()),
+        scheduler,
         metrics,
     );
-    let service = RetryingJobService::new(service_config, counted_handler);
+    let service = RetryingJobService::<QueueRetryProbeJob, _>::new(service_config, counted_handler);
     let config = Config::new(&queue_name).with_poll_interval(
         StrategyBuilder::new()
             .apply(IntervalStrategy::new(POLL_INTERVAL))
@@ -154,17 +188,25 @@ where
         stop_after_poll_intervals,
     };
 
-    worker
-        .run_until_ctx(move |ctx| async move {
-            let report = observation.observe().await;
-            if let Ok(mut slot) = worker_result.lock() {
-                *slot = Some(report);
-            }
-            ctx.stop()?;
-            Ok(())
-        })
-        .await
-        .map_err(|error| format!("retry worker failed: {error}"))?;
+    let run = worker.run_until_ctx(move |ctx| async move {
+        let report = observation.observe().await;
+        if let Ok(mut slot) = worker_result.lock() {
+            *slot = Some(report);
+        }
+        ctx.stop()?;
+        Ok(())
+    });
+
+    match tokio::time::timeout(deadline, run).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => return Err(format!("retry worker failed: {error}")),
+        Err(_) => {
+            return Err(format!(
+                "retry worker exceeded its {:?} deadline",
+                deadline
+            ));
+        }
+    }
 
     let report = result
         .lock()

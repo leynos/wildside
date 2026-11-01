@@ -5,8 +5,11 @@ mod retry_policy_world;
 include!("support/entrypoint.rs");
 declare_test_support!(atexit_cleanup, embedded_postgres, queue_retry_worker);
 
+use std::time::Duration;
+
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
+use serde_json::json;
 
 pub use retry_policy_world::{QueueRetryPolicyWorld, RetryHandlerMode};
 
@@ -58,9 +61,25 @@ fn its_handler_always_fails_retryably(world: &QueueRetryPolicyWorld) {
     world.set_handler_mode(RetryHandlerMode::AlwaysRetryable);
 }
 
+#[given("a stored job whose body is malformed")]
+fn a_stored_job_with_a_malformed_body(world: &QueueRetryPolicyWorld) {
+    world.insert_raw_job(json!({"v": "v1"}));
+}
+
+#[given("a stored job whose envelope version is unsupported")]
+fn a_stored_job_with_an_unsupported_version(world: &QueueRetryPolicyWorld) {
+    let payload = json!({"v": "v2", "probeId": world.probe_id()});
+    world.insert_raw_job(payload);
+}
+
 #[when("the worker processes the queue")]
 fn the_worker_processes_the_queue(world: &QueueRetryPolicyWorld) {
     world.run_worker();
+}
+
+#[when("the worker polls the queue for a bounded window")]
+fn the_worker_polls_the_queue_for_a_bounded_window(world: &QueueRetryPolicyWorld) {
+    world.run_worker_for_polls(100);
 }
 
 #[when("a job is enqueued through the route queue adapter")]
@@ -92,6 +111,26 @@ fn each_rerun_starts_after_its_persisted_retry_time(world: &QueueRetryPolicyWorl
             observation.started_at_micros >= observation.run_at_micros,
             "attempt {} started before its persisted run_at",
             observation.attempt
+        );
+    }
+
+    // A no-op or swallowed scheduling write would leave `run_at` unchanged and
+    // still satisfy the check above whenever the row is already due. Requiring
+    // the stored deadline to advance by at least the base delay makes the
+    // durable-backoff claim non-vacuous. The final observation is excluded
+    // because a successful attempt schedules nothing.
+    let base_delay = world.base_delay_micros();
+    for pair in observations
+        .windows(2)
+        .take(observations.len().saturating_sub(2))
+    {
+        let advance = pair[1].run_at_micros - pair[0].run_at_micros;
+        assert!(
+            advance >= base_delay,
+            "run_at advanced by {advance}us between attempts {} and {}, \
+             below the {base_delay}us base delay",
+            pair[0].attempt,
+            pair[1].attempt
         );
     }
 }
@@ -157,6 +196,56 @@ fn the_stored_job_has_retry_budget(world: &QueueRetryPolicyWorld, attempts: i32)
     assert_eq!(world.job_row().max_attempts, attempts);
 }
 
+#[then("the handler never runs")]
+fn the_handler_never_runs(world: &QueueRetryPolicyWorld) {
+    assert_eq!(
+        world.observed_attempts(),
+        Vec::<u32>::new(),
+        "a payload rejected at the queue boundary must not reach the handler"
+    );
+}
+
+#[then("the latest job row satisfies the dead predicate")]
+fn the_latest_job_row_is_dead(world: &QueueRetryPolicyWorld) {
+    let row = world.latest_job_row();
+    assert!(
+        row.is_dead(),
+        "rejected payload should be storage-dead: {row:?}"
+    );
+}
+
+#[then("the latest job row records the terminal reason {reason}")]
+fn the_latest_job_row_records_terminal_reason(world: &QueueRetryPolicyWorld, reason: String) {
+    assert_eq!(
+        world.latest_job_row().dead_reason(),
+        reason.trim_matches('"')
+    );
+}
+
+#[test]
+fn worker_deadline_bounds_a_non_completing_handler() {
+    let world = QueueRetryPolicyWorld::new();
+    world.set_policy(3);
+    world.set_handler_mode(RetryHandlerMode::NeverCompletes);
+    world.enqueue_job();
+
+    let error = world
+        .run_worker_with_deadline(Duration::from_secs(2))
+        .expect_err("a handler that never completes must hit the harness deadline");
+    assert!(
+        error.contains("deadline"),
+        "deadline failure should name its cause: {error}"
+    );
+    // The handler records its invocation before blocking forever, so this
+    // proves the deadline ended a run that was genuinely in progress rather
+    // than one that failed to start.
+    assert_eq!(
+        world.observed_attempts(),
+        vec![1],
+        "the deadline must interrupt a running handler"
+    );
+}
+
 #[scenario(
     path = "tests/features/queue_retry_policy.feature",
     name = "A transiently failing job is retried before it succeeds"
@@ -202,5 +291,21 @@ fn lower_policy_limit_dead_letters_preexisting_job(world: QueueRetryPolicyWorld)
     name = "An enqueued job carries the queue retry budget"
 )]
 fn enqueued_job_carries_queue_retry_budget(world: QueueRetryPolicyWorld) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/queue_retry_policy.feature",
+    name = "A malformed stored job is dead-lettered without invoking the handler"
+)]
+fn malformed_job_is_dead_lettered_without_invoking_the_handler(world: QueueRetryPolicyWorld) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/queue_retry_policy.feature",
+    name = "An unsupported envelope version is dead-lettered without invoking the handler"
+)]
+fn unsupported_version_is_dead_lettered_without_invoking_the_handler(world: QueueRetryPolicyWorld) {
     drop(world);
 }

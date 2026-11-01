@@ -50,6 +50,16 @@ impl RetryProbeHandler {
                 JobErrorKind::Fatal,
                 "permanent probe failure",
             )),
+            RetryHandlerMode::NeverCompletes => {
+                // Outlive any harness deadline; the deadline is the behaviour
+                // under test, so this delay must never be the thing that ends
+                // the run first.
+                tokio::time::sleep(std::time::Duration::from_secs(600)).await;
+                Err(JobFailure::new(
+                    JobErrorKind::Retryable,
+                    "probe handler never completed",
+                ))
+            }
             RetryHandlerMode::FailRetryableThenSucceed(_) | RetryHandlerMode::AlwaysRetryable => {
                 Err(JobFailure::new(
                     JobErrorKind::Retryable,

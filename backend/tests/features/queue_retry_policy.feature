@@ -61,3 +61,21 @@ Feature: Queue retry policy with durable exponential backoff
     Given a queue with a retry policy of 5 attempts and millisecond backoff
     When a job is enqueued through the route queue adapter
     Then the stored job allows at most 5 attempts
+
+  Scenario: A malformed stored job is dead-lettered without invoking the handler
+    Given a queue with a retry policy of 4 attempts and millisecond backoff
+    And a stored job whose body is malformed
+    When the worker polls the queue for a bounded window
+    Then the handler never runs
+    And the latest job row satisfies the dead predicate
+    And the latest job row records the terminal reason "fatal"
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
+
+  Scenario: An unsupported envelope version is dead-lettered without invoking the handler
+    Given a queue with a retry policy of 4 attempts and millisecond backoff
+    And a stored job whose envelope version is unsupported
+    When the worker polls the queue for a bounded window
+    Then the handler never runs
+    And the latest job row satisfies the dead predicate
+    And the latest job row records the terminal reason "fatal"
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
