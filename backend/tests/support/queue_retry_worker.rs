@@ -204,8 +204,8 @@ where
 ///
 /// The timeout drops the worker future when it expires, which stops any
 /// in-flight handler and shuts the worker down. A worker that exits without
-/// leaving a report is an error rather than an empty result: it means shutdown
-/// pre-empted observation, so the scenario's expectations would be unproven.
+/// leaving a report is an error rather than an empty result: shutdown ended
+/// observation early, so the scenario's expectations would be unproven.
 async fn await_bounded_run<F, E>(
     worker_run: F,
     result: &std::sync::Mutex<Option<WorkerRunReport>>,
