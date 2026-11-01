@@ -84,37 +84,86 @@ async fn register_worker(pool: &PgPool, worker: &str) {
     .expect("register canary worker");
 }
 
-/// Insert one job row with explicit scheduling state.
-#[allow(clippy::too_many_arguments)]
-async fn insert_job(
-    pool: &PgPool,
-    queue: &str,
-    id: &str,
-    status: &str,
+/// Scheduling state for one canary job row.
+///
+/// The defaults describe the row the wrapper most often has to reason about:
+/// a `Failed` job that is due now, has spent one of its five attempts, and
+/// carries no metadata or worker lock. Cases adjust only the field they are
+/// about.
+struct JobRow<'a> {
+    queue: &'a str,
+    id: &'a str,
+    status: &'a str,
     attempts: i32,
     max_attempts: i32,
     run_at_offset_seconds: f64,
     metadata: Option<Value>,
-    locked_by: Option<&str>,
-) {
+    locked_by: Option<&'a str>,
+}
+
+impl<'a> JobRow<'a> {
+    fn new(queue: &'a str, id: &'a str, status: &'a str) -> Self {
+        Self {
+            queue,
+            id,
+            status,
+            attempts: 1,
+            max_attempts: 5,
+            run_at_offset_seconds: -1.0,
+            metadata: None,
+            locked_by: None,
+        }
+    }
+
+    fn attempts(mut self, attempts: i32) -> Self {
+        self.attempts = attempts;
+        self
+    }
+
+    fn max_attempts(mut self, max_attempts: i32) -> Self {
+        self.max_attempts = max_attempts;
+        self
+    }
+
+    /// Offset the row's `run_at` from now, in seconds; negative is already due.
+    fn run_at_offset_seconds(mut self, seconds: f64) -> Self {
+        self.run_at_offset_seconds = seconds;
+        self
+    }
+
+    fn metadata(mut self, metadata: Value) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    fn locked_by(mut self, worker: &'a str) -> Self {
+        self.locked_by = Some(worker);
+        self
+    }
+}
+
+/// Insert one job row with explicit scheduling state.
+async fn insert_job(pool: &PgPool, row: JobRow<'_>) {
     // `apalis.jobs.job` is `bytea` and `metadata` is `jsonb` after the upstream
     // migrations, so the bindings use those exact types rather than text that
     // PostgreSQL would have to reinterpret.
-    let payload = json!({ "v": "v1", "probeId": id }).to_string().into_bytes();
+    let payload = json!({ "v": "v1", "probeId": row.id })
+        .to_string()
+        .into_bytes();
     sqlx::query(
         "INSERT INTO apalis.jobs
             (job, id, job_type, status, attempts, max_attempts, run_at, metadata, lock_by)
          VALUES ($1, $2, $3, $4, $5, $6, now() + make_interval(secs => $7), $8, $9)",
     )
     .bind(payload)
-    .bind(id)
-    .bind(queue)
-    .bind(status)
-    .bind(attempts)
-    .bind(max_attempts)
-    .bind(run_at_offset_seconds)
-    .bind(metadata.map(sqlx::types::Json))
-    .bind(locked_by)
+    .bind(row.id)
+    .bind(row.queue)
+    .bind(row.status)
+    .bind(row.attempts)
+    .bind(row.max_attempts)
+    .bind(row.run_at_offset_seconds)
+    .bind(row.metadata.map(sqlx::types::Json))
+    .bind(row.locked_by)
     .execute(pool)
     .await
     .expect("insert canary job");
@@ -231,7 +280,7 @@ fn failed_row_with_spare_attempts_is_fetched_when_due() {
 
     environment.run(async {
         register_worker(&pool, worker).await;
-        insert_job(&pool, queue, &id, "Failed", 1, 5, -1.0, None, None).await;
+        insert_job(&pool, JobRow::new(queue, &id, "Failed")).await;
     });
 
     let fetched = fetch_tasks(&pool, queue, worker, 1);
@@ -248,90 +297,65 @@ fn failed_row_with_spare_attempts_is_fetched_when_due() {
     assert_eq!(state.lock_by.as_deref(), Some(worker));
 }
 
-#[test]
-fn failed_row_is_not_fetched_before_its_run_at() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.future";
-    let worker = "canary-future-worker";
-    let id = Ulid::new().to_string();
-
-    environment.run(async {
-        register_worker(&pool, worker).await;
-        insert_job(&pool, queue, &id, "Failed", 1, 5, 3_600.0, None, None).await;
-    });
-
-    let fetched = fetch_tasks(&pool, queue, worker, 1);
-    assert!(
-        fetched.is_empty(),
-        "a row scheduled in the future must not be fetched: {fetched:?}"
-    );
-    assert_eq!(
-        read_state(&pool, &id),
-        RowState {
-            status: "Failed".to_owned(),
-            attempts: 1,
-            lock_by: None,
-        },
-        "a future row must stay unclaimed"
-    );
+/// A row the fetcher must overlook, with the reason it is ineligible.
+struct IneligibleRow {
+    queue: &'static str,
+    worker: &'static str,
+    status: &'static str,
+    attempts: i32,
+    run_at_offset_seconds: f64,
+    expectation: &'static str,
 }
 
-#[test]
-fn killed_row_is_not_fetched() {
+#[rstest::rstest]
+#[case::run_at_in_the_future(IneligibleRow {
+    queue: "canary.future",
+    worker: "canary-future-worker",
+    status: "Failed",
+    attempts: 1,
+    run_at_offset_seconds: 3_600.0,
+    expectation: "a row scheduled in the future must not be fetched",
+})]
+#[case::killed_row(IneligibleRow {
+    queue: "canary.killed",
+    worker: "canary-killed-worker",
+    status: "Killed",
+    attempts: 1,
+    run_at_offset_seconds: -1.0,
+    expectation: "a Killed row must never be fetched again",
+})]
+#[case::attempt_cap_reached(IneligibleRow {
+    queue: "canary.exhausted",
+    worker: "canary-exhausted-worker",
+    status: "Failed",
+    attempts: 5,
+    run_at_offset_seconds: -1.0,
+    expectation: "a Failed row at its attempt cap must not be fetched",
+})]
+fn ineligible_rows_are_not_fetched(#[case] case: IneligibleRow) {
     let environment = CanaryEnvironment::shared();
     let pool = environment.pool.clone();
-    let queue = "canary.killed";
-    let worker = "canary-killed-worker";
     let id = Ulid::new().to_string();
+    let row = JobRow::new(case.queue, &id, case.status)
+        .attempts(case.attempts)
+        .run_at_offset_seconds(case.run_at_offset_seconds);
 
     environment.run(async {
-        register_worker(&pool, worker).await;
-        insert_job(&pool, queue, &id, "Killed", 1, 5, -1.0, None, None).await;
+        register_worker(&pool, case.worker).await;
+        insert_job(&pool, row).await;
     });
 
-    let fetched = fetch_tasks(&pool, queue, worker, 1);
-    assert!(
-        fetched.is_empty(),
-        "a Killed row must never be fetched again: {fetched:?}"
-    );
+    let fetched = fetch_tasks(&pool, case.queue, case.worker, 1);
+    assert!(fetched.is_empty(), "{}: {fetched:?}", case.expectation);
     assert_eq!(
         read_state(&pool, &id),
         RowState {
-            status: "Killed".to_owned(),
-            attempts: 1,
+            status: case.status.to_owned(),
+            attempts: case.attempts,
             lock_by: None,
         },
-        "a Killed row must stay unclaimed"
-    );
-}
-
-#[test]
-fn failed_row_at_the_attempt_limit_is_not_fetched() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.exhausted";
-    let worker = "canary-exhausted-worker";
-    let id = Ulid::new().to_string();
-
-    environment.run(async {
-        register_worker(&pool, worker).await;
-        insert_job(&pool, queue, &id, "Failed", 5, 5, -1.0, None, None).await;
-    });
-
-    let fetched = fetch_tasks(&pool, queue, worker, 1);
-    assert!(
-        fetched.is_empty(),
-        "a Failed row at its attempt cap must not be fetched: {fetched:?}"
-    );
-    assert_eq!(
-        read_state(&pool, &id),
-        RowState {
-            status: "Failed".to_owned(),
-            attempts: 5,
-            lock_by: None,
-        },
-        "an exhausted row must stay unclaimed"
+        "{} must stay unclaimed",
+        case.status
     );
 }
 
@@ -345,7 +369,13 @@ fn fetch_preserves_the_persisted_attempt_count() {
 
     environment.run(async {
         register_worker(&pool, worker).await;
-        insert_job(&pool, queue, &id, "Failed", 3, 10, -1.0, None, None).await;
+        insert_job(
+            &pool,
+            JobRow::new(queue, &id, "Failed")
+                .attempts(3)
+                .max_attempts(10),
+        )
+        .await;
     });
 
     let fetched = fetch_tasks(&pool, queue, worker, 1);

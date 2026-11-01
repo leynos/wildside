@@ -16,12 +16,20 @@ pub enum TerminalRetryReason {
 }
 
 /// Details persisted when a task reaches a terminal retry outcome.
-pub(crate) struct TerminalRetryUpdate<'a> {
-    pub(crate) task_id: &'a str,
-    pub(crate) worker_id: &'a str,
-    pub(crate) attempt: NonZeroU32,
-    pub(crate) reason: TerminalRetryReason,
-    pub(crate) shrink_limit: bool,
+///
+/// The port accepts this value rather than five positional arguments so a
+/// call site cannot transpose the columns that describe one row.
+pub struct TerminalRetryUpdate<'a> {
+    /// Identity of the task that terminated.
+    pub task_id: &'a str,
+    /// Worker that owns the task's lock.
+    pub worker_id: &'a str,
+    /// Attempt that terminated the task.
+    pub attempt: NonZeroU32,
+    /// Why the task will not be retried.
+    pub reason: TerminalRetryReason,
+    /// Whether the attempt limit shrinks to the terminating attempt.
+    pub shrink_limit: bool,
 }
 
 impl TerminalRetryReason {

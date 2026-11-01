@@ -24,6 +24,7 @@ use decision::{RetryDecisionContext, RetryWrapperDecision, decide_retry_wrapper_
 use crate::domain::jobs::retry::{JitterSample, JobErrorKind, JobFailure, JobRetryPolicy};
 use crate::domain::ports::{RouteDeadLetterOutcome, RouteQueueMetrics, RouteRetryOutcome};
 use crate::outbound::queue::RetryPersistence;
+use crate::outbound::queue::TerminalRetryUpdate;
 use crate::outbound::queue::decode_job;
 use crate::outbound::queue::postgres_retry_scheduler::TerminalRetryReason;
 
@@ -285,13 +286,13 @@ async fn persist_terminal_failure(
     } = plan;
     let result = context
         .scheduler
-        .record_terminal_failure(
-            identity.task_id,
-            identity.worker_id,
-            context.attempt,
+        .record_terminal_failure(TerminalRetryUpdate {
+            task_id: identity.task_id,
+            worker_id: identity.worker_id,
+            attempt: context.attempt,
             reason,
             shrink_limit,
-        )
+        })
         .await;
     match result {
         Ok(true) => {

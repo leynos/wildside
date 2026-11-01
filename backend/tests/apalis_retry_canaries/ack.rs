@@ -16,7 +16,7 @@ use apalis_postgres::{PgAck, PgContext, PgTask};
 use serde_json::{Value, json};
 use ulid::Ulid;
 
-use super::{CanaryEnvironment, insert_job, register_worker};
+use super::{CanaryEnvironment, JobRow, insert_job, register_worker};
 
 /// A running row locked by the canary worker, as the wrapper would see it.
 fn locked_task(id: &str, worker: &str, max_attempts: i32, attempt: usize) -> PgTask<Value> {
@@ -44,14 +44,12 @@ fn acknowledgement_preserves_scheduling_state() {
         register_worker(&pool, worker).await;
         insert_job(
             &pool,
-            queue,
-            &id,
-            "Running",
-            2,
-            7,
-            3_600.0,
-            Some(metadata.clone()),
-            Some(worker),
+            JobRow::new(queue, &id, "Running")
+                .attempts(2)
+                .max_attempts(7)
+                .run_at_offset_seconds(3_600.0)
+                .metadata(metadata.clone())
+                .locked_by(worker),
         )
         .await;
 
@@ -97,14 +95,11 @@ fn acknowledgement_keeps_a_shrunk_limit_and_terminal_reason() {
         register_worker(&pool, worker).await;
         insert_job(
             &pool,
-            queue,
-            &id,
-            "Running",
-            3,
-            3,
-            -1.0,
-            Some(json!({ "wildside.retry.dead_reason": "fatal" })),
-            Some(worker),
+            JobRow::new(queue, &id, "Running")
+                .attempts(3)
+                .max_attempts(3)
+                .metadata(json!({ "wildside.retry.dead_reason": "fatal" }))
+                .locked_by(worker),
         )
         .await;
 
