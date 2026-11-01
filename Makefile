@@ -59,6 +59,23 @@ define exec_or_bunx
 	fi
 endef
 
+# Run Biome through $(BIOME_VERSION), whatever the PATH happens to hold.
+#
+# Formatter output differs between Biome releases, and the differences are
+# not upward-compatible: code shaped by 2.4.13 is reported as unformatted by
+# 2.3.1 and vice versa. Preferring a PATH binary therefore makes `check-fmt`
+# fail on files that CI, which resolves the pin through `bun x`, accepts.
+#
+# Parameters:
+#   $(1) - arguments passed to Biome
+define biome_cmd
+	if biome --version 2>/dev/null | grep -qF 'Version: $(BIOME_VERSION)'; then \
+	  biome $(1); \
+	else \
+	  bun x --package=@biomejs/biome@$(BIOME_VERSION) biome $(1); \
+	fi
+endef
+
 RUSTFLAGS_STRICT := -D warnings
 RUST_FLAGS ?= $(RUSTFLAGS_STRICT)
 # The build standard (Concordat `rust-build-defaults`): the parallel `rustc`
@@ -228,7 +245,7 @@ local-k8s-logs:
 
 fmt: workspace-sync
 	cargo fmt --all
-	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+	$(call biome_cmd,format --write frontend-pwa packages)
 	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 	$(MDLINT) --fix "**/*.md"
 	$(MAKE) fmt-python
@@ -269,7 +286,7 @@ lint-whitaker:
 	$(RUST_FLAGS_ENV) $(WHITAKER) --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
 
 lint-frontend:
-	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+	$(call biome_cmd,ci --formatter-enabled=true --reporter=github frontend-pwa packages)
 	pnpm --filter frontend-pwa lint
 
 
@@ -542,7 +559,7 @@ define CHECK_FMT_CMD
 else \
 	cargo fmt --all -- --check; \
 fi
-$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+$(call biome_cmd,ci --formatter-enabled=true --reporter=github frontend-pwa packages)
 $(RUFF) format --check
 endef
 
