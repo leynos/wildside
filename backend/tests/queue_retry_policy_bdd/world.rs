@@ -19,16 +19,22 @@ use super::metrics::RecordingRetryMetrics;
 use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::queue_retry_worker::{
-    QueueRetryWorkerConfig, WorkerRunReport, run_queue_retry_worker,
+    DEFAULT_WORKER_DEADLINE, QueueRetryProbeJob, QueueRetryWorkerConfig, WorkerRunReport,
+    run_queue_retry_worker,
 };
 
 pub const QUEUE_NAME: &str = "wildside.retry-policy-bdd";
+
+/// First retry delay used by every scenario policy.
+const BASE_DELAY: Duration = Duration::from_millis(10);
 
 #[derive(Clone, Copy, Debug)]
 pub enum RetryHandlerMode {
     FailRetryableThenSucceed(usize),
     AlwaysRetryable,
     Fatal,
+    /// Fail retryably only after outliving any sensible harness deadline.
+    NeverCompletes,
 }
 
 #[derive(Clone, Debug)]
@@ -183,6 +189,29 @@ impl QueueRetryPolicyWorld {
     }
 
     pub fn run_worker(&self) {
+        self.run_worker_with_deadline(DEFAULT_WORKER_DEADLINE)
+            .expect("bounded retry worker run");
+    }
+
+    /// Run the worker with a fixed observation window.
+    ///
+    /// Used when the stored payload cannot be located by probe id, so the
+    /// harness cannot wait for a terminal state and must bound the run by poll
+    /// count instead.
+    pub fn run_worker_for_polls(&self, polls: usize) {
+        self.run_worker_config(DEFAULT_WORKER_DEADLINE, Some(polls))
+            .expect("bounded retry worker run");
+    }
+
+    pub fn run_worker_with_deadline(&self, deadline: Duration) -> Result<(), String> {
+        self.run_worker_config(deadline, None)
+    }
+
+    fn run_worker_config(
+        &self,
+        deadline: Duration,
+        stop_after_poll_intervals: Option<usize>,
+    ) -> Result<(), String> {
         let policy = self.policy.lock().expect("retry policy mutex").clone();
         let mode = *self.handler_mode.lock().expect("handler mode mutex");
         let probe_handler = RetryProbeHandler {
@@ -191,7 +220,7 @@ impl QueueRetryPolicyWorld {
             observations: Arc::clone(&self.observations),
             mode,
         };
-        let handler = move |_job, attempt| {
+        let handler = move |_job: QueueRetryProbeJob, attempt| {
             let probe_handler = probe_handler.clone();
             async move { probe_handler.run(attempt).await }
         };
@@ -201,13 +230,107 @@ impl QueueRetryPolicyWorld {
             probe_id: self.probe_id.clone(),
             policy,
             metrics: Arc::new(self.metrics.clone()),
-            stop_after_poll_intervals: None,
+            stop_after_poll_intervals,
+            deadline,
         };
         let report = self
             .runtime
-            .block_on(run_queue_retry_worker(config, handler))
-            .expect("bounded retry worker run");
+            .block_on(run_queue_retry_worker(config, handler))?;
         *self.worker_report.lock().expect("worker report mutex") = Some(report);
+        Ok(())
+    }
+
+    /// Store a job whose body may not decode against the queue's job type.
+    ///
+    /// The payload is pushed straight into `apalis.jobs` so the wrapper, not
+    /// the enqueue adapter, is the component that rejects it.
+    pub fn insert_raw_job(&self, payload: Value) {
+        let pool = self.pool.clone();
+        let attempts = self
+            .policy
+            .lock()
+            .expect("retry policy mutex")
+            .max_attempts()
+            .get();
+        let max_attempts = i32::try_from(attempts).expect("policy attempts fit i32");
+        self.runtime.block_on(async move {
+            let mut storage = apalis_postgres::PostgresStorage::<Value>::new_with_config(
+                &pool,
+                &apalis_postgres::Config::new(QUEUE_NAME),
+            );
+            let task = apalis_core::task::Task::builder(payload)
+                .with_ctx(apalis_postgres::PgContext::new().with_max_attempts(max_attempts))
+                .build();
+            use apalis_core::backend::TaskSink;
+            storage
+                .push_task(task)
+                .await
+                .expect("insert raw retry probe job");
+        });
+    }
+
+    /// Read the most recently stored row for this scenario's queue.
+    ///
+    /// Used for payloads that deliberately omit the probe id, which the
+    /// probe-id based lookup cannot find.
+    pub fn latest_job_row(&self) -> StoredJob {
+        self.runtime.block_on(async {
+            sqlx::query_as(
+                "SELECT status, attempts, max_attempts,
+                    (extract(epoch FROM run_at) * 1000000)::bigint,
+                    metadata #>> '{wildside.retry.dead_reason}',
+                    last_result #>> '{Err}',
+                    metadata #>> '{probe.keep}'
+                 FROM apalis.jobs
+                 WHERE job_type = $1
+                 ORDER BY id DESC
+                 LIMIT 1",
+            )
+            .bind(QUEUE_NAME)
+            .fetch_one(&self.pool)
+            .await
+            .map(
+                |(
+                    status,
+                    attempts,
+                    max_attempts,
+                    run_at_micros,
+                    dead_reason,
+                    last_result,
+                    unrelated_metadata,
+                ): (
+                    String,
+                    i32,
+                    i32,
+                    i64,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                )| StoredJob {
+                    status,
+                    attempts,
+                    max_attempts,
+                    run_at_micros,
+                    dead_reason,
+                    last_result,
+                    unrelated_metadata,
+                },
+            )
+            .expect("read latest retry probe row")
+        })
+    }
+
+    pub fn probe_id(&self) -> &str {
+        &self.probe_id
+    }
+
+    /// Configured backoff for the first retry, in microseconds.
+    ///
+    /// The scheduler stores `now() + delay`, so the gap between consecutive
+    /// `run_at` values must be at least this large. A guarded write that never
+    /// fired would leave `run_at` unchanged, which this catches.
+    pub fn base_delay_micros(&self) -> i64 {
+        i64::try_from(BASE_DELAY.as_micros()).expect("base delay fits i64")
     }
 
     pub fn observations(&self) -> Vec<AttemptObservation> {
@@ -338,7 +461,7 @@ impl QueueRetryPolicyWorld {
 fn make_policy(attempts: u32) -> JobRetryPolicy {
     JobRetryPolicy::new(JobRetryPolicyConfig {
         max_attempts: NonZeroU32::new(attempts).expect("positive attempts"),
-        base_delay: Duration::from_millis(10),
+        base_delay: BASE_DELAY,
         multiplier: 2.0,
         max_delay: Duration::from_millis(40),
         jitter_fraction: 0.0,
