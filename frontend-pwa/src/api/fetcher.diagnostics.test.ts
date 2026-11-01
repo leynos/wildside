@@ -111,17 +111,43 @@ describe('customFetch diagnostics', () => {
     expect(eventOf('failure').failureCategory).toBe('transport');
   });
 
-  it('does not report an abort during a body read as a JSON failure', async () => {
-    const abortedBody = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        controller.error(new DOMException('The operation was aborted.', 'AbortError'));
+  it('does not report a caller abort during a body read as a JSON failure', async () => {
+    const controller = new AbortController();
+    // The body stays pending until the caller aborts, so the rejection carries
+    // the caller's own signal reason rather than a stream that failed on its
+    // own.
+    const pendingBody = new ReadableStream<Uint8Array>({
+      start(stream) {
+        controller.signal.addEventListener(
+          'abort',
+          () => {
+            stream.error(controller.signal.reason);
+          },
+          { once: true },
+        );
       },
     });
-    response = new Response(abortedBody, {
+    response = new Response(pendingBody, {
       headers: { 'content-type': 'application/json' },
     });
 
-    await expect(customFetch('/api/users')).rejects.toThrow('aborted');
+    const request = customFetch('/api/users', { signal: controller.signal });
+    controller.abort();
+
+    await expect(request).rejects.toThrow();
+
+    expect(events.filter((event) => event.kind === 'failure')).toHaveLength(0);
+  });
+
+  it('treats a rejection equal to the caller signal reason as a cancellation', async () => {
+    const controller = new AbortController();
+    const reason = new Error('cancelled by caller');
+    transportError = reason;
+
+    const request = customFetch('/api/users', { signal: controller.signal });
+    controller.abort(reason);
+
+    await expect(request).rejects.toBe(reason);
 
     expect(events.filter((event) => event.kind === 'failure')).toHaveLength(0);
   });

@@ -136,6 +136,7 @@ interface FetchContext {
   readonly method: string;
   readonly operation: string;
   readonly startedAt: number;
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -143,13 +144,19 @@ interface FetchContext {
  *
  * A cancellation is a deliberate caller action, not a fault, so both the
  * transport and body-read boundaries use this predicate to keep it out of the
- * failure counts and the global error pipeline. A `TimeoutError` is a real
- * transport failure and deliberately does not match.
+ * failure counts and the global error pipeline. A rejection is matched either
+ * by its `AbortError` name or by identity with the caller's signal reason, so a
+ * wrapper that rethrows the reason is still classified as a cancellation.
+ * `TimeoutError` is a real transport failure and deliberately does not match.
  *
  * @example
- * isAbortError(new DOMException('aborted', 'AbortError')); // true
+ * isAbortError(new DOMException('aborted', 'AbortError'), undefined); // true
+ * isAbortError(new DOMException('timed out', 'TimeoutError'), undefined); // false
  */
-const isAbortError = (error: Error): boolean => error.name === 'AbortError';
+const isAbortError = (error: Error, signal: AbortSignal | undefined): boolean => {
+  if (error.name === 'TimeoutError') return false;
+  return error.name === 'AbortError' || (signal?.aborted === true && error === signal.reason);
+};
 
 /**
  * Perform the request, reporting transport failures without masking them.
@@ -168,7 +175,7 @@ const fetchGuarded = async (
   try {
     return await request();
   } catch (error) {
-    if (error instanceof Error && isAbortError(error)) throw error;
+    if (error instanceof Error && isAbortError(error, context.signal)) throw error;
     emitFetchDiagnostic({
       kind: 'failure',
       method: context.method,
@@ -198,7 +205,7 @@ const prepareRequest = (input: string, init: FetchRequestInit | undefined): Prep
   const { body, isJson } = normalizeBody(init?.body);
   return {
     url,
-    context: { method, operation, startedAt },
+    context: { method, operation, startedAt, signal: init?.signal ?? undefined },
     body,
     headers: defaultHeaders(init, { isJson }),
   };
@@ -250,7 +257,7 @@ const readJsonPayload = async (res: Response, context: FetchContext): Promise<Js
     emitFetchDiagnostic({ ...responseTiming(res, context), kind: 'response' });
     return payload;
   } catch (error) {
-    if (!(error instanceof Error && isAbortError(error))) {
+    if (!(error instanceof Error && isAbortError(error, context.signal))) {
       emitFetchDiagnostic({
         ...responseTiming(res, context),
         kind: 'failure',
