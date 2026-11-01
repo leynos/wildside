@@ -2226,8 +2226,8 @@ operations. Requeue restores the current queue budget and records bounded
 provenance in namespaced metadata. The
 [operator runbook](runbooks/queue-retry-and-dead-letter-operations.md)
 describes the SQL fallback. ADRs
-[003](adr-003-durable-retry-scheduling-for-apalis-jobs.md) and
-[004](adr-004-dead-letters-as-apalis-rows-behind-a-domain-port.md) record the
+[004](adr-004-durable-retry-scheduling-for-apalis-jobs.md) and
+[005](adr-005-dead-letters-as-apalis-rows-behind-a-domain-port.md) record the
 storage and retry decisions.
 
 Worker composition, queue priorities, and job timeouts remain part of the
