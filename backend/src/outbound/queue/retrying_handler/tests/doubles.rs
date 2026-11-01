@@ -27,7 +27,7 @@ use crate::domain::jobs::retry::JobFailure;
 use crate::domain::ports::{
     RouteDeadLetterOutcome, RouteQueueMetrics, RouteQueueOutcome, RouteRetryOutcome,
 };
-use crate::outbound::queue::{RetryPersistence, TerminalRetryReason};
+use crate::outbound::queue::{RetryPersistence, TerminalRetryReason, TerminalRetryUpdate};
 
 pub(super) const QUEUE: &str = "wildside.wrapper-effects";
 pub(super) const WORKER: &str = "wrapper-effects-worker";
@@ -115,18 +115,14 @@ impl RetryPersistence for RecordingPersistence {
 
     async fn record_terminal_failure(
         &self,
-        task_id: &str,
-        worker_id: &str,
-        attempt: NonZeroU32,
-        reason: TerminalRetryReason,
-        shrink_limit: bool,
+        update: TerminalRetryUpdate<'_>,
     ) -> Result<bool, SqlxError> {
         self.record(PersistenceCall::Terminal {
-            task_id: task_id.to_owned(),
-            worker_id: worker_id.to_owned(),
-            attempt: attempt.get(),
-            reason,
-            shrink_limit,
+            task_id: update.task_id.to_owned(),
+            worker_id: update.worker_id.to_owned(),
+            attempt: update.attempt.get(),
+            reason: update.reason,
+            shrink_limit: update.shrink_limit,
         });
         outcome(self.terminal)
     }
