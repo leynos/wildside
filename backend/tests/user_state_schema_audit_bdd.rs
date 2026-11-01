@@ -17,7 +17,7 @@ declare_test_support!(
     table_helpers,
 );
 
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::drop_users_table;
 use support::embedded_postgres::provision_template_database;
@@ -123,7 +123,7 @@ fn world() -> UserStateSchemaAuditWorld {
         let _: Option<()> = handle_cluster_setup_failure(&message);
         return UserStateSchemaAuditWorld::skipped(message);
     }
-    let cluster = match shared_cluster_handle() {
+    let cluster = match bootstrap_shared_cluster() {
         Ok(cluster) => cluster,
         Err(reason) => {
             let message = reason.to_string();

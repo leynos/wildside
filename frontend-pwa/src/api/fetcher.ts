@@ -1,164 +1,419 @@
 /**
- * @file Fetch helper that augments requests with common defaults.
+ * @file JSON boundary between the PWA and its backend.
+ *
+ * Every request passes through one place so that transport defaults, payload
+ * validation, and diagnostics stay consistent. `normalizeBody` serializes plain
+ * objects, arrays, and JSON scalars while forwarding strings and native body
+ * types untouched; `defaultHeaders` adds the JSON content type only for bodies
+ * that were serialized. Responses must be valid JSON when the server advertises
+ * a JSON body, and `customFetchParsed`/`customFetchParsedSafe` validate the
+ * decoded payload against a caller-supplied schema. Failures and timings are
+ * reported through the bounded seam in `diagnostics.ts`; the timing clock is
+ * injectable there so tests can assert durations without the host clock.
  */
 
-import type { z } from 'zod';
+import { z } from 'zod';
 
-// --- Small helpers to keep complexity low and intent clear ---
+import {
+  boundTraceId,
+  describeOperation,
+  elapsedSince,
+  emitFetchDiagnostic,
+  fetchClockNow,
+  requestMethod,
+  statusClassOf,
+} from './diagnostics';
+import { type ClientSpanHandle, type SpanOutcome, startClientSpan } from './tracing';
 
+type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
+interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+type FetchBody = BodyInit | JsonValue | null;
+type FetchRequestInit = Omit<RequestInit, 'body'> & { body?: FetchBody };
+
+interface NormalizedBody {
+  body?: BodyInit | null;
+  isJson: boolean;
+}
+
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ]),
+);
+
+const stringBodySchema = z.string();
+const emptyBodySchema = z.union([z.null(), z.undefined()]);
+// JSON scalars are legal wire bodies even though they are not structures.
+const jsonScalarSchema = z.union([z.number(), z.boolean()]);
+
+/** Predicate: does this string already hold a valid JSON document? */
+const isJsonString = (value: string): boolean => {
+  try {
+    return jsonValueSchema.safeParse(JSON.parse(value)).success;
+  } catch {
+    return false;
+  }
+};
+const nativeBodySchema = z.union([
+  z.instanceof(FormData),
+  z.instanceof(Blob),
+  z.instanceof(URLSearchParams),
+  z.instanceof(ArrayBuffer),
+  z.custom<ArrayBufferView<ArrayBuffer>>((value) => ArrayBuffer.isView(value)),
+  z.instanceof(ReadableStream),
+]);
+
+/** Resolve the API origin from the build-time environment, defaulting locally. */
 const apiBase = (): string => import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
 
-// Content-type predicates kept small and explicit to reduce complexity
-const isFormData = (body: unknown): boolean =>
-  typeof FormData !== 'undefined' && body instanceof FormData;
-const isBlob = (body: unknown): boolean => typeof Blob !== 'undefined' && body instanceof Blob;
-const isUrlEncoded = (body: unknown): boolean =>
-  typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams;
-const isBinary = (body: unknown): boolean =>
-  typeof ArrayBuffer !== 'undefined' &&
-  (body instanceof ArrayBuffer || ArrayBuffer.isView(body as ArrayBufferView));
-const isStringBody = (body: unknown): boolean => typeof body === 'string';
-
-// Decide whether we should set JSON Content‑Type for this request.
-const shouldSetJsonContentType = (
-  headers: Headers,
-  bodyInfo: { isJson: boolean },
-  rawBody: unknown,
-): boolean => {
-  if (headers.has('Content-Type')) return false;
-  if (bodyInfo.isJson) return true;
-  return getContentTypeForBody(rawBody) !== null;
-};
-
-// (former shouldAddJsonContentType) merged into defaultHeaders to keep logic in one place
-
-/** Predicate: does value represent a native non-JSON body type? */
-const isNativeBodyType = (value: unknown): boolean => {
-  return isFormData(value) || isBlob(value) || isUrlEncoded(value) || isBinary(value);
-};
-
 /** Predicate: treat POJOs and arrays as JSON serializable structures. */
-const isPlainObjectLike = (value: unknown): boolean =>
-  typeof value === 'object' &&
-  value !== null &&
-  (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype);
-
-/** Heuristic for strings that look like JSON payloads. */
-const looksLikeJsonString = (text: string): boolean => {
-  const trimmed = text.trim();
-  return (
-    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-    (trimmed.startsWith('[') && trimmed.endsWith(']'))
-  );
-};
+const isPlainObjectLike = (value: FetchBody | undefined): value is JsonObject | JsonValue[] =>
+  Array.isArray(value) || (Boolean(value) && Object.getPrototypeOf(value) === Object.prototype);
 
 /**
- * Normalize the request body for JSON APIs.
- * - Auto-JSON-stringify plain objects to reduce caller friction and header mistakes.
- * - Preserve native body types (FormData, Blob, URLSearchParams, ArrayBuffer/View).
- *
- * Returns the possibly transformed body and whether we produced JSON.
+ * Normalize the request body for JSON APIs while preserving native body types.
+ * Plain objects, arrays, and JSON scalars are serialized; a string body is
+ * forwarded untouched and labelled JSON only when it already parses as JSON.
  */
-const normalizeBody = (body: unknown): { body: BodyInit | null | undefined; isJson: boolean } => {
-  // Be explicit to satisfy strict‑equality lint rules and avoid coercion.
-  if (body === null || body === undefined) {
-    return { body: body as null | undefined, isJson: false };
+const normalizeBody = (body: FetchBody | undefined): NormalizedBody => {
+  const emptyBody = emptyBodySchema.safeParse(body);
+  if (emptyBody.success) return { body: emptyBody.data, isJson: false };
+
+  const nativeBody = nativeBodySchema.safeParse(body);
+  if (nativeBody.success) return { body: nativeBody.data, isJson: false };
+
+  if (isPlainObjectLike(body) || jsonScalarSchema.safeParse(body).success) {
+    return { body: stringBodySchema.parse(JSON.stringify(body)), isJson: true };
   }
 
-  if (isNativeBodyType(body)) return { body: body as BodyInit, isJson: false };
+  const stringBody = stringBodySchema.safeParse(body);
+  if (stringBody.success) {
+    return { body: stringBody.data, isJson: isJsonString(stringBody.data) };
+  }
 
-  if (isPlainObjectLike(body)) return { body: JSON.stringify(body), isJson: true };
-
-  if (typeof body === 'string') return { body, isJson: looksLikeJsonString(body) };
-
-  return { body: body as BodyInit, isJson: false };
+  return { body: String(body), isJson: false };
 };
 
-/**
- * Build default headers and attach JSON content-type when appropriate.
- * Keeps header logic centralized so callers do not need to manage it.
- */
-const defaultHeaders = (init: RequestInit | undefined, bodyInfo: { isJson: boolean }): Headers => {
-  const headers = new Headers(init?.headers as HeadersInit | undefined);
+/** Build default headers and attach JSON content type when appropriate. */
+const defaultHeaders = (
+  init: FetchRequestInit | undefined,
+  bodyInfo: Pick<NormalizedBody, 'isJson'>,
+): Headers => {
+  const headers = new Headers(init?.headers);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
 
-  // Only set Content-Type if not specified by caller and it's clearly JSON.
-  // We consider both auto-JSON (plain objects) and string bodies for legacy compatibility.
-  const rawBody = init?.body as unknown;
-  if (shouldSetJsonContentType(headers, bodyInfo, rawBody)) {
+  if (bodyInfo.isJson && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json; charset=utf-8');
   }
   return headers;
 };
 
-const parseErrorDetail = async (res: Response): Promise<unknown> => {
-  const ct = (res.headers.get('content-type') ?? '').trim().toLowerCase();
+type ErrorDetail = JsonValue | string;
+
+/**
+ * Read the error body as JSON when the response advertises it, otherwise as
+ * text. A body that cannot be decoded becomes an absent detail rather than
+ * masking the HTTP status.
+ */
+const parseErrorDetail = async (res: Response): Promise<ErrorDetail | undefined> => {
+  const contentType = (res.headers.get('content-type') ?? '').trim().toLowerCase();
   try {
-    return ct.includes('json') ? await res.json() : await res.text();
+    if (!contentType.includes('json')) return await res.text();
+    return jsonValueSchema.parse(await res.json());
   } catch {
     return undefined;
   }
 };
 
+/**
+ * Decide whether a successful response carries a JSON document.
+ *
+ * `204` and `205` responses never carry a body, and an explicit zero length
+ * marks an empty body even when the content type claims JSON.
+ */
 const shouldParseJson = (res: Response): boolean => {
   if (res.status === 204 || res.status === 205) return false;
-  const ct = (res.headers.get('content-type') ?? '').trim().toLowerCase();
-  const len = res.headers.get('content-length');
-  const hasBody = len == null || len !== '0';
-  return ct.includes('json') && hasBody;
+  const contentType = (res.headers.get('content-type') ?? '').trim().toLowerCase();
+  const contentLength = res.headers.get('content-length');
+  return contentType.includes('json') && contentLength !== '0';
+};
+
+interface FetchContext {
+  readonly method: string;
+  readonly operation: string;
+  readonly startedAt: number;
+  readonly signal?: AbortSignal;
+  readonly span: ClientSpanHandle;
+}
+
+/**
+ * Predicate: did the caller abort this logical request?
+ *
+ * A cancellation is a deliberate caller action, not a fault, so both the
+ * transport and body-read boundaries use this predicate to keep it out of the
+ * failure counts and the global error pipeline. A rejection is matched either
+ * by its `AbortError` name or by identity with the caller's signal reason, so a
+ * wrapper that rethrows the reason is still classified as a cancellation.
+ * `TimeoutError` is a real transport failure and deliberately does not match.
+ *
+ * @example
+ * isAbortError(new DOMException('aborted', 'AbortError'), undefined); // true
+ * isAbortError(new DOMException('timed out', 'TimeoutError'), undefined); // false
+ */
+const isAbortError = (error: Error, signal: AbortSignal | undefined): boolean => {
+  if (error.name === 'TimeoutError') return false;
+  return error.name === 'AbortError' || (signal?.aborted === true && error === signal.reason);
 };
 
 /**
- * Decide the appropriate Content-Type for a given raw request body.
+ * Perform the request, reporting transport failures without masking them.
  *
- * Returns 'application/json' only when the body is a string and not one of
- * the native non-JSON body types (FormData, Blob, URLSearchParams, or
- * ArrayBuffer/View). Returns null when the Content-Type should not be set
- * automatically.
- *
- * This helper centralizes body type detection to reduce cognitive complexity
- * in the request code while preserving existing behaviour exactly.
- *
- * @param body - The raw `RequestInit.body` value provided by the caller.
- * @returns The mime type string or null when no automatic header should be set.
- * @example
- * getContentTypeForBody('{"a":1}') //=> 'application/json'
- * getContentTypeForBody(new FormData()) //=> null
+ * `fetch` rejects with a network error that callers still need to observe, so
+ * the original error is rethrown after the failure is reported. A caller's own
+ * abort is not a transport fault: `customFetch` forwards `init.signal`, so
+ * excluding `AbortError` keeps a deliberate cancellation out of the failure
+ * counts and the global error pipeline. A `TimeoutError` is still reported,
+ * because a timeout is a genuine transport failure the caller did not choose.
  */
-function getContentTypeForBody(body: unknown): string | null {
-  if (!isStringBody(body)) return null;
-  if (isFormData(body)) return null;
-  if (isBlob(body)) return null;
-  if (isUrlEncoded(body)) return null;
-  if (isBinary(body)) return null;
-  return 'application/json';
-}
-/**
- * Fetch wrapper used by the generated Orval client.
- *
- * Plain-object bodies are serialized to JSON. The JSON content type is set for
- * those and for any string body, since a string is assumed to be pre-serialized
- * JSON; native body types (`FormData`, `Blob`, `URLSearchParams`, and binary)
- * are sent unchanged with no content type. A `Content-Type` the caller supplies
- * is never overwritten. Rejects on a non-2xx response.
- */
-export const customFetch = async <T>(input: string, init?: RequestInit): Promise<T> => {
-  const url = new URL(input, apiBase());
-
-  // Normalize body upfront so header logic sees the final representation.
-  const { body, isJson } = normalizeBody(init?.body as unknown);
-  const headers = defaultHeaders(init, { isJson });
-
-  const res = await fetch(url, { credentials: 'include', ...init, body, headers });
-
-  if (!res.ok) {
-    const detail = await parseErrorDetail(res);
-    const suffix = detail ? `: ${JSON.stringify(detail)}` : '';
-    throw new Error(`${res.status} ${res.statusText} ${res.url}${suffix}`, { cause: detail });
+const fetchGuarded = async (
+  request: () => Promise<Response>,
+  context: FetchContext,
+): Promise<Response> => {
+  try {
+    return await request();
+  } catch (error) {
+    if (error instanceof Error && isAbortError(error, context.signal)) throw error;
+    emitFetchDiagnostic({
+      kind: 'failure',
+      method: context.method,
+      operation: context.operation,
+      durationMs: elapsedSince(context.startedAt),
+      failureCategory: 'transport',
+    });
+    throw error;
   }
+};
 
-  if (!shouldParseJson(res)) return undefined as unknown as T;
-  return res.json() as Promise<T>;
+interface PreparedRequest {
+  readonly url: URL;
+  readonly context: FetchContext;
+  readonly body: BodyInit | null | undefined;
+  readonly headers: Headers;
+}
+
+/** Record the request start, then normalize its body and headers. */
+const prepareRequest = (input: string, init: FetchRequestInit | undefined): PreparedRequest => {
+  const url = new URL(input, apiBase());
+  const operation = describeOperation(url);
+  const method = requestMethod(init?.method);
+  const startedAt = fetchClockNow();
+  emitFetchDiagnostic({ kind: 'request', method, operation });
+
+  const { body, isJson } = normalizeBody(init?.body);
+  return {
+    url,
+    context: {
+      method,
+      operation,
+      startedAt,
+      signal: init?.signal ?? undefined,
+      span: startClientSpan(method, operation),
+    },
+    body,
+    headers: defaultHeaders(init, { isJson }),
+  };
+};
+
+interface ResponseTiming {
+  readonly method: string;
+  readonly operation: string;
+  readonly durationMs: number;
+  readonly statusClass: string;
+  readonly traceId?: string;
+}
+
+/**
+ * Describe a response in the bounded terms a diagnostics sink may receive.
+ *
+ * Duration is measured here, at emission time, so each event covers the phase
+ * it spans: an HTTP failure event stops at the response headers, while a
+ * response event, or a `json` failure event, includes reading the body.
+ */
+const responseTiming = (res: Response, context: FetchContext): ResponseTiming => ({
+  method: context.method,
+  operation: context.operation,
+  durationMs: elapsedSince(context.startedAt),
+  statusClass: statusClassOf(res.status),
+  // The header is network input, so it is bounded before it is retained.
+  traceId: boundTraceId(res.headers.get('trace-id')),
+});
+
+/** Response facts a span may carry, or nothing when no response arrived. */
+const spanFacts = (res: Response | undefined): Pick<SpanOutcome, 'statusClass' | 'traceId'> => {
+  if (!res) return {};
+  return {
+    statusClass: statusClassOf(res.status),
+    traceId: boundTraceId(res.headers.get('trace-id')),
+  };
+};
+
+/** Report an HTTP failure, then reject with the status and error detail. */
+const rejectHttpFailure = async (res: Response, context: FetchContext): Promise<never> => {
+  emitFetchDiagnostic({
+    ...responseTiming(res, context),
+    kind: 'failure',
+    failureCategory: 'http',
+  });
+  const detail = await parseErrorDetail(res);
+  const suffix = detail ? `: ${JSON.stringify(detail)}` : '';
+  throw new Error(`${res.status} ${res.statusText} ${res.url}${suffix}`, { cause: detail });
+};
+
+/**
+ * Decode and validate a JSON payload, reporting decoding faults as `json`.
+ *
+ * An abort can also surface here, while the body is being read; the caller
+ * chose that cancellation, so it is rethrown without becoming a `json` fault.
+ */
+const readJsonPayload = async (res: Response, context: FetchContext): Promise<JsonValue> => {
+  try {
+    const payload = jsonValueSchema.parse(await res.json());
+    emitFetchDiagnostic({ ...responseTiming(res, context), kind: 'response' });
+    return payload;
+  } catch (error) {
+    if (!(error instanceof Error && isAbortError(error, context.signal))) {
+      emitFetchDiagnostic({
+        ...responseTiming(res, context),
+        kind: 'failure',
+        failureCategory: 'json',
+      });
+    }
+    throw error;
+  }
+};
+
+/** Classify a response and resolve with its validated payload when present. */
+const handleResponse = async (
+  res: Response,
+  context: FetchContext,
+): Promise<JsonValue | undefined> => {
+  if (!res.ok) return rejectHttpFailure(res, context);
+  if (!shouldParseJson(res)) {
+    emitFetchDiagnostic({ ...responseTiming(res, context), kind: 'response' });
+    return undefined;
+  }
+  return readJsonPayload(res, context);
+};
+
+interface FetchOutcome {
+  readonly payload: JsonValue | undefined;
+  readonly timing: ResponseTiming;
+  readonly startedAt: number;
+}
+
+/**
+ * Report a caller-schema failure against the response that carried the payload.
+ *
+ * The transport already reported its own completion, so this event carries the
+ * same status class and trace identifier plus a duration that includes schema
+ * validation, letting a consumer pair both events for one logical operation.
+ */
+const emitSchemaFailure = (outcome: FetchOutcome): void => {
+  emitFetchDiagnostic({
+    ...outcome.timing,
+    durationMs: elapsedSince(outcome.startedAt),
+    kind: 'failure',
+    failureCategory: 'schema',
+  });
+};
+
+/**
+ * Fetch a JSON response and return it with its bounded response timing.
+ *
+ * Callers that validate the payload further need the status class and trace
+ * identifier of the response they validated, so both travel with the payload.
+ */
+const customFetchOutcome = async (
+  input: string,
+  init?: FetchRequestInit,
+): Promise<FetchOutcome> => {
+  const { url, context, body, headers } = prepareRequest(input, init);
+  let res: Response | undefined;
+  try {
+    res = await fetchGuarded(
+      () => fetch(url, { credentials: 'include', ...init, body, headers }),
+      context,
+    );
+
+    const payload = await handleResponse(res, context);
+    const timing = responseTiming(res, context);
+    context.span.end({
+      status: 'ok',
+      statusClass: timing.statusClass,
+      traceId: timing.traceId,
+    });
+    return { payload, timing, startedAt: context.startedAt };
+  } catch (error) {
+    // A caller's abort is a cancellation, not a fault, matching the diagnostics
+    // rule. A response that did arrive still contributes its status class and
+    // trace identifier, so a failure span carries the same correlation context
+    // as the failure event the diagnostics sink already received.
+    const isCancelled = error instanceof Error && isAbortError(error, context.signal);
+    context.span.end({ status: isCancelled ? 'cancelled' : 'error', ...spanFacts(res) });
+    throw error;
+  }
+};
+
+/**
+ * Fetch a JSON response after validating its wire representation.
+ *
+ * The repository's ai-deslop policy rejects `unknown` returns, so this
+ * boundary validates the payload once and hands callers a named JSON type.
+ */
+export const customFetch = async (
+  input: string,
+  init?: FetchRequestInit,
+): Promise<JsonValue | undefined> => {
+  const { payload } = await customFetchOutcome(input, init);
+  return payload;
+};
+
+/**
+ * Orval-compatible mutator that adapts {@link customFetch} to the generator's
+ * call shape.
+ *
+ * Orval's fetch client invokes its configured mutator as
+ * `mutator<ResponseType>(input, init)`, so the mutator must accept a response
+ * type argument. The generated types mirror the OpenAPI schema the backend
+ * serves, while `customFetch` still enforces the transport contract: non-2xx
+ * responses reject, and successful payloads must be valid JSON. The assertion
+ * only records the generator's compile-time view of that payload.
+ *
+ * Use {@link customFetch} directly in handwritten code; this adapter exists
+ * so generated clients keep compiling.
+ *
+ * @example
+ * // Generated clients call this as `customFetchOrval<ResponseType>(url, init)`.
+ * const users = await customFetchOrval<Array<{ id: string }>>('/api/users');
+ */
+export const customFetchOrval = async <ResponseType>(
+  input: string,
+  init?: FetchRequestInit,
+): Promise<ResponseType> => {
+  const payload = await customFetch(input, init);
+  // SAFETY: `customFetch` has already validated the payload as JSON, and the
+  // generated `ResponseType` mirrors the OpenAPI schema that same backend
+  // serves. No runtime check can reconcile the two cheaply here, so this cast
+  // records the generator's view rather than widening `customFetch` itself.
+  return payload as ResponseType;
 };
 
 /**
@@ -167,29 +422,34 @@ export const customFetch = async <T>(input: string, init?: RequestInit): Promise
  * @example
  * import { z } from 'zod';
  * const UserSchema = z.object({ id: z.string() });
- * // Inferred: z.output<typeof UserSchema>
  * const user = await customFetchParsed('/api/user', UserSchema);
  * user.id; // string
  */
 export const customFetchParsed = async <Schema extends z.ZodTypeAny>(
   input: string,
   schema: Schema,
-  init?: RequestInit,
+  init?: FetchRequestInit,
 ): Promise<z.output<Schema>> => {
-  const data = await customFetch<unknown>(input, init);
-  return schema.parse(data);
+  const outcome = await customFetchOutcome(input, init);
+  const result = schema.safeParse(outcome.payload);
+  if (result.success) return result.data;
+
+  emitSchemaFailure(outcome);
+  throw result.error;
 };
 
 /**
  * Like `customFetchParsed`, but returns Zod's safe-parse result for schema
  * validation failures so callers can branch on them. Transport errors and
- * non-2xx responses from `customFetch` still reject.
+ * non-2xx responses still reject.
  */
 export const customFetchParsedSafe = async <Schema extends z.ZodTypeAny>(
   input: string,
   schema: Schema,
-  init?: RequestInit,
+  init?: FetchRequestInit,
 ): Promise<z.SafeParseReturnType<unknown, z.output<Schema>>> => {
-  const data = await customFetch<unknown>(input, init);
-  return schema.safeParse(data);
+  const outcome = await customFetchOutcome(input, init);
+  const result = schema.safeParse(outcome.payload);
+  if (!result.success) emitSchemaFailure(outcome);
+  return result;
 };

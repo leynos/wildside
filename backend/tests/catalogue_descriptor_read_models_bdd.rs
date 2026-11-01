@@ -39,7 +39,7 @@ use read_models_assertions::{
     assert_themes, assert_trending, get_catalogue_snapshot, get_descriptor_snapshot,
 };
 use snapshots::build_ingestion_snapshots;
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use support::cluster_skip::handle_cluster_setup_failure;
 use support::embedded_postgres::provision_template_database;
 
@@ -61,7 +61,7 @@ fn setup_test_context() -> Result<TestContext, String> {
     // Repair stale shared-cluster password state before acquiring the cluster.
     ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
     let runtime = Runtime::new().map_err(|e| e.to_string())?;
-    let cluster = shared_cluster_handle().map_err(|e| e.to_string())?;
+    let cluster = bootstrap_shared_cluster().map_err(|e| e.to_string())?;
     let temp_db = provision_template_database(cluster).map_err(|e| e.to_string())?;
 
     let config = PoolConfig::new(temp_db.url())

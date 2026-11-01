@@ -302,6 +302,37 @@ All network responses are validated at the fetch boundary using Zod schemas.
 This keeps corruption and backwards-incompatible API changes from leaking into
 feature logic.
 
+### Shared fetch boundary and bounded diagnostics
+
+Handwritten callers and the generated Orval client share one fetcher in
+`src/api/fetcher.ts`. It applies transport defaults, normalizes request bodies,
+validates responses with Zod, and reports what happened without reporting what
+was sent.
+
+The diagnostics seam in `src/api/diagnostics.ts` carries only a method, a
+declared route template, a duration, a status class, a failure category, and a
+bounded backend `trace-id`. It never carries a URL, query string, body,
+credential, or free-form error text. A template must fit the table that mirrors
+`spec/openapi.json`, and an unlisted path reports `/unknown`, so the label set
+stays finite whatever the caller sends. The application installs a sink at the
+entrypoint, and the bounded metrics consumer in `src/api/fetch-metrics.ts`
+folds those events into request, response, failure, and latency counters that
+the entrypoint publishes through `globalThis.__wildsideFetchMetrics`.
+
+The tracing half of the same boundary is `src/api/tracing.ts`. The fetcher
+starts one client span per logical request and ends it exactly once: `ok` when
+the response was read, `error` for a transport, HTTP, or decoding fault, and
+`cancelled` when the caller aborted. A span carries the declared route
+template, the bounded method, the status class, the bounded `trace-id`, and its
+start and duration readings from the same injectable clock as the diagnostics
+events. The bounded span log in `src/api/span-log.ts` retains the most recent
+spans, and the entrypoint installs its sink and publishes
+`globalThis.__wildsideClientSpans` for devtools; a future telemetry exporter
+replaces that composition without touching the fetcher.
+
+See the [shared API fetcher](developers-guide.md#shared-api-fetcher) section of
+the developers' guide for the full contract and its test coverage.
+
 ## Offline-first and local-first persistence
 
 Wildside has two classes of offline data:

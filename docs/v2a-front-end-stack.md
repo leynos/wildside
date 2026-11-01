@@ -238,7 +238,9 @@ lint, accessibility, and semantic testing gates.
 The current repository quality stack uses Makefile entry points:
 
 - `make fmt` runs Rust formatting and Biome formatting for front-end packages.
-- `make lint-frontend` runs Biome checks for `frontend-pwa` and `packages`.
+- `make lint-frontend` runs Biome checks for `frontend-pwa` and `packages`,
+  then applies the pinned Unicorn and `ai-deslop` Oxlint profiles to
+  `frontend-pwa`.
 - `make typecheck` runs `tsc --noEmit` for TypeScript workspaces.
 - `make markdownlint` validates Markdown using a local `markdownlint-cli2`
   binary when present, with a pinned Bun fallback.

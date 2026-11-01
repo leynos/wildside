@@ -33,6 +33,9 @@
   taxonomy](adr-002-environment-seam-taxonomy.md) – how environment-dependent
   boundaries are injected and where a direct read is still allowed. _Audience:
   backend developers._
+- [Architecture Decision Record (ADR) 003: Front-end linting strategy](adr-003-linting-strategy.md)
+  – how Biome, Oxlint, TypeScript, and TypeDoc divide front-end quality checks.
+  _Audience: front-end developers and tooling maintainers._
 
 ## Frontend development
 

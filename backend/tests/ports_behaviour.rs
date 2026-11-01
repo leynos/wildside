@@ -14,7 +14,7 @@ use uuid::Uuid;
 include!("support/entrypoint.rs");
 declare_test_support!(atexit_cleanup, cluster_skip, embedded_postgres);
 
-use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use crate::support::cluster_skip::handle_cluster_setup_failure;
 use crate::support::embedded_postgres::drop_users_table;
 use crate::support::embedded_postgres::provision_template_database;
@@ -119,7 +119,7 @@ type SharedContext = Arc<Mutex<RepoContext>>;
 fn repo_context() -> Option<RepoContext> {
     ensure_stable_cluster_environment()
         .expect("reconcile stable cluster environment before cluster access");
-    let cluster = match shared_cluster_handle() {
+    let cluster = match bootstrap_shared_cluster() {
         Ok(c) => c,
         Err(reason) => return handle_cluster_setup_failure(reason),
     };

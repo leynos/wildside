@@ -7,7 +7,7 @@ use uuid::Uuid;
 use backend::outbound::persistence::{DbPool, PoolConfig};
 
 use super::super::support::atexit_cleanup::{
-    ensure_stable_cluster_environment, shared_cluster_handle,
+    bootstrap_shared_cluster, ensure_stable_cluster_environment,
 };
 use super::super::support::embedded_postgres::provision_template_database;
 use super::super::support::format_postgres_error;
@@ -45,7 +45,7 @@ pub(crate) fn is_skipped(world: &World) -> bool {
 
 pub(crate) fn setup_db_context() -> Result<DbContext, String> {
     ensure_stable_cluster_environment().map_err(|error| error.to_string())?;
-    let cluster = shared_cluster_handle().map_err(|error| error.to_string())?;
+    let cluster = bootstrap_shared_cluster().map_err(|error| error.to_string())?;
     let database = provision_template_database(cluster).map_err(|error| error.to_string())?;
     let database_url = database.url().to_owned();
     let pool = super::run_async(DbPool::new(

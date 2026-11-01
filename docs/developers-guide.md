@@ -615,9 +615,11 @@ compression library to generate these names.
 
 The front-end package uses Bun-compatible workspace scripts, Vite `^7.3.7`,
 React 19, React DOM 18, TanStack Query 5, Tailwind CSS `^3`, DaisyUI `^4`, Zod
-3, TypeScript 5, Vitest `^4.1.12`, and Orval 8. TanStack Router, Radix UI,
-i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and DaisyUI v5 are
-target-stack items until a roadmap task adds them to
+3, TypeScript 5, Vitest `^4.1.12`, fast-check `^4.8.0` for property-based
+tests, and Orval 8. Biome owns formatting and general lint; Oxlint applies the
+pinned Unicorn and `ai-deslop` rule profiles to `frontend-pwa`. TanStack
+Router, Radix UI, i18next, Fluent, MapLibre GL JS, Dexie, Tailwind CSS v4, and
+DaisyUI v5 are target-stack items until a roadmap task adds them to
 `frontend-pwa/package.json` and the lockfile.
 
 ### Build and preview workflow
@@ -778,6 +780,155 @@ own user-facing behaviour, shared query hooks should own server-state access,
 and durable offline writes should pass through the outbox boundary described in
 `docs/wildside-pwa-data-model.md`.
 
+### Shared API fetcher
+
+`frontend-pwa/src/api/fetcher.ts` is the single boundary between the PWA and
+the backend JSON API. Call it rather than `fetch` directly so request defaults,
+body handling, and response validation stay consistent.
+
+- `customFetch(input, init?)` sends the request and resolves with the validated
+  `JsonValue` payload, or `undefined` when the response does not carry a JSON
+  document. Only a JSON content type is parsed, so a successful response with a
+  non-JSON or missing content type resolves to `undefined` even when it has a
+  body; callers must not mistake that discarded content for an empty response.
+  It serializes plain objects, arrays, and JSON scalar bodies, labels a string
+  body as JSON only when it already parses as JSON, and forwards native
+  `BodyInit` values unchanged. A `body: null` sends no body rather than JSON
+  `null`; pass the string `'null'` to send an explicit JSON null. Cookies are
+  sent because requests default to `credentials: 'include'`, and
+  `Accept: application/json` is added unless the caller sets it. A JSON content
+  type is added only when the body is JSON and the caller has not set one.
+- Response bodies are validated before use. `204` and `205` responses, and
+  bodies with an explicit zero `content-length`, resolve to `undefined`.
+- Non-2xx responses reject with an `Error` naming the status and URL. Its
+  `cause` carries the error detail: the JSON body when the response advertises
+  JSON, otherwise the response text. An undecodable detail is omitted rather
+  than masking the status.
+- `customFetchParsed(input, schema, init?)` validates the payload with a Zod
+  schema and resolves with the parsed value; a mismatch rejects.
+- `customFetchParsedSafe(...)` returns Zod's safe-parse result instead, so
+  callers can branch on schema failures while transport and non-2xx failures
+  still reject.
+- `customFetchOrval<ResponseType>(input, init?)` is the mutator that Orval's
+  generated client calls. Orval emits a response type argument, so this adapter
+  accepts one and delegates to `customFetch`; generated clients keep the same
+  status and JSON validation. Handwritten code should call `customFetch`
+  directly. `frontend-pwa/orval.config.cjs` names this export as the mutator
+  and sets `override.fetch.includeHttpResponseReturnType` to `false`, so
+  generated operations resolve to the bare body instead of an HTTP envelope
+  that the adapter never returns.
+
+The compile-time contract for these helpers is asserted by
+`frontend-pwa/src/api/fetcher.type-contract.ts`, which `make typecheck`
+compiles. Runtime behaviour is covered by unit tests and by
+`fetcher.behaviour.test.ts`, which drives a real HTTP server rather than a
+`fetch` mock.
+
+#### Bounded fetch diagnostics
+
+`frontend-pwa/src/api/diagnostics.ts` is the observation seam for that
+boundary. The fetcher emits one `request` event when a logical request starts
+and one `response` or `failure` event when the transport step ends. When
+`customFetchParsed` or `customFetchParsedSafe` rejects a payload it emits one
+further `failure` event with the `schema` category after the `response` event,
+so a sink must count terminal events by kind and category rather than assuming
+one per request. `setFetchDiagnostics(sink)` installs the application-wide
+receiver; with no sink installed the fetcher behaves exactly as before.
+
+An event carries only bounded fields: the method, a route template, whole
+milliseconds elapsed, the status class (`2xx`, `5xx`), a failure category
+(`transport`, `http`, `json`, or `schema`), and the backend `trace-id` header
+when present. It never carries the URL, query string, body, credential, or a
+free-form error message.
+
+Every one of those fields is bounded at the seam rather than trusted. The
+method is reduced to a known HTTP verb, or `OTHER` for anything else, so a
+caller cannot choose a metric label. The route template must fit one of the
+declared templates in `diagnostics.ts`, which mirror the paths in
+`spec/openapi.json`; a `:id` position accepts exactly one segment, so
+`/api/v1/users/alice@example.com` reports as `/api/v1/users/:id` while an
+unlisted path reports the single `/unknown` fallback. Nothing is derived by
+masking, so the set of labels a consumer can ever see is finite and reviewable;
+add a template to `diagnostics.ts` when the API gains a route.
+`diagnostics.test.ts` fails when a path in the OpenAPI document has no
+template. The `trace-id` header is retained only when it is 128 characters or
+fewer and contains nothing but letters, digits, `_`, `.`, `:`, and `-`; an
+over-long or malformed value is discarded rather than truncated, because a
+shortened identifier would no longer match the backend's records.
+
+Duration is measured when an event is emitted, so each event covers the phase
+it actually spans rather than a fixed portion of the request. A `response`
+event follows a completed body read, and a `json` failure event follows the
+read that failed, so both include body consumption. An `http` failure event is
+emitted before the error body is parsed, so it stops at the response headers
+and does not include reading or formatting that body. Caller-schema validation
+runs after the `response` event has already been emitted, so validation time
+appears only in the `schema` failure event; that event also carries the same
+status class and trace identifier as the response it rejected, which pairs it
+with that response's completion event for one logical operation. A
+caller-initiated abort, recognized from the caller's signal and its abort
+reason, is not reported as a `transport` or `json` failure, because the caller
+chose to cancel the request; a timeout is still reported.
+
+Timing reads go through an injectable clock. `setFetchClock(clock)` installs a
+`() => number` millisecond source, `fetchClockNow()` reads it, and
+`setFetchClock()` with no argument restores the platform `performance.now`. A
+test installs a controlled clock and advances it from inside a stubbed body
+read, so it can assert that a duration covers body consumption rather than only
+the transport step; production code never sets the clock.
+
+`customFetch`, `customFetchParsed`, and `customFetchParsedSafe` all report
+through this seam; `customFetchOrval` reports via `customFetch`. A sink fault
+is swallowed, because diagnostics must not change the outcome of a request.
+
+`frontend-pwa/src/api/fetch-metrics.ts` is the bounded consumer.
+`createFetchMetrics()` accumulates request counts, counts per failure category,
+and latency aggregates per operation template, and keeps the fifty most recent
+events for tracing. Trace identifiers stay in that recent buffer and never
+become metric labels. `frontend-pwa/src/Main.tsx` installs the consumer,
+publishes a snapshot accessor as `__wildsideFetchMetrics` for devtools, and
+sends failure events to `reportError` so the browser's global error pipeline
+observes them. Booting is exported as `boot(document)`, which resolves `#root`
+through `requireRootElement` and fails loudly when the document has none; the
+module calls it once at import, so the guard is testable without a live DOM.
+The PWA has no telemetry destination yet; a future exporter replaces that
+composition without touching the fetcher. Contracts are covered by
+`diagnostics.test.ts`, the fetcher-side events by
+`fetcher.diagnostics.test.ts`, and the consumer by `fetch-metrics.test.ts`. The
+entrypoint wiring is exercised by `main.test.ts`, which mocks the React root,
+the query client, and the application component, imports `Main` once, and
+asserts the mount, the published accessor, the failure report, and the
+missing-root guard. It emits through the real diagnostics seam rather than
+mocking it, so the test also proves that `Main` installed a sink on the same
+metrics instance it published. The consumer's contract is additionally checked
+by `fetch-metrics.property.test.ts`, which generates random event sequences and
+compares the consumer against an independent fold of the documented rules after
+every event, including the operation and recent-buffer bounds. A second
+property generates more operations than the admission bound can hold, so each
+run provably crosses it, and then checks that an operation admitted before the
+bound keeps accumulating.
+
+Client spans are the tracing half of the same boundary.
+`frontend-pwa/src/api/tracing.ts` starts one span per logical request and ends
+it exactly once on every exit path: `ok` when the response was read, `error`
+for a transport, HTTP, or decoding fault, and `cancelled` when the caller
+aborted, matching the diagnostics rule that a deliberate cancellation is not a
+fault. A span carries only the declared route template, the bounded method, the
+status class, the bounded `trace-id`, and its start and duration readings from
+the same injectable clock, so it cannot add request data the diagnostics seam
+has not already bounded. A caller-schema rejection happens after the span has
+ended, because that validation is application work rather than a network
+crossing; the schema failure event still records it.
+
+`frontend-pwa/src/api/span-log.ts` is the bounded consumer. `createSpanLog()`
+retains the hundred most recent spans, discards the oldest beyond that, and
+returns copies from `snapshot()`. `frontend-pwa/src/Main.tsx` installs its sink
+and publishes `__wildsideClientSpans` for devtools, so the composition can be
+replaced by a real exporter later without touching the fetcher. A sink fault is
+swallowed, and ending a span twice is ignored so one request yields one span.
+Contracts are covered by `tracing.test.ts`, `span-log.test.ts`, and
+`fetcher.tracing.test.ts`.
+
 ### Quality gates
 
 Documentation-only front-end planning changes must pass:
@@ -869,6 +1020,14 @@ This strategy is the default because it keeps test runtime low while preserving
 database-level isolation. Only use direct per-test cluster construction when a
 suite truly needs cluster-level isolation (for example, server-wide settings or
 lifecycle-specific assertions).
+
+The shared cluster wrapper checks that PostgreSQL accepts the `UTC` timezone
+before returning its handle. On Unix, it registers process-exit cleanup before
+that check. If the server rejects `UTC`, the test support may add a `UTC` alias
+from `UCT` only after installation metadata confirms that PostgreSQL uses
+bundled timezone data. Reuse the shared cluster wrapper rather than calling the
+readiness helper from individual suites; it is scoped to this test harness and
+never changes host system timezone data.
 
 ### v0.5.0 migration usage rules
 

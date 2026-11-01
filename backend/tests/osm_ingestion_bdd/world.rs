@@ -10,7 +10,7 @@ use mockable::DefaultClock;
 use postgres::NoTls;
 use tokio::runtime::Runtime;
 
-use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use crate::support::cluster_skip::handle_cluster_setup_failure;
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::table_helpers::drop_table;
@@ -26,7 +26,7 @@ impl OsmIngestionWorld {
             .expect("reconcile stable cluster environment before cluster access");
         let runtime = Runtime::new().expect("create runtime");
 
-        let cluster = match shared_cluster_handle() {
+        let cluster = match bootstrap_shared_cluster() {
             Ok(cluster) => cluster,
             Err(reason) => {
                 let message = reason.to_string();
