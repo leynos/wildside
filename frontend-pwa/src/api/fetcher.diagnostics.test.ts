@@ -26,7 +26,9 @@ beforeEach(() => {
         if (transportError) return Promise.reject(transportError);
         capturedRequest = init;
         const next = responseQueue.shift() ?? response;
-        return Promise.resolve(next.clone());
+        // Each test builds the response it expects, so the body may be consumed
+        // once; returning the response itself lets a test stub `json` directly.
+        return Promise.resolve(next);
       },
       { preconnect: globalThis.fetch.preconnect },
     ),
@@ -109,6 +111,21 @@ describe('customFetch diagnostics', () => {
     expect(eventOf('failure').failureCategory).toBe('transport');
   });
 
+  it('does not report an abort during a body read as a JSON failure', async () => {
+    const abortedBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new DOMException('The operation was aborted.', 'AbortError'));
+      },
+    });
+    response = new Response(abortedBody, {
+      headers: { 'content-type': 'application/json' },
+    });
+
+    await expect(customFetch('/api/users')).rejects.toThrow('aborted');
+
+    expect(events.filter((event) => event.kind === 'failure')).toHaveLength(0);
+  });
+
   it('classifies a malformed JSON response', async () => {
     response = new Response('not json', {
       status: 200,
@@ -121,23 +138,21 @@ describe('customFetch diagnostics', () => {
   });
 
   it('includes body consumption in the reported duration', async () => {
-    // A slow stream delays the real `res.json()` read rather than stubbing the
-    // method, so the measurement covers genuine body consumption even though
-    // the fetch mock clones the response.
-    const slowBody = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        await new Promise((resolve) => setTimeout(resolve, 40));
-        controller.enqueue(new TextEncoder().encode('{"ok":true}'));
-        controller.close();
-      },
-    });
-    response = new Response(slowBody, {
-      headers: { 'content-type': 'application/json' },
-    });
+    // A controlled clock keeps the assertion exact: the request starts at 0
+    // and reading the body advances the clock, so the response event must
+    // report the full 40 ms rather than the sub-millisecond transport time.
+    const clock = spyOn(performance, 'now').mockReturnValue(0);
+    const slow = Response.json({ ok: true });
+    const readJson = slow.json.bind(slow);
+    slow.json = async () => {
+      clock.mockReturnValue(40);
+      return readJson();
+    };
+    response = slow;
 
     await customFetch('/api/users');
 
-    expect(eventOf('response').durationMs).toBeGreaterThanOrEqual(35);
+    expect(eventOf('response').durationMs).toBe(40);
   });
 
   it('correlates concurrent requests to the same route by trace id', async () => {

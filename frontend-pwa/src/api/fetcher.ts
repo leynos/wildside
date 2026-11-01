@@ -139,6 +139,19 @@ interface FetchContext {
 }
 
 /**
+ * Predicate: did the caller abort this logical request?
+ *
+ * A cancellation is a deliberate caller action, not a fault, so both the
+ * transport and body-read boundaries use this predicate to keep it out of the
+ * failure counts and the global error pipeline. A `TimeoutError` is a real
+ * transport failure and deliberately does not match.
+ *
+ * @example
+ * isAbortError(new DOMException('aborted', 'AbortError')); // true
+ */
+const isAbortError = (error: Error): boolean => error.name === 'AbortError';
+
+/**
  * Perform the request, reporting transport failures without masking them.
  *
  * `fetch` rejects with a network error that callers still need to observe, so
@@ -155,7 +168,7 @@ const fetchGuarded = async (
   try {
     return await request();
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') throw error;
+    if (error instanceof Error && isAbortError(error)) throw error;
     emitFetchDiagnostic({
       kind: 'failure',
       method: context.method,
@@ -225,18 +238,25 @@ const rejectHttpFailure = async (res: Response, context: FetchContext): Promise<
   throw new Error(`${res.status} ${res.statusText} ${res.url}${suffix}`, { cause: detail });
 };
 
-/** Decode and validate a JSON payload, reporting decoding faults as `json`. */
+/**
+ * Decode and validate a JSON payload, reporting decoding faults as `json`.
+ *
+ * An abort can also surface here, while the body is being read; the caller
+ * chose that cancellation, so it is rethrown without becoming a `json` fault.
+ */
 const readJsonPayload = async (res: Response, context: FetchContext): Promise<JsonValue> => {
   try {
     const payload = jsonValueSchema.parse(await res.json());
     emitFetchDiagnostic({ ...responseTiming(res, context), kind: 'response' });
     return payload;
   } catch (error) {
-    emitFetchDiagnostic({
-      ...responseTiming(res, context),
-      kind: 'failure',
-      failureCategory: 'json',
-    });
+    if (!(error instanceof Error && isAbortError(error))) {
+      emitFetchDiagnostic({
+        ...responseTiming(res, context),
+        kind: 'failure',
+        failureCategory: 'json',
+      });
+    }
     throw error;
   }
 };

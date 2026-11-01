@@ -6,7 +6,9 @@
  * counts, latency per operation, failure counts per bounded category, and a
  * bounded buffer of recent logical-operation records. Operation names come
  * from the bounded vocabulary in `diagnostics.ts`; trace identifiers are kept
- * only in the recent-record buffer and never become metric labels.
+ * only in the recent-record buffer and never become metric labels. Latency is
+ * counted once per logical operation: a schema failure follows the response
+ * event that already carried its duration, so it adds no second observation.
  */
 
 import type {
@@ -90,6 +92,9 @@ export const createFetchMetrics = (): FetchMetrics => {
 
   const observeLatency = (event: FetchDiagnosticEvent): void => {
     if (event.durationMs === undefined) return;
+    // A schema failure follows the response event that already recorded this
+    // logical operation's latency, so recording it again would double-count.
+    if (event.failureCategory === 'schema') return;
     const current = latency.get(event.operation);
     if (!current && latency.size >= MaxOperations) return;
     latency.set(event.operation, addLatency(current, event.durationMs));

@@ -80,6 +80,20 @@ describe('createFetchMetrics', () => {
     });
   });
 
+  it('records one latency observation when a response is followed by a schema failure', () => {
+    const metrics = createFetchMetrics();
+
+    metrics.sink(responseEvent('/api/users', 12));
+    metrics.sink(failureEvent('/api/users', 'schema', 18));
+
+    expect(metrics.snapshot().latencyByOperation['/api/users']).toEqual({
+      count: 1,
+      totalMs: 12,
+      maxMs: 12,
+    });
+    expect(metrics.snapshot().failures.schema).toBe(1);
+  });
+
   it('ignores events without a duration', () => {
     const metrics = createFetchMetrics();
 
