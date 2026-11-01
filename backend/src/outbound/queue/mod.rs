@@ -39,6 +39,9 @@ pub use postgres_dead_letter::{PostgresDeadLetterQueue, RequeueBudgets};
 mod postgres_retry_scheduler;
 pub use postgres_retry_scheduler::{PostgresRetryScheduler, TerminalRetryReason};
 
+mod retry_persistence;
+pub use retry_persistence::RetryPersistence;
+
 mod retrying_handler;
 pub use retrying_handler::{RetryingJobService, RetryingJobServiceConfig};
 

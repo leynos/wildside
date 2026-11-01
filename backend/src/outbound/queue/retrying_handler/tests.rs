@@ -1,5 +1,9 @@
 //! Unit tests for retry wrapper decisions and scheduling context.
 
+mod doubles;
+mod service_decode;
+mod service_effects;
+
 use std::num::NonZeroU32;
 use std::time::Duration;
 
