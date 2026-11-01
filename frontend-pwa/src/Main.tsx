@@ -9,6 +9,10 @@ import { type FetchDiagnosticEvent, setFetchDiagnostics } from './api/diagnostic
 import { createFetchMetrics, publishFetchMetrics } from './api/fetch-metrics';
 import { App } from './app/App';
 
+/** Bounded in-memory consumer, published for devtools and tests to read. */
+const fetchMetrics = createFetchMetrics();
+publishFetchMetrics(fetchMetrics);
+
 /**
  * Feed fetcher diagnostics to the application's metrics and error channel.
  *
@@ -18,9 +22,6 @@ import { App } from './app/App';
  * them; the event carries a bounded route template and categories, never a
  * URL, query string, body, credential, or token.
  */
-const fetchMetrics = createFetchMetrics();
-publishFetchMetrics(fetchMetrics);
-
 const observeFetchDiagnostic = (event: FetchDiagnosticEvent): void => {
   fetchMetrics.sink(event);
   if (event.kind !== 'failure') return;

@@ -69,6 +69,7 @@ const nativeBodySchema = z.union([
   z.instanceof(ReadableStream),
 ]);
 
+/** Resolve the API origin from the build-time environment, defaulting locally. */
 const apiBase = (): string => import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
 
 /** Predicate: treat POJOs and arrays as JSON serializable structures. */

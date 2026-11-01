@@ -302,6 +302,24 @@ All network responses are validated at the fetch boundary using Zod schemas.
 This keeps corruption and backwards-incompatible API changes from leaking into
 feature logic.
 
+### Shared fetch boundary and bounded diagnostics
+
+Handwritten callers and the generated Orval client share one fetcher in
+`src/api/fetcher.ts`. It applies transport defaults, normalizes request bodies,
+validates responses with Zod, and reports what happened without reporting what
+was sent.
+
+The diagnostics seam in `src/api/diagnostics.ts` carries only a method, a
+bounded route template, a duration, a status class, a failure category, and the
+backend `trace-id`. It never carries a URL, query string, body, credential, or
+free-form error text. The application installs a sink at the entrypoint, and
+the bounded metrics consumer in `src/api/fetch-metrics.ts` folds those events
+into request, response, failure, and latency counters that the entrypoint
+publishes through `globalThis.__wildsideFetchMetrics`.
+
+See the [shared API fetcher](developers-guide.md#shared-api-fetcher) section of
+the developers' guide for the full contract and its test coverage.
+
 ## Offline-first and local-first persistence
 
 Wildside has two classes of offline data:

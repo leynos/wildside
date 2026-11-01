@@ -79,25 +79,41 @@ const countEvent = (event: FetchDiagnosticEvent, counts: ReferenceCounts): void 
 };
 
 /**
- * Apply the latency rules for one completed event.
+ * Duration an event contributes to its operation, if it contributes one.
  *
  * A schema failure repeats the response's duration, so it is not a second
- * observation of the same logical operation. New operations are refused once
- * the bound is reached.
+ * observation of the same logical operation.
+ */
+const latencyOf = (event: FetchDiagnosticEvent): number | undefined =>
+  event.kind !== 'request' && event.failureCategory !== 'schema' ? event.durationMs : undefined;
+
+/** Fold one observation into an aggregate, starting from an empty one. */
+const mergeLatency = (
+  current: OperationLatency | undefined,
+  durationMs: number,
+): OperationLatency => {
+  const previous = current ?? { count: 0, totalMs: 0, maxMs: 0 };
+  return {
+    count: previous.count + 1,
+    totalMs: previous.totalMs + durationMs,
+    maxMs: Math.max(previous.maxMs, durationMs),
+  };
+};
+
+/**
+ * Apply the latency rules for one completed event.
+ *
+ * New operations are refused once the bound is reached.
  */
 const recordReferenceLatency = (
   event: FetchDiagnosticEvent,
   observed: Map<string, OperationLatency>,
 ): void => {
-  if (event.kind === 'request' || event.durationMs === undefined) return;
-  if (event.failureCategory === 'schema') return;
+  const durationMs = latencyOf(event);
+  if (durationMs === undefined) return;
   const current = observed.get(event.operation);
   if (!current && observed.size >= MaxOperations) return;
-  observed.set(event.operation, {
-    count: (current?.count ?? 0) + 1,
-    totalMs: (current?.totalMs ?? 0) + event.durationMs,
-    maxMs: Math.max(current?.maxMs ?? 0, event.durationMs),
-  });
+  observed.set(event.operation, mergeLatency(current, durationMs));
 };
 
 /**
