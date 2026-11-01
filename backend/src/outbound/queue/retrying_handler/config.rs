@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use crate::domain::jobs::retry::JobRetryPolicy;
 use crate::domain::ports::RouteQueueMetrics;
-use crate::outbound::queue::postgres_retry_scheduler::PostgresRetryScheduler;
+use crate::outbound::queue::RetryPersistence;
 
 /// Queue-specific dependencies and policy for a [`super::RetryingJobService`].
 pub struct RetryingJobServiceConfig {
     pub(super) queue_name: String,
     pub(super) policy: JobRetryPolicy,
-    pub(super) scheduler: PostgresRetryScheduler,
+    pub(super) scheduler: Arc<dyn RetryPersistence>,
     pub(super) metrics: Arc<dyn RouteQueueMetrics>,
 }
 
@@ -23,14 +23,14 @@ impl RetryingJobServiceConfig {
     /// let config = RetryingJobServiceConfig::new(
     ///     queue_name,
     ///     queue_policy,
-    ///     PostgresRetryScheduler::new(pool.clone()),
+    ///     Arc::new(PostgresRetryScheduler::new(pool.clone())),
     ///     metrics,
     /// );
     /// ```
     pub fn new(
         queue_name: String,
         policy: JobRetryPolicy,
-        scheduler: PostgresRetryScheduler,
+        scheduler: Arc<dyn RetryPersistence>,
         metrics: Arc<dyn RouteQueueMetrics>,
     ) -> Self {
         Self {
