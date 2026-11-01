@@ -2514,6 +2514,10 @@ exists so unit tests can use a recording double to assert the exactly-one-write
 contract without PostgreSQL. Do not add a second implementation speculatively;
 extend the trait only when a real second backend exists.
 
+`record_terminal_failure` takes a `TerminalRetryUpdate` value rather than its
+five columns as positional arguments. A call site cannot transpose a task
+identity, an attempt count, and a reason that all describe the same row.
+
 Backoff frees the worker slot, and the polling interval is a precision floor. A
 crash between the in-memory attempt increment and its acknowledgement can lose
 that one in-flight attempt. Do not install an in-process retry layer on these

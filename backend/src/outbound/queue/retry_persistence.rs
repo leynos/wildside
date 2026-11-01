@@ -12,15 +12,12 @@
 //! second durable backing store is actually adopted; do not use it as a generic
 //! repository abstraction.
 
-use std::num::NonZeroU32;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use sqlx::Error as SqlxError;
 
-use super::postgres_retry_scheduler::{
-    PostgresRetryScheduler, TerminalRetryReason, TerminalRetryUpdate,
-};
+use super::postgres_retry_scheduler::{PostgresRetryScheduler, TerminalRetryUpdate};
 
 /// Guarded persistence writes required by the retrying Apalis service.
 ///
@@ -38,13 +35,13 @@ pub trait RetryPersistence: Send + Sync {
     ) -> Result<bool, SqlxError>;
 
     /// Persist a terminal reason and optionally shrink the attempt limit.
+    ///
+    /// The five columns that describe a terminal failure travel together, so
+    /// they are passed as [`TerminalRetryUpdate`] rather than as a long
+    /// positional argument list that call sites can silently transpose.
     async fn record_terminal_failure(
         &self,
-        task_id: &str,
-        worker_id: &str,
-        attempt: NonZeroU32,
-        reason: TerminalRetryReason,
-        shrink_limit: bool,
+        update: TerminalRetryUpdate<'_>,
     ) -> Result<bool, SqlxError>;
 }
 
@@ -61,22 +58,8 @@ impl RetryPersistence for PostgresRetryScheduler {
 
     async fn record_terminal_failure(
         &self,
-        task_id: &str,
-        worker_id: &str,
-        attempt: NonZeroU32,
-        reason: TerminalRetryReason,
-        shrink_limit: bool,
+        update: TerminalRetryUpdate<'_>,
     ) -> Result<bool, SqlxError> {
-        PostgresRetryScheduler::record_terminal_failure(
-            self,
-            TerminalRetryUpdate {
-                task_id,
-                worker_id,
-                attempt,
-                reason,
-                shrink_limit,
-            },
-        )
-        .await
+        PostgresRetryScheduler::record_terminal_failure(self, update).await
     }
 }
