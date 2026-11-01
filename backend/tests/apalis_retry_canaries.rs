@@ -32,7 +32,7 @@ declare_test_support!(atexit_cleanup, embedded_postgres);
 #[path = "apalis_retry_canaries/ack.rs"]
 mod ack;
 
-use support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use support::embedded_postgres::{provision_template_database, setup_apalis_storage};
 
 /// How long to watch the fetcher before concluding a row is not due.
@@ -52,7 +52,7 @@ impl CanaryEnvironment {
         ENVIRONMENT.get_or_init(|| {
             ensure_stable_cluster_environment().expect("stable PostgreSQL environment");
             let runtime = Runtime::new().expect("create canary Tokio runtime");
-            let cluster = shared_cluster_handle().expect("start embedded PostgreSQL");
+            let cluster = bootstrap_shared_cluster().expect("start embedded PostgreSQL");
             let database = provision_template_database(cluster).expect("provision canary database");
             let url = database.url().to_string();
             let pool = runtime
