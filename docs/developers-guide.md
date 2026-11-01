@@ -832,7 +832,7 @@ emitted, so a success or failure event covers response-body consumption and
 payload validation as well as the round trip. A schema failure carries the same
 status class and trace identifier as the response it rejected, which pairs it
 with that response's completion event for one logical operation. A
-caller-initiated abort, recognised from the caller's signal and its abort
+caller-initiated abort, recognized from the caller's signal and its abort
 reason, is not reported as a `transport` or `json` failure, because the caller
 chose to cancel the request; a timeout is still reported.
 
