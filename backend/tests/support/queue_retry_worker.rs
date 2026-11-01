@@ -197,7 +197,25 @@ where
         Ok(())
     });
 
-    match tokio::time::timeout(deadline, run).await {
+    await_bounded_run(run, &result, deadline).await
+}
+
+/// Run `worker_run` to completion under `deadline` and recover its report.
+///
+/// The timeout drops the worker future when it expires, which stops any
+/// in-flight handler and shuts the worker down. A worker that exits without
+/// leaving a report is an error rather than an empty result: it means shutdown
+/// pre-empted observation, so the scenario's expectations would be unproven.
+async fn await_bounded_run<F, E>(
+    worker_run: F,
+    result: &std::sync::Mutex<Option<WorkerRunReport>>,
+    deadline: Duration,
+) -> Result<WorkerRunReport, String>
+where
+    F: Future<Output = Result<(), E>>,
+    E: std::fmt::Display,
+{
+    match tokio::time::timeout(deadline, worker_run).await {
         Ok(Ok(())) => {}
         Ok(Err(error)) => return Err(format!("retry worker failed: {error}")),
         Err(_) => {
@@ -208,12 +226,11 @@ where
         }
     }
 
-    let report = result
+    result
         .lock()
         .map_err(|error| format!("worker report lock poisoned: {error}"))?
         .take()
-        .ok_or_else(|| "worker stopped without a bounded run report".to_owned())?;
-    Ok(report)
+        .ok_or_else(|| "worker stopped without a bounded run report".to_owned())
 }
 
 async fn is_terminal(pool: &PgPool, queue_name: &str, probe_id: &str) -> bool {
