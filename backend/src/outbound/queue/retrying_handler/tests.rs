@@ -3,13 +3,14 @@
 mod doubles;
 mod service_decode;
 mod service_effects;
+mod service_identity;
 
 use std::num::NonZeroU32;
 use std::time::Duration;
 
 use rstest::rstest;
 
-use super::{RetryDecisionContext, RetryWrapperDecision, decide_retry_wrapper_action};
+use super::decision::{RetryDecisionContext, RetryWrapperDecision, decide_retry_wrapper_action};
 use crate::domain::jobs::retry::{
     JitterSample, JobErrorKind, JobRetryPolicy, JobRetryPolicyConfig,
 };

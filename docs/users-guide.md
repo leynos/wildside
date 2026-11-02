@@ -201,3 +201,42 @@ Authentication and infrastructure errors keep their existing meanings.
 Unauthenticated requests return `401`, repository availability failures return
 `503`, and unexpected persistence query failures return a redacted `500`
 response.
+
+## Job retries and dead letters
+
+Background jobs run through Apalis on PostgreSQL. Each queue has one retry
+policy, configured with `JobRetryPolicyConfig`:
+
+| Field             | Meaning                                                  |
+| ----------------- | -------------------------------------------------------- |
+| `max_attempts`    | Total deliveries allowed, including the first.           |
+| `base_delay`      | Delay before the first retry.                            |
+| `multiplier`      | Growth factor applied to each successive delay.          |
+| `max_delay`       | Upper bound on any single delay.                         |
+| `jitter_fraction` | Fraction of the delay randomized to spread retry bursts. |
+
+A retryable failure is scheduled durably: the wrapper writes the next `run_at`
+while the worker still owns the row, then returns the error for Apalis to
+acknowledge. Waiting for the delay does not occupy a worker slot. A terminal
+failure records `wildside.retry.dead_reason` in the job's metadata instead of
+scheduling another attempt, and the row becomes a dead letter.
+
+The wrapper persists nothing when it cannot prove the current worker owns the
+row, for example when the task has no worker context or its worker disagrees
+with the recorded lock owner. Such a delivery stays failed and increments the
+retry scheduling-failure counter.
+
+Operators manage dead letters through the `DeadLetterQueue` port:
+
+- `list_dead` returns the newest dead jobs first.
+- `requeue` restores the queue's configured attempt budget and clears the
+  dead-letter reason.
+- `discard` permanently removes a dead job.
+
+`requeue` validates the row state, attempt count, requeue counter, and integer
+budget range, but it does not check the job type against the configured
+`RequeueBudgets` or verify that the supplied budget matches that queue's
+policy. Confirming the queue name and its current configured budget is an
+operator precondition. See the
+[dead-letter runbook](runbooks/queue-retry-and-dead-letter-operations.md) for
+the SQL fallback.

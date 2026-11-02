@@ -10,10 +10,11 @@ use std::time::Duration;
 
 use super::super::{RetryFailureContext, handle_failure};
 use super::doubles::{
-    PersistenceCall, QUEUE, RecordingMetrics, RecordingPersistence, TASK_ID, WORKER, WriteOutcome,
+    FixedJitter, PersistenceCall, QUEUE, RecordingMetrics, RecordingPersistence, TASK_ID, WORKER,
+    WriteOutcome,
 };
 use super::policy;
-use crate::domain::jobs::retry::{JobErrorKind, JobFailure};
+use crate::domain::jobs::retry::{JitterSample, JobErrorKind, JobFailure};
 use crate::domain::ports::{RouteDeadLetterOutcome, RouteRetryOutcome};
 use crate::outbound::queue::TerminalRetryReason;
 use tracing_test::traced_test;
@@ -45,16 +46,32 @@ impl FailureRun {
     /// The wrapper always asks Apalis to keep the task failed, so the error is
     /// expected and deliberately dropped here.
     async fn apply(&self, kind: JobErrorKind) {
+        self.apply_with_identity(kind, Some(TASK_ID), Some(WORKER))
+            .await;
+    }
+
+    /// Drive one failed delivery with a chosen task and worker identity.
+    ///
+    /// The scheduler is only reachable when both identities are present; a
+    /// `None` on either side exercises the wrapper's refusal to persist.
+    async fn apply_with_identity(
+        &self,
+        kind: JobErrorKind,
+        task_id: Option<&'static str>,
+        worker_id: Option<&'static str>,
+    ) {
         let retry_policy = policy(3);
+        let jitter = FixedJitter(JitterSample::midpoint());
         let context = RetryFailureContext {
             attempt: NonZeroU32::new(ATTEMPT).expect("positive attempt"),
             context_max_attempts: CONTEXT_MAX_ATTEMPTS,
             policy: &retry_policy,
             scheduler: &self.persistence,
             metrics: &self.metrics,
+            jitter: &jitter,
             queue_name: QUEUE,
-            task_id: Some(TASK_ID),
-            worker_id: Some(WORKER),
+            task_id,
+            worker_id,
         };
         let failure = JobFailure::new(kind, "probe failure");
         handle_failure(failure, &context)
@@ -151,4 +168,66 @@ async fn terminal_write_failure_records_no_dead_letter_outcome() {
 
     assert_eq!(run.calls().len(), 1);
     assert!(run.dead_letters().is_empty());
+}
+
+#[rstest::rstest]
+#[case::missing_task_id(None, Some(WORKER))]
+#[case::missing_worker_id(Some(TASK_ID), None)]
+#[case::missing_both(None, None)]
+#[tokio::test]
+async fn missing_identity_writes_nothing_for_a_retryable_failure(
+    #[case] task_id: Option<&'static str>,
+    #[case] worker_id: Option<&'static str>,
+) {
+    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Updated);
+
+    run.apply_with_identity(JobErrorKind::Retryable, task_id, worker_id)
+        .await;
+
+    assert!(
+        run.calls().is_empty(),
+        "the wrapper must not persist without an owning task and worker"
+    );
+    assert_eq!(
+        run.retries(),
+        vec![RouteRetryOutcome::ScheduleFailure],
+        "an unpersisted retry is a scheduling failure"
+    );
+    assert!(run.dead_letters().is_empty());
+}
+
+#[rstest::rstest]
+#[case::missing_task_id(None, Some(WORKER))]
+#[case::missing_worker_id(Some(TASK_ID), None)]
+#[case::missing_both(None, None)]
+#[tokio::test]
+async fn missing_identity_writes_nothing_for_a_terminal_failure(
+    #[case] task_id: Option<&'static str>,
+    #[case] worker_id: Option<&'static str>,
+) {
+    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Updated);
+
+    run.apply_with_identity(JobErrorKind::Fatal, task_id, worker_id)
+        .await;
+
+    assert!(
+        run.calls().is_empty(),
+        "the wrapper must not persist without an owning task and worker"
+    );
+    assert!(
+        run.dead_letters().is_empty(),
+        "an unwritten terminal outcome is not a dead letter"
+    );
+    assert!(run.retries().is_empty());
+}
+
+#[traced_test]
+#[tokio::test]
+async fn missing_identity_logs_the_blocked_metadata() {
+    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Updated);
+
+    run.apply_with_identity(JobErrorKind::Retryable, None, Some(WORKER))
+        .await;
+
+    assert!(logs_contain("retry metadata missing"));
 }
