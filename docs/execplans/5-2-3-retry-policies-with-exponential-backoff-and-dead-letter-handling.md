@@ -123,10 +123,11 @@ Repository state relevant to this task:
   enqueue side. `ApalisPostgresProvider` wraps
   `apalis_postgres::PostgresStorage<serde_json::Value>` over a dedicated
   `sqlx::PgPool`, and `setup` creates the `apalis.jobs` schema at runtime (no
-  Diesel migration). `push_job` currently calls `storage.push(payload)`, which
-  uses the default context and therefore `max_attempts = 25`. `QueueProvider`
-  is the crate-internal test seam, with `FakeQueueProvider` and
-  `FailingQueueProvider` doubles in
+  Diesel migration). At plan-authoring time `push_job` called
+  `storage.push(payload)` and inherited the default `max_attempts = 25`; the
+  implemented adapter now builds a task with the queue's policy and calls
+  `storage.push_task(task)`. `QueueProvider` is the crate-internal test seam,
+  with `FakeQueueProvider` and `FailingQueueProvider` doubles in
   `backend/src/outbound/queue/test_helpers.rs`.
 - Consumer-side scaffolding: `backend/src/outbound/queue/job_decode.rs`
   provides the pure `decode_job<J>` helper. Its module documentation and
@@ -137,9 +138,11 @@ Repository state relevant to this task:
   contents, and the same privacy stance applies to every retry and dead-letter
   surface in this plan. A decode failure is the canonical fatal error.
 - Jobs: `backend/src/domain/jobs/generate_route.rs` and
-  `backend/src/domain/jobs/enrichment.rs` define versioned V1 envelopes. The
-  module documentation of `backend/src/domain/jobs/mod.rs` currently scopes the
-  module to job payloads. It must be updated when the retry policy joins it.
+  `backend/src/domain/jobs/enrichment.rs` define versioned V1 envelopes. At
+  plan-authoring time the module documentation of
+  `backend/src/domain/jobs/mod.rs` scoped the module to job payloads; it now
+  also describes the retry module's pure failure classification and bounded
+  backoff policy.
 - Error-classification precedent:
   `backend/src/domain/ports/enrichment_source.rs` exposes
   `EnrichmentSourceError::is_retryable()`, and
