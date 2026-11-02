@@ -26,7 +26,7 @@ use pg_embedded_setup_unpriv::TemporaryDatabase;
 use serde_json::{Value, json};
 use tokio::runtime::Runtime;
 
-use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::queue_retry_worker::{
     DEFAULT_WORKER_DEADLINE, QueueRetryProbeJob, QueueRetryWorkerConfig, WorkerRunReport,
@@ -79,7 +79,7 @@ impl QueueDeadLetterWorld {
     pub fn new() -> Self {
         ensure_stable_cluster_environment().expect("stable embedded PostgreSQL environment");
         let runtime = Runtime::new().expect("create dead-letter Tokio runtime");
-        let cluster = shared_cluster_handle().expect("start embedded PostgreSQL");
+        let cluster = bootstrap_shared_cluster().expect("start embedded PostgreSQL");
         let database = provision_template_database(cluster).expect("provision test database");
         let pool = runtime
             .block_on(PgPool::connect(database.url()))
