@@ -16,7 +16,7 @@ use tokio::runtime::Runtime;
 
 use super::handler::RetryProbeHandler;
 use super::metrics::RecordingRetryMetrics;
-use crate::support::atexit_cleanup::{ensure_stable_cluster_environment, shared_cluster_handle};
+use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::queue_retry_worker::{
     DEFAULT_WORKER_DEADLINE, QueueRetryProbeJob, QueueRetryWorkerConfig, WorkerRunReport,
@@ -88,7 +88,7 @@ impl QueueRetryPolicyWorld {
     pub fn new() -> Self {
         ensure_stable_cluster_environment().expect("stable PostgreSQL environment");
         let runtime = Runtime::new().expect("create BDD Tokio runtime");
-        let cluster = shared_cluster_handle().expect("start embedded PostgreSQL");
+        let cluster = bootstrap_shared_cluster().expect("start embedded PostgreSQL");
         let database = provision_template_database(cluster).expect("provision BDD database");
         let database_url = database.url().to_string();
         let pool = runtime
