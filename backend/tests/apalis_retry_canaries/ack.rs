@@ -10,13 +10,12 @@ use std::error::Error as StdError;
 use apalis_core::error::BoxDynError;
 use apalis_core::task::Task;
 use apalis_core::task::attempt::Attempt;
-use apalis_core::task::task_id::TaskId;
 use apalis_core::worker::ext::ack::Acknowledge;
 use apalis_postgres::{PgAck, PgContext, PgTask};
 use serde_json::{Value, json};
-use ulid::Ulid;
 
 use super::{CanaryEnvironment, JobRow, insert_job, register_worker};
+use crate::support::apalis_job_id::apalis_job_id;
 
 /// A running row locked by the canary worker, as the wrapper would see it.
 fn locked_task(id: &str, worker: &str, max_attempts: i32, attempt: usize) -> PgTask<Value> {
@@ -26,7 +25,7 @@ fn locked_task(id: &str, worker: &str, max_attempts: i32, attempt: usize) -> PgT
                 .with_max_attempts(max_attempts)
                 .with_lock_by(Some(worker.to_owned())),
         )
-        .with_task_id(TaskId::new(id.parse().expect("canary task id")))
+        .with_task_id(id.parse().expect("canary task id"))
         .with_attempt(Attempt::new_with_value(attempt))
         .build()
 }
@@ -37,7 +36,7 @@ fn acknowledgement_preserves_scheduling_state() {
     let pool = environment.pool.clone();
     let queue = "canary.ack";
     let worker = "canary-ack-worker";
-    let id = Ulid::new().to_string();
+    let id = apalis_job_id();
     let metadata = json!({ "wildside.retry.dead_reason": "exhausted", "keep": "marker" });
 
     environment.run(async {
@@ -52,7 +51,24 @@ fn acknowledgement_preserves_scheduling_state() {
                 .locked_by(worker),
         )
         .await;
+    });
 
+    // Capture the exact persisted deadline so the post-acknowledgement check
+    // can prove it was left untouched, not merely that it is still in the
+    // future.
+    let run_at_before: i64 = environment
+        .run(async {
+            sqlx::query_scalar(
+                "SELECT (extract(epoch FROM run_at) * 1000000)::bigint
+                 FROM apalis.jobs WHERE id = $1",
+            )
+            .bind(&id)
+            .fetch_one(&pool)
+            .await
+        })
+        .expect("read the scheduled deadline before acknowledgement");
+
+    environment.run(async {
         let task = locked_task(&id, worker, 7, 2);
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
         PgAck::new(pool.clone())
@@ -61,10 +77,11 @@ fn acknowledgement_preserves_scheduling_state() {
             .expect("acknowledge the running job");
     });
 
-    let row: (String, i32, i32, Option<String>, bool) = environment
+    let row: (String, i32, i32, Option<String>, bool, i64) = environment
         .run(async {
             sqlx::query_as(
-                "SELECT status, attempts, max_attempts, metadata::text, run_at > now()
+                "SELECT status, attempts, max_attempts, metadata::text, run_at > now(),
+                        (extract(epoch FROM run_at) * 1000000)::bigint
                  FROM apalis.jobs WHERE id = $1",
             )
             .bind(&id)
@@ -81,6 +98,10 @@ fn acknowledgement_preserves_scheduling_state() {
     assert_eq!(stored["wildside.retry.dead_reason"], json!("exhausted"));
     assert_eq!(stored["keep"], json!("marker"));
     assert!(row.4, "ack must preserve the persisted run_at");
+    assert_eq!(
+        row.5, run_at_before,
+        "ack must not rewrite the scheduled deadline"
+    );
 }
 
 #[test]
@@ -89,7 +110,7 @@ fn acknowledgement_keeps_a_shrunk_limit_and_terminal_reason() {
     let pool = environment.pool.clone();
     let queue = "canary.ack-terminal";
     let worker = "canary-ack-terminal-worker";
-    let id = Ulid::new().to_string();
+    let id = apalis_job_id();
 
     environment.run(async {
         register_worker(&pool, worker).await;

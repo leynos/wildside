@@ -24,14 +24,14 @@ use pg_embedded_setup_unpriv::TemporaryDatabase;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tokio::runtime::Runtime;
-use ulid::Ulid;
 
 include!("support/entrypoint.rs");
-declare_test_support!(atexit_cleanup, embedded_postgres);
+declare_test_support!(apalis_job_id, atexit_cleanup, embedded_postgres);
 
 #[path = "apalis_retry_canaries/ack.rs"]
 mod ack;
 
+use support::apalis_job_id::apalis_job_id;
 use support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use support::embedded_postgres::{provision_template_database, setup_apalis_storage};
 
@@ -278,7 +278,7 @@ fn failed_row_with_spare_attempts_is_fetched_when_due() {
     let pool = environment.pool.clone();
     let queue = "canary.due";
     let worker = "canary-due-worker";
-    let id = Ulid::new().to_string();
+    let id = apalis_job_id();
 
     environment.run(async {
         register_worker(&pool, worker).await;
@@ -339,7 +339,7 @@ struct IneligibleRow {
 fn ineligible_rows_are_not_fetched(#[case] case: IneligibleRow) {
     let environment = CanaryEnvironment::shared();
     let pool = environment.pool.clone();
-    let id = Ulid::new().to_string();
+    let id = apalis_job_id();
     let row = JobRow::new(case.queue, &id, case.status)
         .attempts(case.attempts)
         .run_at_offset_seconds(case.run_at_offset_seconds);
@@ -369,7 +369,7 @@ fn fetch_preserves_the_persisted_attempt_count() {
     let pool = environment.pool.clone();
     let queue = "canary.attempts";
     let worker = "canary-attempts-worker";
-    let id = Ulid::new().to_string();
+    let id = apalis_job_id();
 
     environment.run(async {
         register_worker(&pool, worker).await;

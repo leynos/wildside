@@ -2879,9 +2879,12 @@ the terminal reason `fatal`.
 The second finding asked for non-vacuous durable-backoff evidence and the
 remaining V3b side-effect checks. The BDD world now records each invocation's
 `run_at`, and the scenario asserts that the stored deadline advances by at
-least the configured base delay between consecutive failed attempts, excluding
-the final observation because a successful attempt schedules nothing. That
-assertion fails if a scheduling write is swallowed or skipped, which the earlier
+least the configured base delay between every adjacent pair of observations,
+including the final pair: the last attempt schedules nothing itself, but it
+still observes the deadline the previous failure wrote. A `#[should_panic]`
+negative control suppresses the second advance and proves the check fails on a
+scheduler that advances once and then stops. That assertion fails if a
+scheduling write is swallowed or skipped, which the earlier
 `started_at >= run_at` check alone could not detect. V3b's side-effect checks
 are covered by a `RecordingPersistence` double that records every port call:
 exactly one scheduling write per retryable failure, exactly one terminal write
@@ -2916,3 +2919,28 @@ The candidate still needs the sequential repository gates and publication.
 `cargo check -p backend --tests` was started once and is queued behind the
 shared compile-admission pool; per the standing instruction it is left to queue
 rather than restarted.
+
+### Assessment findings of 2026-11-02
+
+The ExecPlan completeness assessment
+(`Assessment-ID: EP-5.2.3-20261102-2630209`) returned four findings, all
+accepted and repaired on this branch.
+
+1. The deadline-advance loop excluded the final observation. It now checks
+   every adjacent pair through a pure `assert_deadlines_advance` helper in
+   `backend/tests/queue_retry_policy_bdd/world/state.rs`, with a negative
+   control that fails when the second advance is suppressed.
+2. The acknowledgement canary proved only that `run_at` remained in the future.
+   `backend/tests/apalis_retry_canaries/ack.rs` now reads the exact persisted
+   microsecond deadline before acknowledgement and asserts exact equality
+   afterwards, so a rewrite to any other future value fails.
+3. Dead-letter coverage lacked two cases. `queue_dead_letter.feature` now
+   covers requeuing an identifier with no persisted row (`NotDead`) and listing
+   a fatally dead job (`DeadReason::Fatal`, one attempt, its own last error).
+4. The plan's dependency policy permits only the exact Apalis pins and
+   `googletest`. The direct `ulid` dev-dependency contradicted that, so it is
+   removed. Seeded row identifiers now come from a shared, unit-tested
+   Crockford Base32 encoder in `backend/tests/support/apalis_job_id.rs` built
+   on the existing `uuid` dependency, and the retry-wrapper unit double parses
+   its existing `TASK_ID` constant instead of generating a ULID. Cargo removed
+   only the backend's direct `ulid` lock edge.

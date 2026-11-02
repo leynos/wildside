@@ -4,4 +4,4 @@ mod handler;
 mod metrics;
 mod world;
 
-pub use world::{QueueRetryPolicyWorld, RetryHandlerMode};
+pub use world::{QueueRetryPolicyWorld, RetryHandlerMode, assert_deadlines_advance};

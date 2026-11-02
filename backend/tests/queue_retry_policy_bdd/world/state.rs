@@ -199,3 +199,65 @@ impl QueueRetryPolicyWorld {
         assert_eq!(dead_letter_outcomes.len(), exhausted + fatal);
     }
 }
+
+/// Assert every adjacent attempt pair advanced the persisted deadline.
+///
+/// Observations are taken at handler entry, so the deadline seen by attempt
+/// `n + 1` was written when attempt `n` failed. That makes every adjacent pair
+/// meaningful, including the last one: a successful final attempt schedules
+/// nothing itself, but it still observes the deadline the previous failure
+/// wrote. Excluding that pair would let a scheduler that advances once and
+/// then stops pass the scenario.
+pub fn assert_deadlines_advance(observations: &[AttemptObservation], base_delay_micros: i64) {
+    for pair in observations.windows(2) {
+        let advance = pair[1].run_at_micros - pair[0].run_at_micros;
+        assert!(
+            advance >= base_delay_micros,
+            "run_at advanced by {advance}us between attempts {} and {}, \
+             below the {base_delay_micros}us base delay",
+            pair[0].attempt,
+            pair[1].attempt
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Negative controls for the deadline-advance assertion.
+
+    use super::super::AttemptObservation;
+    use super::assert_deadlines_advance;
+
+    const BASE_DELAY_MICROS: i64 = 10_000;
+
+    fn observation(attempt: u32, run_at_micros: i64) -> AttemptObservation {
+        AttemptObservation {
+            attempt,
+            started_at_micros: run_at_micros,
+            run_at_micros,
+        }
+    }
+
+    #[test]
+    fn every_advancing_pair_passes() {
+        let observations = [
+            observation(1, 0),
+            observation(2, BASE_DELAY_MICROS),
+            observation(3, 2 * BASE_DELAY_MICROS),
+        ];
+
+        assert_deadlines_advance(&observations, BASE_DELAY_MICROS);
+    }
+
+    #[test]
+    #[should_panic(expected = "run_at advanced by 0us between attempts 2 and 3")]
+    fn a_suppressed_second_advance_fails() {
+        let observations = [
+            observation(1, 0),
+            observation(2, BASE_DELAY_MICROS),
+            observation(3, BASE_DELAY_MICROS),
+        ];
+
+        assert_deadlines_advance(&observations, BASE_DELAY_MICROS);
+    }
+}

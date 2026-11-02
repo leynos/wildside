@@ -119,9 +119,6 @@ syn = { version = "2", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = "1"
 # Compile-fail coverage for the `declare_test_support!` module-wiring macro.
 trybuild = { version = "1", features = ["diff"] }
-# Builds Apalis task ids for retry-wrapper unit tests. Already present through
-# `apalis-core`, so this pins the same major version without a new dependency.
-ulid = "1"
 
 [[bin]]
 name = "openapi-dump"
