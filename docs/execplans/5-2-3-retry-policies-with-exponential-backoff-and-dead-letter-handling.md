@@ -1967,6 +1967,46 @@ caret requirements.
   naming, with the exact paths recorded in the delivery ledger. This
   plan-record edit is documentation-only, so the final publication candidate
   was rechecked with the Markdown gates.
+- [x] (2026-11-02 Europe/Berlin) Repaired the hosted CI failures on the
+  published head `a81c9b7` and pushed the result as `d755954`. The hosted
+  `build` and `coverage` jobs failed at compile time with `E0432` because the
+  queue BDD worlds still imported the removed `shared_cluster_handle`; they now
+  call `bootstrap_shared_cluster`. `make lint-whitaker` then rejected the
+  470-line `queue_retry_policy_bdd/world.rs`, so the stored-row inspection and
+  assertion helpers moved to `world/state.rs` (201 lines, parent 282). Two
+  `#[allow(dead_code)]` attributes became `#[expect(dead_code, reason = ...)]`
+  to satisfy the workspace's `allow_attributes` deny, and the format gates now
+  honour the pinned Biome version. The commits are `b0ce938`, `38ad355`,
+  `208baa8`, `dad906c`, `1154a63`, and `d755954`.
+- [x] (2026-11-02 Europe/Berlin) Corrected the Apalis fetch canary. The
+  `failed_row_with_spare_attempts_is_fetched_when_due` case asserted
+  `status = 'Running'`, but `apalis-postgres 1.0.0-rc.8`'s newest
+  `apalis.get_jobs` migration sets `'Queued'`; only the worker pipeline's
+  separate `lock_by_id` step promotes the row. The canary now asserts the queue
+  step, which still proves the fetch claimed the row, and the `RowState` doc
+  comment describes the two-step split. The suite passed 21 of 21 cases
+  (`/tmp/gate9-canary-retry.out`).
+- [x] (2026-11-02 Europe/Berlin) Local gates on the repaired tree:
+  `make check-fmt`, `make spelling`, `make lint-clippy`, and
+  `make lint-whitaker` all exited 0 (`/tmp/gate10-*`). `make test-rust` ran
+  2,036 Nextest cases with 2,036 passed and four skipped
+  (`/tmp/gate11-test-rust-*.out`); the two trybuild compile-fail invocations
+  that follow were still queued for compile slots when the background wrapper
+  reached its own limit, and are covered by hosted CI. The earlier full-lint
+  evidence on the same source tree is recorded in the delivery ledger.
+- [x] (2026-11-02 Europe/Berlin) Repaired the second hosted CI failure, in
+  `test_lint_frontend_runs_biome_before_the_package_linter`. The pinned-Biome
+  change made the Makefile probe `biome --version` before choosing a runner, so
+  the command double logged an extra `bun` invocation. The double now answers
+  the probe with the version the Makefile pins, without logging it, and a new
+  contract covers the mismatched-PATH fallback to
+  `bun x --package=@biomejs/biome@<pin>`. The added contract pushed
+  `makefile_tooling_test.py` past pylint's 400-line limit, so the command
+  doubles and their helpers moved to `tooling_doubles.py` (commit `d03f46a`).
+  `make lint-python` now rates 10.00/10, the workflow contracts pass 622 cases
+  with one skipped, and `make check-fmt`, `make spelling`, `make typecheck`,
+  `make markdownlint`, and `make nixie` all exited 0 (`/tmp/gate14c-*`,
+  `/tmp/gate15-*`, `/tmp/gate17-*`).
 
 ## Surprises & discoveries
 
