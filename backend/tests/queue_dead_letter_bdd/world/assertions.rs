@@ -2,21 +2,26 @@
 
 use serde_json::Value;
 
-use backend::domain::ports::{DeadLetterError, DeadLetterQueue, DeadReason};
+use backend::domain::ports::{DeadJob, DeadLetterError, DeadLetterQueue, DeadReason};
 
 use super::QueueDeadLetterWorld;
 
 impl QueueDeadLetterWorld {
-    pub fn assert_failure_context(&self) {
+    /// Read the current job's entry from a fresh dead-job listing.
+    fn listed_current_job(&self) -> DeadJob {
         let id = self.current_id();
         let listing = self
             .runtime
             .block_on(self.dead_letters.list_dead(100))
             .expect("list dead jobs");
-        let job = listing
-            .iter()
+        listing
+            .into_iter()
             .find(|job| job.id == id)
-            .expect("listed probe job");
+            .expect("listed probe job")
+    }
+
+    pub fn assert_failure_context(&self) {
+        let job = self.listed_current_job();
         assert_eq!(job.reason, DeadReason::Exhausted);
         assert_eq!(job.attempts, 3);
         assert_eq!(
@@ -82,17 +87,19 @@ impl QueueDeadLetterWorld {
     }
 
     pub fn assert_unclassified(&self) {
-        let id = self.current_id();
-        let listing = self
-            .runtime
-            .block_on(self.dead_letters.list_dead(100))
-            .expect("list dead jobs");
-        let job = listing
-            .iter()
-            .find(|job| job.id == id)
-            .expect("legacy dead job listed");
+        let job = self.listed_current_job();
         assert_eq!(job.reason, DeadReason::Unclassified);
         assert_eq!(job.last_error, None);
+    }
+
+    pub fn assert_fatal_failure_context(&self) {
+        let job = self.listed_current_job();
+        assert_eq!(job.reason, DeadReason::Fatal);
+        assert_eq!(job.attempts, 1);
+        assert_eq!(
+            job.last_error.as_deref(),
+            Some("permanent dead-letter probe failure")
+        );
     }
 
     pub fn assert_full_retry_budget_after_requeue(&self) {

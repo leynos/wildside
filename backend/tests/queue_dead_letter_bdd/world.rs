@@ -26,6 +26,7 @@ use pg_embedded_setup_unpriv::TemporaryDatabase;
 use serde_json::{Value, json};
 use tokio::runtime::Runtime;
 
+use crate::support::apalis_job_id::apalis_job_id;
 use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::queue_retry_worker::{
@@ -184,6 +185,16 @@ impl QueueDeadLetterWorld {
 
     pub fn fail_retryably(&self) {
         *self.handler_mode.lock().expect("handler mode mutex") = HandlerMode::RetryableFailure;
+    }
+
+    /// Point the scenario at an identifier that has no persisted row.
+    ///
+    /// The operator-facing port must reject an unknown identifier rather than
+    /// silently succeeding, so the operation needs a target that cannot match
+    /// any seeded job.
+    pub fn insert_absent_job_id(&self) {
+        let id = DeadJobId::new(apalis_job_id());
+        *self.current_job_id.lock().expect("current id mutex") = Some(id);
     }
 
     pub fn insert_pending_job(&self) {

@@ -94,3 +94,13 @@ Feature: Dead-letter listing, requeue, and discard
     Given a dead job belongs to an unconfigured queue
     When the operator requeues the dead job
     Then the operation fails because its queue has no retry budget
+
+  Scenario: Requeue rejects an unknown job identifier
+    Given no job exists for the requested identifier
+    When the operator requeues the dead job
+    Then the operation fails because the job is not dead
+
+  Scenario: A fatal dead job is listed with its fatal reason
+    Given a job has been dead-lettered by a fatal error
+    When the operator lists dead jobs
+    Then the listing reports the fatal reason and last error

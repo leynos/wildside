@@ -12,14 +12,12 @@ use std::time::Duration;
 use apalis_core::task::Task;
 use apalis_core::task::attempt::Attempt;
 use apalis_core::task::extensions::Extensions;
-use apalis_core::task::task_id::TaskId;
 use apalis_core::worker::context::WorkerContext;
 use apalis_postgres::{PgContext, PgTask};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::Error as SqlxError;
-use ulid::Ulid;
 
 use super::super::{RetryingJobService, RetryingJobServiceConfig};
 use super::policy;
@@ -174,7 +172,7 @@ pub(super) fn task(payload: Value, attempt: usize) -> PgTask<Value> {
                 .with_lock_by(Some(WORKER.to_owned())),
         )
         .with_data(data)
-        .with_task_id(TaskId::new(Ulid::new()))
+        .with_task_id(TASK_ID.parse().expect("task id"))
         .with_attempt(Attempt::new_with_value(attempt))
         .build()
 }

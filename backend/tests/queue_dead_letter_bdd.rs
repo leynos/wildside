@@ -3,7 +3,12 @@
 #[path = "queue_dead_letter_bdd/mod.rs"]
 mod queue_dead_letter_world;
 include!("support/entrypoint.rs");
-declare_test_support!(atexit_cleanup, embedded_postgres, queue_retry_worker);
+declare_test_support!(
+    apalis_job_id,
+    atexit_cleanup,
+    embedded_postgres,
+    queue_retry_worker
+);
 
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
@@ -93,6 +98,11 @@ fn two_dead_jobs_exist(world: &QueueDeadLetterWorld) {
 #[given("a dead job belongs to an unconfigured queue")]
 fn a_dead_job_belongs_to_an_unconfigured_queue(world: &QueueDeadLetterWorld) {
     world.insert_unconfigured_dead_job();
+}
+
+#[given("no job exists for the requested identifier")]
+fn no_job_exists_for_the_requested_identifier(world: &QueueDeadLetterWorld) {
+    world.insert_absent_job_id();
 }
 
 #[when("the operator lists dead jobs")]
@@ -240,6 +250,11 @@ fn the_operation_fails_for_unknown_queue(world: &QueueDeadLetterWorld) {
     world.assert_unknown_queue_error();
 }
 
+#[then("the listing reports the fatal reason and last error")]
+fn the_listing_reports_the_fatal_reason_and_last_error(world: &QueueDeadLetterWorld) {
+    world.assert_fatal_failure_context();
+}
+
 #[scenario(
     path = "tests/features/queue_dead_letter.feature",
     name = "Dead jobs are listed with their failure context"
@@ -329,6 +344,18 @@ fn requeue_rejects_malformed_counter_without_changing_row(world: QueueDeadLetter
     name = "Requeue rejects negative attempts without changing the row"
 )]
 fn requeue_rejects_negative_attempts_without_changing_row(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Requeue rejects an unknown job identifier"
+)]
+fn requeue_rejects_unknown_identifier(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "A fatal dead job is listed with its fatal reason"
+)]
+fn fatal_dead_job_is_listed_with_its_reason(world: QueueDeadLetterWorld) {}
 
 #[test]
 fn dead_letter_listing_plan_uses_a_bounded_index_path() {
