@@ -7,8 +7,11 @@
 //! - the scheduling columns exist and keep their names;
 //! - only due `Failed` rows with spare attempts are fetched;
 //! - `Killed` rows and rows at their attempt cap are never fetched;
-//! - a fetched task keeps its persisted attempt count; and
-//! - acknowledgement leaves `run_at`, `max_attempts`, and `metadata` intact.
+//! - a fetched task keeps its persisted attempt count;
+//! - acknowledgement leaves `run_at`, `max_attempts`, and `metadata` intact;
+//!   and
+//! - the retry wrapper writes nothing unless the recorded lock owner matches
+//!   the worker that delivered the task.
 //!
 //! A failure here means an Apalis upgrade changed the contract, not that the
 //! wrapper regressed.
@@ -30,10 +33,12 @@ declare_test_support!(apalis_job_id, atexit_cleanup, embedded_postgres);
 
 #[path = "apalis_retry_canaries/ack.rs"]
 mod ack;
+#[path = "apalis_retry_canaries/identity.rs"]
+mod identity;
 
 use support::apalis_job_id::apalis_job_id;
 use support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
-use support::embedded_postgres::{provision_template_database, setup_apalis_storage};
+use support::embedded_postgres::provision_template_database;
 
 /// How long to watch the fetcher before concluding a row is not due.
 const FETCH_WINDOW: Duration = Duration::from_millis(1_500);
@@ -55,9 +60,7 @@ impl CanaryEnvironment {
             let cluster = bootstrap_shared_cluster().expect("start embedded PostgreSQL");
             let database = provision_template_database(cluster).expect("provision canary database");
             let url = database.url().to_string();
-            let pool = runtime
-                .block_on(setup_apalis_storage(&url))
-                .expect("set up Apalis storage");
+            let pool = canary_pool(&runtime, &url);
             Self {
                 runtime,
                 pool,
@@ -69,6 +72,36 @@ impl CanaryEnvironment {
     fn run<F: std::future::Future>(&self, future: F) -> F::Output {
         self.runtime.block_on(future)
     }
+}
+
+/// Build the canary pool with a generous acquire timeout.
+///
+/// Every PostgreSQL test binary shares one embedded cluster, so the server can
+/// be saturated by unrelated suites while a canary waits for a connection. The
+/// default 30-second acquire timeout then expires and the canary fails for a
+/// reason unrelated to the contract it pins. Waiting longer, and holding fewer
+/// connections, keeps the canaries deterministic without changing what they
+/// assert.
+///
+/// The pool must only ever be driven from [`CanaryEnvironment::runtime`].
+/// `sqlx` ties a connection to the runtime that created it, and dropping that
+/// runtime while the connection is checked out leaks the pool permit. Enough
+/// leaked permits exhaust the pool permanently, and every later acquire waits
+/// out the timeout. A helper that needs the pool therefore borrows the shared
+/// runtime instead of building its own.
+fn canary_pool(runtime: &Runtime, url: &str) -> PgPool {
+    runtime.block_on(async {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(4)
+            .acquire_timeout(Duration::from_secs(120))
+            .connect(url)
+            .await
+            .expect("connect canary pool");
+        PostgresStorage::<(), (), ()>::setup(&pool)
+            .await
+            .expect("set up Apalis storage");
+        pool
+    })
 }
 
 /// Register the canary worker so `lock_by` satisfies its foreign key.
@@ -182,8 +215,13 @@ struct FetchedTask {
 /// The stream yields one registration heartbeat (`Ok(None)`) before the first
 /// fetch. A window that expires means no further row became due, which is how
 /// the negative canaries express "not fetched".
-fn fetch_tasks(pool: &PgPool, queue: &str, worker: &str, wanted: usize) -> Vec<FetchedTask> {
-    let runtime = Runtime::new().expect("create fetch runtime");
+fn fetch_tasks(
+    runtime: &Runtime,
+    pool: &PgPool,
+    queue: &str,
+    worker: &str,
+    wanted: usize,
+) -> Vec<FetchedTask> {
     runtime.block_on(async {
         let storage = PostgresStorage::<Value>::new_with_config(pool, &Config::new(queue));
         let stream = Backend::poll(storage, &WorkerContext::new::<Value>(worker));
@@ -219,8 +257,7 @@ struct RowState {
     lock_by: Option<String>,
 }
 
-fn read_state(pool: &PgPool, id: &str) -> RowState {
-    let runtime = Runtime::new().expect("create state runtime");
+fn read_state(runtime: &Runtime, pool: &PgPool, id: &str) -> RowState {
     runtime.block_on(async {
         let row: (String, i32, Option<String>) =
             sqlx::query_as("SELECT status, attempts, lock_by FROM apalis.jobs WHERE id = $1")
@@ -285,7 +322,7 @@ fn failed_row_with_spare_attempts_is_fetched_when_due() {
         insert_job(&pool, JobRow::new(queue, &id, "Failed")).await;
     });
 
-    let fetched = fetch_tasks(&pool, queue, worker, 1);
+    let fetched = fetch_tasks(&environment.runtime, &pool, queue, worker, 1);
     assert_eq!(fetched.len(), 1, "a due Failed row must be fetched");
     assert_eq!(fetched[0].task_id, id);
 
@@ -293,7 +330,7 @@ fn failed_row_with_spare_attempts_is_fetched_when_due() {
     // fetch that never touched the row. The fetcher stops at the queue step,
     // so the row is `Queued` rather than the `Running` the worker's own lock
     // step would set.
-    let state = read_state(&pool, &id);
+    let state = read_state(&environment.runtime, &pool, &id);
     assert_eq!(
         state.status, "Queued",
         "fetch queues the row for the worker"
@@ -349,10 +386,10 @@ fn ineligible_rows_are_not_fetched(#[case] case: IneligibleRow) {
         insert_job(&pool, row).await;
     });
 
-    let fetched = fetch_tasks(&pool, case.queue, case.worker, 1);
+    let fetched = fetch_tasks(&environment.runtime, &pool, case.queue, case.worker, 1);
     assert!(fetched.is_empty(), "{}: {fetched:?}", case.expectation);
     assert_eq!(
-        read_state(&pool, &id),
+        read_state(&environment.runtime, &pool, &id),
         RowState {
             status: case.status.to_owned(),
             attempts: case.attempts,
@@ -382,7 +419,7 @@ fn fetch_preserves_the_persisted_attempt_count() {
         .await;
     });
 
-    let fetched = fetch_tasks(&pool, queue, worker, 1);
+    let fetched = fetch_tasks(&environment.runtime, &pool, queue, worker, 1);
     assert_eq!(fetched.len(), 1, "the persisted attempt row is due");
     assert_eq!(
         fetched[0].attempt, 3,

@@ -92,6 +92,15 @@ impl PostgresRetryScheduler {
     /// Returns the PostgreSQL error when the guarded update cannot be
     /// executed, or a protocol error when the delay exceeds the interval
     /// range accepted by PostgreSQL.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            operation = "schedule_retry",
+            task_id,
+            worker_id,
+            delay_micros = %delay.as_micros(),
+        )
+    )]
     pub async fn schedule_retry(
         &self,
         task_id: &str,
@@ -140,6 +149,17 @@ impl PostgresRetryScheduler {
     /// Returns the PostgreSQL error when the guarded update cannot be
     /// executed, or a protocol error when the attempt exceeds Apalis's integer
     /// range.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            operation = "record_terminal_failure",
+            task_id = update.task_id,
+            worker_id = update.worker_id,
+            attempt = update.attempt.get(),
+            reason = update.reason.as_label(),
+            shrink_limit = update.shrink_limit,
+        )
+    )]
     pub(crate) async fn record_terminal_failure(
         &self,
         update: TerminalRetryUpdate<'_>,
