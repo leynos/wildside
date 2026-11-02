@@ -11,7 +11,7 @@ use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::json;
 
-pub use retry_policy_world::{QueueRetryPolicyWorld, RetryHandlerMode};
+pub use retry_policy_world::{QueueRetryPolicyWorld, RetryHandlerMode, assert_deadlines_advance};
 
 #[fixture]
 fn world() -> QueueRetryPolicyWorld {
@@ -116,23 +116,10 @@ fn each_rerun_starts_after_its_persisted_retry_time(world: &QueueRetryPolicyWorl
 
     // A no-op or swallowed scheduling write would leave `run_at` unchanged and
     // still satisfy the check above whenever the row is already due. Requiring
-    // the stored deadline to advance by at least the base delay makes the
-    // durable-backoff claim non-vacuous. The final observation is excluded
-    // because a successful attempt schedules nothing.
-    let base_delay = world.base_delay_micros();
-    for pair in observations
-        .windows(2)
-        .take(observations.len().saturating_sub(2))
-    {
-        let advance = pair[1].run_at_micros - pair[0].run_at_micros;
-        assert!(
-            advance >= base_delay,
-            "run_at advanced by {advance}us between attempts {} and {}, \
-             below the {base_delay}us base delay",
-            pair[0].attempt,
-            pair[1].attempt
-        );
-    }
+    // every adjacent pair to advance by at least the base delay makes the
+    // durable-backoff claim non-vacuous, including the final pair: the last
+    // attempt observes the deadline the previous failure wrote.
+    assert_deadlines_advance(&observations, world.base_delay_micros());
 }
 
 #[then("the job completes with status {status}")]
