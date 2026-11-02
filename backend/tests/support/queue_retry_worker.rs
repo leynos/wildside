@@ -37,7 +37,7 @@ pub const DEFAULT_WORKER_DEADLINE: Duration = Duration::from_secs(20);
 #[derive(Clone, Debug, Deserialize)]
 pub struct QueueRetryProbeJob {
     /// The persisted probe identifier.
-    #[allow(dead_code)] // Observed through the database row, not the handler.
+    #[expect(dead_code, reason = "observed through the database row, not the handler")]
     #[serde(rename = "probeId")]
     pub probe_id: String,
 }

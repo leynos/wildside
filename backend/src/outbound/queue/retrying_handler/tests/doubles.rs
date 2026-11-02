@@ -37,7 +37,7 @@ pub(super) const TASK_ID: &str = "01J00000000000000000000000";
 #[derive(Clone, Debug, Deserialize)]
 pub(super) struct TestJob {
     #[serde(rename = "probeId")]
-    #[allow(dead_code)] // Decoding is the behaviour under test.
+    #[expect(dead_code, reason = "decoding is the behaviour under test")]
     probe_id: String,
 }
 
