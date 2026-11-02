@@ -206,10 +206,12 @@ fn fetch_tasks(pool: &PgPool, queue: &str, worker: &str, wanted: usize) -> Vec<F
 
 /// Persisted scheduling state the fetcher would change on a successful lock.
 ///
-/// `apalis.get_jobs` sets `status = 'Running'` and records the worker in
-/// `lock_by`, so an unchanged row proves the fetcher never claimed it. This
-/// makes the negative canaries independent of how long the observation window
-/// happens to last.
+/// `apalis.get_jobs` queues the row by setting `status = 'Queued'` and records
+/// the worker in `lock_by`. Promotion to `'Running'` is a second step
+/// (`lock_by_id.sql`) that only the worker pipeline performs, so the fetcher
+/// alone leaves it `'Queued'`. An unchanged row proves the fetcher never
+/// claimed it, which makes the negative canaries independent of how long the
+/// observation window happens to last.
 #[derive(Debug, PartialEq, Eq)]
 struct RowState {
     status: String,
@@ -287,12 +289,14 @@ fn failed_row_with_spare_attempts_is_fetched_when_due() {
     assert_eq!(fetched.len(), 1, "a due Failed row must be fetched");
     assert_eq!(fetched[0].task_id, id);
 
-    // Proving the lock landed keeps this positive case from passing on a
-    // fetch that never touched the row.
+    // Proving the claim landed keeps this positive case from passing on a
+    // fetch that never touched the row. The fetcher stops at the queue step,
+    // so the row is `Queued` rather than the `Running` the worker's own lock
+    // step would set.
     let state = read_state(&pool, &id);
     assert_eq!(
-        state.status, "Running",
-        "fetch claims the row for the worker"
+        state.status, "Queued",
+        "fetch queues the row for the worker"
     );
     assert_eq!(state.lock_by.as_deref(), Some(worker));
 }
