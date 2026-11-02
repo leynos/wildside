@@ -2213,7 +2213,8 @@ outgrow PostgreSQL `NOTIFY`/`SKIP LOCKED` capabilities.
 
 Each job family has a queue-specific retry policy. The implemented
 `RetryingJobService` classifies a failure and, while the worker owns the row,
-writes its next `run_at` before returning the error for acknowledgement.
+either writes its next `run_at` for a retryable failure or records the terminal
+dead-letter classification, before returning the error for acknowledgement.
 PostgreSQL makes the row eligible after that durable delay; waiting does not
 occupy a worker slot. The polling interval limits timing precision, and load
 can delay delivery further. `max_attempts` bounds deliveries across worker

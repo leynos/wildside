@@ -296,6 +296,30 @@ def test_lint_frontend_uses_the_pin_when_the_path_biome_differs(
     ), "the fallback must run the pinned Biome check over both workspaces"
 
 
+def test_lint_frontend_rejects_a_path_biome_sharing_the_pin_prefix(
+    fake_tool_environment: tuple[dict[str, str], Path],
+) -> None:
+    """A PATH Biome whose version merely starts with the pin is replaced.
+
+    ``grep -F`` would accept ``Version: 2.3.10`` when the pin is ``2.3.1``,
+    because the pin is a substring of the longer version. The whole-line match
+    must reject it and fall back to the pinned release.
+    """
+    env, log_path = fake_tool_environment
+    pin = makefile_variable("BIOME_VERSION")
+    env["FAKE_BIOME_VERSION"] = f"{pin}0"
+
+    completed = run_make("lint-frontend", env)
+
+    assert completed.returncode == 0, completed.stderr
+    assert [invocation[0] for invocation in read_invocations(log_path)] == [
+        "bun",
+        "pnpm",
+    ], "a PATH Biome sharing the pin's prefix must be replaced by the pin"
+    (bun,) = tool_arguments(log_path, "bun")
+    assert bun[:2] == ("x", f"--package=@biomejs/biome@{pin}")
+
+
 @pytest.mark.parametrize(("target", "expected_arguments"), NO_PROJECT_TARGETS)
 def test_targets_run_uv_without_project_discovery(
     target: str,
