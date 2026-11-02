@@ -69,7 +69,7 @@ endef
 # Parameters:
 #   $(1) - arguments passed to Biome
 define biome_cmd
-	if biome --version 2>/dev/null | grep -qF 'Version: $(BIOME_VERSION)'; then \
+	if biome --version 2>/dev/null | grep -qxF 'Version: $(BIOME_VERSION)'; then \
 	  biome $(1); \
 	else \
 	  bun x --package=@biomejs/biome@$(BIOME_VERSION) biome $(1); \

@@ -2515,14 +2515,16 @@ built from the configured queue policies. A requeue restores the appropriate
 policy limit and records its bounded count under
 `wildside.retry.requeue_count`; terminal failures record
 `wildside.retry.dead_reason`. Both updates preserve unrelated metadata. The
-policy constructor validates delay parameters before jitter so a configuration
+policy constructor validates delay parameters before jitter, so a configuration
 with several invalid fields reports the same first error.
 
 `RetryingJobService<J, F>`, configured with `RetryingJobServiceConfig`, applies
 one policy to one queue. It decodes the stored payload into the queue's concrete
 `v1` job type `J` before invoking `F`, so a handler never observes a body that
-passed the version check but failed the type check. It schedules `run_at` with
-an ownership guard before returning a failure for Apalis to acknowledge.
+passed the version check but failed the type check. For a retryable failure it
+schedules `run_at` with an ownership guard before returning the error for
+Apalis to acknowledge; a terminal failure records its dead-letter
+classification instead of scheduling another attempt.
 
 All persistence goes through the `RetryPersistence` port: `schedule_retry` for
 a durable retry and `record_terminal_failure` for a dead-letter classification.
@@ -2743,11 +2745,12 @@ Queue observability:
   feature-gated counter for durable retry scheduling results.
 - `route_queue_dead_letter_total{reason=exhausted|fatal}` – A feature-gated
   counter for terminal retry outcomes.
-- Retry policy belongs to one queue/job family. The Apalis handler wrapper
-  persists `run_at` before returning the failure to the PostgreSQL
-  acknowledgement; it installs no in-process retry middleware. Terminal
-  outcomes persist `wildside.retry.dead_reason` in the existing Apalis JSONB
-  metadata, and acknowledgements preserve that value and other metadata.
+- Retry policy belongs to one queue/job family. For a retryable failure the
+  Apalis handler wrapper persists `run_at` before returning the failure to the
+  PostgreSQL acknowledgement; it installs no in-process retry middleware.
+  Terminal outcomes persist `wildside.retry.dead_reason` in the existing Apalis
+  JSONB metadata instead of scheduling another attempt, and acknowledgements
+  preserve that value and other metadata.
 - `tracing` – The adapter emits `debug` on enqueue success and `warn` on
   failure points (serialization, push, and setup failures), including latency
   and the adapter outcome.

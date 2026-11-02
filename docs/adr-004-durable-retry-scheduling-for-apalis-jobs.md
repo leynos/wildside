@@ -20,7 +20,7 @@ The 2026-10-14 investigation found that in-process retries at the rc pins race
 with the storage fetcher: a failed row can be fetched while the retry layer is
 still processing it. The wrapper updates a row only while it is `Running` and
 locked by the current worker, before Apalis acknowledges the failure. A
-terminal outcome can also reduce the stored attempt limit so a later `Failed`
+terminal outcome can also reduce the stored attempt limit, so a later `Failed`
 row is unfetchable. A crash between the in-memory attempt increment and its
 acknowledgement can lose that one in-flight attempt.
 

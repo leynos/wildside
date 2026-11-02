@@ -63,6 +63,21 @@ def makefile_variable(name: str) -> str:
 
     The Biome double has to claim the version the Makefile itself pins, or the
     contract would encode the pin twice and drift from it.
+
+    Parameters
+    ----------
+    name : str
+        Makefile variable name.
+
+    Returns
+    -------
+    str
+        Value assigned by the matching ``?=`` definition.
+
+    Raises
+    ------
+    ToolingDoubleError
+        If the Makefile does not define ``name`` with ``?=``.
     """
     makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf8")
     match = re.search(rf"^{re.escape(name)} \?= (\S+)$", makefile, re.MULTILINE)
@@ -73,7 +88,18 @@ def makefile_variable(name: str) -> str:
 
 
 def build_fake_tool_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
-    """Provide command doubles, an isolated invocation log, and a known TMPDIR."""
+    """Build the fake-tool environment and invocation-log path.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Temporary directory owned by the test fixture.
+
+    Returns
+    -------
+    tuple[dict[str, str], Path]
+        Environment mapping and invocation-log path.
+    """
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     _write_executable(fake_bin / "tool", FAKE_TOOL)
@@ -88,7 +114,12 @@ def build_fake_tool_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
     env["TOOL_LOG"] = str(log_path)
     env["TMPDIR"] = str(temporary)
-    env["FAKE_BIOME_VERSION"] = makefile_variable("BIOME_VERSION")
+    # Make's `?=` keeps a caller-exported BIOME_VERSION, so pin it here as
+    # well: the fake Biome and the Makefile must agree on the version even
+    # when the surrounding environment exports a different one.
+    biome_version = makefile_variable("BIOME_VERSION")
+    env["BIOME_VERSION"] = biome_version
+    env["FAKE_BIOME_VERSION"] = biome_version
     return env, log_path
 
 
@@ -98,7 +129,27 @@ def run_make(
     *,
     cwd: Path = REPOSITORY_ROOT,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a Makefile tooling target with command doubles on ``PATH``."""
+    """Run a Makefile tooling target with command doubles on ``PATH``.
+
+    Parameters
+    ----------
+    target : str
+        Make target to run.
+    env : dict[str, str]
+        Environment passed to Make.
+    cwd : Path, default=REPOSITORY_ROOT
+        Working directory for Make.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        Completed Make process.
+
+    Raises
+    ------
+    ToolingDoubleError
+        If Make is unavailable.
+    """
     make = which("make")
     if make is None:
         message = "make must be available for workflow contract tests"
@@ -124,7 +175,18 @@ def run_make(
 
 
 def read_invocations(log_path: Path) -> list[ToolInvocation]:
-    """Return logged command invocations, or an empty list when none ran."""
+    """Read logged command invocations.
+
+    Parameters
+    ----------
+    log_path : Path
+        Invocation-log path.
+
+    Returns
+    -------
+    list[ToolInvocation]
+        Logged invocations, or an empty list when none ran.
+    """
     if not log_path.exists():
         return []
     fields = iter(log_path.read_bytes().removesuffix(b"\0").split(b"\0"))
@@ -146,7 +208,20 @@ def read_invocations(log_path: Path) -> list[ToolInvocation]:
 
 
 def tool_arguments(log_path: Path, tool: str) -> list[tuple[str, ...]]:
-    """Return the argument tuple of each logged invocation of *tool*."""
+    """Return arguments for each logged invocation of a tool.
+
+    Parameters
+    ----------
+    log_path : Path
+        Invocation-log path.
+    tool : str
+        Tool name to filter.
+
+    Returns
+    -------
+    list[tuple[str, ...]]
+        Argument tuples for matching invocations.
+    """
     return [
         invocation[-1]
         for invocation in read_invocations(log_path)

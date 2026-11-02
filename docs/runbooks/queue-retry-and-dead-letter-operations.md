@@ -41,8 +41,12 @@ queue's **current configured** `JobRetryPolicy.max_attempts`; do not derive the
 budget from the dead row, whose limit may have been reduced on a fatal failure.
 The adapter refuses an unknown queue, negative attempts, or an invalid counter.
 It increments a valid counter with saturation at `u32::MAX` and preserves other
-metadata. The following transaction applies the same guards. Enter the exact
-queue name and an integer policy budget in the PostgreSQL `integer` range.
+metadata. The following transaction applies the row-state, attempt, counter
+range, and integer budget range guards, but it does not check `job_type` against
+`RequeueBudgets` or verify that `retry_budget` matches that queue's policy.
+Confirming the queue name and its current configured budget is therefore an
+operator precondition. Enter the exact queue name and an integer policy budget
+in the PostgreSQL `integer` range.
 
 ```sql
 \prompt 'Dead job id: ' job_id
