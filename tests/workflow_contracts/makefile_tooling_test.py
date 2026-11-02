@@ -4,113 +4,23 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess  # ruff: ignore[suspicious-subprocess-import] - tests deliberately exercise Make via subprocess.
 from pathlib import Path
-from shutil import which
 
 import pytest
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-
-FAKE_TOOL = """#!/bin/sh
-printf '%s\\0%s\\0%s\\0%s\\0%s\\0' \\
-    "$(basename "$0")" \\
-    "${TMPDIR:-}" \\
-    "${UV_CACHE_DIR:-}" \\
-    "${UV_TOOL_DIR:-}" \\
-    "$#" >> "$TOOL_LOG"
-for argument in "$@"; do
-    printf '%s\\0' "$argument" >> "$TOOL_LOG"
-done
-"""
-
-type ToolInvocation = tuple[str, str, str, str, tuple[str, ...]]
-
-
-def _write_executable(path: Path, source: str) -> None:
-    """Write an executable command double."""
-    path.write_text(source, encoding="utf8")
-    path.chmod(0o755)
-
-
-#: The temporary directory the fixture hands to every Make invocation. The
-#: assertions compare the tools' `TMPDIR` against this, so the contract is
-#: "the Makefile passes the caller's TMPDIR through untouched" rather than
-#: "whoever ran the suite happened to have no TMPDIR set". Reading the
-#: ambient value made the suite pass on GitHub's runners, which set none, and
-#: fail on any developer machine that sets one.
-TMPDIR_SENTINEL: str = "tmpdir-owned-by-the-fixture"
+from tooling_doubles import (
+    REPOSITORY_ROOT,
+    build_fake_tool_environment,
+    makefile_variable,
+    read_invocations,
+    run_make,
+    tool_arguments,
+)
 
 
 @pytest.fixture
 def fake_tool_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
     """Provide command doubles, an isolated invocation log, and a known TMPDIR."""
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    _write_executable(fake_bin / "tool", FAKE_TOOL)
-    for tool_name in ("bun", "pnpm", "uv", "nixie", "merman-cli", "biome"):
-        (fake_bin / tool_name).symlink_to(fake_bin / "tool")
-
-    temporary = tmp_path / TMPDIR_SENTINEL
-    temporary.mkdir()
-
-    log_path = tmp_path / "tool.log"
-    env = os.environ.copy()
-    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
-    env["TOOL_LOG"] = str(log_path)
-    env["TMPDIR"] = str(temporary)
-    return env, log_path
-
-
-def _run_make(
-    target: str,
-    env: dict[str, str],
-    *,
-    cwd: Path = REPOSITORY_ROOT,
-) -> subprocess.CompletedProcess[str]:
-    """Run a Makefile tooling target with command doubles on ``PATH``."""
-    make = which("make")
-    assert make is not None, "make must be available for workflow contract tests"
-    fake_uv = Path(env["PATH"].split(os.pathsep, maxsplit=1)[0]) / "uv"
-    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - the resolved make executable is trusted.
-        [
-            make,
-            "--no-print-directory",
-            "-f",
-            str(REPOSITORY_ROOT / "Makefile"),
-            f"PATH={env['PATH']}",
-            f"UV={fake_uv}",
-            target,
-        ],
-        cwd=cwd,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=30,
-    )
-
-
-def _read_invocations(log_path: Path) -> list[ToolInvocation]:
-    """Return logged command invocations, or an empty list when none ran."""
-    if not log_path.exists():
-        return []
-    fields = iter(log_path.read_bytes().removesuffix(b"\0").split(b"\0"))
-    invocations = []
-    while tool := next(fields, None):
-        tmpdir = next(fields).decode()
-        uv_cache_dir = next(fields).decode()
-        uv_tool_dir = next(fields).decode()
-        argument_count = int(next(fields))
-        arguments = tuple(next(fields).decode() for _ in range(argument_count))
-        invocations.append((
-            tool.decode(),
-            tmpdir,
-            uv_cache_dir,
-            uv_tool_dir,
-            arguments,
-        ))
-    return invocations
+    return build_fake_tool_environment(tmp_path)
 
 
 def test_nixie_invokes_the_installed_merman_renderer(
@@ -119,12 +29,12 @@ def test_nixie_invokes_the_installed_merman_renderer(
     """Nixie invokes its installed Merman renderer without setup commands."""
     env, log_path = fake_tool_environment
 
-    completed = _run_make("nixie", env)
+    completed = run_make("nixie", env)
 
     assert completed.returncode == 0, completed.stderr
     uv_cache = str(REPOSITORY_ROOT / ".uv-cache")
     uv_tools = str(REPOSITORY_ROOT / ".uv-tools")
-    assert _read_invocations(log_path) == [
+    assert read_invocations(log_path) == [
         ("nixie", env["TMPDIR"], uv_cache, uv_tools, ("--renderer", "merman"))
     ]
 
@@ -138,10 +48,10 @@ def test_nixie_stops_before_validation_without_merman(
     (fake_bin / "merman-cli").unlink()
     env["PATH"] = str(fake_bin)
 
-    completed = _run_make("nixie", env)
+    completed = run_make("nixie", env)
 
     assert completed.returncode != 0
-    invocations = _read_invocations(log_path)
+    invocations = read_invocations(log_path)
     assert not invocations, f"unexpected tool invocations: {invocations!r}"
 
 
@@ -151,7 +61,7 @@ def test_lint_asyncapi_uses_pnpm_cli_runner(
     """The AsyncAPI target selects pnpm and passes the validation contract."""
     env, log_path = fake_tool_environment
 
-    completed = _run_make("lint-asyncapi", env)
+    completed = run_make("lint-asyncapi", env)
 
     assert completed.returncode == 0, completed.stderr
     expected_invocation = (
@@ -167,7 +77,7 @@ def test_lint_asyncapi_uses_pnpm_cli_runner(
             "--fail-severity=info",
         ),
     )
-    assert _read_invocations(log_path) == [expected_invocation]
+    assert read_invocations(log_path) == [expected_invocation]
 
 
 # A requirement's leading name, before any `==` pin or `>=` floor.
@@ -189,15 +99,6 @@ TYPECHECK_DEPENDENCIES = frozenset({
     "cuprum",
     "cmd-mox",
 })
-
-
-def _tool_arguments(log_path: Path, tool: str) -> list[tuple[str, ...]]:
-    """Return the argument tuple of each logged invocation of *tool*."""
-    return [
-        invocation[-1]
-        for invocation in _read_invocations(log_path)
-        if invocation[0] == tool
-    ]
 
 
 def _requirement_name(requirement: str) -> str:
@@ -226,10 +127,10 @@ def test_check_fmt_python_verifies_formatting_without_rewriting(
     """The format gate checks Ruff formatting rather than applying it."""
     env, log_path = fake_tool_environment
 
-    completed = _run_make("check-fmt-python", env)
+    completed = run_make("check-fmt-python", env)
 
     assert completed.returncode == 0, completed.stderr
-    (arguments,) = _tool_arguments(log_path, "uv")
+    (arguments,) = tool_arguments(log_path, "uv")
     assert arguments[:3] == ("tool", "run", "--from")
     assert arguments[3].startswith("ruff=="), "the format gate must run a pinned Ruff"
     assert arguments[4:] == ("ruff", "format", "--check"), (
@@ -243,10 +144,10 @@ def test_lint_python_runs_ruff_interrogate_and_pylint(
     """The Python lint gate runs all three configured tiers, in order."""
     env, log_path = fake_tool_environment
 
-    completed = _run_make("lint-python", env)
+    completed = run_make("lint-python", env)
 
     assert completed.returncode == 0, completed.stderr
-    ruff, interrogate, pylint = _tool_arguments(log_path, "uv")
+    ruff, interrogate, pylint = tool_arguments(log_path, "uv")
 
     assert ruff[:3] == ("tool", "run", "--from")
     assert ruff[3].startswith("ruff==")
@@ -277,10 +178,10 @@ def test_typecheck_python_materializes_a_venv_before_running_ty(
     """The gate materializes an environment before ty resolves imports."""
     env, log_path = fake_tool_environment
 
-    completed = _run_make("typecheck-python", env)
+    completed = run_make("typecheck-python", env)
 
     assert completed.returncode == 0, completed.stderr
-    venv, install, ty = _tool_arguments(log_path, "uv")
+    venv, install, ty = tool_arguments(log_path, "uv")
 
     assert venv[:2] == ("venv", "--allow-existing"), (
         "typecheck-python must reuse an existing .venv rather than rebuild it"
@@ -343,14 +244,14 @@ def test_lint_frontend_runs_biome_before_the_package_linter(
     """The front-end lint target runs the pinned Biome check, then Oxlint."""
     env, log_path = fake_tool_environment
 
-    completed = _run_make("lint-frontend", env)
+    completed = run_make("lint-frontend", env)
 
     assert completed.returncode == 0, completed.stderr
-    assert [invocation[0] for invocation in _read_invocations(log_path)] == [
+    assert [invocation[0] for invocation in read_invocations(log_path)] == [
         "biome",
         "pnpm",
     ], "lint-frontend must run Biome first and the package linter second"
-    (biome,) = _tool_arguments(log_path, "biome")
+    (biome,) = tool_arguments(log_path, "biome")
     assert biome == (
         "ci",
         "--formatter-enabled=true",
@@ -358,10 +259,41 @@ def test_lint_frontend_runs_biome_before_the_package_linter(
         "frontend-pwa",
         "packages",
     ), "the formatter gate must run the pinned Biome check over both workspaces"
-    (oxlint,) = _tool_arguments(log_path, "pnpm")
+    (oxlint,) = tool_arguments(log_path, "pnpm")
     assert oxlint == ("--filter", "frontend-pwa", "lint"), (
         "the pinned Oxlint profiles must run through the workspace script"
     )
+
+
+def test_lint_frontend_uses_the_pin_when_the_path_biome_differs(
+    fake_tool_environment: tuple[dict[str, str], Path],
+) -> None:
+    """A PATH Biome at another version is replaced by the pinned release.
+
+    Biome's formatter output is not stable across releases, so a developer
+    machine with a different Biome must not decide whether the gate passes.
+    """
+    env, log_path = fake_tool_environment
+    env["FAKE_BIOME_VERSION"] = "0.0.0-not-the-pin"
+
+    completed = run_make("lint-frontend", env)
+
+    assert completed.returncode == 0, completed.stderr
+    assert [invocation[0] for invocation in read_invocations(log_path)] == [
+        "bun",
+        "pnpm",
+    ], "a mismatched PATH Biome must be replaced by the pinned release"
+    (bun,) = tool_arguments(log_path, "bun")
+    assert bun == (
+        "x",
+        f"--package=@biomejs/biome@{makefile_variable('BIOME_VERSION')}",
+        "biome",
+        "ci",
+        "--formatter-enabled=true",
+        "--reporter=github",
+        "frontend-pwa",
+        "packages",
+    ), "the fallback must run the pinned Biome check over both workspaces"
 
 
 @pytest.mark.parametrize(("target", "expected_arguments"), NO_PROJECT_TARGETS)
@@ -373,10 +305,10 @@ def test_targets_run_uv_without_project_discovery(
     """Helper and test targets resolve without the tooling-only project."""
     env, log_path = fake_tool_environment
 
-    completed = _run_make(target, env)
+    completed = run_make(target, env)
 
     assert completed.returncode == 0, completed.stderr
-    (arguments,) = _tool_arguments(log_path, "uv")
+    (arguments,) = tool_arguments(log_path, "uv")
     assert arguments[:2] == ("run", "--no-project"), (
         f"{target} must run uv with --no-project so the root pyproject.toml"
         " cannot alter its resolution"
