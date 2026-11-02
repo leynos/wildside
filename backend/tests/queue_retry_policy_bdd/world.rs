@@ -23,6 +23,8 @@ use crate::support::queue_retry_worker::{
 
 mod state;
 
+pub use state::assert_deadlines_advance;
+
 pub const QUEUE_NAME: &str = "wildside.retry-policy-bdd";
 
 /// First retry delay used by every scenario policy.

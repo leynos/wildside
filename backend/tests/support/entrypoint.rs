@@ -24,6 +24,10 @@ macro_rules! declare_test_support {
             $(declare_test_support!(@module $module);)+
         }
     };
+    (@module apalis_job_id) => {
+        #[path = "../support/apalis_job_id.rs"]
+        pub mod apalis_job_id;
+    };
     (@module atexit_cleanup) => {
         #[path = "../support/atexit_cleanup.rs"]
         pub mod atexit_cleanup;
