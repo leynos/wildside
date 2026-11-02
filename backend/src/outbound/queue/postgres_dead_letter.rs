@@ -75,6 +75,7 @@ struct LockedDeadJob {
 
 #[async_trait::async_trait]
 impl DeadLetterQueue for PostgresDeadLetterQueue {
+    #[tracing::instrument(skip_all, fields(operation = "list_dead", limit))]
     async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError> {
         let requested = usize::try_from(limit).map_err(|_| {
             DeadLetterError::unavailable("dead-letter listing limit exceeds platform range")
@@ -120,6 +121,7 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
         Ok(dead_jobs)
     }
 
+    #[tracing::instrument(skip_all, fields(operation = "requeue", job_id = %id.as_str()))]
     async fn requeue(&self, id: &DeadJobId) -> Result<(), DeadLetterError> {
         let mut transaction = self
             .pool
@@ -183,6 +185,7 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
             .map_err(|error| unavailable("commit dead-job requeue", error))
     }
 
+    #[tracing::instrument(skip_all, fields(operation = "discard", job_id = %id.as_str()))]
     async fn discard(&self, id: &DeadJobId) -> Result<(), DeadLetterError> {
         let query = format!(
             "DELETE FROM apalis.jobs

@@ -19,9 +19,9 @@ use serde::Deserialize;
 use serde_json::Value;
 use sqlx::Error as SqlxError;
 
-use super::super::{RetryingJobService, RetryingJobServiceConfig};
+use super::super::{JitterSource, RetryingJobService, RetryingJobServiceConfig};
 use super::policy;
-use crate::domain::jobs::retry::JobFailure;
+use crate::domain::jobs::retry::{JitterSample, JobFailure};
 use crate::domain::ports::{
     RouteDeadLetterOutcome, RouteQueueMetrics, RouteQueueOutcome, RouteRetryOutcome,
 };
@@ -160,21 +160,74 @@ impl RecordingMetrics {
     }
 }
 
+/// Build a delivery whose worker context and `lock_by` agree.
 pub(super) fn task(payload: Value, attempt: usize) -> PgTask<Value> {
+    task_with_identity(payload, attempt, Some(WORKER), Some(WORKER))
+}
+
+/// Build a delivery with a chosen worker context and `lock_by`.
+///
+/// `worker` is the name stored in the task's [`WorkerContext`]; `lock_by` is
+/// the worker recorded on the Apalis context. The wrapper persists a failure
+/// only when both are present and agree, so tests use this to exercise each
+/// missing or mismatched combination.
+pub(super) fn task_with_identity(
+    payload: Value,
+    attempt: usize,
+    worker: Option<&str>,
+    lock_by: Option<&str>,
+) -> PgTask<Value> {
+    build_task(payload, attempt, worker, lock_by, Some(TASK_ID))
+}
+
+/// Build a delivery that carries no task identifier.
+///
+/// The wrapper needs the task identifier to address the row it would update,
+/// so a delivery without one must be refused even when the worker identities
+/// agree.
+pub(super) fn task_without_id(
+    payload: Value,
+    attempt: usize,
+    worker: Option<&str>,
+    lock_by: Option<&str>,
+) -> PgTask<Value> {
+    build_task(payload, attempt, worker, lock_by, None)
+}
+
+fn build_task(
+    payload: Value,
+    attempt: usize,
+    worker: Option<&str>,
+    lock_by: Option<&str>,
+    task_id: Option<&str>,
+) -> PgTask<Value> {
     let mut data = Extensions::default();
-    // `WorkerContext::new` carries the service type only for diagnostics, so
-    // the unit is sufficient here.
-    data.insert(WorkerContext::new::<()>(WORKER));
-    Task::builder(payload)
+    if let Some(worker) = worker {
+        // `WorkerContext::new` carries the service type only for diagnostics,
+        // so the unit is sufficient here.
+        data.insert(WorkerContext::new::<()>(worker));
+    }
+    let mut builder = Task::builder(payload)
         .with_ctx(
             PgContext::new()
                 .with_max_attempts(5)
-                .with_lock_by(Some(WORKER.to_owned())),
+                .with_lock_by(lock_by.map(str::to_owned)),
         )
         .with_data(data)
-        .with_task_id(TASK_ID.parse().expect("task id"))
-        .with_attempt(Attempt::new_with_value(attempt))
-        .build()
+        .with_attempt(Attempt::new_with_value(attempt));
+    if let Some(task_id) = task_id {
+        builder = builder.with_task_id(task_id.parse().expect("task id"));
+    }
+    builder.build()
+}
+
+/// Jitter source that always returns the same sample.
+pub(super) struct FixedJitter(pub(super) JitterSample);
+
+impl JitterSource for FixedJitter {
+    fn sample(&self) -> JitterSample {
+        self.0
+    }
 }
 
 pub(super) fn service<F, Fut>(
@@ -191,6 +244,7 @@ where
         policy(3),
         persistence,
         metrics as Arc<dyn RouteQueueMetrics>,
-    );
+    )
+    .with_jitter(Arc::new(FixedJitter(JitterSample::midpoint())));
     RetryingJobService::<TestJob, F>::new(config, handler)
 }
