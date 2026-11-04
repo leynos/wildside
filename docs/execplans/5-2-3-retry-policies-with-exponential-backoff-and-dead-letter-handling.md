@@ -5,8 +5,9 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (approved for execution 2026-10-30; implementation
-complete, hosted code-health remediation and delivery pending)
+Status: IN PROGRESS (approved for execution 2026-10-30; implementation complete
+and rebased onto `main` at `b3e37d1` on 2026-11-04; the gates for that replay
+and its publication are pending)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -2010,6 +2011,23 @@ caret requirements.
   with one skipped, and `make check-fmt`, `make spelling`, `make typecheck`,
   `make markdownlint`, and `make nixie` all exited 0 (`/tmp/gate14c-*`,
   `/tmp/gate15-*`, `/tmp/gate17-*`).
+- [x] (2026-11-04 Europe/Berlin) Replayed the branch onto the `main` that now
+  carries the audit remediation. PR #583 (squash `b3e37d1`) upgraded `utoipa`
+  to 6 and `utoipa-swagger-ui` to 10.0.2, which resolves `zip` 9.2.2 and lets
+  the repository drop the three `zip` ignores; this supersedes the earlier
+  expectation that PR #567's `fix-zstd-audit` branch would carry the audit fix.
+  The exclusive boundary was the old target `f682d1e`, and the old head was
+  `94ac912`. All 68 commits replayed with no conflicts and no merge commits
+  using `--merge`, `--no-fork-point`, `--no-update-refs`, `--no-autostash`,
+  `--reapply-cherry-picks`, `--keep-empty`, `--empty=stop`, `zdiff3`, and the
+  explicit Weave bypass `-c core.attributesFile=/dev/null`. Recovery refs are
+  `refs/backup/457-{old-head,base,target,remote-head}`. The new head is
+  `01973bc`. `git range-diff` pairs all 68 commits; 67 are identical and the
+  only difference is `Add pure queue retry policy`, whose `Cargo.lock` hunk
+  lifting `regex` to 1.13.1 no longer applies because the new target already
+  resolves it. `git diff --check` is clean and `cargo metadata --locked` exits
+  0, so the lockfile still matches the combined manifests. The sequential
+  commit gates and publication for this candidate remain pending.
 
 ## Surprises & discoveries
 
