@@ -87,10 +87,10 @@
           "completionSummary": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WalkCompletionSummaryResponseBody"
               },
               {
-                "$ref": "#/components/schemas/WalkCompletionSummaryResponseBody"
+                "type": "null"
               }
             ]
           },
@@ -609,10 +609,10 @@
           "progress": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RouteProgressResponse"
               },
               {
-                "$ref": "#/components/schemas/RouteProgressResponse"
+                "type": "null"
               }
             ]
           },
