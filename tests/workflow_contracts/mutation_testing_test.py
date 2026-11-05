@@ -61,7 +61,13 @@ EXPECTED_WITH = {
         "backend/src/outbound/queue/test_helpers.rs"
     ),
     "extra-args": "--all-features --test-workspace=true",
+    # The build standard links with `mold` on Linux, so the runner needs it.
+    "install-mold": "true",
     "setup-commands": (
+        # `setup-rust` exports `-D warnings` alone, which displaces the Cargo
+        # configuration, so the standard flags are restored for cargo-mutants.
+        'echo "RUSTFLAGS=-D warnings -Zthreads=8 -Clink-arg=-fuse-ld=mold" '
+        '>> "$GITHUB_ENV"\n'
         'echo "POSTGRESQL_VERSION==16.10.0" >> "$GITHUB_ENV"\n'
         'echo "POSTGRESQL_RELEASES_URL='
         'https://github.com/theseus-rs/postgresql-binaries" >> "$GITHUB_ENV"\n'
