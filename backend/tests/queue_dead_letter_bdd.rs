@@ -13,7 +13,7 @@ declare_test_support!(
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 
-pub use queue_dead_letter_world::QueueDeadLetterWorld;
+pub(crate) use queue_dead_letter_world::QueueDeadLetterWorld;
 
 #[fixture]
 fn world() -> QueueDeadLetterWorld {

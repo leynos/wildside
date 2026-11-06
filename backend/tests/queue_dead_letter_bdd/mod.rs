@@ -2,4 +2,4 @@
 
 mod world;
 
-pub use world::QueueDeadLetterWorld;
+pub(crate) use world::QueueDeadLetterWorld;

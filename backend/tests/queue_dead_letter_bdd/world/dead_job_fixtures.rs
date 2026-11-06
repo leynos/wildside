@@ -6,7 +6,7 @@ use super::rows::JobSeed;
 use super::{QUEUE_NAME, QueueDeadLetterWorld};
 
 impl QueueDeadLetterWorld {
-    pub fn insert_unclassified_dead_row(&self) {
+    pub(crate) fn insert_unclassified_dead_row(&self) {
         let id = self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Failed",
@@ -19,7 +19,7 @@ impl QueueDeadLetterWorld {
         *self.current_job_id.lock().expect("current id mutex") = Some(id);
     }
 
-    pub fn insert_malformed_requeue_count_and_valid_dead_jobs(&self) {
+    pub(crate) fn insert_malformed_requeue_count_and_valid_dead_jobs(&self) {
         // Fill one raw SQL page with rows the adapter rejects before a valid
         // row so this scenario exercises offset pagination, not just overfetch.
         const MALFORMED_ROWS_BEFORE_VALID: usize = 101;
@@ -38,7 +38,7 @@ impl QueueDeadLetterWorld {
         *self.newest_job_id.lock().expect("newest job id mutex") = Some(valid);
     }
 
-    pub fn insert_malformed_requeue_count_dead_job(&self) -> DeadJobId {
+    pub(crate) fn insert_malformed_requeue_count_dead_job(&self) -> DeadJobId {
         let malformed = self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Failed",
@@ -53,7 +53,7 @@ impl QueueDeadLetterWorld {
         malformed
     }
 
-    pub fn insert_negative_attempt_dead_row(&self) {
+    pub(crate) fn insert_negative_attempt_dead_row(&self) {
         let id = self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Killed",
@@ -66,7 +66,7 @@ impl QueueDeadLetterWorld {
         *self.current_job_id.lock().expect("current id mutex") = Some(id);
     }
 
-    pub fn insert_two_dead_jobs(&self) {
+    pub(crate) fn insert_two_dead_jobs(&self) {
         self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Failed",
@@ -89,7 +89,7 @@ impl QueueDeadLetterWorld {
         *self.current_job_id.lock().expect("current id mutex") = Some(newest);
     }
 
-    pub fn insert_unconfigured_dead_job(&self) {
+    pub(crate) fn insert_unconfigured_dead_job(&self) {
         let id = self.insert_job(JobSeed {
             job_type: "wildside.unconfigured-queue",
             status: "Failed",

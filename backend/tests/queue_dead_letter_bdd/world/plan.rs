@@ -9,7 +9,7 @@ const DEAD_ROW_COUNT: i32 = 50;
 const DEAD_LISTING_SQL: &str = include_str!("../../../src/outbound/queue/sql/dead_listing.sql");
 
 impl QueueDeadLetterWorld {
-    pub fn assert_listing_plan_avoids_sequential_scan(&self) {
+    pub(crate) fn assert_listing_plan_avoids_sequential_scan(&self) {
         let seed = uuid::Uuid::new_v4().to_string();
         self.runtime
             .block_on(
