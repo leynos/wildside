@@ -15,7 +15,7 @@ impl QueueRetryPolicyWorld {
     ///
     /// Used for payloads that deliberately omit the probe id, which the
     /// probe-id based lookup cannot find.
-    pub fn latest_job_row(&self) -> StoredJob {
+    pub(crate) fn latest_job_row(&self) -> StoredJob {
         self.runtime.block_on(async {
             sqlx::query_as(
                 "SELECT status, attempts, max_attempts,
@@ -62,7 +62,7 @@ impl QueueRetryPolicyWorld {
         })
     }
 
-    pub fn probe_id(&self) -> &str {
+    pub(crate) fn probe_id(&self) -> &str {
         &self.probe_id
     }
 
@@ -71,32 +71,32 @@ impl QueueRetryPolicyWorld {
     /// The scheduler stores `now() + delay`, so the gap between consecutive
     /// `run_at` values must be at least this large. A guarded write that never
     /// fired would leave `run_at` unchanged, which this catches.
-    pub fn base_delay_micros(&self) -> i64 {
+    pub(crate) fn base_delay_micros(&self) -> i64 {
         i64::try_from(BASE_DELAY.as_micros()).expect("base delay fits i64")
     }
 
-    pub fn observations(&self) -> Vec<AttemptObservation> {
+    pub(crate) fn observations(&self) -> Vec<AttemptObservation> {
         self.observations
             .lock()
             .expect("attempt observations mutex")
             .clone()
     }
 
-    pub fn observed_attempts(&self) -> Vec<u32> {
+    pub(crate) fn observed_attempts(&self) -> Vec<u32> {
         self.observations()
             .into_iter()
             .map(|observation| observation.attempt)
             .collect()
     }
 
-    pub fn worker_report(&self) -> WorkerRunReport {
+    pub(crate) fn worker_report(&self) -> WorkerRunReport {
         self.worker_report
             .lock()
             .expect("worker report mutex")
             .expect("worker report should be available")
     }
 
-    pub fn job_row(&self) -> StoredJob {
+    pub(crate) fn job_row(&self) -> StoredJob {
         let probe_id = self.probe_id.clone();
         self.runtime.block_on(async move {
             let row: (
@@ -134,7 +134,7 @@ impl QueueRetryPolicyWorld {
         })
     }
 
-    pub fn assert_acknowledged_state(&self) {
+    pub(crate) fn assert_acknowledged_state(&self) {
         let row = self.job_row();
         let observation = self
             .observations()
@@ -164,7 +164,7 @@ impl QueueRetryPolicyWorld {
         }
     }
 
-    pub fn assert_metrics(&self, retries: usize, exhausted: usize, fatal: usize) {
+    pub(crate) fn assert_metrics(&self, retries: usize, exhausted: usize, fatal: usize) {
         let retry_outcomes = self
             .metrics
             .retry_outcomes
@@ -208,7 +208,10 @@ impl QueueRetryPolicyWorld {
 /// nothing itself, but it still observes the deadline the previous failure
 /// wrote. Excluding that pair would let a scheduler that advances once and
 /// then stops pass the scenario.
-pub fn assert_deadlines_advance(observations: &[AttemptObservation], base_delay_micros: i64) {
+pub(crate) fn assert_deadlines_advance(
+    observations: &[AttemptObservation],
+    base_delay_micros: i64,
+) {
     for pair in observations.windows(2) {
         let advance = pair[1].run_at_micros - pair[0].run_at_micros;
         assert!(

@@ -23,15 +23,15 @@ use crate::support::queue_retry_worker::{
 
 mod state;
 
-pub use state::assert_deadlines_advance;
+pub(crate) use state::assert_deadlines_advance;
 
-pub const QUEUE_NAME: &str = "wildside.retry-policy-bdd";
+pub(crate) const QUEUE_NAME: &str = "wildside.retry-policy-bdd";
 
 /// First retry delay used by every scenario policy.
 const BASE_DELAY: Duration = Duration::from_millis(10);
 
 #[derive(Clone, Copy, Debug)]
-pub enum RetryHandlerMode {
+pub(crate) enum RetryHandlerMode {
     FailRetryableThenSucceed(usize),
     AlwaysRetryable,
     Fatal,
@@ -40,14 +40,14 @@ pub enum RetryHandlerMode {
 }
 
 #[derive(Clone, Debug)]
-pub struct AttemptObservation {
+pub(crate) struct AttemptObservation {
     pub attempt: u32,
     pub started_at_micros: i64,
     pub run_at_micros: i64,
 }
 
 #[derive(Clone, Debug)]
-pub struct StoredJob {
+pub(crate) struct StoredJob {
     pub status: String,
     pub attempts: i32,
     pub max_attempts: i32,
@@ -58,16 +58,16 @@ pub struct StoredJob {
 }
 
 impl StoredJob {
-    pub fn is_dead(&self) -> bool {
+    pub(crate) fn is_dead(&self) -> bool {
         self.status == "Killed" || (self.status == "Failed" && self.attempts >= self.max_attempts)
     }
 
-    pub fn dead_reason(&self) -> &str {
+    pub(crate) fn dead_reason(&self) -> &str {
         self.dead_reason.as_deref().expect("D15 terminal reason")
     }
 }
 
-pub struct QueueRetryPolicyWorld {
+pub(crate) struct QueueRetryPolicyWorld {
     runtime: Runtime,
     pool: PgPool,
     _database: TemporaryDatabase,
@@ -87,7 +87,7 @@ impl Default for QueueRetryPolicyWorld {
 }
 
 impl QueueRetryPolicyWorld {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         ensure_stable_cluster_environment().expect("stable PostgreSQL environment");
         let runtime = Runtime::new().expect("create BDD Tokio runtime");
         let cluster = bootstrap_shared_cluster().expect("start embedded PostgreSQL");
@@ -120,7 +120,7 @@ impl QueueRetryPolicyWorld {
         }
     }
 
-    pub fn set_policy(&self, attempts: u32) {
+    pub(crate) fn set_policy(&self, attempts: u32) {
         let policy = make_policy(attempts);
         let provider = self
             .runtime
@@ -135,11 +135,11 @@ impl QueueRetryPolicyWorld {
         *self.policy.lock().expect("retry policy mutex") = policy;
     }
 
-    pub fn set_handler_mode(&self, mode: RetryHandlerMode) {
+    pub(crate) fn set_handler_mode(&self, mode: RetryHandlerMode) {
         *self.handler_mode.lock().expect("handler mode mutex") = mode;
     }
 
-    pub fn enqueue_job(&self) {
+    pub(crate) fn enqueue_job(&self) {
         let probe_id = self.probe_id.clone();
         let payload = json!({"v": "v1", "probeId": probe_id});
         let queue = self.queue.lock().expect("route queue mutex").clone();
@@ -148,7 +148,7 @@ impl QueueRetryPolicyWorld {
             .expect("enqueue retry policy probe job");
     }
 
-    pub fn insert_preexisting_job(&self, attempts: i32) {
+    pub(crate) fn insert_preexisting_job(&self, attempts: i32) {
         let probe_id = self.probe_id.clone();
         let payload = json!({"v": "v1", "probeId": probe_id});
         let pool = self.pool.clone();
@@ -168,7 +168,7 @@ impl QueueRetryPolicyWorld {
         });
     }
 
-    pub fn set_unrelated_metadata(&self) {
+    pub(crate) fn set_unrelated_metadata(&self) {
         let probe_id = self.probe_id.clone();
         self.runtime
             .block_on(
@@ -190,7 +190,7 @@ impl QueueRetryPolicyWorld {
             .expect("set unrelated metadata marker");
     }
 
-    pub fn run_worker(&self) {
+    pub(crate) fn run_worker(&self) {
         self.run_worker_with_deadline(DEFAULT_WORKER_DEADLINE)
             .expect("bounded retry worker run");
     }
@@ -200,12 +200,12 @@ impl QueueRetryPolicyWorld {
     /// Used when the stored payload cannot be located by probe id, so the
     /// harness cannot wait for a terminal state and must bound the run by poll
     /// count instead.
-    pub fn run_worker_for_polls(&self, polls: usize) {
+    pub(crate) fn run_worker_for_polls(&self, polls: usize) {
         self.run_worker_config(DEFAULT_WORKER_DEADLINE, Some(polls))
             .expect("bounded retry worker run");
     }
 
-    pub fn run_worker_with_deadline(&self, deadline: Duration) -> Result<(), String> {
+    pub(crate) fn run_worker_with_deadline(&self, deadline: Duration) -> Result<(), String> {
         self.run_worker_config(deadline, None)
     }
 
@@ -246,7 +246,7 @@ impl QueueRetryPolicyWorld {
     ///
     /// The payload is pushed straight into `apalis.jobs` so the wrapper, not
     /// the enqueue adapter, is the component that rejects it.
-    pub fn insert_raw_job(&self, payload: Value) {
+    pub(crate) fn insert_raw_job(&self, payload: Value) {
         let pool = self.pool.clone();
         let attempts = self
             .policy

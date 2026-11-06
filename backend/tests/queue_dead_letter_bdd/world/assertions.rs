@@ -20,7 +20,7 @@ impl QueueDeadLetterWorld {
             .expect("listed probe job")
     }
 
-    pub fn assert_failure_context(&self) {
+    pub(crate) fn assert_failure_context(&self) {
         let job = self.listed_current_job();
         assert_eq!(job.reason, DeadReason::Exhausted);
         assert_eq!(job.attempts, 3);
@@ -30,11 +30,11 @@ impl QueueDeadLetterWorld {
         );
     }
 
-    pub fn assert_status(&self, expected: &str) {
+    pub(crate) fn assert_status(&self, expected: &str) {
         assert_eq!(self.snapshot(&self.current_id()).status, expected);
     }
 
-    pub fn assert_requeue_count(&self, expected: u32) {
+    pub(crate) fn assert_requeue_count(&self, expected: u32) {
         let snapshot = self.snapshot(&self.current_id());
         let count = snapshot
             .metadata
@@ -44,14 +44,14 @@ impl QueueDeadLetterWorld {
         assert_eq!(count, Some(u64::from(expected)));
     }
 
-    pub fn assert_invalid_job_data_error(&self) {
+    pub(crate) fn assert_invalid_job_data_error(&self) {
         assert!(matches!(
             self.take_operation_result(),
             Err(DeadLetterError::InvalidJobData { .. })
         ));
     }
 
-    pub fn assert_requeue_restored_state(&self) {
+    pub(crate) fn assert_requeue_restored_state(&self) {
         self.take_operation_result()
             .expect("dead-job requeue succeeds");
         let snapshot = self.snapshot(&self.current_id());
@@ -67,14 +67,14 @@ impl QueueDeadLetterWorld {
         assert_eq!(metadata["operator.note"], "preserve-me");
     }
 
-    pub fn assert_legacy_row_not_fetched(&self) {
+    pub(crate) fn assert_legacy_row_not_fetched(&self) {
         let snapshot = self.snapshot(&self.current_id());
         assert_eq!(snapshot.status, "Failed");
         assert_eq!(snapshot.attempts, 3);
         assert_eq!(snapshot.max_attempts, None);
     }
 
-    pub fn assert_control_row_processed(&self) {
+    pub(crate) fn assert_control_row_processed(&self) {
         let id = self
             .poll_control_job_id
             .lock()
@@ -86,13 +86,13 @@ impl QueueDeadLetterWorld {
         assert!(self.worker_was_registered());
     }
 
-    pub fn assert_unclassified(&self) {
+    pub(crate) fn assert_unclassified(&self) {
         let job = self.listed_current_job();
         assert_eq!(job.reason, DeadReason::Unclassified);
         assert_eq!(job.last_error, None);
     }
 
-    pub fn assert_fatal_failure_context(&self) {
+    pub(crate) fn assert_fatal_failure_context(&self) {
         let job = self.listed_current_job();
         assert_eq!(job.reason, DeadReason::Fatal);
         assert_eq!(job.attempts, 1);
@@ -102,15 +102,15 @@ impl QueueDeadLetterWorld {
         );
     }
 
-    pub fn assert_full_retry_budget_after_requeue(&self) {
+    pub(crate) fn assert_full_retry_budget_after_requeue(&self) {
         assert_eq!(*self.handler_calls.lock().expect("handler calls mutex"), 3);
     }
 
-    pub fn assert_exhausted_after_requeue(&self) {
+    pub(crate) fn assert_exhausted_after_requeue(&self) {
         self.assert_failure_context();
     }
 
-    pub fn assert_exhausted_reason_replaced_fatal(&self) {
+    pub(crate) fn assert_exhausted_reason_replaced_fatal(&self) {
         let snapshot = self.snapshot(&self.current_id());
         assert_eq!(
             snapshot
@@ -121,14 +121,14 @@ impl QueueDeadLetterWorld {
         );
     }
 
-    pub fn assert_not_dead_error(&self) {
+    pub(crate) fn assert_not_dead_error(&self) {
         assert!(matches!(
             self.take_operation_result(),
             Err(DeadLetterError::NotDead { .. })
         ));
     }
 
-    pub fn assert_state_unchanged(&self) {
+    pub(crate) fn assert_state_unchanged(&self) {
         let before = self
             .state_before_operation
             .lock()
@@ -138,12 +138,12 @@ impl QueueDeadLetterWorld {
         assert_eq!(self.snapshot(&self.current_id()), before);
     }
 
-    pub fn assert_listing_empty(&self) {
+    pub(crate) fn assert_listing_empty(&self) {
         self.list_dead(100);
         assert!(self.listing.lock().expect("listing mutex").is_empty());
     }
 
-    pub fn assert_listing_contains_only_valid_dead_job(&self) {
+    pub(crate) fn assert_listing_contains_only_valid_dead_job(&self) {
         let valid_id = self
             .newest_job_id
             .lock()
@@ -155,7 +155,7 @@ impl QueueDeadLetterWorld {
         assert_eq!(listing[0].id, valid_id);
     }
 
-    pub fn assert_job_absent(&self) {
+    pub(crate) fn assert_job_absent(&self) {
         let exists = self
             .runtime
             .block_on(
@@ -169,7 +169,7 @@ impl QueueDeadLetterWorld {
         assert!(!exists);
     }
 
-    pub fn assert_only_newest_job_listed(&self) {
+    pub(crate) fn assert_only_newest_job_listed(&self) {
         let expected = self
             .newest_job_id
             .lock()
@@ -184,7 +184,7 @@ impl QueueDeadLetterWorld {
         assert_eq!(listing[0].id, expected);
     }
 
-    pub fn assert_unknown_queue_error(&self) {
+    pub(crate) fn assert_unknown_queue_error(&self) {
         assert!(matches!(
             self.take_operation_result(),
             Err(DeadLetterError::UnknownQueue { .. })
