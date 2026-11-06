@@ -25,7 +25,7 @@ insta = { version = "1", features = ["json"] }
 proptest = "1.6"
 rstest = "0.26"
 rstest-bdd = "0.5.0"
-rstest-bdd-macros = { version = "0.5.0", features = ["strict-compile-time-validation"] }
+rstest-bdd-macros = { version = "0.6.0", features = ["strict-compile-time-validation"] }
 trybuild = { version = "1", features = ["diff"] }
 
 [lints]
