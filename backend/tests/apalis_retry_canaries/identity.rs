@@ -77,15 +77,39 @@ fn read_scheduling_state(
     })
 }
 
+/// The row and worker names one canary scenario uses.
+struct CanarySpec {
+    queue: &'static str,
+    worker: &'static str,
+}
+
+/// The `lock_by` a delivery carries, relative to the canary worker.
+#[derive(Clone, Copy, Debug)]
+enum LockOwner {
+    /// The row records no owner at all.
+    Missing,
+    /// The row is owned by a worker other than the delivery's.
+    OtherWorker,
+    /// The row is owned by the delivery's own worker.
+    Worker,
+}
+
+const OTHER_WORKER: &str = "another-worker";
+
+impl LockOwner {
+    fn lock_by(self, spec: &CanarySpec) -> Option<&'static str> {
+        match self {
+            Self::Missing => None,
+            Self::OtherWorker => Some(OTHER_WORKER),
+            Self::Worker => Some(spec.worker),
+        }
+    }
+}
+
 /// Build a delivery whose worker context and `lock_by` are chosen separately.
-fn task_with_identity(
-    id: &str,
-    worker: &str,
-    lock_by: Option<&str>,
-    attempt: usize,
-) -> PgTask<Value> {
+fn task_for(spec: &CanarySpec, id: &str, lock_by: Option<&str>) -> PgTask<Value> {
     let mut data = Extensions::default();
-    data.insert(WorkerContext::new::<Value>(worker));
+    data.insert(WorkerContext::new::<Value>(spec.worker));
     Task::builder(json!({ "v": "v1", "probeId": id }))
         .with_ctx(
             PgContext::new()
@@ -94,7 +118,7 @@ fn task_with_identity(
         )
         .with_data(data)
         .with_task_id(id.parse().expect("canary task id"))
-        .with_attempt(Attempt::new_with_value(attempt))
+        .with_attempt(Attempt::new_with_value(1))
         .build()
 }
 
@@ -125,90 +149,90 @@ async fn deliver(pool: &PgPool, queue: &str, task: PgTask<Value>) -> Result<(), 
     service.call(task).await
 }
 
-/// Insert a running row the canary worker owns.
-async fn insert_running_row(pool: &PgPool, queue: &str, worker: &str, id: &str) {
-    register_worker(pool, worker).await;
+/// One shared canary row, the names its scenario uses, and its environment.
+struct IdentityCanary {
+    environment: &'static CanaryEnvironment,
+    spec: &'static CanarySpec,
+    id: String,
+}
+
+impl IdentityCanary {
+    /// Insert a running row the canary worker owns.
+    fn start(spec: &'static CanarySpec) -> Self {
+        let canary = Self {
+            environment: CanaryEnvironment::shared(),
+            spec,
+            id: apalis_job_id(),
+        };
+        canary.environment.run(insert_running_row(&canary));
+        canary
+    }
+
+    fn state(&self) -> SchedulingState {
+        read_scheduling_state(&self.environment.runtime, &self.environment.pool, &self.id)
+    }
+
+    /// Deliver one retryable failure under the chosen lock owner.
+    fn deliver(&self, owner: LockOwner) -> Result<(), BoxDynError> {
+        self.environment.run(deliver(
+            &self.environment.pool,
+            self.spec.queue,
+            task_for(self.spec, &self.id, owner.lock_by(self.spec)),
+        ))
+    }
+}
+
+async fn insert_running_row(canary: &IdentityCanary) {
+    register_worker(&canary.environment.pool, canary.spec.worker).await;
     insert_job(
-        pool,
-        JobRow::new(queue, id, "Running")
+        &canary.environment.pool,
+        JobRow::new(canary.spec.queue, &canary.id, "Running")
             .attempts(1)
             .max_attempts(5)
             .run_at_offset_seconds(3_600.0)
             .metadata(json!({ "keep": "marker" }))
-            .locked_by(worker),
+            .locked_by(canary.spec.worker),
     )
     .await;
 }
 
+const REFUSED: CanarySpec = CanarySpec {
+    queue: "canary.identity-refused",
+    worker: "canary-identity-refused-worker",
+};
+
+const OWNED: CanarySpec = CanarySpec {
+    queue: "canary.identity-owned",
+    worker: "canary-identity-owned-worker",
+};
+
+#[rstest::rstest]
+#[case::absent_lock_owner(LockOwner::Missing)]
+#[case::disagreeing_lock_owner(LockOwner::OtherWorker)]
 #[test]
-fn wrapper_writes_nothing_when_lock_by_is_absent() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.identity-no-lock";
-    let worker = "canary-identity-no-lock-worker";
-    let id = apalis_job_id();
+fn wrapper_writes_nothing_without_a_matching_lock_owner(#[case] owner: LockOwner) {
+    let canary = IdentityCanary::start(&REFUSED);
+    let before = canary.state();
 
-    environment.run(insert_running_row(&pool, queue, worker, &id));
-    let before = read_scheduling_state(&environment.runtime, &pool, &id);
-
-    let result = environment.run(deliver(
-        &pool,
-        queue,
-        task_with_identity(&id, worker, None, 1),
-    ));
+    let result = canary.deliver(owner);
 
     assert!(result.is_err(), "the delivery stays failed");
     assert_eq!(
-        read_scheduling_state(&environment.runtime, &pool, &id),
+        canary.state(),
         before,
-        "the wrapper must not write without a recorded lock owner"
-    );
-}
-
-#[test]
-fn wrapper_writes_nothing_when_the_lock_owner_disagrees() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.identity-mismatch";
-    let worker = "canary-identity-mismatch-worker";
-    let id = apalis_job_id();
-
-    environment.run(insert_running_row(&pool, queue, worker, &id));
-    let before = read_scheduling_state(&environment.runtime, &pool, &id);
-
-    let result = environment.run(deliver(
-        &pool,
-        queue,
-        task_with_identity(&id, worker, Some("another-worker"), 1),
-    ));
-
-    assert!(result.is_err(), "the delivery stays failed");
-    assert_eq!(
-        read_scheduling_state(&environment.runtime, &pool, &id),
-        before,
-        "the wrapper must not write for a worker that does not own the row"
+        "the wrapper must not write without a lock owner that matches the worker context"
     );
 }
 
 #[test]
 fn wrapper_schedules_the_retry_when_the_lock_owner_agrees() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.identity-owned";
-    let worker = "canary-identity-owned-worker";
-    let id = apalis_job_id();
+    let canary = IdentityCanary::start(&OWNED);
+    let before = canary.state();
 
-    environment.run(insert_running_row(&pool, queue, worker, &id));
-    let before = read_scheduling_state(&environment.runtime, &pool, &id);
-
-    let result = environment.run(deliver(
-        &pool,
-        queue,
-        task_with_identity(&id, worker, Some(worker), 1),
-    ));
+    let result = canary.deliver(LockOwner::Worker);
 
     assert!(result.is_err(), "the delivery stays failed");
-    let after = read_scheduling_state(&environment.runtime, &pool, &id);
+    let after = canary.state();
     assert_eq!(after.status, before.status, "the wrapper leaves the status");
     assert_eq!(after.attempts, before.attempts);
     assert_eq!(after.max_attempts, before.max_attempts);
