@@ -51,14 +51,19 @@ pub enum DeadReason {
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeadJob {
+    /// Storage identifier of the dead job.
     pub id: DeadJobId,
+    /// Job type name recorded when the job was enqueued.
     pub job_type: String,
+    /// Why the job reached a terminal outcome.
     pub reason: DeadReason,
+    /// Attempts consumed before the job went dead.
     pub attempts: u32,
     /// A bounded error string, without the serialized job payload.
     pub last_error: Option<String>,
     /// Number of operator requeues recorded in D15 metadata.
     pub requeue_count: u32,
+    /// When the job went dead, when the adapter records it.
     pub dead_at: Option<DateTime<Utc>>,
 }
 
