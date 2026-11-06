@@ -35,6 +35,8 @@ declare_test_support!(apalis_job_id, atexit_cleanup, embedded_postgres);
 mod ack;
 #[path = "apalis_retry_canaries/identity.rs"]
 mod identity;
+#[path = "apalis_retry_canaries/scheduler.rs"]
+mod scheduler;
 
 use support::apalis_job_id::apalis_job_id;
 use support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
@@ -210,35 +212,30 @@ struct FetchedTask {
     max_attempts: i32,
 }
 
-/// Poll the queue through the real Apalis backend and collect due tasks.
+/// Poll the queue through the real Apalis backend for one due task.
 ///
 /// The stream yields one registration heartbeat (`Ok(None)`) before the first
 /// fetch. A window that expires means no further row became due, which is how
 /// the negative canaries express "not fetched".
-fn fetch_tasks(
-    runtime: &Runtime,
-    pool: &PgPool,
+fn fetch_one_task(
+    environment: &CanaryEnvironment,
     queue: &str,
     worker: &str,
-    wanted: usize,
-) -> Vec<FetchedTask> {
-    runtime.block_on(async {
-        let storage = PostgresStorage::<Value>::new_with_config(pool, &Config::new(queue));
+) -> Option<FetchedTask> {
+    environment.run(async {
+        let storage =
+            PostgresStorage::<Value>::new_with_config(&environment.pool, &Config::new(queue));
         let stream = Backend::poll(storage, &WorkerContext::new::<Value>(worker));
         futures::pin_mut!(stream);
 
-        let mut fetched = Vec::new();
-        while fetched.len() < wanted {
-            let next = tokio::time::timeout(FETCH_WINDOW, stream.next()).await;
-            match next {
-                Ok(Some(Ok(Some(task)))) => fetched.push(describe(&task)),
+        loop {
+            match tokio::time::timeout(FETCH_WINDOW, stream.next()).await {
+                Ok(Some(Ok(Some(task)))) => return Some(describe(&task)),
                 Ok(Some(Ok(None))) => {}
                 Ok(Some(Err(error))) => panic!("fetch failed: {error}"),
-                Ok(None) => break,
-                Err(_) => break,
+                Ok(None) | Err(_) => return None,
             }
         }
-        fetched
     })
 }
 
@@ -322,9 +319,9 @@ fn failed_row_with_spare_attempts_is_fetched_when_due() {
         insert_job(&pool, JobRow::new(queue, &id, "Failed")).await;
     });
 
-    let fetched = fetch_tasks(&environment.runtime, &pool, queue, worker, 1);
-    assert_eq!(fetched.len(), 1, "a due Failed row must be fetched");
-    assert_eq!(fetched[0].task_id, id);
+    let fetched =
+        fetch_one_task(environment, queue, worker).expect("a due Failed row must be fetched");
+    assert_eq!(fetched.task_id, id);
 
     // Proving the claim landed keeps this positive case from passing on a
     // fetch that never touched the row. The fetcher stops at the queue step,
@@ -386,8 +383,8 @@ fn ineligible_rows_are_not_fetched(#[case] case: IneligibleRow) {
         insert_job(&pool, row).await;
     });
 
-    let fetched = fetch_tasks(&environment.runtime, &pool, case.queue, case.worker, 1);
-    assert!(fetched.is_empty(), "{}: {fetched:?}", case.expectation);
+    let fetched = fetch_one_task(environment, case.queue, case.worker);
+    assert!(fetched.is_none(), "{}: {fetched:?}", case.expectation);
     assert_eq!(
         read_state(&environment.runtime, &pool, &id),
         RowState {
@@ -419,11 +416,11 @@ fn fetch_preserves_the_persisted_attempt_count() {
         .await;
     });
 
-    let fetched = fetch_tasks(&environment.runtime, &pool, queue, worker, 1);
-    assert_eq!(fetched.len(), 1, "the persisted attempt row is due");
+    let fetched =
+        fetch_one_task(environment, queue, worker).expect("the persisted attempt row is due");
     assert_eq!(
-        fetched[0].attempt, 3,
+        fetched.attempt, 3,
         "the wrapper must see the persisted attempt count, not a reset one"
     );
-    assert_eq!(fetched[0].max_attempts, 10);
+    assert_eq!(fetched.max_attempts, 10);
 }
