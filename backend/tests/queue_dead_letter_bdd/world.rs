@@ -52,7 +52,7 @@ enum DeadJobOperation {
 }
 
 /// A scenario owns a disposable Apalis database and exercises the public port.
-pub struct QueueDeadLetterWorld {
+pub(crate) struct QueueDeadLetterWorld {
     runtime: Runtime,
     pool: PgPool,
     _database: TemporaryDatabase,
@@ -77,7 +77,7 @@ impl Default for QueueDeadLetterWorld {
 }
 
 impl QueueDeadLetterWorld {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         ensure_stable_cluster_environment().expect("stable embedded PostgreSQL environment");
         let runtime = Runtime::new().expect("create dead-letter Tokio runtime");
         let cluster = bootstrap_shared_cluster().expect("start embedded PostgreSQL");
@@ -118,18 +118,18 @@ impl QueueDeadLetterWorld {
         }
     }
 
-    pub fn exhaust_job(&self) {
+    pub(crate) fn exhaust_job(&self) {
         *self.handler_mode.lock().expect("handler mode mutex") = HandlerMode::RetryableFailure;
         self.enqueue_probe_job();
         self.process_queue();
         self.remember_probe_job_id();
     }
 
-    pub fn fix_fault(&self) {
+    pub(crate) fn fix_fault(&self) {
         *self.handler_mode.lock().expect("handler mode mutex") = HandlerMode::Succeed;
     }
 
-    pub fn allow_null_attempt_limit(&self) {
+    pub(crate) fn allow_null_attempt_limit(&self) {
         self.runtime
             .block_on(
                 sqlx::query("ALTER TABLE apalis.jobs ALTER COLUMN max_attempts DROP NOT NULL")
@@ -138,7 +138,7 @@ impl QueueDeadLetterWorld {
             .expect("allow legacy nullable attempt limits");
     }
 
-    pub fn insert_legacy_failed_row(&self, attempts: i32) {
+    pub(crate) fn insert_legacy_failed_row(&self, attempts: i32) {
         let id = self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Failed",
@@ -151,7 +151,7 @@ impl QueueDeadLetterWorld {
         *self.current_job_id.lock().expect("current job id mutex") = Some(id);
     }
 
-    pub fn insert_pending_poll_control(&self) {
+    pub(crate) fn insert_pending_poll_control(&self) {
         self.fix_fault();
         let id = self.insert_pending_row();
         *self
@@ -160,7 +160,7 @@ impl QueueDeadLetterWorld {
             .expect("poll control job id mutex") = Some(id);
     }
 
-    pub fn poll_queue_for_bounded_period(&self) {
+    pub(crate) fn poll_queue_for_bounded_period(&self) {
         let report = self.run_worker(Some(LEGACY_ROW_POLL_INTERVALS));
         assert_eq!(report.poll_intervals_elapsed, LEGACY_ROW_POLL_INTERVALS);
         assert!(self.worker_was_registered());
@@ -176,14 +176,14 @@ impl QueueDeadLetterWorld {
             .expect("check bounded-poll worker registration")
     }
 
-    pub fn fatal_job(&self) {
+    pub(crate) fn fatal_job(&self) {
         *self.handler_mode.lock().expect("handler mode mutex") = HandlerMode::FatalFailure;
         self.enqueue_probe_job();
         self.process_queue();
         self.remember_probe_job_id();
     }
 
-    pub fn fail_retryably(&self) {
+    pub(crate) fn fail_retryably(&self) {
         *self.handler_mode.lock().expect("handler mode mutex") = HandlerMode::RetryableFailure;
     }
 
@@ -192,12 +192,12 @@ impl QueueDeadLetterWorld {
     /// The operator-facing port must reject an unknown identifier rather than
     /// silently succeeding, so the operation needs a target that cannot match
     /// any seeded job.
-    pub fn insert_absent_job_id(&self) {
+    pub(crate) fn insert_absent_job_id(&self) {
         let id = DeadJobId::new(apalis_job_id());
         *self.current_job_id.lock().expect("current id mutex") = Some(id);
     }
 
-    pub fn insert_pending_job(&self) {
+    pub(crate) fn insert_pending_job(&self) {
         let id = self.insert_pending_row();
         *self.current_job_id.lock().expect("current id mutex") = Some(id);
     }
@@ -214,7 +214,7 @@ impl QueueDeadLetterWorld {
         })
     }
 
-    pub fn insert_pending_and_running_jobs(&self) {
+    pub(crate) fn insert_pending_and_running_jobs(&self) {
         self.insert_pending_row();
         self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
@@ -227,25 +227,25 @@ impl QueueDeadLetterWorld {
         });
     }
 
-    pub fn list_dead(&self, limit: u32) {
+    pub(crate) fn list_dead(&self, limit: u32) {
         let result = self.runtime.block_on(self.dead_letters.list_dead(limit));
         *self.listing.lock().expect("listing mutex") = result.expect("list dead jobs");
     }
 
-    pub fn requeue_dead_job(&self) {
+    pub(crate) fn requeue_dead_job(&self) {
         self.run_dead_job_operation(DeadJobOperation::Requeue);
     }
 
-    pub fn requeue_current_job(&self) {
+    pub(crate) fn requeue_current_job(&self) {
         self.record_current_job_state();
         self.requeue_dead_job();
     }
 
-    pub fn requeue_current_dead_job(&self) {
+    pub(crate) fn requeue_current_dead_job(&self) {
         self.requeue_current_job();
     }
 
-    pub fn add_requeue_metadata(&self) {
+    pub(crate) fn add_requeue_metadata(&self) {
         let metadata = json!({
             "wildside.retry.requeue_count": 4,
             "operator.note": "preserve-me"
@@ -264,11 +264,11 @@ impl QueueDeadLetterWorld {
             .expect("add existing requeue metadata");
     }
 
-    pub fn discard_dead_job(&self) {
+    pub(crate) fn discard_dead_job(&self) {
         self.run_dead_job_operation(DeadJobOperation::Discard);
     }
 
-    pub fn discard_current_job(&self) {
+    pub(crate) fn discard_current_job(&self) {
         self.record_current_job_state();
         self.discard_dead_job();
     }
@@ -293,7 +293,7 @@ impl QueueDeadLetterWorld {
             .expect("operation result mutex") = Some(result);
     }
 
-    pub fn process_queue(&self) {
+    pub(crate) fn process_queue(&self) {
         let report = self.run_worker(None);
         assert!(report.reached_terminal, "worker reached a terminal state");
     }
