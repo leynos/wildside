@@ -1900,7 +1900,18 @@ caret requirements.
   Evidence:
   `/tmp/coderabbit-wildside-epm3-d05ac43-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
   Publication remains pending the final implementation and rebase.
-- [ ] Publish the completed implementation after the requested rebase and gates.
+- [x] (2026-11-06 Europe/Berlin) Published the completed implementation at
+  `6208d77` after the 70-commit replay onto `origin/main` `4fd681e` (the
+  DF12-110 build standard) and a full sequential nine-gate run on the replayed
+  candidate: `check-fmt`, `spelling`, `markdownlint`, `nixie`, `lint`,
+  `typecheck`, `test`, `audit`, and `openapi`, all exiting zero. `test` ran
+  2,061 Nextest cases (four skipped), both compile-fail suites, the frontend
+  and workspace suites, and the workflow-contract and script suites; `openapi`
+  left `spec/openapi.json` unchanged. Logs use the `/tmp/<gate>-457-final.out`
+  prefix. The replay resolved the two additive conflicts in
+  `.cargo/config.toml` and the `Makefile` by keeping both sides. The push was a
+  force-with-lease against the previously published head `a47ac8a`; the
+  refreshed tracking ref and `git ls-remote` both report `6208d77`.
 - [x] (2026-10-28 Europe/Berlin) Rebased the 45-commit topic from exclusive
   boundary `9d899f2` onto fetched `origin/main` `ede1a2b`, with recovery refs
   for the old head `83f9f98`, boundary, and target. The rebase completed
