@@ -177,7 +177,15 @@ pub(super) fn task_with_identity(
     worker: Option<&str>,
     lock_by: Option<&str>,
 ) -> PgTask<Value> {
-    build_task(payload, attempt, worker, lock_by, Some(TASK_ID))
+    build_task(
+        payload,
+        attempt,
+        DeliveryIdentity {
+            worker,
+            lock_by,
+            task_id: Some(TASK_ID),
+        },
+    )
 }
 
 /// Build a delivery that carries no task identifier.
@@ -191,18 +199,30 @@ pub(super) fn task_without_id(
     worker: Option<&str>,
     lock_by: Option<&str>,
 ) -> PgTask<Value> {
-    build_task(payload, attempt, worker, lock_by, None)
+    build_task(
+        payload,
+        attempt,
+        DeliveryIdentity {
+            worker,
+            lock_by,
+            task_id: None,
+        },
+    )
 }
 
-fn build_task(
-    payload: Value,
-    attempt: usize,
-    worker: Option<&str>,
-    lock_by: Option<&str>,
-    task_id: Option<&str>,
-) -> PgTask<Value> {
+/// The identity a task double carries.
+///
+/// The wrapper writes only when it can name both the row and the worker that
+/// owns it, so tests vary these three fields independently.
+struct DeliveryIdentity<'a> {
+    worker: Option<&'a str>,
+    lock_by: Option<&'a str>,
+    task_id: Option<&'a str>,
+}
+
+fn build_task(payload: Value, attempt: usize, identity: DeliveryIdentity<'_>) -> PgTask<Value> {
     let mut data = Extensions::default();
-    if let Some(worker) = worker {
+    if let Some(worker) = identity.worker {
         // `WorkerContext::new` carries the service type only for diagnostics,
         // so the unit is sufficient here.
         data.insert(WorkerContext::new::<()>(worker));
@@ -211,11 +231,11 @@ fn build_task(
         .with_ctx(
             PgContext::new()
                 .with_max_attempts(5)
-                .with_lock_by(lock_by.map(str::to_owned)),
+                .with_lock_by(identity.lock_by.map(str::to_owned)),
         )
         .with_data(data)
         .with_attempt(Attempt::new_with_value(attempt));
-    if let Some(task_id) = task_id {
+    if let Some(task_id) = identity.task_id {
         builder = builder.with_task_id(task_id.parse().expect("task id"));
     }
     builder.build()

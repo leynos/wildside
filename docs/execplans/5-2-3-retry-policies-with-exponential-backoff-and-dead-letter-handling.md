@@ -2965,3 +2965,30 @@ accepted and repaired on this branch.
    on the existing `uuid` dependency, and the retry-wrapper unit double parses
    its existing `TASK_ID` constant instead of generating a ULID. Cargo removed
    only the backend's direct `ulid` lock edge.
+
+### Scheduler guard coverage of 2026-11-05
+
+CodeRabbit's pre-merge `Testing (Overall)` row asked for evidence that the
+retry scheduler refuses persistence for rows it does not own and for values
+PostgreSQL cannot store. The wrapper's own precondition already had recording
+doubles and PostgreSQL canaries; the guarded `UPDATE` statements did not.
+
+Two layers were added. `backend/src/outbound/queue/postgres_retry_scheduler.rs`
+now has unit tests for both range guards: a retry delay beyond the
+microseconds-`i64` range, and a terminal attempt beyond the `i32` column range,
+each asserting the `Protocol` error without contacting a server. They use a
+lazily connected pool, so the guard runs before any connection is attempted.
+
+`backend/tests/apalis_retry_canaries/scheduler.rs` drives
+`PostgresRetryScheduler` against a real `apalis.jobs` row for the ownership
+predicate: a completed row, a row locked by another worker, and an owned
+running row. The refusal cases assert the exact persisted deadline is
+unchanged; the acceptance case asserts the deadline becomes the requested delay
+measured from the database's own `now()`, so the assertion does not depend on
+the application clock. The scheduler's `run_at` origin deliberately remains
+`now()` in SQL: Apalis fetches with `run_at < now()`, so scheduling from the
+same database clock keeps the delay free of application/database skew.
+
+Clippy denies `too_many_arguments` at five under `-D warnings`, so the test
+helpers take a small row or identity struct rather than a positional list of
+the columns that describe one delivery.
