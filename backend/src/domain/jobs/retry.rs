@@ -183,7 +183,10 @@ pub enum JobRetryPolicyBuildError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RetryDecision {
     /// Retry after the given delay.
-    Retry { delay: Duration },
+    Retry {
+        /// Delay the queue must wait before redelivering the job.
+        delay: Duration,
+    },
     /// Stop retrying and dead-letter the job.
     DeadLetter,
 }
