@@ -2028,6 +2028,35 @@ caret requirements.
   resolves it. `git diff --check` is clean and `cargo metadata --locked` exits
   0, so the lockfile still matches the combined manifests. The sequential
   commit gates and publication for this candidate remain pending.
+- [x] (2026-11-06 Europe/Berlin) Repaired the three `clippy::too_many_arguments`
+  failures that `01973bc` introduced, without weakening the lint policy: the
+  scheduler canary helper takes a `SchedulerRow`, the fetch helper took the
+  whole `CanaryEnvironment`, and the task double takes a `DeliveryIdentity`.
+  Commit `38b673c` carries the repair together with the scheduler guard tests
+  described under *Scheduler guard coverage of 2026-11-05*. All nine gates
+  passed on that content: `check-fmt`, `spelling`, `markdownlint`, `nixie`,
+  `lint`, `typecheck`, `test` (2,061 Nextest cases, 2,061 passed and four
+  skipped, both compile-fail suites, the browser and workspace suites, 623
+  workflow contracts, 115 script tests, and 14 lint-action tests), `audit`, and
+  `openapi`. Logs use the `/tmp/<gate>-457-repair.out` prefix.
+- [x] (2026-11-06 Europe/Berlin) Replayed the branch onto `origin/main`
+  `4fd681e` (*Apply the build standard and footprint*, DF12-110), whose build
+  standard adds `-Zthreads=8` and the Linux `mold` linker to every gate. The
+  last inherited commit is `b3e37d1`, so the 70 branch-owned commits replayed
+  from `b3e37d1..38b673c` with `--merge`, `--no-fork-point`, `--no-update-refs`,
+  `--no-autostash`, `--reapply-cherry-picks`, `--keep-empty`, `--empty=stop`,
+  `zdiff3`, and the explicit Weave bypass `-c core.attributesFile=/dev/null`.
+  Recovery refs are
+  `refs/backup/457-2-{old-head,base,target,old-target,remote-head}`. Two
+  commits conflicted, both additively, and both were resolved by keeping both
+  sides: `.cargo/config.toml` keeps the target's `[unstable]`, `[build]`, and
+  `[target.'cfg(target_os = "linux")']` tables alongside this branch's `[env]`
+  pins, and `Makefile` keeps the target's `GATE_RUST_FLAGS_ENV` plumbing
+  alongside this branch's `biome_cmd`, `shell_quote`, and scoped PostgreSQL
+  exports. `git range-diff` pairs all 70 commits and differs only in expected
+  context at four of them. `git diff --check` is clean and
+  `cargo metadata --locked` exits 0. The replay produced `490f004`; gates on
+  the replayed candidate and publication remain pending.
 
 ## Surprises & discoveries
 
