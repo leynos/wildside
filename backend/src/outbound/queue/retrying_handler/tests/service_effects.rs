@@ -171,44 +171,21 @@ async fn terminal_write_failure_records_no_dead_letter_outcome() {
 }
 
 #[rstest::rstest]
-#[case::missing_task_id(None, Some(WORKER))]
-#[case::missing_worker_id(Some(TASK_ID), None)]
-#[case::missing_both(None, None)]
+#[case::retryable_missing_task_id(JobErrorKind::Retryable, None, Some(WORKER))]
+#[case::retryable_missing_worker_id(JobErrorKind::Retryable, Some(TASK_ID), None)]
+#[case::retryable_missing_both(JobErrorKind::Retryable, None, None)]
+#[case::terminal_missing_task_id(JobErrorKind::Fatal, None, Some(WORKER))]
+#[case::terminal_missing_worker_id(JobErrorKind::Fatal, Some(TASK_ID), None)]
+#[case::terminal_missing_both(JobErrorKind::Fatal, None, None)]
 #[tokio::test]
-async fn missing_identity_writes_nothing_for_a_retryable_failure(
+async fn missing_identity_writes_nothing(
+    #[case] kind: JobErrorKind,
     #[case] task_id: Option<&'static str>,
     #[case] worker_id: Option<&'static str>,
 ) {
     let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Updated);
 
-    run.apply_with_identity(JobErrorKind::Retryable, task_id, worker_id)
-        .await;
-
-    assert!(
-        run.calls().is_empty(),
-        "the wrapper must not persist without an owning task and worker"
-    );
-    assert_eq!(
-        run.retries(),
-        vec![RouteRetryOutcome::ScheduleFailure],
-        "an unpersisted retry is a scheduling failure"
-    );
-    assert!(run.dead_letters().is_empty());
-}
-
-#[rstest::rstest]
-#[case::missing_task_id(None, Some(WORKER))]
-#[case::missing_worker_id(Some(TASK_ID), None)]
-#[case::missing_both(None, None)]
-#[tokio::test]
-async fn missing_identity_writes_nothing_for_a_terminal_failure(
-    #[case] task_id: Option<&'static str>,
-    #[case] worker_id: Option<&'static str>,
-) {
-    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Updated);
-
-    run.apply_with_identity(JobErrorKind::Fatal, task_id, worker_id)
-        .await;
+    run.apply_with_identity(kind, task_id, worker_id).await;
 
     assert!(
         run.calls().is_empty(),
@@ -216,9 +193,17 @@ async fn missing_identity_writes_nothing_for_a_terminal_failure(
     );
     assert!(
         run.dead_letters().is_empty(),
-        "an unwritten terminal outcome is not a dead letter"
+        "an unwritten outcome is not a dead letter"
     );
-    assert!(run.retries().is_empty());
+    if kind == JobErrorKind::Retryable {
+        assert_eq!(
+            run.retries(),
+            vec![RouteRetryOutcome::ScheduleFailure],
+            "an unpersisted retry is a scheduling failure"
+        );
+    } else {
+        assert!(run.retries().is_empty());
+    }
 }
 
 #[traced_test]
