@@ -465,7 +465,7 @@
           },
           "zoomRange": {
             "$ref": "#/components/schemas/ZoomRangeBody",
-            "description": "Inclusive zoom levels downloaded."
+            "description": "Inclusive range of zoom levels the bundle targets; a queued or downloading bundle has\nnot necessarily fetched them all yet."
           }
         },
         "required": [

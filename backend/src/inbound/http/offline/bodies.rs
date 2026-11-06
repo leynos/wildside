@@ -83,7 +83,8 @@ pub struct OfflineBundleResponse {
     pub region_id: Option<String>,
     /// Geographic extent of the area stored.
     pub bounds: BoundsBody,
-    /// Inclusive zoom levels downloaded.
+    /// Inclusive range of zoom levels the bundle targets; a queued or downloading bundle has
+    /// not necessarily fetched them all yet.
     pub zoom_range: ZoomRangeBody,
     /// Estimated download size in bytes.
     pub estimated_size_bytes: u64,

@@ -43,14 +43,14 @@ pub enum CatalogueValidationError {
     },
     /// A value that must not be negative was negative.
     NegativeValue {
-        /// Dotted name of the field that failed, such as `route_summary.slug`.
+        /// Dotted name of the field that failed, such as `route_summary.distance_metres`.
         field: &'static str,
         /// The rejected negative value.
         value: i32,
     },
     /// A `[min, max]` range has a negative bound or `min` above `max`.
     InvalidRange {
-        /// Dotted name of the field that failed, such as `route_summary.slug`.
+        /// Dotted name of the range field that failed, such as `route_collection.distance_range_metres`.
         field: &'static str,
         /// Lower bound as supplied.
         min: i32,
@@ -59,7 +59,7 @@ pub enum CatalogueValidationError {
     },
     /// A rating falls outside the inclusive 0.0 to 5.0 range.
     InvalidRating {
-        /// Dotted name of the field that failed, such as `route_summary.slug`.
+        /// Dotted name of the field that failed, such as `theme.rating`.
         field: &'static str,
         /// The rejected rating as supplied.
         rating: f32,
