@@ -16,8 +16,11 @@ pub type LocaleCode = String;
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct LocalizedStringSet {
+    /// Display name for this locale; must not be blank.
     pub name: String,
+    /// Optional shortened label for layouts with limited space.
     pub short_label: Option<String>,
+    /// Optional longer description in this locale.
     pub description: Option<String>,
 }
 
@@ -54,9 +57,18 @@ impl LocalizedStringSet {
 /// Validation errors returned by [`LocalizationMap::new`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LocalizationValidationError {
+    /// The map contained no locales at all.
     EmptyMap,
-    InvalidLocaleCode { locale: String },
-    EmptyName { locale: String },
+    /// A locale key was blank or had leading or trailing whitespace.
+    InvalidLocaleCode {
+        /// The offending locale key, exactly as supplied.
+        locale: String,
+    },
+    /// The localized name for a locale was blank.
+    EmptyName {
+        /// The locale whose name was blank.
+        locale: String,
+    },
 }
 
 impl fmt::Display for LocalizationValidationError {

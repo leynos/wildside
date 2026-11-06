@@ -120,10 +120,20 @@ pub enum RouteCacheKeyDerivationError {
     Hash(#[from] PayloadHashError),
     /// A coordinate value violates the route-cache-key admission bound.
     #[error("coordinate field '{key}' must be between -180 and 180; got {value}")]
-    CoordinateOutOfRange { key: String, value: Number },
+    CoordinateOutOfRange {
+        /// Name of the coordinate field whose value was rejected, such as `lat`.
+        key: String,
+        /// The rejected coordinate value as supplied.
+        value: Number,
+    },
     /// Rounding unexpectedly produced a value that JSON cannot represent.
     #[error("rounded coordinate in field '{key}' is not a finite JSON number: {value}")]
-    RoundedCoordinateNotRepresentable { key: String, value: Number },
+    RoundedCoordinateNotRepresentable {
+        /// Name of the coordinate field whose rounded value could not be encoded.
+        key: String,
+        /// The original input value that failed to round to a representable number.
+        value: Number,
+    },
     /// The generated cache key failed validation.
     #[error(transparent)]
     Validation(RouteCacheKeyValidationError),

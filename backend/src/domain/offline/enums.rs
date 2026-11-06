@@ -9,11 +9,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OfflineBundleKind {
+    /// Bundle covering a region rather than a single route.
     Region,
+    /// Bundle covering a single route.
     Route,
 }
 
 impl OfflineBundleKind {
+    /// Returns the snake_case name used in serialized form.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Region => "region",
@@ -31,6 +34,7 @@ impl fmt::Display for OfflineBundleKind {
 /// Parse error for [`OfflineBundleKind`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseOfflineBundleKindError {
+    /// Text that did not match a known kind.
     pub input: String,
 }
 
@@ -60,13 +64,18 @@ impl FromStr for OfflineBundleKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OfflineBundleStatus {
+    /// Accepted and waiting to start; progress is zero.
     Queued,
+    /// Tiles are being fetched; progress is below 1.0.
     Downloading,
+    /// All tiles are downloaded; progress is exactly 1.0.
     Complete,
+    /// The download ended in an error.
     Failed,
 }
 
 impl OfflineBundleStatus {
+    /// Returns the lowercase name used in serialized form.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Queued => "queued",
@@ -86,6 +95,7 @@ impl fmt::Display for OfflineBundleStatus {
 /// Parse error for [`OfflineBundleStatus`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseOfflineBundleStatusError {
+    /// Text that did not match a known status.
     pub input: String,
 }
 

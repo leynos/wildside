@@ -13,10 +13,15 @@ use tracing::warn;
 use zeroize::Zeroize;
 
 const SESSION_KEY_DEFAULT_PATH: &str = "/var/run/secrets/session_key";
+/// Minimum session key length in bytes, enforced in release builds.
 pub const SESSION_KEY_MIN_LEN: usize = 64;
+/// Environment variable that controls whether session cookies are `Secure`.
 pub const COOKIE_SECURE_ENV: &str = "SESSION_COOKIE_SECURE";
+/// Environment variable that sets the `SameSite` policy for session cookies.
 pub const SAMESITE_ENV: &str = "SESSION_SAMESITE";
+/// Environment variable that permits a temporary session key when the key file cannot be read.
 pub const ALLOW_EPHEMERAL_ENV: &str = "SESSION_ALLOW_EPHEMERAL";
+/// Environment variable that overrides the path of the session key file.
 pub const KEY_FILE_ENV: &str = "SESSION_KEY_FILE";
 
 /// Environment abstraction for session configuration lookups.
@@ -104,26 +109,37 @@ pub struct SessionSettings {
 pub enum SessionConfigError {
     /// A required environment variable is missing.
     #[error("missing required environment variable: {name}")]
-    MissingEnv { name: &'static str },
+    MissingEnv {
+        /// Name of the missing environment variable.
+        name: &'static str,
+    },
     /// A variable is present but contains an invalid value.
     #[error("invalid value for {name}='{value}'; expected {expected}")]
     InvalidEnv {
+        /// Name of the environment variable holding the invalid value.
         name: &'static str,
+        /// The raw value that was rejected.
         value: String,
+        /// Human-readable description of the accepted values.
         expected: &'static str,
     },
     /// Reading the session key file failed.
     #[error("failed to read session key at {path}: {source}")]
     KeyRead {
+        /// Path of the session key file that could not be read.
         path: PathBuf,
+        /// I/O error reported while opening or reading the key file.
         #[source]
         source: std::io::Error,
     },
     /// The session key file exists but is too short for release builds.
     #[error("session key at {path} too short: need >= {min_len} bytes, got {length}")]
     KeyTooShort {
+        /// Path of the session key file that was too short.
         path: PathBuf,
+        /// Length in bytes of the key read from the file.
         length: usize,
+        /// Minimum required key length in bytes.
         min_len: usize,
     },
     /// `SameSite=None` requires a secure cookie setting in release builds.

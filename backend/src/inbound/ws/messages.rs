@@ -22,6 +22,7 @@ pub struct DisplayNameRequest {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserCreatedResponse {
+    /// Correlation identifier echoed from the originating request.
     pub trace_id: Uuid,
     /// Unique user identifier.
     pub id: String,
@@ -70,9 +71,13 @@ impl From<&DisplayNameRejectedEvent> for InvalidDisplayNameDetails {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvalidDisplayNameResponse {
+    /// Correlation identifier echoed from the originating request.
     pub trace_id: Uuid,
+    /// Machine-readable error code, such as `invalid_display_name`.
     pub code: String,
+    /// Human-readable description of the validation failure.
     pub error: String,
+    /// Structured failure details, omitted when the error has no display-name metadata.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<InvalidDisplayNameDetails>,
 }

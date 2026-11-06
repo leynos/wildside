@@ -31,26 +31,42 @@ pub use trending_route_highlight::{TrendingRouteHighlight, TrendingRouteHighligh
 /// Validation errors returned by catalogue read-model constructors.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CatalogueValidationError {
+    /// A slug field is empty, has surrounding whitespace, or fails the slug format.
     InvalidSlug {
+        /// Dotted name of the field that failed, such as `route_summary.slug`.
         field: &'static str,
     },
+    /// A text field is empty or contains only whitespace.
     EmptyField {
+        /// Dotted name of the field that failed, such as `route_summary.slug`.
         field: &'static str,
     },
+    /// A value that must not be negative was negative.
     NegativeValue {
+        /// Dotted name of the field that failed, such as `route_summary.distance_metres`.
         field: &'static str,
+        /// The rejected negative value.
         value: i32,
     },
+    /// A `[min, max]` range has a negative bound or `min` above `max`.
     InvalidRange {
+        /// Dotted name of the range field that failed, such as `route_collection.distance_range_metres`.
         field: &'static str,
+        /// Lower bound as supplied.
         min: i32,
+        /// Upper bound as supplied.
         max: i32,
     },
+    /// A rating falls outside the inclusive 0.0 to 5.0 range.
     InvalidRating {
+        /// Dotted name of the field that failed, such as `theme.rating`.
         field: &'static str,
+        /// The rejected rating as supplied.
         rating: f32,
     },
+    /// A localization map failed validation.
     Localization(LocalizationValidationError),
+    /// A semantic icon identifier failed validation.
     IconIdentifier(SemanticIconIdentifierValidationError),
 }
 

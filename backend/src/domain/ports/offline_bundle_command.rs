@@ -17,18 +17,31 @@ use crate::domain::{
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OfflineBundlePayload {
+    /// Identifier of the offline bundle manifest.
     pub id: Uuid,
+    /// Owning user, if the bundle is tied to an account.
     pub owner_user_id: Option<UserId>,
+    /// Identifier of the device that stores the bundle.
     pub device_id: String,
+    /// Whether the bundle covers a whole region or a single route.
     pub kind: OfflineBundleKind,
+    /// Route covered by the bundle, set for route-scoped bundles.
     pub route_id: Option<Uuid>,
+    /// Region covered by the bundle, set for region-scoped bundles.
     pub region_id: Option<String>,
+    /// Geographic extent of the area to store.
     pub bounds: BoundingBox,
+    /// Inclusive zoom levels to download.
     pub zoom_range: ZoomRange,
+    /// Estimated download size in bytes.
     pub estimated_size_bytes: u64,
+    /// When the manifest was first created.
     pub created_at: DateTime<Utc>,
+    /// When the manifest last changed.
     pub updated_at: DateTime<Utc>,
+    /// Current download lifecycle state.
     pub status: OfflineBundleStatus,
+    /// Download progress as a fraction from 0.0 to 1.0 inclusive.
     pub progress: f32,
 }
 
@@ -78,8 +91,11 @@ impl From<OfflineBundle> for OfflineBundlePayload {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpsertOfflineBundleRequest {
+    /// Authenticated user performing the upsert.
     pub user_id: UserId,
+    /// Manifest to create or update.
     pub bundle: OfflineBundlePayload,
+    /// Optional key that lets retries replay the same response.
     pub idempotency_key: Option<IdempotencyKey>,
 }
 
@@ -87,7 +103,9 @@ pub struct UpsertOfflineBundleRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpsertOfflineBundleResponse {
+    /// Stored manifest after the upsert.
     pub bundle: OfflineBundlePayload,
+    /// Whether this response replays an earlier idempotent result.
     #[serde(rename = "replayed")]
     pub is_replayed: bool,
 }
@@ -96,8 +114,11 @@ pub struct UpsertOfflineBundleResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteOfflineBundleRequest {
+    /// Authenticated user requesting the deletion.
     pub user_id: UserId,
+    /// Identifier of the bundle to delete.
     pub bundle_id: Uuid,
+    /// Optional key that lets retries replay the same response.
     pub idempotency_key: Option<IdempotencyKey>,
 }
 
@@ -105,7 +126,9 @@ pub struct DeleteOfflineBundleRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteOfflineBundleResponse {
+    /// Identifier of the bundle that was deleted.
     pub bundle_id: Uuid,
+    /// Whether this response replays an earlier idempotent result.
     #[serde(rename = "replayed")]
     pub is_replayed: bool,
 }

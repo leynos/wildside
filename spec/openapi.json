@@ -5,18 +5,22 @@
         "description": "Bounds payload for offline bundle requests and responses.",
         "properties": {
           "maxLat": {
+            "description": "Northern edge latitude in degrees.",
             "format": "double",
             "type": "number"
           },
           "maxLng": {
+            "description": "Eastern edge longitude in degrees.",
             "format": "double",
             "type": "number"
           },
           "minLat": {
+            "description": "Southern edge latitude in degrees.",
             "format": "double",
             "type": "number"
           },
           "minLng": {
+            "description": "Western edge longitude in degrees.",
             "format": "double",
             "type": "number"
           }
@@ -33,6 +37,7 @@
         "description": "Request payload for creating a walk session.",
         "properties": {
           "endedAt": {
+            "description": "RFC 3339 timestamp at which the walk ended, absent while it is still in progress.",
             "format": "date-time",
             "type": [
               "string",
@@ -40,6 +45,7 @@
             ]
           },
           "highlightedPoiIds": {
+            "description": "UUIDs of the points of interest the user highlighted during the walk.",
             "items": {
               "format": "uuid",
               "type": "string"
@@ -47,26 +53,31 @@
             "type": "array"
           },
           "id": {
+            "description": "Client-generated UUID for the walk session.",
             "format": "uuid",
             "type": "string"
           },
           "primaryStats": {
+            "description": "Primary statistics for the walk, such as distance or duration.",
             "items": {
               "$ref": "#/components/schemas/WalkPrimaryStatBody"
             },
             "type": "array"
           },
           "routeId": {
+            "description": "UUID of the route that was walked.",
             "format": "uuid",
             "type": "string"
           },
           "secondaryStats": {
+            "description": "Secondary statistics for the walk, such as energy or count.",
             "items": {
               "$ref": "#/components/schemas/WalkSecondaryStatBody"
             },
             "type": "array"
           },
           "startedAt": {
+            "description": "RFC 3339 timestamp at which the walk started.",
             "format": "date-time",
             "type": "string"
           }
@@ -87,7 +98,8 @@
           "completionSummary": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WalkCompletionSummaryResponseBody"
+                "$ref": "#/components/schemas/WalkCompletionSummaryResponseBody",
+                "description": "Summary of the walk, present only when the session has ended."
               },
               {
                 "type": "null"
@@ -95,6 +107,7 @@
             ]
           },
           "sessionId": {
+            "description": "UUID of the recorded walk session.",
             "format": "uuid",
             "type": "string"
           }
@@ -108,9 +121,11 @@
         "description": "Response payload for deleting an offline bundle.",
         "properties": {
           "bundleId": {
+            "description": "Identifier of the deleted bundle manifest.",
             "type": "string"
           },
           "replayed": {
+            "description": "Whether this response replays an earlier idempotent result.",
             "type": "boolean"
           }
         },
@@ -168,12 +183,15 @@
         "description": "JSON record payload for admin enrichment provenance reporting.",
         "properties": {
           "boundingBox": {
-            "$ref": "#/components/schemas/ProvenanceBoundsBody"
+            "$ref": "#/components/schemas/ProvenanceBoundsBody",
+            "description": "Geographic bounding box covered by the imported data."
           },
           "importedAt": {
+            "description": "Import time as an RFC 3339 timestamp.",
             "type": "string"
           },
           "sourceUrl": {
+            "description": "Source URL the enrichment data was imported from.",
             "type": "string"
           }
         },
@@ -235,6 +253,7 @@
         "description": "Interest theme update payload for `PUT /api/v1/users/me/interests`.",
         "properties": {
           "expectedRevision": {
+            "description": "Revision last read by the client; omitted only when no preferences exist yet.",
             "format": "int32",
             "minimum": 0,
             "type": [
@@ -243,6 +262,7 @@
             ]
           },
           "interestThemeIds": {
+            "description": "Interest theme UUIDs to store, at most `INTEREST_THEME_IDS_MAX` entries.",
             "items": {
               "type": "string"
             },
@@ -287,6 +307,7 @@
             ]
           },
           "records": {
+            "description": "Provenance records on this page, in the repository's deterministic order.",
             "items": {
               "$ref": "#/components/schemas/EnrichmentProvenanceRecordBody"
             },
@@ -302,6 +323,7 @@
         "description": "Query parameters for listing offline bundles.",
         "properties": {
           "deviceId": {
+            "description": "Device whose bundles to list; required, and normalized before lookup.",
             "type": [
               "string",
               "null"
@@ -314,6 +336,7 @@
         "description": "Response payload for listing offline bundles.",
         "properties": {
           "bundles": {
+            "description": "Bundle manifests in the requested device scope.",
             "items": {
               "$ref": "#/components/schemas/OfflineBundleResponse"
             },
@@ -329,9 +352,11 @@
         "description": "Login request body for `POST /api/v1/login`.\n\nExample JSON:\n`{\"username\":\"admin\",\"password\":\"password\"}`",
         "properties": {
           "password": {
+            "description": "Password submitted for authentication; must not be empty.",
             "type": "string"
           },
           "username": {
+            "description": "Username submitted for authentication; must not be empty.",
             "type": "string"
           }
         },
@@ -379,55 +404,68 @@
         "description": "Response payload for an offline bundle manifest.",
         "properties": {
           "bounds": {
-            "$ref": "#/components/schemas/BoundsBody"
+            "$ref": "#/components/schemas/BoundsBody",
+            "description": "Geographic extent of the area stored."
           },
           "createdAt": {
+            "description": "Creation time as an RFC 3339 timestamp.",
             "type": "string"
           },
           "deviceId": {
+            "description": "Device that stores the bundle.",
             "type": "string"
           },
           "estimatedSizeBytes": {
+            "description": "Estimated download size in bytes.",
             "format": "int64",
             "minimum": 0,
             "type": "integer"
           },
           "id": {
+            "description": "Identifier of the bundle manifest.",
             "type": "string"
           },
           "kind": {
+            "description": "Bundle scope, either `region` or `route`.",
             "type": "string"
           },
           "ownerUserId": {
+            "description": "Owning user identifier, if the bundle is tied to an account.",
             "type": [
               "string",
               "null"
             ]
           },
           "progress": {
+            "description": "Download progress from 0.0 to 1.0 inclusive.",
             "format": "float",
             "type": "number"
           },
           "regionId": {
+            "description": "Region identifier, set for region bundles.",
             "type": [
               "string",
               "null"
             ]
           },
           "routeId": {
+            "description": "Route identifier, set for route bundles.",
             "type": [
               "string",
               "null"
             ]
           },
           "status": {
+            "description": "Lifecycle state: `queued`, `downloading`, `complete` or `failed`.",
             "type": "string"
           },
           "updatedAt": {
+            "description": "Last update time as an RFC 3339 timestamp.",
             "type": "string"
           },
           "zoomRange": {
-            "$ref": "#/components/schemas/ZoomRangeBody"
+            "$ref": "#/components/schemas/ZoomRangeBody",
+            "description": "Inclusive range of zoom levels the bundle targets; a queued or downloading bundle has\nnot necessarily fetched them all yet."
           }
         },
         "required": [
@@ -507,6 +545,7 @@
         "description": "Request payload for updating user preferences.",
         "properties": {
           "expectedRevision": {
+            "description": "Revision the client last saw, for optimistic concurrency; omit on first save.",
             "format": "int32",
             "minimum": 0,
             "type": [
@@ -515,6 +554,7 @@
             ]
           },
           "interestThemeIds": {
+            "description": "Interest theme UUIDs to save; required, so a missing value is rejected.",
             "items": {
               "type": "string"
             },
@@ -525,6 +565,7 @@
             ]
           },
           "safetyToggleIds": {
+            "description": "Safety toggle UUIDs to enable; required, so a missing value is rejected.",
             "items": {
               "type": "string"
             },
@@ -535,6 +576,7 @@
             ]
           },
           "unitSystem": {
+            "description": "Display unit system, either `metric` or `imperial`; required.",
             "type": [
               "string",
               "null"
@@ -572,18 +614,22 @@
         "description": "Bounds payload for one provenance record.",
         "properties": {
           "maxLat": {
+            "description": "Maximum latitude of the bounding box, in degrees.",
             "format": "double",
             "type": "number"
           },
           "maxLng": {
+            "description": "Maximum longitude of the bounding box, in degrees.",
             "format": "double",
             "type": "number"
           },
           "minLat": {
+            "description": "Minimum latitude of the bounding box, in degrees.",
             "format": "double",
             "type": "number"
           },
           "minLng": {
+            "description": "Minimum longitude of the bounding box, in degrees.",
             "format": "double",
             "type": "number"
           }
@@ -862,49 +908,61 @@
         "description": "Request payload for creating or updating an offline bundle manifest.",
         "properties": {
           "bounds": {
-            "$ref": "#/components/schemas/BoundsBody"
+            "$ref": "#/components/schemas/BoundsBody",
+            "description": "Geographic extent of the area to store."
           },
           "createdAt": {
+            "description": "Creation time as an RFC 3339 timestamp.",
             "type": "string"
           },
           "deviceId": {
+            "description": "Device that stores the bundle; normalized before use.",
             "type": "string"
           },
           "estimatedSizeBytes": {
+            "description": "Estimated download size in bytes.",
             "format": "int64",
             "minimum": 0,
             "type": "integer"
           },
           "id": {
+            "description": "Client-supplied identifier of the bundle manifest, as a UUID string.",
             "type": "string"
           },
           "kind": {
+            "description": "Bundle scope, either `region` or `route`.",
             "type": "string"
           },
           "progress": {
+            "description": "Download progress from 0.0 to 1.0 inclusive.",
             "format": "float",
             "type": "number"
           },
           "regionId": {
+            "description": "Region identifier, set for region bundles.",
             "type": [
               "string",
               "null"
             ]
           },
           "routeId": {
+            "description": "Route identifier as a UUID string, set for route bundles.",
             "type": [
               "string",
               "null"
             ]
           },
           "status": {
+            "description": "Lifecycle state: `queued`, `downloading`, `complete` or `failed`.",
             "type": "string"
           },
           "updatedAt": {
+            "description": "Last update time as an RFC 3339 timestamp.",
             "type": "string"
           },
           "zoomRange": {
-            "$ref": "#/components/schemas/ZoomRangeBody"
+            "$ref": "#/components/schemas/ZoomRangeBody",
+            "description": "Inclusive zoom levels to download."
           }
         },
         "required": [
@@ -925,12 +983,15 @@
         "description": "Response payload for upserting an offline bundle.",
         "properties": {
           "bundle": {
-            "$ref": "#/components/schemas/OfflineBundleResponse"
+            "$ref": "#/components/schemas/OfflineBundleResponse",
+            "description": "Stored manifest after the upsert."
           },
           "bundleId": {
+            "description": "Identifier of the upserted bundle manifest.",
             "type": "string"
           },
           "replayed": {
+            "description": "Whether this response replays an earlier idempotent result.",
             "type": "boolean"
           }
         },
@@ -945,6 +1006,7 @@
         "description": "Response payload for user preferences.",
         "properties": {
           "interestThemeIds": {
+            "description": "Selected interest theme UUIDs, as strings.",
             "items": {
               "type": "string"
             },
@@ -952,11 +1014,13 @@
             "type": "array"
           },
           "revision": {
+            "description": "Current revision, incremented on each successful save.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
           },
           "safetyToggleIds": {
+            "description": "Enabled safety toggle UUIDs, as strings.",
             "items": {
               "type": "string"
             },
@@ -964,12 +1028,15 @@
             "type": "array"
           },
           "unitSystem": {
+            "description": "Display unit system, either `metric` or `imperial`.",
             "type": "string"
           },
           "updatedAt": {
+            "description": "Last update time as an RFC 3339 timestamp.",
             "type": "string"
           },
           "userId": {
+            "description": "Identifier of the user who owns these preferences, as a string.",
             "type": "string"
           }
         },
@@ -987,10 +1054,12 @@
         "description": "Completion summary payload returned when a walk is complete.",
         "properties": {
           "endedAt": {
+            "description": "RFC 3339 timestamp at which the walk ended.",
             "format": "date-time",
             "type": "string"
           },
           "highlightedPoiIds": {
+            "description": "UUIDs of the points of interest highlighted during the walk.",
             "items": {
               "format": "uuid",
               "type": "string"
@@ -998,30 +1067,36 @@
             "type": "array"
           },
           "primaryStats": {
+            "description": "Primary statistics recorded for the walk.",
             "items": {
               "$ref": "#/components/schemas/WalkPrimaryStatBody"
             },
             "type": "array"
           },
           "routeId": {
+            "description": "UUID of the route that was walked.",
             "format": "uuid",
             "type": "string"
           },
           "secondaryStats": {
+            "description": "Secondary statistics recorded for the walk.",
             "items": {
               "$ref": "#/components/schemas/WalkSecondaryStatBody"
             },
             "type": "array"
           },
           "sessionId": {
+            "description": "UUID of the completed walk session.",
             "format": "uuid",
             "type": "string"
           },
           "startedAt": {
+            "description": "RFC 3339 timestamp at which the walk started.",
             "format": "date-time",
             "type": "string"
           },
           "userId": {
+            "description": "UUID of the user who walked the route.",
             "format": "uuid",
             "type": "string"
           }
@@ -1042,9 +1117,11 @@
         "description": "Primary walk statistic payload.",
         "properties": {
           "kind": {
+            "description": "Statistic kind, either `distance` or `duration`.",
             "type": "string"
           },
           "value": {
+            "description": "Measured value of the statistic.",
             "format": "double",
             "type": "number"
           }
@@ -1059,15 +1136,18 @@
         "description": "Secondary walk statistic payload.",
         "properties": {
           "kind": {
+            "description": "Statistic kind, either `energy` or `count`.",
             "type": "string"
           },
           "unit": {
+            "description": "Optional unit label for `value`, such as `kcal`.",
             "type": [
               "string",
               "null"
             ]
           },
           "value": {
+            "description": "Measured value of the statistic.",
             "format": "double",
             "type": "number"
           }
@@ -1082,11 +1162,13 @@
         "description": "Zoom payload for offline bundle requests and responses.",
         "properties": {
           "maxZoom": {
+            "description": "Highest zoom level included, inclusive; must not be below `min_zoom`.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
           },
           "minZoom": {
+            "description": "Lowest zoom level included, inclusive.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"

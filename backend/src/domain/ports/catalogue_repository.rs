@@ -35,12 +35,19 @@ define_port_error! {
 /// query sequencing.
 #[derive(Debug, Clone)]
 pub struct ExploreCatalogueSnapshot {
+    /// When the snapshot was assembled.
     pub generated_at: DateTime<Utc>,
+    /// Route categories shown on the landing page.
     pub categories: Vec<RouteCategory>,
+    /// Route summaries included in the snapshot.
     pub routes: Vec<RouteSummary>,
+    /// Theme cards included in the snapshot.
     pub themes: Vec<Theme>,
+    /// Curated route collections included in the snapshot.
     pub collections: Vec<RouteCollection>,
+    /// Trending route highlights included in the snapshot.
     pub trending: Vec<TrendingRouteHighlight>,
+    /// Community pick, or `None` when the catalogue has none.
     pub community_pick: Option<CommunityPick>,
 }
 

@@ -41,7 +41,12 @@ pub enum ArchitectureLintError {
     /// Filesystem traversal or reading failed.
     Io(io::Error),
     /// Rust source parsing failed.
-    Parse { file: Utf8PathBuf, message: String },
+    Parse {
+        /// The source file that failed to parse.
+        file: Utf8PathBuf,
+        /// The parser's description of the failure.
+        message: String,
+    },
     /// One or more boundary violations were found.
     Violations(Vec<Violation>),
 }
@@ -142,6 +147,7 @@ pub fn lint_sources(sources: &[LintSource]) -> Result<(), ArchitectureLintError>
 pub struct LintSource {
     /// Path relative to `backend/src`.
     pub file: Utf8PathBuf,
+    /// The file's full source text.
     pub contents: String,
 }
 

@@ -8,7 +8,9 @@ use std::collections::BTreeMap;
 /// A full schema snapshot used for ER diagram rendering.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaDiagram {
+    /// Tables in the snapshot; `normalized` sorts them by name.
     pub tables: Vec<SchemaTable>,
+    /// Foreign-key relationships between the tables, rendered as Mermaid edges.
     pub relationships: Vec<SchemaRelationship>,
 }
 
@@ -66,26 +68,37 @@ impl SchemaDiagram {
 /// A database table with typed columns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaTable {
+    /// Table name as reported by the database catalogue.
     pub name: String,
+    /// Columns of the table; `normalized` sorts them by name.
     pub columns: Vec<SchemaColumn>,
 }
 
 /// A typed database column.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaColumn {
+    /// Column name as reported by the database catalogue.
     pub name: String,
+    /// Database type name, such as `uuid` or `text[]`, sanitized before rendering.
     pub data_type: String,
+    /// Whether the column is part of the table's primary key.
     pub is_primary_key: bool,
+    /// Whether the column accepts `NULL` values.
     pub is_nullable: bool,
 }
 
 /// A single foreign-key relationship between two columns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaRelationship {
+    /// Table holding the foreign-key column, which is the child side of the edge.
     pub referencing_table: String,
+    /// Foreign-key column on the referencing table.
     pub referencing_column: String,
+    /// Table the foreign key points to, which is the parent side of the edge.
     pub referenced_table: String,
+    /// Column on the referenced table that the foreign key targets.
     pub referenced_column: String,
+    /// Whether the foreign-key column accepts `NULL`, which renders optional cardinality.
     pub referencing_is_nullable: bool,
 }
 

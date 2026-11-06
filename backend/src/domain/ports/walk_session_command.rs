@@ -17,13 +17,21 @@ use crate::domain::{
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalkSessionPayload {
+    /// Stable identifier of the walk session.
     pub id: Uuid,
+    /// Identifier of the user who walked the route.
     pub user_id: crate::domain::UserId,
+    /// Identifier of the route that was walked.
     pub route_id: Uuid,
+    /// Instant at which the walk started.
     pub started_at: DateTime<Utc>,
+    /// Instant at which the walk ended, or `None` while it is still in progress.
     pub ended_at: Option<DateTime<Utc>>,
+    /// Primary statistics, such as distance or duration, recorded for the walk.
     pub primary_stats: Vec<WalkPrimaryStatDraft>,
+    /// Secondary statistics, such as energy or count, recorded for the walk.
     pub secondary_stats: Vec<WalkSecondaryStatDraft>,
+    /// Identifiers of the points of interest the user highlighted during the walk.
     pub highlighted_poi_ids: Vec<Uuid>,
 }
 
@@ -31,13 +39,21 @@ pub struct WalkSessionPayload {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalkCompletionSummaryPayload {
+    /// Stable identifier of the completed walk session.
     pub session_id: Uuid,
+    /// Identifier of the user who walked the route.
     pub user_id: crate::domain::UserId,
+    /// Identifier of the route that was walked.
     pub route_id: Uuid,
+    /// Instant at which the walk started.
     pub started_at: DateTime<Utc>,
+    /// Instant at which the walk ended.
     pub ended_at: DateTime<Utc>,
+    /// Primary statistics recorded for the walk.
     pub primary_stats: Vec<WalkPrimaryStatDraft>,
+    /// Secondary statistics recorded for the walk.
     pub secondary_stats: Vec<WalkSecondaryStatDraft>,
+    /// Identifiers of the points of interest highlighted during the walk.
     pub highlighted_poi_ids: Vec<Uuid>,
 }
 
@@ -133,6 +149,7 @@ impl From<WalkCompletionSummary> for WalkCompletionSummaryPayload {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWalkSessionRequest {
+    /// Walk session payload to validate and record.
     pub session: WalkSessionPayload,
 }
 
@@ -140,7 +157,9 @@ pub struct CreateWalkSessionRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWalkSessionResponse {
+    /// Identifier of the recorded walk session.
     pub session_id: Uuid,
+    /// Completion summary, present only when the payload carried an `ended_at` timestamp.
     pub completion_summary: Option<WalkCompletionSummaryPayload>,
 }
 

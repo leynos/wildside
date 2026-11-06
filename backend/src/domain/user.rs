@@ -6,67 +6,8 @@ use chrono::{DateTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Validation errors returned by [`User::try_from_strings`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum UserValidationError {
-    EmptyId,
-    InvalidId,
-    EmptyDisplayName,
-    DisplayNameTooShort { min: usize },
-    DisplayNameTooLong { max: usize },
-    DisplayNameInvalidCharacters,
-}
-
-impl fmt::Display for UserValidationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::EmptyId => write!(f, "user id must not be empty"),
-            Self::InvalidId => write!(f, "user id must be a valid UUID"),
-            Self::EmptyDisplayName => write!(f, "display name must not be empty"),
-            Self::DisplayNameTooShort { min } => {
-                write!(f, "display name must be at least {min} characters")
-            }
-            Self::DisplayNameTooLong { max } => {
-                write!(f, "display name must be at most {max} characters")
-            }
-            Self::DisplayNameInvalidCharacters => write!(
-                f,
-                "display name may only contain letters, numbers, spaces, or underscores",
-            ),
-        }
-    }
-}
-
-impl std::error::Error for UserValidationError {}
-
-impl UserValidationError {
-    /// Metadata for display name validation failures (code, message, field).
-    pub fn display_name_error_meta(&self) -> Option<(&'static str, String, &'static str)> {
-        match self {
-            Self::EmptyDisplayName => Some((
-                "empty",
-                "Display name must not be empty.".to_owned(),
-                "displayName",
-            )),
-            Self::DisplayNameTooShort { .. } => Some((
-                "too_short",
-                format!("Display name must be at least {DISPLAY_NAME_MIN} characters."),
-                "displayName",
-            )),
-            Self::DisplayNameTooLong { .. } => Some((
-                "too_long",
-                format!("Display name must be at most {DISPLAY_NAME_MAX} characters."),
-                "displayName",
-            )),
-            Self::DisplayNameInvalidCharacters => Some((
-                "invalid_chars",
-                "Only alphanumeric characters, spaces, and underscores are allowed.".to_owned(),
-                "displayName",
-            )),
-            _ => None,
-        }
-    }
-}
+mod error;
+pub use error::UserValidationError;
 
 /// Stable user identifier stored as a UUID.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

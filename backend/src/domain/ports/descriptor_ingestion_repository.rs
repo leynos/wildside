@@ -24,23 +24,28 @@ define_port_error! {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait DescriptorIngestionRepository: Send + Sync {
+    /// Insert or update the given tag records.
     async fn upsert_tags(&self, records: &[Tag]) -> Result<(), DescriptorIngestionRepositoryError>;
 
+    /// Insert or update the given badge records.
     async fn upsert_badges(
         &self,
         records: &[Badge],
     ) -> Result<(), DescriptorIngestionRepositoryError>;
 
+    /// Insert or update the given safety toggle records.
     async fn upsert_safety_toggles(
         &self,
         records: &[SafetyToggle],
     ) -> Result<(), DescriptorIngestionRepositoryError>;
 
+    /// Insert or update the given safety preset records.
     async fn upsert_safety_presets(
         &self,
         records: &[SafetyPreset],
     ) -> Result<(), DescriptorIngestionRepositoryError>;
 
+    /// Insert or update the given interest theme records.
     async fn upsert_interest_themes(
         &self,
         records: &[InterestTheme],

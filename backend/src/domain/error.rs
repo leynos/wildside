@@ -52,9 +52,12 @@ pub struct Error {
     details: Option<Value>,
 }
 
+/// Reasons an [`Error`] payload fails validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ErrorValidationError {
+    /// The message was empty or contained only whitespace.
     EmptyMessage,
+    /// The trace identifier was empty or contained only whitespace.
     EmptyTraceId,
 }
 

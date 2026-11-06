@@ -25,22 +25,37 @@ pub use validation::normalize_device_id;
 /// Validation errors raised by offline bundle constructors.
 #[derive(Debug, Clone, PartialEq)]
 pub enum OfflineValidationError {
+    /// The device identifier was empty.
     EmptyDeviceId,
+    /// The bundle bounds failed `BoundingBox` validation.
     BoundingBox(crate::domain::BoundingBoxError),
+    /// The minimum zoom level was greater than the maximum.
     InvalidZoomRange {
+        /// Minimum zoom level that was supplied.
         min_zoom: u8,
+        /// Maximum zoom level that was supplied.
         max_zoom: u8,
     },
+    /// Progress fell outside the inclusive range `[0.0, 1.0]`.
     InvalidProgress {
+        /// Rejected progress value.
         progress: f32,
     },
+    /// A route bundle was built without a `route_id`.
     MissingRouteIdForRouteBundle,
+    /// A region bundle was built without a `region_id`.
     MissingRegionIdForRegionBundle,
+    /// A region bundle was built with a `route_id`.
     UnexpectedRouteIdForRegionBundle,
+    /// A route bundle was built with a `region_id`.
     UnexpectedRegionIdForRouteBundle,
+    /// The `updated_at` timestamp precedes `created_at`.
     UpdatedBeforeCreated,
+    /// The status and progress combination is not permitted.
     InvalidStatusProgress {
+        /// Status that is incompatible with `progress`.
         status: OfflineBundleStatus,
+        /// Progress value that is incompatible with `status`.
         progress: f32,
     },
 }

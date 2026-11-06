@@ -14,15 +14,25 @@ use crate::domain::semantic_icon_identifier::SemanticIconIdentifier;
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct RouteCollectionDraft {
+    /// Unique identifier for the collection.
     pub id: Uuid,
+    /// Slug identifying the collection; validated as a domain slug on construction.
     pub slug: String,
+    /// Semantic icon identifier, such as `category:nature`, that the client resolves.
     pub icon_key: SemanticIconIdentifier,
+    /// Localized card copy keyed by locale code.
     pub localizations: LocalizationMap,
+    /// Hero image shown on the collection card.
     pub lead_image: ImageAsset,
+    /// Map preview image shown alongside the collection.
     pub map_preview: ImageAsset,
+    /// Distance range as `[min, max]` in metres; bounds must be non-negative and ordered.
     pub distance_range_metres: [i32; 2],
+    /// Duration range as `[min, max]` in seconds; bounds must be non-negative and ordered.
     pub duration_range_seconds: [i32; 2],
+    /// Difficulty label for the collection; must not be blank.
     pub difficulty: String,
+    /// Identifiers of the routes grouped by this collection.
     pub route_ids: Vec<Uuid>,
 }
 
@@ -49,33 +59,43 @@ impl RouteCollection {
         Self::try_from(draft)
     }
 
+    /// Return the collection's unique identifier.
     pub fn id(&self) -> Uuid {
         self.id
     }
+    /// Borrow the validated slug identifying the collection.
     pub fn slug(&self) -> &str {
         self.slug.as_str()
     }
+    /// Borrow the semantic icon identifier for the collection card.
     pub fn icon_key(&self) -> &SemanticIconIdentifier {
         &self.icon_key
     }
+    /// Borrow the localized card copy keyed by locale code.
     pub fn localizations(&self) -> &LocalizationMap {
         &self.localizations
     }
+    /// Borrow the hero image shown on the collection card.
     pub fn lead_image(&self) -> &ImageAsset {
         &self.lead_image
     }
+    /// Borrow the map preview image shown alongside the collection.
     pub fn map_preview(&self) -> &ImageAsset {
         &self.map_preview
     }
+    /// Borrow the `[min, max]` route distance range in metres.
     pub fn distance_range_metres(&self) -> &[i32; 2] {
         &self.distance_range_metres
     }
+    /// Borrow the `[min, max]` route duration range in seconds.
     pub fn duration_range_seconds(&self) -> &[i32; 2] {
         &self.duration_range_seconds
     }
+    /// Borrow the validated, non-blank difficulty label.
     pub fn difficulty(&self) -> &str {
         self.difficulty.as_str()
     }
+    /// Borrow the identifiers of the routes grouped by this collection.
     pub fn route_ids(&self) -> &[Uuid] {
         self.route_ids.as_slice()
     }

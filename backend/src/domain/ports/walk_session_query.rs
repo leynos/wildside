@@ -15,6 +15,7 @@ use super::walk_session_command::{WalkCompletionSummaryPayload, WalkSessionPaylo
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetWalkSessionRequest {
+    /// Identifier of the walk session to fetch.
     pub session_id: Uuid,
 }
 
@@ -22,6 +23,7 @@ pub struct GetWalkSessionRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetWalkSessionResponse {
+    /// The walk session that matched the request.
     pub session: WalkSessionPayload,
 }
 
@@ -29,6 +31,7 @@ pub struct GetWalkSessionResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListWalkCompletionSummariesRequest {
+    /// User whose completion summaries should be listed.
     pub user_id: UserId,
 }
 
@@ -36,6 +39,7 @@ pub struct ListWalkCompletionSummariesRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListWalkCompletionSummariesResponse {
+    /// Completion summaries belonging to the requested user.
     pub summaries: Vec<WalkCompletionSummaryPayload>,
 }
 

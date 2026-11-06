@@ -24,25 +24,40 @@ pub use stats::{
 /// Validation errors raised by walk session constructors.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WalkValidationError {
+    /// A primary stat value was non-finite or negative.
     NegativePrimaryStatValue {
+        /// Statistic whose value was rejected.
         kind: WalkPrimaryStatKind,
+        /// The rejected value.
         value: f64,
     },
+    /// A secondary stat value was non-finite or negative.
     NegativeSecondaryStatValue {
+        /// Statistic whose value was rejected.
         kind: WalkSecondaryStatKind,
+        /// The rejected value.
         value: f64,
     },
+    /// A secondary stat unit label was blank after trimming.
     EmptySecondaryStatUnit,
+    /// The session end time precedes its start time.
     EndedBeforeStarted,
+    /// The same primary stat kind was supplied more than once.
     DuplicatePrimaryStatKind {
+        /// The repeated statistic kind.
         kind: WalkPrimaryStatKind,
     },
+    /// The same secondary stat kind was supplied more than once.
     DuplicateSecondaryStatKind {
+        /// The repeated statistic kind.
         kind: WalkSecondaryStatKind,
     },
+    /// The same POI was highlighted more than once in a session.
     DuplicateHighlightedPoiId {
+        /// The repeated POI identifier.
         poi_id: Uuid,
     },
+    /// A completion summary was requested for a session without an end time.
     SessionNotCompleted,
 }
 

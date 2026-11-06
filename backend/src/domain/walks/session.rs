@@ -10,13 +10,21 @@ use super::{WalkPrimaryStat, WalkSecondaryStat, WalkValidationError};
 /// Input payload for [`WalkSession::new`].
 #[derive(Debug, Clone)]
 pub struct WalkSessionDraft {
+    /// Identifier for the walk session.
     pub id: Uuid,
+    /// Owner of the walk session.
     pub user_id: UserId,
+    /// Route being walked.
     pub route_id: Uuid,
+    /// When the walk started.
     pub started_at: DateTime<Utc>,
+    /// End time, or `None` while in progress; must not precede `started_at`.
     pub ended_at: Option<DateTime<Utc>>,
+    /// Headline statistics, such as distance and duration.
     pub primary_stats: Vec<WalkPrimaryStat>,
+    /// Supplementary statistics, such as energy or count values.
     pub secondary_stats: Vec<WalkSecondaryStat>,
+    /// Points of interest highlighted during the walk.
     pub highlighted_poi_ids: Vec<Uuid>,
 }
 

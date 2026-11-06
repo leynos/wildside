@@ -22,11 +22,17 @@ use diesel_async::pooled_connection::bb8::{Pool, PooledConnection};
 pub enum PoolError {
     /// Failed to check out a connection from the pool.
     #[error("failed to get connection from pool: {message}")]
-    Checkout { message: String },
+    Checkout {
+        /// Underlying error text from the pool checkout attempt.
+        message: String,
+    },
 
     /// Failed to build the connection pool.
     #[error("failed to build connection pool: {message}")]
-    Build { message: String },
+    Build {
+        /// Underlying error text from the pool construction attempt.
+        message: String,
+    },
 }
 
 impl PoolError {

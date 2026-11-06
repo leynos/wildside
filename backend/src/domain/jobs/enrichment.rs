@@ -125,10 +125,20 @@ pub enum EnrichmentJobBuildError {
     EmptyTag,
     /// The tag vector exceeds the V1 limit.
     #[error("enrichment job has too many tags: {observed} > {limit}")]
-    TooManyTags { limit: usize, observed: usize },
+    TooManyTags {
+        /// Maximum number of tags permitted in a V1 job.
+        limit: usize,
+        /// Number of tags supplied, which exceeded `limit`.
+        observed: usize,
+    },
     /// One tag exceeds the V1 byte-length limit.
     #[error("enrichment job tag is too long: {observed} > {limit}")]
-    TagTooLong { limit: usize, observed: usize },
+    TagTooLong {
+        /// Maximum UTF-8 byte length permitted for a single tag in V1.
+        limit: usize,
+        /// UTF-8 byte length of the offending tag, which exceeded `limit`.
+        observed: usize,
+    },
 }
 
 impl EnrichmentJob {

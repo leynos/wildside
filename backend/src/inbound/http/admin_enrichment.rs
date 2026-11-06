@@ -40,9 +40,13 @@ pub struct ListEnrichmentProvenanceQuery {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvenanceBoundsBody {
+    /// Minimum longitude of the bounding box, in degrees.
     pub min_lng: f64,
+    /// Minimum latitude of the bounding box, in degrees.
     pub min_lat: f64,
+    /// Maximum longitude of the bounding box, in degrees.
     pub max_lng: f64,
+    /// Maximum latitude of the bounding box, in degrees.
     pub max_lat: f64,
 }
 
@@ -50,8 +54,11 @@ pub struct ProvenanceBoundsBody {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EnrichmentProvenanceRecordBody {
+    /// Source URL the enrichment data was imported from.
     pub source_url: String,
+    /// Import time as an RFC 3339 timestamp.
     pub imported_at: String,
+    /// Geographic bounding box covered by the imported data.
     pub bounding_box: ProvenanceBoundsBody,
 }
 
@@ -59,6 +66,7 @@ pub struct EnrichmentProvenanceRecordBody {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListEnrichmentProvenanceResponseBody {
+    /// Provenance records on this page, in the repository's deterministic order.
     pub records: Vec<EnrichmentProvenanceRecordBody>,
     /// Exclusive `RFC3339|UUID` cursor for the next page.
     ///

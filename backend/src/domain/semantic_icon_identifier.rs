@@ -10,7 +10,10 @@ use serde::{Deserialize, Serialize};
 /// Validation errors returned by [`SemanticIconIdentifier::new`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SemanticIconIdentifierValidationError {
+    /// The identifier is empty or contains only whitespace.
     Empty,
+    /// The identifier lacks a `<namespace>:<name>` form, has boundary whitespace, or uses
+    /// disallowed characters.
     InvalidFormat,
 }
 

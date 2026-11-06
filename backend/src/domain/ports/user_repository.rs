@@ -76,6 +76,7 @@ impl ListUsersPageRequest {
     }
 }
 
+/// Persistence port for user records, implemented by outbound adapters.
 #[async_trait]
 pub trait UserRepository: Send + Sync {
     /// Insert or update a user record.

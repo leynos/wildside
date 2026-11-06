@@ -11,6 +11,7 @@ use crate::domain::ports::UserOnboarding;
 /// Dependency bundle for WebSocket handlers.
 #[derive(Clone)]
 pub struct WsState {
+    /// Onboarding port that registers users from WebSocket display-name requests.
     pub onboarding: Arc<dyn UserOnboarding>,
 }
 

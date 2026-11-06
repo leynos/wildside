@@ -13,6 +13,7 @@ define_port_error! {
     }
 }
 
+/// Cache of computed route plans, addressed by [`RouteCacheKey`].
 #[async_trait]
 pub trait RouteCache: Send + Sync {
     /// Domain-specific plan representation shared with the repository.
