@@ -16,13 +16,21 @@ use crate::domain::semantic_icon_identifier::SemanticIconIdentifier;
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct ThemeDraft {
+    /// Stable identifier for the theme card.
     pub id: Uuid,
+    /// URL-safe slug, checked by `Theme::new`.
     pub slug: String,
+    /// Semantic icon used to render the theme.
     pub icon_key: SemanticIconIdentifier,
+    /// Localized display strings keyed by locale tag.
     pub localizations: LocalizationMap,
+    /// Hero image shown on the theme card.
     pub image: ImageAsset,
+    /// Number of walks in the theme; never negative.
     pub walk_count: i32,
+    /// Inclusive `[min, max]` distance range in metres, both non-negative and ordered.
     pub distance_range_metres: [i32; 2],
+    /// Average rating from 0.0 to 5.0 inclusive.
     pub rating: f32,
 }
 
@@ -79,27 +87,35 @@ impl Theme {
         Self::try_from(draft)
     }
 
+    /// Stable identifier copied from the draft.
     pub fn id(&self) -> Uuid {
         self.id
     }
+    /// Validated URL-safe slug.
     pub fn slug(&self) -> &str {
         self.slug.as_str()
     }
+    /// Semantic icon used to render the theme.
     pub fn icon_key(&self) -> &SemanticIconIdentifier {
         &self.icon_key
     }
+    /// Localized display strings keyed by locale tag.
     pub fn localizations(&self) -> &LocalizationMap {
         &self.localizations
     }
+    /// Hero image shown on the theme card.
     pub fn image(&self) -> &ImageAsset {
         &self.image
     }
+    /// Number of walks in the theme; never negative.
     pub fn walk_count(&self) -> i32 {
         self.walk_count
     }
+    /// Inclusive `[min, max]` distance range in metres.
     pub fn distance_range_metres(&self) -> &[i32; 2] {
         &self.distance_range_metres
     }
+    /// Average rating from 0.0 to 5.0 inclusive.
     pub fn rating(&self) -> f32 {
         self.rating
     }

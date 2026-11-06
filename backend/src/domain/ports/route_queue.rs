@@ -13,6 +13,7 @@ define_port_error! {
     }
 }
 
+/// Port for enqueueing route plans for asynchronous downstream processing.
 #[async_trait]
 pub trait RouteQueue: Send + Sync {
     /// Domain-specific plan representation shared across adapters.

@@ -32,7 +32,9 @@ use serde_json::json;
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
+    /// Username submitted for authentication; must not be empty.
     pub username: String,
+    /// Password submitted for authentication; must not be empty.
     pub password: String,
 }
 
@@ -41,8 +43,10 @@ pub struct LoginRequest {
 #[serde(rename_all = "camelCase")]
 pub struct InterestsRequest {
     // The #[schema(max_items = 100)] must equal INTEREST_THEME_IDS_MAX.
+    /// Interest theme UUIDs to store, at most `INTEREST_THEME_IDS_MAX` entries.
     #[schema(max_items = 100)]
     pub interest_theme_ids: Vec<String>,
+    /// Revision last read by the client; omitted only when no preferences exist yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_revision: Option<u32>,
 }

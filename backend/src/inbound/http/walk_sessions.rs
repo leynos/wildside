@@ -32,16 +32,23 @@ use crate::inbound::http::validation::{
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWalkSessionRequestBody {
+    /// Client-generated UUID for the walk session.
     #[schema(format = "uuid")]
     pub id: String,
+    /// UUID of the route that was walked.
     #[schema(format = "uuid")]
     pub route_id: String,
+    /// RFC 3339 timestamp at which the walk started.
     #[schema(format = "date-time")]
     pub started_at: String,
+    /// RFC 3339 timestamp at which the walk ended, absent while it is still in progress.
     #[schema(format = "date-time")]
     pub ended_at: Option<String>,
+    /// Primary statistics for the walk, such as distance or duration.
     pub primary_stats: Vec<WalkPrimaryStatBody>,
+    /// Secondary statistics for the walk, such as energy or count.
     pub secondary_stats: Vec<WalkSecondaryStatBody>,
+    /// UUIDs of the points of interest the user highlighted during the walk.
     #[schema(value_type = Vec<uuid::Uuid>)]
     pub highlighted_poi_ids: Vec<String>,
 }
@@ -50,7 +57,9 @@ pub struct CreateWalkSessionRequestBody {
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WalkPrimaryStatBody {
+    /// Statistic kind, either `distance` or `duration`.
     pub kind: String,
+    /// Measured value of the statistic.
     pub value: f64,
 }
 
@@ -58,8 +67,11 @@ pub struct WalkPrimaryStatBody {
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WalkSecondaryStatBody {
+    /// Statistic kind, either `energy` or `count`.
     pub kind: String,
+    /// Measured value of the statistic.
     pub value: f64,
+    /// Optional unit label for `value`, such as `kcal`.
     pub unit: Option<String>,
 }
 
@@ -67,8 +79,10 @@ pub struct WalkSecondaryStatBody {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWalkSessionResponseBody {
+    /// UUID of the recorded walk session.
     #[schema(format = "uuid")]
     pub session_id: String,
+    /// Summary of the walk, present only when the session has ended.
     pub completion_summary: Option<WalkCompletionSummaryResponseBody>,
 }
 
@@ -76,18 +90,26 @@ pub struct CreateWalkSessionResponseBody {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WalkCompletionSummaryResponseBody {
+    /// UUID of the completed walk session.
     #[schema(format = "uuid")]
     pub session_id: String,
+    /// UUID of the user who walked the route.
     #[schema(format = "uuid")]
     pub user_id: String,
+    /// UUID of the route that was walked.
     #[schema(format = "uuid")]
     pub route_id: String,
+    /// RFC 3339 timestamp at which the walk started.
     #[schema(format = "date-time")]
     pub started_at: String,
+    /// RFC 3339 timestamp at which the walk ended.
     #[schema(format = "date-time")]
     pub ended_at: String,
+    /// Primary statistics recorded for the walk.
     pub primary_stats: Vec<WalkPrimaryStatBody>,
+    /// Secondary statistics recorded for the walk.
     pub secondary_stats: Vec<WalkSecondaryStatBody>,
+    /// UUIDs of the points of interest highlighted during the walk.
     #[schema(value_type = Vec<uuid::Uuid>)]
     pub highlighted_poi_ids: Vec<String>,
 }

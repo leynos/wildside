@@ -9,7 +9,9 @@ use super::CatalogueValidationError;
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct ImageAsset {
+    /// Image URL; `new` rejects a blank value.
     pub url: String,
+    /// Alternative text describing the image; `new` rejects a blank value.
     pub alt: String,
 }
 

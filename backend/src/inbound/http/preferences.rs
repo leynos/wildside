@@ -29,11 +29,15 @@ use crate::inbound::http::validation::{FieldName, missing_field_error, parse_uui
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PreferencesRequest {
+    /// Interest theme UUIDs to save; required, so a missing value is rejected.
     #[schema(max_items = 100)]
     pub interest_theme_ids: Option<Vec<String>>,
+    /// Safety toggle UUIDs to enable; required, so a missing value is rejected.
     #[schema(max_items = 100)]
     pub safety_toggle_ids: Option<Vec<String>>,
+    /// Display unit system, either `metric` or `imperial`; required.
     pub unit_system: Option<String>,
+    /// Revision the client last saw, for optimistic concurrency; omit on first save.
     pub expected_revision: Option<u32>,
 }
 
@@ -41,13 +45,19 @@ pub struct PreferencesRequest {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserPreferencesResponse {
+    /// Identifier of the user who owns these preferences, as a string.
     pub user_id: String,
+    /// Selected interest theme UUIDs, as strings.
     #[schema(max_items = 100)]
     pub interest_theme_ids: Vec<String>,
+    /// Enabled safety toggle UUIDs, as strings.
     #[schema(max_items = 100)]
     pub safety_toggle_ids: Vec<String>,
+    /// Display unit system, either `metric` or `imperial`.
     pub unit_system: String,
+    /// Current revision, incremented on each successful save.
     pub revision: u32,
+    /// Last update time as an RFC 3339 timestamp.
     pub updated_at: String,
 }
 

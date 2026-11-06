@@ -12,7 +12,9 @@ use super::WalkValidationError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WalkPrimaryStatKind {
+    /// Distance covered during the walk.
     Distance,
+    /// Elapsed time spent on the walk.
     Duration,
 }
 
@@ -46,7 +48,9 @@ impl FromStr for WalkPrimaryStatKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WalkSecondaryStatKind {
+    /// Energy expended during the walk, with its unit carried separately.
     Energy,
+    /// Number of discrete events recorded during the walk.
     Count,
 }
 
@@ -100,7 +104,9 @@ pub struct WalkPrimaryStat {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalkPrimaryStatDraft {
+    /// Statistic category, either distance or duration.
     pub kind: WalkPrimaryStatKind,
+    /// Finite, non-negative statistic value, checked on conversion.
     pub value: f64,
 }
 
@@ -177,8 +183,11 @@ pub struct WalkSecondaryStat {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalkSecondaryStatDraft {
+    /// Statistic category, either energy or count.
     pub kind: WalkSecondaryStatKind,
+    /// Finite, non-negative statistic value, checked on conversion.
     pub value: f64,
+    /// Optional unit label such as `kcal`; a blank label is rejected.
     pub unit: Option<String>,
 }
 

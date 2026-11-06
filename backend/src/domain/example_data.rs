@@ -46,10 +46,16 @@ pub enum ExampleDataSeedingError {
     DisplayNameInvalid(#[from] UserValidationError),
     /// Seed value cannot be represented in the database.
     #[error("seed value {seed} exceeds maximum representable value")]
-    SeedOverflow { seed: u64 },
+    SeedOverflow {
+        /// The seed that does not fit the database's integer type.
+        seed: u64,
+    },
     /// User count cannot be represented in the database.
     #[error("user count {count} exceeds maximum representable value")]
-    UserCountOverflow { count: usize },
+    UserCountOverflow {
+        /// The requested number of users that does not fit the database's integer type.
+        count: usize,
+    },
     /// Persistence adapter failed while seeding.
     #[error("example data persistence error: {0}")]
     Persistence(#[from] ExampleDataSeedRepositoryError),

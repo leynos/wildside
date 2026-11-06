@@ -13,10 +13,15 @@ use crate::domain::semantic_icon_identifier::SemanticIconIdentifier;
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct RouteCategoryDraft {
+    /// Stable identifier for the category.
     pub id: Uuid,
+    /// Lowercase slug of ASCII letters, digits and hyphens, checked on construction.
     pub slug: String,
+    /// Semantic icon identifier used to render the category.
     pub icon_key: SemanticIconIdentifier,
+    /// Localized display strings keyed by locale.
     pub localizations: LocalizationMap,
+    /// Number of routes in the category; must be non-negative.
     pub route_count: i32,
 }
 
@@ -38,18 +43,23 @@ impl RouteCategory {
         Self::try_from(draft)
     }
 
+    /// Return the stable identifier of the category.
     pub fn id(&self) -> Uuid {
         self.id
     }
+    /// Return the validated slug as a string slice.
     pub fn slug(&self) -> &str {
         self.slug.as_str()
     }
+    /// Return the semantic icon identifier used to render the category.
     pub fn icon_key(&self) -> &SemanticIconIdentifier {
         &self.icon_key
     }
+    /// Return the localized display strings for the category.
     pub fn localizations(&self) -> &LocalizationMap {
         &self.localizations
     }
+    /// Return the number of routes in the category.
     pub fn route_count(&self) -> i32 {
         self.route_count
     }

@@ -219,6 +219,7 @@ pub mod er_snapshots {
     /// Fixture Mermaid renderer for ER snapshot tests.
     #[derive(Debug, Clone, Default)]
     pub struct FixtureMermaidRenderer {
+        /// When `true`, `render_svg` returns `RendererFailed` without writing output.
         pub should_fail: bool,
     }
 

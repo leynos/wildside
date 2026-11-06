@@ -26,7 +26,9 @@ mod snapshot_io;
 /// Output settings for ER diagram snapshot generation.
 #[derive(Debug, Clone)]
 pub struct SnapshotRequest {
+    /// Directory that receives the generated snapshot files.
     pub output_dir: PathBuf,
+    /// Whether to render an SVG from the Mermaid source as well.
     pub should_render_svg: bool,
 }
 impl Default for SnapshotRequest {
@@ -41,27 +43,56 @@ impl Default for SnapshotRequest {
 /// Paths written by a snapshot generation run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotArtifacts {
+    /// Path of the written Mermaid source file.
     pub mermaid_path: PathBuf,
+    /// Path of the rendered SVG, or `None` when rendering was skipped.
     pub svg_path: Option<PathBuf>,
 }
 
 /// Errors surfaced by ER snapshot generation.
 #[derive(Debug, Error)]
 pub enum SnapshotGenerationError {
+    /// The schema diagram could not be loaded from the repository.
     #[error(transparent)]
     Repository(#[from] SchemaSnapshotRepositoryError),
+    /// The embedded PostgreSQL cluster or temporary database could not be set up.
     #[error("embedded postgres setup failed: {message}")]
-    EmbeddedPostgres { message: String },
+    EmbeddedPostgres {
+        /// Debug-formatted error from the embedded PostgreSQL setup.
+        message: String,
+    },
+    /// Connecting to the database or applying migrations from `path` failed.
     #[error("database migration failed ({path}): {message}")]
-    Migration { path: PathBuf, message: String },
+    Migration {
+        /// Migrations directory that was being applied.
+        path: PathBuf,
+        /// Error reported by the connection or migration harness.
+        message: String,
+    },
+    /// A filesystem operation on the snapshot output failed.
     #[error("filesystem operation failed ({path}): {message}")]
-    Io { path: PathBuf, message: String },
+    Io {
+        /// Path involved in the failed operation.
+        path: PathBuf,
+        /// Error text reported by the filesystem call.
+        message: String,
+    },
+    /// The renderer command could not be started.
     #[error("renderer command '{command}' failed to start: {message}")]
-    RendererUnavailable { command: String, message: String },
+    RendererUnavailable {
+        /// Renderer command line that was attempted.
+        command: String,
+        /// Reason the renderer process could not be spawned.
+        message: String,
+    },
+    /// The renderer ran but exited without success.
     #[error("renderer command '{command}' failed (status {status:?}): {stderr}")]
     RendererFailed {
+        /// Renderer command line that was run.
         command: String,
+        /// Exit code, or `None` when the process was killed by a signal.
         status: Option<i32>,
+        /// Trimmed standard error output from the renderer.
         stderr: String,
     },
 }
@@ -84,6 +115,7 @@ impl SnapshotGenerationError {
 
 /// Render Mermaid source files to SVG snapshots.
 pub trait MermaidRenderer: Send + Sync {
+    /// Render the Mermaid file at `input_path` to an SVG at `output_path`.
     fn render_svg(
         &self,
         input_path: &Path,

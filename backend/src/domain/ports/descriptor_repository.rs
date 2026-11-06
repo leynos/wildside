@@ -27,11 +27,17 @@ define_port_error! {
 /// Cohesive snapshot of all descriptor registries.
 #[derive(Debug, Clone)]
 pub struct DescriptorSnapshot {
+    /// Instant at which the snapshot was assembled.
     pub generated_at: DateTime<Utc>,
+    /// Tag descriptors, in deterministic order.
     pub tags: Vec<Tag>,
+    /// Badge descriptors, in deterministic order.
     pub badges: Vec<Badge>,
+    /// Safety toggle descriptors, in deterministic order.
     pub safety_toggles: Vec<SafetyToggle>,
+    /// Safety preset descriptors, in deterministic order.
     pub safety_presets: Vec<SafetyPreset>,
+    /// Interest theme descriptors, in deterministic order.
     pub interest_themes: Vec<InterestTheme>,
 }
 

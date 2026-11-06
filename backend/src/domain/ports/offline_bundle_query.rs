@@ -15,7 +15,9 @@ use super::offline_bundle_command::OfflineBundlePayload;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListOfflineBundlesRequest {
+    /// Optional owning user that the listing is scoped to.
     pub owner_user_id: Option<UserId>,
+    /// Device identifier used to scope the listing for sync.
     pub device_id: String,
 }
 
@@ -23,6 +25,7 @@ pub struct ListOfflineBundlesRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListOfflineBundlesResponse {
+    /// Offline bundle manifests in the requested scope.
     pub bundles: Vec<OfflineBundlePayload>,
 }
 
@@ -30,6 +33,7 @@ pub struct ListOfflineBundlesResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetOfflineBundleRequest {
+    /// Identifier of the offline bundle to fetch.
     pub bundle_id: Uuid,
 }
 
@@ -37,6 +41,7 @@ pub struct GetOfflineBundleRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetOfflineBundleResponse {
+    /// The offline bundle manifest matching the requested identifier.
     pub bundle: OfflineBundlePayload,
 }
 

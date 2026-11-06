@@ -3,6 +3,7 @@
 macro_rules! define_port_error {
     (@ctor $variant:ident) => {
         ::paste::paste! {
+            #[doc = concat!("Construct a `", stringify!($variant), "` error.")]
             pub fn [<$variant:snake>]() -> Self {
                 Self::$variant
             }
@@ -15,6 +16,7 @@ macro_rules! define_port_error {
 
     (@ctor_impl $variant:ident ($($params:tt)*) ($($inits:tt)*) ) => {
         ::paste::paste! {
+            #[doc = concat!("Construct a `", stringify!($variant), "` error.")]
             pub fn [<$variant:snake>]($($params)*) -> Self {
                 Self::$variant { $($inits)* }
             }
@@ -45,7 +47,9 @@ macro_rules! define_port_error {
             $(
                 $(#[$variant_meta])*
                 #[error($message)]
-                $variant $( { $($field : $ty),* } )?,
+                $variant $( {
+                    $( #[doc = "Value interpolated into the error message."] $field : $ty ),*
+                } )?,
             )*
         }
 

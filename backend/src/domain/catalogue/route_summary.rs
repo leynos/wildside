@@ -15,18 +15,31 @@ use crate::domain::localization::LocalizationMap;
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct RouteSummaryDraft {
+    /// Unique identifier for the summary card.
     pub id: Uuid,
+    /// Identifier of the route the card summarizes.
     pub route_id: Uuid,
+    /// Identifier of the route category the route belongs to.
     pub category_id: Uuid,
+    /// Identifier of the theme the route belongs to.
     pub theme_id: Uuid,
+    /// Optional slug for the card; when present it is validated as a slug.
     pub slug: Option<String>,
+    /// Localized card copy keyed by locale code.
     pub localizations: LocalizationMap,
+    /// Hero image shown on the card.
     pub hero_image: ImageAsset,
+    /// Route length in metres; must not be negative.
     pub distance_metres: i32,
+    /// Expected duration in seconds; must not be negative.
     pub duration_seconds: i32,
+    /// Average rating from 0.0 to 5.0 inclusive.
     pub rating: f32,
+    /// Identifiers of the badges attached to the route.
     pub badge_ids: Vec<Uuid>,
+    /// Difficulty label for the route; must not be blank.
     pub difficulty: String,
+    /// Identifiers of the interest themes the route is associated with.
     pub interest_theme_ids: Vec<Uuid>,
 }
 
@@ -56,42 +69,55 @@ impl RouteSummary {
         Self::try_from(draft)
     }
 
+    /// Return the card's unique identifier.
     pub fn id(&self) -> Uuid {
         self.id
     }
+    /// Return the identifier of the summarized route.
     pub fn route_id(&self) -> Uuid {
         self.route_id
     }
+    /// Return the identifier of the route's category.
     pub fn category_id(&self) -> Uuid {
         self.category_id
     }
+    /// Return the identifier of the route's theme.
     pub fn theme_id(&self) -> Uuid {
         self.theme_id
     }
+    /// Return the validated slug, or `None` when the card has none.
     pub fn slug(&self) -> Option<&str> {
         self.slug.as_deref()
     }
+    /// Borrow the localized card copy keyed by locale code.
     pub fn localizations(&self) -> &LocalizationMap {
         &self.localizations
     }
+    /// Borrow the hero image shown on the card.
     pub fn hero_image(&self) -> &ImageAsset {
         &self.hero_image
     }
+    /// Return the route length in metres.
     pub fn distance_metres(&self) -> i32 {
         self.distance_metres
     }
+    /// Return the expected duration in seconds.
     pub fn duration_seconds(&self) -> i32 {
         self.duration_seconds
     }
+    /// Return the average rating, from 0.0 to 5.0 inclusive.
     pub fn rating(&self) -> f32 {
         self.rating
     }
+    /// Borrow the identifiers of the badges attached to the route.
     pub fn badge_ids(&self) -> &[Uuid] {
         self.badge_ids.as_slice()
     }
+    /// Borrow the validated, non-blank difficulty label.
     pub fn difficulty(&self) -> &str {
         self.difficulty.as_str()
     }
+    /// Borrow the identifiers of the interest themes the route is associated with.
     pub fn interest_theme_ids(&self) -> &[Uuid] {
         self.interest_theme_ids.as_slice()
     }

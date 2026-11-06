@@ -2,9 +2,8 @@
 use std::str::FromStr;
 
 use actix_web::{HttpRequest, delete, get, post, web};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
-use utoipa::ToSchema;
 
 use crate::domain::ports::{
     DeleteOfflineBundleRequest, ListOfflineBundlesRequest, OfflineBundlePayload,
@@ -25,93 +24,12 @@ use crate::inbound::http::validation::{
     FieldName, missing_field_error, parse_rfc3339_timestamp, parse_uuid,
 };
 
-/// Query parameters for listing offline bundles.
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ListOfflineBundlesQuery {
-    pub device_id: Option<String>,
-}
-
-/// Request payload for creating or updating an offline bundle manifest.
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UpsertOfflineBundleRequestBody {
-    pub id: String,
-    pub device_id: String,
-    pub kind: String,
-    pub route_id: Option<String>,
-    pub region_id: Option<String>,
-    pub bounds: BoundsBody,
-    pub zoom_range: ZoomRangeBody,
-    pub estimated_size_bytes: u64,
-    pub created_at: String,
-    pub updated_at: String,
-    pub status: String,
-    pub progress: f32,
-}
-
-/// Bounds payload for offline bundle requests and responses.
-#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct BoundsBody {
-    pub min_lng: f64,
-    pub min_lat: f64,
-    pub max_lng: f64,
-    pub max_lat: f64,
-}
-
-/// Zoom payload for offline bundle requests and responses.
-#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ZoomRangeBody {
-    pub min_zoom: u8,
-    pub max_zoom: u8,
-}
-
-/// Response payload for an offline bundle manifest.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct OfflineBundleResponse {
-    pub id: String,
-    pub owner_user_id: Option<String>,
-    pub device_id: String,
-    pub kind: String,
-    pub route_id: Option<String>,
-    pub region_id: Option<String>,
-    pub bounds: BoundsBody,
-    pub zoom_range: ZoomRangeBody,
-    pub estimated_size_bytes: u64,
-    pub created_at: String,
-    pub updated_at: String,
-    pub status: String,
-    pub progress: f32,
-}
-
-/// Response payload for listing offline bundles.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ListOfflineBundlesResponseBody {
-    pub bundles: Vec<OfflineBundleResponse>,
-}
-
-/// Response payload for upserting an offline bundle.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UpsertOfflineBundleResponseBody {
-    pub bundle_id: String,
-    #[serde(rename = "replayed")]
-    pub is_replayed: bool,
-    pub bundle: OfflineBundleResponse,
-}
-
-/// Response payload for deleting an offline bundle.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct DeleteOfflineBundleResponseBody {
-    pub bundle_id: String,
-    #[serde(rename = "replayed")]
-    pub is_replayed: bool,
-}
+mod bodies;
+pub use bodies::{
+    BoundsBody, DeleteOfflineBundleResponseBody, ListOfflineBundlesQuery,
+    ListOfflineBundlesResponseBody, OfflineBundleResponse, UpsertOfflineBundleRequestBody,
+    UpsertOfflineBundleResponseBody, ZoomRangeBody,
+};
 
 #[derive(Debug, Deserialize)]
 struct OfflineBundlePath {

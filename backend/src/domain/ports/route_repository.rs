@@ -15,6 +15,7 @@ define_port_error! {
     }
 }
 
+/// Persistence port for route plans, looked up by request identifier.
 #[async_trait]
 pub trait RouteRepository: Send + Sync {
     /// Domain-specific plan representation.

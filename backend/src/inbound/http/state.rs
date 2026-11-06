@@ -21,26 +21,42 @@ use crate::domain::ports::{
 /// Parameter object bundling all port implementations for HTTP handlers.
 #[derive(Clone)]
 pub struct HttpStatePorts {
+    /// Authentication use case for login flows.
     pub login: Arc<dyn LoginService>,
+    /// Use case for listing users.
     pub users: Arc<dyn UsersQuery>,
+    /// Use case for reading the current user's profile.
     pub profile: Arc<dyn UserProfileQuery>,
+    /// Use case for updating a user's interest theme selections.
     pub interests: Arc<dyn UserInterestsCommand>,
+    /// Use case for updating user preferences, guarded by revision checks.
     pub preferences: Arc<dyn UserPreferencesCommand>,
+    /// Use case for fetching user preferences.
     pub preferences_query: Arc<dyn UserPreferencesQuery>,
+    /// Use case for updating route annotations, guarded by revision checks.
     pub route_annotations: Arc<dyn RouteAnnotationsCommand>,
+    /// Use case for fetching route annotations.
     pub route_annotations_query: Arc<dyn RouteAnnotationsQuery>,
+    /// Use case for submitting route requests with idempotency support.
     pub route_submission: Arc<dyn RouteSubmissionService>,
+    /// Port for reading Explore catalogue snapshots.
     pub catalogue: Arc<dyn CatalogueRepository>,
+    /// Port for reading descriptor registries.
     pub descriptors: Arc<dyn DescriptorRepository>,
 }
 
 /// Optional ports for endpoints introduced after the initial HTTP state shape.
 #[derive(Clone)]
 pub struct HttpStateExtraPorts {
+    /// Driving port for offline bundle mutations.
     pub offline_bundles: Arc<dyn OfflineBundleCommand>,
+    /// Driving port for offline bundle reads.
     pub offline_bundles_query: Arc<dyn OfflineBundleQuery>,
+    /// Port for persisting and reporting enrichment provenance.
     pub enrichment_provenance: Arc<dyn EnrichmentProvenanceRepository>,
+    /// Driving port for walk session writes.
     pub walk_sessions: Arc<dyn WalkSessionCommand>,
+    /// Driving port for walk session reads.
     pub walk_sessions_query: Arc<dyn WalkSessionQuery>,
 }
 
@@ -59,22 +75,39 @@ impl Default for HttpStateExtraPorts {
 /// Dependency bundle for HTTP handlers.
 #[derive(Clone)]
 pub struct HttpState {
+    /// Authentication use case for login flows.
     pub login: Arc<dyn LoginService>,
+    /// Use case for listing users.
     pub users: Arc<dyn UsersQuery>,
+    /// Use case for reading the current user's profile.
     pub profile: Arc<dyn UserProfileQuery>,
+    /// Use case for updating a user's interest theme selections.
     pub interests: Arc<dyn UserInterestsCommand>,
+    /// Use case for updating user preferences, guarded by revision checks.
     pub preferences: Arc<dyn UserPreferencesCommand>,
+    /// Use case for fetching user preferences.
     pub preferences_query: Arc<dyn UserPreferencesQuery>,
+    /// Use case for updating route annotations, guarded by revision checks.
     pub route_annotations: Arc<dyn RouteAnnotationsCommand>,
+    /// Use case for fetching route annotations.
     pub route_annotations_query: Arc<dyn RouteAnnotationsQuery>,
+    /// Use case for submitting route requests with idempotency support.
     pub route_submission: Arc<dyn RouteSubmissionService>,
+    /// Port for reading Explore catalogue snapshots.
     pub catalogue: Arc<dyn CatalogueRepository>,
+    /// Port for reading descriptor registries.
     pub descriptors: Arc<dyn DescriptorRepository>,
+    /// Driving port for offline bundle mutations.
     pub offline_bundles: Arc<dyn OfflineBundleCommand>,
+    /// Driving port for offline bundle reads.
     pub offline_bundles_query: Arc<dyn OfflineBundleQuery>,
+    /// Port for persisting and reporting enrichment provenance.
     pub enrichment_provenance: Arc<dyn EnrichmentProvenanceRepository>,
+    /// Driving port for walk session writes.
     pub walk_sessions: Arc<dyn WalkSessionCommand>,
+    /// Driving port for walk session reads.
     pub walk_sessions_query: Arc<dyn WalkSessionQuery>,
+    /// Recorder for pagination error observations, chosen by the composition root.
     pub pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
 }
 

@@ -4,63 +4,19 @@
 //! workflows. They are domain-owned and validated before persistence.
 
 use std::collections::HashSet;
-use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::localization::{LocalizationMap, LocalizationValidationError};
-use super::semantic_icon_identifier::{
-    SemanticIconIdentifier, SemanticIconIdentifierValidationError,
-};
+use super::localization::LocalizationMap;
+use super::semantic_icon_identifier::SemanticIconIdentifier;
 use crate::domain::slug::is_valid_slug;
 
 #[cfg(test)]
 mod tests;
 
-/// Validation errors returned by descriptor constructors.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DescriptorValidationError {
-    InvalidSlug { field: &'static str },
-    EmptySafetyPresetToggleIds,
-    DuplicateSafetyPresetToggleId { toggle_id: Uuid },
-    Localization(LocalizationValidationError),
-    IconIdentifier(SemanticIconIdentifierValidationError),
-}
-
-impl fmt::Display for DescriptorValidationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidSlug { field } => write!(
-                f,
-                "{field} must contain lowercase ASCII letters, digits, and hyphens"
-            ),
-            Self::EmptySafetyPresetToggleIds => {
-                write!(f, "safety_preset.safety_toggle_ids must not be empty")
-            }
-            Self::DuplicateSafetyPresetToggleId { toggle_id } => write!(
-                f,
-                "safety_preset.safety_toggle_ids contains duplicate id {toggle_id}"
-            ),
-            Self::Localization(error) => error.fmt(f),
-            Self::IconIdentifier(error) => error.fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for DescriptorValidationError {}
-
-impl From<LocalizationValidationError> for DescriptorValidationError {
-    fn from(value: LocalizationValidationError) -> Self {
-        Self::Localization(value)
-    }
-}
-
-impl From<SemanticIconIdentifierValidationError> for DescriptorValidationError {
-    fn from(value: SemanticIconIdentifierValidationError) -> Self {
-        Self::IconIdentifier(value)
-    }
-}
+mod error;
+pub use error::DescriptorValidationError;
 
 macro_rules! define_simple_descriptor {
     (
@@ -70,13 +26,18 @@ macro_rules! define_simple_descriptor {
         $field_prefix:literal,
         $doc_example:literal
     ) => {
+        /// Input payload for building a validated descriptor of this kind.
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
         #[serde(deny_unknown_fields)]
         pub struct $draft_name {
+            /// Stable identifier for the descriptor.
             pub id: Uuid,
+            /// Lowercase slug, checked for validity on construction.
             pub slug: String,
+            /// Semantic icon identifier used when rendering the descriptor.
             pub icon_key: SemanticIconIdentifier,
+            /// Localized display strings keyed by locale.
             pub localizations: LocalizationMap,
         }
 
@@ -107,9 +68,13 @@ macro_rules! define_simple_descriptor {
                 })
             }
 
+            /// Return the stable identifier of the descriptor.
             pub fn id(&self) -> Uuid { self.id }
+            /// Return the validated slug as a string slice.
             pub fn slug(&self) -> &str { self.slug.as_str() }
+            /// Return the semantic icon identifier used to render the descriptor.
             pub fn icon_key(&self) -> &SemanticIconIdentifier { &self.icon_key }
+            /// Return the localized display strings for the descriptor.
             pub fn localizations(&self) -> &LocalizationMap { &self.localizations }
         }
 
@@ -235,8 +200,11 @@ assert_eq!(toggle.slug(), "well-lit");
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct InterestTheme {
+    /// Stable identifier for the interest theme.
     pub id: Uuid,
+    /// Display name shown in preference pickers.
     pub name: String,
+    /// Optional longer text explaining the theme, when one is supplied.
     pub description: Option<String>,
 }
 
@@ -257,10 +225,15 @@ impl InterestTheme {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct SafetyPresetDraft {
+    /// Stable identifier for the safety preset.
     pub id: Uuid,
+    /// Lowercase slug, checked for validity on construction.
     pub slug: String,
+    /// Semantic icon identifier used when rendering the preset.
     pub icon_key: SemanticIconIdentifier,
+    /// Localized display strings keyed by locale.
     pub localizations: LocalizationMap,
+    /// Safety toggle identifiers bundled by the preset; must be non-empty and unique.
     pub safety_toggle_ids: Vec<Uuid>,
 }
 
@@ -310,18 +283,23 @@ impl SafetyPreset {
         Self::try_from(draft)
     }
 
+    /// Return the stable identifier of the safety preset.
     pub fn id(&self) -> Uuid {
         self.id
     }
+    /// Return the validated slug as a string slice.
     pub fn slug(&self) -> &str {
         self.slug.as_str()
     }
+    /// Return the semantic icon identifier used to render the preset.
     pub fn icon_key(&self) -> &SemanticIconIdentifier {
         &self.icon_key
     }
+    /// Return the localized display strings for the preset.
     pub fn localizations(&self) -> &LocalizationMap {
         &self.localizations
     }
+    /// Return the safety toggle identifiers bundled by the preset, in stored order.
     pub fn safety_toggle_ids(&self) -> &[Uuid] {
         self.safety_toggle_ids.as_slice()
     }

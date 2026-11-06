@@ -12,9 +12,13 @@ use crate::domain::localization::LocalizationMap;
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct TrendingRouteHighlightDraft {
+    /// Unique identifier for the highlight.
     pub id: Uuid,
+    /// Identifier of the route summary the highlight overlays.
     pub route_summary_id: Uuid,
+    /// Trend change label, such as `+12%`; must not be blank.
     pub trend_delta: String,
+    /// Localized subtitle copy keyed by locale code.
     pub subtitle_localizations: LocalizationMap,
 }
 
@@ -45,15 +49,19 @@ impl TrendingRouteHighlight {
         })
     }
 
+    /// Return the highlight's unique identifier.
     pub fn id(&self) -> Uuid {
         self.id
     }
+    /// Return the identifier of the overlaid route summary.
     pub fn route_summary_id(&self) -> Uuid {
         self.route_summary_id
     }
+    /// Borrow the validated trend change label, such as `+12%`.
     pub fn trend_delta(&self) -> &str {
         self.trend_delta.as_str()
     }
+    /// Borrow the localized subtitle copy keyed by locale code.
     pub fn subtitle_localizations(&self) -> &LocalizationMap {
         &self.subtitle_localizations
     }
