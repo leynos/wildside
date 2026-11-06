@@ -14,8 +14,8 @@ use apalis_postgres::PgTask;
 use serde_json::{Value, json};
 
 use super::doubles::{
-    RecordingMetrics, RecordingPersistence, TestJob, WORKER, WriteOutcome, service,
-    task_with_identity, task_without_id,
+    DeliveryIdentity, RecordingMetrics, RecordingPersistence, TestJob, WORKER, WriteOutcome,
+    service, task_with,
 };
 use crate::domain::jobs::retry::{JobErrorKind, JobFailure};
 use crate::domain::ports::RouteRetryOutcome;
@@ -39,29 +39,16 @@ impl Harness {
         }
     }
 
-    /// Deliver `payload` once through a task with the chosen identities.
+    /// Deliver `payload` once through a task with the chosen identity.
     ///
     /// The handler always fails retryably, so the wrapper's persistence
     /// precondition is the only thing that decides whether a write happens.
     async fn deliver(
         &self,
         payload: Value,
-        worker: Option<&'static str>,
-        lock_by: Option<&'static str>,
+        identity: DeliveryIdentity<'static>,
     ) -> Result<(), BoxDynError> {
-        self.deliver_task(task_with_identity(payload, 1, worker, lock_by))
-            .await
-    }
-
-    /// Deliver a task that carries no identifier.
-    async fn deliver_without_id(
-        &self,
-        payload: Value,
-        worker: Option<&'static str>,
-        lock_by: Option<&'static str>,
-    ) -> Result<(), BoxDynError> {
-        self.deliver_task(task_without_id(payload, 1, worker, lock_by))
-            .await
+        self.deliver_task(task_with(payload, 1, identity)).await
     }
 
     async fn deliver_task(&self, task: PgTask<Value>) -> Result<(), BoxDynError> {
@@ -94,56 +81,27 @@ impl Harness {
     }
 }
 
+#[rstest::rstest]
+#[case::missing_task_id(Some(WORKER), Some(WORKER), false)]
+#[case::missing_worker_context(None, Some(WORKER), true)]
+#[case::missing_lock_by(Some(WORKER), None, true)]
+#[case::disagreeing_worker(Some(WORKER), Some("another-worker"), true)]
 #[tokio::test]
-async fn missing_task_id_writes_nothing() {
+async fn unproven_ownership_writes_nothing(
+    #[case] worker: Option<&'static str>,
+    #[case] lock_by: Option<&'static str>,
+    #[case] has_task_id: bool,
+) {
     let harness = Harness::new();
+    let identity = DeliveryIdentity::new(worker, lock_by);
+    let identity = if has_task_id {
+        identity
+    } else {
+        identity.without_task_id()
+    };
 
     let result = harness
-        .deliver_without_id(
-            json!({"v": "v1", "probeId": "probe"}),
-            Some(WORKER),
-            Some(WORKER),
-        )
-        .await;
-
-    assert!(result.is_err(), "the delivery stays failed");
-    harness.assert_refused();
-}
-
-#[tokio::test]
-async fn missing_worker_context_writes_nothing() {
-    let harness = Harness::new();
-
-    let result = harness
-        .deliver(json!({"v": "v1", "probeId": "probe"}), None, Some(WORKER))
-        .await;
-
-    assert!(result.is_err(), "the delivery stays failed");
-    harness.assert_refused();
-}
-
-#[tokio::test]
-async fn missing_lock_by_writes_nothing() {
-    let harness = Harness::new();
-
-    let result = harness
-        .deliver(json!({"v": "v1", "probeId": "probe"}), Some(WORKER), None)
-        .await;
-
-    assert!(result.is_err(), "the delivery stays failed");
-    harness.assert_refused();
-}
-
-#[tokio::test]
-async fn mismatched_worker_and_lock_by_writes_nothing() {
-    let harness = Harness::new();
-
-    let result = harness
-        .deliver(
-            json!({"v": "v1", "probeId": "probe"}),
-            Some(WORKER),
-            Some("another-worker"),
-        )
+        .deliver(json!({"v": "v1", "probeId": "probe"}), identity)
         .await;
 
     assert!(result.is_err(), "the delivery stays failed");
@@ -157,8 +115,7 @@ async fn matching_worker_and_lock_by_persists_the_retry() {
     let result = harness
         .deliver(
             json!({"v": "v1", "probeId": "probe"}),
-            Some(WORKER),
-            Some(WORKER),
+            DeliveryIdentity::new(Some(WORKER), Some(WORKER)),
         )
         .await;
 

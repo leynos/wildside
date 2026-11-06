@@ -162,65 +162,58 @@ impl RecordingMetrics {
 
 /// Build a delivery whose worker context and `lock_by` agree.
 pub(super) fn task(payload: Value, attempt: usize) -> PgTask<Value> {
-    task_with_identity(payload, attempt, Some(WORKER), Some(WORKER))
-}
-
-/// Build a delivery with a chosen worker context and `lock_by`.
-///
-/// `worker` is the name stored in the task's [`WorkerContext`]; `lock_by` is
-/// the worker recorded on the Apalis context. The wrapper persists a failure
-/// only when both are present and agree, so tests use this to exercise each
-/// missing or mismatched combination.
-pub(super) fn task_with_identity(
-    payload: Value,
-    attempt: usize,
-    worker: Option<&str>,
-    lock_by: Option<&str>,
-) -> PgTask<Value> {
-    build_task(
+    task_with(
         payload,
         attempt,
-        DeliveryIdentity {
-            worker,
-            lock_by,
-            task_id: Some(TASK_ID),
-        },
-    )
-}
-
-/// Build a delivery that carries no task identifier.
-///
-/// The wrapper needs the task identifier to address the row it would update,
-/// so a delivery without one must be refused even when the worker identities
-/// agree.
-pub(super) fn task_without_id(
-    payload: Value,
-    attempt: usize,
-    worker: Option<&str>,
-    lock_by: Option<&str>,
-) -> PgTask<Value> {
-    build_task(
-        payload,
-        attempt,
-        DeliveryIdentity {
-            worker,
-            lock_by,
-            task_id: None,
-        },
+        DeliveryIdentity::new(Some(WORKER), Some(WORKER)),
     )
 }
 
 /// The identity a task double carries.
 ///
 /// The wrapper writes only when it can name both the row and the worker that
-/// owns it, so tests vary these three fields independently.
-struct DeliveryIdentity<'a> {
+/// owns it, so tests vary these three fields independently. The identity
+/// starts out naming [`TASK_ID`]; [`without_task_id`](Self::without_task_id)
+/// removes that name to exercise the refusal path.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct DeliveryIdentity<'a> {
     worker: Option<&'a str>,
     lock_by: Option<&'a str>,
     task_id: Option<&'a str>,
 }
 
-fn build_task(payload: Value, attempt: usize, identity: DeliveryIdentity<'_>) -> PgTask<Value> {
+impl<'a> DeliveryIdentity<'a> {
+    /// An identity for a delivery that names [`TASK_ID`].
+    ///
+    /// `worker` is the name stored in the task's [`WorkerContext`]; `lock_by`
+    /// is the worker recorded on the Apalis context. The wrapper persists a
+    /// failure only when both are present and agree, so tests pass each
+    /// missing or mismatched combination.
+    pub(super) fn new(worker: Option<&'a str>, lock_by: Option<&'a str>) -> Self {
+        Self {
+            worker,
+            lock_by,
+            task_id: Some(TASK_ID),
+        }
+    }
+
+    /// The same identity on a delivery that carries no task identifier.
+    ///
+    /// The wrapper needs the identifier to address the row it would update, so
+    /// a delivery without one must be refused even when the worker identities
+    /// agree.
+    pub(super) fn without_task_id(mut self) -> Self {
+        self.task_id = None;
+        self
+    }
+}
+
+/// Build a delivery with the chosen identity.
+pub(super) fn task_with(
+    payload: Value,
+    attempt: usize,
+    identity: DeliveryIdentity<'_>,
+) -> PgTask<Value> {
     let mut data = Extensions::default();
     if let Some(worker) = identity.worker {
         // `WorkerContext::new` carries the service type only for diagnostics,
