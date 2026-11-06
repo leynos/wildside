@@ -189,3 +189,64 @@ impl PostgresRetryScheduler {
         Ok(result.rows_affected() == 1)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Range guards that must be rejected before PostgreSQL is contacted.
+
+    use super::{PostgresRetryScheduler, TerminalRetryReason, TerminalRetryUpdate};
+    use sqlx::Error as SqlxError;
+    use sqlx::postgres::PgPoolOptions;
+    use std::num::NonZeroU32;
+    use std::time::Duration;
+
+    /// Build a scheduler whose pool never opens a connection.
+    ///
+    /// The range guards under test run before the query is executed, so a
+    /// lazily connected pool keeps them fast and independent of a server.
+    fn scheduler_without_server() -> PostgresRetryScheduler {
+        let pool = PgPoolOptions::new()
+            .connect_lazy("postgres://wildside@127.0.0.1:1/wildside")
+            .expect("lazy pool parses");
+        PostgresRetryScheduler::new(pool)
+    }
+
+    #[tokio::test]
+    async fn schedule_retry_rejects_a_delay_beyond_the_interval_range() {
+        let scheduler = scheduler_without_server();
+
+        let error = scheduler
+            .schedule_retry("task", "worker", Duration::from_secs(u64::MAX))
+            .await
+            .expect_err("the delay cannot be expressed in microseconds as i64");
+
+        assert!(
+            matches!(&error, SqlxError::Protocol(message)
+                if message.contains("retry delay exceeds")),
+            "expected a protocol error about the retry delay, got {error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_terminal_failure_rejects_an_attempt_beyond_the_integer_range() {
+        let scheduler = scheduler_without_server();
+        let update = TerminalRetryUpdate {
+            task_id: "task",
+            worker_id: "worker",
+            attempt: NonZeroU32::new(u32::MAX).expect("u32::MAX is non-zero"),
+            reason: TerminalRetryReason::Exhausted,
+            shrink_limit: true,
+        };
+
+        let error = scheduler
+            .record_terminal_failure(update)
+            .await
+            .expect_err("the attempt cannot be stored in an i32 column");
+
+        assert!(
+            matches!(&error, SqlxError::Protocol(message)
+                if message.contains("retry attempt exceeds")),
+            "expected a protocol error about the retry attempt, got {error:?}"
+        );
+    }
+}
