@@ -11,7 +11,9 @@ use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::json;
 
-pub use retry_policy_world::{QueueRetryPolicyWorld, RetryHandlerMode, assert_deadlines_advance};
+pub(crate) use retry_policy_world::{
+    QueueRetryPolicyWorld, RetryHandlerMode, assert_deadlines_advance,
+};
 
 #[fixture]
 fn world() -> QueueRetryPolicyWorld {
