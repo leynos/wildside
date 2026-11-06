@@ -2068,8 +2068,39 @@ caret requirements.
   context at four of them. `git diff --check` is clean and
   `cargo metadata --locked` exits 0. The replay produced `490f004`; gates on
   the replayed candidate and publication remain pending.
+- [x] (2026-11-06 Europe/Berlin) Replayed the 74-commit series onto
+  `origin/main` `bcba8b1` (*Deny missing_docs in backend and
+  architecture-lint*, PR #587) after the hosted `build` and `coverage` jobs
+  failed on six `missing documentation for a struct field` diagnostics. The six
+  sites were documented in `89567f9` first, then the series replayed with the
+  explicit Weave bypass. `range-diff` pairs all 74 commits, `git diff --check`
+  is clean, and recovery refs are
+  `refs/recovery/457-20261106-{old-head,old-base,target}`. The replay produced
+  `148a547`.
+- [x] (2026-11-06 Europe/Berlin) Cleared the second, previously invisible class
+  of the same defect: `missing_docs = "deny"` also covers integration-test
+  targets, so 65 public helpers in the `queue_dead_letter_bdd` and
+  `queue_retry_policy_bdd` world modules were undocumented. Commit `c64d1f1`
+  reduces them to `pub(crate)`, matching the convention already used by
+  `offline_bundle_walk_session_bdd` on main, rather than documenting test
+  plumbing. `cargo check --locked --all-targets --all-features` and
+  `cargo clippy` under the CI deny flags both exit 0. The nine sequential gates
+  are running on `c64d1f1`; publication remains pending.
 
 ## Surprises & discoveries
+
+- Observation (2026-11-06): a `pull_request` workflow checks out the PR **merge
+  ref**, not the branch head. Main's `bcba8b1` added `missing_docs = "deny"` to
+  `backend/Cargo.toml` and documented 548 items; because this branch was still
+  based on `4fd681e`, the hosted build saw main's documentation while the local
+  tree did not, so the same six diagnostics appeared only in CI. A local
+  reproduction on the stale base reported 587 errors instead of six, which
+  looked like a tooling discrepancy but was simply the pre-#587 tree. Replaying
+  onto `bcba8b1` made the local gates cover the failure class, and immediately
+  exposed a second one: the deny also applies to integration-test targets, so 65
+  `pub` helpers in the queue BDD world modules needed either documentation or
+  crate-scoped visibility. `pub(crate)` was chosen, matching main's
+  `offline_bundle_walk_session_bdd` convention.
 
 - Observation (2026-10-26 EP-M2 focused run): the shared test lock remains
   held by an older PostgreSQL process under the user systemd manager, so the
