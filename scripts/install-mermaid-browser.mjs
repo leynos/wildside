@@ -118,14 +118,42 @@ export function installPinnedBrowsers({
   execPath = process.execPath,
   run = spawnSync,
 } = {}) {
+  const command = [requireCliPath(cliPath), 'browsers', 'install'];
+  assertInstallSucceeded(run(execPath, command, { stdio: 'inherit' }));
+}
+
+/**
+ * Returns the CLI path to invoke, or explains why it cannot be invoked.
+ *
+ * @param {string} cliPath - The resolved path to Puppeteer's CLI script.
+ * @returns {string} The same path, once it is known to be usable.
+ * @throws {Error} If no path was resolved.
+ */
+function requireCliPath(cliPath) {
   if (typeof cliPath !== 'string' || cliPath.length === 0) {
     throw new Error('Cannot install Puppeteer browsers without a CLI path.');
   }
 
-  const result = run(execPath, [cliPath, 'browsers', 'install'], {
-    stdio: 'inherit',
-  });
+  return cliPath;
+}
 
+/**
+ * Throws unless `puppeteer browsers install` completed successfully.
+ *
+ * The three failure modes stay distinct because they need different fixes: a
+ * process that could not start, one killed by a signal, and one that ran and
+ * exited non-zero.
+ *
+ * @param {{
+ *   error?: Error,
+ *   signal?: string | null,
+ *   status: number | null,
+ * }} result - The value `spawnSync` returned.
+ * @returns {void}
+ * @throws {Error} If the command failed to start, was signalled, or exited
+ *   with a non-zero status.
+ */
+function assertInstallSucceeded(result) {
   if (result.error) {
     throw result.error;
   }
