@@ -5,9 +5,12 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (approved for execution 2026-10-30; implementation complete
-and rebased onto `main` at `b3e37d1` on 2026-11-04; the gates for that replay
-and its publication are pending)
+Status: IN PROGRESS (approved for execution 2026-10-30; implementation
+complete, replayed onto `main` `bcba8b1`, and published as PR #457; the
+pre-merge reconciliation of 2026-11-07 added the terminal-write canaries, the
+Makefile command-boundary tests, the const-context tests, and the module and
+user-guide documentation, and the remaining work is the final gate run, a fresh
+CodeRabbit review, and merge)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -1025,44 +1028,85 @@ Feature specification (keep it in sync with the implementation):
 ```gherkin
 Feature: Queue retry policy with durable exponential backoff
 
-  Scenario: A transiently failing job is retried with backoff then succeeds
+  Scenario: A transiently failing job is retried before it succeeds
     Given a queue with a retry policy of 4 attempts and millisecond backoff
     And a job whose handler fails twice then succeeds
     When the worker processes the queue
     Then the handler runs three times with attempts 1, 2 and 3
-    And each rerun starts no earlier than the retry time its failure scheduled
+    And each rerun starts no earlier than its persisted retry time
     And the job completes with status "Done"
+    And the acknowledgement preserves the final attempt state
+    And retry metrics contain 2 scheduled, 0 exhausted and 0 fatal outcomes
 
-  Scenario: A persistently failing job exhausts its attempts and is dead-lettered
+  Scenario: A retryable failure is dead-lettered after exhausting attempts
     Given a queue with a retry policy of 3 attempts and millisecond backoff
     And a job whose handler always fails with a retryable error
     When the worker processes the queue
-    Then the handler runs exactly three times in total
-    And the job is recorded as dead because its retries were exhausted
+    Then the handler runs exactly 3 times
+    And the row is stored as Killed and satisfies the dead predicate
+    And the persisted terminal reason is "exhausted"
+    And the acknowledgement preserves the final attempt state
     And further polling delivers no more runs
+    And retry metrics contain 2 scheduled, 1 exhausted and 0 fatal outcomes
 
-  Scenario: A fatally failing job is dead-lettered immediately
+  Scenario: A fatal failure is dead-lettered immediately
     Given a queue with a retry policy of 3 attempts and millisecond backoff
     And a job whose handler fails with a fatal error
+    And the job has an unrelated metadata marker
     When the worker processes the queue
-    Then the handler runs once
-    And the job is recorded as dead because of a fatal error
+    Then the handler runs exactly once
+    And the row is stored as Failed and satisfies the dead predicate
+    And the persisted terminal reason is fatal
+    And the acknowledgement preserves the final attempt state
+    And unrelated metadata survives acknowledgement
     And further polling delivers no more runs
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
 
-  Scenario: Policy exhaustion keeps its reason when the stored limit is higher
-    Given a pre-existing job permits 25 attempts
-    And the current queue policy permits 3 attempts
+  Scenario: A fatal failure at the attempt limit stores Killed
+    Given a queue with a retry policy of one attempt and millisecond backoff
+    And a job whose handler fails with a fatal error
+    When the worker processes the queue
+    Then the handler runs exactly once
+    And the row is stored as Killed and satisfies the dead predicate
+    And the persisted terminal reason is fatal
+    And the acknowledgement preserves the final attempt state
+    And further polling delivers no more runs
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
+
+  Scenario: A lower policy limit dead-letters a pre-existing job
+    Given a queue with a retry policy of 3 attempts and millisecond backoff
+    And a pre-existing job permits 25 attempts
     And its handler always fails with a retryable error
     When the worker processes the queue
-    Then the handler runs exactly three times in total
+    Then the handler runs exactly 3 times
     And the row is stored as Failed and satisfies the dead predicate
-    And the persisted terminal reason is Exhausted rather than Fatal
+    And the persisted terminal reason is "exhausted"
+    And the acknowledgement preserves the final attempt state
     And further polling delivers no more runs
+    And retry metrics contain 2 scheduled, 1 exhausted and 0 fatal outcomes
 
-  Scenario: An enqueued job carries the queue's retry budget
-    Given a queue with a retry policy of 5 attempts
+  Scenario: An enqueued job carries the queue retry budget
+    Given a queue with a retry policy of 5 attempts and millisecond backoff
     When a job is enqueued through the route queue adapter
     Then the stored job allows at most 5 attempts
+
+  Scenario: A malformed stored job is dead-lettered without invoking the handler
+    Given a queue with a retry policy of 4 attempts and millisecond backoff
+    And a stored job whose body is malformed
+    When the worker polls the queue for a bounded window
+    Then the handler never runs
+    And the latest job row satisfies the dead predicate
+    And the latest job row records the terminal reason "fatal"
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
+
+  Scenario: An unsupported envelope version is dead-lettered without invoking the handler
+    Given a queue with a retry policy of 4 attempts and millisecond backoff
+    And a stored job whose envelope version is unsupported
+    When the worker polls the queue for a bounded window
+    Then the handler never runs
+    And the latest job row satisfies the dead predicate
+    And the latest job row records the terminal reason "fatal"
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
 ```
 
 Plateau: the retry policy is enforced end to end under test. Production
@@ -2085,7 +2129,29 @@ caret requirements.
   `offline_bundle_walk_session_bdd` on main, rather than documenting test
   plumbing. `cargo check --locked --all-targets --all-features` and
   `cargo clippy` under the CI deny flags both exit 0. The nine sequential gates
-  are running on `c64d1f1`; publication remains pending.
+  passed on `c64d1f1` and on `b90a6ca`, which only committed this plan's
+  Progress entries.
+- [x] (2026-11-06 Europe/Berlin) Split the classified failure types out of
+  `backend/src/domain/jobs/retry.rs`. The `89567f9` documentation additions
+  pushed that module to 402 lines, over the 400-line `module-max-lines` ceiling
+  enforced by Whitaker. Commit `6f80639` moves `JobErrorKind`, `JobFailure`, and
+  `MAX_JOB_FAILURE_MESSAGE_BYTES` into `retry/failure.rs` and re-exports them,
+  so no call path changes while the module returns to 314 lines. The split is
+  semantic rather than mechanical: `retry.rs` now owns policy and decision, and
+  `failure.rs` owns classification and the bounded payload-free message.
+- [x] (2026-11-06 Europe/Berlin) Cleared the audit block that appeared when
+  RustSec published four advisories against the pinned `actix-web` and
+  `actix-http` releases. `make audit` failed on RUSTSEC-2026-0446, -0447,
+  -0448, and -0455. Commit `09e07c6` is a lockfile-only bump to `actix-web`
+  4.18.2 and `actix-http` 3.20.3, which also advances `actix-server` to 2.8.0
+  and `actix-web-codegen` to 4.5.0 and drops `socket2` 0.5.10. No manifest,
+  source, or test changed, and `make audit` then exited 0 with 16 allowed
+  warnings.
+- [x] (2026-11-06 Europe/Berlin) Published `09e07c6` over SSH with an explicit
+  lease and confirmed the remote head matches the local commit. All nine gates
+  passed on that content and the hosted run for the same commit reported
+  `coverage`, the CodeScene review, and the Gecko security review green, with
+  the `build` job still running when this entry was written.
 
 ## Surprises & discoveries
 
@@ -3063,3 +3129,35 @@ same database clock keeps the delay free of application/database skew.
 Clippy denies `too_many_arguments` at five under `-D warnings`, so the test
 helpers take a small row or identity struct rather than a positional list of
 the columns that describe one delivery.
+
+### Pre-merge reconciliation of 2026-11-07
+
+The re-posted pre-merge table still carried rows from the `553277a` review.
+Each row was re-checked against the current tree; three were genuinely open and
+were repaired, and the rest were already satisfied.
+
+The terminal-write ownership guard had no canary of its own.
+`backend/tests/apalis_retry_canaries/scheduler.rs` now drives
+`record_terminal_failure` against a real row for the three cases the row named:
+an owned running row (asserting the return value, the shrunk cap, and the
+preserved unrelated metadata), a row owned by another worker, and a completed
+row. The refusal cases compare the whole persisted state before and after.
+
+The Prometheus adapter's module documentation still described enqueue metrics
+only; it now names both durable-retry counters and says what each outcome label
+separates. The Makefile environment assertions were text matches, so a new
+`backend/tests/environment_policy_contract/make_boundary_tests.rs` runs `make`
+as a child process against probe targets: it proves the defaults, that a caller
+override containing spaces, a dollar sign, quotes, and an apostrophe
+round-trips through `shell_quote` unchanged, and that an unrelated recipe does
+not inherit the password.
+
+The compile-time row asked for const-context usage of the new public
+`const fn`s. `backend/tests/retry_const_api_compile_time.rs` evaluates
+`JitterSample::midpoint` and the four `as_label` methods in `const` items, so
+losing a `const` qualifier is a compile failure rather than a silent change.
+
+The user-facing row asked for a versioned migration guide. The backend crate is
+`0.1.0`; there is no 0.2.0 release to migrate from, so the user guide carries
+the migration instead. It now shows the old and new constructor calls alongside
+the no-shims policy and the stored-budget behaviour.
