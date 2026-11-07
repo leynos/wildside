@@ -110,20 +110,6 @@ class AuditException(typ.TypedDict):
     introducedBy: typ.NotRequired[str]
 
 
-#: The two unfixable advisories against `extract-zip` 2.0.1. Both rest on the
-#: same argument, so both die with the same upgrade.
-EXTRACT_ZIP_EXCEPTION_IDS = (
-    "EXTRACT_ZIP_SYMLINK_TRAVERSAL_2026_08",
-    "EXTRACT_ZIP_ARBITRARY_WRITE_2026_09",
-)
-EXTRACT_ZIP_TRACKING_ISSUE = "https://github.com/leynos/wildside/issues/491"
-
-#: The sole package the `extract-zip` reasoning permits as its parent. The
-#: argument is not that `extract-zip` is harmless but that the only archive it
-#: opens is one Puppeteer fetched from Google's endpoints, so a second consumer
-#: retires the argument even though the package name is still in the lockfile.
-EXTRACT_ZIP_PERMITTED_DEPENDENT = "@puppeteer/browsers"
-
 #: The two Picomatch advisories Bun cannot resolve through `resolutions`.
 PICOMATCH_EXCEPTION_IDS = (
     "BUN_PICOMATCH_POSIX_2026_06",
@@ -170,8 +156,7 @@ MINIMATCH_GLOB_EXCEPTION_IDS = (
 #: Every ledger entry must appear here, so that adding an exception means
 #: writing the condition that retires it rather than only a date.
 EXCEPTIONS_WITH_REMOVAL_INVARIANTS = frozenset(
-    EXTRACT_ZIP_EXCEPTION_IDS
-    + PICOMATCH_EXCEPTION_IDS
+    PICOMATCH_EXCEPTION_IDS
     + BRACES_EXCEPTION_IDS
     + ZOD_EXCEPTION_IDS
     + DEEPMERGE_EXCEPTION_IDS
@@ -262,53 +247,6 @@ def test_every_audit_exception_has_a_tested_removal_invariant(
         f"these audit exceptions have no tested removal invariant: "
         f"{sorted(uncovered)}. Add a test here that fails once the entry's "
         f"reasoning stops holding, and register its identifier."
-    )
-
-
-def test_the_extract_zip_exceptions_are_void_once_puppeteer_drops_it(
-    ledger: list[AuditException], packages: lock.PackageTable
-) -> None:
-    """Both `extract-zip` exceptions rest on the package still being reachable.
-
-    `extract-zip` 2.0.1 has no patched release, so the entries argue from
-    reachability instead: only `puppeteer` 23 pulls it in, through
-    `@puppeteer/browsers` 2.x, to unpack an archive Puppeteer fetched itself.
-    `@puppeteer/browsers` 3.x replaced it with `modern-tar`, so upgrading to
-    `puppeteer` 25.7 or later removes the package and the advisories together.
-    Failing here is the intended outcome of that upgrade: delete both entries.
-    """
-    present = _coupled_group(ledger, EXTRACT_ZIP_EXCEPTION_IDS)
-    if not present:
-        pytest.skip("the extract-zip advisories are no longer excepted")
-
-    assert lock.resolved_versions(packages, "extract-zip"), (
-        f"{sorted(present)} except advisories against extract-zip, but Bun no "
-        f"longer resolves it. Remove the entries and close "
-        f"{EXTRACT_ZIP_TRACKING_ISSUE}."
-    )
-
-
-def test_the_extract_zip_exceptions_are_void_once_anything_else_pulls_it(
-    ledger: list[AuditException], packages: lock.PackageTable
-) -> None:
-    """The entries except a package, but the argument is about one caller.
-
-    `run-bun-audit.js` turns a ledger entry into a repository-wide
-    `--ignore`, so a second consumer of `extract-zip` would be covered by an
-    exception written about Puppeteer's trusted Chrome archive. Merely
-    checking that the package is still resolved would not notice.
-    """
-    present = _coupled_group(ledger, EXTRACT_ZIP_EXCEPTION_IDS)
-    if not present:
-        pytest.skip("the extract-zip advisories are no longer excepted")
-
-    dependents = lock.dependents_of(packages, "extract-zip")
-    unexpected = dependents - {EXTRACT_ZIP_PERMITTED_DEPENDENT}
-    assert not unexpected, (
-        f"{sorted(present)} except extract-zip on the grounds that only "
-        f"{EXTRACT_ZIP_PERMITTED_DEPENDENT} unpacks an archive Puppeteer "
-        f"fetched itself, but {sorted(unexpected)} now depend on it too. The "
-        f"exceptions are repository-wide, so they would cover those callers."
     )
 
 
