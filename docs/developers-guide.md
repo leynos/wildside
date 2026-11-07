@@ -190,6 +190,22 @@ carries examples, in `PY_DOCTEST_PATHS`. A named list goes stale in silence, so
 of the Makefile and fails if any file carrying an example lies outside it. A
 script added with an example fails that contract until it is collected.
 
+## Fetching dependencies before tests
+
+The backend and pagination compile-fail tests start their own `cargo`. Cargo
+resolves dependencies while it holds the package-cache lock in `$CARGO_HOME`,
+so a nested `cargo` that resolves cold can wait on another repository's build
+for many minutes. The fix is to fetch once, before any test starts:
+
+- `make test-rust` runs `cargo fetch --locked` first. A failed fetch stops the
+  run.
+- The `ci.yml` build and coverage jobs, and `coverage-main.yml`, run the same
+  command as an unconditional step before their first test or coverage step,
+  with no `|| true`.
+
+Prepare a direct or offline run with `cargo fetch --locked` first. The estate
+lint rule `nested-cargo-offline-tests` checks both.
+
 ## Workflow pins and Dependabot
 
 Dependabot owns the upgrade of GitHub Actions and reusable workflows, including
