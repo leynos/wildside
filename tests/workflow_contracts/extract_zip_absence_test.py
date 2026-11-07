@@ -171,7 +171,9 @@ def test_a_bun_specifier_resolving_the_package_is_detected(specifier: str) -> No
     non-numeric or peer-qualified specifier cannot slip past the ban.
     """
     packages: bun.PackageTable = {"some-package/extract-zip": [specifier, "", {}]}
-    assert bun_resolves(packages)
+    assert bun_resolves(packages), (
+        f"{specifier!r} must be reported as resolving {FORBIDDEN_PACKAGE}"
+    )
 
 
 def test_a_bun_dependency_edge_on_the_package_is_detected() -> None:
@@ -179,7 +181,9 @@ def test_a_bun_dependency_edge_on_the_package_is_detected() -> None:
     packages: bun.PackageTable = {
         "parent": ["parent@1.0.0", "", {"dependencies": {"extract-zip": "^2"}}]
     }
-    assert bun_dependents(packages) == {"parent"}
+    assert bun_dependents(packages) == {"parent"}, (
+        "a declared dependency edge must name its parent"
+    )
 
 
 def test_a_target_in_only_one_lockfile_is_detected() -> None:
@@ -191,20 +195,29 @@ def test_a_target_in_only_one_lockfile_is_detected() -> None:
     clean_pnpm = "packages: {a@1.0.0: {}}\nsnapshots: {}\n"
     dirty_bun: bun.PackageTable = {"a": ["extract-zip@2.0.1", "", {}]}
 
-    assert bun_resolves(dirty_bun)
-    assert not pnpm_resolves(clean_pnpm)
+    assert bun_resolves(dirty_bun), "the dirty Bun graph must be detected"
+    assert not pnpm_resolves(clean_pnpm), "the clean pnpm graph must not be reported"
 
 
-def test_a_pnpm_key_resolving_the_package_is_detected() -> None:
-    """Scenario: a pnpm key names the package with a peer suffix."""
-    text = "packages: {}\nsnapshots: {extract-zip@2.0.1(get-stream@5.2.0): {}}\n"
-    assert pnpm_resolves(text)
+@pytest.mark.parametrize(
+    ("table", "text"),
+    [
+        ("the packages table", "packages: {extract-zip@2.0.1: {}}\nsnapshots: {}\n"),
+        (
+            "the snapshots table, with a peer suffix",
+            "packages: {}\nsnapshots: {extract-zip@2.0.1(get-stream@5.2.0): {}}\n",
+        ),
+    ],
+)
+def test_a_pnpm_key_resolving_the_package_is_detected(table: str, text: str) -> None:
+    """Scenario: either pnpm package table resolves the package.
 
-
-def test_a_pnpm_package_table_entry_is_detected() -> None:
-    """Scenario: only the `packages` table, not `snapshots`, holds the entry."""
-    text = "packages: {extract-zip@2.0.1: {}}\nsnapshots: {}\n"
-    assert pnpm_resolves(text)
+    Invariant: both tables are searched, so an entry that appears in only one
+    of them is still reported.
+    """
+    assert pnpm_resolves(text), (
+        f"a key in {table} must be reported as resolving {FORBIDDEN_PACKAGE}"
+    )
 
 
 def test_a_peer_suffix_mentioning_the_package_is_not_a_resolution() -> None:
@@ -214,7 +227,9 @@ def test_a_peer_suffix_mentioning_the_package_is_not_a_resolution() -> None:
     in parentheses is not reported as the package itself.
     """
     text = "packages: {other@1.0.0(extract-zip@2.0.1): {}}\nsnapshots: {}\n"
-    assert not pnpm_resolves(text)
+    assert not pnpm_resolves(text), (
+        "a peer suffix must not be read as the package itself"
+    )
 
 
 def test_a_bun_peer_declaration_mentioning_the_package_is_clean() -> None:
@@ -230,8 +245,8 @@ def test_a_bun_peer_declaration_mentioning_the_package_is_clean() -> None:
             {"peerDependencies": {"extract-zip": "^2"}},
         ]
     }
-    assert not bun_resolves(packages)
-    assert not bun_dependents(packages)
+    assert not bun_resolves(packages), "a peer declaration is not a resolution"
+    assert not bun_dependents(packages), "a peer declaration is not an edge"
 
 
 def test_a_bun_path_naming_the_package_but_resolving_another_is_clean() -> None:
@@ -239,8 +254,8 @@ def test_a_bun_path_naming_the_package_but_resolving_another_is_clean() -> None:
     packages: bun.PackageTable = {
         "extract-zip/get-stream": ["get-stream@5.2.0", "", {}]
     }
-    assert not bun_resolves(packages)
-    assert not bun_dependents(packages)
+    assert not bun_resolves(packages), "a dependency path is not a resolution"
+    assert not bun_dependents(packages), "a dependency path is not an edge"
 
 
 def test_a_repeated_pnpm_key_is_refused() -> None:

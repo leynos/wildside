@@ -38,9 +38,9 @@
     "package": "frontend-pwa",
     "advisory": "GHSA-mrhx-c7xc-m3w5",
     "introducedBy": "zod",
-    "reason": "zod is patched only in 4.6.6 and above, and the workspace is on zod 3.25.76 (`^3` in frontend-pwa and packages/types), so the fix is a major-version migration that needs its own change and verification rather than a pin bump. The advisory is memory exhaustion while validating a very large array against an array schema with no length constraint. The only array schema is UsersSchema in packages/types/src/user.ts, applied by customFetchParsed in frontend-pwa/src/api/fetcher.ts to responses from the project's own backend and running in the user's browser tab, so an attacker would need to control the backend response, and the impact is a client-side memory exhaustion of one tab, not a server compromise. The build-time path through chromium-bidi now resolves a patched zod release, so it no longer contributes a vulnerable version. The entry expires after 14 days. Tracked in https://github.com/leynos/wildside/issues/561.",
+    "reason": "zod is patched only in 4.6.6 and above, and the workspace is on zod 3.25.76 (`^3` in frontend-pwa and packages/types), so the fix is a major-version migration that needs its own change and verification rather than a pin bump. The advisory is memory exhaustion while validating a very large array against an array schema with no length constraint. The only array schema is UsersSchema in packages/types/src/user.ts, applied by customFetchParsed in frontend-pwa/src/api/fetcher.ts to responses from the project's own backend and running in the user's browser tab, so an attacker would need to control the backend response, and the impact is a client-side memory exhaustion of one tab, not a server compromise. The build-time path through chromium-bidi now resolves a patched zod release, so it no longer contributes a vulnerable version. The entry was renewed on 2026-11-07 for a further 14 days: the zod 4 migration is still open in https://github.com/leynos/wildside/issues/561, the reach tests in tests/workflow_contracts/zod_exception_test.py still pass, and `pnpm audit` still reports the advisory against zod 3.25.76.",
     "addedAt": "2026-10-24",
-    "expiresAt": "2026-11-07"
+    "expiresAt": "2026-11-21"
   },
   {
     "id": "MINIMATCH_GLOBPARTS_AMPLIFICATION_2026_10",

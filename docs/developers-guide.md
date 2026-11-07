@@ -1057,7 +1057,7 @@ node scripts/install-mermaid-browser.mjs
 The script downloads the pinned `chrome` and `chrome-headless-shell` builds
 through Puppeteer's public `browsers install` command and leaves an existing
 cache untouched. Extraction uses the optional `yauzl` package when one is
-installed and otherwise the platform's `unzip` command, so an install needs
+installed and otherwise the platform's `unzip` command, so installation needs
 `unzip` on `PATH`; no lockfile resolves `yauzl`, and the pins that used to
 force it are gone.
 
