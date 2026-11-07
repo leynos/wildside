@@ -75,6 +75,11 @@ struct LockedDeadJob {
 
 #[async_trait::async_trait]
 impl DeadLetterQueue for PostgresDeadLetterQueue {
+    /// List dead-lettered rows newest first, skipping malformed metadata.
+    ///
+    /// A row qualifies when it is `Killed`, or `Failed` with no cap or an
+    /// exhausted one. Rows are ordered by `done_at` (nulls last) and then id,
+    /// so a page is stable across repeated reads.
     #[tracing::instrument(skip_all, fields(operation = "list_dead", limit))]
     async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError> {
         let requested = usize::try_from(limit).map_err(|_| {
@@ -121,6 +126,11 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
         Ok(dead_jobs)
     }
 
+    /// Reset a dead-lettered row to `Pending` under its queue's attempt budget.
+    ///
+    /// The row is locked with `FOR UPDATE` and only accepted while it still
+    /// satisfies the dead-letter predicate; the transaction then clears the
+    /// lock, resets attempts, and records the incremented requeue count.
     #[tracing::instrument(skip_all, fields(operation = "requeue", job_id = %id.as_str()))]
     async fn requeue(&self, id: &DeadJobId) -> Result<(), DeadLetterError> {
         let mut transaction = self
@@ -185,6 +195,10 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
             .map_err(|error| unavailable("commit dead-job requeue", error))
     }
 
+    /// Permanently delete a row that still satisfies the dead-letter predicate.
+    ///
+    /// A row that is no longer dead is reported rather than removed, so a
+    /// concurrent requeue or a live job cannot be discarded by mistake.
     #[tracing::instrument(skip_all, fields(operation = "discard", job_id = %id.as_str()))]
     async fn discard(&self, id: &DeadJobId) -> Result<(), DeadLetterError> {
         let query = format!(
@@ -207,6 +221,8 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
     }
 }
 
+/// Convert a stored row, dropping it when its attempt or requeue metadata is
+/// invalid rather than surfacing a job the domain cannot represent.
 fn dead_job_from_row(row: DeadJobRow) -> Option<DeadJob> {
     let attempts = match u32::try_from(row.attempts) {
         Ok(attempts) => attempts,
@@ -242,6 +258,8 @@ fn dead_job_from_row(row: DeadJobRow) -> Option<DeadJob> {
     })
 }
 
+/// Map the stored dead-reason label, treating absent or unknown values as
+/// unclassified so an older row remains listable.
 fn dead_reason_from_metadata(value: Option<&str>) -> DeadReason {
     match value {
         Some("fatal") => DeadReason::Fatal,
@@ -271,6 +289,8 @@ fn next_count_value(value: Option<&str>) -> Result<u32, ()> {
         .unwrap_or(Ok(0))
 }
 
+/// Truncate to at most `max_bytes`, backing up to the nearest character
+/// boundary so a multi-byte code point is never split.
 fn truncate_utf8(value: &str, max_bytes: usize) -> String {
     if value.len() <= max_bytes {
         return value.to_owned();

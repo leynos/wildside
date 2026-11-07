@@ -40,6 +40,7 @@ pub(super) struct RetryFailureContext<'a> {
         queue = context.queue_name,
         attempt = context.attempt.get(),
         error_kind = error_kind_label(failure.kind()),
+        outcome = tracing::field::Empty,
     )
 )]
 pub(super) async fn handle_failure(
@@ -61,10 +62,12 @@ pub(super) async fn handle_failure(
     let identity = match (context.task_id, context.worker_id) {
         (Some(task_id), Some(worker_id)) => RetryJobIdentity { task_id, worker_id },
         _ => {
+            tracing::Span::current().record("outcome", "refused");
             record_missing_retry_metadata(context, kind, decision);
             return Err(Box::new(RetryAckError(error_message)));
         }
     };
+    tracing::Span::current().record("outcome", decision_label(decision));
 
     match decision {
         RetryWrapperDecision::Schedule { delay } => {
@@ -139,6 +142,7 @@ fn record_missing_retry_metadata(
         worker_id = identity.worker_id,
         attempt = context.attempt.get(),
         delay_micros = %delay.as_micros(),
+        outcome = tracing::field::Empty,
     )
 )]
 async fn persist_retry_schedule(
@@ -153,6 +157,7 @@ async fn persist_retry_schedule(
         .await
     {
         Ok(true) => {
+            tracing::Span::current().record("outcome", "scheduled");
             context.metrics.observe_retry(RouteRetryOutcome::Scheduled);
             warn!(
                 queue = context.queue_name,
@@ -166,6 +171,7 @@ async fn persist_retry_schedule(
             );
         }
         Ok(false) => {
+            tracing::Span::current().record("outcome", "schedule_failure");
             context
                 .metrics
                 .observe_retry(RouteRetryOutcome::ScheduleFailure);
@@ -180,6 +186,7 @@ async fn persist_retry_schedule(
             );
         }
         Err(error) => {
+            tracing::Span::current().record("outcome", "schedule_failure");
             context
                 .metrics
                 .observe_retry(RouteRetryOutcome::ScheduleFailure);
@@ -210,6 +217,7 @@ async fn persist_retry_schedule(
         worker_id = identity.worker_id,
         attempt = context.attempt.get(),
         reason = plan.reason.as_label(),
+        outcome = tracing::field::Empty,
     )
 )]
 async fn persist_terminal_failure(
@@ -234,6 +242,7 @@ async fn persist_terminal_failure(
         .await;
     match result {
         Ok(true) => {
+            tracing::Span::current().record("outcome", "dead_lettered");
             context
                 .metrics
                 .observe_dead_letter(dead_letter_outcome(reason));
@@ -249,27 +258,33 @@ async fn persist_terminal_failure(
                 "job failure recorded as terminal"
             );
         }
-        Ok(false) => warn!(
-            queue = context.queue_name,
-            task_id = identity.task_id,
-            worker_id = identity.worker_id,
-            attempt = context.attempt.get(),
-            error_kind = error_kind_label(kind),
-            decision = "terminal_write_failure",
-            reason = reason.as_label(),
-            "job terminal update no longer owns a running row"
-        ),
-        Err(error) => warn!(
-            queue = context.queue_name,
-            task_id = identity.task_id,
-            worker_id = identity.worker_id,
-            attempt = context.attempt.get(),
-            error_kind = error_kind_label(kind),
-            decision = "terminal_write_failure",
-            reason = reason.as_label(),
-            error = %error,
-            "job terminal update failed"
-        ),
+        Ok(false) => {
+            tracing::Span::current().record("outcome", "terminal_write_failure");
+            warn!(
+                queue = context.queue_name,
+                task_id = identity.task_id,
+                worker_id = identity.worker_id,
+                attempt = context.attempt.get(),
+                error_kind = error_kind_label(kind),
+                decision = "terminal_write_failure",
+                reason = reason.as_label(),
+                "job terminal update no longer owns a running row"
+            );
+        }
+        Err(error) => {
+            tracing::Span::current().record("outcome", "terminal_write_failure");
+            warn!(
+                queue = context.queue_name,
+                task_id = identity.task_id,
+                worker_id = identity.worker_id,
+                attempt = context.attempt.get(),
+                error_kind = error_kind_label(kind),
+                decision = "terminal_write_failure",
+                reason = reason.as_label(),
+                error = %error,
+                "job terminal update failed"
+            );
+        }
     }
 }
 

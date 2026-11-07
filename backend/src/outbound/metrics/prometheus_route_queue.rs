@@ -1,10 +1,17 @@
-//! Prometheus adapter for route queue enqueue metrics.
+//! Prometheus adapter for route queue metrics.
 //!
-//! This adapter records route queue enqueue operations when the `metrics`
-//! Cargo feature is enabled. It registers `route_queue_enqueue_total`, an
+//! This adapter records route queue operations when the `metrics` Cargo
+//! feature is enabled. It registers `route_queue_enqueue_total`, an
 //! `IntCounterVec` labelled by `outcome`, and
 //! `route_queue_enqueue_latency_seconds`, a `HistogramVec` labelled by
 //! `outcome`.
+//!
+//! It also registers the durable-retry counters `route_queue_retry_total` and
+//! `route_queue_dead_letter_total`, both `IntCounterVec`s labelled by
+//! `outcome`. The retry counter separates a scheduled retry from a scheduling
+//! failure, and the dead-letter counter separates an exhausted retry budget
+//! from a fatal failure, so an operator can tell a healthy retry from a lost
+//! one without reading logs.
 //!
 //! The adapter receives a Prometheus [`Registry`] at construction time, so
 //! tests can use isolated registries and production can use the process default
