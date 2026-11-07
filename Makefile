@@ -285,7 +285,8 @@ lint-python:
 
 # Level 2 prints a MISSED row per undocumented definition, which this target
 # fails on: interrogate rounds its percentage to one decimal, so the threshold
-# alone can pass a lone gap in a large repository.
+# alone can pass a lone gap in a large repository. `grep` reads the whole report
+# (no `-q`), so `printf` is never cut off by a SIGPIPE under `pipefail`.
 interrogate:
 	report="$$(uv tool run --from interrogate==$(INTERROGATE_VERSION) interrogate $(INTERROGATE_FLAGS) $(INTERROGATE_TARGETS))" || status=$$?
 	printf '%s\n' "$$report"
