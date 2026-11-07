@@ -125,7 +125,7 @@ jobs:
 
       - name: Install Rust toolchain
         id: setup-rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@5a99aed78ce68dcebd3052b75c31e6f173162b1e
+        uses: leynos/shared-actions/.github/actions/setup-rust@a49fcb1b9183fdfccc5b1f87b55e01e05086875b
         with:
           # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
           cache-provider: external
@@ -153,7 +153,7 @@ jobs:
         # Tests start their own cargo offline; fetch once so none resolves cold.
         run: cargo fetch --locked
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
+        uses: leynos/shared-actions/.github/actions/generate-coverage@a49fcb1b9183fdfccc5b1f87b55e01e05086875b
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
@@ -197,7 +197,7 @@ jobs:
         # be uploaded as the trunk's and become the baseline every pull
         # request is ratcheted against.
         if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@a49fcb1b9183fdfccc5b1f87b55e01e05086875b
         with:
           # mode defaults to "upload", which is the only mode this estate
           # uses: under CV-005 no pull-request lane talks to CodeScene, so
