@@ -1,9 +1,15 @@
-//! Password-file repair for embedded PostgreSQL integration tests.
+//! Retained-state repair for embedded PostgreSQL integration tests.
 //!
 //! `postgresql_embedded` only writes the initdb password file when it does not
 //! already exist. When the shared stable test password changes, a stale
 //! `.pgpass` can initialize a fresh data directory with the old password while
 //! clients connect with the new one.
+//!
+//! The same directory is also retained across a change to `PG_VERSION_REQ`,
+//! and across a bootstrap that never finished. PostgreSQL refuses to start when
+//! the stored `PG_VERSION` names a different major version from the server
+//! binary, and `initdb` refuses a directory that is not empty. A default data
+//! directory carrying either fault is removed before the cluster bootstraps.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -20,6 +26,11 @@ pub(super) fn repair_default_password_state(
     password: &[u8],
     paths: &PasswordStatePaths,
 ) -> io::Result<()> {
+    // A data directory the next bootstrap cannot reuse fails before any
+    // password is checked, so it is repaired first and independently of the
+    // install directory's presence.
+    repair_unusable_data_directory(paths)?;
+
     // A missing install directory means there is nothing to repair, so treat
     // it as a quiet success. Genuine failures (permissions, a path that is not
     // a directory, and so on) are propagated so the caller can surface them at
@@ -57,6 +68,7 @@ pub(crate) struct PasswordStatePaths {
     data_parent: PathBuf,
     data_name: PathBuf,
     should_remove_data_dir: bool,
+    expected_major_version: Option<u32>,
 }
 
 impl PasswordStatePaths {
@@ -64,7 +76,8 @@ impl PasswordStatePaths {
     ///
     /// `PG_RUNTIME_DIR` and `PG_DATA_DIR` override the per-uid defaults under
     /// `/var/tmp`. Only the default data directory is eligible for deletion:
-    /// an explicitly configured one belongs to the caller.
+    /// an explicitly configured one belongs to the caller. `PG_VERSION_REQ`
+    /// supplies the major version a retained data directory must match.
     pub(crate) fn resolve(read_env: impl Fn(&str) -> Option<String>) -> Self {
         // SAFETY: `geteuid` has no preconditions and does not modify memory.
         let uid = unsafe { libc::geteuid() };
@@ -90,8 +103,77 @@ impl PasswordStatePaths {
             data_parent,
             data_name,
             should_remove_data_dir,
+            expected_major_version: read_env("PG_VERSION_REQ")
+                .as_deref()
+                .and_then(major_version),
         }
     }
+}
+
+/// Extract the leading major version from a requirement or a `PG_VERSION` file.
+///
+/// `PG_VERSION_REQ` accepts Cargo-style requirements such as `=16.10.0` or
+/// `>=16`, and PostgreSQL writes a bare number into `PG_VERSION`. Both reduce
+/// to the first run of digits, so one parser serves both.
+fn major_version(text: &str) -> Option<u32> {
+    let digits: String = text
+        .trim()
+        .trim_start_matches(|character: char| !character.is_ascii_digit())
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
+}
+
+/// Report whether `path` exists inside `dir`, propagating real I/O failures.
+fn path_exists(dir: &Dir, path: &Path) -> io::Result<bool> {
+    match dir.metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+/// Remove the default data directory when the next bootstrap cannot reuse it.
+///
+/// `postgresql_embedded` decides whether to run `initdb` by looking for
+/// `<data dir>/postgresql.conf` alone, and `initdb` then refuses a directory
+/// that is not empty. Two retained states therefore block every later
+/// bootstrap until the directory is gone:
+///
+/// * a directory left by a bootstrap that never finished, which has files but
+///   no `postgresql.conf`, so the library runs `initdb` over it; and
+/// * a directory initialized by another major version, whose stored
+///   `PG_VERSION` disagrees with `PG_VERSION_REQ`, so PostgreSQL refuses to
+///   start.
+///
+/// Removing the default directory lets the next bootstrap initialize a
+/// matching one. An explicitly configured `PG_DATA_DIR` belongs to the caller
+/// and is never removed, and an absent directory is a quiet no-op.
+fn repair_unusable_data_directory(paths: &PasswordStatePaths) -> io::Result<()> {
+    if !paths.should_remove_data_dir {
+        return Ok(());
+    }
+    let Some(data_parent) = open_dir_if_exists(&paths.data_parent)? else {
+        return Ok(());
+    };
+    let data_name = &paths.data_name;
+
+    if !path_exists(&data_parent, &data_name.join("postgresql.conf"))? {
+        return remove_dir_if_exists(&data_parent, data_name);
+    }
+    let Some(expected) = paths.expected_major_version else {
+        return Ok(());
+    };
+    let stored = match data_parent.read_to_string(data_name.join("PG_VERSION")) {
+        Ok(stored) => stored,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    if major_version(&stored) == Some(expected) {
+        return Ok(());
+    }
+    remove_dir_if_exists(&data_parent, data_name)
 }
 
 /// Compare the stored `.pgpass` with `password` and clear the stale state.
@@ -143,3 +225,7 @@ fn remove_dir_if_exists(parent: &Dir, path: &Path) -> io::Result<()> {
 #[cfg(test)]
 #[path = "password_state_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "password_state_paths_tests.rs"]
+mod paths_tests;
