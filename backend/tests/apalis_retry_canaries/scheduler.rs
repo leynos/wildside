@@ -7,9 +7,13 @@
 //! not only the wrapper's precondition, is pinned against a real
 //! `apalis.jobs` table.
 
+use std::num::NonZeroU32;
 use std::time::Duration;
 
-use backend::outbound::queue::PostgresRetryScheduler;
+use backend::outbound::queue::{
+    PostgresRetryScheduler, RetryPersistence, TerminalRetryReason, TerminalRetryUpdate,
+};
+use serde_json::Value;
 use sqlx::PgPool;
 
 use super::{CanaryEnvironment, JobRow, insert_job, register_worker};
@@ -78,6 +82,49 @@ async fn insert_scheduler_row(pool: &PgPool, row: SchedulerRow<'_>) {
             .locked_by(row.worker),
     )
     .await;
+}
+
+/// The stored state a terminal write may change.
+#[derive(Debug, PartialEq, Eq)]
+struct TerminalState {
+    max_attempts: i32,
+    metadata: Option<String>,
+}
+
+/// Read the attempt cap and metadata a terminal write would rewrite.
+fn read_terminal_state(
+    runtime: &tokio::runtime::Runtime,
+    pool: &PgPool,
+    id: &str,
+) -> TerminalState {
+    runtime.block_on(async {
+        let (max_attempts, metadata): (i32, Option<String>) =
+            sqlx::query_as("SELECT max_attempts, metadata::text FROM apalis.jobs WHERE id = $1")
+                .bind(id)
+                .fetch_one(pool)
+                .await
+                .expect("read canary terminal state");
+        TerminalState {
+            max_attempts,
+            metadata,
+        }
+    })
+}
+
+/// Build the terminal update a canary worker would persist.
+fn terminal_update<'a>(
+    id: &'a str,
+    worker: &'a str,
+    reason: TerminalRetryReason,
+    shrink_limit: bool,
+) -> TerminalRetryUpdate<'a> {
+    TerminalRetryUpdate {
+        task_id: id,
+        worker_id: worker,
+        attempt: NonZeroU32::new(3).expect("three is a non-zero attempt"),
+        reason,
+        shrink_limit,
+    }
 }
 
 #[test]
@@ -179,5 +226,151 @@ fn scheduler_advances_the_deadline_for_an_owned_running_row() {
     assert!(
         (expected - CLOCK_SLACK_MICROS..=expected + CLOCK_SLACK_MICROS).contains(&after),
         "the deadline must move to the requested delay from now, saw {after}us"
+    );
+}
+
+/// Insert a row carrying unrelated metadata the terminal write must preserve.
+async fn insert_terminal_row(pool: &PgPool, row: SchedulerRow<'_>) {
+    register_worker(pool, row.worker).await;
+    insert_job(
+        pool,
+        JobRow::new(row.queue, row.id, row.status)
+            .attempts(1)
+            .max_attempts(5)
+            .run_at_offset_seconds(3_600.0)
+            .metadata(serde_json::json!({ "keep": "marker" }))
+            .locked_by(row.worker),
+    )
+    .await;
+}
+
+#[test]
+fn terminal_write_records_the_reason_for_an_owned_running_row() {
+    let environment = CanaryEnvironment::shared();
+    let pool = environment.pool.clone();
+    let queue = "canary.terminal-owned";
+    let worker = "canary-terminal-owned-worker";
+    let id = apalis_job_id();
+
+    environment.run(insert_terminal_row(
+        &pool,
+        SchedulerRow {
+            queue,
+            worker,
+            status: "Running",
+            id: &id,
+        },
+    ));
+
+    let recorded = environment
+        .run(
+            PostgresRetryScheduler::new(pool.clone()).record_terminal_failure(terminal_update(
+                &id,
+                worker,
+                TerminalRetryReason::Exhausted,
+                true,
+            )),
+        )
+        .expect("the guarded update executes");
+
+    assert!(recorded, "the recorded lock owner still owns a running row");
+    let after = read_terminal_state(&environment.runtime, &pool, &id);
+    assert_eq!(
+        after.max_attempts, 3,
+        "a shrinking terminal write stores the delivered attempt as the new cap"
+    );
+    let stored: Value = serde_json::from_str(after.metadata.as_deref().expect("metadata retained"))
+        .expect("metadata remains valid JSON");
+    assert_eq!(
+        stored["wildside.retry.dead_reason"],
+        serde_json::json!("exhausted")
+    );
+    assert_eq!(
+        stored["keep"],
+        serde_json::json!("marker"),
+        "the terminal write must preserve unrelated metadata keys"
+    );
+}
+
+#[test]
+fn terminal_write_refuses_a_row_owned_by_another_worker() {
+    let environment = CanaryEnvironment::shared();
+    let pool = environment.pool.clone();
+    let queue = "canary.terminal-foreign-lock";
+    let owner = "canary-terminal-foreign-owner";
+    let caller = "canary-terminal-foreign-caller";
+    let id = apalis_job_id();
+
+    environment.run(insert_terminal_row(
+        &pool,
+        SchedulerRow {
+            queue,
+            worker: owner,
+            status: "Running",
+            id: &id,
+        },
+    ));
+    let before = read_terminal_state(&environment.runtime, &pool, &id);
+
+    let recorded = environment
+        .run(
+            PostgresRetryScheduler::new(pool.clone()).record_terminal_failure(terminal_update(
+                &id,
+                caller,
+                TerminalRetryReason::Fatal,
+                true,
+            )),
+        )
+        .expect("the guarded update executes");
+
+    assert!(
+        !recorded,
+        "only the recorded lock owner may classify a row as terminal"
+    );
+    assert_eq!(
+        read_terminal_state(&environment.runtime, &pool, &id),
+        before,
+        "the guarded update must leave another worker's row untouched"
+    );
+}
+
+#[test]
+fn terminal_write_refuses_a_row_that_is_not_running() {
+    let environment = CanaryEnvironment::shared();
+    let pool = environment.pool.clone();
+    let queue = "canary.terminal-completed";
+    let worker = "canary-terminal-completed-worker";
+    let id = apalis_job_id();
+
+    environment.run(insert_terminal_row(
+        &pool,
+        SchedulerRow {
+            queue,
+            worker,
+            status: "Done",
+            id: &id,
+        },
+    ));
+    let before = read_terminal_state(&environment.runtime, &pool, &id);
+
+    let recorded = environment
+        .run(
+            PostgresRetryScheduler::new(pool.clone()).record_terminal_failure(terminal_update(
+                &id,
+                worker,
+                TerminalRetryReason::Exhausted,
+                true,
+            )),
+        )
+        .expect("the guarded update executes");
+
+    assert!(
+        !recorded,
+        "a completed row must not accept a terminal reason"
+    );
+    assert_eq!(
+        read_terminal_state(&environment.runtime, &pool, &id),
+        before,
+        "the guarded update must leave a completed row untouched"
     );
 }

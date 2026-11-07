@@ -129,6 +129,10 @@ pub struct JobRetryPolicyConfig {
 }
 
 impl JobRetryPolicyConfig {
+    /// Reject a delay curve whose base, growth, or ceiling cannot be bounded.
+    ///
+    /// Checks run in a fixed order so the reported error names the first
+    /// offending value rather than whichever numeric overflow happens first.
     fn validate_delays(&self) -> Result<(), JobRetryPolicyBuildError> {
         if self.base_delay.is_zero() {
             return Err(JobRetryPolicyBuildError::ZeroBaseDelay);
@@ -145,6 +149,8 @@ impl JobRetryPolicyConfig {
         Ok(())
     }
 
+    /// Reject a jitter fraction that is non-finite, out of range, or pushes the
+    /// largest jittered delay past the hard ceiling.
     fn validate_jitter(&self) -> Result<(), JobRetryPolicyBuildError> {
         if !self.jitter_fraction.is_finite() || !(0.0..=1.0).contains(&self.jitter_fraction) {
             return Err(JobRetryPolicyBuildError::InvalidJitterFraction);
