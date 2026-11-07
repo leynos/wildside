@@ -6,11 +6,13 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: IN PROGRESS (approved for execution 2026-10-30; implementation
-complete, replayed onto `main` `bcba8b1`, and published as PR #457; the
-pre-merge reconciliation of 2026-11-07 added the terminal-write canaries, the
-Makefile command-boundary tests, the const-context tests, and the module and
-user-guide documentation, and the remaining work is the final gate run, a fresh
-CodeRabbit review, and merge)
+complete, replayed a second time onto `main` `9799286`, and published as the
+pull request `leynos/wildside#457` at `877c09b`; the pre-merge reconciliation
+of 2026-11-07 added the terminal-write canaries, the Makefile command-boundary
+tests, the const-context tests, and the module and user-guide documentation;
+all nine commit gates pass on the published head and every hosted check is
+green with a CodeScene approval; the remaining work is the queued fresh
+CodeRabbit review and the merge)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -2172,6 +2174,20 @@ caret requirements.
   `git diff --check` is clean, and there are no merge commits. The replay
   produced `b6956c6`, and the recovery ref is
   `refs/heads/recovery/457-pre-rebase-push` at `b3531ad`.
+- [x] (2026-11-07 Europe/Berlin) Validated and published the replayed series.
+  The tip commit was amended to `877c09b` so its message and this plan record
+  the replay onto `9799286`, the additive `test-rust` conflict and its
+  `checkmake`-driven compaction, and the skipped duplicate `actix-web` commit.
+  All nine gates then passed sequentially on `877c09b`: `check-fmt`, `spelling`,
+  `markdownlint`, `nixie`, `lint`, `typecheck`, `test` (`2413` tests run,
+  `2413` passed, `4` skipped), `audit`, and `openapi`. The push used an
+  explicit force-with-lease against the previous head `b3531ad`, the tracking
+  ref was refreshed, and both `HEAD` and `refs/remotes/origin/…` resolve to
+  `877c09b`. On that head the hosted `build` and `coverage` jobs succeed, the
+  CodeScene review approves, the Gecko security review passes, and
+  `mergeStateStatus` is `CLEAN`. CodeRabbit's automatic review is paused after
+  its review of `09e07c6`, so one formal review was queued through `comenq` (id
+  `ec6335ce`) to cover the published head.
 
 ## Surprises & discoveries
 
