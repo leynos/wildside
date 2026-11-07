@@ -2152,6 +2152,26 @@ caret requirements.
   passed on that content and the hosted run for the same commit reported
   `coverage`, the CodeScene review, and the Gecko security review green, with
   the `build` job still running when this entry was written.
+- [x] (2026-11-07 Europe/Berlin) Replayed the 82-commit series onto
+  `origin/main` `9799286` (*Read the whole interrogate report so pipefail
+  cannot hide a MISSED row*, PR #593) after the pull request became
+  `CONFLICTING`. The replay used `--merge`, `--no-fork-point`,
+  `--no-update-refs`, `--no-autostash`, `--reapply-cherry-picks`,
+  `--keep-empty`, `--empty=stop`, `zdiff3`, and the command-scoped Weave driver
+  override, because `tests/workflow_contracts/makefile_tooling_test.py` carries
+  a `merge=weave` attribute. One commit conflicted, additively, and keeping
+  both sides resolved it: the `test-rust` recipe now runs the target's
+  `cargo fetch --locked` alongside this branch's scoped `PG_PASSWORD` and
+  `POSTGRESQL_RELEASES_URL` exports. That took the recipe to six lines, over
+  `checkmake`'s five-line body budget, so the two `cargo test --test`
+  compile-fail invocations became one command selecting both targets; the
+  `export` line stays verbatim because the environment contract matches it
+  whole. One commit became empty and was skipped: `09e07c6` is the same
+  `actix-web` 4.18.2 and `actix-http` 3.20.3 lockfile bump that landed on main
+  as `18db61f` (#589). `git range-diff` pairs the remaining 81 commits,
+  `git diff --check` is clean, and there are no merge commits. The replay
+  produced `b6956c6`, and the recovery ref is
+  `refs/heads/recovery/457-pre-rebase-push` at `b3531ad`.
 
 ## Surprises & discoveries
 

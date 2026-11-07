@@ -393,8 +393,7 @@ test-rust: workspace-sync prepare-pg-worker
 	cargo fetch --locked
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(GATE_RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
 		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail))'
-	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features
-	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --test sha2_digest_formatting_compile_fail --all-features
+	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --all-features --test declare_test_support_compile_fail --test sha2_digest_formatting_compile_fail
 
 test-frontend: deps typecheck
 	pnpm run test
