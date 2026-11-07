@@ -29,59 +29,128 @@ const RETRY_DELAY: Duration = Duration::from_secs(30);
 /// statements rather than the delay the scheduler stored.
 const CLOCK_SLACK_MICROS: i64 = 5_000_000;
 
-/// Read a row's next-deadline as microseconds since the Unix epoch.
-fn read_deadline_micros(runtime: &tokio::runtime::Runtime, pool: &PgPool, id: &str) -> i64 {
-    runtime.block_on(async {
-        let (deadline,): (i64,) = sqlx::query_as(
-            "SELECT (extract(epoch FROM run_at) * 1000000)::bigint
-             FROM apalis.jobs WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .expect("read canary deadline");
-        deadline
-    })
-}
+/// A row's deadline as microseconds since the Unix epoch.
+const DEADLINE_SQL: &str =
+    "SELECT (extract(epoch FROM run_at) * 1000000)::bigint FROM apalis.jobs WHERE id = $1";
 
-/// Read a row's deadline as microseconds from the database's own clock.
+/// A row's deadline as microseconds from the database's own clock.
 ///
 /// Expressing the deadline relative to `now()` in the same statement keeps the
 /// assertion independent of the application's clock.
-fn read_deadline_offset_micros(runtime: &tokio::runtime::Runtime, pool: &PgPool, id: &str) -> i64 {
-    runtime.block_on(async {
-        let (offset,): (i64,) = sqlx::query_as(
-            "SELECT (extract(epoch FROM run_at - now()) * 1000000)::bigint
-             FROM apalis.jobs WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .expect("read canary deadline offset");
-        offset
-    })
-}
+const DEADLINE_OFFSET_SQL: &str =
+    "SELECT (extract(epoch FROM run_at - now()) * 1000000)::bigint FROM apalis.jobs WHERE id = $1";
 
-/// A scheduler canary row, identified by the worker that holds its lock.
+/// The worker that owns the rows these canaries insert.
+const OWNER: &str = "canary-scheduler-owner";
+
+/// A worker that holds a lock the caller does not.
+const OTHER_WORKER: &str = "canary-scheduler-other-worker";
+
+/// A worker that attempts a write it does not own.
+const CALLER: &str = "canary-scheduler-caller";
+
+/// The queue, worker, and status that describe one canary row.
 struct SchedulerRow<'a> {
     queue: &'a str,
     worker: &'a str,
     status: &'a str,
-    id: &'a str,
 }
 
 /// Insert a row that the named canary worker may or may not own.
-async fn insert_scheduler_row(pool: &PgPool, row: SchedulerRow<'_>) {
+///
+/// `metadata` seeds unrelated keys so a terminal write can prove it preserved
+/// them; the ordinary scheduler canaries pass `None`.
+async fn insert_scheduler_row(
+    pool: &PgPool,
+    id: &str,
+    row: SchedulerRow<'_>,
+    metadata: Option<Value>,
+) {
     register_worker(pool, row.worker).await;
-    insert_job(
-        pool,
-        JobRow::new(row.queue, row.id, row.status)
-            .attempts(1)
-            .max_attempts(5)
-            .run_at_offset_seconds(3_600.0)
-            .locked_by(row.worker),
-    )
-    .await;
+    let mut job = JobRow::new(row.queue, id, row.status)
+        .attempts(1)
+        .max_attempts(5)
+        .run_at_offset_seconds(3_600.0)
+        .locked_by(row.worker);
+    if let Some(metadata) = metadata {
+        job = job.metadata(metadata);
+    }
+    insert_job(pool, job).await;
+}
+
+/// A canary row together with the environment and pool that hold it.
+struct Canary {
+    environment: &'static CanaryEnvironment,
+    pool: PgPool,
+    id: String,
+}
+
+impl Canary {
+    /// Insert a row and return the handles that drive it.
+    fn start(row: SchedulerRow<'_>, metadata: Option<Value>) -> Self {
+        let environment = CanaryEnvironment::shared();
+        let pool = environment.pool.clone();
+        let id = apalis_job_id();
+        environment.run(insert_scheduler_row(&pool, &id, row, metadata));
+        Self {
+            environment,
+            pool,
+            id,
+        }
+    }
+
+    /// Read one `bigint` column for this row, naming it in any failure.
+    fn read_micros(&self, sql: &str, what: &str) -> i64 {
+        // Build the message eagerly so `expect` still names the column; a
+        // closure that panics is what the workspace lint forbids.
+        let failure = format!("read canary {what}");
+        self.environment.runtime.block_on(async {
+            let (value,): (i64,) = sqlx::query_as(sql)
+                .bind(&self.id)
+                .fetch_one(&self.pool)
+                .await
+                .expect(&failure);
+            value
+        })
+    }
+
+    /// Read the attempt cap and metadata a terminal write would rewrite.
+    fn read_terminal_state(&self) -> TerminalState {
+        self.environment.runtime.block_on(async {
+            let (max_attempts, metadata): (i32, Option<String>) = sqlx::query_as(
+                "SELECT max_attempts, metadata::text FROM apalis.jobs WHERE id = $1",
+            )
+            .bind(&self.id)
+            .fetch_one(&self.pool)
+            .await
+            .expect("read canary terminal state");
+            TerminalState {
+                max_attempts,
+                metadata,
+            }
+        })
+    }
+
+    /// Assert a guarded write reports no update and leaves the row unchanged.
+    ///
+    /// Reading the row twice, rather than trusting the boolean alone, is what
+    /// proves a refused write did not persist a partial change.
+    fn assert_write_is_refused<T: PartialEq + std::fmt::Debug>(
+        &self,
+        read: impl Fn(&Self) -> T,
+        write: impl FnOnce() -> bool,
+        reason: &str,
+    ) {
+        let before = read(self);
+        let updated = write();
+
+        assert!(!updated, "{reason}");
+        assert_eq!(
+            read(self),
+            before,
+            "the guarded update must leave the row untouched"
+        );
+    }
 }
 
 /// The stored state a terminal write may change.
@@ -89,26 +158,6 @@ async fn insert_scheduler_row(pool: &PgPool, row: SchedulerRow<'_>) {
 struct TerminalState {
     max_attempts: i32,
     metadata: Option<String>,
-}
-
-/// Read the attempt cap and metadata a terminal write would rewrite.
-fn read_terminal_state(
-    runtime: &tokio::runtime::Runtime,
-    pool: &PgPool,
-    id: &str,
-) -> TerminalState {
-    runtime.block_on(async {
-        let (max_attempts, metadata): (i32, Option<String>) =
-            sqlx::query_as("SELECT max_attempts, metadata::text FROM apalis.jobs WHERE id = $1")
-                .bind(id)
-                .fetch_one(pool)
-                .await
-                .expect("read canary terminal state");
-        TerminalState {
-            max_attempts,
-            metadata,
-        }
-    })
 }
 
 /// Build the terminal update a canary worker would persist.
@@ -127,98 +176,68 @@ fn terminal_update<'a>(
     }
 }
 
-#[test]
-fn scheduler_refuses_a_row_that_is_not_running() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.scheduler-completed";
-    let worker = "canary-scheduler-completed-worker";
-    let id = apalis_job_id();
-
-    environment.run(insert_scheduler_row(
-        &pool,
-        SchedulerRow {
-            queue,
-            worker,
-            status: "Done",
-            id: &id,
-        },
-    ));
-    let before = read_deadline_micros(&environment.runtime, &pool, &id);
-
-    let updated = environment
-        .run(PostgresRetryScheduler::new(pool.clone()).schedule_retry(&id, worker, RETRY_DELAY))
-        .expect("the guarded update executes");
-
-    assert!(!updated, "a completed row must not accept a retry deadline");
-    assert_eq!(
-        read_deadline_micros(&environment.runtime, &pool, &id),
-        before,
-        "the guarded update must leave a completed row untouched"
-    );
+/// The guarded write a refusal canary attempts.
+#[derive(Clone, Copy, Debug)]
+enum GuardedWrite {
+    /// Move the retry deadline.
+    ScheduleRetry,
+    /// Record a terminal reason.
+    TerminalFailure,
 }
 
-#[test]
-fn scheduler_refuses_a_row_owned_by_another_worker() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.scheduler-foreign-lock";
-    let owner = "canary-scheduler-foreign-owner";
-    let caller = "canary-scheduler-foreign-caller";
-    let id = apalis_job_id();
+/// Why a row must refuse a guarded write.
+#[derive(Clone, Copy, Debug)]
+enum RefusalCause {
+    /// The row is already `Done`, so no worker may change it.
+    NotRunning,
+    /// Another worker holds the lock.
+    ForeignOwner,
+}
 
-    environment.run(insert_scheduler_row(
-        &pool,
-        SchedulerRow {
-            queue,
-            worker: owner,
-            status: "Running",
-            id: &id,
-        },
-    ));
-    let before = read_deadline_micros(&environment.runtime, &pool, &id);
+impl RefusalCause {
+    /// The row's status and recorded lock owner.
+    fn row(self) -> (&'static str, &'static str) {
+        match self {
+            Self::NotRunning => ("Done", OWNER),
+            Self::ForeignOwner => ("Running", OTHER_WORKER),
+        }
+    }
 
-    let updated = environment
-        .run(PostgresRetryScheduler::new(pool.clone()).schedule_retry(&id, caller, RETRY_DELAY))
-        .expect("the guarded update executes");
-
-    assert!(
-        !updated,
-        "only the recorded lock owner may move the deadline"
-    );
-    assert_eq!(
-        read_deadline_micros(&environment.runtime, &pool, &id),
-        before,
-        "the guarded update must leave another worker's row untouched"
-    );
+    /// The worker that attempts the write.
+    fn caller(self) -> &'static str {
+        match self {
+            Self::NotRunning => OWNER,
+            Self::ForeignOwner => CALLER,
+        }
+    }
 }
 
 #[test]
 fn scheduler_advances_the_deadline_for_an_owned_running_row() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.scheduler-owned";
-    let worker = "canary-scheduler-owned-worker";
-    let id = apalis_job_id();
-
-    environment.run(insert_scheduler_row(
-        &pool,
+    let canary = Canary::start(
         SchedulerRow {
-            queue,
-            worker,
+            queue: "canary.scheduler-owned",
+            worker: OWNER,
             status: "Running",
-            id: &id,
         },
-    ));
-    let before = read_deadline_offset_micros(&environment.runtime, &pool, &id);
+        None,
+    );
+    let before = canary.read_micros(DEADLINE_OFFSET_SQL, "deadline offset");
 
-    let updated = environment
-        .run(PostgresRetryScheduler::new(pool.clone()).schedule_retry(&id, worker, RETRY_DELAY))
+    let updated = canary
+        .environment
+        .run(
+            PostgresRetryScheduler::new(canary.pool.clone()).schedule_retry(
+                &canary.id,
+                OWNER,
+                RETRY_DELAY,
+            ),
+        )
         .expect("the guarded update executes");
 
     assert!(updated, "the recorded lock owner still owns a running row");
     let expected = i64::try_from(RETRY_DELAY.as_micros()).expect("delay fits in i64");
-    let after = read_deadline_offset_micros(&environment.runtime, &pool, &id);
+    let after = canary.read_micros(DEADLINE_OFFSET_SQL, "deadline offset");
     assert!(
         before > expected + CLOCK_SLACK_MICROS,
         "the fixture's original deadline must be further away, saw {before}us"
@@ -229,52 +248,28 @@ fn scheduler_advances_the_deadline_for_an_owned_running_row() {
     );
 }
 
-/// Insert a row carrying unrelated metadata the terminal write must preserve.
-async fn insert_terminal_row(pool: &PgPool, row: SchedulerRow<'_>) {
-    register_worker(pool, row.worker).await;
-    insert_job(
-        pool,
-        JobRow::new(row.queue, row.id, row.status)
-            .attempts(1)
-            .max_attempts(5)
-            .run_at_offset_seconds(3_600.0)
-            .metadata(serde_json::json!({ "keep": "marker" }))
-            .locked_by(row.worker),
-    )
-    .await;
-}
-
 #[test]
 fn terminal_write_records_the_reason_for_an_owned_running_row() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.terminal-owned";
-    let worker = "canary-terminal-owned-worker";
-    let id = apalis_job_id();
-
-    environment.run(insert_terminal_row(
-        &pool,
+    let canary = Canary::start(
         SchedulerRow {
-            queue,
-            worker,
+            queue: "canary.terminal-owned",
+            worker: OWNER,
             status: "Running",
-            id: &id,
         },
-    ));
+        Some(serde_json::json!({ "keep": "marker" })),
+    );
 
-    let recorded = environment
+    let recorded = canary
+        .environment
         .run(
-            PostgresRetryScheduler::new(pool.clone()).record_terminal_failure(terminal_update(
-                &id,
-                worker,
-                TerminalRetryReason::Exhausted,
-                true,
-            )),
+            PostgresRetryScheduler::new(canary.pool.clone()).record_terminal_failure(
+                terminal_update(&canary.id, OWNER, TerminalRetryReason::Exhausted, true),
+            ),
         )
         .expect("the guarded update executes");
 
     assert!(recorded, "the recorded lock owner still owns a running row");
-    let after = read_terminal_state(&environment.runtime, &pool, &id);
+    let after = canary.read_terminal_state();
     assert_eq!(
         after.max_attempts, 3,
         "a shrinking terminal write stores the delivered attempt as the new cap"
@@ -292,85 +287,55 @@ fn terminal_write_records_the_reason_for_an_owned_running_row() {
     );
 }
 
+/// Both refusal routes end in the same observable state, so one canary states
+/// the invariant for every combination of write and cause.
+#[rstest::rstest]
+#[case::schedule_on_completed_row(GuardedWrite::ScheduleRetry, RefusalCause::NotRunning)]
+#[case::schedule_under_foreign_lock(GuardedWrite::ScheduleRetry, RefusalCause::ForeignOwner)]
+#[case::terminal_on_completed_row(GuardedWrite::TerminalFailure, RefusalCause::NotRunning)]
+#[case::terminal_under_foreign_lock(GuardedWrite::TerminalFailure, RefusalCause::ForeignOwner)]
 #[test]
-fn terminal_write_refuses_a_row_owned_by_another_worker() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.terminal-foreign-lock";
-    let owner = "canary-terminal-foreign-owner";
-    let caller = "canary-terminal-foreign-caller";
-    let id = apalis_job_id();
-
-    environment.run(insert_terminal_row(
-        &pool,
+fn guarded_write_refuses_a_row_it_may_not_change(
+    #[case] write: GuardedWrite,
+    #[case] cause: RefusalCause,
+) {
+    let (status, owner) = cause.row();
+    let caller = cause.caller();
+    let canary = Canary::start(
         SchedulerRow {
-            queue,
+            queue: "canary.scheduler-refused",
             worker: owner,
-            status: "Running",
-            id: &id,
+            status,
         },
-    ));
-    let before = read_terminal_state(&environment.runtime, &pool, &id);
-
-    let recorded = environment
-        .run(
-            PostgresRetryScheduler::new(pool.clone()).record_terminal_failure(terminal_update(
-                &id,
-                caller,
-                TerminalRetryReason::Fatal,
-                true,
-            )),
-        )
-        .expect("the guarded update executes");
-
-    assert!(
-        !recorded,
-        "only the recorded lock owner may classify a row as terminal"
+        Some(serde_json::json!({ "keep": "marker" })),
     );
-    assert_eq!(
-        read_terminal_state(&environment.runtime, &pool, &id),
-        before,
-        "the guarded update must leave another worker's row untouched"
-    );
-}
+    let scheduler = || PostgresRetryScheduler::new(canary.pool.clone());
 
-#[test]
-fn terminal_write_refuses_a_row_that_is_not_running() {
-    let environment = CanaryEnvironment::shared();
-    let pool = environment.pool.clone();
-    let queue = "canary.terminal-completed";
-    let worker = "canary-terminal-completed-worker";
-    let id = apalis_job_id();
-
-    environment.run(insert_terminal_row(
-        &pool,
-        SchedulerRow {
-            queue,
-            worker,
-            status: "Done",
-            id: &id,
-        },
-    ));
-    let before = read_terminal_state(&environment.runtime, &pool, &id);
-
-    let recorded = environment
-        .run(
-            PostgresRetryScheduler::new(pool.clone()).record_terminal_failure(terminal_update(
-                &id,
-                worker,
-                TerminalRetryReason::Exhausted,
-                true,
-            )),
-        )
-        .expect("the guarded update executes");
-
-    assert!(
-        !recorded,
-        "a completed row must not accept a terminal reason"
-    );
-    assert_eq!(
-        read_terminal_state(&environment.runtime, &pool, &id),
-        before,
-        "the guarded update must leave a completed row untouched"
-    );
+    match write {
+        GuardedWrite::ScheduleRetry => canary.assert_write_is_refused(
+            |canary| canary.read_micros(DEADLINE_SQL, "deadline"),
+            || {
+                canary
+                    .environment
+                    .run(scheduler().schedule_retry(&canary.id, caller, RETRY_DELAY))
+                    .expect("the guarded update executes")
+            },
+            "a row the caller may not change must not accept a retry deadline",
+        ),
+        GuardedWrite::TerminalFailure => canary.assert_write_is_refused(
+            |canary| canary.read_terminal_state(),
+            || {
+                canary
+                    .environment
+                    .run(scheduler().record_terminal_failure(terminal_update(
+                        &canary.id,
+                        caller,
+                        TerminalRetryReason::Exhausted,
+                        true,
+                    )))
+                    .expect("the guarded update executes")
+            },
+            "a row the caller may not change must not accept a terminal reason",
+        ),
+    }
 }
