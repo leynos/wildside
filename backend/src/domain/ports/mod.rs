@@ -6,6 +6,7 @@ pub(crate) use macros::define_port_error;
 mod cache_key;
 mod catalogue_ingestion_repository;
 mod catalogue_repository;
+mod dead_letter_queue;
 mod descriptor_ingestion_repository;
 mod descriptor_repository;
 mod enrichment_job_metrics;
@@ -60,6 +61,7 @@ pub use catalogue_repository::{
     CatalogueRepository, CatalogueRepositoryError, ExploreCatalogueSnapshot,
     FixtureCatalogueRepository,
 };
+pub use dead_letter_queue::{DeadJob, DeadJobId, DeadLetterError, DeadLetterQueue, DeadReason};
 #[cfg(test)]
 pub use descriptor_ingestion_repository::MockDescriptorIngestionRepository;
 pub use descriptor_ingestion_repository::{
@@ -173,7 +175,10 @@ pub use route_cache::{RouteCache, RouteCacheError};
 pub use route_preferences::RoutePreferences;
 pub(crate) use route_preferences::{ROUTE_PREFERENCE_MAX_ITEMS, ROUTE_PREFERENCE_MAX_VALUE_BYTES};
 pub use route_queue::{JobDispatchError, RouteQueue};
-pub use route_queue_metrics::{NoOpRouteQueueMetrics, RouteQueueMetrics, RouteQueueOutcome};
+pub use route_queue_metrics::{
+    NoOpRouteQueueMetrics, RouteDeadLetterOutcome, RouteQueueMetrics, RouteQueueOutcome,
+    RouteRetryOutcome,
+};
 pub use route_repository::{RoutePersistenceError, RouteRepository};
 pub(crate) use route_submission::deserialize_non_null;
 pub use route_submission::{
