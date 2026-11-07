@@ -281,26 +281,40 @@ const OWNED: CanarySpec = CanarySpec {
     worker: "canary-identity-owned-worker",
 };
 
+/// Assert a refused delivery leaves the row untouched and counts one
+/// scheduling failure.
+///
+/// Both refusal routes end in the same observable state, so the invariant is
+/// stated once and both canaries stay in step.
+fn assert_refused_without_writing(
+    canary: &IdentityCanary,
+    deliver: impl FnOnce(&IdentityCanary) -> Result<(), BoxDynError>,
+    reason: &str,
+) {
+    let before = canary.state();
+
+    let result = deliver(canary);
+
+    assert!(result.is_err(), "the delivery stays failed");
+    assert_eq!(canary.state(), before, "{reason}");
+    assert_eq!(
+        canary.retry_outcomes(),
+        vec![RouteRetryOutcome::ScheduleFailure],
+        "a refused retry counts as a scheduling failure"
+    );
+}
+
 #[rstest::rstest]
 #[case::absent_lock_owner(LockOwner::Missing)]
 #[case::disagreeing_lock_owner(LockOwner::OtherWorker)]
 #[test]
 fn wrapper_writes_nothing_without_a_matching_lock_owner(#[case] owner: LockOwner) {
     let canary = IdentityCanary::start(&REFUSED);
-    let before = canary.state();
 
-    let result = canary.deliver(owner);
-
-    assert!(result.is_err(), "the delivery stays failed");
-    assert_eq!(
-        canary.state(),
-        before,
-        "the wrapper must not write without a lock owner that matches the worker context"
-    );
-    assert_eq!(
-        canary.retry_outcomes(),
-        vec![RouteRetryOutcome::ScheduleFailure],
-        "a refused retry counts as a scheduling failure"
+    assert_refused_without_writing(
+        &canary,
+        |canary| canary.deliver(owner),
+        "the wrapper must not write without a lock owner that matches the worker context",
     );
 }
 
@@ -310,20 +324,11 @@ fn wrapper_writes_nothing_without_a_matching_lock_owner(#[case] owner: LockOwner
 #[test]
 fn wrapper_writes_nothing_without_proven_identity(#[case] identity: DeliveryIdentity) {
     let canary = IdentityCanary::start(&REFUSED);
-    let before = canary.state();
 
-    let result = canary.deliver_with_identity(LockOwner::Worker, identity);
-
-    assert!(result.is_err(), "the delivery stays failed");
-    assert_eq!(
-        canary.state(),
-        before,
-        "the wrapper must not write without a task id and a matching worker context"
-    );
-    assert_eq!(
-        canary.retry_outcomes(),
-        vec![RouteRetryOutcome::ScheduleFailure],
-        "a refused retry counts as a scheduling failure"
+    assert_refused_without_writing(
+        &canary,
+        |canary| canary.deliver_with_identity(LockOwner::Worker, identity),
+        "the wrapper must not write without a task id and a matching worker context",
     );
 }
 
