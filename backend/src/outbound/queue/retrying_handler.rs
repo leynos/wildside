@@ -11,12 +11,13 @@ use apalis_postgres::PgTask;
 use futures_util::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use tracing::Instrument;
 
 mod config;
 mod decision;
 mod failure;
 
-pub use config::{JitterSource, RetryingJobServiceConfig};
+pub use config::{JitterSource, RetryingJobServiceConfig, ThreadRngJitter};
 use failure::{RetryFailureContext, current_attempt, handle_failure, running_worker_id};
 
 use crate::domain::jobs::retry::{JobErrorKind, JobFailure, JobRetryPolicy};
@@ -87,6 +88,20 @@ where
         Poll::Ready(Ok(()))
     }
 
+    /// Decode one delivery, invoke the handler, and persist its failure.
+    ///
+    /// The span records the identity facts only after decoding the task, so a
+    /// delivery that never reaches the handler still carries its ids.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            operation = "call",
+            queue = self.queue_name,
+            task_id = tracing::field::Empty,
+            worker_id = tracing::field::Empty,
+            attempt = tracing::field::Empty,
+        )
+    )]
     fn call(&mut self, task: PgTask<Value>) -> Self::Future {
         let policy = self.policy.clone();
         let scheduler = self.scheduler.clone();
@@ -94,13 +109,18 @@ where
         let jitter = std::sync::Arc::clone(&self.jitter);
         let queue_name = self.queue_name.clone();
         let handler = self.handler.clone();
+        let span = tracing::Span::current();
 
-        Box::pin(async move {
+        let future = async move {
             let attempt = current_attempt(task.parts.attempt.current());
             let context_max_attempts =
                 u32::try_from(task.parts.ctx.max_attempts()).unwrap_or_default();
             let worker_id = running_worker_id(&task);
             let task_id = task.parts.task_id.as_ref().map(ToString::to_string);
+            tracing::Span::current().record("attempt", tracing::field::display(attempt));
+            tracing::Span::current().record("task_id", tracing::field::debug(task_id.as_deref()));
+            tracing::Span::current()
+                .record("worker_id", tracing::field::debug(worker_id.as_deref()));
             let failure_context = RetryFailureContext {
                 attempt,
                 context_max_attempts,
@@ -125,7 +145,9 @@ where
                 Ok(()) => Ok(()),
                 Err(failure) => handle_failure(failure, &failure_context).await,
             }
-        })
+        };
+
+        Box::pin(future.instrument(span))
     }
 }
 
