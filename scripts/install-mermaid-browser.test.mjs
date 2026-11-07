@@ -191,6 +191,10 @@ describe('runCli', () => {
 
 describe('module import', () => {
   it('does not start an install as an import side effect', async () => {
+    // The static import at the top of this file would otherwise leave the
+    // module cached, so a run that selected only this test would exercise the
+    // real `spawnSync` and pass without checking anything.
+    vi.resetModules();
     const spawnSync = vi.fn(() => ({ status: 0, signal: null }));
     vi.doMock('node:child_process', () => ({ spawnSync }));
 
