@@ -1327,10 +1327,14 @@ Three pieces cooperate here:
   configuration from the current directory and its ancestors; invoking it from
   elsewhere with `--manifest-path` alone does not load the version and mirror
   defaults. Supply the environment explicitly in that case or when invoking a
-  test binary directly. `ensure_stable_cluster_environment` only reconciles
-  password state; it does not mutate the test process environment. The
-  environment policy contract tests guard the Makefile password and all
-  non-forcing defaults.
+  test binary directly. `ensure_stable_cluster_environment` reconciles retained
+  cluster state only: a stale `.pgpass`, and a default data directory the next
+  bootstrap could not reuse. A data directory is unusable when it has no
+  `postgresql.conf` — a bootstrap that never finished — or when its
+  `PG_VERSION` names a different major version from `PG_VERSION_REQ`. The
+  repair never removes an explicitly configured `PG_DATA_DIR`, and it does not
+  mutate the test process environment. The environment policy contract tests
+  guard the Makefile password and all non-forcing defaults.
 
 ## Environment seams
 

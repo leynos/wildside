@@ -240,3 +240,36 @@ policy. Confirming the queue name and its current configured budget is an
 operator precondition. See the
 [dead-letter runbook](runbooks/queue-retry-and-dead-letter-operations.md) for
 the SQL fallback.
+
+### Configuring the Apalis provider
+
+`ApalisPostgresProvider::new` takes a `sqlx::PgPool`, the queue name, and the
+queue's `JobRetryPolicy`. It derives the Apalis attempt budget from
+`policy.max_attempts()`, so the `max_attempts` stored on each new job comes
+from the policy rather than from a second value that could drift. Pass the same
+policy to `RetryingJobServiceConfig::new` so the wrapper and the stored budget
+agree. A policy limit that does not fit Apalis's signed `integer` attempt
+column is rejected with `JobDispatchError::Rejected`.
+
+The constructor gained the policy argument when durable retries were
+introduced. There are no compatibility shims or deprecated overloads because
+the crate is pre-1.0, so an existing caller must pass the policy for that queue:
+
+```rust
+// Before durable retries: the attempt budget came from Apalis's default.
+let provider = ApalisPostgresProvider::new(pool.clone(), "route.generate");
+
+// After: the queue's policy supplies the attempt budget.
+let provider = ApalisPostgresProvider::new(pool.clone(), "route.generate", policy.clone());
+```
+
+Changing the policy does not rewrite rows already in the table: each stored job
+keeps the `max_attempts` recorded when it was enqueued, and the new budget
+applies to jobs enqueued afterwards. The retry wrapper still applies the
+current policy on each failed delivery, so an older row with a larger stored
+cap is dead-lettered once the policy's limit is reached; when that terminating
+attempt is below the stored cap, the cap is lowered to it.
+
+Retry jitter comes from a `JitterSource`. Use
+`RetryingJobServiceConfig::with_jitter` to replace the default random source
+with a deterministic one, which makes scheduled delays reproducible in a test.
