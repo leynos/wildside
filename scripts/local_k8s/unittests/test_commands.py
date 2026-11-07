@@ -27,6 +27,7 @@ def test_run_sends_input_text_through_subprocess(
         cwd: str | None = None,
         input_text: str,
     ) -> CommandResult:
+        """Log the call, including its stdin text, and report a created resource."""
         calls.append((command, args, cwd, input_text))
         return CommandResult(stdout="created\n", stderr="")
 
@@ -62,6 +63,7 @@ def test_run_wraps_subprocess_failures(monkeypatch: pytest.MonkeyPatch) -> None:
         cwd: str | None = None,
         input_text: str,
     ) -> CommandResult:
+        """Check the default working directory, then raise ``CalledProcessError``."""
         assert cwd is None, (
             "subprocess runner must receive the default working directory"
         )
@@ -93,6 +95,7 @@ def test_run_returns_plumbum_results(monkeypatch: pytest.MonkeyPatch) -> None:
         *,
         cwd: str | None = None,
     ) -> CommandResult:
+        """Log the call and return the expected result."""
         calls.append((command, args, cwd))
         return expected
 
@@ -115,6 +118,7 @@ def test_run_wraps_plumbum_failures(monkeypatch: pytest.MonkeyPatch) -> None:
         *,
         cwd: str | None = None,
     ) -> CommandResult:
+        """Check the default working directory, then raise ``ProcessExecutionError``."""
         assert cwd is None, "plumbum runner must receive the default working directory"
         raise ProcessExecutionError(["helm", "status"], 1, "", "release missing\n")
 
@@ -143,6 +147,7 @@ def test_run_cwd_is_thread_safe_under_concurrency() -> None:
         targets = [dir_a, dir_b] * 15
 
         def observed_cwd(directory: str) -> Path:
+            """Run the child process in ``directory`` and return the cwd it printed."""
             result = run(sys.executable, print_cwd, cwd=directory)
             return Path(result.stdout.strip()).resolve()
 

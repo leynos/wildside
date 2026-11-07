@@ -34,6 +34,7 @@ STANDARD_FLAGS = f"-D warnings {THREADS} {LINKER_FLAG}"
 
 
 def _config() -> dict[str, typ.Any]:
+    """Parse the repository's ``.cargo/config.toml``."""
     return tomllib.loads((ROOT / ".cargo" / "config.toml").read_text("utf-8"))
 
 
@@ -149,10 +150,12 @@ def test_whitaker_keeps_its_own_flag_boundary() -> None:
 
 
 def _build_job() -> dict[str, typ.Any]:
+    """Return the ``build`` job from the CI workflow."""
     return inv.load_workflow("ci.yml")["jobs"]["build"]
 
 
 def _setup_rust_step(job: dict[str, typ.Any]) -> dict[str, typ.Any]:
+    """Return the job's single ``setup-rust`` step, asserting there is exactly one."""
     steps = [
         step
         for step in job["steps"]

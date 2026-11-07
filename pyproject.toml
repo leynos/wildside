@@ -163,15 +163,6 @@ dataclasses = "dc"
 convention = "numpy"
 ignore-decorators = ["typing.overload", "typ.overload"]
 
-[tool.interrogate]
-ignore-overloaded-functions = true
-# Docstring coverage is enforced on the shipped helper code; the unit-test
-# suites are covered by Ruff's D rules instead.
-exclude = [
-    "scripts/local_k8s/unittests",
-    "scripts/tests",
-]
-
 [tool.ty.environment]
 # The local_k8s package is imported with PYTHONPATH=scripts (see the
 # test-scripts Make target and scripts/local_k8s.py), so ty needs the same

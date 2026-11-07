@@ -54,6 +54,7 @@ class TestClusterStatus:
         commands: list[tuple[str, list[str]]] = []
 
         def record_run(command: str, args: list[str], **_: object) -> CommandResult:
+            """Log the command and list only another cluster."""
             commands.append((command, args))
             return CommandResult(stdout="other\n", stderr="")
 
@@ -76,6 +77,7 @@ class TestClusterStatus:
         commands: list[tuple[str, list[str]]] = []
 
         def record_run(command: str, args: list[str], **_: object) -> CommandResult:
+            """Log the command and list the preview cluster, as a cluster list does."""
             commands.append((command, args))
             return CommandResult(stdout="wildside-preview\n", stderr="")
 
@@ -100,6 +102,7 @@ class TestClusterStatus:
         """Verify k3d status keeps the direct ingress URL."""
 
         def record_run(_command: str, _args: list[str], **_: object) -> CommandResult:
+            """List the preview cluster whatever command runs."""
             return CommandResult(stdout='[{"name":"wildside-preview"}]\n', stderr="")
 
         mocker.patch("local_k8s.cluster.require_tools", return_value=None)

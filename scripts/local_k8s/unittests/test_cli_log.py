@@ -14,6 +14,8 @@ if typ.TYPE_CHECKING:
 
 @dc.dataclass(frozen=True)
 class _LogEntriesCase:
+    """One log-loading scenario: raw log text and the entries or error it yields."""
+
     source: str
     expected: list[list[object]] | None
     expected_error: type[Exception] | None

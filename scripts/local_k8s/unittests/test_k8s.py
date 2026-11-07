@@ -20,6 +20,7 @@ def _capture_status_commands(
     calls: list[tuple[str, list[str]]] = []
 
     def fake_run(command: str, args: list[str]) -> SimpleNamespace:
+        """Log the kubectl call and return empty output."""
         calls.append((command, args))
         return SimpleNamespace(stdout="")
 

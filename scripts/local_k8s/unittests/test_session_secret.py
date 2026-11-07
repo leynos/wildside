@@ -91,6 +91,7 @@ def test_ensure_session_secret_reuses_existing_key(
     )
 
     def fail_on_rotation(_length: int) -> bytes:
+        """Fail the test if a new key is generated."""
         error_message = "existing local preview session keys must be reused"
         raise AssertionError(error_message)
 
@@ -156,6 +157,7 @@ class _ConcurrentSecretResponder:
     def __call__(
         self, command: str, args: list[str], **kwargs: object
     ) -> SimpleNamespace:
+        """Log the command, then answer Secret reads and writes."""
         input_text = _validated_input_text(kwargs.get("input_text"))
         self.commands.append((command, args, input_text))
         if _is_get_session_secret(args):
@@ -163,6 +165,7 @@ class _ConcurrentSecretResponder:
         return self._respond_to_write(command, args)
 
     def _respond_to_write(self, command: str, args: list[str]) -> SimpleNamespace:
+        """Fail ``create`` as already existing, accept ``apply``, reject the rest."""
         if args[2:5] == ["create", "-f", "-"]:
             raise LocalK8sError(
                 _already_exists_message(),
@@ -174,6 +177,7 @@ class _ConcurrentSecretResponder:
         raise AssertionError(error_message)
 
     def _respond_to_get(self) -> SimpleNamespace:
+        """Return empty output until ``ready_after_get_calls`` reads, then a key."""
         get_calls = sum(1 for _c, a, _i in self.commands if _is_get_session_secret(a))
         stdout = (
             _valid_session_key_stdout()
@@ -248,6 +252,7 @@ def _raise_on_create(
     """Return a ``run`` replacement that raises ``exc`` on the create call."""
 
     def _run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
+        """Raise ``exc`` on the Secret create call; reject any other command."""
         _validated_input_text(kwargs.get("input_text"))
         if args[2:5] == ["create", "-f", "-"]:
             raise exc

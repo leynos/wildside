@@ -112,6 +112,9 @@ TY_VERSION ?= 0.0.59
 # [tool.ty.environment] python-version in pyproject.toml.
 PY_TYPECHECK_VERSION ?= 3.13
 INTERROGATE_VERSION ?= 1.7.0
+# Interrogate scans these targets recursively, subject to its default exclusions.
+INTERROGATE_TARGETS ?= scripts tests
+INTERROGATE_FLAGS ?= -vv --fail-under 100
 # Pylint runs on PyPy for speed; uv downloads the managed PyPy 3.12 when none
 # is installed. The minor version is pinned so a new PyPy release cannot change
 # the parsed grammar without a commit here.
@@ -164,7 +167,7 @@ PY_TYPECHECK_DEPS = $(PY_TEST_DEPS) \
 .PHONY: spelling
 .PHONY: lint-rust lint-clippy lint-whitaker lint-frontend lint-asyncapi lint-openapi lint-makefile
 .PHONY: lint-actions lint-architecture workspace-sync prepare-pg-worker
-.PHONY: lint-python typecheck-python check-fmt-python fmt-python
+.PHONY: lint-python interrogate typecheck-python check-fmt-python fmt-python
 
 # `make fmt` and `make check-fmt` call mdtablefix directly. `--git` selects the
 # Markdown files Git tracks and `--include-untracked` adds the untracked files
@@ -273,12 +276,21 @@ lint-frontend:
 lint-specs: lint-asyncapi lint-openapi
 
 # Python lint tier: Ruff (style and correctness), interrogate (docstring
-# coverage on the shipped helper code; unittests are excluded via
-# pyproject.toml), and Pylint (second-tier rule families) over all Python.
+# coverage over every Python tree, tests included), and Pylint (second-tier
+# rule families) over all Python.
 lint-python:
 	$(RUFF) check
-	uv tool run --from interrogate==$(INTERROGATE_VERSION) interrogate --fail-under 100 scripts
+	$(MAKE) interrogate
 	$(PYLINT) $(PYLINT_TARGETS)
+
+# Level 2 prints a MISSED row per undocumented definition, which this target
+# fails on: interrogate rounds its percentage to one decimal, so the threshold
+# alone can pass a lone gap in a large repository.
+interrogate:
+	report="$$(uv tool run --from interrogate==$(INTERROGATE_VERSION) interrogate $(INTERROGATE_FLAGS) $(INTERROGATE_TARGETS))" || status=$$?
+	printf '%s\n' "$$report"
+	test "$${status:-0}" -eq 0 || exit "$$status"
+	if printf '%s\n' "$$report" | grep -q '| *MISSED *|'; then printf '%s\n' 'interrogate: undocumented definitions remain; see the MISSED rows above' >&2; exit 1; fi
 
 lint-architecture:
 	$(GATE_RUST_FLAGS_ENV) cargo run -p architecture-lint --quiet

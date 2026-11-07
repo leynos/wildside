@@ -136,6 +136,7 @@ def _podman_saved_image_name(
     commands: list[tuple[str, list[str]]] = []
 
     def record_run(command: str, args: list[str], **_: object) -> object:
+        """Log the command and return a bare result object."""
         commands.append((command, args))
         return object()
 
@@ -174,6 +175,7 @@ def _printed_service_name(
     commands: list[tuple[str, list[str]]] = []
 
     def record_run(command: str, args: list[str], **_: object) -> object:
+        """Log the command and return a result with empty ``stdout``."""
         commands.append((command, args))
         return type("Result", (), {"stdout": ""})()
 
