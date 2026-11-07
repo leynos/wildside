@@ -3,8 +3,8 @@
 The target runs the pinned tool, prints its report, and must fail both when the
 tool fails and when the report holds a ``MISSED`` row, because interrogate
 rounds its percentage to one decimal and a lone gap in a large repository can
-still read as 100.0%. A stand-in ``uv`` prints a chosen report and exit status,
-so each case runs the real recipe without the network.
+still read as 100.0%. A stand-in ``uv`` prints a chosen report and exits with a
+chosen status, so each case runs the real recipe without the network.
 """
 
 from __future__ import annotations

@@ -77,7 +77,7 @@ class TestClusterStatus:
         commands: list[tuple[str, list[str]]] = []
 
         def record_run(command: str, args: list[str], **_: object) -> CommandResult:
-            """Log the command and report the preview cluster as the kube context."""
+            """Log the command and list the preview cluster, as a cluster list does."""
             commands.append((command, args))
             return CommandResult(stdout="wildside-preview\n", stderr="")
 
