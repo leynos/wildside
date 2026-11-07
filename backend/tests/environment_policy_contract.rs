@@ -46,6 +46,9 @@
 #[path = "environment_policy_contract/export_tests.rs"]
 mod export_tests;
 
+#[path = "environment_policy_contract/make_boundary_tests.rs"]
+mod make_boundary_tests;
+
 use std::error::Error as StdError;
 
 use toml::Value;
