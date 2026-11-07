@@ -51,6 +51,7 @@ def test_deploy_preview_docker_requirement_conditional_on_skip_build(
         """Return a side-effect replacement that records orchestration order."""
 
         def step(_: PreviewConfig) -> None:
+            """Log this step's name when it runs."""
             calls.append(name)
 
         return step

@@ -40,10 +40,12 @@ def install_cluster_run_recorder(
         *,
         input_text: str | None = None,
     ) -> MockCommandResult:
+        """Log the command, then answer through ``responder``."""
         commands.append((command, args, input_text))
         return responder(command, args, input_text)
 
     def record_require_tools(tools: tuple[str, ...]) -> None:
+        """Forward the required tools to ``on_require_tools``, if one was given."""
         if on_require_tools is not None:
             on_require_tools(tuple(tools))
 
@@ -65,6 +67,7 @@ class TestClusterCreation:
         def respond(
             _command: str, args: list[str], _input_text: str | None
         ) -> MockCommandResult:
+            """Report an empty k3d cluster list; accept every other command."""
             if args == ["cluster", "list", "--output", "json"]:
                 return MockCommandResult(stdout="[]")
             return MockCommandResult()
@@ -104,6 +107,7 @@ class TestClusterCreation:
         def respond(
             _command: str, args: list[str], _input_text: str | None
         ) -> MockCommandResult:
+            """Report the preview cluster as existing; accept every other command."""
             if args == ["cluster", "list", "--output", "json"]:
                 return MockCommandResult(stdout='[{"name": "wildside-preview"}]')
             return MockCommandResult()
@@ -128,6 +132,7 @@ class TestClusterCreation:
         def respond(
             command: str, args: list[str], _input_text: str | None
         ) -> MockCommandResult:
+            """Report only another kind cluster; accept every other command."""
             if command == "kind" and args == ["get", "clusters"]:
                 return MockCommandResult(stdout="other\n")
             return MockCommandResult()
@@ -180,6 +185,7 @@ class TestClusterCreation:
         def respond(
             _command: str, _args: list[str], _input_text: str | None
         ) -> MockCommandResult:
+            """Accept every command with an empty result."""
             return MockCommandResult()
 
         commands = install_cluster_run_recorder(

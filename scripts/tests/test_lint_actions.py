@@ -349,6 +349,7 @@ def test_the_run_stops_at_whichever_invocation_fails(
     attempted: list[str] = []
 
     def _record(invocation: lint_actions.Invocation) -> None:
+        """Log the tool, failing the invocation at ``failure_index``."""
         attempted.append(invocation.tool)
         if len(attempted) == failure_index + 1:
             raise lint_actions.LintError(invocation.tool, 1)

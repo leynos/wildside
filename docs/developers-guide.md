@@ -1953,11 +1953,12 @@ comments with a reason, rather than `# noqa: CODE`.
 
 - `make check-fmt-python` verifies Ruff formatting without rewriting files.
 - `make lint-python` runs three tiers: Ruff for style and correctness,
-  interrogate for docstring coverage over `scripts/`, and a pinned Pylint on
-  uv-managed PyPy 3.12 over `scripts/` and `tests/`. `syntax-error` stays
-  enabled, so a module PyPy cannot parse fails the lint rather than being
-  skipped. CI pins uv at 0.12.19 or later, the first release that ships PyPy
-  3.12.
+  interrogate for docstring coverage over `scripts/` and `tests/` (the
+  `make interrogate` target, which fails on any `MISSED` row because
+  interrogate rounds its percentage), and a pinned Pylint on uv-managed PyPy
+  3.12 over `scripts/` and `tests/`. `syntax-error` stays enabled, so a module
+  PyPy cannot parse fails the lint rather than being skipped. CI pins uv at
+  0.12.19 or later, the first release that ships PyPy 3.12.
 - `make typecheck-python` creates or reuses `.venv`, installs the declared
   typecheck dependencies into it, then runs ty against the configured Python
   sources. ty needs a real environment on disk to resolve imports, because the

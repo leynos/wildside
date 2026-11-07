@@ -54,6 +54,7 @@ class TestImageImport:
         commands: list[tuple[str, list[str]]] = []
 
         def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+            """Log the command and accept it with an empty result."""
             commands.append((command, args))
             return MockCommandResult()
 
@@ -197,6 +198,7 @@ class TestImageImport:
         command_log: list[tuple[str, list[str]]] = []
 
         def record_run(command: str, args: list[str], **_: object) -> MockCommandResult:
+            """Log the command, failing the podman ``kind load`` step."""
             command_log.append((command, args))
             if command == "env" and args[:3] == [
                 "KIND_EXPERIMENTAL_PROVIDER=podman",
@@ -331,6 +333,7 @@ class TestRemoveStaleArchive:
         # Force rmtree to fail on the directory, then drive the onexc handler so
         # the logging path runs exactly as it would on a real cleanup error.
         def fake_rmtree(path: object, *, onexc: cabc.Callable[..., None]) -> None:
+            """Report a permission error for ``path`` through the ``onexc`` hook."""
             onexc(fake_rmtree, str(path), OSError("permission denied"))
 
         mocker.patch("local_k8s.kind.shutil.rmtree", side_effect=fake_rmtree)

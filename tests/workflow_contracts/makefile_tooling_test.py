@@ -256,10 +256,12 @@ def test_lint_python_runs_ruff_interrogate_and_pylint(
     assert interrogate[3].startswith("interrogate==")
     assert interrogate[4:] == (
         "interrogate",
+        "-vv",
         "--fail-under",
         "100",
         "scripts",
-    ), "interrogate must keep demanding total docstring coverage of scripts"
+        "tests",
+    ), "interrogate must demand total docstring coverage of scripts and tests"
 
     assert pylint[:5] == ("tool", "run", "--managed-python", "--python", "pypy@3.12"), (
         "Pylint must run on managed PyPy pinned to its minor version"

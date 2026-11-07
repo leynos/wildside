@@ -102,6 +102,7 @@ def install_run_recorder(
     commands: list[CommandRecord] = []
 
     def record_run(command: str, args: list[str], **kwargs: object) -> SimpleNamespace:
+        """Log the command with its text input and return the canned ``stdout``."""
         input_text = kwargs.get("input_text")
         if input_text is not None and not isinstance(input_text, str):
             error_message = "input_text must be text when provided"
