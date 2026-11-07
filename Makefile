@@ -95,7 +95,7 @@ REDOCLY_CLI_VERSION ?= 2.19.0
 # the ephemeral `bun x` fallback runs when orval is not on PATH, and 8.22.0
 # is the first release clearing the September 2026 advisory cluster.
 ORVAL_VERSION ?= 8.27.0
-BIOME_VERSION ?= 2.3.1
+BIOME_VERSION ?= 2.4.13
 TSC_VERSION ?= 5.9.2
 MARKDOWNLINT_CLI2_VERSION ?= 0.14.0
 YAMLLINT_VERSION ?= 1.35.1
