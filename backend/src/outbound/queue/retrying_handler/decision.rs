@@ -65,6 +65,7 @@ pub(super) fn decide_retry_wrapper_action(
     }
 }
 
+/// Map a refused retry to its terminal reason and cap-shrinking plan.
 fn terminal_decision(kind: JobErrorKind, shrink_limit: bool) -> RetryWrapperDecision {
     let reason = match kind {
         JobErrorKind::Fatal => TerminalRetryReason::Fatal,

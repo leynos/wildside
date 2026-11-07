@@ -19,6 +19,8 @@ pub enum JobErrorKind {
 }
 
 impl From<&EnrichmentSourceError> for JobErrorKind {
+    /// Treat the source's retryability as the job's, so the queue policy sees
+    /// one consistent classification for upstream failures.
     fn from(error: &EnrichmentSourceError) -> Self {
         if error.is_retryable() {
             Self::Retryable
