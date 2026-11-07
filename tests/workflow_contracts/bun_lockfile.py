@@ -68,6 +68,94 @@ def _specifier_of(entry: PackageEntry) -> str | None:
     return specifier if isinstance(specifier, str) else None
 
 
+def package_name(specifier: str) -> str:
+    """Return the package name a Bun specifier names, whatever its version.
+
+    A contract may only need to know whether a package is present, not which
+    release resolved, so this reader accepts ordinary, prerelease, non-numeric
+    and peer-qualified specifiers alike. Splitting on the last separator is not
+    enough: a scoped name begins with `@` and can carry a peer suffix.
+
+    Parameters
+    ----------
+    specifier : str
+        The first element of a package entry, such as `name@1.2.3`.
+
+    Returns
+    -------
+    str
+        The package name without its version.
+
+    Raises
+    ------
+    ValueError
+        If the specifier is empty, not a string, or names no package.
+
+    Examples
+    --------
+    >>> package_name("extract-zip@2.0.1")
+    'extract-zip'
+    >>> package_name("@puppeteer/browsers@2.6.1")
+    '@puppeteer/browsers'
+    >>> package_name("get-stream@5.2.0-beta.1")
+    'get-stream'
+    >>> package_name("get-stream")
+    'get-stream'
+    """
+    if not isinstance(specifier, str) or not specifier:
+        message = "a Bun package entry must name its package"
+        raise ValueError(message)
+    # A scoped name's leading `@` is not the version separator.
+    search_from = 1 if specifier.startswith("@") else 0
+    separator = specifier.find("@", search_from)
+    name = specifier if separator == -1 else specifier[:separator]
+    if not name:
+        message = f"a Bun package entry names no package: {specifier!r}"
+        raise ValueError(message)
+    return name
+
+
+def resolved_names(packages: PackageTable) -> set[str]:
+    """Return the name of every package the table resolves.
+
+    Unlike :func:`resolved_versions`, this keeps entries whose version is not
+    numeric, because absence is a question about names alone.
+
+    Parameters
+    ----------
+    packages : PackageTable
+        Bun's package table.
+
+    Returns
+    -------
+    set[str]
+        The package name of every entry.
+
+    Raises
+    ------
+    ValueError
+        If an entry is not a non-empty list whose first element is a string.
+
+    Examples
+    --------
+    >>> resolved_names({"a": ["a@1.2.3"], "b/a": ["a@2.0.0"]})
+    {'a'}
+    >>> resolved_names({"a": ["a@latest"]})
+    {'a'}
+    """
+    names = set()
+    for entry in packages.values():
+        if not isinstance(entry, list) or not entry:
+            message = "a Bun package entry must be a non-empty list"
+            raise ValueError(message)
+        specifier = _specifier_of(entry)
+        if specifier is None:
+            message = f"a Bun package entry names no package: {entry[0]!r}"
+            raise ValueError(message)
+        names.add(package_name(specifier))
+    return names
+
+
 def _declared_dependencies(entry: PackageEntry) -> set[str]:
     """Return every package name an entry declares as a dependency."""
     metadata = next((item for item in entry if isinstance(item, dict)), {})

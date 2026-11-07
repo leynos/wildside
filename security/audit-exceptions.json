@@ -16,24 +16,6 @@
     "expiresAt": "2026-12-15"
   },
   {
-    "id": "EXTRACT_ZIP_SYMLINK_TRAVERSAL_2026_08",
-    "package": "frontend-pwa",
-    "advisory": "GHSA-jmr9-qjv8-65gv",
-    "introducedBy": "extract-zip",
-    "reason": "Both pnpm and Bun report this, so the entry is scoped to the frontend-pwa workspace ledger. extract-zip has no patched release; 2.0.1 is the latest published version and the advisory covers everything up to it. It reaches the tree only through puppeteer 23 via @puppeteer/browsers 2.x, which is used at build time to download a Mermaid rendering browser from Google's own endpoints, so no untrusted archive is extracted. The fix is @puppeteer/browsers 3.x, which replaced extract-zip with modern-tar and first ships in puppeteer 25.7; that is a two-major bump and scripts/install-mermaid-browser.mjs deep-imports puppeteer internals, so it needs its own change and verification. Tracked in https://github.com/leynos/wildside/issues/491.",
-    "addedAt": "2026-08-13",
-    "expiresAt": "2026-11-14"
-  },
-  {
-    "id": "EXTRACT_ZIP_ARBITRARY_WRITE_2026_09",
-    "package": "frontend-pwa",
-    "advisory": "GHSA-7pqw-9j4j-h8q3",
-    "introducedBy": "extract-zip",
-    "reason": "A second, independent advisory against the same unpatchable extract-zip 2.0.1 that EXTRACT_ZIP_SYMLINK_TRAVERSAL_2026_08 covers, reported by both pnpm and Bun. The symlink entries it describes are written only while @puppeteer/browsers 2.x unpacks a Chrome archive that puppeteer itself fetched from Google's endpoints at build time, so no attacker-supplied archive reaches it. It resolves with the same puppeteer 25.7 upgrade and must not outlive it. Tracked in https://github.com/leynos/wildside/issues/491.",
-    "addedAt": "2026-09-14",
-    "expiresAt": "2026-11-14"
-  },
-  {
     "id": "BRACES_NESTED_PATTERN_DOS_2026_10",
     "package": "frontend-pwa",
     "advisory": "GHSA-vfj7-8cjw-p6xm",
