@@ -189,7 +189,7 @@ def test_every_restore_precedes_the_first_installer() -> None:
     [
         ("ci.yml", "build", "TOOLS_CACHE_KEY"),
         ("ci.yml", "coverage", "COVERAGE_TOOLS_CACHE_KEY"),
-        ("coverage-main.yml", "coverage-upload", "COVERAGE_TOOLS_CACHE_KEY"),
+        ("coverage-main.yml", "coverage-warmup", "COVERAGE_TOOLS_CACHE_KEY"),
     ],
 )
 def test_tool_cache_keys_carry_the_runner_image_identity(

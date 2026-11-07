@@ -58,7 +58,9 @@ def test_coverage_generation_forces_rust_only_lcov() -> None:
     """
     generation = _find_step(_load_steps(), "Generate Rust coverage")
 
-    assert generation.get("with") == {
+    options = generation.get("with")
+    assert isinstance(options, dict), "the coverage step must pass inputs"
+    expected = {
         "language": "rust",
         "output-path": COVERAGE_FILE,
         "format": "lcov",
@@ -66,7 +68,52 @@ def test_coverage_generation_forces_rust_only_lcov() -> None:
         "features": "example-data metrics test-support",
         "with-ratchet": "true",
         "cache-provider": "external",
-    }, "main-branch coverage must force Rust-only ratcheted LCOV output"
+    }
+    assert {key: options.get(key) for key in expected} == expected, (
+        "main-branch coverage must force Rust-only ratcheted LCOV output"
+    )
+
+
+def test_the_hosted_job_hands_its_baseline_to_the_publisher() -> None:
+    """A hosted runner saves no baseline; it hands the figures on by artefact.
+
+    The Ubicloud pull-request lanes never read the hosted cache store, so the
+    hosted measurement must not save there, and the publisher job must read the
+    artefact the measurement names.
+    """
+    options = _find_step(_load_steps(), "Generate Rust coverage").get("with")
+    assert isinstance(options, dict), "the coverage step must pass inputs"
+    assert options.get("publish-baseline") == "never"
+    handover = options.get("baseline-artefact-name")
+    assert isinstance(handover, str), (
+        "the hosted job must name the artefact that carries its baseline"
+    )
+    assert handover, "the artefact name must not be empty"
+    publisher = [
+        step
+        for step in _load_steps("coverage-baseline")
+        if "publish-coverage-baseline" in str(step.get("uses", ""))
+    ]
+    assert len(publisher) == 1, "coverage-baseline must publish exactly once"
+    assert publisher[0].get("with", {}).get("artefact-name") == handover
+
+
+def test_the_warmup_compiles_the_pull_request_lane_build_without_running_it() -> None:
+    """The warm-up builds with the lane's selection so compiler-cache keys match."""
+    steps = _load_steps("coverage-warmup")
+    builds = [
+        step.get("with", {})
+        for step in steps
+        if GENERATE_COVERAGE_PATH in str(step.get("uses", ""))
+    ]
+    assert len(builds) == 1, "the warm-up must call generate-coverage once"
+    build = builds[0]
+    assert build.get("build-only") == "true"
+    hosted = _find_step(_load_steps(), "Generate Rust coverage").get("with", {})
+    for key in ("use-cargo-nextest", "features", "language"):
+        assert build.get(key) == hosted.get(key), (
+            f"the warm-up and the measurement must agree on {key}"
+        )
 
 
 def test_codescene_upload_consumes_the_generated_lcov_report() -> None:

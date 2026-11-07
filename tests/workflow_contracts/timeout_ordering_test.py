@@ -68,6 +68,7 @@ REQUIRED_CONDITIONS: typ.Final[dict[tuple[str, str], tuple[str | None, str | Non
         "coverage",
     ): (None, "github.actor != 'dependabot[bot]' && github.event_name != 'push'"),
     ("coverage-main.yml", "coverage-upload"): (None, None),
+    ("coverage-main.yml", "coverage-warmup"): (None, None),
 }
 
 

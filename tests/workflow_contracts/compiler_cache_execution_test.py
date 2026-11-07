@@ -43,6 +43,7 @@ JOBS = (
     ("ci.yml", "build"),
     ("ci.yml", "coverage"),
     ("coverage-main.yml", "coverage-upload"),
+    ("coverage-main.yml", "coverage-warmup"),
 )
 REPORT_STEP = "Record compiler-cache effectiveness"
 SETUP_ID = "setup-rust"

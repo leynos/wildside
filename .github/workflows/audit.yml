@@ -39,7 +39,7 @@ jobs:
       # cache-provider stays "github": this job mounts no cache of its own, so
       # the shared action is the single owner of the Cargo paths it uses.
       - name: Install Rust toolchain
-        uses: leynos/shared-actions/.github/actions/setup-rust@5a99aed78ce68dcebd3052b75c31e6f173162b1e
+        uses: leynos/shared-actions/.github/actions/setup-rust@f84a7def5646a6fc7ba77c1f486906f66a0fed96
       - name: Install cargo-audit
         env:
           GITHUB_TOKEN: ${{ github.token }}
