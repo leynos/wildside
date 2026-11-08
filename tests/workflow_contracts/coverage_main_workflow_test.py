@@ -91,7 +91,9 @@ def test_the_hosted_job_hands_its_baseline_to_the_publisher() -> None:
     artefact the measurement names.
     """
     options = _inputs(_find_step(_load_steps(), "Generate Rust coverage"))
-    assert options.get("publish-baseline") == "never"
+    assert options.get("publish-baseline") == "never", (
+        "the hosted job must not save a baseline into a store the lanes cannot read"
+    )
     handover = options.get("baseline-artefact-name")
     assert isinstance(handover, str), (
         "the hosted job must name the artefact that carries its baseline"
@@ -103,7 +105,9 @@ def test_the_hosted_job_hands_its_baseline_to_the_publisher() -> None:
         if "publish-coverage-baseline" in str(step.get("uses", ""))
     ]
     assert len(publisher) == 1, "coverage-baseline must publish exactly once"
-    assert publisher[0].get("artefact-name") == handover
+    assert publisher[0].get("artefact-name") == handover, (
+        "the publisher must read the artefact the measurement names"
+    )
 
 
 def test_the_warmup_compiles_the_pull_request_lane_build_without_running_it() -> None:
@@ -116,7 +120,9 @@ def test_the_warmup_compiles_the_pull_request_lane_build_without_running_it() ->
     ]
     assert len(builds) == 1, "the warm-up must call generate-coverage once"
     build = builds[0]
-    assert build.get("build-only") == "true"
+    assert build.get("build-only") == "true", (
+        "the warm-up must compile the instrumented tests and run none"
+    )
     hosted = _inputs(_find_step(_load_steps(), "Generate Rust coverage"))
     for key in ("use-cargo-nextest", "features", "language"):
         assert build.get(key) == hosted.get(key), (
