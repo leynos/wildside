@@ -11,9 +11,10 @@
 //! target shows that. A fake `cargo` records the environment it received,
 //! which keeps the check to the export rather than to a real compile.
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
+
+use cap_std::fs::{Dir, Permissions, PermissionsExt};
 
 /// Repository root, one level above the `backend` package directory.
 fn repository_root() -> PathBuf {
@@ -119,15 +120,17 @@ struct TargetRun {
 /// sync and the embedded-worker build are not what this contract measures.
 fn run_test_rust(assignments: &[(&str, &str)]) -> TargetRun {
     let sandbox = tempfile::tempdir().expect("tempdir");
+    // The fixture writes through a capability handle, so the sandbox path is
+    // the only ambient access this test needs.
+    let dir = Dir::open_ambient_dir(sandbox.path(), cap_std::ambient_authority())
+        .expect("open the sandbox as a capability directory");
+    dir.create_dir("bin")
+        .expect("create the fake bin directory");
+    dir.write("bin/cargo", FAKE_CARGO)
+        .expect("write the fake cargo tool");
+    dir.set_permissions("bin/cargo", Permissions::from_mode(0o755))
+        .expect("make the fake cargo executable");
     let bin = sandbox.path().join("bin");
-    std::fs::create_dir(&bin).expect("create the fake bin directory");
-    let fake_cargo = bin.join("cargo");
-    std::fs::write(&fake_cargo, FAKE_CARGO).expect("write the fake cargo tool");
-    let mut permissions = std::fs::metadata(&fake_cargo)
-        .expect("stat the fake cargo tool")
-        .permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&fake_cargo, permissions).expect("make the fake cargo executable");
     let log_path = sandbox.path().join("cargo-env.log");
 
     let mut command = Command::new("make");
@@ -152,7 +155,9 @@ fn run_test_rust(assignments: &[(&str, &str)]) -> TargetRun {
         command.arg(format!("{name}={value}"));
     }
     let output = command.output().expect("make runs as a child process");
-    let recorded = std::fs::read_to_string(&log_path).unwrap_or_default();
+    // A missing log means the double never ran; the empty string lets the
+    // assertion report that as the mismatch it is.
+    let recorded = dir.read_to_string("cargo-env.log").unwrap_or_default();
     TargetRun { output, recorded }
 }
 
