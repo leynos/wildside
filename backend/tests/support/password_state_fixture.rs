@@ -121,6 +121,26 @@ impl PasswordStateFixture {
         self.write_data_file("postgresql.conf", "# initialized\n");
     }
 
+    /// Write `contents` to a path below the data directory, creating parents.
+    ///
+    /// Scenarios about a layout that nests clusters in subdirectories need a
+    /// file that `write_data_file` cannot reach.
+    pub(super) fn write_nested_data_file(&self, path: &str, contents: &str) {
+        let data_dir = self
+            .data_parent
+            .open_dir("data")
+            .expect("the fixture's data directory exists");
+        let path = Path::new(path);
+        if let Some(parent) = path.parent() {
+            data_dir
+                .create_dir_all(parent)
+                .expect("create nested data directory");
+        }
+        data_dir
+            .write(path, contents)
+            .expect("write nested data file");
+    }
+
     /// Write `contents` to `name` inside the fixture's data directory.
     pub(super) fn write_data_file(&self, name: &str, contents: &str) {
         let data_dir = self
