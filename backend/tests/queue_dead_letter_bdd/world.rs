@@ -3,6 +3,7 @@
 mod assertions;
 mod dead_job_fixtures;
 mod plan;
+mod properties;
 mod rows;
 use self::rows::JobSeed;
 use self::rows::JobSnapshot;
