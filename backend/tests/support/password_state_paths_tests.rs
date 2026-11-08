@@ -48,14 +48,17 @@ fn resolve_reads_overrides_from_the_injected_reader(
     }
 }
 
-/// Scenario: `PG_VERSION_REQ` is absent or names a major version.
+/// Scenario: `PG_VERSION_REQ` is absent, pins a major, or names a range.
 ///
-/// Invariant: only a parseable requirement gives the repair a version to
-/// enforce; an absent or unparsable requirement leaves retained data alone.
+/// Invariant: only an exact requirement gives the repair a version to enforce;
+/// an absent, ranged, or unparsable requirement leaves retained data alone,
+/// because a range accepts more than one stored major version.
 #[rstest]
 #[case::absent(&[], None)]
 #[case::pinned(&[("PG_VERSION_REQ", "=16.10.0")], Some(16))]
-#[case::lower_bound(&[("PG_VERSION_REQ", ">=17")], Some(17))]
+#[case::bare_pin(&[("PG_VERSION_REQ", "17")], Some(17))]
+#[case::lower_bound(&[("PG_VERSION_REQ", ">=17")], None)]
+#[case::upper_bound(&[("PG_VERSION_REQ", "<17")], None)]
 #[case::unparsable(&[("PG_VERSION_REQ", "latest")], None)]
 fn resolve_reads_the_expected_major_version(
     #[case] vars: &'static [(&'static str, &'static str)],
