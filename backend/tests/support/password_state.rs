@@ -155,29 +155,38 @@ fn path_exists(dir: &Dir, path: &Path) -> io::Result<bool> {
 /// stale pid file left by an exited cluster does not block removal, because
 /// that is exactly the state the repair exists to clean up.
 fn data_directory_is_in_use(data_parent: &Dir, data_name: &Path) -> io::Result<bool> {
-    let contents = match data_parent.read_to_string(data_name.join("postmaster.pid")) {
-        Ok(contents) => contents,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error),
+    let Some(contents) = read_optional_text(data_parent, &data_name.join("postmaster.pid"))? else {
+        return Ok(false);
     };
-    let Some(pid) = contents
+    let pid = contents
         .lines()
         .next()
-        .and_then(|line| line.trim().parse::<i32>().ok())
-    else {
-        return Ok(false);
-    };
+        .and_then(|line| line.trim().parse::<i32>().ok());
+    Ok(pid.is_some_and(pid_is_live))
+}
+
+/// Read a text file inside `dir`, treating an absent file as `None`.
+fn read_optional_text(dir: &Dir, path: &Path) -> io::Result<Option<String>> {
+    match dir.read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// Report whether `pid` names a process that is currently running.
+fn pid_is_live(pid: i32) -> bool {
     if pid <= 0 {
-        return Ok(false);
+        return false;
     }
     // SAFETY: signal 0 performs the existence and permission check only; it
     // delivers no signal and has no other side effect.
     if unsafe { libc::kill(pid, 0) } == 0 {
-        return Ok(true);
+        return true;
     }
     // `EPERM` means the process exists but belongs to another user, which is
     // still a live holder of the directory.
-    Ok(io::Error::last_os_error().kind() == io::ErrorKind::PermissionDenied)
+    io::Error::last_os_error().kind() == io::ErrorKind::PermissionDenied
 }
 
 /// Remove the default data directory when the next bootstrap cannot reuse it.
@@ -214,21 +223,32 @@ fn repair_unusable_data_directory(paths: &PasswordStatePaths) -> io::Result<()> 
         return Ok(());
     }
 
-    if !path_exists(&data_parent, &data_name.join("postgresql.conf"))? {
-        return remove_dir_if_exists(&data_parent, data_name);
-    }
-    let Some(expected) = paths.expected_major_version else {
-        return Ok(());
-    };
-    let stored = match data_parent.read_to_string(data_name.join("PG_VERSION")) {
-        Ok(stored) => stored,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(error),
-    };
-    if major_version(&stored) == Some(expected) {
+    if data_directory_is_reusable(&data_parent, data_name, paths.expected_major_version)? {
         return Ok(());
     }
     remove_dir_if_exists(&data_parent, data_name)
+}
+
+/// Report whether the next bootstrap can reuse an existing data directory.
+///
+/// The library reuses a directory only when it holds `postgresql.conf`, and
+/// PostgreSQL then refuses to start if the stored `PG_VERSION` disagrees with
+/// the configured major version. Without a version requirement there is
+/// nothing to contradict, so an initialized directory is reusable whatever it
+/// holds.
+fn data_directory_is_reusable(
+    data_parent: &Dir,
+    data_name: &Path,
+    expected_major: Option<u32>,
+) -> io::Result<bool> {
+    if !path_exists(data_parent, &data_name.join("postgresql.conf"))? {
+        return Ok(false);
+    }
+    let Some(expected) = expected_major else {
+        return Ok(true);
+    };
+    let stored = read_optional_text(data_parent, &data_name.join("PG_VERSION"))?;
+    Ok(stored.is_some_and(|stored| major_version(&stored) == Some(expected)))
 }
 
 /// Compare the stored `.pgpass` with `password` and clear the stale state.
