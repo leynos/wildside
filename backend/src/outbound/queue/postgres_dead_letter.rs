@@ -80,7 +80,7 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
     /// A row qualifies when it is `Killed`, or `Failed` with no cap or an
     /// exhausted one. Rows are ordered by `done_at` (nulls last) and then id,
     /// so a page is stable across repeated reads.
-    #[tracing::instrument(skip_all, fields(operation = "list_dead", limit))]
+    #[tracing::instrument(skip_all, fields(operation = "list_dead", limit), err)]
     async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError> {
         let requested = usize::try_from(limit).map_err(|_| {
             DeadLetterError::unavailable("dead-letter listing limit exceeds platform range")
@@ -131,7 +131,7 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
     /// The row is locked with `FOR UPDATE` and only accepted while it still
     /// satisfies the dead-letter predicate; the transaction then clears the
     /// lock, resets attempts, and records the incremented requeue count.
-    #[tracing::instrument(skip_all, fields(operation = "requeue", job_id = %id.as_str()))]
+    #[tracing::instrument(skip_all, fields(operation = "requeue", job_id = %id.as_str()), err)]
     async fn requeue(&self, id: &DeadJobId) -> Result<(), DeadLetterError> {
         let mut transaction = self
             .pool
@@ -192,14 +192,19 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
         transaction
             .commit()
             .await
-            .map_err(|error| unavailable("commit dead-job requeue", error))
+            .map_err(|error| unavailable("commit dead-job requeue", error))?;
+        tracing::info!(
+            job_id = %id.as_str(),
+            "requeued dead-lettered job"
+        );
+        Ok(())
     }
 
     /// Permanently delete a row that still satisfies the dead-letter predicate.
     ///
     /// A row that is no longer dead is reported rather than removed, so a
     /// concurrent requeue or a live job cannot be discarded by mistake.
-    #[tracing::instrument(skip_all, fields(operation = "discard", job_id = %id.as_str()))]
+    #[tracing::instrument(skip_all, fields(operation = "discard", job_id = %id.as_str()), err)]
     async fn discard(&self, id: &DeadJobId) -> Result<(), DeadLetterError> {
         let query = format!(
             "DELETE FROM apalis.jobs
