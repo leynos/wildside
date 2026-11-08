@@ -2227,7 +2227,17 @@ caret requirements.
   `ZOD_ARRAY_MEMORY_EXHAUSTION_2026_10` expired on 2026-11-07, and `main` had
   already renewed it to 2026-12-08 in `c5bd108` (#595). That renewal is the
   only commit `main` carries beyond this branch, so the repair was replayed
-  onto it rather than committed against a stale base.
+  onto it rather than committed against a stale base. The replay produced
+  `f3dfc38`, and all nine gates passed on that head, including `audit`, which
+  fails on the pre-renewal base.
+- [x] (2026-11-08 Europe/Berlin) CodeScene then reported two new code-health
+  issues against `password_state.rs`: a cyclomatic complexity of 9 in
+  `repair_unusable_data_directory` and a module mean of 4.11 against a
+  threshold of 4. The directory decision moved into
+  `data_directory_is_reusable`, the pid liveness check into `pid_is_live`, and
+  the three duplicated optional-read matches into `read_optional_text`.
+  Behaviour is unchanged — all 38 `atexit_cleanup_tests` cases still pass — and
+  `cs review` scores the file 10.0 with no findings.
 
 ## Surprises & discoveries
 
