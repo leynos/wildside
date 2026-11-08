@@ -154,8 +154,39 @@ fn path_exists(dir: &Dir, path: &Path) -> io::Result<bool> {
 /// live process is the only ownership evidence available at this boundary; a
 /// stale pid file left by an exited cluster does not block removal, because
 /// that is exactly the state the repair exists to clean up.
+///
+/// The pinned library places `postmaster.pid` directly in the data directory,
+/// but a newer layout may give each cluster its own subdirectory beneath it.
+/// Only the first level is inspected: this is a safety check, not a recursive
+/// scan, and a cluster nested deeper than one level is outside the layout any
+/// released version of the library has used.
 fn data_directory_is_in_use(data_parent: &Dir, data_name: &Path) -> io::Result<bool> {
-    let Some(contents) = read_optional_text(data_parent, &data_name.join("postmaster.pid"))? else {
+    if pid_file_names_live_process(data_parent, &data_name.join("postmaster.pid"))? {
+        return Ok(true);
+    }
+    let entries = match data_parent.read_dir(data_name) {
+        Ok(entries) => entries,
+        // An absent data directory holds no cluster, so there is nothing to
+        // protect and nothing to remove.
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    for entry in entries {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let nested = data_name.join(entry.file_name()).join("postmaster.pid");
+        if pid_file_names_live_process(data_parent, &nested)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Report whether the pid file at `path` names a process that is still running.
+fn pid_file_names_live_process(dir: &Dir, path: &Path) -> io::Result<bool> {
+    let Some(contents) = read_optional_text(dir, path)? else {
         return Ok(false);
     };
     let pid = contents
@@ -216,14 +247,20 @@ fn repair_unusable_data_directory(paths: &PasswordStatePaths) -> io::Result<()> 
     };
     let data_name = &paths.data_name;
 
-    // The default data directory is shared with every other project under the
-    // same user, and those clusters do not hold Wildside's lock. A running one
-    // is not ours to repair or delete, so leave its data alone.
-    if data_directory_is_in_use(&data_parent, data_name)? {
+    if data_directory_is_reusable(&data_parent, data_name, paths.expected_major_version)? {
         return Ok(());
     }
 
-    if data_directory_is_reusable(&data_parent, data_name, paths.expected_major_version)? {
+    // The default data directory is shared with every other project under the
+    // same user, and those clusters do not hold Wildside's lock. A running one
+    // is not ours to repair or delete, so leave its data alone.
+    //
+    // This check deliberately sits as close to the removal as it can: another
+    // project may start a cluster after any earlier check, and the check and
+    // the removal cannot be made atomic without a lock protocol that every
+    // project sharing the per-user directory takes. Keeping the gap to a single
+    // intervening call is the narrowest window this side of that protocol.
+    if data_directory_is_in_use(&data_parent, data_name)? {
         return Ok(());
     }
     remove_dir_if_exists(&data_parent, data_name)
