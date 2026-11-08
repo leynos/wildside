@@ -221,12 +221,14 @@ a shipped console. Each queue has one retry policy, configured with
 | `jitter_fraction` | Symmetric fraction by which each delay is randomized.   |
 
 The nominal delay for attempt `n` is `base_delay × multiplier^(n − 1)`, clamped
-to `max_delay`. Jitter then scales it by a factor in
+to `max_delay`. Jitter then scales the clamped value by a factor in
 `1 − jitter_fraction ..= 1 + jitter_fraction`, so the delay actually scheduled
-for the first retry is `base_delay` adjusted by up to `±jitter_fraction`, and a
-positive sample can exceed `max_delay` by `jitter_fraction × max_delay`. A
-`base_delay` larger than `max_delay` is clamped before jitter, so the delays
-track the clamp rather than the nominal value.
+for the first retry is `min(base_delay, max_delay)` adjusted by up to
+`±jitter_fraction`, and a positive sample can exceed `max_delay` by
+`jitter_fraction × max_delay`. Because the clamp is applied before jitter, a
+`base_delay` larger than `max_delay` does not raise the first delay: with
+`base_delay = 10s`, `max_delay = 1s`, and zero jitter, the first retry waits
+one second, not ten.
 
 A retryable failure is scheduled durably: the wrapper writes the next `run_at`
 while the worker still owns the row, then returns the error for Apalis to
@@ -243,7 +245,8 @@ neither the retry nor the dead-letter counter, so that counter must not be used
 to detect a refused terminal write. Both cases log a warning naming the refused
 decision.
 
-Operators manage dead letters through the `DeadLetterQueue` port:
+The `DeadLetterQueue` port defines the operations a future operator command
+will drive:
 
 - `list_dead` returns the newest dead jobs first.
 - `requeue` restores the queue's configured attempt budget and clears the
@@ -253,10 +256,12 @@ Operators manage dead letters through the `DeadLetterQueue` port:
 `requeue` validates the row state, attempt count, requeue counter, and integer
 budget range. It also looks the row's job type up in the configured
 `RequeueBudgets` and rejects a job whose queue has no budget, so a requeued row
-always carries a budget this process knows about. The manual SQL fallback in the
-[dead-letter runbook](runbooks/queue-retry-and-dead-letter-operations.md) does
-not pass through that guard: checking the queue name and its current configured
-budget is the operator's precondition there.
+always carries a budget this process knows about. Until the operator command
+exists, the
+[dead-letter runbook](runbooks/queue-retry-and-dead-letter-operations.md) is
+the current operator procedure. Its SQL does not pass through that guard:
+checking the queue name and its current configured budget is the operator's
+precondition there.
 
 ### Configuring the Apalis provider
 
