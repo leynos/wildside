@@ -137,40 +137,30 @@ fn repair_unusable_data_directory_ignores_a_stale_postmaster_pid() {
     );
 }
 
-/// Scenario: a layout that nests a live cluster's data below the shared root.
+/// Scenario: a layout nests a cluster's `postmaster.pid` below the shared root.
 ///
-/// Invariant: a live cluster whose pid file is one level down still counts as
-/// ownership evidence, so the repair leaves the whole tree alone.
-#[test]
-fn repair_unusable_data_directory_keeps_a_nested_cluster_in_use() {
+/// Invariant: a pid file one level down is ownership evidence exactly like the
+/// top-level one. A live pid keeps the whole tree; a stale pid keeps nothing,
+/// so the nested check cannot make a retained layout permanent.
+#[rstest]
+#[case::live(None, true)]
+#[case::stale(Some(i32::MAX as u32), false)]
+fn repair_unusable_data_directory_reads_a_nested_postmaster_pid(
+    #[case] pid: Option<u32>,
+    #[case] should_keep_data: bool,
+) {
     let fixture = PasswordStateFixture::new(true).requiring_major_version(Some(16));
-    fixture.write_nested_data_file(
-        "cluster-1/postmaster.pid",
-        &format!("{}\n", std::process::id()),
-    );
+    // The test process stands in for another project's postmaster unless the
+    // case names a pid that cannot be running.
+    let pid = pid.unwrap_or_else(std::process::id);
+    fixture.write_nested_data_file("cluster-1/postmaster.pid", &format!("{pid}\n"));
 
     repair_unusable_data_directory(&fixture.paths).expect("data directory repair should succeed");
 
-    assert!(
+    assert_eq!(
         fixture.data_parent.exists("data"),
-        "a nested running cluster must keep the shared directory in place"
-    );
-}
-
-/// Scenario: a nested pid file names a process that has exited.
-///
-/// Invariant: the nested check does not make a stale layout permanent; the
-/// whole tree is still removed when no live cluster owns it.
-#[test]
-fn repair_unusable_data_directory_ignores_a_nested_stale_postmaster_pid() {
-    let fixture = PasswordStateFixture::new(true).requiring_major_version(Some(16));
-    fixture.write_nested_data_file("cluster-1/postmaster.pid", &format!("{}\n", i32::MAX));
-
-    repair_unusable_data_directory(&fixture.paths).expect("data directory repair should succeed");
-
-    assert!(
-        !fixture.data_parent.exists("data"),
-        "a nested stale pid file must not keep an unusable directory in place"
+        should_keep_data,
+        "only a live nested cluster may keep the shared directory in place"
     );
 }
 
