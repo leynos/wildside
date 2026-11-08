@@ -8,11 +8,13 @@
 //! `apalis.jobs` table.
 
 use std::num::NonZeroU32;
+use std::sync::Arc;
 use std::time::Duration;
 
 use backend::outbound::queue::{
-    PostgresRetryScheduler, RetryPersistence, TerminalRetryReason, TerminalRetryUpdate,
+    ClockSource, PostgresRetryScheduler, RetryPersistence, TerminalRetryReason, TerminalRetryUpdate,
 };
+use chrono::{DateTime, TimeZone, Utc};
 use serde_json::Value;
 use sqlx::PgPool;
 
@@ -245,6 +247,51 @@ fn scheduler_advances_the_deadline_for_an_owned_running_row() {
     assert!(
         (expected - CLOCK_SLACK_MICROS..=expected + CLOCK_SLACK_MICROS).contains(&after),
         "the deadline must move to the requested delay from now, saw {after}us"
+    );
+}
+
+/// A clock that always reports the same instant.
+struct FixedClock(DateTime<Utc>);
+
+impl ClockSource for FixedClock {
+    fn now(&self) -> DateTime<Utc> {
+        self.0
+    }
+}
+
+/// Scenario: the scheduler runs with an injected clock.
+///
+/// Invariant: the persisted deadline is exactly that instant plus the delay,
+/// so a fixed clock makes the stored value a property of the input rather
+/// than of when the statement happened to run.
+#[test]
+fn scheduler_persists_the_injected_instant_plus_the_delay() {
+    let instant = Utc
+        .with_ymd_and_hms(2031, 5, 6, 7, 8, 9)
+        .single()
+        .expect("the fixed instant is unambiguous");
+    let canary = Canary::start(
+        SchedulerRow {
+            queue: "canary.scheduler-clock",
+            worker: OWNER,
+            status: "Running",
+        },
+        None,
+    );
+    let scheduler =
+        PostgresRetryScheduler::new(canary.pool.clone()).with_clock(Arc::new(FixedClock(instant)));
+
+    let updated = canary
+        .environment
+        .run(scheduler.schedule_retry(&canary.id, OWNER, RETRY_DELAY))
+        .expect("the guarded update executes");
+
+    assert!(updated, "the recorded lock owner still owns a running row");
+    let delay = i64::try_from(RETRY_DELAY.as_micros()).expect("delay fits in i64");
+    assert_eq!(
+        canary.read_micros(DEADLINE_SQL, "deadline"),
+        instant.timestamp_micros() + delay,
+        "the persisted deadline must be the injected instant plus the delay"
     );
 }
 
