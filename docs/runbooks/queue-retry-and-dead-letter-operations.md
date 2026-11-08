@@ -111,6 +111,34 @@ WHERE id = :'job_id'
 RETURNING id, job_type;
 ```
 
+## Signals and alerting
+
+Each adapter operation runs inside a `tracing` span whose `operation` field
+names it (`list_dead`, `requeue`, or `discard`, with `job_id` on the last two).
+A failure is recorded on that span, so every error return has a boundary event
+to alert on. Successful requeues and discards log at `INFO` with the `job_id`,
+and a row the domain cannot represent logs at `WARN` with the `job_id` that was
+skipped.
+
+The retry scheduling-failure counter covers refused retry decisions only. A
+refused terminal write logs a warning and increments neither the retry nor the
+dead-letter counter, so alerting on counters alone will miss it; match the
+warning instead.
+
+Dead-letter backlog is the number of rows the dead predicate matches. This
+query is read-only, ignores no rows, and returns only a count:
+
+```sql
+SELECT count(*) AS dead_jobs
+FROM apalis.jobs
+WHERE status = 'Killed'
+   OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts));
+```
+
+Alert on that count crossing the level the team has agreed to act on, and on a
+rising rate of skipped-row warnings, which indicate metadata that no longer
+matches the schema. The listing limit below caps a page, not the backlog.
+
 ## Detect repeated worker crashes
 
 At `apalis-postgres` rc.8, orphan recovery changes a stale `Running` or
