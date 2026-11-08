@@ -2281,6 +2281,21 @@ caret requirements.
   environment-policy probes; those messages now use `concat!()`, which
   satisfies both the pinned and the newer suite. The redundant host library was
   quarantined under `~/.local/share/whitaker-bootstrap/quarantine/`.
+- [x] (2026-11-08 Europe/Berlin) Hosted CI on `ba9bafd` is green (`build` and
+  `coverage`), which confirms the `--lib whitaker_suite` selection works on the
+  pinned runner install as well as locally.
+- [x] (2026-11-08 Europe/Berlin) Three CodeRabbit follow-ups needed more work.
+  The review guide still reported the first retry delay as raw `base_delay`; it
+  now says `min(base_delay, max_delay)` and carries the `10s`/`1s` example. The
+  dead-letter section still described operators driving the port and called the
+  SQL runbook a fallback; it now presents the port as the deferred command's
+  contract and the runbook as the current procedure. The shared data-directory
+  repair only inspected `postmaster.pid` at the top level, so a layout that
+  nests clusters in subdirectories would have hidden a running cluster; it now
+  inspects the first level down, sits immediately before the removal to narrow
+  the check-then-delete window, and has tests for a nested live cluster and a
+  nested stale pid file. All nine gates pass on the combined tree (`854bf27`,
+  `a82e169`).
 
 ## Surprises & discoveries
 
