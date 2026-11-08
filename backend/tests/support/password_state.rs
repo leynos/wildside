@@ -76,8 +76,10 @@ impl PasswordStatePaths {
     ///
     /// `PG_RUNTIME_DIR` and `PG_DATA_DIR` override the per-uid defaults under
     /// `/var/tmp`. Only the default data directory is eligible for deletion:
-    /// an explicitly configured one belongs to the caller. `PG_VERSION_REQ`
-    /// supplies the major version a retained data directory must match.
+    /// an explicitly configured one belongs to the caller. An exact
+    /// `PG_VERSION_REQ` pin supplies the major version a retained data
+    /// directory must match; a range requirement supplies none, because more
+    /// than one stored major satisfies it.
     pub(crate) fn resolve(read_env: impl Fn(&str) -> Option<String>) -> Self {
         // SAFETY: `geteuid` has no preconditions and does not modify memory.
         let uid = unsafe { libc::geteuid() };
@@ -110,14 +112,24 @@ impl PasswordStatePaths {
     }
 }
 
-/// Extract the leading major version from a requirement or a `PG_VERSION` file.
+/// Extract the major version from an exact pin or a `PG_VERSION` file.
 ///
-/// `PG_VERSION_REQ` accepts Cargo-style requirements such as `=16.10.0` or
-/// `>=16`, and PostgreSQL writes a bare number into `PG_VERSION`. Both reduce
-/// to the first run of digits, so one parser serves both.
+/// PostgreSQL writes a bare number into `PG_VERSION`, and a bare number is
+/// also an exact `PG_VERSION_REQ`. A `=` requirement such as `=16.10.0` pins
+/// the same way. Every other operator denotes a range: `>=17` is satisfied by
+/// an 18 directory, so treating it as a pin to 17 would delete a directory the
+/// requirement still accepts. Ranges therefore yield `None`, which leaves a
+/// retained directory in place rather than guessing at a mismatch.
 fn major_version(text: &str) -> Option<u32> {
-    let digits: String = text
-        .trim()
+    let trimmed = text.trim();
+    let is_exact = trimmed
+        .chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_digit() || first == '=');
+    if !is_exact {
+        return None;
+    }
+    let digits: String = trimmed
         .trim_start_matches(|character: char| !character.is_ascii_digit())
         .chars()
         .take_while(char::is_ascii_digit)
@@ -132,6 +144,40 @@ fn path_exists(dir: &Dir, path: &Path) -> io::Result<bool> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }
+}
+
+/// Report whether a running postmaster holds the data directory.
+///
+/// `/var/tmp/pg-embed-<uid>` is shared by every project under the same user,
+/// and another project's cluster does not take Wildside's process lock, so the
+/// lock alone cannot prove the directory is ours. A `postmaster.pid` naming a
+/// live process is the only ownership evidence available at this boundary; a
+/// stale pid file left by an exited cluster does not block removal, because
+/// that is exactly the state the repair exists to clean up.
+fn data_directory_is_in_use(data_parent: &Dir, data_name: &Path) -> io::Result<bool> {
+    let contents = match data_parent.read_to_string(data_name.join("postmaster.pid")) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    let Some(pid) = contents
+        .lines()
+        .next()
+        .and_then(|line| line.trim().parse::<i32>().ok())
+    else {
+        return Ok(false);
+    };
+    if pid <= 0 {
+        return Ok(false);
+    }
+    // SAFETY: signal 0 performs the existence and permission check only; it
+    // delivers no signal and has no other side effect.
+    if unsafe { libc::kill(pid, 0) } == 0 {
+        return Ok(true);
+    }
+    // `EPERM` means the process exists but belongs to another user, which is
+    // still a live holder of the directory.
+    Ok(io::Error::last_os_error().kind() == io::ErrorKind::PermissionDenied)
 }
 
 /// Remove the default data directory when the next bootstrap cannot reuse it.
@@ -149,7 +195,9 @@ fn path_exists(dir: &Dir, path: &Path) -> io::Result<bool> {
 ///
 /// Removing the default directory lets the next bootstrap initialize a
 /// matching one. An explicitly configured `PG_DATA_DIR` belongs to the caller
-/// and is never removed, and an absent directory is a quiet no-op.
+/// and is never removed, an absent directory is a quiet no-op, and a directory
+/// held by a running cluster is left alone because it may belong to another
+/// project sharing the per-user default.
 fn repair_unusable_data_directory(paths: &PasswordStatePaths) -> io::Result<()> {
     if !paths.should_remove_data_dir {
         return Ok(());
@@ -158,6 +206,13 @@ fn repair_unusable_data_directory(paths: &PasswordStatePaths) -> io::Result<()> 
         return Ok(());
     };
     let data_name = &paths.data_name;
+
+    // The default data directory is shared with every other project under the
+    // same user, and those clusters do not hold Wildside's lock. A running one
+    // is not ours to repair or delete, so leave its data alone.
+    if data_directory_is_in_use(&data_parent, data_name)? {
+        return Ok(());
+    }
 
     if !path_exists(&data_parent, &data_name.join("postgresql.conf"))? {
         return remove_dir_if_exists(&data_parent, data_name);
@@ -204,7 +259,11 @@ fn repair_password_file_state(
         // a quiet no-op rather than a reason to skip the `.pgpass` cleanup
         // below.
         if let Some(data_parent) = open_dir_if_exists(&paths.data_parent)? {
-            remove_dir_if_exists(&data_parent, &paths.data_name)?;
+            // The shared directory may belong to another project's running
+            // cluster; removing it would disrupt that project's tests.
+            if !data_directory_is_in_use(&data_parent, &paths.data_name)? {
+                remove_dir_if_exists(&data_parent, &paths.data_name)?;
+            }
         }
     }
 
@@ -221,6 +280,10 @@ fn remove_dir_if_exists(parent: &Dir, path: &Path) -> io::Result<()> {
         Err(error) => Err(error),
     }
 }
+
+#[cfg(test)]
+#[path = "password_state_fixture.rs"]
+mod fixture;
 
 #[cfg(test)]
 #[path = "password_state_tests.rs"]

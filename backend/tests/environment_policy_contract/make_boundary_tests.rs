@@ -26,9 +26,15 @@ fn run_probe(probe: &str, target: &str, assignments: &[(&str, &str)]) -> Output 
     let mut command = Command::new("make");
     // `make test` exports these into the test process, so a child `make` would
     // inherit them and the probes would measure the parent, not the Makefile.
+    // `MAKEFLAGS`, `MFLAGS`, and `MAKELEVEL` carry the parent invocation's
+    // `-n`, `-s`, or job-control flags, which would change or suppress the
+    // probe recipe rather than measure the Makefile under test.
     command
         .env_remove("PG_PASSWORD")
         .env_remove("POSTGRESQL_RELEASES_URL")
+        .env_remove("MAKEFLAGS")
+        .env_remove("MFLAGS")
+        .env_remove("MAKELEVEL")
         .current_dir(repository_root())
         .arg("--no-print-directory")
         .arg("-f")

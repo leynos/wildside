@@ -1061,6 +1061,20 @@ When a phase introduces a new lint, accessibility, Playwright, or semantic CSS
 gate, update this guide and the corresponding phase ExecPlan under
 `docs/execplans/` in the same change.
 
+### Pinned front-end tool versions
+
+`make check-fmt` and `make lint` run Biome through `BIOME_VERSION` (currently
+`2.3.1`), not through whatever `biome` the `PATH` happens to hold. Formatter
+output is not upward-compatible across Biome releases: code shaped by `2.4.13`
+is reported as unformatted by `2.3.1` and vice versa, so preferring a `PATH`
+binary makes local checks fail on files that CI, which resolves the pin,
+accepts. The `biome_cmd` macro in the `Makefile` selects the pinned version and
+falls back to `bun x --package=@biomejs/biome@$(BIOME_VERSION)` when no
+matching binary is installed. The fallback needs network access the first time;
+later runs reuse the Bun cache. Bump `BIOME_VERSION` and the formatter in the
+same change, then reformat the whole front end so the diff shows only the
+version's real effects.
+
 ### Dependency audit helper modules
 
 The JavaScript dependency-audit flow is split by responsibility:
@@ -1812,6 +1826,25 @@ The queue adapter requires:
 The backend includes an Apalis-backed `RouteQueue` adapter that persists jobs
 to PostgreSQL storage via `apalis-postgres` / `PostgresStorage`. The adapter
 implements the hexagonal `RouteQueue` port defined in the domain layer.
+
+### Retry scheduling and the injected clock
+
+`PostgresRetryScheduler` computes a retry deadline from a `ClockSource` rather
+than from the database's clock. `ClockSource::now` returns a UTC instant;
+`SystemClock` is the production adapter, and
+`PostgresRetryScheduler::with_clock` installs a fixed one in tests.
+`schedule_retry` adds the policy's delay to that instant and binds the result
+as the literal `run_at` value, so a test can infer the stored deadline from the
+sample it injected without racing the server's `now()`.
+
+This splits the two clocks deliberately. The application clock decides the
+deadline, which makes the scheduled value reproducible and keeps the retry
+policy's timing independent of the database host's time zone and load. The
+database clock still decides when a row becomes eligible, because `apalis`
+compares `run_at` with its own `now()` when it polls. The scheduling canaries
+therefore read `run_at - now()` inside a single statement: comparing the
+application's computed instant with a separately read database instant would
+measure the gap between two clocks rather than the delay the scheduler stored.
 
 ## Root-level script tests
 

@@ -14,7 +14,9 @@ use super::doubles::{
     WriteOutcome,
 };
 use super::policy;
-use crate::domain::jobs::retry::{JitterSample, JobErrorKind, JobFailure};
+use crate::domain::jobs::retry::{
+    JitterSample, JobErrorKind, JobFailure, JobRetryPolicy, JobRetryPolicyConfig,
+};
 use crate::domain::ports::{RouteDeadLetterOutcome, RouteRetryOutcome};
 use crate::outbound::queue::TerminalRetryReason;
 use tracing_test::traced_test;
@@ -128,6 +130,79 @@ async fn scheduling_error_counts_one_outcome_and_stops_writing() {
 
     assert_eq!(run.calls().len(), 1, "no retry write after error");
     assert_eq!(run.retries(), vec![RouteRetryOutcome::ScheduleFailure]);
+}
+
+/// Build a policy whose jitter can move a delay away from its nominal value.
+///
+/// The shared [`policy`] helper disables jitter so decision tests stay exact;
+/// these cases exist to prove the wrapper applies the sample it is given.
+fn jittered_policy() -> JobRetryPolicy {
+    JobRetryPolicy::new(JobRetryPolicyConfig {
+        max_attempts: NonZeroU32::new(3).expect("positive attempt limit"),
+        base_delay: Duration::from_millis(100),
+        multiplier: 2.0,
+        max_delay: Duration::from_millis(800),
+        jitter_fraction: 0.25,
+    })
+    .expect("valid jittered policy")
+}
+
+/// Drive one retryable failure through `policy` with an injected jitter sample
+/// and return the delay the wrapper asked the scheduler to persist.
+async fn scheduled_delay_for_sample(policy: &JobRetryPolicy, sample: f64) -> Duration {
+    let persistence = RecordingPersistence::new(WriteOutcome::Updated, WriteOutcome::Updated);
+    let metrics = RecordingMetrics::default();
+    let jitter = FixedJitter(JitterSample::new(sample).expect("jitter sample in 0..=1"));
+    let context = RetryFailureContext {
+        attempt: NonZeroU32::new(ATTEMPT).expect("positive attempt"),
+        context_max_attempts: CONTEXT_MAX_ATTEMPTS,
+        policy,
+        scheduler: &persistence,
+        metrics: &metrics,
+        jitter: &jitter,
+        queue_name: QUEUE,
+        task_id: Some(TASK_ID),
+        worker_id: Some(WORKER),
+    };
+    let failure = JobFailure::new(JobErrorKind::Retryable, "probe failure");
+    handle_failure(failure, &context)
+        .await
+        .expect_err("the wrapper asks Apalis to keep the task failed");
+
+    match persistence.calls().as_slice() {
+        [PersistenceCall::Schedule { delay, .. }] => *delay,
+        other => panic!("expected exactly one schedule write, got {other:?}"),
+    }
+}
+
+/// Scenario: two deliveries of the same attempt draw distinct jitter samples.
+///
+/// Invariant: the persisted delay follows the sample, so a non-zero jitter
+/// fraction actually spreads retries instead of being ignored.
+#[tokio::test]
+async fn distinct_jitter_samples_produce_distinct_scheduled_delays() {
+    let policy = jittered_policy();
+
+    let lowest = scheduled_delay_for_sample(&policy, 0.0).await;
+    let midpoint = scheduled_delay_for_sample(&policy, 0.5).await;
+    let highest = scheduled_delay_for_sample(&policy, 1.0).await;
+
+    assert_eq!(
+        midpoint,
+        Duration::from_millis(100),
+        "the midpoint sample leaves the nominal delay unchanged"
+    );
+    assert_eq!(
+        lowest,
+        Duration::from_millis(75),
+        "a zero sample applies the full negative jitter offset"
+    );
+    assert_eq!(
+        highest,
+        Duration::from_millis(125),
+        "a one sample applies the full positive jitter offset"
+    );
+    assert_ne!(lowest, highest, "the two extremes must differ");
 }
 
 #[traced_test]

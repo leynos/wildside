@@ -11,6 +11,7 @@ use std::time::Duration;
 use rstest::rstest;
 
 use super::decision::{RetryDecisionContext, RetryWrapperDecision, decide_retry_wrapper_action};
+use super::failure::current_attempt;
 use crate::domain::jobs::retry::{
     JitterSample, JobErrorKind, JobRetryPolicy, JobRetryPolicyConfig,
 };
@@ -113,6 +114,37 @@ fn retry_wrapper_maps_policy_and_context_budget(#[case] case: RetryWrapperCase) 
     );
 
     assert_eq!(decision, case.expected);
+}
+
+/// Scenario: Apalis delivers an attempt counter outside the domain's
+/// representable range.
+///
+/// Invariant: the wrapper clamps such a delivery to the nearest valid attempt
+/// rather than rejecting it, so a defective counter cannot fail a job.
+#[test]
+fn current_attempt_clamps_defective_delivery_counters() {
+    assert_eq!(
+        current_attempt(0).get(),
+        1,
+        "zero becomes the first attempt"
+    );
+    assert_eq!(current_attempt(1).get(), 1);
+    assert_eq!(
+        current_attempt(u32::MAX as usize).get(),
+        u32::MAX,
+        "the largest representable counter is preserved"
+    );
+}
+
+/// Scenario: the platform's `usize` is wider than `u32`.
+///
+/// Invariant: a counter above `u32::MAX` saturates instead of wrapping to a
+/// small attempt.
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn current_attempt_saturates_above_the_u32_range() {
+    assert_eq!(current_attempt(u32::MAX as usize + 1).get(), u32::MAX);
+    assert_eq!(current_attempt(usize::MAX).get(), u32::MAX);
 }
 
 #[test]
