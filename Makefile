@@ -281,9 +281,17 @@ lint-clippy:
 # WHITAKER_INSTALLER_VERSION). Runs under RUSTFLAGS="-D warnings" so a
 # workspace warning fails the lint, matching the clippy gate. CI invokes
 # this target so both surfaces stay in lockstep.
+#
+# `--lib whitaker_suite` selects the aggregated library explicitly. The
+# installer's prebuilt archive can stage the suite beside the constituent
+# libraries it already contains; `--all` would load both copies of the same
+# lint and rustc aborts with "duplicate specification of lint". The pinned
+# installer (0.2.11) predates the pruning fix, so name the suite instead.
+# `--fail-on-no-libraries` keeps the gate honest: an install that does not
+# stage the named library fails instead of running no lints at all.
 lint-whitaker:
-	$(RUST_FLAGS_ENV) $(WHITAKER) --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
-	$(RUST_FLAGS_ENV) $(WHITAKER) --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
+	$(RUST_FLAGS_ENV) $(WHITAKER) --lib whitaker_suite --fail-on-no-libraries -- --manifest-path Cargo.toml --workspace --all-targets --all-features
+	$(RUST_FLAGS_ENV) $(WHITAKER) --lib whitaker_suite --fail-on-no-libraries -- --manifest-path backend/Cargo.toml --all-targets --all-features
 
 lint-frontend:
 	$(call biome_cmd,ci --formatter-enabled=true --reporter=github frontend-pwa packages)
