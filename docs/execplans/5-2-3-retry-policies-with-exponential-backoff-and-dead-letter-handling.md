@@ -6,16 +6,20 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: IN PROGRESS (approved for execution 2026-10-30; implementation
-complete, replayed a second time onto `main` `9799286`, and published as the
-pull request `leynos/wildside#457`, most recently at `6299c28`; the pre-merge
-reconciliation of 2026-11-07 added the terminal-write canaries, the Makefile
-command-boundary tests, the const-context tests, and the module and user-guide
-documentation; the review of 2026-11-08 then corrected the metric labels, the
-`make` probe environment, the version-pin and shared-directory repair rules,
-the representative test commands, and the user-guide constructor, counter,
-runbook, and delay claims, and added the delivery-counter and jitter tests; the
-remaining work is to publish that repair, confirm the gates and hosted checks,
-and merge)
+complete, replayed onto `main` `c5bd108`, and published as the pull request
+`leynos/wildside#457`; the pre-merge reconciliation of 2026-11-07 added the
+terminal-write canaries, the Makefile command-boundary tests, the const-context
+tests, and the module and user-guide documentation; the review of 2026-11-08
+then corrected the metric labels, the `make` probe environment, the version-pin
+and shared-directory repair rules, the representative test commands, and the
+user-guide constructor, counter, runbook, and delay claims, and added the
+delivery-counter and jitter tests; the second reconciliation on 2026-11-08
+split the password-state fixture to stay inside the module limit, reduced
+`repair_unusable_data_directory` below the complexity gate, exercised the real
+`test-rust` recipe behind a `cargo` double, pinned the scheduler's persisted
+deadline to an injected instant, added a generated listing property test, and
+gave the dead-letter adapter error and requeue boundary events; the remaining
+work is to publish that repair, confirm the gates and hosted checks, and merge)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -2246,6 +2250,26 @@ caret requirements.
   up to date. They prove the documented defaults and a caller override carrying
   spaces, quotes, a dollar sign, `&`, and `?` reach the compile commands
   verbatim, and the unrelated-target probe now checks both settings.
+
+- [x] (2026-11-08 Europe/Berlin) The capability-based filesystem lint rejected
+  the first version of those `test-rust` cases: `std::fs::create_dir`, `write`,
+  `metadata`, `set_permissions` and `read_to_string` all bypass the policy. The
+  fixture now opens the sandbox once with `Dir::open_ambient_dir` and writes,
+  chmods, and reads the `cargo` double and its log through that capability
+  handle, so the tests keep their behaviour and the lint passes.
+- [x] (2026-11-08 Europe/Berlin) The "Unit Architecture" row asked for evidence
+  that an injected clock reaches the persisted deadline. The existing canary
+  compares against SQL `now()`, which a scheduler ignoring its `ClockSource`
+  would also satisfy. A second canary fixes the instant and asserts the stored
+  deadline equals that instant plus the delay in microseconds.
+- [x] (2026-11-08 Europe/Berlin) The warning rows were closed on their evidence
+  rather than by restating them. "Testing (Property / Proof)" gained a
+  generated test that seeds a random mixture of malformed and valid dead rows,
+  lists them with a random limit, and compares the result with the valid
+  prefix. "Observability" gained `err` on the three dead-letter spans, an
+  `INFO` event on a successful requeue, and a runbook section describing the
+  spans, the requeue and skipped-row events, the warning-only terminal-write
+  signal, and the backlog count query.
 
 ## Surprises & discoveries
 
