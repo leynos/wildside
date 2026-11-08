@@ -2270,6 +2270,17 @@ caret requirements.
   `INFO` event on a successful requeue, and a runbook section describing the
   spans, the requeue and skipped-row events, the warning-only terminal-write
   signal, and the backlog count query.
+- [x] (2026-11-08 Europe/Berlin) `main` at `c5bd108` is red: the pinned
+  `whitaker-installer` 0.2.11 stages `libwhitaker_suite` beside the constituent
+  `libstring_continuation_style`, and `cargo dylint --all` loads both, so rustc
+  aborts with "duplicate specification of lint string_continuation_style".
+  `lint-whitaker` now names the aggregated library explicitly
+  (`--lib whitaker_suite`), which loads one copy. Verified locally with both
+  libraries staged: the `--all` form panics and the `--lib` form passes. The
+  same suite also flagged four backslash-continued cooked strings in the
+  environment-policy probes; those messages now use `concat!()`, which
+  satisfies both the pinned and the newer suite. The redundant host library was
+  quarantined under `~/.local/share/whitaker-bootstrap/quarantine/`.
 
 ## Surprises & discoveries
 
