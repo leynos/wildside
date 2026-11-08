@@ -2238,6 +2238,14 @@ caret requirements.
   the three duplicated optional-read matches into `read_optional_text`.
   Behaviour is unchanged — all 38 `atexit_cleanup_tests` cases still pass — and
   `cs review` scores the file 10.0 with no findings.
+- [x] (2026-11-08 Europe/Berlin) The pre-merge "Testing (Unit And Behavioural)"
+  row asked for the actual `test-rust` target rather than probes alone. Two
+  cases now run that recipe with a `cargo` double that records the environment
+  it receives: a command-line `PATH` assignment replaces the Makefile's own
+  `export PATH :=`, and `-o` marks the workspace-sync and worker prerequisites
+  up to date. They prove the documented defaults and a caller override carrying
+  spaces, quotes, a dollar sign, `&`, and `?` reach the compile commands
+  verbatim, and the unrelated-target probe now checks both settings.
 
 ## Surprises & discoveries
 
