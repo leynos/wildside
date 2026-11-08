@@ -152,8 +152,10 @@ fn no_source_file_allows_a_policy_lint() -> TestResult {
 
     assert!(
         offences.is_empty(),
-        "no source may allow a protected lint; use an item-scoped \
-         #[expect(..., reason = \"...\")] at a composition root instead:\n{}",
+        concat!(
+            "no source may allow a protected lint; use an item-scoped ",
+            "#[expect(..., reason = \"...\")] at a composition root instead:\n{}",
+        ),
         offences.join("\n")
     );
     Ok(())
@@ -215,8 +217,10 @@ fn no_source_file_includes_an_unreadable_target() -> TestResult {
 
     assert!(
         offences.is_empty(),
-        "an include! target must be a string literal naming a .rs file inside \
-         the scanned roots, or the scan cannot see what it brought in:\n{}",
+        concat!(
+            "an include! target must be a string literal naming a .rs file inside ",
+            "the scanned roots, or the scan cannot see what it brought in:\n{}",
+        ),
         offences.join("\n")
     );
     Ok(())
