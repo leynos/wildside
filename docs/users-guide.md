@@ -204,16 +204,29 @@ response.
 
 ## Job retries and dead letters
 
-Background jobs run through Apalis on PostgreSQL. Each queue has one retry
-policy, configured with `JobRetryPolicyConfig`:
+Background jobs run through Apalis on PostgreSQL. The retry and dead-letter
+ports are implemented and covered by the test suite, but composing them into a
+production worker and operator command is deferred to item 5.3.1 of the
+delivery plan, and the port currently has only test callers. The SQL runbook
+linked below is therefore the available operator procedure, not a fallback from
+a shipped console. Each queue has one retry policy, configured with
+`JobRetryPolicyConfig`:
 
-| Field             | Meaning                                                  |
-| ----------------- | -------------------------------------------------------- |
-| `max_attempts`    | Total deliveries allowed, including the first.           |
-| `base_delay`      | Delay before the first retry.                            |
-| `multiplier`      | Growth factor applied to each successive delay.          |
-| `max_delay`       | Upper bound on any single delay.                         |
-| `jitter_fraction` | Fraction of the delay randomized to spread retry bursts. |
+| Field             | Meaning                                                 |
+| ----------------- | ------------------------------------------------------- |
+| `max_attempts`    | Total deliveries allowed, including the first.          |
+| `base_delay`      | Nominal delay before the first retry.                   |
+| `multiplier`      | Growth factor applied to each successive nominal delay. |
+| `max_delay`       | Upper bound on a nominal delay, applied before jitter.  |
+| `jitter_fraction` | Symmetric fraction by which each delay is randomized.   |
+
+The nominal delay for attempt `n` is `base_delay × multiplier^(n − 1)`, clamped
+to `max_delay`. Jitter then scales it by a factor in
+`1 − jitter_fraction ..= 1 + jitter_fraction`, so the delay actually scheduled
+for the first retry is `base_delay` adjusted by up to `±jitter_fraction`, and a
+positive sample can exceed `max_delay` by `jitter_fraction × max_delay`. A
+`base_delay` larger than `max_delay` is clamped before jitter, so the delays
+track the clamp rather than the nominal value.
 
 A retryable failure is scheduled durably: the wrapper writes the next `run_at`
 while the worker still owns the row, then returns the error for Apalis to
@@ -223,8 +236,12 @@ scheduling another attempt, and the row becomes a dead letter.
 
 The wrapper persists nothing when it cannot prove the current worker owns the
 row, for example when the task has no worker context or its worker disagrees
-with the recorded lock owner. Such a delivery stays failed and increments the
-retry scheduling-failure counter.
+with the recorded lock owner. Such a delivery stays failed. When the policy
+would have scheduled a retry it increments the retry scheduling-failure
+counter; when the policy would have recorded a terminal failure it increments
+neither the retry nor the dead-letter counter, so that counter must not be used
+to detect a refused terminal write. Both cases log a warning naming the refused
+decision.
 
 Operators manage dead letters through the `DeadLetterQueue` port:
 
@@ -234,33 +251,35 @@ Operators manage dead letters through the `DeadLetterQueue` port:
 - `discard` permanently removes a dead job.
 
 `requeue` validates the row state, attempt count, requeue counter, and integer
-budget range, but it does not check the job type against the configured
-`RequeueBudgets` or verify that the supplied budget matches that queue's
-policy. Confirming the queue name and its current configured budget is an
-operator precondition. See the
-[dead-letter runbook](runbooks/queue-retry-and-dead-letter-operations.md) for
-the SQL fallback.
+budget range. It also looks the row's job type up in the configured
+`RequeueBudgets` and rejects a job whose queue has no budget, so a requeued row
+always carries a budget this process knows about. The manual SQL fallback in the
+[dead-letter runbook](runbooks/queue-retry-and-dead-letter-operations.md) does
+not pass through that guard: checking the queue name and its current configured
+budget is the operator's precondition there.
 
 ### Configuring the Apalis provider
 
 `ApalisPostgresProvider::new` takes a `sqlx::PgPool`, the queue name, and the
-queue's `JobRetryPolicy`. It derives the Apalis attempt budget from
+queue's `JobRetryPolicy`. It is `async` and returns
+`Result<Self, JobDispatchError>`. It derives the Apalis attempt budget from
 `policy.max_attempts()`, so the `max_attempts` stored on each new job comes
 from the policy rather than from a second value that could drift. Pass the same
 policy to `RetryingJobServiceConfig::new` so the wrapper and the stored budget
 agree. A policy limit that does not fit Apalis's signed `integer` attempt
 column is rejected with `JobDispatchError::Rejected`.
 
-The constructor gained the policy argument when durable retries were
-introduced. There are no compatibility shims or deprecated overloads because
-the crate is pre-1.0, so an existing caller must pass the policy for that queue:
+The constructor gained the queue name and policy arguments when durable retries
+were introduced. There are no compatibility shims or deprecated overloads
+because the crate is pre-1.0, so an existing caller must pass both:
 
 ```rust
-// Before durable retries: the attempt budget came from Apalis's default.
-let provider = ApalisPostgresProvider::new(pool.clone(), "route.generate");
+// Before durable retries: the provider set up the job table on its own.
+let provider = ApalisPostgresProvider::new(pool.clone()).await?;
 
-// After: the queue's policy supplies the attempt budget.
-let provider = ApalisPostgresProvider::new(pool.clone(), "route.generate", policy.clone());
+// After: the queue name and its policy supply the stored attempt budget.
+let provider =
+    ApalisPostgresProvider::new(pool.clone(), "route.generate", policy.clone()).await?;
 ```
 
 Changing the policy does not rewrite rows already in the table: each stored job

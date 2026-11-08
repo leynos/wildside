@@ -7,12 +7,15 @@ be kept up to date as work proceeds.
 
 Status: IN PROGRESS (approved for execution 2026-10-30; implementation
 complete, replayed a second time onto `main` `9799286`, and published as the
-pull request `leynos/wildside#457` at `877c09b`; the pre-merge reconciliation
-of 2026-11-07 added the terminal-write canaries, the Makefile command-boundary
-tests, the const-context tests, and the module and user-guide documentation;
-all nine commit gates pass on the published head and every hosted check is
-green with a CodeScene approval; the remaining work is the queued fresh
-CodeRabbit review and the merge)
+pull request `leynos/wildside#457`, most recently at `6299c28`; the pre-merge
+reconciliation of 2026-11-07 added the terminal-write canaries, the Makefile
+command-boundary tests, the const-context tests, and the module and user-guide
+documentation; the review of 2026-11-08 then corrected the metric labels, the
+`make` probe environment, the version-pin and shared-directory repair rules,
+the representative test commands, and the user-guide constructor, counter,
+runbook, and delay claims, and added the delivery-counter and jitter tests; the
+remaining work is to publish that repair, confirm the gates and hosted checks,
+and merge)
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -1322,9 +1325,13 @@ they land):
 ```bash
 git branch --show-current   # expect 5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling
 cargo tree -p backend -e normal | grep -E 'apalis-(core|postgres|sql)'
-cargo test -p backend retry 2>&1 | tee /tmp/test-wildside-$(git branch --show-current).out
-cargo test -p backend --test queue_retry_policy_bdd 2>&1 | tee /tmp/bdd-wildside-$(git branch --show-current).out
-cargo test -p backend --test queue_dead_letter_bdd 2>&1 | tee /tmp/dlq-wildside-$(git branch --show-current).out
+make prepare-pg-worker      # once per checkout; the BDD targets below need it
+PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  cargo test -p backend retry 2>&1 | tee /tmp/test-wildside-$(git branch --show-current).out
+PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  cargo test -p backend --test queue_retry_policy_bdd 2>&1 | tee /tmp/bdd-wildside-$(git branch --show-current).out
+PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  cargo test -p backend --test queue_dead_letter_bdd 2>&1 | tee /tmp/dlq-wildside-$(git branch --show-current).out
 rg -n '\.retry\(|RetryLayer|apalis::layers' backend/ ; grep -n '^apalis\s*=' backend/Cargo.toml
 ```
 
@@ -1888,10 +1895,12 @@ caret requirements.
   at 0.9.1 against M2 boundary `425b018` through `284e25d`. It covered all 16
   expected paths and returned six findings. Review evidence:
   `/tmp/wildside-epm3-coderabbit-284e25d.out`.
-- [x] (2026-10-26 Europe/Berlin) Strengthened the legacy-null-limit BDD case
-  with a bounded worker poll, a registered-worker check, and a successfully
-  handled control row. Initial verification of this edit was superseded after
-  discovering that `#[scenario(path = ...)]` defaults to feature scenario 0.
+- [x] (2026-10-26 Europe/Berlin, historical record) Strengthened the
+  legacy-null-limit BDD case with a bounded worker poll, a registered-worker
+  check, and a successfully handled control row. Initial verification of this
+  edit was superseded after discovering that `#[scenario(path = ...)]` defaults
+  to feature scenario 0. The entry is retained as history; the scenario
+  bindings recorded in the following entry are the current evidence.
 - [x] (2026-10-26 Europe/Berlin) Added one named `#[scenario]` binding for each
   of the 15 dead-letter feature scenarios. Seed rows now use Apalis ULIDs and
   valid V1 envelopes. The expanded red run exposed the malformed-metadata
@@ -2188,6 +2197,37 @@ caret requirements.
   `mergeStateStatus` is `CLEAN`. CodeRabbit's automatic review is paused after
   its review of `09e07c6`, so one formal review was queued through `comenq` (id
   `ec6335ce`) to cover the published head.
+- [x] (2026-11-07 Europe/Berlin) Corrected this plan's own status record and
+  republished it as `6299c28`. All nine gates passed again on that head and the
+  hosted checks stayed green with `mergeStateStatus: CLEAN`.
+- [x] (2026-11-08 Europe/Berlin) The queued review posted and CodeRabbit
+  reviewed `09e07c6..6299c28`, returning ten inline findings and a failed
+  pre-merge table. All ten were verified against the tree and repaired: the
+  metric module now names `outcome` for `route_queue_retry_total` and `reason`
+  for `route_queue_dead_letter_total`; the `make` probes drop inherited
+  `MAKEFLAGS`/`MFLAGS`/`MAKELEVEL`; `major_version` treats only exact pins as
+  pins, so a range requirement no longer deletes a directory it accepts; the
+  shared-data-directory repair skips a directory held by a live
+  `postmaster.pid`; the representative test commands prepare `pg_worker` and
+  export `PG_PASSWORD`/`PG_EMBEDDED_WORKER`; and the user guide's constructor,
+  counter, runbook, requeue, and delay-bound claims now match the code.
+  `current_attempt` gained boundary tests for a zero counter and one above
+  `u32::MAX`, and the wrapper gained a test proving two injected jitter samples
+  produce different persisted delays. The developers' guide gained the pinned
+  Biome selection and the scheduler clock seam; this plan's clock paragraph was
+  corrected, because the deadline is bound from the injected `ClockSource`
+  rather than SQL `now()`.
+- [x] (2026-11-08 Europe/Berlin) The repair round then failed the `lint` gate on
+  its own line-count check: `password_state_tests.rs` had grown to 411 lines
+  against the 400-line module limit. The shared fixture moved to
+  `backend/tests/support/password_state_fixture.rs` behind its own `#[path]`
+  module, leaving the test module at 286 lines, and all 38
+  `atexit_cleanup_tests` cases still pass. The rerun then exposed a base
+  condition rather than a defect in this branch: `make audit` aborts because
+  `ZOD_ARRAY_MEMORY_EXHAUSTION_2026_10` expired on 2026-11-07, and `main` had
+  already renewed it to 2026-12-08 in `c5bd108` (#595). That renewal is the
+  only commit `main` carries beyond this branch, so the repair was replayed
+  onto it rather than committed against a stale base.
 
 ## Surprises & discoveries
 
@@ -3158,9 +3198,18 @@ predicate: a completed row, a row locked by another worker, and an owned
 running row. The refusal cases assert the exact persisted deadline is
 unchanged; the acceptance case asserts the deadline becomes the requested delay
 measured from the database's own `now()`, so the assertion does not depend on
-the application clock. The scheduler's `run_at` origin deliberately remains
-`now()` in SQL: Apalis fetches with `run_at < now()`, so scheduling from the
-same database clock keeps the delay free of application/database skew.
+the application clock.
+
+The scheduler's `run_at` origin is the injected `ClockSource`, not SQL `now()`.
+`retry_deadline` adds the policy delay to `ClockSource::now()` and binds the
+result as a literal, so a test that installs a fixed clock through
+`PostgresRetryScheduler::with_clock` can predict the stored deadline exactly.
+The two clocks keep distinct jobs: the application clock chooses the deadline
+and makes scheduling reproducible, while Apalis still compares `run_at` with
+the database's own `now()` when it polls, so eligibility is evaluated on the
+database clock. The canaries read `run_at - now()` in one statement precisely
+because comparing the two clocks separately would measure their skew rather
+than the stored delay.
 
 Clippy denies `too_many_arguments` at five under `-D warnings`, so the test
 helpers take a small row or identity struct rather than a positional list of
