@@ -1846,6 +1846,11 @@ therefore read `run_at - now()` inside a single statement: comparing the
 application's computed instant with a separately read database instant would
 measure the gap between two clocks rather than the delay the scheduler stored.
 
+A requeue is the other case: `PostgresDeadLetterQueue::requeue` sets
+`run_at = now()` inside its own transaction, so the row is due immediately
+according to the clock that will poll it. There is no application-side delay to
+reproduce, so no clock seam is injected there; the statement is the boundary.
+
 ## Root-level script tests
 
 Repository-level Node.js scripts under `scripts/` are tested with
