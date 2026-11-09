@@ -694,8 +694,9 @@ wrapper):
 - `PostgresRetryScheduler` (holding the Apalis `PgPool`) exposes two guarded
   statements, both
   `WHERE id = $task_id AND lock_by = $worker AND status = 'Running'`:
-  - `schedule_retry(task_id, worker, delay)`:
-    `UPDATE apalis.jobs SET run_at = now() + $delay`.
+  - `schedule_retry(task_id, worker, delay)` computes one absolute deadline
+    from an injected `ClockSource` (`SystemClock` in production) and binds it:
+    `UPDATE apalis.jobs SET run_at = $deadline`.
   - `record_terminal_failure(task_id, worker, attempt, reason, shrink_limit)`:
     conditionally sets `max_attempts = $attempt` and writes the reason to
     `metadata['wildside.retry.dead_reason']` in one guarded statement under
@@ -1327,6 +1328,7 @@ Work from the repository root. Representative commands (adjust test names as
 they land):
 
 ```bash
+set -o pipefail   # without it, `tee` alone decides the exit status of each command below
 git branch --show-current   # expect 5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling
 cargo tree -p backend -e normal | grep -E 'apalis-(core|postgres|sql)'
 make prepare-pg-worker      # once per checkout; the BDD targets below need it
@@ -1369,14 +1371,17 @@ milestone define the recovery point; revert uncommitted changes rather than
 patching forward. The only destructive operation introduced is `discard` (a
 guarded delete of a dead row), which exists solely behind the port and its
 tests. The scheduling writes (`run_at`, `max_attempts`) are guarded to the row
-the worker holds. Shrinking `max_attempts` is idempotent for a given attempt;
-`run_at = now() + $delay` is not, because each execution advances the deadline.
-Issue that relative scheduling update once and do not retry it after an
-ambiguous database response. If a future design retries scheduling writes,
-compute one absolute deadline and reuse it, or add a guard that proves the
-attempt has not already been scheduled. The scheduling-error recovery behaviour
-is recorded under Risks. The EP-M0 pin change is reverted by restoring the two
-caret requirements.
+the worker holds. Shrinking `max_attempts` is idempotent for a given attempt.
+`run_at` is written as an absolute deadline from the scheduler's injected
+clock, so re-issuing the same statement with the same delay rewrites the same
+instant rather than advancing it. The deadline therefore follows the
+application clock while Apalis still compares it with the database's own
+`now()`, so deployment clock skew shifts scheduled retries by the skew; keep
+hosts synchronized. This paragraph previously described a relative
+`now() + $delay` update and a recommendation to retry it only once; both are
+historical, because the implemented write is absolute. The scheduling-error
+recovery behaviour is recorded under Risks. The EP-M0 pin change is reverted by
+restoring the two caret requirements.
 
 ## Progress
 
@@ -2831,9 +2836,9 @@ caret requirements.
   returns `Err`, it issues one guarded update while the row is still `Running`
   and locked by this worker
   (`WHERE id = $1 AND lock_by = $2 AND status = 'Running'`). For a retryable
-  error below the policy limit, it sets
-  `run_at = now() + JobRetryPolicy::backoff_delay(attempt, jitter)`. A fatal
-  error or a retryable error at the policy limit takes the terminal path. If
+  error below the policy limit, it sets `run_at` to the injected clock's
+  instant plus `JobRetryPolicy::backoff_delay(attempt, jitter)`. A fatal error
+  or a retryable error at the policy limit takes the terminal path. If
   `Attempt::current() < context max_attempts`, the guarded update sets the
   persisted `max_attempts` to `Attempt::current()`, exactly the `attempts`
   value the ack will persist. This also handles a pre-existing row whose stored
@@ -3314,3 +3319,65 @@ The user-facing row asked for a versioned migration guide. The backend crate is
 `0.1.0`; there is no 0.2.0 release to migrate from, so the user guide carries
 the migration instead. It now shows the old and new constructor calls alongside
 the no-shims policy and the stored-budget behaviour.
+
+### Pre-merge reconciliation of 2026-11-08
+
+The refreshed table raised three errors and five warnings against `0659a3d`.
+Two errors were accurate and are repaired here.
+
+The `RetryingJobService::call` path had no jitter coverage: the distinct-sample
+test drove `handle_failure` directly, so the wiring from
+`RetryingJobServiceConfig::with_jitter` to the persisted delay was assumed
+rather than observed. `configured_jitter_source_shapes_the_delivered_delay` now
+builds the service through `with_jitter` with a non-zero jitter fraction and
+asserts the persisted delay at the low, middle, and high sample.
+
+Two module docstrings claimed every failed delivery performs one guarded write.
+They now say the wrapper attempts one write only when it can prove ownership,
+and writes nothing when the proof is missing or the database guard refuses the
+update. The users guide already documented that behaviour.
+
+The Unit Architecture row repeated a request to move listing diagnostics behind
+an explicit side-effect boundary and to inject a clock into `requeue`. The
+first is rebutted: `tracing` is this adapter's observability boundary, as it is
+for `requeue` and `discard`, and the warning is how an operator learns that a
+stored row could not be represented. The second is rebutted: `requeue` sets
+`run_at = now()` inside its SQL so the row is immediately eligible on the
+database clock, and binding an application timestamp would introduce skew. The
+testable half was implemented: the generated listing scenario now mixes both
+rejection branches, interleaves them between valid rows, and asserts that
+listing leaves every skipped row byte-for-byte unchanged.
+
+Two documentation rows were also accurate. This plan described
+`run_at = now() + $delay` in three places; the scheduler binds an absolute
+deadline from its injected `ClockSource`, so those passages now describe the
+implemented clock and the superseded relative-update advice is marked
+historical. The 0.2.0 migration request remains inapplicable for the reason
+recorded above.
+
+The same review left eight inline findings, seven of which were valid.
+
+`list_dead` paged with `OFFSET` across separate pool queries, so a row that
+became dead, or left the queue, between two batches shifted every later row and
+duplicated or skipped an entry. It now reads every batch inside one
+`REPEATABLE READ`, read-only transaction, which removes both defects without
+blocking writers.
+
+Four documentation findings were accurate. The users guide and the runbook
+described the missing-identity refusal as a warning; the wrapper logs it at
+`ERROR` and reserves `WARN` for a refused or failed terminal write. The
+developers guide's clock section claimed a single-statement `run_at - now()`
+avoided skew; it only avoids comparing two separately sampled instants, so the
+section now names the skew and pool-wait limits, and ADR-004 records the
+accepted risk. The cluster-state section now says the default data directory is
+a per-user shared path that the repair can remove even when another project
+created it, and that direct test runs should use isolated paths.
+`with_data_entry_as_file` no longer fails in `remove_dir_all`; its doc comment
+and the matching test comment now name the in-use probe, which is the call that
+actually fails first. The concrete-steps command block gained
+`set -o pipefail`, without which `tee` alone decided each command's exit status.
+
+The remaining finding asked for the production deadline to be computed in SQL
+instead of from `ClockSource`. That mechanism was chosen for determinism and is
+recorded in D11 and ADR-004; documenting the skew consequence, as above, is the
+accepted resolution.

@@ -1362,9 +1362,15 @@ Three pieces cooperate here:
   bootstrap could not reuse. A data directory is unusable when it has no
   `postgresql.conf` — a bootstrap that never finished — or when its
   `PG_VERSION` names a different major version from `PG_VERSION_REQ`. The
-  repair never removes an explicitly configured `PG_DATA_DIR`, and it does not
-  mutate the test process environment. The environment policy contract tests
-  guard the Makefile password and all non-forcing defaults.
+  default is a per-user shared path (`/var/tmp/pg-embed-<uid>`), so another
+  project on the same host can leave a cluster there. The repair keeps a
+  directory whose `postmaster.pid`, at the top level or one level down, names a
+  running process, but a stopped cluster that fails the reuse test is removed
+  even when another project created it. Set `PG_DATA_DIR` and `PG_RUNTIME_DIR`
+  to project-specific paths when several projects share a host; the repair
+  never removes an explicitly configured `PG_DATA_DIR`, and it does not mutate
+  the test process environment. The environment policy contract tests guard the
+  Makefile password and all non-forcing defaults.
 
 ## Environment seams
 
@@ -1845,6 +1851,15 @@ compares `run_at` with its own `now()` when it polls. The scheduling canaries
 therefore read `run_at - now()` inside a single statement: comparing the
 application's computed instant with a separately read database instant would
 measure the gap between two clocks rather than the delay the scheduler stored.
+
+One statement removes that sampling gap, not clock skew. The stored deadline is
+an application-clock instant that Apalis compares with the database's `now()`,
+so a worker clock behind the database makes a retry eligible early and a clock
+ahead delays it. Time spent waiting for a pool connection after the deadline
+was computed also shortens the effective delay. `SystemClock` reads the host
+clock, so synchronize hosts with a time service and monitor clock offset; the
+fixed-clock assertions verify the stored delay, not eligibility. ADR-004
+records the accepted risk.
 
 A requeue is the other case: `PostgresDeadLetterQueue::requeue` sets
 `run_at = now()` inside its own transaction, so the row is due immediately
@@ -2836,8 +2851,9 @@ PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/ta
   cargo test -p backend --test job_structs_postgres_bdd
 ```
 
-For concurrent direct runs, also apply the separate data, runtime, and
-temporary paths from the earlier example to each command.
+On a host shared with other projects, apply the separate data, runtime, and
+temporary paths from the earlier example to every direct run, not only
+concurrent ones, so no run can repair or bootstrap the shared default cluster.
 
 ### Queue test infrastructure
 

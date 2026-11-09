@@ -121,9 +121,11 @@ and a row the domain cannot represent logs at `WARN` with the `job_id` that was
 skipped.
 
 The retry scheduling-failure counter covers refused retry decisions only. A
-refused terminal write logs a warning and increments neither the retry nor the
-dead-letter counter, so alerting on counters alone will miss it; match the
-warning instead.
+terminal outcome that cannot be persisted increments neither the retry nor the
+dead-letter counter. Missing or mismatched worker identity logs at `ERROR`
+(`retry metadata missing; cannot persist failure outcome`); a refused or failed
+terminal write logs at `WARN` with decision `terminal_write_failure`. Alert on
+both events, because counters alone will miss them.
 
 Dead-letter backlog is the number of rows the dead predicate matches. This
 query is read-only, ignores no rows, and returns only a count:

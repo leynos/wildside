@@ -1,17 +1,23 @@
 //! Side-effect tests for the retry wrapper's persistence contract.
 //!
-//! The wrapper must perform exactly one guarded write per failed delivery and
-//! no write at all after a successful handler. The scheduler is behind
-//! [`RetryPersistence`], so these tests observe calls directly instead of
-//! inferring them from database state.
+//! When it can prove ownership, the wrapper attempts exactly one guarded write
+//! per failed delivery. It writes nothing after a successful handler, and it
+//! writes nothing when the ownership proof is missing or the database guard
+//! refuses the update. The scheduler is behind [`RetryPersistence`], so these
+//! tests observe calls directly instead of inferring them from database state.
 
 use std::num::NonZeroU32;
+use std::sync::Arc;
 use std::time::Duration;
+
+use apalis_core::layers::Service;
+use rstest::rstest;
+use serde_json::json;
 
 use super::super::{RetryFailureContext, handle_failure};
 use super::doubles::{
-    FixedJitter, PersistenceCall, QUEUE, RecordingMetrics, RecordingPersistence, TASK_ID, WORKER,
-    WriteOutcome,
+    DeliveryIdentity, FixedJitter, PersistenceCall, QUEUE, RecordingMetrics, RecordingPersistence,
+    TASK_ID, TestJob, WORKER, WriteOutcome, service_with, task_with, wrapper_config,
 };
 use super::policy;
 use crate::domain::jobs::retry::{
@@ -203,6 +209,59 @@ async fn distinct_jitter_samples_produce_distinct_scheduled_delays() {
         "a one sample applies the full positive jitter offset"
     );
     assert_ne!(lowest, highest, "the two extremes must differ");
+}
+
+/// Scenario: a delivery runs through a service configured with a jitter source.
+///
+/// Invariant: the sample reaches the persisted delay through
+/// `RetryingJobService::call`, so a configuration-supplied jitter source
+/// shapes real deliveries rather than merely being stored.
+#[rstest]
+#[case::lowest(0.0, Duration::from_millis(75))]
+#[case::midpoint(0.5, Duration::from_millis(100))]
+#[case::highest(1.0, Duration::from_millis(125))]
+#[tokio::test]
+async fn configured_jitter_source_shapes_the_delivered_delay(
+    #[case] sample: f64,
+    #[case] expected: Duration,
+) {
+    let persistence = Arc::new(RecordingPersistence::new(
+        WriteOutcome::Updated,
+        WriteOutcome::Updated,
+    ));
+    let metrics = Arc::new(RecordingMetrics::default());
+    let jitter = Arc::new(FixedJitter(
+        JitterSample::new(sample).expect("sample in 0..=1"),
+    ));
+    let handler = |_job: TestJob, _attempt: NonZeroU32| async {
+        Err(JobFailure::new(JobErrorKind::Retryable, "probe failure"))
+    };
+    let config = wrapper_config(
+        jittered_policy(),
+        Arc::clone(&persistence),
+        Arc::clone(&metrics),
+    )
+    .with_jitter(jitter);
+    let mut service = service_with(config, handler);
+    let task = task_with(
+        json!({"v": "v1", "probeId": "probe"}),
+        usize::try_from(ATTEMPT).expect("the fixed attempt fits in usize"),
+        DeliveryIdentity::new(Some(WORKER), Some(WORKER)),
+    );
+
+    let result = service.call(task).await;
+
+    assert!(result.is_err(), "the delivery stays failed");
+    assert_eq!(
+        persistence.calls(),
+        vec![PersistenceCall::Schedule {
+            task_id: TASK_ID.to_owned(),
+            worker_id: WORKER.to_owned(),
+            delay: expected,
+        }],
+        "the persisted delay must follow the configured jitter sample"
+    );
+    assert_eq!(metrics.retries(), vec![RouteRetryOutcome::Scheduled]);
 }
 
 #[traced_test]

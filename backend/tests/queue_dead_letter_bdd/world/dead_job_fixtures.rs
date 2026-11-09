@@ -39,6 +39,19 @@ impl QueueDeadLetterWorld {
     }
 
     pub(crate) fn insert_malformed_requeue_count_dead_job(&self) -> DeadJobId {
+        let malformed = self.insert_malformed_requeue_count_dead_job_at(2);
+        *self.current_job_id.lock().expect("current id mutex") = Some(malformed.clone());
+        malformed
+    }
+
+    /// Insert a dead row whose requeue count cannot be parsed.
+    ///
+    /// The caller chooses the age so a generated listing scenario can place
+    /// unrepresentable rows between representable ones.
+    pub(super) fn insert_malformed_requeue_count_dead_job_at(
+        &self,
+        done_age_seconds: i64,
+    ) -> DeadJobId {
         let malformed = self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Failed",
@@ -46,24 +59,31 @@ impl QueueDeadLetterWorld {
             max_attempts: Some(3),
             reason: Some("exhausted"),
             last_error: Some("malformed row"),
-            done_age_seconds: 2,
+            done_age_seconds,
         });
         self.set_requeue_count(&malformed, "not-a-number");
-        *self.current_job_id.lock().expect("current id mutex") = Some(malformed.clone());
         malformed
     }
 
     pub(crate) fn insert_negative_attempt_dead_row(&self) {
-        let id = self.insert_job(JobSeed {
+        let id = self.insert_negative_attempt_dead_job_at(0);
+        *self.current_job_id.lock().expect("current id mutex") = Some(id);
+    }
+
+    /// Insert a dead row whose attempt count is negative.
+    ///
+    /// The caller chooses the age, for the same reason as
+    /// [`Self::insert_malformed_requeue_count_dead_job_at`].
+    pub(super) fn insert_negative_attempt_dead_job_at(&self, done_age_seconds: i64) -> DeadJobId {
+        self.insert_job(JobSeed {
             job_type: QUEUE_NAME,
             status: "Killed",
             attempts: -1,
             max_attempts: Some(3),
             reason: Some("fatal"),
             last_error: Some("negative attempts"),
-            done_age_seconds: 0,
-        });
-        *self.current_job_id.lock().expect("current id mutex") = Some(id);
+            done_age_seconds,
+        })
     }
 
     pub(crate) fn insert_two_dead_jobs(&self) {

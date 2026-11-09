@@ -84,13 +84,14 @@ impl PasswordStateFixture {
 
     /// Build a fixture whose data entry is a regular file, not a directory.
     ///
-    /// Removing it via `remove_dir_all` then fails with a non-NotFound error
-    /// (ENOTDIR), exercising the path where data cleanup fails while the
-    /// stale `.pgpass` must remain in place for a retry.
+    /// Probing `data/postmaster.pid` then fails with a non-NotFound error
+    /// (ENOTDIR) before any removal is attempted, exercising the path where
+    /// data cleanup fails while the stale `.pgpass` must remain in place for a
+    /// retry.
     pub(super) fn with_data_entry_as_file() -> Self {
         Self::with_data_entry(true, |data_parent| {
-            // The "data" entry is a file, so `remove_dir_all` fails with a
-            // non-NotFound error rather than deleting a directory.
+            // The "data" entry is a file, so the ownership probe fails with a
+            // non-NotFound error rather than reporting absent state.
             data_parent.write("data", b"x").expect("write data file");
         })
     }

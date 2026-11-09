@@ -39,5 +39,13 @@ positive and negative cases are specified in the
   `RetryingJobService` without an Apalis retry layer.
 - Backoff does not occupy a worker slot. Delivery can occur after the due time
   by up to the poll interval or longer under load.
+- The retry deadline is computed from the worker's `ClockSource` and bound as
+  an absolute `run_at`, which keeps the stored delay reproducible in tests. The
+  accepted risk is clock skew: Apalis compares that application-clock instant
+  with the database's `now()`, so a worker clock behind the database makes a
+  retry eligible early, and a clock ahead delays it. Pool-connection wait after
+  the deadline is computed also shortens the effective delay. Mitigate by
+  synchronizing hosts with a time service and monitoring clock offset; the
+  fixed-clock tests verify the stored delay, not eligibility.
 - The pinned acknowledgement and fetch contracts are upgrade prerequisites,
   rather than assumptions that can be carried over to 1.0 without evidence.
