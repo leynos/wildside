@@ -243,9 +243,11 @@ fn repair_removes_stale_pgpass_when_data_parent_is_absent() {
 
 #[test]
 fn repair_keeps_pgpass_when_data_cleanup_fails() {
-    // When the data-directory removal fails, `.pgpass` must remain so a
-    // retry still detects the stale state. Cleaning the data directory
-    // before deleting `.pgpass` keeps the repair retryable.
+    // When the data-directory cleanup fails, `.pgpass` must remain so a
+    // retry still detects the stale state. Here the in-use probe fails
+    // because `data` is a regular file, and the probe runs before the
+    // deletion; cleaning the data directory before deleting `.pgpass` keeps
+    // the repair retryable either way.
     let fixture = PasswordStateFixture::with_data_entry_as_file();
     fixture.write_pgpass(b"old-password");
 

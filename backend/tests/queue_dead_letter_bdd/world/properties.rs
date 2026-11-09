@@ -4,7 +4,9 @@
 //! metadata the domain cannot represent. Scenarios pin a few named mixtures;
 //! this test instead generates them, so the invariant is checked for many
 //! combinations of malformed rows, valid rows, and limits, including mixtures
-//! whose page boundaries fall inside a run of filtered rows.
+//! whose page boundaries fall inside a run of filtered rows. The same test
+//! asserts that listing leaves every skipped row untouched, so reading the
+//! dead-letter queue stays free of write side effects.
 
 use backend::domain::ports::DeadJobId;
 use proptest::prelude::*;
@@ -17,6 +19,19 @@ use super::{QUEUE_NAME, QueueDeadLetterWorld};
 /// Listing orders by `done_at` descending, so a wide gap keeps the expected
 /// order a property of the seed rather than of how long the inserts took.
 const AGE_SPACING_SECONDS: i64 = 10;
+
+/// Offset that places a malformed row halfway between two valid ones.
+///
+/// Valid rows sit at exact multiples of [`AGE_SPACING_SECONDS`], so this offset
+/// interleaves filtered rows with listed ones instead of collecting every
+/// rejection at one end of the listing.
+const MALFORMED_AGE_OFFSET_SECONDS: i64 = 5;
+
+/// Age of the malformed row at `index`, interleaved between valid rows.
+fn malformed_age(index: usize) -> i64 {
+    let index = i64::try_from(index).expect("a generated row index fits in i64");
+    AGE_SPACING_SECONDS * index + MALFORMED_AGE_OFFSET_SECONDS
+}
 
 impl QueueDeadLetterWorld {
     /// Insert `count` valid dead rows, newest first, and return their ids.
@@ -42,6 +57,23 @@ impl QueueDeadLetterWorld {
             .collect()
     }
 
+    /// Insert malformed dead rows whose ages interleave with the valid ones.
+    ///
+    /// Both rejection branches are represented: an unparsable requeue count
+    /// and a negative attempt count. The returned identifiers let the caller
+    /// check afterwards that listing did not modify the rows it skipped.
+    fn insert_interleaved_malformed_rows(
+        &self,
+        malformed_requeue_counts: usize,
+        malformed_attempts: usize,
+    ) -> Vec<DeadJobId> {
+        let requeue_rows = (0..malformed_requeue_counts)
+            .map(|index| self.insert_malformed_requeue_count_dead_job_at(malformed_age(index)));
+        let attempt_rows = (0..malformed_attempts)
+            .map(|index| self.insert_negative_attempt_dead_job_at(malformed_age(index)));
+        requeue_rows.chain(attempt_rows).collect()
+    }
+
     /// Return the identifiers from the most recent listing, in listed order.
     fn listed_ids(&self) -> Vec<String> {
         self.listing
@@ -59,17 +91,19 @@ proptest! {
     /// Scenario: a generated mixture of malformed and valid dead rows.
     ///
     /// Invariant: the listing is exactly the valid rows, newest first,
-    /// truncated to the limit, wherever the batch boundaries fall.
+    /// truncated to the limit, wherever the batch boundaries fall, and the
+    /// skipped rows are still exactly as they were stored.
     #[test]
     fn listing_is_the_valid_prefix_of_generated_rows(
-        malformed in 0usize..130,
+        malformed_requeue_counts in 0usize..70,
+        malformed_attempts in 0usize..70,
         valid in 0usize..8,
         limit in 1u32..=12,
     ) {
         let world = QueueDeadLetterWorld::new();
-        for _ in 0..malformed {
-            world.insert_malformed_requeue_count_dead_job();
-        }
+        let malformed_ids = world
+            .insert_interleaved_malformed_rows(malformed_requeue_counts, malformed_attempts);
+        let before: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();
         let inserted = world.insert_ordered_dead_rows(valid);
 
         world.list_dead(limit);
@@ -81,5 +115,8 @@ proptest! {
             .map(|id| id.as_str().to_owned())
             .collect();
         prop_assert_eq!(world.listed_ids(), expected);
+
+        let after: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();
+        prop_assert_eq!(after, before, "listing must not modify the rows it skips");
     }
 }

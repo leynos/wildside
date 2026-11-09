@@ -80,6 +80,12 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
     /// A row qualifies when it is `Killed`, or `Failed` with no cap or an
     /// exhausted one. Rows are ordered by `done_at` (nulls last) and then id,
     /// so a page is stable across repeated reads.
+    ///
+    /// Every batch is read from one `REPEATABLE READ`, read-only snapshot. The
+    /// batches are offset pages of a single logical listing, so a row that
+    /// becomes dead, or leaves the queue, between two batches would shift
+    /// every later row and duplicate or skip an entry. One snapshot keeps the
+    /// pages consistent with each other without blocking concurrent writers.
     #[tracing::instrument(skip_all, fields(operation = "list_dead", limit), err)]
     async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError> {
         let requested = usize::try_from(limit).map_err(|_| {
@@ -87,6 +93,15 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
         })?;
         let mut dead_jobs = Vec::new();
         let mut offset = 0_i64;
+        let mut snapshot = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| unavailable("begin dead-list snapshot", error))?;
+        sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            .execute(&mut *snapshot)
+            .await
+            .map_err(|error| unavailable("configure dead-list snapshot", error))?;
 
         while dead_jobs.len() < requested {
             let batch_limit = i64::try_from(DEAD_LISTING_BATCH_SIZE).map_err(|_| {
@@ -95,7 +110,7 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
             let rows = sqlx::query_as::<_, DeadJobRow>(DEAD_LISTING_SQL)
                 .bind(batch_limit)
                 .bind(offset)
-                .fetch_all(&self.pool)
+                .fetch_all(&mut *snapshot)
                 .await
                 .map_err(|error| unavailable("list dead jobs", error))?;
             let raw_row_count = rows.len();
@@ -122,6 +137,13 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
                 break;
             }
         }
+
+        // A read-only snapshot has nothing to persist, so closing it only
+        // releases the connection.
+        snapshot
+            .commit()
+            .await
+            .map_err(|error| unavailable("close dead-list snapshot", error))?;
 
         Ok(dead_jobs)
     }

@@ -1,12 +1,14 @@
 //! Port for the guarded writes the retry wrapper performs before acknowledgement.
 //!
 //! [`RetryingJobService`](super::RetryingJobService) decides whether a failed
-//! delivery should be rescheduled or made terminal, then performs exactly one
-//! guarded write. Both writes are the only side effects on that path, so the
-//! wrapper depends on this small trait rather than the concrete
-//! [`PostgresRetryScheduler`]. That keeps the "one write per failure" contract
-//! testable with a recording double, and it mirrors how the queue provider is
-//! abstracted for the same reason.
+//! delivery should be rescheduled or made terminal. When it can prove the
+//! current worker owns the row it attempts exactly one guarded write, and it
+//! writes nothing when the identity is missing or disagrees, or when the
+//! database guard refuses the update. Those attempts are the only side effects
+//! the wrapper can cause, so it depends on this small trait rather than the
+//! concrete [`PostgresRetryScheduler`]. That keeps the "at most one write per
+//! failure" contract testable with a recording double, and it mirrors how the
+//! queue provider is abstracted for the same reason.
 //!
 //! The port has a single production implementation. Introduce another only if a
 //! second durable backing store is actually adopted; do not use it as a generic
