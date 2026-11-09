@@ -21,7 +21,7 @@ use sqlx::Error as SqlxError;
 
 use super::super::{JitterSource, RetryingJobService, RetryingJobServiceConfig};
 use super::policy;
-use crate::domain::jobs::retry::{JitterSample, JobFailure};
+use crate::domain::jobs::retry::{JitterSample, JobFailure, JobRetryPolicy};
 use crate::domain::ports::{
     RouteDeadLetterOutcome, RouteQueueMetrics, RouteQueueOutcome, RouteRetryOutcome,
 };
@@ -243,6 +243,28 @@ impl JitterSource for FixedJitter {
     }
 }
 
+/// Build one wrapper configuration for the shared queue under test.
+///
+/// Callers that care about jitter use this to reach
+/// `RetryingJobServiceConfig::with_jitter` themselves, so the wiring they
+/// exercise is the same one production uses.
+pub(super) fn wrapper_config(
+    policy: JobRetryPolicy,
+    persistence: Arc<RecordingPersistence>,
+    metrics: Arc<RecordingMetrics>,
+) -> RetryingJobServiceConfig {
+    RetryingJobServiceConfig::new(
+        QUEUE.to_owned(),
+        policy,
+        persistence,
+        metrics as Arc<dyn RouteQueueMetrics>,
+    )
+}
+
+/// Build a service with the shared test policy and a midpoint jitter sample.
+///
+/// The midpoint sample leaves every nominal delay unchanged, so tests that
+/// only care about which write a delivery produces are unaffected by jitter.
 pub(super) fn service<F, Fut>(
     persistence: Arc<RecordingPersistence>,
     metrics: Arc<RecordingMetrics>,
@@ -252,12 +274,22 @@ where
     F: Fn(TestJob, NonZeroU32) -> Fut + Clone + Send + Sync + 'static,
     Fut: std::future::Future<Output = Result<(), JobFailure>> + Send + 'static,
 {
-    let config = RetryingJobServiceConfig::new(
-        QUEUE.to_owned(),
-        policy(3),
-        persistence,
-        metrics as Arc<dyn RouteQueueMetrics>,
-    )
-    .with_jitter(Arc::new(FixedJitter(JitterSample::midpoint())));
+    let config = wrapper_config(policy(3), persistence, metrics)
+        .with_jitter(Arc::new(FixedJitter(JitterSample::midpoint())));
+    RetryingJobService::<TestJob, F>::new(config, handler)
+}
+
+/// Build a service from a prepared configuration.
+///
+/// Tests that vary a configuration input, such as the jitter source, build the
+/// configuration first and then hand it over unchanged.
+pub(super) fn service_with<F, Fut>(
+    config: RetryingJobServiceConfig,
+    handler: F,
+) -> RetryingJobService<TestJob, F>
+where
+    F: Fn(TestJob, NonZeroU32) -> Fut + Clone + Send + Sync + 'static,
+    Fut: std::future::Future<Output = Result<(), JobFailure>> + Send + 'static,
+{
     RetryingJobService::<TestJob, F>::new(config, handler)
 }

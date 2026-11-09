@@ -242,8 +242,9 @@ with the recorded lock owner. Such a delivery stays failed. When the policy
 would have scheduled a retry it increments the retry scheduling-failure
 counter; when the policy would have recorded a terminal failure it increments
 neither the retry nor the dead-letter counter, so that counter must not be used
-to detect a refused terminal write. Both cases log a warning naming the refused
-decision.
+to detect a refused terminal write. Both cases log an error naming the refused
+decision, because a missing or mismatched identity is a delivery defect rather
+than a retry signal.
 
 The `DeadLetterQueue` port defines the operations a future operator command
 will drive:
