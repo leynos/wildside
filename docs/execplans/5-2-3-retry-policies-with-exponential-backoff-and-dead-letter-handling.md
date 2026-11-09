@@ -3390,3 +3390,11 @@ The remaining finding asked for the production deadline to be computed in SQL
 instead of from `ClockSource`. That mechanism was chosen for determinism and is
 recorded in D11 and ADR-004; documenting the skew consequence, as above, is the
 accepted resolution.
+
+The hosted CodeScene check then reported one advisory rule against
+`dead_job_fixtures.rs`: `insert_unclassified_dead_row` and
+`insert_unconfigured_dead_job` built the same exhausted-shaped seed twice. The
+shared `insert_current_failed_dead_row` helper now takes the queue name, the
+dead reason, and the stored failure, so each scenario is a one-line call.
+`cs review` scores the file 10.0 with no findings, and the dead-letter
+scenarios are unchanged.
