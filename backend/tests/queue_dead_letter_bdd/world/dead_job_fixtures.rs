@@ -6,17 +6,31 @@ use super::rows::JobSeed;
 use super::{QUEUE_NAME, QueueDeadLetterWorld};
 
 impl QueueDeadLetterWorld {
-    pub(crate) fn insert_unclassified_dead_row(&self) {
+    /// Insert an exhausted-shaped dead row and make it the current job.
+    ///
+    /// The scenarios that build a single dead row differ only in which queue
+    /// it belongs to and what the stored failure says, so those details are
+    /// parameters rather than a copy of the seed.
+    fn insert_current_failed_dead_row(
+        &self,
+        job_type: &str,
+        reason: &str,
+        last_error: Option<&str>,
+    ) {
         let id = self.insert_job(JobSeed {
-            job_type: QUEUE_NAME,
+            job_type,
             status: "Failed",
             attempts: 3,
             max_attempts: Some(3),
-            reason: Some("unknown"),
-            last_error: Some("legacy failure"),
+            reason: Some(reason),
+            last_error,
             done_age_seconds: 0,
         });
         *self.current_job_id.lock().expect("current id mutex") = Some(id);
+    }
+
+    pub(crate) fn insert_unclassified_dead_row(&self) {
+        self.insert_current_failed_dead_row(QUEUE_NAME, "unknown", Some("legacy failure"));
     }
 
     pub(crate) fn insert_malformed_requeue_count_and_valid_dead_jobs(&self) {
@@ -110,15 +124,6 @@ impl QueueDeadLetterWorld {
     }
 
     pub(crate) fn insert_unconfigured_dead_job(&self) {
-        let id = self.insert_job(JobSeed {
-            job_type: "wildside.unconfigured-queue",
-            status: "Failed",
-            attempts: 3,
-            max_attempts: Some(3),
-            reason: Some("exhausted"),
-            last_error: None,
-            done_age_seconds: 0,
-        });
-        *self.current_job_id.lock().expect("current id mutex") = Some(id);
+        self.insert_current_failed_dead_row("wildside.unconfigured-queue", "exhausted", None);
     }
 }
