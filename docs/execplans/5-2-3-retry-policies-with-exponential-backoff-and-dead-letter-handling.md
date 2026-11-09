@@ -1332,12 +1332,19 @@ set -o pipefail   # without it, `tee` alone decides the exit status of each comm
 git branch --show-current   # expect 5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling
 cargo tree -p backend -e normal | grep -E 'apalis-(core|postgres|sql)'
 make prepare-pg-worker      # once per checkout; the BDD targets below need it
-PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
-  cargo test -p backend retry 2>&1 | tee /tmp/test-wildside-$(git branch --show-current).out
-PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
-  cargo test -p backend --test queue_retry_policy_bdd 2>&1 | tee /tmp/bdd-wildside-$(git branch --show-current).out
-PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
-  cargo test -p backend --test queue_dead_letter_bdd 2>&1 | tee /tmp/dlq-wildside-$(git branch --show-current).out
+# Keep the cluster under this checkout. The default `/var/tmp/pg-embed-<uid>`
+# is shared across projects, and its repair removes a stopped cluster that
+# fails the reuse test even when another project created it.
+PG_ENV=(PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}"
+        PG_EMBEDDED_WORKER="$PWD/target/pg_worker"
+        PG_DATA_DIR="$PWD/target/pg-embed/data"
+        PG_RUNTIME_DIR="$PWD/target/pg-embed/run")
+env "${PG_ENV[@]}" cargo test -p backend retry \
+  2>&1 | tee /tmp/test-wildside-$(git branch --show-current).out
+env "${PG_ENV[@]}" cargo test -p backend --test queue_retry_policy_bdd \
+  2>&1 | tee /tmp/bdd-wildside-$(git branch --show-current).out
+env "${PG_ENV[@]}" cargo test -p backend --test queue_dead_letter_bdd \
+  2>&1 | tee /tmp/dlq-wildside-$(git branch --show-current).out
 rg -n '\.retry\(|RetryLayer|apalis::layers' backend/ ; grep -n '^apalis\s*=' backend/Cargo.toml
 ```
 
@@ -3371,11 +3378,13 @@ avoided skew; it only avoids comparing two separately sampled instants, so the
 section now names the skew and pool-wait limits, and ADR-004 records the
 accepted risk. The cluster-state section now says the default data directory is
 a per-user shared path that the repair can remove even when another project
-created it, and that direct test runs should use isolated paths.
-`with_data_entry_as_file` no longer fails in `remove_dir_all`; its doc comment
-and the matching test comment now name the in-use probe, which is the call that
-actually fails first. The concrete-steps command block gained
-`set -o pipefail`, without which `tee` alone decided each command's exit status.
+created it, and that direct test runs should use isolated paths. The
+concrete-steps block now sets `PG_DATA_DIR` and `PG_RUNTIME_DIR` under this
+checkout for that reason. `with_data_entry_as_file` no longer fails in
+`remove_dir_all`; its doc comment and the matching test comment now name the
+in-use probe, which is the call that actually fails first. The concrete-steps
+command block gained `set -o pipefail`, without which `tee` alone decided each
+command's exit status.
 
 The remaining finding asked for the production deadline to be computed in SQL
 instead of from `ClockSource`. That mechanism was chosen for determinism and is
