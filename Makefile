@@ -36,7 +36,18 @@ export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go
 # path is unreachable in the deployed configuration. Review by 2026-10-03,
 # and remove this ignore rather than renew it if the server ever terminates
 # TLS or enables h2c: https://github.com/leynos/wildside/issues/472
-CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258
+# RUSTSEC-2026-0459 (C SQLite CVE-2026-119375) is fixed in libsqlite3-sys
+# 0.39. Cargo.lock holds 0.30.1 through rusqlite 0.32 in wildside-core and
+# wildside-data (the wildside-engine git dependency pinned in
+# backend/Cargo.toml), so the fix needs an engine release on a newer rusqlite;
+# that is not available to this repository yet. The backend links the library
+# through wildside-data but never calls persist_pois_to_sqlite or opens a
+# SQLite database itself; it uses only ingest_osm_pbf_report. Review by
+# 2026-12-10, and end this ignore when wildside-engine moves to rusqlite with
+# libsqlite3-sys 0.39 or later (diesel is not in this path: its libsqlite3-sys
+# cap, which blocked mxd, does not apply because wildside uses diesel with
+# PostgreSQL only): https://github.com/leynos/wildside/issues/600
+CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258 --ignore RUSTSEC-2026-0459
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
