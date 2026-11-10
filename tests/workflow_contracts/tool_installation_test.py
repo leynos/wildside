@@ -138,13 +138,22 @@ def test_every_shared_action_reference_is_pinned_to_a_full_sha() -> None:
 
 
 def test_the_estate_calls_one_shared_actions_commit() -> None:
-    """One reviewed commit supplies every shared action the estate calls.
+    """One commit supplies the shared actions, and one the coverage trio.
 
-    The value itself is Dependabot's to move, so this asserts agreement
-    between the references rather than a particular SHA.
+    Asserts agreement rather than a SHA, which Dependabot moves. The coverage
+    actions move ahead of the rest, so they agree among themselves.
     """
-    refs = {reference[2] for reference in _shared_action_references()}
-    assert len(refs) == 1, f"the estate spans several shared-actions commits: {refs}"
+    trio = (
+        "generate-coverage",
+        "upload-codescene-coverage",
+        "publish-coverage-baseline",
+    )
+    groups: dict[bool, set[str]] = {True: set(), False: set()}
+    for _, path, ref in _shared_action_references():
+        groups[path.rsplit("/", 1)[-1] in trio].add(ref)
+    assert all(len(refs) <= 1 for refs in groups.values()), (
+        f"the shared actions span several commits within a group: {groups}"
+    )
 
 
 def test_whitaker_comes_from_the_shared_installer_action() -> None:
@@ -378,8 +387,12 @@ def test_the_coverage_tool_cache_key_tracks_the_shared_action_pin() -> None:
     binaries. This assertion is a deliberate lockstep with the pin, and a
     Dependabot bump is expected to fail it until the key is refreshed.
     """
-    refs = {reference[2] for reference in _shared_action_references()}
-    assert len(refs) == 1, f"the estate spans several shared-actions commits: {refs}"
+    refs = {
+        ref
+        for _, path, ref in _shared_action_references()
+        if path.endswith("/generate-coverage")
+    }
+    assert len(refs) == 1, f"generate-coverage spans several commits: {refs}"
     pin = refs.pop()
     for filename in ("ci.yml", "coverage-main.yml"):
         assert f"SHARED_ACTIONS_PIN: {pin}" in _workflow_text(filename), (

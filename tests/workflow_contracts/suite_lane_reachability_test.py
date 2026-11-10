@@ -99,7 +99,9 @@ def _runs_the_suite(step: dict[str, object]) -> bool:
     if lanes.script_of(step) == COMPILE_FAIL_SCRIPT:
         return False
     if COVERAGE_ACTION in str(step.get("uses", "")):
-        return True
+        options = step.get("with")
+        # A build-only call compiles the instrumented tests and runs none.
+        return not (isinstance(options, dict) and options.get("build-only") == "true")
     return does.runs_the_suite(step)
 
 

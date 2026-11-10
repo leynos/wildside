@@ -45,12 +45,14 @@ NOT_FALLBACK = "steps.setup-rust.outputs.sccache-status != 'fallback'"
 
 #: Each Rust job and the `expect-cache` it must declare. `ci.yml` jobs have a
 #: fork arm on a GitHub-hosted runner, so they take whichever backend the runner
-#: offers; `coverage-upload` runs only on the managed runner and must get its
-#: proxy.
+#: offers; `coverage-upload` runs only on a hosted runner, where `ubicloud`
+#: would fail closed, so it takes `any`; `coverage-warmup` runs only on the
+#: managed runner and must get its proxy.
 RUST_JOBS = (
     ("ci.yml", "build", "any"),
     ("ci.yml", "coverage", "any"),
-    ("coverage-main.yml", "coverage-upload", "ubicloud"),
+    ("coverage-main.yml", "coverage-upload", "any"),
+    ("coverage-main.yml", "coverage-warmup", "ubicloud"),
 )
 
 #: Job-level variables only a job that wires sccache by hand sets. `setup-rust`
