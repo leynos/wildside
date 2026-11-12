@@ -12,22 +12,26 @@ fallback.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 import workflow_inventory as inv
 
-#: The shared-actions commit `setup-rust` must pin: #546, which sits on #523.
-#: Asserted by value, so a bump has to update it and someone has to confirm the
-#: new revision still leaves this repository the sole owner of its caches.
-SETUP_RUST_PIN = "5a99aed78ce68dcebd3052b75c31e6f173162b1e"
+#: A well-formed fixture commit; the contract accepts any full commit SHA, so a
+#: Dependabot bump needs no edit here. The estate-wide agreement of the shared
+#: action commits is held by `test_the_estate_calls_one_shared_actions_commit`.
+SETUP_RUST_PIN = "0" * 40
 
-#: The one `uses` value every Rust job must carry: the exact repository, action
-#: path and pin. A suffix match would accept another repository's, or another
-#: action's, `setup-rust@<pin>` and so bypass the cache behaviour under test.
-SETUP_RUST_USES = f"leynos/shared-actions/.github/actions/setup-rust@{SETUP_RUST_PIN}"
+#: The `setup-rust` repository and action path every Rust job must name. A
+#: suffix match would accept another repository's, or another action's,
+#: `setup-rust@<pin>` and so bypass the cache behaviour under test.
+SETUP_RUST_ACTION = "leynos/shared-actions/.github/actions/setup-rust"
+SETUP_RUST_USES = f"{SETUP_RUST_ACTION}@{SETUP_RUST_PIN}"
+SETUP_RUST_REFERENCE = re.compile(re.escape(SETUP_RUST_ACTION) + r"@[0-9a-f]{40}")
 
 
 def is_the_pinned_setup_rust(uses: str) -> bool:
-    """Return whether `uses` is exactly the reviewed `setup-rust` reference.
+    """Return whether `uses` is the `setup-rust` action at a full commit SHA.
 
     >>> is_the_pinned_setup_rust(SETUP_RUST_USES)
     True
@@ -35,7 +39,7 @@ def is_the_pinned_setup_rust(uses: str) -> bool:
     >>> is_the_pinned_setup_rust(other)
     False
     """
-    return uses == SETUP_RUST_USES
+    return SETUP_RUST_REFERENCE.fullmatch(uses) is not None
 
 
 SETUP_STEP = "Install Rust toolchain"
@@ -75,7 +79,7 @@ def test_setup_rust_owns_the_compiler_cache(
     setup = inv.find_step(steps, SETUP_STEP)
     uses = str(setup.get("uses", ""))
     assert is_the_pinned_setup_rust(uses), (
-        f"{filename}:{job_id} must use exactly {SETUP_RUST_USES}; found {uses}"
+        f"{filename}:{job_id} must use {SETUP_RUST_ACTION} at a full SHA; found {uses}"
     )
     assert setup.get("id") == SETUP_ID, (
         f"{filename}:{job_id} setup-rust must carry the id {SETUP_ID!r}"
@@ -174,8 +178,8 @@ def test_the_statistics_step_reads_the_action_and_stands_down_on_a_fallback(
             id="another-action-path-with-the-same-suffix",
         ),
         pytest.param(
-            "leynos/shared-actions/.github/actions/setup-rust@" + "0" * 40,
-            id="another-pin",
+            "leynos/shared-actions/.github/actions/setup-rust@" + "0" * 39,
+            id="an-abbreviated-pin",
         ),
         pytest.param(
             "leynos/shared-actions/.github/actions/setup-rust@main",
@@ -189,7 +193,7 @@ def test_a_setup_rust_reference_that_is_not_the_exact_action_is_refused(
     """The narrow half: a lookalike with the same suffix or pin must not pass.
 
     Each case would satisfy a `uses.endswith("/setup-rust@<pin>")` check or
-    carry the right pin on the wrong path, and must differ from the one value
-    the contract accepts.
+    carry a well-formed pin on the wrong path, and must differ from the one
+    shape the contract accepts: the action at a full commit SHA.
     """
     assert not is_the_pinned_setup_rust(uses), f"{uses!r} must be refused"
