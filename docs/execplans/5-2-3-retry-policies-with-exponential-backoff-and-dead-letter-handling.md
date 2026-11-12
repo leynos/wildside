@@ -1379,16 +1379,20 @@ patching forward. The only destructive operation introduced is `discard` (a
 guarded delete of a dead row), which exists solely behind the port and its
 tests. The scheduling writes (`run_at`, `max_attempts`) are guarded to the row
 the worker holds. Shrinking `max_attempts` is idempotent for a given attempt.
-`run_at` is written as an absolute deadline from the scheduler's injected
-clock, so re-issuing the same statement with the same delay rewrites the same
-instant rather than advancing it. The deadline therefore follows the
-application clock while Apalis still compares it with the database's own
-`now()`, so deployment clock skew shifts scheduled retries by the skew; keep
-hosts synchronized. This paragraph previously described a relative
-`now() + $delay` update and a recommendation to retry it only once; both are
-historical, because the implemented write is absolute. The scheduling-error
-recovery behaviour is recorded under Risks. The EP-M0 pin change is reverted by
-restoring the two caret requirements.
+`run_at` is written as an absolute deadline computed from the scheduler's
+injected clock, and every call recomputes it from that clock's current value.
+Re-issuing `schedule_retry` with the same delay later in time therefore stores
+a later deadline rather than the original instant. Repeating the guarded update
+is safe because it rewrites the same worker-owned row, but it is not idempotent
+in the value written, so a recovery retry after an ambiguous failure extends
+the delay by however much time has passed. The deadline follows the application
+clock while Apalis still compares it with the database's own `now()`, so
+deployment clock skew shifts scheduled retries by the skew; keep hosts
+synchronized. An earlier revision of this paragraph described a relative
+`now() + $delay` update that rewrote the same instant when re-issued; that is
+historical, because the implemented write is an absolute deadline. The
+scheduling-error recovery behaviour is recorded under Risks. The EP-M0 pin
+change is reverted by restoring the two caret requirements.
 
 ## Progress
 
@@ -1716,14 +1720,19 @@ restoring the two caret requirements.
   findings are addressed in the current candidate; the duplicate optional
   diagnostic finding is covered by the same `.expect(...)` edits. Evidence:
   `/tmp/coderabbit-393f0df6-4a19-41c6-a76a-35fb9e814fa0--5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-.out`.
-- [x] (2026-10-25 Europe/Berlin) CodeRabbit reassessed commit `3bcf1b0`
-  against `origin/main` at `e7ab91e` and identified two minor issues: the plan
-  overstated relative `run_at` idempotence, and Cargo's global environment
-  exposed the test password to non-test commands. Both are corrected in the
-  current candidate: the plan prohibits blind retries after ambiguous writes;
-  Cargo no longer supplies the password globally, and the test recipe provides
-  it only to its Rust test processes. All seven full gates passed on the fix6
-  candidate; CodeRabbit reassessment remains pending. Evidence:
+- [x] (2026-10-25 Europe/Berlin, historical) CodeRabbit reassessed commit
+  `3bcf1b0` against `origin/main` at `e7ab91e` and identified two minor issues:
+  the plan overstated relative `run_at` idempotence, and Cargo's global
+  environment exposed the test password to non-test commands. The environment
+  finding was repaired then and is still in force: Cargo no longer supplies the
+  password globally, and the test recipe provides it only to its Rust test
+  processes. The idempotence finding was answered at the time by prohibiting
+  blind retries after ambiguous writes, but the implemented scheduler later
+  replaced the relative `now() + $delay` update with an absolute deadline from
+  its injected clock, so that answer is superseded: a repeated call now
+  recomputes the deadline from the current clock and moves it forward by the
+  elapsed time. The Idempotence and recovery section records the current
+  behaviour. Evidence:
   `/tmp/coderabbit-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
 - [x] (2026-10-26 Europe/Berlin) All seven sequential gates passed on the
   frozen fix6 candidate: check-fmt, test, typecheck, lint, markdownlint, nixie,
@@ -3276,20 +3285,25 @@ lazily connected pool, so the guard runs before any connection is attempted.
 `PostgresRetryScheduler` against a real `apalis.jobs` row for the ownership
 predicate: a completed row, a row locked by another worker, and an owned
 running row. The refusal cases assert the exact persisted deadline is
-unchanged; the acceptance case asserts the deadline becomes the requested delay
-measured from the database's own `now()`, so the assertion does not depend on
-the application clock.
+unchanged. The acceptance case runs the scheduler on its default `SystemClock`
+and compares `run_at - now()` with the requested delay under a five-second
+tolerance. That comparison relates the application clock that produced `run_at`
+to the database clock that evaluates `now()`, so its value carries any skew
+between the two clocks and the time elapsed between the write and the read. The
+canary therefore proves the stored delay is the requested one to within that
+tolerance, not exactly.
 
 The scheduler's `run_at` origin is the injected `ClockSource`, not SQL `now()`.
 `retry_deadline` adds the policy delay to `ClockSource::now()` and binds the
 result as a literal, so a test that installs a fixed clock through
-`PostgresRetryScheduler::with_clock` can predict the stored deadline exactly.
-The two clocks keep distinct jobs: the application clock chooses the deadline
-and makes scheduling reproducible, while Apalis still compares `run_at` with
-the database's own `now()` when it polls, so eligibility is evaluated on the
-database clock. The canaries read `run_at - now()` in one statement precisely
-because comparing the two clocks separately would measure their skew rather
-than the stored delay.
+`PostgresRetryScheduler::with_clock` can predict the stored deadline exactly;
+that is the case that asserts microsecond equality. The two clocks keep
+distinct jobs: the application clock chooses the deadline and makes scheduling
+reproducible, while Apalis still compares `run_at` with the database's own
+`now()` when it polls, so eligibility is evaluated on the database clock.
+Reading `run_at - now()` in one statement removes the drift between two
+separate database samples, but it cannot remove the application-to-database
+skew, which is why the production-clock assertion is tolerance-based.
 
 Clippy denies `too_many_arguments` at five under `-D warnings`, so the test
 helpers take a small row or identity struct rather than a positional list of
@@ -3398,3 +3412,83 @@ shared `insert_current_failed_dead_row` helper now takes the queue name, the
 dead reason, and the stored failure, so each scenario is a one-line call.
 `cs review` scores the file 10.0 with no findings, and the dead-letter
 scenarios are unchanged.
+
+### Pre-merge reconciliation of 2026-11-12
+
+Review `5828058526` on `51278ea` posted two inline findings and nine failed
+pre-merge rows. Both inline findings were accurate and are repaired here.
+
+`list_dead` opened its snapshot with `begin()` and a separate
+`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY` query. It now uses
+`Pool::begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")`, which
+sets the isolation level on the `BEGIN` statement itself. The existing
+`unavailable("begin dead-list snapshot", ...)` mapping is unchanged.
+
+The users guide now separates the two refusal paths. A missing or mismatched
+delivery identity attempts no write, so it increments none of the counters and
+logs at `ERROR`. A write the database refuses or fails increments the retry
+scheduling-failure counter when it was a retry, and the new terminal-write
+counter when it was terminal, and logs at `WARN` with the matching `decision`.
+
+Three rows were accurate and are repaired.
+
+The observability row asked for a bounded signal for terminal writes that never
+applied. `RouteQueueMetrics::observe_terminal_write_failure` is new, and the
+Prometheus adapter registers `route_queue_terminal_write_failure_total`
+labelled by the bounded `reason` values `fatal` and `exhausted`. The wrapper
+calls it on both the refused and the failed terminal-write branches, and the
+recording doubles in `test_helpers.rs`, the retrying-handler unit tests, the
+retry-policy BDD world, and the identity canary implement it. Job identifiers
+stay in logs and spans, never in labels. Dead-letter backlog remains the
+runbook's count query, which the runbook now names alongside the three counters.
+
+The property row asked for interleaved rows on both sides of multiple batch
+boundaries with an independently built reference. The generator now places up
+to 280 malformed rows, which spans more than two listing batches, spaces the
+valid rows by the average malformed run so boundaries fall between them, and
+sorts the reference by stored age instead of relying on insertion order. It
+still asserts that every skipped row is byte-identical after the listing. The
+single case completes in about 50 seconds against embedded PostgreSQL.
+
+The developer-documentation row asked for two corrections. The canary
+description now says the production-clock acceptance case compares
+`run_at - now()` under a five-second tolerance, so its result carries
+application-to-database clock skew and the time between the write and the read;
+the exact assertion is the `FixedClock` case. The idempotence paragraph now
+says a repeated `schedule_retry` recomputes the deadline from the current clock
+and therefore moves it forward by the elapsed time, rather than rewriting the
+same instant. The 2026-10-25 progress entry that recorded the older relative
+`run_at` idempotence answer is marked historical, and its outcome is recorded:
+the environment fix stayed, while the idempotence answer was superseded by the
+absolute-deadline design.
+
+The remaining rows were re-checked and rebutted on evidence.
+
+- Docstring Coverage: the workspace denies missing documentation
+  (`missing_docs = "deny"` in `Cargo.toml` and `backend/Cargo.toml`), and
+  `make interrogate` reports 100%.
+- User-Facing Documentation (versioned migration): the backend crate is
+  `0.1.0`; there is no `0.2.0` release to migrate from. The users guide carries
+  the constructor migration with the old and new calls.
+- Testing (Overall): a deterministic between-batch mutation test has no seam to
+  drive. Every batch runs inside one transaction that exposes no boundary, so
+  an external lock strong enough to order a mutation after the first batch
+  (`ACCESS EXCLUSIVE`) also blocks the first batch, while share and row locks
+  do not pause a reader, and polling `pg_stat_activity` for an idle-in-
+  transaction window is timing-based rather than deterministic. The multi-
+  boundary property test above is the deterministic coverage this design
+  admits; distinguishing isolation levels would require the production seam the
+  adapter deliberately does not expose.
+- Unit Architecture: `tracing` is this adapter's observability boundary, as it
+  is for `requeue` and `discard`, and `requeue` writes `run_at = now()` in SQL
+  so the row is immediately eligible on the database clock.
+- Domain Architecture: the effective budget is already decided once, in
+  `decide_retry_wrapper_action`, from the policy limit and the fetched task's
+  stored limit; the Apalis conversion and the storage update stay in the
+  adapter as the row asks.
+
+Verification for this round: `cargo check -p backend --tests --all-features`
+succeeds, the 41 focused retrying-handler and metrics unit tests pass, the
+strengthened property test passes, and `cs review` scores every changed Rust
+file 10.0 after `persist_terminal_failure` was split so it stays inside the
+CodeScene length and argument thresholds.

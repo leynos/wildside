@@ -98,6 +98,10 @@ impl FailureRun {
     fn dead_letters(&self) -> Vec<RouteDeadLetterOutcome> {
         self.metrics.dead_letters()
     }
+
+    fn terminal_write_failures(&self) -> Vec<RouteDeadLetterOutcome> {
+        self.metrics.terminal_write_failures()
+    }
 }
 
 #[tokio::test]
@@ -295,13 +299,38 @@ async fn fatal_failure_records_one_terminal_write() {
 }
 
 #[tokio::test]
-async fn terminal_write_failure_records_no_dead_letter_outcome() {
+async fn terminal_write_failure_records_its_own_outcome_only() {
     let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::NotOwned);
 
     run.apply(JobErrorKind::Fatal).await;
 
     assert_eq!(run.calls().len(), 1);
-    assert!(run.dead_letters().is_empty());
+    assert!(
+        run.dead_letters().is_empty(),
+        "an unwritten terminal decision is not a dead letter"
+    );
+    assert_eq!(
+        run.terminal_write_failures(),
+        vec![RouteDeadLetterOutcome::Fatal],
+        "a refused terminal write has its own bounded counter"
+    );
+}
+
+#[tokio::test]
+async fn terminal_write_error_records_its_own_outcome_only() {
+    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Failed);
+
+    run.apply(JobErrorKind::Fatal).await;
+
+    assert_eq!(run.calls().len(), 1);
+    assert!(
+        run.dead_letters().is_empty(),
+        "a failed terminal write is not a dead letter"
+    );
+    assert_eq!(
+        run.terminal_write_failures(),
+        vec![RouteDeadLetterOutcome::Fatal]
+    );
 }
 
 #[rstest::rstest]
@@ -328,6 +357,10 @@ async fn missing_identity_writes_nothing(
     assert!(
         run.dead_letters().is_empty(),
         "an unwritten outcome is not a dead letter"
+    );
+    assert!(
+        run.terminal_write_failures().is_empty(),
+        "an absent identity is not a refused terminal write"
     );
     if kind == JobErrorKind::Retryable {
         assert_eq!(

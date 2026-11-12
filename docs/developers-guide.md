@@ -2802,6 +2802,9 @@ Queue observability:
   feature-gated counter for durable retry scheduling results.
 - `route_queue_dead_letter_total{reason=exhausted|fatal}` – A feature-gated
   counter for terminal retry outcomes.
+- `route_queue_terminal_write_failure_total{reason=exhausted|fatal}` – A
+  feature-gated counter for terminal writes the database refused or failed to
+  apply, which change no stored state and so cannot be counted as dead letters.
 - Retry policy belongs to one queue/job family. For a retryable failure the
   Apalis handler wrapper persists `run_at` before returning the failure to the
   PostgreSQL acknowledgement; it installs no in-process retry middleware.

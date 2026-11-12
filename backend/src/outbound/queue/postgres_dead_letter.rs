@@ -95,13 +95,9 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
         let mut offset = 0_i64;
         let mut snapshot = self
             .pool
-            .begin()
+            .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             .await
             .map_err(|error| unavailable("begin dead-list snapshot", error))?;
-        sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-            .execute(&mut *snapshot)
-            .await
-            .map_err(|error| unavailable("configure dead-list snapshot", error))?;
 
         while dead_jobs.len() < requested {
             let batch_limit = i64::try_from(DEAD_LISTING_BATCH_SIZE).map_err(|_| {
