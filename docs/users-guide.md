@@ -236,15 +236,38 @@ acknowledge. Waiting for the delay does not occupy a worker slot. A terminal
 failure records `wildside.retry.dead_reason` in the job's metadata instead of
 scheduling another attempt, and the row becomes a dead letter.
 
+A failure is terminal for one of two reasons, and the reason selects the
+recovery an operator should consider:
+
+- `fatal` means the failure is not retryable at all, so the first delivery
+  dead-letters the row however much budget remains. Requeuing it will usually
+  fail again unless the underlying cause has been fixed.
+- `exhausted` means the attempt budget was spent: the delivery count reached
+  the policy's `max_attempts`. Requeuing it restores a fresh budget.
+
+`list_dead` reports these as `DeadReason::Fatal` and `DeadReason::Exhausted`.
+Rows written before this reason was recorded, or with an unrecognized label,
+list as `DeadReason::Unclassified` rather than being hidden, so an upgrade does
+not strand old dead letters.
+
 The wrapper persists nothing when it cannot prove the current worker owns the
 row, for example when the task has no worker context or its worker disagrees
 with the recorded lock owner. Such a delivery stays failed. When the policy
 would have scheduled a retry it increments the retry scheduling-failure
 counter; when the policy would have recorded a terminal failure it increments
-neither the retry nor the dead-letter counter, so that counter must not be used
-to detect a refused terminal write. Both cases log an error naming the refused
-decision, because a missing or mismatched identity is a delivery defect rather
-than a retry signal.
+none of the retry, dead-letter, or terminal-write-failure counters, because no
+write was attempted. A missing or mismatched identity logs an error naming the
+refused decision; that identity defect is not itself a retry signal.
+
+A write that the database refuses, or that fails, is a different case from an
+identity defect. A refused or failed retry write increments the retry
+scheduling-failure counter. A refused or failed terminal write increments
+`route_queue_terminal_write_failure_total`, labelled by the reason it would
+have stored, and leaves the dead-letter counter unchanged because the row's
+state did not change. Both log a warning whose `decision` field is
+`schedule_failure` or `terminal_write_failure` respectively. Alert on the
+terminal-write-failure counter as well as the warnings, because the dead-letter
+counter alone will not show a terminal write that never applied.
 
 The `DeadLetterQueue` port defines the operations a future operator command
 will drive:

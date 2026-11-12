@@ -130,6 +130,7 @@ impl RetryPersistence for RecordingPersistence {
 pub(super) struct RecordingMetrics {
     retries: Mutex<Vec<RouteRetryOutcome>>,
     dead_letters: Mutex<Vec<RouteDeadLetterOutcome>>,
+    terminal_write_failures: Mutex<Vec<RouteDeadLetterOutcome>>,
 }
 
 impl RouteQueueMetrics for RecordingMetrics {
@@ -145,6 +146,13 @@ impl RouteQueueMetrics for RecordingMetrics {
             .expect("dead-letter metrics")
             .push(outcome);
     }
+
+    fn observe_terminal_write_failure(&self, reason: RouteDeadLetterOutcome) {
+        self.terminal_write_failures
+            .lock()
+            .expect("terminal-write-failure metrics")
+            .push(reason);
+    }
 }
 
 impl RecordingMetrics {
@@ -156,6 +164,13 @@ impl RecordingMetrics {
         self.dead_letters
             .lock()
             .expect("dead-letter metrics")
+            .clone()
+    }
+
+    pub(super) fn terminal_write_failures(&self) -> Vec<RouteDeadLetterOutcome> {
+        self.terminal_write_failures
+            .lock()
+            .expect("terminal-write-failure metrics")
             .clone()
     }
 }

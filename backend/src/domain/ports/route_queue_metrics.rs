@@ -3,6 +3,12 @@
 //! This port keeps queue observability behind the domain boundary. Queue
 //! adapters can record bounded queue outcomes without depending on Prometheus
 //! or any other metrics backend, while tests can inject a no-op implementation.
+//!
+//! The dead-letter reasons double as the labels for a separate terminal-write
+//! failure counter. That counter exists because a refused or failed terminal
+//! write changes no stored state, so it is neither a dead letter nor a
+//! scheduled retry; without its own signal the only evidence would be a log
+//! line.
 
 use std::time::Duration;
 
@@ -89,6 +95,12 @@ pub trait RouteQueueMetrics: Send + Sync {
 
     /// Record a terminal dead-letter reason.
     fn observe_dead_letter(&self, outcome: RouteDeadLetterOutcome);
+
+    /// Record a terminal write the database refused or failed to apply.
+    ///
+    /// The label is the dead-letter reason the write would have stored, so an
+    /// operator can tell which terminal path lost its persistence attempt.
+    fn observe_terminal_write_failure(&self, reason: RouteDeadLetterOutcome);
 }
 
 /// No-op route queue metrics recorder for tests and disabled metrics builds.
@@ -101,4 +113,6 @@ impl RouteQueueMetrics for NoOpRouteQueueMetrics {
     fn observe_retry(&self, _outcome: RouteRetryOutcome) {}
 
     fn observe_dead_letter(&self, _outcome: RouteDeadLetterOutcome) {}
+
+    fn observe_terminal_write_failure(&self, _reason: RouteDeadLetterOutcome) {}
 }

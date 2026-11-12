@@ -11,6 +11,7 @@ use backend::domain::ports::{
 pub struct RecordingRetryMetrics {
     pub retry_outcomes: Arc<Mutex<Vec<RouteRetryOutcome>>>,
     pub dead_letter_outcomes: Arc<Mutex<Vec<RouteDeadLetterOutcome>>>,
+    pub terminal_write_failures: Arc<Mutex<Vec<RouteDeadLetterOutcome>>>,
 }
 
 impl RouteQueueMetrics for RecordingRetryMetrics {
@@ -28,5 +29,12 @@ impl RouteQueueMetrics for RecordingRetryMetrics {
             .lock()
             .expect("dead-letter metrics mutex")
             .push(outcome);
+    }
+
+    fn observe_terminal_write_failure(&self, reason: RouteDeadLetterOutcome) {
+        self.terminal_write_failures
+            .lock()
+            .expect("terminal-write metrics mutex")
+            .push(reason);
     }
 }
