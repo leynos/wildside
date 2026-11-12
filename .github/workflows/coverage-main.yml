@@ -5,10 +5,10 @@ name: Coverage (main)
 # workflow in the repository that talks to CodeScene at all: pull requests
 # generate coverage in ci.yml's `coverage` job and ratchet it, and reach
 # CodeScene not at all. This workflow advances the baseline they ratchet
-# against: caches saved on main are readable by every pull-request run, so the
-# baseline written here is the one those checks compare against.
+# against, through `coverage-baseline`: caches saved on main by an Ubicloud
+# job are readable by every Ubicloud pull-request run.
 #
-# This job is the single writer of the Cargo registry, coverage-tool,
+# `coverage-warmup` is the single writer of the Cargo registry, coverage-tool,
 # PostgreSQL embedded, and pg_worker cache keys. ci.yml restores all four and
 # never saves them, so no two jobs race to reserve the same key.
 #
@@ -35,14 +35,13 @@ permissions:
   contents: read
 
 jobs:
+  # Measures coverage and uploads it to CodeScene on a GitHub-hosted runner,
+  # which is free on a public repository. It saves no cache and no ratchet
+  # baseline: a hosted runner writes GitHub's cache store, which the Ubicloud
+  # pull-request lanes never read. It hands the figures on as an artefact for
+  # `coverage-baseline`, and `coverage-warmup` below owns every cache key.
   coverage-upload:
-    # Four vCPU, as for `ci.yml`'s `coverage` job, whose work this lane
-    # repeats on a push to `main`: 8m15s warm and 17m02s cold at 1.46 to
-    # 1.70 busy cores on average, peak memory 4.0 GiB (runs 39038438142 and
-    # 39061927189 in leynos/wildside). This lane adds the upload, which
-    # reached 522 s of work outside the coverage step on run 33921794186; the
-    # 120 minute ceiling and 5,400 s watchdog below are unchanged.
-    runs-on: ubicloud-standard-4
+    runs-on: ubuntu-24.04
     # The CodeScene token lives in this environment, whose deployment policy
     # admits `main` alone; the codescene environment contract holds it to
     # this job.
@@ -50,6 +49,149 @@ jobs:
     # Above the 5,400 s cargo watchdog below plus the work either side of
     # the coverage step, which reached 522 s on run 33921794186. At 90
     # minutes the ceiling equalled the watchdog exactly.
+    timeout-minutes: 120
+    env:
+      PG_VERSION: "16.10.0"
+      # See ci.yml's coverage job: raise the per-invocation cargo
+      # wall-clock cap above the repo's 60-minute nextest global-timeout.
+      RUN_RUST_CARGO_WAIT_TIMEOUT: '5400'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        id: setup-rust
+        uses: leynos/shared-actions/.github/actions/setup-rust@0eabb6bc07148981de5da395e30cd78d83f5c7c2
+        with:
+          cache-provider: external
+          # A hosted runner's compiler cache is GitHub's store, so `ubicloud`
+          # would fail closed here.
+          expect-cache: any
+      - name: Install pg_worker binary
+        env:
+          # cargo-binstall resolves the release archive through the GitHub
+          # API, which is rate-limited hard when unauthenticated.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make prepare-pg-worker
+      - name: Warm PostgreSQL embedded binary cache
+        env:
+          # Increase GitHub API rate limits for postgresql_embedded downloads.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin the embedded PostgreSQL version so postgresql_archive skips
+          # release-listing queries; the "=" prefix requests an exact match.
+          POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
+          POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
+        run: bash scripts/warm-pg-embedded-cache.sh
+      - name: Fetch dependencies
+        # Tests start their own cargo offline; fetch once so none resolves cold.
+        run: cargo fetch --locked
+      - name: Generate Rust coverage
+        uses: leynos/shared-actions/.github/actions/generate-coverage@f84a7def5646a6fc7ba77c1f486906f66a0fed96
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
+          POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
+          # Keep backend selection explicit for strict PG_TEST_BACKEND validation.
+          PG_TEST_BACKEND: postgresql_embedded
+          # Stable superuser password for the shared embedded cluster. Test
+          # support no longer sets this in-process (issue #464), so the runner
+          # composes it; a random per-process password would make later test
+          # binaries fail with `28P01 password authentication failed`.
+          PG_PASSWORD: wildside_embedded_test
+          # Root-path bootstrap requires the worker binary for privilege demotion.
+          PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
+        with:
+          # Force Rust-only coverage: the repo's root pyproject.toml is
+          # tooling-only (no [project] table), so auto-detection would classify
+          # the repo as mixed and reject lcov. See leynos/shared-actions#373.
+          language: rust
+          output-path: lcov.info
+          format: lcov
+          # nextest is required: .config/nextest.toml serializes the
+          # embedded-Postgres test binaries via the pg-embed test-group.
+          use-cargo-nextest: 'true'
+          # Mirror ci.yml's coverage job (all features except pagination's
+          # trybuild-tests, which the coverage nextest timeout would kill).
+          features: example-data metrics test-support
+          with-ratchet: 'true'
+          # No baseline is read or saved here; the figures travel to
+          # `coverage-baseline` as an artefact.
+          publish-baseline: never
+          baseline-artefact-name: coverage-baseline-handover
+          cache-provider: external
+      - name: Check CodeScene token availability
+        # Publishes whether the token exists, and nothing else. The token
+        # stays out of every `env` on this job: the upload is a composite
+        # action, and a composite action's nested steps inherit the calling
+        # step's environment, so a token placed there reaches every one of
+        # them. A fork's push has no secrets, so this reads false there.
+        id: codescene_token
+        run: echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+      - name: Upload coverage data to CodeScene
+        # The ref clause is not redundant with the push filter above.
+        # `workflow_dispatch` is mandatory here, and a dispatch can be run
+        # from any branch, so without this a feature branch's coverage would
+        # be uploaded as the trunk's.
+        if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@f84a7def5646a6fc7ba77c1f486906f66a0fed96
+        with:
+          # mode defaults to "upload", which is the only mode this estate
+          # uses: under CV-005 no pull-request lane talks to CodeScene, so
+          # `mode: check` has no caller. CodeScene infers project 70675
+          # from the git remote, so no project-url is needed.
+          format: lcov
+          access-token: ${{ secrets.CS_ACCESS_TOKEN }}
+
+      - name: Record compiler-cache effectiveness
+        # A server that fell back (setup-rust's sccache-status) never started and
+        # has no statistics; with no server `sccache --show-stats` prints empty
+        # defaults, which would read as a broken integration.
+        if: always() && steps.setup-rust.outputs.sccache-status != 'fallback'
+        shell: bash
+        env:
+          SCCACHE_BACKEND: ${{ steps.setup-rust.outputs.cache-backend }}
+        run: |
+          set -euo pipefail
+          fence='```'
+          # This step runs with always(), so it can be reached when the job
+          # failed before setup-rust installed sccache. Report nothing rather
+          # than adding a second red step that buries the real cause.
+          if ! command -v sccache >/dev/null 2>&1; then
+            echo 'sccache is not installed; skipping compiler-cache statistics.'
+            exit 0
+          fi
+          printf 'backend: %s\n' "${SCCACHE_BACKEND}"
+          sccache --show-stats | tee sccache-stats.txt
+          {
+            printf '### sccache\n\n- backend: %s\n\n%s text\n' "${SCCACHE_BACKEND}" "$fence"
+            cat sccache-stats.txt
+            printf '%s\n' "$fence"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Checks the handed-over figures against the stored baseline and saves them
+  # under the key the pull-request ratchet restores. It runs on Ubicloud, the
+  # cache store those lanes read, compiles nothing, and runs only when
+  # `coverage-upload` passed, so a failed run never advances the baseline.
+  coverage-baseline:
+    needs: coverage-upload
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Publish the ratchet baseline
+        uses: leynos/shared-actions/.github/actions/publish-coverage-baseline@f84a7def5646a6fc7ba77c1f486906f66a0fed96
+        with:
+          artefact-name: coverage-baseline-handover
+
+  # Compiles the instrumented tests the pull-request lane builds, without
+  # running them, so that lane's compiler-cache reads hit. It depends on
+  # nothing: a failing test is no reason to leave the cache cold.
+  coverage-warmup:
+    # Four vCPU, as for `ci.yml`'s `coverage` job, whose build it repeats on a
+    # push to `main`. The 120 minute ceiling and 5,400 s watchdog below are
+    # unchanged from the job this one replaces.
+    runs-on: ubicloud-standard-4
     timeout-minutes: 120
     env:
       PG_VERSION: "16.10.0"
@@ -69,7 +211,7 @@ jobs:
           # workflow one, so it is read here in the shell.
           RUNNER_SCOPE: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}
           CARGO_LOCK_HASH: ${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
-          SHARED_ACTIONS_PIN: 5a99aed78ce68dcebd3052b75c31e6f173162b1e
+          SHARED_ACTIONS_PIN: f84a7def5646a6fc7ba77c1f486906f66a0fed96
           # The Makefile pins pg-embed-setup-unpriv, whose pg_worker binary
           # lands in the cargo bin directory this archive carries.
           MAKEFILE_HASH: ${{ hashFiles('Makefile') }}
@@ -125,7 +267,7 @@ jobs:
 
       - name: Install Rust toolchain
         id: setup-rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@5a99aed78ce68dcebd3052b75c31e6f173162b1e
+        uses: leynos/shared-actions/.github/actions/setup-rust@0eabb6bc07148981de5da395e30cd78d83f5c7c2
         with:
           # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
           cache-provider: external
@@ -152,59 +294,25 @@ jobs:
       - name: Fetch dependencies
         # Tests start their own cargo offline; fetch once so none resolves cold.
         run: cargo fetch --locked
-      - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
+      - name: Compile the instrumented tests
+        uses: leynos/shared-actions/.github/actions/generate-coverage@f84a7def5646a6fc7ba77c1f486906f66a0fed96
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
           POSTGRESQL_RELEASES_URL: https://github.com/theseus-rs/postgresql-binaries
-          # Keep backend selection explicit for strict PG_TEST_BACKEND validation.
           PG_TEST_BACKEND: postgresql_embedded
-          # Stable superuser password for the shared embedded cluster. Test
-          # support no longer sets this in-process (issue #464), so the runner
-          # composes it; a random per-process password would make later test
-          # binaries fail with `28P01 password authentication failed`.
           PG_PASSWORD: wildside_embedded_test
-          # Root-path bootstrap requires the worker binary for privilege demotion.
           PG_EMBEDDED_WORKER: ${{ github.workspace }}/target/pg_worker
         with:
-          # Force Rust-only coverage: the repo's root pyproject.toml is
-          # tooling-only (no [project] table), so auto-detection would classify
-          # the repo as mixed and reject lcov. See leynos/shared-actions#373.
           language: rust
           output-path: lcov.info
           format: lcov
-          # nextest is required: .config/nextest.toml serializes the
-          # embedded-Postgres test binaries via the pg-embed test-group.
           use-cargo-nextest: 'true'
-          # Mirror ci.yml's coverage job (all features except pagination's
-          # trybuild-tests, which the coverage nextest timeout would kill).
+          # The same selection as ci.yml's coverage job, so the compiler-cache
+          # keys match.
           features: example-data metrics test-support
-          with-ratchet: 'true'
+          build-only: 'true'
           cache-provider: external
-      - name: Check CodeScene token availability
-        # Publishes whether the token exists, and nothing else. The token
-        # stays out of every `env` on this job: the upload is a composite
-        # action, and a composite action's nested steps inherit the calling
-        # step's environment, so a token placed there reaches every one of
-        # them. A fork's push has no secrets, so this reads false there.
-        id: codescene_token
-        run: echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
-      - name: Upload coverage data to CodeScene
-        # The ref clause is not redundant with the push filter above.
-        # `workflow_dispatch` is mandatory here, and a dispatch can be run
-        # from any branch, so without this a feature branch's coverage would
-        # be uploaded as the trunk's and become the baseline every pull
-        # request is ratcheted against.
-        if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
-        with:
-          # mode defaults to "upload", which is the only mode this estate
-          # uses: under CV-005 no pull-request lane talks to CodeScene, so
-          # `mode: check` has no caller. CodeScene infers project 70675
-          # from the git remote, so no project-url is needed.
-          format: lcov
-          access-token: ${{ secrets.CS_ACCESS_TOKEN }}
 
       # Trunk is the only cache writer. Every save below is this key's sole
       # owner, so a pull request restores a generation that exactly one job

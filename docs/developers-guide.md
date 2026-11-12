@@ -252,8 +252,24 @@ run through `make test-workflow-contracts`.
 ### Job placement
 
 Build and test work runs on the managed `ubicloud-standard-4` label: `ci.yml`'s
-`build` and `coverage` jobs, and `coverage-main.yml`'s `coverage-upload` job.
+`build` and `coverage` jobs, and `coverage-main.yml`'s `coverage-warmup` job.
 Every managed job declares `timeout-minutes`.
+
+`coverage-main.yml` runs on every push to `main` as three jobs:
+
+- `coverage-upload` measures coverage and uploads it to CodeScene on a
+  GitHub-hosted `ubuntu-24.04` runner, which is free on a public repository. It
+  saves no cache and no baseline (`publish-baseline: never`), because a hosted
+  runner writes GitHub's cache store and the Ubicloud pull-request lanes never
+  read it. It hands the figures on as the `coverage-baseline-handover` artefact.
+- `coverage-baseline` runs on `ubicloud-standard-2`, only when `coverage-upload`
+  passed. It checks the figures against the stored baseline and saves them
+  under the key the pull-request ratchet restores. It compiles nothing.
+- `coverage-warmup` runs on `ubicloud-standard-4`, the lane's own shape, and
+  depends on nothing. It compiles the instrumented tests without running them
+  (`build-only`, with the lane's feature selection) so the lane's
+  compiler-cache reads hit, and it is the only writer of the Cargo registry,
+  coverage-tool and PostgreSQL archives below.
 
 A pull request from a fork cannot obtain an Ubicloud runner, so a job that
 named one unconditionally would have no runner at all and would fail for a
@@ -413,9 +429,10 @@ PR 523) with three inputs and an id:
 - `cache-provider: external`, because this job owns `~/.cargo/registry`,
   `~/.cargo/bin` and the uv layers;
 - `expect-cache`: `any` for the two `ci.yml` jobs, which have a fork arm on a
-  GitHub-hosted runner, and `ubicloud` for `coverage-main.yml`'s
-  `coverage-upload`, which runs only on the managed runner and fails if the
-  proxy is missing;
+  GitHub-hosted runner, and for `coverage-main.yml`'s `coverage-upload`, which
+  runs only on a hosted runner where `ubicloud` would fail closed; and
+  `ubicloud` for its `coverage-warmup`, which runs only on the managed runner
+  and fails if the proxy is missing;
 - `use-sccache` left at its default of `true`;
 - `id: setup-rust`, which the statistics step reads outputs through.
 
@@ -465,9 +482,9 @@ inputs its key is built from.
 | Workspace `node_modules`     | `build`                 | the pnpm and Bun lock hashes         |
 | Bun download cache           | `build`                 | both Bun lock hashes                 |
 | Global tools                 | `build`                 | tool pins, `Makefile`, `dylint.toml` |
-| Cargo registry and Git index | `coverage-upload`       | `rust-toolchain.toml`, `Cargo.lock`  |
-| Coverage-lane tools          | `coverage-upload`       | shared-actions pin, `Makefile`       |
-| Embedded PostgreSQL binaries | `coverage-upload`       | the PostgreSQL version               |
+| Cargo registry and Git index | `coverage-warmup`       | `rust-toolchain.toml`, `Cargo.lock`  |
+| Coverage-lane tools          | `coverage-warmup`       | shared-actions pin, `Makefile`       |
+| Embedded PostgreSQL binaries | `coverage-warmup`       | the PostgreSQL version               |
 
 The archives above cover these paths:
 

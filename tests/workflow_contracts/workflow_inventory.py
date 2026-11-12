@@ -29,16 +29,25 @@ CACHE_ACTION_PATHS = ("actions/cache", "actions/cache/restore", "actions/cache/s
 
 #: Managed-runner labels this repository intends to use. Every label here must
 #: also be registered with actionlint.
-MANAGED_RUNNER_LABELS = frozenset({"ubicloud-standard-4"})
-GITHUB_HOSTED_LABELS = frozenset({"ubuntu-latest"})
+MANAGED_RUNNER_LABELS = frozenset({"ubicloud-standard-2", "ubicloud-standard-4"})
+GITHUB_HOSTED_LABELS = frozenset({"ubuntu-latest", "ubuntu-24.04"})
 
-#: Jobs that build or test the product. Everything else is administrative,
-#: scheduled, or API-bound and belongs on a GitHub-hosted runner.
+#: Jobs that build or test the product on a managed runner. Everything else is
+#: administrative, scheduled, or API-bound and belongs on a GitHub-hosted
+#: runner, except the jobs named below.
 BUILD_JOBS = frozenset({
     ("ci.yml", "build"),
     ("ci.yml", "coverage"),
-    ("coverage-main.yml", "coverage-upload"),
+    ("coverage-main.yml", "coverage-warmup"),
 })
+
+#: The main-branch coverage measurement. It runs on a GitHub-hosted runner,
+#: where compute is free, and saves no cache the managed runners read.
+HOSTED_COVERAGE_JOB = ("coverage-main.yml", "coverage-upload")
+
+#: The job that checks and saves the ratchet baseline on the managed runners'
+#: cache store. It compiles nothing, so it takes the smallest managed size.
+BASELINE_JOB = ("coverage-main.yml", "coverage-baseline")
 
 _CACHE_KEY_ASSIGNMENT = re.compile(
     r"printf '(?P<name>[A-Z0-9_]+)=(?P<prefix>[a-z0-9-]+?)-%s", re.MULTILINE
@@ -190,8 +199,8 @@ def workflow_jobs(filename: str) -> list[tuple[str, dict[str, typ.Any]]]:
 
     Examples
     --------
-    >>> [job_id for job_id, _ in workflow_jobs("coverage-main.yml")]
-    ['coverage-upload']
+    >>> [job_id for job_id, _ in workflow_jobs("ci.yml")]
+    ['build', 'coverage']
     """
     jobs = load_workflow(filename).get("jobs", {})
     if not isinstance(jobs, dict):
@@ -248,7 +257,7 @@ def cache_key_prefixes(job: dict[str, typ.Any]) -> dict[str, str]:
 
     Examples
     --------
-    >>> job = load_workflow("coverage-main.yml")["jobs"]["coverage-upload"]
+    >>> job = load_workflow("coverage-main.yml")["jobs"]["coverage-warmup"]
     >>> cache_key_prefixes(job)["CARGO_CACHE_KEY"]
     'cargo-v1'
     """

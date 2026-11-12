@@ -59,7 +59,10 @@ from document_strings import strings_in
 
 
 def _generate_coverage_inputs(filename: str) -> list[dict[str, object]]:
-    """Return the inputs of every `generate-coverage` step in one workflow.
+    """Return the inputs of every measuring `generate-coverage` step in a workflow.
+
+    A `build-only` step compiles the instrumented tests without measuring
+    anything, so it is not a coverage generation.
 
     Parameters
     ----------
@@ -78,7 +81,10 @@ def _generate_coverage_inputs(filename: str) -> list[dict[str, object]]:
             if GENERATE_COVERAGE not in inventory.step_action(step):
                 continue
             options = step.get("with")
-            found.append(options if isinstance(options, dict) else {})
+            options = options if isinstance(options, dict) else {}
+            if options.get("build-only") == "true":
+                continue
+            found.append(options)
     return found
 
 
