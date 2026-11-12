@@ -70,6 +70,8 @@ impl RouteQueueMetrics for RecordingMetrics {
     }
 
     fn observe_dead_letter(&self, _outcome: RouteDeadLetterOutcome) {}
+
+    fn observe_terminal_write_failure(&self, _reason: RouteDeadLetterOutcome) {}
 }
 
 /// Scheduling state the wrapper must leave untouched when it refuses to write.

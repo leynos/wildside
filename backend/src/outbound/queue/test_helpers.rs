@@ -99,6 +99,7 @@ pub struct RecordingRouteQueueMetrics {
     observations: Arc<Mutex<Vec<(RouteQueueOutcome, Duration)>>>,
     retry_observations: Arc<Mutex<Vec<RouteRetryOutcome>>>,
     dead_letter_observations: Arc<Mutex<Vec<RouteDeadLetterOutcome>>>,
+    terminal_write_failures: Arc<Mutex<Vec<RouteDeadLetterOutcome>>>,
 }
 
 impl RecordingRouteQueueMetrics {
@@ -143,6 +144,21 @@ impl RecordingRouteQueueMetrics {
             .map(|guard| guard.clone())
             .map_err(|error| format!("failed to lock dead-letter metrics: {error}"))
     }
+
+    /// Return terminal-write failures recorded by this test recorder.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// let failures = metrics.terminal_write_failures()?;
+    /// assert_eq!(failures, [RouteDeadLetterOutcome::Fatal]);
+    /// ```
+    pub fn terminal_write_failures(&self) -> Result<Vec<RouteDeadLetterOutcome>, String> {
+        self.terminal_write_failures
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|error| format!("failed to lock terminal-write metrics: {error}"))
+    }
 }
 
 impl RouteQueueMetrics for RecordingRouteQueueMetrics {
@@ -168,5 +184,13 @@ impl RouteQueueMetrics for RecordingRouteQueueMetrics {
             Err(error) => panic!("failed to lock dead-letter metrics: {error}"),
         };
         observations.push(outcome);
+    }
+
+    fn observe_terminal_write_failure(&self, reason: RouteDeadLetterOutcome) {
+        let mut observations = match self.terminal_write_failures.lock() {
+            Ok(observations) => observations,
+            Err(error) => panic!("failed to lock terminal-write metrics: {error}"),
+        };
+        observations.push(reason);
     }
 }
