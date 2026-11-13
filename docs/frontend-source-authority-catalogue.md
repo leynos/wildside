@@ -48,9 +48,9 @@ Follow-up labels use these values: `update design document`,
 - `spec/openapi.json` is authoritative for implemented REST wire contracts.
 - `spec/asyncapi.yaml` is authoritative for implemented WebSocket and event
   wire contracts.
-- `docs/adr-001-websockets-on-actix-ws.md` is authoritative for the accepted
-  backend WebSocket adapter decision. It is supporting, not authoritative, for
-  front-end event semantics.
+- `docs/adrs/adr-0001-websockets-on-actix-ws.md` is authoritative for the
+  accepted backend WebSocket adapter decision. It is supporting, not
+  authoritative, for front-end event semantics.
 
 ## Topic catalogue
 
@@ -254,7 +254,7 @@ implementation can cite implemented wire contracts.
 
 Authority: `spec/asyncapi.yaml` (`authoritative`).
 
-Supporting sources: `docs/adr-001-websockets-on-actix-ws.md`,
+Supporting sources: `docs/adrs/adr-0001-websockets-on-actix-ws.md`,
 `docs/wildside-pwa-design.md`, and `docs/wildside-ux-state-graph-v0.1.json`
 (`supporting`).
 
@@ -388,8 +388,8 @@ only in `docs/frontend-roadmap.md`.
 Authority: `docs/wildside-pwa-data-model.md` (`authoritative`).
 
 Supporting sources: `docs/wildside-backend-architecture.md`,
-`docs/adr-001-websockets-on-actix-ws.md`, and the `hexagonal-architecture` skill
-(`supporting`).
+`docs/adrs/adr-0001-websockets-on-actix-ws.md`, and the
+`hexagonal-architecture` skill (`supporting`).
 
 Current status: domain types and ports remain framework-independent, adapters
 translate at boundaries, and front-end code consumes backend contracts through

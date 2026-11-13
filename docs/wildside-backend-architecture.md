@@ -1144,7 +1144,8 @@ sequenceDiagram
 > years) and read at application start through the
 > `crate::config::idempotency` adapter's `idempotency_config_from_env`, which
 > takes an injected `IdempotencyEnv` (see
-> [ADR 002](adr-002-environment-seam-taxonomy.md)). The domain holds only the
+> [ADR 002](adrs/adr-0002-environment-seam-taxonomy.md)). The domain holds only
+> the
 > pure `IdempotencyConfig` value object. The domain defines `MutationType` with
 > `FromStr`, `Display`, and serde traits for consistent serialization. The
 > Diesel adapter `DieselIdempotencyRepository` stores the mutation type as a

@@ -491,7 +491,7 @@ Add and update documentation while the implementation details are fresh:
 - Add an Architectural Decision Record only if implementation makes a
   long-lived architectural choice not adequately captured by the design doc. If
   needed, use the next `docs/adr-NNN-*.md` number after
-  `docs/adr-001-websockets-on-actix-ws.md`.
+  `docs/adrs/adr-0001-websockets-on-actix-ws.md`.
 - Update `docs/backend-roadmap.md` by adding a deployment coordination task
   under section 7 if no suitable task exists. Mark it done only after all gates
   pass.

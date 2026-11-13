@@ -747,8 +747,9 @@ Supporting sources cross-referenced during audit include
 `docs/pure-accessible-and-localizable-react-components.md`,
 `docs/high-velocity-accessibility-first-component-testing.md`,
 `docs/enforcing-semantic-tailwind-best-practice.md`,
-`docs/react-tailwind-with-bun.md`, `docs/adr-001-websockets-on-actix-ws.md`,
-and the per-topic notes in `docs/frontend-source-authority-catalogue.md`.
+`docs/react-tailwind-with-bun.md`,
+`docs/adrs/adr-0001-websockets-on-actix-ws.md`, and the per-topic notes in
+`docs/frontend-source-authority-catalogue.md`.
 
 The Wildside Makefile exposes the gates that apply to documentation-only
 changes: `make check-fmt`, `make lint`, `make markdownlint`, `make nixie`, and
@@ -1027,7 +1028,7 @@ Quality criteria (what "done" means):
   ships presentation-layer fields (CSS class names, gradients, pre-rendered
   HTML), which violates domain purity, and (b) any front-end reliance on
   backend WebSocket framing details beyond what
-  `docs/adr-001-websockets-on-actix-ws.md` exposes as an inbound adapter
+  `docs/adrs/adr-0001-websockets-on-actix-ws.md` exposes as an inbound adapter
   contract, which violates adapter isolation.
 
 Quality method (how we check):
@@ -1128,7 +1129,7 @@ exhaustive list):
   `docs/high-velocity-accessibility-first-component-testing.md`,
   `docs/enforcing-semantic-tailwind-best-practice.md` — supporting documents
   cross-referenced during audit.
-- `docs/adr-001-websockets-on-actix-ws.md` — the only existing ADR that
+- `docs/adrs/adr-0001-websockets-on-actix-ws.md` — the only existing ADR that
   affects the audit boundary.
 
 ## Revision note

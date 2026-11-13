@@ -1413,8 +1413,8 @@ library that reads the environment itself, the runner supplies it — see the
 coverage steps. Nothing in `backend/tests/` needs a process-wide environment
 lock, and no nextest group exists to protect environment state.
 
-`docs/adr-002-environment-seam-taxonomy.md` records the decision and the full
-list of sanctioned roots. Three contract targets guard the mechanism:
+`docs/adrs/adr-0002-environment-seam-taxonomy.md` records the decision and the
+full list of sanctioned roots. Three contract targets guard the mechanism:
 `backend/tests/environment_policy_contract.rs` asserts what the repository
 declares, `backend/tests/environment_policy_lint.rs` runs `clippy-driver` over
 probe sources to prove those declarations actually fire, and
