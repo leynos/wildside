@@ -2008,21 +2008,25 @@ change is reverted by restoring the two caret requirements.
   use the `/tmp/rebase-final-b212dc13-` prefix. Lint reported existing
   non-fatal OpenAPI and workflow warnings. The implementation is locally
   validated; publication and hosted review remain pending.
-- [ ] (2026-10-28 Europe/Berlin) The published head `186b80c` received one
-  critical CodeScene finding in the shared BDD worker and advisory findings in
-  the retry constructor, dead-letter scenario state, and environment-policy
-  contract. The candidate separates bounded worker observation, groups manifest
-  inputs, shares repeated scenario operations, and splits constructor
-  validation while preserving error precedence. Focused local CodeScene review
-  reports no findings in those files. The first focused test build failed with
-  `E0583` because the moved integration-test module needed an explicit path;
-  that path is now specified. The focused rerun passed all 108 selected policy,
-  environment-contract, and PostgreSQL BDD tests (887 unselected). Evidence:
+- [x] (2026-10-28 Europe/Berlin; closed 2026-11-13) The published head
+  `186b80c` received one critical CodeScene finding in the shared BDD worker
+  and advisory findings in the retry constructor, dead-letter scenario state,
+  and environment-policy contract. The candidate separates bounded worker
+  observation, groups manifest inputs, shares repeated scenario operations, and
+  splits constructor validation while preserving error precedence. Focused
+  local CodeScene review reports no findings in those files. The first focused
+  test build failed with `E0583` because the moved integration-test module
+  needed an explicit path; that path is now specified. The focused rerun passed
+  all 108 selected policy, environment-contract, and PostgreSQL BDD tests (887
+  unselected). Evidence:
   `/tmp/test-codescene-focused2-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
-  Full gates, a complete delta review, and hosted reassessment remain pending.
-  The hosted CI Audit step failed on `qs` and `deepmerge` advisories inherited
-  from `main`; separate prerequisite PR #567 already owns that audit work and
-  is blocked on its exception's tracking and removal-condition checks.
+  Closed later: the full gates, the complete delta review and the hosted
+  reassessment this entry left pending all happened, and every gate is green on
+  the current head. The audit work it named as blocked on prerequisite #567
+  landed: #567 merged as `9206b8f` on 2026-10-31, #600/#603 cleared the two
+  `main` advisories, and #615 re-pinned `basic-ftp` to 6.2.6 for
+  `GHSA-5pm8-86m8-9m6r`. The entry stays as the historical record of the
+  CodeScene repair; it is not outstanding work.
 - [x] (2026-10-28 Europe/Berlin) Drafted ADRs 003 and 004, updated the queue
   architecture, developer guidance, roadmap, and documentation index, and added
   an operator runbook. Its four SQL blocks were exercised against an isolated
@@ -3447,8 +3451,9 @@ boundaries with an independently built reference. The generator now places up
 to 280 malformed rows, which spans more than two listing batches, spaces the
 valid rows by the average malformed run so boundaries fall between them, and
 sorts the reference by stored age instead of relying on insertion order. It
-still asserts that every skipped row is byte-identical after the listing. The
-single case completes in about 50 seconds against embedded PostgreSQL.
+still asserts that every skipped row keeps every column the snapshot query
+reads; the comparison is over those columns, not over a byte image of the row.
+The single case completes in about 50 seconds against embedded PostgreSQL.
 
 The developer-documentation row asked for two corrections. The canary
 description now says the production-clock acceptance case compares
@@ -3531,3 +3536,106 @@ command-line variable, so it re-exports the pin unchanged; CI has no global
 The dependency-pin prerequisite merged as `0e2dadf`, and its post-merge `main`
 runs both concluded `success` on that exact SHA: `ci` run 43370215638 and
 `Coverage (main)` run 43370215579.
+
+### Reconciliation of the 2026-11-13 review reply
+
+CodeRabbit answered the row reconciliation against `2280231` with nine
+re-assessments: three concrete documentation defects, two partial test and
+observability gaps, two accepted design decisions, and one request for a fresh
+docstring-coverage result. The concrete defects were real and are repaired here.
+
+- User-facing documentation. The guide said `exhausted` means the delivery
+  count reached the policy's `max_attempts`. `decide_retry_wrapper_action` also
+  terminates a retryable failure once the attempt reaches the `max_attempts`
+  stored on the job, so the guide now names both limits and the lower one wins.
+  The paragraph on changing the policy gained the matching case: a row whose
+  stored cap is below the current policy limit dead-letters at its own cap, so
+  raising the policy does not revive it.
+- Module-level documentation. `retry_persistence.rs` claimed a metric and a log
+  line for every decision. `record_missing_retry_metadata` records no metric
+  when the decision is terminal and the delivery identity is missing or
+  disagrees, because no write was attempted; the module doc now says exactly
+  that and keeps the schedule-failure metric it does record.
+- Developer documentation. The unchecked 2026-10-28 progress entry still
+  reported gates, a delta review and a hosted reassessment as pending. It is
+  marked closed with its outcome recorded, including that prerequisite #567
+  merged as `9206b8f` and that #600/#603 and #615 cleared the advisories it was
+  waiting on.
+- Property coverage. The generated case can shrink to a mixture with no listed
+  row above a batch boundary, so a new deterministic case,
+  `listing_crosses_two_batch_boundaries`, fixes the shape: 250 malformed rows
+  across three 100-row batches with four valid rows at positions 90, 131, 182
+  and 233, so the boundaries at 100 and 200 each fall between listed rows. It
+  checks the full listing and a truncated limit against an independently
+  ordered reference. The plan's claim that the skipped rows are byte-identical
+  is corrected: the assertion compares every column the snapshot query reads.
+- Observability. The runbook now states that the backlog count is collected by
+  the monitoring system's scheduled query rather than exported by the process,
+  and why: the crate has no background sampler, and serving the aggregate from
+  the metrics registry would run it on every scrape. The three counters remain
+  the scraped application signals, and the runbook names the collection step as
+  part of deploying the runbook.
+
+Two requests are rebutted rather than actioned.
+
+- Docstring Coverage asks for a fresh diff-scoped result from CodeRabbit's own
+  check. That check is not one of this repository's gates. The enforced
+  contract is `missing_docs = "deny"` for Rust plus
+  `interrogate --fail-under 100` for the Python under `scripts` and `tests`,
+  both inside `make lint`, which has passed on this head. There is no local
+  equivalent of the saved check to run, so the row cannot be closed locally;
+  the disposition is the repository policy plus its passing gate.
+- Testing (Overall) asks for a negative control built from separate
+  read-committed snapshots. The adapter exposes no between-batch seam, which
+  the reply accepts, and a control with no row-set change between batches
+  cannot distinguish the isolation levels either. The deterministic boundary
+  case above exercises the page walk with listed rows on both sides of two
+  boundaries; the isolation level itself is a single `begin_with` call whose
+  statement is a constant. Adding a production seam purely to fail a control is
+  declined; the structural argument and the boundary case are the evidence this
+  design admits.
+
+The Unit Architecture and Domain Architecture rows are recorded as accepted
+design decisions by the reviewer, so they need no change: the database clock
+preserves immediate requeue eligibility, and the effective budget is decided
+once in the adapter's pure decision function.
+
+### Gate runs of the 2026-11-13 repairs
+
+Two runs cover this repair set, both against `2280231` plus the five modified
+files. Every gate was started once per run and each make exit status was read
+from a sidecar rather than from the log tail.
+
+The first run started at 09:47:13 and covered all nine gates in repository
+order. Eight were green. `check-fmt` exited 2 because `mdtablefix --check`
+wanted the paragraph wrapping of the two documents this repair edits
+(`docs/users-guide.md` `+3 -3`, this plan `+7 -8`), and the failure occurred
+inside `check-fmt-markdown`, so that target's `cargo fmt`, Biome and Ruff
+stages had not run.
+
+- `spelling`, 16s; `markdownlint`, 19s, 133 files and no errors; `nixie`, 3s.
+- `lint`, 2496s, including `interrogate` at `--fail-under 100` and
+  `checkmake Makefile`.
+- `typecheck`, 5s: `ty` and the three `tsc --noEmit` projects were clean.
+- `test`, 2604s: nextest ran 2673 tests, 2673 passed and 4 were skipped, so the
+  new case is in the suite; `listing_crosses_two_batch_boundaries` passed in
+  6.5s and `listing_is_the_valid_prefix_of_generated_rows` in 48.7s. Both
+  trybuild suites passed (1134s and 33s), vitest 92 tests, Bun 170, the token
+  package 3, workflow contracts 658 with 1 skipped, scripts 115 with 13
+  skipped, and the action linter 14.
+- `audit`, 6s, 17 allowed advisory warnings and no vulnerability; `openapi`,
+  709s, regenerating the specification identically and leaving the tree clean.
+
+`mdtablefix --in-place` then applied exactly that reflow, and a second run at
+11:31 re-gated the four Markdown-scoped targets:
+
+- `check-fmt`, 3s: `check-fmt-markdown` left 132 files unchanged and all three
+  `CHECK_FMT_CMD` stages then ran and passed — `cargo fmt --all -- --check`,
+  `biome ci` under the pinned 2.3.1, and `ruff format --check`.
+- `spelling`, 15s; `markdownlint`, 15s over 133 files with no errors; `nixie`,
+  6s.
+
+`lint` began 84 seconds before the reflow and the reflow touched only those two
+Markdown files, which no `lint` sub-target reads, so its result stands for the
+same Rust tree. `test`, `audit` and `openapi` all started after the reflow and
+therefore ran on the final content.

@@ -5,12 +5,14 @@
 //! current worker owns the row it attempts exactly one guarded write, and it
 //! writes nothing when the identity is missing or disagrees, or when the
 //! database guard refuses the update. Those attempts are the only *persistence*
-//! writes the wrapper can cause; it also records a metric and a log line for
-//! each decision, and those are deliberately not routed through this port. It
-//! depends on this small trait rather than the concrete
-//! [`PostgresRetryScheduler`] so the "at most one write per failure" contract
-//! stays testable with a recording double, mirroring how the queue provider is
-//! abstracted for the same reason.
+//! writes the wrapper can cause. It also logs every decision and records the
+//! metrics that describe a write outcome. A terminal decision whose delivery
+//! identity is missing or disagrees is the exception: it logs an error and
+//! records no metric, because no write was attempted. Logging and metrics are
+//! deliberately not routed through this port. It depends on this small trait
+//! rather than the concrete [`PostgresRetryScheduler`] so the "at most one
+//! write per failure" contract stays testable with a recording double,
+//! mirroring how the queue provider is abstracted for the same reason.
 //!
 //! The port has a single production implementation. Introduce another only if a
 //! second durable backing store is actually adopted; do not use it as a generic
