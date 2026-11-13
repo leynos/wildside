@@ -3492,3 +3492,42 @@ succeeds, the 41 focused retrying-handler and metrics unit tests pass, the
 strengthened property test passes, and `cs review` scores every changed Rust
 file 10.0 after `persist_terminal_failure` was split so it stays inside the
 CodeScene length and argument thresholds.
+
+### Full gate run of 2026-11-13
+
+The candidate gated here is `f281de7`, which merges `origin/main` at `0e2dadf`
+(the `basic-ftp` 6.2.6 pin, delivered as #615) into `39f7ad0` and therefore
+carries the 2026-11-12 repairs from `8f4deaf`. The merge itself resolved only
+`bun.lock`, `package.json` and `pnpm-lock.yaml`, nine insertions against nine
+deletions, so the Rust and documentation content is the tree that `8f4deaf`
+produced.
+
+All nine gates were run once each, in the repository's order, on that head.
+Each gate's make exit status was captured to a sidecar rather than taken from
+the log tail. Every gate exited 0.
+
+- `check-fmt`, 3s: Biome 2.3.1 from `node_modules/.bin`, the repo pin;
+  `mdtablefix` left 132 files unchanged.
+- `spelling`, 12s: the `typos-config-builder` gate was clean.
+- `markdownlint`, 14s: 133 files, no errors.
+- `nixie`, 3s: every diagram validated.
+- `lint`, 4863s: all sub-targets ran, including `interrogate` at
+  `--fail-under 100` and `checkmake Makefile`.
+- `typecheck`, 10s: `ty` and the three `tsc --noEmit` projects were clean.
+- `test`, 2946s: backend nextest 2672 passed and 4 skipped, both trybuild
+  suites passed, vitest 92 passed, Bun 170 passed, workflow contracts 658
+  passed, scripts 115 passed, lint-actions 14 passed.
+- `audit`, 20s: 17 allowed advisory warnings, all covered by the exception
+  ledger; the `basic-ftp` advisory is clear at 6.2.6, so no entry was added.
+- `openapi`, 869s: `openapi-dump` regenerated `spec/openapi.json` byte for
+  byte, leaving the tree clean.
+
+`check-fmt` and `lint` needed the local Biome override described in the
+repository notes, because `Makefile:29` exports a `PATH` that puts a
+developer-installed Biome ahead of the pinned one. The override is a make
+command-line variable, so it re-exports the pin unchanged; CI has no global
+`biome` and falls through to `bun x --package=@biomejs/biome@2.3.1`.
+
+The dependency-pin prerequisite merged as `0e2dadf`, and its post-merge `main`
+runs both concluded `success` on that exact SHA: `ci` run 43370215638 and
+`Coverage (main)` run 43370215579.
