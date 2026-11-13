@@ -187,8 +187,8 @@ introduces user-visible tool behaviour, which is outside the expected scope.
   roadmap item 0.1.1 instead of duplicating the phase-level plan.
 
 - Observation: only one ADR exists, and it is backend WebSocket transport
-  policy. Evidence: `docs/adr-001-websockets-on-actix-ws.md` is the only ADR
-  found under `docs/`. Impact: the catalogue will likely name several ADR
+  policy. Evidence: `docs/adrs/adr-0001-websockets-on-actix-ws.md` is the only
+  ADR found under `docs/`. Impact: the catalogue will likely name several ADR
   follow-ups rather than citing existing ADRs for front-end stack, local-first,
   accessibility, localization, and styling governance.
 
@@ -586,7 +586,7 @@ The catalogue must classify all required source files:
 `docs/v2a-front-end-stack.md`, `docs/wildside-pwa-design.md`,
 `docs/wildside-pwa-data-model.md`, `docs/wildside-ux-state-graph-v0.1.json`,
 `docs/sitemap.md`, `spec/openapi.json`, `spec/asyncapi.yaml`, and
-`docs/adr-001-websockets-on-actix-ws.md`.
+`docs/adrs/adr-0001-websockets-on-actix-ws.md`.
 
 The catalogue must signpost relevant supporting documentation and skills:
 `leta`, `rust-router`, `hexagonal-architecture`, `execplans`, Firecrawl,

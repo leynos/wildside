@@ -134,6 +134,6 @@ per-step defaults so an existing value still wins.
   domain layer.
 - Issue 434: replace environment-driven embedded PostgreSQL test support with
   explicit settings.
-- "Environment seams" in [developers' guide](developers-guide.md).
+- "Environment seams" in [developers' guide](../developers-guide.md).
 - Netsuke's equivalent record, which this ADR mirrors:
   <https://github.com/leynos/netsuke/blob/main/docs/adr-008-environment-seam-taxonomy.md>
