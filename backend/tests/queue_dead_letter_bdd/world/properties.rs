@@ -60,6 +60,24 @@ impl QueueDeadLetterWorld {
             .collect()
     }
 
+    /// Insert one valid dead row whose storage age is `age` seconds.
+    ///
+    /// The deterministic boundary case needs ages chosen to place listed rows
+    /// on both sides of known batch boundaries, so it seeds rows directly
+    /// rather than deriving ages from a stride.
+    fn insert_valid_dead_row_at(&self, age: i64) -> (DeadJobId, i64) {
+        let id = self.insert_job(JobSeed {
+            job_type: QUEUE_NAME,
+            status: "Failed",
+            attempts: 3,
+            max_attempts: Some(3),
+            reason: Some("exhausted"),
+            last_error: Some("boundary row"),
+            done_age_seconds: age,
+        });
+        (id, age)
+    }
+
     /// Insert malformed dead rows whose ages interleave with the valid ones.
     ///
     /// Both rejection branches are represented: an unparsable requeue count
@@ -94,8 +112,8 @@ proptest! {
     /// Scenario: a generated mixture of malformed and valid dead rows.
     ///
     /// Invariant: the listing is exactly the valid rows, newest first,
-    /// truncated to the limit, wherever the batch boundaries fall, and the
-    /// skipped rows are still exactly as they were stored.
+    /// truncated to the limit, wherever the batch boundaries fall, and every
+    /// column the snapshot reads on the skipped rows is unchanged.
     #[test]
     fn listing_is_the_valid_prefix_of_generated_rows(
         malformed_requeue_counts in 0usize..=140,
@@ -133,4 +151,40 @@ proptest! {
         let after: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();
         prop_assert_eq!(after, before, "listing must not modify the rows it skips");
     }
+}
+
+/// Scenario: a fixed mixture whose listed rows straddle two batch boundaries.
+///
+/// The generated cases above may shrink to a mixture with every listed row in
+/// one batch, so they cannot guarantee that the page walk is exercised with
+/// listed rows on both sides of more than one boundary. This case fixes the
+/// shape instead. Two populations of 125 malformed rows each span ages 5 to
+/// 1245, which fills three 100-row batches; the four valid rows land at
+/// positions 90, 131, 182 and 233, so the boundaries at 100 and 200 each fall
+/// between a pair of listed rows.
+///
+/// Invariant: the listing is those four rows newest first, truncated by the
+/// limit, and the rows it skips keep every column the snapshot reads.
+#[test]
+fn listing_crosses_two_batch_boundaries() {
+    let world = QueueDeadLetterWorld::new();
+    let malformed_ids = world.insert_interleaved_malformed_rows(125, 125);
+    let before: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();
+    let inserted: Vec<_> = [452_i64, 652, 902, 1152]
+        .into_iter()
+        .map(|age| world.insert_valid_dead_row_at(age))
+        .collect();
+    let newest_first: Vec<String> = inserted
+        .iter()
+        .map(|(id, _)| id.as_str().to_owned())
+        .collect();
+
+    world.list_dead(4);
+    assert_eq!(world.listed_ids(), newest_first);
+
+    world.list_dead(2);
+    assert_eq!(world.listed_ids(), newest_first[..2].to_vec());
+
+    let after: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();
+    assert_eq!(after, before, "listing must not modify the rows it skips");
 }

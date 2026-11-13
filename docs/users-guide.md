@@ -242,8 +242,10 @@ recovery an operator should consider:
 - `fatal` means the failure is not retryable at all, so the first delivery
   dead-letters the row however much budget remains. Requeuing it will usually
   fail again unless the underlying cause has been fixed.
-- `exhausted` means the attempt budget was spent: the delivery count reached
-  the policy's `max_attempts`. Requeuing it restores a fresh budget.
+- `exhausted` means the attempt budget was spent. A retryable failure ends the
+  row when the delivery count reaches either the policy's `max_attempts` or the
+  `max_attempts` stored on the job, whichever is lower. Requeuing it restores a
+  fresh budget.
 
 `list_dead` reports these as `DeadReason::Fatal` and `DeadReason::Exhausted`.
 Rows written before this reason was recorded, or with an unrecognized label,
@@ -316,7 +318,10 @@ keeps the `max_attempts` recorded when it was enqueued, and the new budget
 applies to jobs enqueued afterwards. The retry wrapper still applies the
 current policy on each failed delivery, so an older row with a larger stored
 cap is dead-lettered once the policy's limit is reached; when that terminating
-attempt is below the stored cap, the cap is lowered to it.
+attempt is below the stored cap, the cap is lowered to it. A row whose stored
+cap is below the current policy limit dead-letters at its own cap instead, so
+raising the policy does not revive a row that was enqueued with a smaller
+budget.
 
 Retry jitter comes from a `JitterSource`. Use
 `RetryingJobServiceConfig::with_jitter` to replace the default random source
