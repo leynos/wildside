@@ -146,6 +146,17 @@ Alert on that count crossing the level the team has agreed to act on, and on a
 rising rate of skipped-row warnings, which indicate metadata that no longer
 matches the schema. The listing limit below caps a page, not the backlog.
 
+The application does not export this count. Its metrics registry carries the
+three counters described above, which are scraped from the process, but the
+backlog is a database fact and the process has no background sampler: serving
+the count from the registry would run this aggregate over `apalis.jobs` on
+every scrape, so the scan cost would follow the scrape interval rather than the
+change rate. The collection point is therefore the monitoring system's own
+scheduled query, run on an interval the alerting owner sets, with its result
+plotted and alerted on like any other collected series. Creating that schedule
+is part of deploying this runbook, not part of the crate; until it exists the
+count is available only by running the query by hand.
+
 ## Detect repeated worker crashes
 
 At `apalis-postgres` rc.8, orphan recovery changes a stale `Running` or
