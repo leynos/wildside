@@ -88,7 +88,7 @@ STANDARD_TARGET_GUARD = $(if $(strip $(CARGO_BUILD_TARGET)),$(error the build st
 RUST_FLAGS_ENV := RUSTFLAGS="$(RUST_FLAGS)"
 # Whitaker builds its lint driver on a different toolchain, so it selects LLVM
 # explicitly rather than inheriting the Cranelift development default.
-WHITAKER_ENV := $(RUST_FLAGS_ENV) CARGO_UNSTABLE_CODEGEN_BACKEND=true \
+WHITAKER_ENV := RUSTFLAGS="-D warnings" CARGO_UNSTABLE_CODEGEN_BACKEND=true \
 	CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm CARGO_PROFILE_TEST_CODEGEN_BACKEND=llvm
 GATE_RUST_FLAGS_ENV = $(STANDARD_TARGET_GUARD)RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(RUST_FLAGS) $(STANDARD_RUSTFLAGS)"
 RUSTDOC_FLAGS ?= --cfg docsrs -D warnings
