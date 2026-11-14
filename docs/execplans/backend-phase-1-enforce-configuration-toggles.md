@@ -183,12 +183,9 @@ default and capture output with `tee` so logs are preserved.
     timeout 300 make markdownlint 2>&1 | tee /tmp/wildside-markdownlint.log
     timeout 300 make nixie 2>&1 | tee /tmp/wildside-nixie.log
 
-   If `make nixie` fails because the Mermaid puppeteer dependency is missing,
-   run:
-
-    set -o pipefail
-    timeout 300 make deps 2>&1 | tee /tmp/wildside-deps.log
-    timeout 300 make nixie 2>&1 | tee /tmp/wildside-nixie.log
+   `make nixie` needs the browser-free `nixie` and `merman-cli` tools on
+   `PATH`; it downloads no browser. Install them with the pinned versions in
+   the developer's guide if either command is missing.
 
 2. Format if needed:
 
@@ -330,3 +327,10 @@ artefacts, and interfaces now match the shipped code and the remaining work is
 fully complete. Updated the decision log and interface guidance to describe the
 local `SessionEnv` trait and `DefaultEnv`, reflecting the shift of `mockable`
 to a dev-only dependency.
+
+## Revision note (2026-11-14)
+
+`make nixie` now renders through the browser-free `nixie --renderer merman`
+pipeline and installs no browser, so the concrete-steps guidance no longer
+refers to a Mermaid Puppeteer dependency or to `make deps` as its remedy. The
+2025-12-20 discovery entry is left as the historical observation it records.

@@ -57,7 +57,8 @@ Success is observable when:
 - Dependencies: if a new dependency appears necessary, document the reason and
   request approval before adding it.
 - Tooling: if rendering requires non-reproducible external tooling beyond
-  current workspace tools (`mmdc`/Mermaid), stop and escalate.
+  current workspace tools (`merman-cli`, which `make nixie` already requires),
+  stop and escalate.
 - Validation retries: if `make check-fmt`, `make lint`, or `make test` fail
   three times without a clear root cause, stop and record options.
 
@@ -109,11 +110,10 @@ Success is observable when:
   snapshot generator. Impact: this feature must introduce first-class
   generation mechanics and traceable artefact storage.
 
-- Observation: workspace tooling already includes Mermaid CLI dependencies and
-  browser bootstrap support. Evidence: root `package.json` includes
-  `@mermaid-js/mermaid-cli`, and `scripts/install-mermaid-browser.mjs` supports
-  Mermaid rendering setup. Impact: no new diagram-rendering dependency is
-  expected.
+- Observation: workspace tooling already includes a browser-free Mermaid
+  renderer. Evidence: `make nixie` runs `nixie --renderer merman` and requires
+  `merman-cli`. Impact: ER snapshots can reuse that renderer, so no new
+  diagram-rendering dependency and no browser download are expected.
 
 - Observation: the repository enforces capability-based filesystem access via
   Whitaker lint (`no_std_fs_operations`) across library and test targets.
@@ -363,8 +363,8 @@ Planned interfaces:
 
 Dependencies:
 
-- Reuse existing workspace tooling for Mermaid rendering
-  (`@mermaid-js/mermaid-cli`).
+- Reuse the existing browser-free Mermaid renderer (`merman-cli`) that
+  `make nixie` already requires.
 - Reuse existing Rust crates already present in backend and test support.
 - No new external service dependencies are planned.
 
@@ -379,3 +379,10 @@ update requirements, and quality gates.
 adapters for schema snapshot extraction, CLI generation flow, deterministic ER
 artefacts, behavioural and unit coverage, architecture and roadmap updates, and
 passed required quality gates.
+
+2026-11-14: Replaced the browser-backed renderer with the browser-free
+`merman-cli` that `make nixie` already requires. The default
+`CommandMermaidRenderer` command and the Puppeteer configuration plumbing are
+gone, along with the browser installer, its tests, and the
+`@mermaid-js/mermaid-cli` and `puppeteer` dependencies. The renderer, tooling
+and dependency notes above were updated to match.
