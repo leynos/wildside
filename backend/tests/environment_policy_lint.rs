@@ -233,15 +233,19 @@ fn an_allow_attribute_is_rejected() -> TestResult {
         diagnostics
             .iter()
             .any(|diagnostic| diagnostic.has_code("clippy::allow_attributes")),
-        "an #[allow] over a prohibited call must be reported by \
-         clippy::allow_attributes"
+        concat!(
+            "an #[allow] over a prohibited call must be reported by ",
+            "clippy::allow_attributes",
+        )
     );
     assert!(
         !diagnostics
             .iter()
             .any(|diagnostic| diagnostic.has_code("clippy::disallowed_methods")),
-        "the #[allow] suppresses disallowed_methods, which is exactly why the \
-         policy requires #[expect] instead"
+        concat!(
+            "the #[allow] suppresses disallowed_methods, which is exactly why the ",
+            "policy requires #[expect] instead",
+        )
     );
     Ok(())
 }

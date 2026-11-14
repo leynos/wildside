@@ -24,6 +24,10 @@ macro_rules! declare_test_support {
             $(declare_test_support!(@module $module);)+
         }
     };
+    (@module apalis_job_id) => {
+        #[path = "../support/apalis_job_id.rs"]
+        pub mod apalis_job_id;
+    };
     (@module atexit_cleanup) => {
         #[path = "../support/atexit_cleanup.rs"]
         pub mod atexit_cleanup;
@@ -51,6 +55,10 @@ macro_rules! declare_test_support {
     (@module profile_interests) => {
         #[path = "../support/profile_interests.rs"]
         pub mod profile_interests;
+    };
+    (@module queue_retry_worker) => {
+        #[path = "../support/queue_retry_worker.rs"]
+        pub mod queue_retry_worker;
     };
     (@module redis) => {
         #[path = "../support/redis.rs"]

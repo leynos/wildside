@@ -1,0 +1,193 @@
+//! Behaviour assertions for dead-letter operations.
+
+use serde_json::Value;
+
+use backend::domain::ports::{DeadJob, DeadLetterError, DeadLetterQueue, DeadReason};
+
+use super::QueueDeadLetterWorld;
+
+impl QueueDeadLetterWorld {
+    /// Read the current job's entry from a fresh dead-job listing.
+    fn listed_current_job(&self) -> DeadJob {
+        let id = self.current_id();
+        let listing = self
+            .runtime
+            .block_on(self.dead_letters.list_dead(100))
+            .expect("list dead jobs");
+        listing
+            .into_iter()
+            .find(|job| job.id == id)
+            .expect("listed probe job")
+    }
+
+    pub(crate) fn assert_failure_context(&self) {
+        let job = self.listed_current_job();
+        assert_eq!(job.reason, DeadReason::Exhausted);
+        assert_eq!(job.attempts, 3);
+        assert_eq!(
+            job.last_error.as_deref(),
+            Some("temporary dead-letter probe failure")
+        );
+    }
+
+    pub(crate) fn assert_status(&self, expected: &str) {
+        assert_eq!(self.snapshot(&self.current_id()).status, expected);
+    }
+
+    pub(crate) fn assert_requeue_count(&self, expected: u32) {
+        let snapshot = self.snapshot(&self.current_id());
+        let count = snapshot
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("wildside.retry.requeue_count"))
+            .and_then(Value::as_u64);
+        assert_eq!(count, Some(u64::from(expected)));
+    }
+
+    pub(crate) fn assert_invalid_job_data_error(&self) {
+        assert!(matches!(
+            self.take_operation_result(),
+            Err(DeadLetterError::InvalidJobData { .. })
+        ));
+    }
+
+    pub(crate) fn assert_requeue_restored_state(&self) {
+        self.take_operation_result()
+            .expect("dead-job requeue succeeds");
+        let snapshot = self.snapshot(&self.current_id());
+        assert_eq!(snapshot.status, "Pending");
+        assert_eq!(snapshot.attempts, 0);
+        assert_eq!(snapshot.max_attempts, Some(3));
+        assert!(snapshot.run_at <= chrono::Utc::now());
+        assert_eq!(snapshot.lock_by, None);
+        assert_eq!(snapshot.lock_at, None);
+        let metadata = snapshot.metadata.expect("requeue metadata");
+        assert_eq!(metadata["wildside.retry.requeue_count"], 5);
+        assert!(metadata.get("wildside.retry.dead_reason").is_none());
+        assert_eq!(metadata["operator.note"], "preserve-me");
+    }
+
+    pub(crate) fn assert_legacy_row_not_fetched(&self) {
+        let snapshot = self.snapshot(&self.current_id());
+        assert_eq!(snapshot.status, "Failed");
+        assert_eq!(snapshot.attempts, 3);
+        assert_eq!(snapshot.max_attempts, None);
+    }
+
+    pub(crate) fn assert_control_row_processed(&self) {
+        let id = self
+            .poll_control_job_id
+            .lock()
+            .expect("poll control job id mutex")
+            .clone()
+            .expect("poll control row id");
+        assert_eq!(self.snapshot(&id).status, "Done");
+        assert_eq!(*self.handler_calls.lock().expect("handler calls mutex"), 1);
+        assert!(self.worker_was_registered());
+    }
+
+    pub(crate) fn assert_unclassified(&self) {
+        let job = self.listed_current_job();
+        assert_eq!(job.reason, DeadReason::Unclassified);
+        assert_eq!(job.last_error, None);
+    }
+
+    pub(crate) fn assert_fatal_failure_context(&self) {
+        let job = self.listed_current_job();
+        assert_eq!(job.reason, DeadReason::Fatal);
+        assert_eq!(job.attempts, 1);
+        assert_eq!(
+            job.last_error.as_deref(),
+            Some("permanent dead-letter probe failure")
+        );
+    }
+
+    pub(crate) fn assert_full_retry_budget_after_requeue(&self) {
+        assert_eq!(*self.handler_calls.lock().expect("handler calls mutex"), 3);
+    }
+
+    pub(crate) fn assert_exhausted_after_requeue(&self) {
+        self.assert_failure_context();
+    }
+
+    pub(crate) fn assert_exhausted_reason_replaced_fatal(&self) {
+        let snapshot = self.snapshot(&self.current_id());
+        assert_eq!(
+            snapshot
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata["wildside.retry.dead_reason"].as_str()),
+            Some("exhausted")
+        );
+    }
+
+    pub(crate) fn assert_not_dead_error(&self) {
+        assert!(matches!(
+            self.take_operation_result(),
+            Err(DeadLetterError::NotDead { .. })
+        ));
+    }
+
+    pub(crate) fn assert_state_unchanged(&self) {
+        let before = self
+            .state_before_operation
+            .lock()
+            .expect("snapshot mutex")
+            .take()
+            .expect("pre-operation state");
+        assert_eq!(self.snapshot(&self.current_id()), before);
+    }
+
+    pub(crate) fn assert_listing_empty(&self) {
+        self.list_dead(100);
+        assert!(self.listing.lock().expect("listing mutex").is_empty());
+    }
+
+    pub(crate) fn assert_listing_contains_only_valid_dead_job(&self) {
+        let valid_id = self
+            .newest_job_id
+            .lock()
+            .expect("newest job id mutex")
+            .clone()
+            .expect("valid dead job id");
+        let listing = self.listing.lock().expect("dead-job listing mutex");
+        assert_eq!(listing.len(), 1);
+        assert_eq!(listing[0].id, valid_id);
+    }
+
+    pub(crate) fn assert_job_absent(&self) {
+        let exists = self
+            .runtime
+            .block_on(
+                sqlx::query_scalar::<_, bool>(
+                    "SELECT EXISTS (SELECT 1 FROM apalis.jobs WHERE id = $1)",
+                )
+                .bind(self.current_id().as_str())
+                .fetch_one(&self.pool),
+            )
+            .expect("check discarded row");
+        assert!(!exists);
+    }
+
+    pub(crate) fn assert_only_newest_job_listed(&self) {
+        let expected = self
+            .newest_job_id
+            .lock()
+            .expect("newest id mutex")
+            .clone()
+            .expect("newest job id");
+        let listing = self
+            .runtime
+            .block_on(self.dead_letters.list_dead(1))
+            .expect("list newest dead job");
+        assert_eq!(listing.len(), 1);
+        assert_eq!(listing[0].id, expected);
+    }
+
+    pub(crate) fn assert_unknown_queue_error(&self) {
+        assert!(matches!(
+            self.take_operation_result(),
+            Err(DeadLetterError::UnknownQueue { .. })
+        ));
+    }
+}

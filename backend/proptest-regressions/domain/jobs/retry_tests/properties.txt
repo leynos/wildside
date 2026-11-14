@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a61bd8e5eb57eb1366bc8b88611b03c1503be3de863250b65d7a790338d848f7 # shrinks to (policy, attempt, jitter, jitter_fraction, base_delay, multiplier, max_delay) = (JobRetryPolicy { max_attempts: 4, base_delay: 7.663s, multiplier: 5.962, max_delay: 1s, jitter_fraction: 0.0 }, 1, JitterSample(0.0), 0.0, 7.663s, 5.962, 1s)
+cc 7b7c016d484de335b66273837256d4da8e72f0577cb08a06cb7a3729d98c7714 # shrinks to (policy, attempt, ..) = (JobRetryPolicy { max_attempts: 1, base_delay: 1ms, multiplier: 1.001, max_delay: 1s, jitter_fraction: 0.0 }, 1, JitterSample(0.0), 0.0, 1ms, 1.001, 1s)

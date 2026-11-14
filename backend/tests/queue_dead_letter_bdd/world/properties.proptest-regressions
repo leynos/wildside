@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6a4853ceda23a576ce3b65221fa33a476194be6dc21e0e792aecef1b5fd7dbb5 # shrinks to malformed_requeue_counts = 0, malformed_attempts = 0, valid = 2, limit = 1

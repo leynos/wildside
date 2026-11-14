@@ -1,10 +1,23 @@
-//! Prometheus adapter for route queue enqueue metrics.
+//! Prometheus adapter for route queue metrics.
 //!
-//! This adapter records route queue enqueue operations when the `metrics`
-//! Cargo feature is enabled. It registers `route_queue_enqueue_total`, an
+//! This adapter records route queue operations when the `metrics` Cargo
+//! feature is enabled. It registers `route_queue_enqueue_total`, an
 //! `IntCounterVec` labelled by `outcome`, and
 //! `route_queue_enqueue_latency_seconds`, a `HistogramVec` labelled by
 //! `outcome`.
+//!
+//! It also registers the durable-retry counters `route_queue_retry_total`,
+//! an `IntCounterVec` labelled by `outcome`, and
+//! `route_queue_dead_letter_total`, an `IntCounterVec` labelled by `reason`.
+//! The retry counter separates a scheduled retry from a scheduling failure,
+//! and the dead-letter counter separates an exhausted retry budget from a
+//! fatal failure, so an operator can tell a healthy retry from a lost one
+//! without reading logs.
+//!
+//! A third counter, `route_queue_terminal_write_failure_total`, reuses the
+//! bounded `reason` labels for terminal writes the database refused or failed
+//! to apply. Those attempts change no stored state, so they increment neither
+//! of the other counters; this one is their only metric signal.
 //!
 //! The adapter receives a Prometheus [`Registry`] at construction time, so
 //! tests can use isolated registries and production can use the process default
@@ -16,7 +29,9 @@ use std::time::Duration;
 
 use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts, Registry};
 
-use crate::domain::ports::{RouteQueueMetrics, RouteQueueOutcome};
+use crate::domain::ports::{
+    RouteDeadLetterOutcome, RouteQueueMetrics, RouteQueueOutcome, RouteRetryOutcome,
+};
 
 // Total enqueue attempts, labelled only by bounded `outcome` values:
 // "success" and "failure". No other labels are present, keeping cardinality
@@ -26,6 +41,9 @@ const QUEUE_ENQUEUE_TOTAL: &str = "route_queue_enqueue_total";
 // "success" and "failure". No other labels are present, keeping cardinality
 // low.
 const QUEUE_ENQUEUE_LATENCY_SECONDS: &str = "route_queue_enqueue_latency_seconds";
+const QUEUE_RETRY_TOTAL: &str = "route_queue_retry_total";
+const QUEUE_DEAD_LETTER_TOTAL: &str = "route_queue_dead_letter_total";
+const QUEUE_TERMINAL_WRITE_FAILURE_TOTAL: &str = "route_queue_terminal_write_failure_total";
 // Fixed latency bucket ceilings, in seconds, used for route queue enqueue
 // observations.
 const ENQUEUE_LATENCY_BUCKETS_SECONDS: &[f64] = &[
@@ -37,6 +55,9 @@ const ENQUEUE_LATENCY_BUCKETS_SECONDS: &[f64] = &[
 pub struct PrometheusRouteQueueMetrics {
     total: IntCounterVec,
     latency_seconds: HistogramVec,
+    retry_total: IntCounterVec,
+    dead_letter_total: IntCounterVec,
+    terminal_write_failure_total: IntCounterVec,
 }
 
 impl PrometheusRouteQueueMetrics {
@@ -60,13 +81,41 @@ impl PrometheusRouteQueueMetrics {
             .buckets(ENQUEUE_LATENCY_BUCKETS_SECONDS.to_vec()),
             &["outcome"],
         )?;
+        let retry_total = IntCounterVec::new(
+            Opts::new(
+                QUEUE_RETRY_TOTAL,
+                "Total durable route queue retry outcomes",
+            ),
+            &["outcome"],
+        )?;
+        let dead_letter_total = IntCounterVec::new(
+            Opts::new(
+                QUEUE_DEAD_LETTER_TOTAL,
+                "Total durable route queue dead-letter outcomes",
+            ),
+            &["reason"],
+        )?;
+
+        let terminal_write_failure_total = IntCounterVec::new(
+            Opts::new(
+                QUEUE_TERMINAL_WRITE_FAILURE_TOTAL,
+                "Total durable route queue terminal writes that were refused or failed",
+            ),
+            &["reason"],
+        )?;
 
         registry.register(Box::new(total.clone()))?;
         registry.register(Box::new(latency_seconds.clone()))?;
+        registry.register(Box::new(retry_total.clone()))?;
+        registry.register(Box::new(dead_letter_total.clone()))?;
+        registry.register(Box::new(terminal_write_failure_total.clone()))?;
 
         Ok(Self {
             total,
             latency_seconds,
+            retry_total,
+            dead_letter_total,
+            terminal_write_failure_total,
         })
     }
 }
@@ -78,6 +127,24 @@ impl RouteQueueMetrics for PrometheusRouteQueueMetrics {
         self.latency_seconds
             .with_label_values(&[outcome_label])
             .observe(latency.as_secs_f64());
+    }
+
+    fn observe_retry(&self, outcome: RouteRetryOutcome) {
+        self.retry_total
+            .with_label_values(&[outcome.as_label()])
+            .inc();
+    }
+
+    fn observe_dead_letter(&self, outcome: RouteDeadLetterOutcome) {
+        self.dead_letter_total
+            .with_label_values(&[outcome.as_label()])
+            .inc();
+    }
+
+    fn observe_terminal_write_failure(&self, reason: RouteDeadLetterOutcome) {
+        self.terminal_write_failure_total
+            .with_label_values(&[reason.as_label()])
+            .inc();
     }
 }
 
@@ -155,6 +222,28 @@ route_queue_enqueue_total{outcome="success"} 1
         );
     }
 
+    #[test]
+    fn records_retry_and_dead_letter_counters_with_bounded_labels() {
+        let registry = Registry::new();
+        let metrics = new_metrics(&registry).expect("metrics register");
+
+        metrics.observe_enqueue(RouteQueueOutcome::Success, Duration::from_millis(7));
+        metrics.observe_retry(RouteRetryOutcome::Scheduled);
+        metrics.observe_retry(RouteRetryOutcome::ScheduleFailure);
+        metrics.observe_dead_letter(RouteDeadLetterOutcome::Exhausted);
+        metrics.observe_dead_letter(RouteDeadLetterOutcome::Fatal);
+        metrics.observe_terminal_write_failure(RouteDeadLetterOutcome::Fatal);
+
+        let text = encode_all_route_queue_metrics(&registry);
+        assert!(text.contains("route_queue_retry_total{outcome=\"scheduled\"} 1"));
+        assert!(text.contains("route_queue_retry_total{outcome=\"schedule_failure\"} 1"));
+        assert!(text.contains("route_queue_dead_letter_total{reason=\"exhausted\"} 1"));
+        assert!(text.contains("route_queue_dead_letter_total{reason=\"fatal\"} 1"));
+        assert!(text.contains("route_queue_terminal_write_failure_total{reason=\"fatal\"} 1"));
+        assert!(text.contains("route_queue_enqueue_total{outcome=\"success\"} 1"));
+        assert!(!text.contains("outcome=\"fatal\""));
+    }
+
     proptest! {
         #[test]
         fn records_bounded_outcome_labels_and_latency(
@@ -210,6 +299,14 @@ route_queue_enqueue_total{outcome="success"} 1
             .collect::<Vec<_>>();
         lines.sort_by_key(|line| line.replace("le=\"+Inf\"", "le=\"z\""));
         lines.join("\n")
+    }
+
+    fn encode_all_route_queue_metrics(registry: &Registry) -> String {
+        let mut buffer = Vec::new();
+        if let Err(error) = prometheus::TextEncoder::new().encode(&registry.gather(), &mut buffer) {
+            panic!("metrics should encode: {error}");
+        }
+        String::from_utf8(buffer).expect("Prometheus metrics should be UTF-8")
     }
 
     fn handle_registration_result(
