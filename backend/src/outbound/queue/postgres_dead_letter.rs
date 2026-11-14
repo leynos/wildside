@@ -9,10 +9,17 @@ use sqlx::{FromRow, PgPool};
 
 use crate::domain::ports::{DeadJob, DeadJobId, DeadLetterError, DeadLetterQueue, DeadReason};
 
+mod listing_controls;
+#[cfg(any(test, feature = "test-support"))]
+use listing_controls::ListingControls;
+
 const MAX_LAST_ERROR_BYTES: usize = 1024;
 const DEAD_LISTING_BATCH_SIZE: usize = 100;
 const DEAD_PREDICATE: &str = "status = 'Killed' OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts))";
 const DEAD_LISTING_SQL: &str = include_str!("sql/dead_listing.sql");
+
+/// Isolation level the listing snapshot takes in production.
+const DEAD_LISTING_ISOLATION: &str = "REPEATABLE READ";
 
 /// Per-queue attempt limits restored when an operator requeues a dead job.
 #[derive(Clone, Debug, Default)]
@@ -43,6 +50,8 @@ impl RequeueBudgets {
 pub struct PostgresDeadLetterQueue {
     pool: PgPool,
     requeue_budgets: RequeueBudgets,
+    #[cfg(any(test, feature = "test-support"))]
+    listing: ListingControls,
 }
 
 impl PostgresDeadLetterQueue {
@@ -51,7 +60,28 @@ impl PostgresDeadLetterQueue {
         Self {
             pool,
             requeue_budgets,
+            #[cfg(any(test, feature = "test-support"))]
+            listing: ListingControls::default(),
         }
+    }
+
+    /// Isolation level the next listing uses.
+    fn listing_isolation(&self) -> &str {
+        #[cfg(any(test, feature = "test-support"))]
+        if let Some(isolation) = &self.listing.isolation {
+            return isolation.as_str();
+        }
+        DEAD_LISTING_ISOLATION
+    }
+
+    /// Run the installed page probe, if this build has one.
+    async fn after_listing_page(&self, pages_read: usize) {
+        #[cfg(any(test, feature = "test-support"))]
+        if let Some(probe) = &self.listing.page_probe {
+            probe(pages_read).await;
+        }
+        #[cfg(not(any(test, feature = "test-support")))]
+        let _ = pages_read;
     }
 }
 
@@ -86,6 +116,10 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
     /// becomes dead, or leaves the queue, between two batches would shift
     /// every later row and duplicate or skip an entry. One snapshot keeps the
     /// pages consistent with each other without blocking concurrent writers.
+    ///
+    /// A `test-support` build may install a page hook and a different isolation
+    /// level; production construction has neither, so every production listing
+    /// reads one snapshot.
     #[tracing::instrument(skip_all, fields(operation = "list_dead", limit), err)]
     async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError> {
         let requested = usize::try_from(limit).map_err(|_| {
@@ -93,9 +127,13 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
         })?;
         let mut dead_jobs = Vec::new();
         let mut offset = 0_i64;
+        let mut pages_read = 0_usize;
         let mut snapshot = self
             .pool
-            .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            .begin_with(format!(
+                "BEGIN ISOLATION LEVEL {}, READ ONLY",
+                self.listing_isolation()
+            ))
             .await
             .map_err(|error| unavailable("begin dead-list snapshot", error))?;
 
@@ -132,6 +170,9 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
             if raw_row_count < DEAD_LISTING_BATCH_SIZE {
                 break;
             }
+
+            pages_read += 1;
+            self.after_listing_page(pages_read).await;
         }
 
         // A read-only snapshot has nothing to persist, so closing it only
