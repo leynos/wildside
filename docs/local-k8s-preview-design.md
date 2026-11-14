@@ -46,6 +46,15 @@ consumed by Nile Valley. It renders:
 - optional `ExternalSecret` resources for external-secrets operators;
 - optional service accounts, ingress, autoscaling, and disruption budgets.
 
+Martin support is planned in [backend roadmap section 6.1](backend-roadmap.md)
+and specified by the [tile delivery design](backend-tile-delivery-design.md).
+It adds opt-in Martin resources, a separate route-source switch, and explicit
+Ingress backends for public POIs and backend-authorized routes. Preview
+acceptance must use PostGIS and decode actual tiles in both path and hostname
+modes, including direct-source denial. These are future chart contracts, not
+capabilities of the current backend-only chart. Nile Valley owns shared
+monitoring installation, ingress-controller overlays, and cluster networking.
+
 Secret validation is opt-in through `validateExistingSecret` so GitOps and
 offline `helm template` runs do not require live cluster access. When
 `externalSecret.enabled` is true and `existingSecretName` is unset, the
