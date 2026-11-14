@@ -6,7 +6,6 @@
 use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
 use crate::domain::render_mermaid_er_diagram;
 use crate::outbound::persistence::PostgresSchemaSnapshotRepository;
-use cap_std::{ambient_authority, fs::Dir};
 use diesel::Connection;
 use diesel::pg::PgConnection;
 use diesel_migrations::{FileBasedMigrations, MigrationHarness};
@@ -123,11 +122,15 @@ pub trait MermaidRenderer: Send + Sync {
     ) -> Result<(), SnapshotGenerationError>;
 }
 
-/// Renderer backed by `mmdc` (Mermaid CLI).
+/// Renderer backed by an external Mermaid command.
+///
+/// The default command is `merman-cli`, the browser-free renderer that
+/// `make nixie` already requires. Rendering through a browser would make the
+/// snapshot depend on a downloaded Chromium build, which the repository no
+/// longer installs.
 #[derive(Debug, Clone)]
 pub struct CommandMermaidRenderer {
     command: Vec<OsString>,
-    puppeteer_config: Option<PathBuf>,
 }
 
 impl CommandMermaidRenderer {
@@ -139,10 +142,7 @@ impl CommandMermaidRenderer {
         let mut command = vec![program.into()];
         command.extend(args.into_iter().map(Into::into));
 
-        Self {
-            command,
-            puppeteer_config: default_puppeteer_config(),
-        }
+        Self { command }
     }
 
     fn command_label(&self) -> String {
@@ -156,7 +156,7 @@ impl CommandMermaidRenderer {
 
 impl Default for CommandMermaidRenderer {
     fn default() -> Self {
-        Self::new("pnpm", ["exec", "mmdc"])
+        Self::new("merman-cli", std::iter::empty::<&str>())
     }
 }
 
@@ -185,10 +185,6 @@ impl MermaidRenderer for CommandMermaidRenderer {
             .arg(output_path)
             .arg("--outputFormat")
             .arg("svg");
-
-        if let Some(config) = &self.puppeteer_config {
-            command.arg("--puppeteerConfigFile").arg(config);
-        }
 
         let output =
             command
@@ -360,16 +356,6 @@ pub fn apply_migrations(
 
 fn migrations_directory() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
-}
-
-fn default_puppeteer_config() -> Option<PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("mmdc-puppeteer.json");
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let file_name = path.file_name()?;
-    let directory = Dir::open_ambient_dir(parent, ambient_authority()).ok()?;
-    directory.is_file(file_name).then_some(path)
 }
 
 #[cfg(test)]
