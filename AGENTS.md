@@ -68,7 +68,7 @@
   the PR or execution record.
 - **Decision history:** Preserve accepted ADR decisions; record subsequent
   changes through the
-  [ADR amendment and supersession process](docs/documentation-style-guide.md#architectural-decision-records-adrs).
+  [ADR amendment and supersession guidance](docs/documentation-style-guide.md#architectural-decision-records-adrs).
   Capture proof-driven API, representation, and invariant decisions in the
   design documentation.
 - **Completed execplans:** Completed execplans are historical documents and
@@ -258,11 +258,16 @@ project:
     `interrogate` (100 percent docstring coverage) and Pylint for Python,
     `checkmake` and `mbake` for the Makefile, and `scripts/lint_actions.py` for
     workflows.
-  - `make test` runs `make test-rust`, which first prepares the pinned
-    PostgreSQL worker (`make prepare-pg-worker`). It then runs
+  - `make test` runs `make test-rust`, which first runs
+    `make prepare-pg-worker`. That target reuses an existing pinned
+    `pg_worker`, installs the pinned release with `cargo-binstall`, or, when
+    neither applies, falls back to a `pg_worker` already on `PATH` with a
+    warning that its version is not checked. `test-rust` then runs
     `cargo nextest run --workspace --all-targets --all-features --no-fail-fast`,
-    excluding the compile-fail test binaries, and runs those compile-fail
-    binaries with `cargo test`. The frontend tests, the workflow-contract and
+    excluding the `declare_test_support_compile_fail`, `compile_fail_tests`, and
+    `sha2_digest_formatting_compile_fail` binaries. It runs the first and third
+    of those with `cargo test -p backend`. `make test` does not run the
+    `compile_fail_tests` binary. The frontend tests, the workflow-contract and
     script pytest suites, and the lint-actions tests follow. `make test` does
     not run Rust doctests as a separate step.
   - The test and architecture recipes set `RUSTFLAGS` through
@@ -348,16 +353,15 @@ project:
   `newt-hype` when introducing many homogeneous wrappers that share behaviour;
   add small shims such as `From<&str>` and `AsRef<str>` for string-backed
   wrappers. For path-centric wrappers implement `AsRef<Path>` alongside
-  `into_inner()` and `to_path_buf()`, avoid attempting
-  `impl From<Wrapper> for PathBuf` because of the orphan rule. Prefer explicit
-  tuple structs whenever bespoke validation or tailored trait surfaces are
-  required, customizing `Deref`, `AsRef`, and `TryFrom` per type. Use
-  `the-newtype` when defining traits and needing blanket implementations that
-  apply across wrappers satisfying `Newtype + AsRef/AsMut<Inner>`, or when
-  establishing a coherent internal convention that keeps trait forwarding
-  consistent without per-type boilerplate. Combine approaches: lean on
-  `newt-hype` for the common case, tuple structs for outliers, and
-  `the-newtype` to unify behaviour when owning the trait definitions.
+  `into_inner()` and `to_path_buf()`. Prefer explicit tuple structs whenever
+  bespoke validation or tailored trait surfaces are required, customizing
+  `Deref`, `AsRef`, and `TryFrom` per type. Use `the-newtype` when defining
+  traits and needing blanket implementations that apply across wrappers
+  satisfying `Newtype + AsRef/AsMut<Inner>`, or when establishing a coherent
+  internal convention that keeps trait forwarding consistent without per-type
+  boilerplate. Combine approaches: lean on `newt-hype` for the common case,
+  tuple structs for outliers, and `the-newtype` to unify behaviour when owning
+  the trait definitions.
 - Use `cap_std` and `cap_std::fs_utf8` / `camino` in place of `std::fs` and
   `std::path` for enhanced cross-platform support and capabilities oriented
   filesystem access.
