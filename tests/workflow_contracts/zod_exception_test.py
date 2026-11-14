@@ -6,8 +6,9 @@ exception in `security/audit-exceptions.json` is a fourteen-day stopgap for a
 major-version migration, argued from reach, and reach has two halves that are
 read from different places. The registry packages that depend on zod are read
 from the Bun lockfile's package table, which lists resolved registry packages
-only: it holds `chromium-bidi` (Puppeteer's build-time tooling) and never the
-workspace's own packages. The workspace's own use is therefore read separately,
+only: it holds no zod parent at all now that Puppeteer's `chromium-bidi`
+tooling has been removed, and it never lists the workspace's own packages. The
+workspace's own use is therefore read separately,
 from the workspace manifests: `frontend-pwa` and `packages/types` declare zod
 directly, for `UsersSchema` and the fetcher. These tests fail when the
 migration lands or when either half gains a parent the reason does not cover.
@@ -38,12 +39,13 @@ ZOD_TRACKING_ISSUE = "https://github.com/leynos/wildside/issues/561"
 #: what the exception exists to tolerate.
 FIRST_PATCHED_ZOD = (4, 6, 6)
 
-#: The only resolved registry package the reasoning permits as a parent:
-#: Puppeteer's tooling, which never parses untrusted input. A parent outside
-#: this set is a new way to reach the code, which the entry's reason does not
-#: cover. Workspace packages are not in the lockfile's package table, so they
-#: are checked against the next constant instead.
-ZOD_PERMITTED_DEPENDENTS = frozenset({"chromium-bidi"})
+#: The resolved registry packages the reasoning permits as zod parents: none.
+#: Puppeteer's `chromium-bidi` tooling used to be the sole exception, and it was
+#: removed with the browser rendering tooling, so any registry parent at all is
+#: a new way to reach the code that the entry's reason does not cover.
+#: Workspace packages are not in the lockfile's package table, so they are
+#: checked against the next constant instead.
+ZOD_PERMITTED_DEPENDENTS: frozenset[str] = frozenset()
 
 #: The workspace manifests, relative to the repository root, that the reason
 #: names as declaring zod: `frontend-pwa` parses API responses through it and
@@ -245,12 +247,13 @@ def test_the_zod_exception_is_void_once_only_patched_releases_resolve(
 def test_the_zod_exception_is_void_once_anything_else_pulls_it(
     ledger_ids: frozenset[str], packages: lock.PackageTable
 ) -> None:
-    """The entry is repository-wide, but its reason is about one parent.
+    """The entry is repository-wide, but its reason is about specific parents.
 
     `run-bun-audit.js` turns a ledger entry into a `--ignore` for every caller,
-    while the reason argues only that Puppeteer's `chromium-bidi` reaches zod
-    through tooling. A further parent would be covered by an argument written
-    about neither, and checking that zod is still resolved would not notice.
+    while the reason argues only that the workspace manifests reach zod and
+    that the removed `chromium-bidi` tooling was the last registry parent. A
+    further parent would be covered by an argument written about neither, and
+    checking that zod is still resolved would not notice.
     """
     if ZOD_EXCEPTION_ID not in ledger_ids:
         pytest.skip("the zod advisory is no longer excepted")

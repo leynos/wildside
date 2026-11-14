@@ -1068,6 +1068,13 @@ The Nixie package provides the `nixie` command, while the Merman package
 provides `merman-cli`. Continuous integration installs both tools before its
 first call to `make nixie`.
 
+Neither `make nixie` nor the separate ER-snapshot command
+(`backend/src/bin/er_snapshots.rs`) needs a browser. Both render through
+`merman-cli`: Nixie drives it through its Merman backend, and the ER snapshot
+command invokes it directly, so the pinned `merman-cli` installation above is
+the only prerequisite. No Puppeteer cache is primed and no browser download is
+attempted; the repository resolves neither Puppeteer nor Mermaid CLI.
+
 Code changes under `frontend-pwa/` or `packages/tokens/` must pass the relevant
 front-end gates plus the repository-wide commit gates:
 
@@ -2305,6 +2312,11 @@ resolve in the top-level `resolutions` block, which Bun consumes without
 exposing the fixes to npm's override handling. Regenerate both `pnpm-lock.yaml`
 and `bun.lock` after changing a shared security pin.
 
+A pin exists only to redirect a package that a lockfile still resolves. When a
+change removes a package's last consumer from both lockfiles, remove its
+`pnpm.overrides` entry and, where present, its `resolutions` entry in the same
+change: a pin that binds nothing reads as protection that is no longer there.
+
 `resolutions` accepts only bare package names. Bun silently ignores ranged keys
 such as `picomatch@<2.3.2`, so the ranged form works in `pnpm.overrides` but
 has no effect for Bun. Where a package is present at two majors that each need
@@ -2348,15 +2360,18 @@ indefensible fails the test suite instead of waiting for its expiry:
   entry with only the former silences a Bun advisory repository-wide with
   nothing in the gates watching for the day its argument lapses.
 - Each argument-from-reachability exception fails once its reachability
-  argument dies. The `extract-zip` entries hold only while `bun.lock` still
-  resolves `extract-zip` and `@puppeteer/browsers` is still its only parent;
-  both stop being true on the upgrade to Puppeteer 25.7 or later, where
-  `@puppeteer/browsers` 3.x swaps in `modern-tar`. A second consumer would end
-  the argument too, because an entry ignores the advisory repository-wide
-  rather than along the path its reason describes. The Picomatch entries hold
-  only while `bun.lock` still resolves a version inside an advisory's range,
-  which stops being true once Bun honours ranged `resolutions` keys or the last
-  Picomatch 2 consumer leaves.
+  argument dies. The Picomatch entries hold only while `bun.lock` still
+  resolves a version inside an advisory's range, which stops being true once
+  Bun honours ranged `resolutions` keys or the last Picomatch 2 consumer leaves.
+- An advisory with no patched release is removed by taking the package out of
+  the graph, not by renewing its exception. The two `extract-zip` entries were
+  retired that way: the browser-backed Mermaid tooling left both graphs, so the
+  Puppeteer dependency that resolved `extract-zip` is gone (#491). Both
+  `make nixie` and the ER snapshot command render through the browser-free
+  `merman-cli`. `tests/workflow_contracts/extract_zip_absence_test.py` now
+  asserts the package is absent from both lockfiles, unconditionally. If a
+  later dependency brings it back, remove that dependency rather than restoring
+  the exception.
 - An exception taken out against a patched release fails once the patch is
   reachable. The Style Dictionary entry was of this kind and is gone: the
   patched release (5.4.4 and later) needs glob 13, so the repository-wide
@@ -2368,15 +2383,19 @@ indefensible fails the test suite instead of waiting for its expiry:
   that alters the CSS variables, the Tailwind preset or the daisyUI theme fails
   a test instead of passing unseen.
 - Entries that rest on one argument stand or fall together. The two
-  `extract-zip` entries and the two Picomatch entries are each checked as a
-  group, so a ledger holding one of a pair fails rather than quietly keeping an
-  argument for one advisory that it discarded for the other.
+  Picomatch entries are checked as a group, so a ledger holding one of a pair
+  fails rather than quietly keeping an argument for one advisory that it
+  discarded for the other.
 
 The questions these invariants ask of `bun.lock`, which versions of a package
 it resolves and which packages reach one, are answered by
-`tests/workflow_contracts/bun_lockfile.py`. Read the lockfile through it rather
-than by matching text, so that a new invariant asserts a dependency edge rather
-than the presence of a name.
+`tests/workflow_contracts/bun_lockfile.py`. The same questions of
+`pnpm-lock.yaml` are answered by `tests/workflow_contracts/pnpm_lockfile.py`,
+which reads the `packages` and `snapshots` tables through
+`tests/workflow_contracts/strict_yaml.py` so a repeated key is refused rather
+than collapsed. Read either lockfile through these helpers rather than by
+matching text, so that a new invariant asserts a dependency edge rather than
+the presence of a name.
 
 Failing there is the intended outcome of the fix landing: delete the entry and
 close its issue. When adding an exception, add the matching invariant and prove

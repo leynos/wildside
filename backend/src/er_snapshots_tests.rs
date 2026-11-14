@@ -8,7 +8,9 @@ use uuid::Uuid;
 
 use crate::domain::er_diagram::{SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable};
 use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
-use crate::er_snapshots::{SnapshotGenerationError, SnapshotRequest, generate_from_repository};
+use crate::er_snapshots::{
+    CommandMermaidRenderer, SnapshotGenerationError, SnapshotRequest, generate_from_repository,
+};
 use crate::test_support::cap_fs::{path_exists, read_file_to_string, remove_directory, write_file};
 use crate::test_support::er_snapshots::FixtureMermaidRenderer;
 
@@ -201,4 +203,15 @@ fn temp_output_dir(prefix: &str) -> TestResult<PathBuf> {
 
 fn cleanup(path: PathBuf) {
     let _cleanup_result = remove_directory(path.as_path());
+}
+
+#[test]
+fn the_default_renderer_runs_the_browser_free_merman_cli() {
+    let renderer = CommandMermaidRenderer::default();
+
+    assert_eq!(
+        renderer.command_label(),
+        "merman-cli",
+        "the default renderer must not invoke a browser-backed Mermaid CLI"
+    );
 }
