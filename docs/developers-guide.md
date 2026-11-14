@@ -602,14 +602,16 @@ Cranelift-compiled panic does not find its unwind handler. The run was stopped
 at 1,218 of 1,849 tests: 52 tests aborted with `SIGABRT` (for example
 `domain::ports::cache_key::tests::coordinate_bound_is_inclusive`,
 `domain::offline_bundle_service::tests::upsert_persists_bundle_without_idempotency_key`
-and the `inbound::http::offline` and `inbound::http::routes` rejection tests)
-and `domain::user::tests::new_panics_when_invalid_id` failed. The same suite
-passes on the LLVM backend. The pin is now `nightly-2026-10-31`; the
-measurement above was taken on `nightly-2026-10-28` and has not been repeated
-on the newer pin, and Dependabot moves the pin daily. Re-measure on the next
-deliberate toolchain bump or by 2026-11-30, whichever is first, and adopt the
-backend, through `[unstable] codegen-backend` and
-`[profile.dev] codegen-backend = "cranelift"`, when the suite passes under it.
+and the `inbound::http::offline` and `inbound::http::routes` rejection tests).
+`domain::user::tests::new_panics_when_invalid_id` also failed, because it
+observed the panic with `catch_unwind`; it now uses `#[should_panic]`, which
+libtest handles without unwinding support. The same suite passes on the LLVM
+backend. The pin is now `nightly-2026-10-31`; the measurement above was taken on
+`nightly-2026-10-28` and has not been repeated on the newer pin, and
+Dependabot moves the pin daily. Re-measure on the next deliberate toolchain
+bump or by 2026-11-30, whichever is first, and adopt the backend, through
+`[unstable] codegen-backend` and `[profile.dev] codegen-backend = "cranelift"`,
+when the suite passes under it.
 
 ## Local Kubernetes preview
 
