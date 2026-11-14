@@ -3584,21 +3584,65 @@ Two requests are rebutted rather than actioned.
   `interrogate --fail-under 100` for the Python under `scripts` and `tests`,
   both inside `make lint`, which has passed on this head. There is no local
   equivalent of the saved check to run, so the row cannot be closed locally;
-  the disposition is the repository policy plus its passing gate.
-- Testing (Overall) asks for a negative control built from separate
-  read-committed snapshots. The adapter exposes no between-batch seam, which
-  the reply accepts, and a control with no row-set change between batches
-  cannot distinguish the isolation levels either. The deterministic boundary
-  case above exercises the page walk with listed rows on both sides of two
-  boundaries; the isolation level itself is a single `begin_with` call whose
-  statement is a constant. Adding a production seam purely to fail a control is
-  declined; the structural argument and the boundary case are the evidence this
-  design admits.
+  the disposition is the repository policy plus its passing gate, and it is
+  recorded here as an explicit exception rather than as a current percentage.
+  The reviewer confirmed the two contracts differ and asked for either a fresh
+  result or such an exception; a fresh result needs a review pass, and review
+  has been paused since `2280231`.
+- Testing (Overall) asked for a negative control built from separate
+  read-committed snapshots. That request is now actioned by
+  `page_walk_is_skip_free_only_under_one_snapshot`; see the section below.
 
 The Unit Architecture and Domain Architecture rows are recorded as accepted
 design decisions by the reviewer, so they need no change: the database clock
 preserves immediate requeue eligibility, and the effective budget is decided
 once in the adapter's pure decision function.
+
+### Reconciliation of the 2026-11-13 follow-up reply
+
+The reviewer re-inspected `7c8c9d9`, marked four rows addressed and both
+architecture rows accepted, and raised one new documentation defect plus three
+verification requests. Each is actioned here.
+
+- Runbook metric description, a real defect. The runbook said a missing or
+  mismatched delivery identity "increments none of the three counters".
+  `record_missing_retry_metadata` increments the retry scheduling-failure
+  counter when the decision is `Schedule`, because the retry the policy asked
+  for will not happen, and records no metric when the decision is terminal,
+  because the row was never classified as dead. Both log at `ERROR`. The
+  runbook now distinguishes the two cases; the users guide already did.
+- Concurrent-listing control. `page_walk_is_skip_free_only_under_one_snapshot`
+  now drives the adapter itself. The follow-up confirmed that a test-only seam
+  would satisfy the request, and this repository already owns the seam it needs:
+  `test-support` is a non-default feature that the integration tests switch on
+  through the crate's self dev-dependency, and it already carries
+  `queue::test_helpers`. Two additions sit behind the same
+  `cfg(any(test, feature = "test-support"))` gate. `with_listing_page_probe`
+  runs a hook after every full page of the real `list_dead` loop, and
+  `with_listing_isolation` replaces the snapshot isolation for the negative
+  control. Production construction installs neither, so the shipped path still
+  reads one `REPEATABLE READ` snapshot and `DEAD_LISTING_ISOLATION` remains a
+  constant.
+- What the control observes. The world seeds 150 dead rows, installs a probe
+  that deletes the eleventh newest row from a second pooled connection after
+  page one, and lists with a limit high enough to walk both pages. Under
+  `READ COMMITTED` — the negative control, and the direction that must fail —
+  the listing returns 149 rows and drops the row that slid into page two. Under
+  the adapter's own isolation it returns all 150, including the row deleted
+  mid-walk. The failing direction is asserted first, so the snapshot claim
+  cannot hold vacuously.
+- Why the gate is `test-support` rather than `cfg(test)`. `backend/tests/`
+  binaries link the library compiled without `cfg(test)`, so an item gated on
+  `cfg(test)` alone does not exist for them. The `test-support` feature is the
+  repository's existing answer to that boundary: it is off in production,
+  enabled for integration tests by the self dev-dependency, and already the
+  home of `queue::test_helpers`.
+- Backlog collection. The runbook now records the deployment action explicitly
+  and the evidence for its absence from this repository:
+  `deploy/charts/wildside` declares no scrape configuration, `ServiceMonitor`
+  or alerting rule, and its only metrics block is the horizontal pod
+  autoscaler. Until the monitoring system's scheduled query exists, the count
+  has no collected signal.
 
 ### Gate runs of the 2026-11-13 repairs
 
@@ -3639,3 +3683,51 @@ stages had not run.
 Markdown files, which no `lint` sub-target reads, so its result stands for the
 same Rust tree. `test`, `audit` and `openapi` all started after the reflow and
 therefore ran on the final content.
+
+### Gate run of the concurrent-listing control (2026-11-13)
+
+Three runs covered this change set. The first two are recorded for what they
+caught, because each found a defect the run before it could not see.
+
+- The first run found two defects in the new control: `check-fmt` exited 2 on
+  the test module's formatting, and `lint` exited 2 on two
+  `clippy::excessive_nesting` sites in the same file.
+- The second run, against the rewritten control, found three more.
+  `check-fmt` exited 2 because `mdtablefix --check` wanted this plan reflowed
+  `+13 -13`, and that failure stops `check-fmt-markdown` before its
+  `cargo fmt`, Biome and Ruff stages run. `lint` exited 2 because whitaker
+  measured the `postgres_dead_letter` module at 420 lines against its 400-line
+  cap; the seam moved into `postgres_dead_letter/listing_controls.rs`, which
+  whitaker counts as a module of its own, leaving the adapter at 374 lines.
+  `audit` exited 2 on `RUSTSEC-2026-0538`, "Receive loop can spin after a
+  truncated datagram" (`quinn-udp` 0.5.14), published after the previous run;
+  the lockfile now pins 0.5.16, the advisory's first fixed release.
+  `cargo tree -i quinn-udp --workspace --all-features` prints nothing for both
+  the host target and `--target all`, so the crate is absent from the resolved
+  graph and the bump changes only the lockfile entry that the audit scans.
+
+The final run began at 14:12 on the settled tree — `7c8c9d9` plus all seven
+candidate paths — and started each of the nine gates once. A
+`git status --porcelain` comparison before and after shows no gate mutated a
+tracked file.
+
+- `check-fmt`, 2s: `check-fmt-markdown` left 132 files unchanged, `cargo fmt`
+  found all 120 Rust files already formatted, and the Biome and Ruff stages
+  passed.
+- `spelling`, 11s, leaving `typos.toml` unchanged; `markdownlint`, 15s over
+  133 files with no errors; `nixie`, 3s, all diagrams validated.
+- `lint`, 551s, including `cargo doc`, clippy under `-D warnings`, whitaker,
+  `interrogate` at `--fail-under 100`, `checkmake`, `mbake` and the action
+  linter.
+- `typecheck`, 4s: `ty` and the three `tsc --noEmit` projects were clean.
+- `test`, 1282s: nextest ran 2674 tests, 2674 passed and 4 were skipped.
+  `page_walk_is_skip_free_only_under_one_snapshot` passed in 7.3s, and the two
+  sibling listing tests in the same binary passed in 51.2s. Both trybuild
+  suites, vitest, Bun, the token package, the workflow contracts and the
+  scripts suites passed.
+- `audit`, 38s, 17 allowed advisory warnings and no vulnerability; `openapi`,
+  95s, regenerating the specification identically and leaving the tree clean.
+
+Compile admission reported a full pool (`capacity 4, held 4`) and queued
+compilers behind it for the whole run. Nothing was killed, retried or
+duplicated, and no gate was started twice.
