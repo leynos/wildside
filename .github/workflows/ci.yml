@@ -473,6 +473,8 @@ jobs:
           installer-version: ${{ env.WHITAKER_INSTALLER_VERSION }}
           # This job's tool cache owns ~/.cargo/bin and ~/.local/share/whitaker.
           cache-provider: external
+          # The repository's Cargo configuration selects Cranelift.
+          cranelift: true
       - name: Whitaker lint
         run: make lint-whitaker
 

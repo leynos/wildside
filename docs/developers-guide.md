@@ -590,31 +590,38 @@ ceiling). `tests/workflow_contracts/build_standard_test.py` holds the
 configuration, the footprint settings, the Makefile composition, the target
 refusal and the CI provisioning.
 
-### Cranelift is not the development backend
+### Cranelift
 
-The Cranelift codegen backend is not part of this repository's standard,
-because the repository's own suite does not pass under it. Measured on
-2026-10-31 on the pinned `nightly-2026-10-28`, running `make test-rust` with
-`CARGO_UNSTABLE_CODEGEN_BACKEND=true`,
-`CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift` and
-`CARGO_PROFILE_TEST_CODEGEN_BACKEND=cranelift` and nothing else changed, a
-Cranelift-compiled panic does not find its unwind handler. The run was stopped
-at 1,218 of 1,849 tests: 52 tests aborted with `SIGABRT` (for example
-`domain::ports::cache_key::tests::coordinate_bound_is_inclusive`,
-`domain::offline_bundle_service::tests::upsert_persists_bundle_without_idempotency_key`
-and the `inbound::http::offline` and `inbound::http::routes` rejection tests).
-`domain::user::tests::new_panics_when_invalid_id` also failed; that test
-observed the panic with `catch_unwind` and now uses `#[should_panic]`. A later
-full-workspace run under Cranelift (2026-11-14, `nightly-2026-10-31`) passed
-the whole `domain::user::tests` module. That later run does not repeat the
-measurement above as a whole, and the cause of the earlier failure was not
-isolated. The same suite passes on the LLVM backend. The pin is now
-`nightly-2026-10-31`; the first measurement above was taken on
-`nightly-2026-10-28` and has not been repeated in full on the newer pin, and
-Dependabot moves the pin daily. Re-measure on the next deliberate toolchain
-bump or by 2026-11-30, whichever is first, and adopt the backend, through
-`[unstable] codegen-backend` and `[profile.dev] codegen-backend = "cranelift"`,
-when the suite passes under it.
+Cranelift is the default backend for development builds, set in
+`.cargo/config.toml` (`[unstable] codegen-backend = true` and
+`[profile.dev] codegen-backend = "cranelift"`) on the nightly pinned in
+`rust-toolchain.toml`, which also lists the `rustc-codegen-cranelift-preview`
+component. Release builds keep LLVM, because the dev profile does not reach the
+release profile. Coverage and Whitaker select LLVM explicitly: the coverage
+action overrides the backend when it detects Cranelift, and
+`make lint-whitaker` sets `CARGO_PROFILE_{DEV,TEST}_CODEGEN_BACKEND=llvm`. CI
+installs Whitaker with `cranelift: true`.
+
+The `zmij` crate, `serde_json`'s float formatter, is built on LLVM through
+`[profile.dev.package.zmij]` and `[profile.test.package.zmij]`. On x86-64 it
+calls the SSE2 `pmulhuw` intrinsic, which Cranelift does not implement
+(`llvm.x86.sse2.pmulhu.w is not yet supported`,
+[rustc_codegen_cranelift#171](https://github.com/rust-lang/rustc_codegen_cranelift/issues/171)).
+The stub is a non-unwinding panic, so any `serde_json` float-to-string
+conversion aborted the test with `SIGABRT`. That, not unwinding, was the cause
+of the 52 aborts recorded on 2026-10-31 (for example
+`domain::ports::cache_key::tests::coordinate_bound_is_inclusive`). Drop the two
+overrides when Cranelift implements the intrinsic or `zmij` stops using it.
+
+Measured on 2026-11-14 on `nightly-2026-10-31`, `make test` with the default
+backend on Cranelift: 1874 of 1874 tests pass on the second of two runs, and
+none aborts. The first run failed one test,
+`catalogue_descriptor_ingestion_bdd`, on an embedded-PostgreSQL environment
+collision (`initdb` found the shared `/var/tmp/pg-embed-1000/data` directory
+non-empty); the same test failed the same way under LLVM on that host, and it
+passed on rerun. The Cranelift component does not unwind, so a test must not
+rely on a caught panic: assert on a returned error, or use `#[should_panic]`,
+which libtest handles.
 
 ## Local Kubernetes preview
 

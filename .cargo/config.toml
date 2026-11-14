@@ -11,13 +11,20 @@
 # `RUSTFLAGS` replaces both. Every flag is therefore repeated in each source,
 # and the Makefile and CI compose them into the `RUSTFLAGS` they assign.
 # Coverage assigns `RUSTFLAGS` without them on purpose, so a measurement stays
-# on the platform linker and the single-threaded frontend. Cranelift is not the
-# development backend because the suite does not pass under it; the exception
-# is recorded in the developers' guide.
+# on the platform linker and the single-threaded frontend.
+#
+# Cranelift is the development default. Only the dev profile selects it, so
+# release builds keep LLVM; coverage and Whitaker select LLVM explicitly. The
+# `zmij` crate (serde_json's float formatter) is built on LLVM, because it uses
+# the SSE2 `pmulhuw` intrinsic that Cranelift does not implement
+# (rustc_codegen_cranelift#171) and aborts at run time otherwise. Drop the
+# `zmij` overrides when that lands; see "Cranelift" in the developers' guide.
 [unstable]
 embed-metadata = false
+codegen-backend = true
 
 [profile.dev]
+codegen-backend = "cranelift"
 opt-level = 1          # default is 0; 1 shrinks a bit without killing compile times
 debug = 0              # no debug info keeps the target tree small; see the developers' guide
 debug-assertions = true
@@ -25,6 +32,14 @@ overflow-checks = true
 incremental = false    # incremental state is the largest part of a dev target tree
 panic = "unwind"       # keep unwinding in normal dev builds
 strip = "none"         # don't strip by default for dev
+
+# `zmij` stays on LLVM: Cranelift lacks `llvm.x86.sse2.pmulhu.w`
+# (rustc_codegen_cranelift#171), which zmij's SSE2 path calls.
+[profile.dev.package.zmij]
+codegen-backend = "llvm"
+
+[profile.test.package.zmij]
+codegen-backend = "llvm"
 
 [build]
 rustflags = ["-Zthreads=8"]
