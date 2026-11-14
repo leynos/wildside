@@ -605,11 +605,12 @@ at 1,218 of 1,849 tests: 52 tests aborted with `SIGABRT` (for example
 and the `inbound::http::offline` and `inbound::http::routes` rejection tests).
 `domain::user::tests::new_panics_when_invalid_id` also failed, because it
 observed the panic with `catch_unwind`; it now uses `#[should_panic]`, which
-libtest handles without unwinding support. The same suite passes on the LLVM
-backend. The pin is now `nightly-2026-10-31`; the measurement above was taken on
-`nightly-2026-10-28` and has not been repeated on the newer pin, and
-Dependabot moves the pin daily. Re-measure on the next deliberate toolchain
-bump or by 2026-11-30, whichever is first, and adopt the backend, through
+leaves the observation to libtest's own panic handling instead of an explicit
+`catch_unwind` in the test. The same suite passes on the LLVM backend. The pin
+is now `nightly-2026-10-31`; the measurement above was taken on
+`nightly-2026-10-28` and has not been repeated on the newer pin, and Dependabot
+moves the pin daily. Re-measure on the next deliberate toolchain bump or by
+2026-11-30, whichever is first, and adopt the backend, through
 `[unstable] codegen-backend` and `[profile.dev] codegen-backend = "cranelift"`,
 when the suite passes under it.
 
