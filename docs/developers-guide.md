@@ -603,13 +603,15 @@ at 1,218 of 1,849 tests: 52 tests aborted with `SIGABRT` (for example
 `domain::ports::cache_key::tests::coordinate_bound_is_inclusive`,
 `domain::offline_bundle_service::tests::upsert_persists_bundle_without_idempotency_key`
 and the `inbound::http::offline` and `inbound::http::routes` rejection tests).
-`domain::user::tests::new_panics_when_invalid_id` also failed, because it
-observed the panic with `catch_unwind`; it now uses `#[should_panic]`, and the
-`domain::user::tests` module passes under Cranelift (measured 2026-11-14 on
-`nightly-2026-10-31`, as part of a full-workspace run). The same suite passes
-on the LLVM backend. The pin is now `nightly-2026-10-31`; the measurement above
-was taken on `nightly-2026-10-28` and has not been repeated on the newer pin,
-and Dependabot moves the pin daily. Re-measure on the next deliberate toolchain
+`domain::user::tests::new_panics_when_invalid_id` also failed; that test
+observed the panic with `catch_unwind` and now uses `#[should_panic]`. A later
+full-workspace run under Cranelift (2026-11-14, `nightly-2026-10-31`) passed
+the whole `domain::user::tests` module. That later run does not repeat the
+measurement above as a whole, and the cause of the earlier failure was not
+isolated. The same suite passes on the LLVM backend. The pin is now
+`nightly-2026-10-31`; the first measurement above was taken on
+`nightly-2026-10-28` and has not been repeated in full on the newer pin, and
+Dependabot moves the pin daily. Re-measure on the next deliberate toolchain
 bump or by 2026-11-30, whichever is first, and adopt the backend, through
 `[unstable] codegen-backend` and `[profile.dev] codegen-backend = "cranelift"`,
 when the suite passes under it.
