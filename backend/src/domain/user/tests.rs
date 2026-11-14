@@ -126,9 +126,9 @@ fn accepts_maximum_length(valid_id: TestUserId) {
 }
 
 #[rstest]
+#[should_panic(expected = "user string values must satisfy validation")]
 fn new_panics_when_invalid_id() {
-    let result = std::panic::catch_unwind(|| User::from_strings("", "Ada"));
-    assert!(result.is_err());
+    let _ = User::from_strings("", "Ada");
 }
 
 #[rstest]
