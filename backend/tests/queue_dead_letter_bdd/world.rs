@@ -2,6 +2,7 @@
 
 mod assertions;
 mod dead_job_fixtures;
+mod isolation;
 mod plan;
 mod properties;
 mod rows;
