@@ -125,9 +125,13 @@ terminal write the database refuses or fails increments
 `route_queue_terminal_write_failure_total`, labelled by the reason the write
 would have stored (`fatal` or `exhausted`), and not the dead-letter counter,
 because the row's stored state did not change. Missing or mismatched worker
-identity writes nothing at all and increments none of the three counters; it
-logs at `ERROR` (`retry metadata missing; cannot persist failure outcome`). A
-refused or failed write also logs at `WARN` with decision
+identity writes nothing at all, and which counter moves depends on the decision
+the policy reached. A scheduling decision increments the retry
+scheduling-failure counter, because the retry that was asked for will not
+happen. A terminal decision increments none of the three counters, because the
+row was never classified as dead. Both log at `ERROR`
+(`retry metadata missing; cannot persist failure outcome`) with the refused
+`decision`. A refused or failed write also logs at `WARN` with decision
 `terminal_write_failure`. Alert on the terminal-write-failure counter and on
 both log events: the dead-letter counter alone will not show a terminal write
 that never applied.
@@ -153,9 +157,14 @@ the count from the registry would run this aggregate over `apalis.jobs` on
 every scrape, so the scan cost would follow the scrape interval rather than the
 change rate. The collection point is therefore the monitoring system's own
 scheduled query, run on an interval the alerting owner sets, with its result
-plotted and alerted on like any other collected series. Creating that schedule
-is part of deploying this runbook, not part of the crate; until it exists the
-count is available only by running the query by hand.
+plotted and alerted on like any other collected series.
+
+Nothing in this repository creates that schedule. The Helm chart under
+`deploy/charts/wildside` declares no scrape configuration, `ServiceMonitor` or
+alerting rule — its only metrics block is the horizontal pod autoscaler — so
+the collection is a deployment action against the monitoring system, not a
+chart value. Until that schedule exists, the count is available only by running
+the query by hand, and the backlog has no collected signal to alert on.
 
 ## Detect repeated worker crashes
 
