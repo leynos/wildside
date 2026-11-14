@@ -3,9 +3,10 @@
 GHSA-jmr9-qjv8-65gv (unvalidated symlink path traversal) and
 GHSA-7pqw-9j4j-h8q3 (arbitrary writes through symlink entries) cover every
 published `extract-zip` release up to 2.0.1, and 2.0.1 is the newest release.
-No version bump can resolve them, so issue #491 removes the package instead:
-`@puppeteer/browsers` 3.x replaced it with `modern-tar`, and the Puppeteer 25.7
-upgrade took the last path to it out of both lockfiles.
+No version bump can resolve them, so issue #491 removed the browser-backed
+Mermaid tooling instead: `make nixie` and the ER snapshot command both render
+through the browser-free `merman-cli`, so no Puppeteer or Mermaid CLI
+dependency remains to resolve `extract-zip`.
 
 The repository keeps two lockfiles, so absence has to be asserted in both.
 These tests are unconditional: an audit exception would hide a reintroduction

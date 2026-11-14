@@ -1068,20 +1068,12 @@ The Nixie package provides the `nixie` command, while the Merman package
 provides `merman-cli`. Continuous integration installs both tools before its
 first call to `make nixie`.
 
-`make nixie` needs no browser. The separate ER-snapshot command
-(`backend/src/bin/er_snapshots.rs`) renders its SVG through Mermaid CLI and
-Puppeteer, so prime the Puppeteer cache once before running it:
-
-```bash
-node scripts/install-mermaid-browser.mjs
-```
-
-The script downloads the pinned `chrome` and `chrome-headless-shell` builds
-through Puppeteer's public `browsers install` command and leaves an existing
-cache untouched. Extraction uses the optional `yauzl` package when one is
-installed and otherwise the platform's `unzip` command, so installation needs
-`unzip` on `PATH`; no lockfile resolves `yauzl`, and the pins that used to
-force it are gone.
+Neither `make nixie` nor the separate ER-snapshot command
+(`backend/src/bin/er_snapshots.rs`) needs a browser. Both render through
+`merman-cli`: Nixie drives it through its Merman backend, and the ER snapshot
+command invokes it directly, so the pinned `merman-cli` installation above is
+the only prerequisite. No Puppeteer cache is primed and no browser download is
+attempted; the repository resolves neither Puppeteer nor Mermaid CLI.
 
 Code changes under `frontend-pwa/` or `packages/tokens/` must pass the relevant
 front-end gates plus the repository-wide commit gates:
@@ -2373,12 +2365,13 @@ indefensible fails the test suite instead of waiting for its expiry:
   Bun honours ranged `resolutions` keys or the last Picomatch 2 consumer leaves.
 - An advisory with no patched release is removed by taking the package out of
   the graph, not by renewing its exception. The two `extract-zip` entries were
-  retired that way: `@puppeteer/browsers` 3.x replaced `extract-zip` with
-  `modern-tar`, and the Puppeteer 25.7 upgrade removed the last path to it
-  (#491). `tests/workflow_contracts/extract_zip_absence_test.py` now asserts
-  the package is absent from both lockfiles, unconditionally. If a later
-  dependency brings it back, remove that dependency rather than restoring the
-  exception.
+  retired that way: the browser-backed Mermaid tooling left both graphs, so the
+  Puppeteer dependency that resolved `extract-zip` is gone (#491). Both
+  `make nixie` and the ER snapshot command render through the browser-free
+  `merman-cli`. `tests/workflow_contracts/extract_zip_absence_test.py` now
+  asserts the package is absent from both lockfiles, unconditionally. If a
+  later dependency brings it back, remove that dependency rather than restoring
+  the exception.
 - An exception taken out against a patched release fails once the patch is
   reachable. The Style Dictionary entry was of this kind and is gone: the
   patched release (5.4.4 and later) needs glob 13, so the repository-wide
