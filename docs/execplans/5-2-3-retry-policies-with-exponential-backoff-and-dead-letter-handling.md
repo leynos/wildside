@@ -4047,8 +4047,9 @@ database that refuses every write leaves no way to protect it.
 The repair keeps the write and makes it survive the ordinary transient failure:
 
 - The fallback is attempted three times, with waits of 25 ms and 150 ms before
-  the later attempts. The sequence costs under a fifth of a second, which keeps
-  it inside a delivery's budget.
+  the later attempts. Those sleeps total 175 ms; the database calls and pool
+  acquisition each attempt needs are additional, so 175 ms is the added wait
+  rather than the elapsed time.
 - A refused guard (`Ok(false)`) still ends the sequence immediately: the row is
   another actor's, so retrying would only repeat a decision someone else now
   owns.
