@@ -16,7 +16,10 @@ use apalis_postgres::PgAck;
 
 use super::{Canary, DELIVERED_ATTEMPT, OWNER, SchedulerRow, delivery_attempt};
 use crate::fetch_one_task;
-use backend::outbound::queue::{PostgresRetryScheduler, RetryPersistence, TerminalCapClamp};
+use backend::outbound::queue::{
+    PostgresRetryScheduler, RetryPersistence, TerminalCapClamp, TerminalRetryReason,
+    TerminalRetryUpdate,
+};
 
 /// The attempt limit the delivery was fetched with.
 ///
@@ -46,6 +49,26 @@ fn unreachable_scheduler(canary: &Canary) -> PostgresRetryScheduler {
             .connect_lazy("postgres://wildside:wildside@127.0.0.1:1/wildside")
             .expect("build a lazily connected pool for an unreachable database");
         PostgresRetryScheduler::new(pool)
+    })
+}
+
+/// Run the terminal write the wrapper attempts before its fallback.
+///
+/// This is the write whose failure the fallback exists to cover, so driving it
+/// against the unreachable database keeps the canary faithful to the sequence
+/// the handler performs instead of starting at the fallback.
+fn terminal_write_fails(canary: &Canary, scheduler: &PostgresRetryScheduler) -> bool {
+    canary.environment.run(async {
+        scheduler
+            .record_terminal_failure(TerminalRetryUpdate {
+                task_id: &canary.id,
+                worker_id: OWNER,
+                attempt: delivery_attempt(),
+                reason: TerminalRetryReason::Fatal,
+                shrink_limit: true,
+            })
+            .await
+            .is_err()
     })
 }
 
@@ -171,7 +194,11 @@ fn a_fallback_that_never_lands_leaves_the_row_fetchable() {
     let canary = Canary::start(SchedulerRow::running(UNREACHABLE_QUEUE, OWNER).due(), None);
     let scheduler = unreachable_scheduler(&canary);
 
-    let outcome = canary
+    assert!(
+        terminal_write_fails(&canary, &scheduler),
+        "an unreachable database must report the terminal write as failed"
+    );
+    let clamp = canary
         .environment
         .run(scheduler.clamp_terminal_cap(TerminalCapClamp {
             task_id: &canary.id,
@@ -179,8 +206,8 @@ fn a_fallback_that_never_lands_leaves_the_row_fetchable() {
             attempt: delivery_attempt(),
         }));
     assert!(
-        outcome.is_err(),
-        "an unreachable database must report a failed write, not an applied one"
+        clamp.is_err(),
+        "an unreachable database must report the fallback as failed, not applied"
     );
 
     acknowledge_failure(&canary);
