@@ -2,16 +2,13 @@
 //!
 //! A terminal decision asks for one guarded terminal write. Only an applied
 //! write counts as a dead letter; a refused or failed write increments the
-//! terminal-write-failure counter instead, and a failed write is followed by
-//! exactly one cap-lowering fallback.
+//! terminal-write-failure counter instead, and a failed write is followed by a
+//! cap-lowering fallback that is retried a bounded number of times.
 
-use super::doubles::{
-    PersistenceCall, RecordingMetrics, RecordingPersistence, TASK_ID, WORKER, WriteOutcome,
-};
-use super::failure_run::{ATTEMPT, FailureRun};
+use super::doubles::WriteOutcome;
+use super::failure_run::{FailureRun, clamp_call, terminal_call};
 use crate::domain::jobs::retry::JobErrorKind;
 use crate::domain::ports::RouteDeadLetterOutcome;
-use crate::outbound::queue::TerminalRetryReason;
 use tracing_test::traced_test;
 
 #[tokio::test]
@@ -22,13 +19,8 @@ async fn fatal_failure_records_one_terminal_write() {
 
     assert_eq!(
         run.calls(),
-        vec![PersistenceCall::Terminal {
-            task_id: TASK_ID.to_owned(),
-            worker_id: WORKER.to_owned(),
-            attempt: ATTEMPT,
-            reason: TerminalRetryReason::Fatal,
-            shrink_limit: true,
-        }]
+        vec![terminal_call()],
+        "a terminal decision that applies is the delivery's only write"
     );
     assert_eq!(run.dead_letters(), vec![RouteDeadLetterOutcome::Fatal]);
     assert!(run.retries().is_empty());
@@ -40,8 +32,9 @@ async fn terminal_write_failure_records_its_own_outcome_only() {
 
     run.apply(JobErrorKind::Fatal).await;
 
-    assert!(
-        matches!(run.calls().as_slice(), [PersistenceCall::Terminal { .. }]),
+    assert_eq!(
+        run.calls(),
+        vec![terminal_call()],
         "a refused terminal write is not followed by a fallback: the row is not ours"
     );
     assert!(
@@ -57,26 +50,13 @@ async fn terminal_write_failure_records_its_own_outcome_only() {
 
 #[tokio::test]
 async fn terminal_write_error_lowers_the_cap_after_the_failed_write() {
-    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Failed);
+    let run = FailureRun::failing_terminal_write([WriteOutcome::Updated]);
 
     run.apply(JobErrorKind::Fatal).await;
 
     assert_eq!(
         run.calls(),
-        vec![
-            PersistenceCall::Terminal {
-                task_id: TASK_ID.to_owned(),
-                worker_id: WORKER.to_owned(),
-                attempt: ATTEMPT,
-                reason: TerminalRetryReason::Fatal,
-                shrink_limit: true,
-            },
-            PersistenceCall::Clamp {
-                task_id: TASK_ID.to_owned(),
-                worker_id: WORKER.to_owned(),
-                attempt: ATTEMPT,
-            },
-        ],
+        vec![terminal_call(), clamp_call()],
         "a failed terminal write must be followed by one cap-lowering fallback"
     );
     assert!(
@@ -91,14 +71,61 @@ async fn terminal_write_error_lowers_the_cap_after_the_failed_write() {
 
 #[traced_test]
 #[tokio::test]
-async fn failed_cap_fallback_logs_its_own_decision() {
-    let run = FailureRun {
-        persistence: RecordingPersistence::new(WriteOutcome::Updated, WriteOutcome::Failed)
-            .with_clamp(WriteOutcome::Failed),
-        metrics: RecordingMetrics::default(),
-    };
+async fn a_transient_cap_fallback_failure_is_retried() {
+    let run = FailureRun::failing_terminal_write([WriteOutcome::Failed, WriteOutcome::Updated]);
 
     run.apply(JobErrorKind::Fatal).await;
 
-    assert!(logs_contain("terminal_cap_clamp_failed"));
+    assert_eq!(
+        run.calls(),
+        vec![terminal_call(), clamp_call(), clamp_call()],
+        "a fallback that fails once must be retried before the delivery unwinds"
+    );
+    assert!(
+        logs_contain("terminal_cap_clamped"),
+        "the retried fallback must report that it applied"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_cap_fallback_is_not_retried() {
+    let run = FailureRun::failing_terminal_write([WriteOutcome::NotOwned, WriteOutcome::Updated]);
+
+    run.apply(JobErrorKind::Fatal).await;
+
+    assert_eq!(
+        run.calls(),
+        vec![terminal_call(), clamp_call()],
+        "a refused guard means another actor owns the row, so a retry would repeat its decision"
+    );
+}
+
+#[tokio::test]
+async fn cap_fallback_exhaustion_retries_a_bounded_number_of_times() {
+    let run = FailureRun::failing_terminal_write([WriteOutcome::Failed]);
+
+    run.apply(JobErrorKind::Fatal).await;
+
+    assert_eq!(
+        run.calls(),
+        vec![terminal_call(), clamp_call(), clamp_call(), clamp_call()],
+        "the fallback must be attempted three times and then abandoned"
+    );
+}
+
+#[traced_test]
+#[tokio::test]
+async fn exhausted_cap_fallback_raises_the_alarm() {
+    let run = FailureRun::failing_terminal_write([WriteOutcome::Failed]);
+
+    run.apply(JobErrorKind::Fatal).await;
+
+    assert!(
+        logs_contain("terminal_cap_clamp_exhausted"),
+        "a retired job left unprotected must raise the alarm"
+    );
+    assert!(
+        !logs_contain("terminal_cap_clamped"),
+        "no fallback applied, so none may be reported as clamped"
+    );
 }

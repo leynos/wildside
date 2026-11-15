@@ -76,6 +76,7 @@ pub struct RetryScheduleUpdate<'a> {
 /// not be stored. Apalis still acknowledges that delivery as failed, and a
 /// failed row stays fetchable while `attempts < max_attempts`, so the cap is
 /// lowered to the terminating attempt before that acknowledgement lands.
+#[derive(Clone, Copy)]
 pub struct TerminalCapClamp<'a> {
     /// Identity of the task that terminated.
     pub task_id: &'a str,

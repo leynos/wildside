@@ -15,6 +15,7 @@ use super::doubles::{
 use super::policy;
 use crate::domain::jobs::retry::{JitterSample, JobErrorKind, JobFailure};
 use crate::domain::ports::{RouteDeadLetterOutcome, RouteRetryOutcome};
+use crate::outbound::queue::TerminalRetryReason;
 
 /// Delivery attempt every effect test exercises.
 ///
@@ -34,6 +35,18 @@ impl FailureRun {
     pub(super) fn new(schedule: WriteOutcome, terminal: WriteOutcome) -> Self {
         Self {
             persistence: RecordingPersistence::new(schedule, terminal),
+            metrics: RecordingMetrics::default(),
+        }
+    }
+
+    /// A run whose terminal write fails and whose fallback writes follow `clamps`.
+    ///
+    /// The wrapper retries a failed fallback, so each scripted outcome answers
+    /// one attempt.
+    pub(super) fn failing_terminal_write(clamps: impl IntoIterator<Item = WriteOutcome>) -> Self {
+        Self {
+            persistence: RecordingPersistence::new(WriteOutcome::Updated, WriteOutcome::Failed)
+                .with_clamp_script(clamps),
             metrics: RecordingMetrics::default(),
         }
     }
@@ -90,5 +103,25 @@ impl FailureRun {
 
     pub(super) fn terminal_write_failures(&self) -> Vec<RouteDeadLetterOutcome> {
         self.metrics.terminal_write_failures()
+    }
+}
+
+/// The terminal write a fatal failure of the shared delivery performs.
+pub(super) fn terminal_call() -> PersistenceCall {
+    PersistenceCall::Terminal {
+        task_id: TASK_ID.to_owned(),
+        worker_id: WORKER.to_owned(),
+        attempt: ATTEMPT,
+        reason: TerminalRetryReason::Fatal,
+        shrink_limit: true,
+    }
+}
+
+/// The cap-lowering fallback the shared delivery performs.
+pub(super) fn clamp_call() -> PersistenceCall {
+    PersistenceCall::Clamp {
+        task_id: TASK_ID.to_owned(),
+        worker_id: WORKER.to_owned(),
+        attempt: ATTEMPT,
     }
 }

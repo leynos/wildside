@@ -2643,13 +2643,21 @@ instead of overwriting the decision of the delivery that replaced it.
 
 A terminal classification fails the delivery, which Apalis acknowledges as
 `Failed`, and a failed row is fetched again while `attempts < max_attempts`. If
-the terminal write itself fails, the wrapper therefore issues one further
-guarded write, `clamp_terminal_cap`, which lowers `max_attempts` to the
+the terminal write itself fails, the wrapper therefore issues further guarded
+writes through `clamp_terminal_cap`, which lowers `max_attempts` to the
 terminating attempt with `LEAST(COALESCE(max_attempts, $cap), $cap)`. The
-acknowledgement then leaves an unfetchable row. The fallback never raises a
-cap, carries the same four guards, and is best effort: a refusal or an error is
-logged with its own decision and never retried, because the delivery is already
-unwinding.
+acknowledgement then leaves an unfetchable row, because the cap binds exactly
+the value the acknowledgement stores as `attempts`. The fallback never raises a
+cap and carries the same four guards. It is idempotent, so a failed attempt is
+retried up to three times with short waits: it runs only after another write
+has failed, which usually means a transiently failing database, and one attempt
+would leave the retired job fetchable for the rest of the delivery's life. A
+refusal still ends the sequence, because the row is another actor's and a retry
+would repeat their decision. Exhaustion logs `terminal_cap_clamp_exhausted` at
+`ERROR`; nothing in a handler can protect a row whose writes the database
+refuses. Parking `run_at` is deliberately not used: orphan recovery rewrites
+`status` to `Pending`, which the fetch selects whatever the attempt count, so a
+parked row would never run and would never be listed as dead either.
 
 Backoff frees the worker slot, and the polling interval is a precision floor. A
 crash between the in-memory attempt increment and its acknowledgement can lose

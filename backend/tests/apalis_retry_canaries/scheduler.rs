@@ -6,7 +6,8 @@
 //! two steps. These canaries drive `PostgresRetryScheduler` directly so the SQL
 //! predicate, and not only the wrapper's precondition, is pinned against a real
 //! `apalis.jobs` table. The cases that exercise a refused write, and the
-//! terminal-cap fallback, live in [`guards`].
+//! terminal-cap fallback, live in [`guards`]; the ones that drive the real
+//! acknowledgement and fetch after that fallback live in [`terminated`].
 
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -27,6 +28,9 @@ use crate::support::apalis_job_id::apalis_job_id;
 // deriving a nested directory for its children, so the path is explicit here.
 #[path = "scheduler/guards.rs"]
 mod guards;
+
+#[path = "scheduler/terminated.rs"]
+mod terminated;
 
 /// The retry delay the happy-path canary schedules.
 const RETRY_DELAY: Duration = Duration::from_secs(30);
@@ -81,10 +85,16 @@ struct SchedulerRow<'a> {
     status: &'a str,
     attempts: i32,
     max_attempts: i32,
+    /// When the row becomes eligible, in seconds from now; negative is due.
+    run_at_offset_seconds: f64,
 }
 
 impl<'a> SchedulerRow<'a> {
     /// A running row owned by `worker`, with the ordinary attempt counters.
+    ///
+    /// Its deadline is in the future, so the scheduling canaries can prove a
+    /// write moved it. A canary that needs the fetcher to consider the row
+    /// calls [`due`](Self::due).
     fn running(queue: &'a str, worker: &'a str) -> Self {
         Self {
             queue,
@@ -92,7 +102,14 @@ impl<'a> SchedulerRow<'a> {
             status: "Running",
             attempts: STORED_ATTEMPTS,
             max_attempts: 5,
+            run_at_offset_seconds: 3_600.0,
         }
+    }
+
+    /// Make the row already eligible, so a fetch would claim it.
+    fn due(mut self) -> Self {
+        self.run_at_offset_seconds = -1.0;
+        self
     }
 }
 
@@ -110,7 +127,7 @@ async fn insert_scheduler_row(
     let mut job = JobRow::new(row.queue, id, row.status)
         .attempts(row.attempts)
         .max_attempts(row.max_attempts)
-        .run_at_offset_seconds(3_600.0)
+        .run_at_offset_seconds(row.run_at_offset_seconds)
         .locked_by(row.worker);
     if let Some(metadata) = metadata {
         job = job.metadata(metadata);

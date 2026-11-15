@@ -28,7 +28,8 @@ pub(super) struct TerminalRetryPlan {
 /// neither a retry nor a dead letter; it increments the terminal-write-failure
 /// counter and logs a warning instead. A failed write is then followed by
 /// [`clamp_terminal_cap`], because the handler still returns an error and must
-/// not let Apalis run the retired job again.
+/// not let Apalis run the retired job again; that fallback retries a transient
+/// failure briefly and raises an alarm if it never lands.
 #[tracing::instrument(
     skip_all,
     fields(
