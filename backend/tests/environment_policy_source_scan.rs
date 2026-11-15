@@ -120,6 +120,8 @@
 
 mod environment_policy_scan;
 
+use std::path::PathBuf;
+
 use environment_policy_scan::{
     SOURCE_ROOTS, TestResult, rust_sources, suppressed_lints, unreadable_includes, workspace_root,
 };
@@ -159,28 +161,29 @@ fn no_source_file_allows_a_policy_lint() -> TestResult {
     Ok(())
 }
 
-/// Scenario: the scan is pointed at sources that no longer exist.
+/// Sources the scan must reach, as slash-separated workspace-relative paths.
 ///
-/// Invariant: it reads real files and fails loudly rather than passing by
-/// finding nothing, which is how a source scan usually rots.
-#[test]
-fn the_scan_reads_the_workspace_sources() -> TestResult {
+/// Each names a workspace member whose sources the scan exists to cover, so a
+/// root that stopped being walked fails the test that follows.
+const EXPECTED_SOURCES: [&str; 3] = [
+    "backend/src/lib.rs",
+    "crates/example-data/src/lib.rs",
+    "tools/architecture-lint/src/main.rs",
+];
+
+/// Every workspace source the scan reads, across all of its roots.
+fn workspace_sources() -> TestResult<Vec<(PathBuf, String)>> {
     let root = workspace_root()?;
     let mut sources = Vec::new();
     for source_root in SOURCE_ROOTS {
         sources.extend(rust_sources(&root.join(source_root), source_root)?);
     }
+    Ok(sources)
+}
 
-    assert!(
-        sources.len() > 300,
-        "the scan should cover the workspace's sources, found {}",
-        sources.len()
-    );
-    for expected in [
-        "backend/src/lib.rs",
-        "crates/example-data/src/lib.rs",
-        "tools/architecture-lint/src/main.rs",
-    ] {
+/// Assert the scan reached every source it is expected to cover.
+fn assert_reaches_expected_sources(sources: &[(PathBuf, String)]) {
+    for expected in EXPECTED_SOURCES {
         assert!(
             sources
                 .iter()
@@ -188,6 +191,22 @@ fn the_scan_reads_the_workspace_sources() -> TestResult {
             "the scan should reach {expected}"
         );
     }
+}
+
+/// Scenario: the scan is pointed at sources that no longer exist.
+///
+/// Invariant: it reads real files and fails loudly rather than passing by
+/// finding nothing, which is how a source scan usually rots.
+#[test]
+fn the_scan_reads_the_workspace_sources() -> TestResult {
+    let sources = workspace_sources()?;
+
+    assert!(
+        sources.len() > 300,
+        "the scan should cover the workspace's sources, found {}",
+        sources.len()
+    );
+    assert_reaches_expected_sources(&sources);
     Ok(())
 }
 
