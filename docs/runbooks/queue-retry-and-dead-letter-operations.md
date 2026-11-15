@@ -11,8 +11,10 @@ correct database. These examples never select job payloads.
 
 The dead predicate includes `Killed` rows and `Failed` rows whose limit is null
 or exhausted. A missing or unrecognized terminal reason is `Unclassified`. The
-adapter also omits rows with negative attempts or malformed requeue counts;
-this diagnostic query shows those rows so an operator can investigate them.
+adapter also omits rows with negative attempts or malformed requeue counts: the
+listing reports each one as a skipped entry with its identifier and cause,
+alongside the jobs it did return. This diagnostic query shows the raw rows so
+an operator can investigate them.
 
 ```sql
 SELECT id, job_type, attempts, max_attempts, done_at,
@@ -118,23 +120,35 @@ names it (`list_dead`, `requeue`, or `discard`, with `job_id` on the last two).
 A failure is recorded on that span, so every error return has a boundary event
 to alert on. Successful requeues and discards log at `INFO` with the `job_id`,
 and a row the domain cannot represent logs at `WARN` with the `job_id` that was
-skipped.
+skipped and a bounded `reason` (`negative-attempts` or
+`invalid-requeue-count`). Each listing that skipped anything also logs one
+summary line with the number skipped, so a sampled log still shows that a gap
+existed.
 
 The retry scheduling-failure counter covers refused retry decisions only. A
 terminal write the database refuses or fails increments
 `route_queue_terminal_write_failure_total`, labelled by the reason the write
 would have stored (`fatal` or `exhausted`), and not the dead-letter counter,
-because the row's stored state did not change. Missing or mismatched worker
-identity writes nothing at all, and which counter moves depends on the decision
-the policy reached. A scheduling decision increments the retry
-scheduling-failure counter, because the retry that was asked for will not
-happen. A terminal decision increments none of the three counters, because the
-row was never classified as dead. Both log at `ERROR`
+because no reason was stored. Missing or mismatched worker identity writes
+nothing at all, and which counter moves depends on the decision the policy
+reached. A scheduling decision increments the retry scheduling-failure counter,
+because the retry that was asked for will not happen. A terminal decision
+increments none of the three counters, because the row was never classified as
+dead. Both log at `ERROR`
 (`retry metadata missing; cannot persist failure outcome`) with the refused
 `decision`. A refused or failed write also logs at `WARN` with decision
 `terminal_write_failure`. Alert on the terminal-write-failure counter and on
 both log events: the dead-letter counter alone will not show a terminal write
 that never applied.
+
+A failed terminal write is followed by one bounded fallback. The handler lowers
+the row's `max_attempts` to the attempt that just terminated, so the `Failed`
+row Apalis records next is not fetched and run again. That fallback logs at
+`WARN` with decision `terminal_cap_clamped` when it applies,
+`terminal_cap_clamp_refused` when another actor has taken the row over, or
+`terminal_cap_clamp_failed` when the statement itself fails. Only the last case
+leaves a terminal row that is still re-fetchable; it is bounded by the existing
+`max_attempts` and is what the terminal-write-failure alert should page on.
 
 Dead-letter backlog is the number of rows the dead predicate matches. This
 query is read-only, ignores no rows, and returns only a count:
