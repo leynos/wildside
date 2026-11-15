@@ -4119,6 +4119,6 @@ finished at 09:13, green, on the older library; r15 and the hosted run both
 started afterwards and both fail identically. Every file the rule flags is
 byte-identical to `origin/main`.
 
-Following the r11 note, the repair belongs in a base pull request rather than in
-this feature diff: three refactors, one per flagged function, delivered
+Following the r11 note, the repair belongs in a base pull request rather than
+in this feature diff: three refactors, one per flagged function, delivered
 separately from the retry work.
