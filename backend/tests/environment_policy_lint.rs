@@ -150,15 +150,9 @@ fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
 /// temporary directory the caller keeps alive for the compilation.
 fn stage_probe(probe: &str) -> TestResult<tempfile::TempDir> {
     let sandbox = tempfile::tempdir()?;
-    write_probe(sandbox.path(), probe)?;
-    Ok(sandbox)
-}
-
-/// Write `probe` into `sandbox`, beside the directory its compilation emits to.
-fn write_probe(sandbox: &Path, probe: &str) -> TestResult {
-    let dir = create_output_directory(sandbox)?;
+    let dir = create_output_directory(sandbox.path())?;
     dir.write("probe.rs", probe)?;
-    Ok(())
+    Ok(sandbox)
 }
 
 /// Open `sandbox` and create the directory `clippy-driver` writes its output to.
