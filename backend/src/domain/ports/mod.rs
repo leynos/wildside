@@ -61,7 +61,10 @@ pub use catalogue_repository::{
     CatalogueRepository, CatalogueRepositoryError, ExploreCatalogueSnapshot,
     FixtureCatalogueRepository,
 };
-pub use dead_letter_queue::{DeadJob, DeadJobId, DeadLetterError, DeadLetterQueue, DeadReason};
+pub use dead_letter_queue::{
+    DeadJob, DeadJobId, DeadJobSkip, DeadLetterError, DeadLetterListing, DeadLetterQueue,
+    DeadReason, SkippedDeadJob,
+};
 #[cfg(test)]
 pub use descriptor_ingestion_repository::MockDescriptorIngestionRepository;
 pub use descriptor_ingestion_repository::{

@@ -1,9 +1,53 @@
 //! Mapping and dead-row predicate tests for the PostgreSQL adapter.
 
-use super::{
-    dead_reason_from_metadata, is_dead_row, next_count_value, next_requeue_count, truncate_utf8,
+use super::row_decoding::{
+    dead_job_from_row, dead_reason_from_metadata, next_count_value, next_requeue_count,
+    truncate_utf8,
 };
-use crate::domain::ports::DeadReason;
+use super::{DeadJobRow, is_dead_row};
+use crate::domain::ports::{DeadJobId, DeadJobSkip, DeadReason, SkippedDeadJob};
+
+/// Build the storage row the conversion reads, filling unused columns with
+/// values the case does not depend on.
+fn stored_row(attempts: i32, requeue_count: Option<&str>) -> DeadJobRow {
+    DeadJobRow {
+        id: "row-1".to_owned(),
+        job_type: "wildside.test-queue".to_owned(),
+        attempts,
+        dead_reason: Some("exhausted".to_owned()),
+        requeue_count: requeue_count.map(str::to_owned),
+        last_error: Some("probe failure".to_owned()),
+        dead_at: None,
+    }
+}
+
+#[rstest::rstest]
+#[case::negative_attempts(stored_row(-1, None), DeadJobSkip::NegativeAttempts)]
+#[case::invalid_requeue_count(stored_row(3, Some("not-a-count")), DeadJobSkip::InvalidRequeueCount)]
+fn unrepresentable_rows_are_rejected_with_their_cause(
+    #[case] row: DeadJobRow,
+    #[case] cause: DeadJobSkip,
+) {
+    let rejected = dead_job_from_row(row).expect_err("the row cannot be represented");
+
+    assert_eq!(
+        rejected,
+        SkippedDeadJob::new(DeadJobId::new("row-1"), cause)
+    );
+}
+
+#[test]
+fn representable_rows_map_every_listed_field() {
+    let job = dead_job_from_row(stored_row(3, Some("2"))).expect("the row is representable");
+
+    assert_eq!(job.id.as_str(), "row-1");
+    assert_eq!(job.job_type, "wildside.test-queue");
+    assert_eq!(job.reason, DeadReason::Exhausted);
+    assert_eq!(job.attempts, 3);
+    assert_eq!(job.requeue_count, 2);
+    assert_eq!(job.last_error.as_deref(), Some("probe failure"));
+    assert!(job.dead_at.is_none());
+}
 
 #[test]
 fn metadata_reason_maps_only_the_two_owned_labels() {

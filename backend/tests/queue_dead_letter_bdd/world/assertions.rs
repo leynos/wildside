@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use backend::domain::ports::{DeadJob, DeadLetterError, DeadLetterQueue, DeadReason};
+use backend::domain::ports::{DeadJob, DeadJobSkip, DeadLetterError, DeadLetterQueue, DeadReason};
 
 use super::QueueDeadLetterWorld;
 
@@ -15,6 +15,8 @@ impl QueueDeadLetterWorld {
             .block_on(self.dead_letters.list_dead(100))
             .expect("list dead jobs");
         listing
+            .into_parts()
+            .0
             .into_iter()
             .find(|job| job.id == id)
             .expect("listed probe job")
@@ -58,7 +60,14 @@ impl QueueDeadLetterWorld {
         assert_eq!(snapshot.status, "Pending");
         assert_eq!(snapshot.attempts, 0);
         assert_eq!(snapshot.max_attempts, Some(3));
-        assert!(snapshot.run_at <= chrono::Utc::now());
+        // Requeue writes `run_at` from the database clock, so the restored row
+        // must already be eligible when this read observes it. Boundary the
+        // assertion with the application clock, which is deliberately not the
+        // clock the write used: only a database-side timestamp can satisfy it.
+        assert!(
+            snapshot.run_at <= chrono::Utc::now(),
+            "a requeued row is immediately eligible, not scheduled for later"
+        );
         assert_eq!(snapshot.lock_by, None);
         assert_eq!(snapshot.lock_at, None);
         let metadata = snapshot.metadata.expect("requeue metadata");
@@ -140,7 +149,26 @@ impl QueueDeadLetterWorld {
 
     pub(crate) fn assert_listing_empty(&self) {
         self.list_dead(100);
-        assert!(self.listing.lock().expect("listing mutex").is_empty());
+        let listing = self.listing.lock().expect("listing mutex");
+        assert!(listing.jobs().is_empty());
+        assert!(
+            listing.skipped().is_empty(),
+            "an empty listing has nothing it could not read: {:?}",
+            listing.skipped()
+        );
+    }
+
+    /// Assert the listing reported the one row it could not read.
+    pub(crate) fn assert_listing_skips_the_negative_attempt_row(&self) {
+        let listing = self.listing.lock().expect("dead-job listing mutex");
+        assert!(
+            listing.jobs().is_empty(),
+            "a row with a negative attempt count is not listable"
+        );
+        let skipped = listing.skipped();
+        assert_eq!(skipped.len(), 1, "the one malformed row is reported");
+        assert_eq!(skipped[0].id, self.current_id());
+        assert_eq!(skipped[0].cause, DeadJobSkip::NegativeAttempts);
     }
 
     pub(crate) fn assert_listing_contains_only_valid_dead_job(&self) {
@@ -151,8 +179,19 @@ impl QueueDeadLetterWorld {
             .clone()
             .expect("valid dead job id");
         let listing = self.listing.lock().expect("dead-job listing mutex");
-        assert_eq!(listing.len(), 1);
-        assert_eq!(listing[0].id, valid_id);
+        assert_eq!(listing.jobs().len(), 1);
+        assert_eq!(listing.jobs()[0].id, valid_id);
+        let skipped = listing.skipped();
+        assert!(
+            !skipped.is_empty(),
+            "the unreadable rows are reported rather than dropped"
+        );
+        assert!(
+            skipped
+                .iter()
+                .all(|row| row.cause == DeadJobSkip::InvalidRequeueCount),
+            "every rejected row names the field that made it unreadable: {skipped:?}"
+        );
     }
 
     pub(crate) fn assert_job_absent(&self) {
@@ -180,8 +219,8 @@ impl QueueDeadLetterWorld {
             .runtime
             .block_on(self.dead_letters.list_dead(1))
             .expect("list newest dead job");
-        assert_eq!(listing.len(), 1);
-        assert_eq!(listing[0].id, expected);
+        assert_eq!(listing.jobs().len(), 1);
+        assert_eq!(listing.jobs()[0].id, expected);
     }
 
     pub(crate) fn assert_unknown_queue_error(&self) {

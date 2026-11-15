@@ -19,7 +19,8 @@ use backend::domain::jobs::retry::{
     JobErrorKind, JobFailure, JobRetryPolicy, JobRetryPolicyConfig,
 };
 use backend::domain::ports::{
-    DeadJob, DeadJobId, DeadLetterError, DeadLetterQueue, NoOpRouteQueueMetrics, RouteQueue,
+    DeadJobId, DeadLetterError, DeadLetterListing, DeadLetterQueue, NoOpRouteQueueMetrics,
+    RouteQueue,
 };
 use backend::outbound::queue::{
     ApalisPostgresProvider, GenericApalisRouteQueue, PostgresDeadLetterQueue, RequeueBudgets,
@@ -67,7 +68,7 @@ pub(crate) struct QueueDeadLetterWorld {
     current_job_id: Mutex<Option<DeadJobId>>,
     poll_control_job_id: Mutex<Option<DeadJobId>>,
     newest_job_id: Mutex<Option<DeadJobId>>,
-    listing: Mutex<Vec<DeadJob>>,
+    listing: Mutex<DeadLetterListing>,
     operation_result: Mutex<Option<Result<(), DeadLetterError>>>,
     state_before_operation: Mutex<Option<JobSnapshot>>,
 }
@@ -114,7 +115,7 @@ impl QueueDeadLetterWorld {
             current_job_id: Mutex::new(None),
             poll_control_job_id: Mutex::new(None),
             newest_job_id: Mutex::new(None),
-            listing: Mutex::new(Vec::new()),
+            listing: Mutex::new(DeadLetterListing::default()),
             operation_result: Mutex::new(None),
             state_before_operation: Mutex::new(None),
         }

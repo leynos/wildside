@@ -1,14 +1,15 @@
 //! Property coverage for dead-job listing across batch boundaries.
 //!
-//! The listing loop pages through raw SQL batches and drops rows whose storage
-//! metadata the domain cannot represent. Scenarios pin a few named mixtures;
+//! The listing loop pages through raw SQL batches and reports rows whose
+//! storage metadata the domain cannot represent instead of dropping them.
+//! Scenarios pin a few named mixtures;
 //! this test instead generates them, so the invariant is checked for many
 //! combinations of malformed rows, valid rows, and limits, including mixtures
 //! whose page boundaries fall inside a run of filtered rows. The same test
 //! asserts that listing leaves every skipped row untouched, so reading the
 //! dead-letter queue stays free of write side effects.
 
-use backend::domain::ports::DeadJobId;
+use backend::domain::ports::{DeadJobId, DeadJobSkip};
 use proptest::prelude::*;
 
 use super::rows::JobSeed;
@@ -100,10 +101,54 @@ impl QueueDeadLetterWorld {
         self.listing
             .lock()
             .expect("listing mutex")
+            .jobs()
             .iter()
             .map(|job| job.id.as_str().to_owned())
             .collect()
     }
+
+    /// Return the skipped rows from the most recent listing, sorted by id.
+    ///
+    /// Skipped rows are reported as a set: their order within the listing is
+    /// the storage order of rows that are, by definition, not listed.
+    fn reported_skips(&self) -> Vec<(String, &'static str)> {
+        let listing = self.listing.lock().expect("listing mutex");
+        let mut skips: Vec<(String, &'static str)> = listing
+            .skipped()
+            .iter()
+            .map(|row| (row.id.as_str().to_owned(), row.cause.as_label()))
+            .collect();
+        skips.sort();
+        skips
+    }
+}
+
+/// Pair each generated malformed identifier with the cause it should report.
+///
+/// The identifiers arrive grouped by kind, matching the order the rows are
+/// seeded, and are sorted so the expectation can be compared with the listing's
+/// own sorted report.
+fn expected_skips(
+    requeue_rows: &[DeadJobId],
+    attempt_rows: &[DeadJobId],
+) -> Vec<(String, &'static str)> {
+    let mut skips: Vec<(String, &'static str)> = requeue_rows
+        .iter()
+        .map(|id| {
+            (
+                id.as_str().to_owned(),
+                DeadJobSkip::InvalidRequeueCount.as_label(),
+            )
+        })
+        .chain(attempt_rows.iter().map(|id| {
+            (
+                id.as_str().to_owned(),
+                DeadJobSkip::NegativeAttempts.as_label(),
+            )
+        }))
+        .collect();
+    skips.sort();
+    skips
 }
 
 proptest! {
@@ -112,8 +157,10 @@ proptest! {
     /// Scenario: a generated mixture of malformed and valid dead rows.
     ///
     /// Invariant: the listing is exactly the valid rows, newest first,
-    /// truncated to the limit, wherever the batch boundaries fall, and every
-    /// column the snapshot reads on the skipped rows is unchanged.
+    /// truncated to the limit, wherever the batch boundaries fall; every skip
+    /// it reports names a genuinely malformed row and the field that made it
+    /// unreadable; and every column the snapshot reads on those rows is
+    /// unchanged.
     #[test]
     fn listing_is_the_valid_prefix_of_generated_rows(
         malformed_requeue_counts in 0usize..=140,
@@ -124,6 +171,7 @@ proptest! {
         let world = QueueDeadLetterWorld::new();
         let malformed_ids = world
             .insert_interleaved_malformed_rows(malformed_requeue_counts, malformed_attempts);
+        let (requeue_ids, attempt_ids) = malformed_ids.split_at(malformed_requeue_counts);
         let before: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();
 
         // Up to 280 malformed rows span more than two listing batches. Spacing
@@ -148,6 +196,20 @@ proptest! {
             .collect();
         prop_assert_eq!(world.listed_ids(), expected);
 
+        // A truncated listing stops walking once it holds `limit` jobs, so it
+        // reports only the unreadable rows it actually read. The check that
+        // holds for every limit is that each reported skip names a genuinely
+        // malformed row with the field that made it unreadable: no phantom
+        // skips, no misattributed causes.
+        let reported = world.reported_skips();
+        let expected_skips = expected_skips(requeue_ids, attempt_ids);
+        prop_assert!(
+            reported.iter().all(|entry| expected_skips.contains(entry)),
+            "reported skips {:?} must all be genuine among {:?}",
+            reported,
+            expected_skips
+        );
+
         let after: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();
         prop_assert_eq!(after, before, "listing must not modify the rows it skips");
     }
@@ -164,7 +226,8 @@ proptest! {
 /// between a pair of listed rows.
 ///
 /// Invariant: the listing is those four rows newest first, truncated by the
-/// limit, and the rows it skips keep every column the snapshot reads.
+/// limit; the skips it reports are genuine malformed rows; and the rows it
+/// skips keep every column the snapshot reads.
 #[test]
 fn listing_crosses_two_batch_boundaries() {
     let world = QueueDeadLetterWorld::new();
@@ -184,6 +247,16 @@ fn listing_crosses_two_batch_boundaries() {
 
     world.list_dead(2);
     assert_eq!(world.listed_ids(), newest_first[..2].to_vec());
+    let reported = world.reported_skips();
+    let expected = expected_skips(&malformed_ids[..125], &malformed_ids[125..]);
+    assert!(
+        !reported.is_empty(),
+        "the walk read malformed rows, so it must report them"
+    );
+    assert!(
+        reported.iter().all(|entry| expected.contains(entry)),
+        "every reported skip names a genuinely malformed row and its cause: {reported:?}"
+    );
 
     let after: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();
     assert_eq!(after, before, "listing must not modify the rows it skips");

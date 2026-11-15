@@ -67,12 +67,128 @@ pub struct DeadJob {
     pub dead_at: Option<DateTime<Utc>>,
 }
 
+/// Why a stored dead-letter row could not be represented as a [`DeadJob`].
+///
+/// The variants stay coarse so the reason can be used as a bounded log field
+/// and matched by callers; the offending value belongs in the row itself, not
+/// in this classification.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeadJobSkip {
+    /// The stored attempt count is negative, which no attempt count can be.
+    NegativeAttempts,
+    /// The stored requeue count is present but not a number.
+    InvalidRequeueCount,
+}
+
+impl DeadJobSkip {
+    /// Return a short, bounded label for logging and test assertions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::ports::DeadJobSkip;
+    ///
+    /// assert_eq!(DeadJobSkip::NegativeAttempts.as_label(), "negative-attempts");
+    /// ```
+    pub const fn as_label(self) -> &'static str {
+        match self {
+            Self::NegativeAttempts => "negative-attempts",
+            Self::InvalidRequeueCount => "invalid-requeue-count",
+        }
+    }
+}
+
+/// A dead-letter row the listing could not represent, and why.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SkippedDeadJob {
+    /// Storage identifier of the row that was skipped.
+    pub id: DeadJobId,
+    /// The field that made the row unrepresentable.
+    pub cause: DeadJobSkip,
+}
+
+impl SkippedDeadJob {
+    /// Pair a row identifier with the reason it was skipped.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::ports::{DeadJobId, DeadJobSkip, SkippedDeadJob};
+    ///
+    /// let skipped = SkippedDeadJob::new(DeadJobId::new("row-1"), DeadJobSkip::NegativeAttempts);
+    /// assert_eq!(skipped.id.as_str(), "row-1");
+    /// ```
+    pub fn new(id: DeadJobId, cause: DeadJobSkip) -> Self {
+        Self { id, cause }
+    }
+}
+
+/// The outcome of one dead-job listing.
+///
+/// A listing reads storage that earlier versions, or concurrent writers, may
+/// have left malformed. Rows the domain cannot represent are reported
+/// separately instead of being dropped silently, so a caller can tell an empty
+/// queue from an unreadable one without consulting logs. Both parts are read
+/// through accessors so a caller cannot consume the jobs and lose the skips.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DeadLetterListing {
+    jobs: Vec<DeadJob>,
+    skipped: Vec<SkippedDeadJob>,
+}
+
+impl DeadLetterListing {
+    /// Combine the represented jobs with the rows that were skipped.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::ports::DeadLetterListing;
+    ///
+    /// let listing = DeadLetterListing::new(Vec::new(), Vec::new());
+    /// assert!(listing.jobs().is_empty());
+    /// assert!(listing.skipped().is_empty());
+    /// ```
+    pub fn new(jobs: Vec<DeadJob>, skipped: Vec<SkippedDeadJob>) -> Self {
+        Self { jobs, skipped }
+    }
+
+    /// The dead jobs, newest first.
+    pub fn jobs(&self) -> &[DeadJob] {
+        &self.jobs
+    }
+
+    /// The rows storage held that could not be represented.
+    pub fn skipped(&self) -> &[SkippedDeadJob] {
+        &self.skipped
+    }
+
+    /// Consume the listing, returning its jobs and skipped rows.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use backend::domain::ports::DeadLetterListing;
+    ///
+    /// let (jobs, skipped) = DeadLetterListing::new(Vec::new(), Vec::new()).into_parts();
+    /// assert!(jobs.is_empty() && skipped.is_empty());
+    /// ```
+    pub fn into_parts(self) -> (Vec<DeadJob>, Vec<SkippedDeadJob>) {
+        (self.jobs, self.skipped)
+    }
+}
+
 /// Read and manage terminal jobs without exposing PostgreSQL to the domain.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait DeadLetterQueue: Send + Sync {
-    /// List newest dead jobs first, returning at most `limit` entries.
-    async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError>;
+    /// List newest dead jobs first, returning at most `limit` jobs.
+    ///
+    /// Rows that storage holds but the domain cannot represent are returned in
+    /// [`DeadLetterListing::skipped`] rather than dropped, so a caller can tell
+    /// a genuinely short queue from an unreadable one.
+    async fn list_dead(&self, limit: u32) -> Result<DeadLetterListing, DeadLetterError>;
 
     /// Restore the configured retry budget for a currently dead job.
     async fn requeue(&self, id: &DeadJobId) -> Result<(), DeadLetterError>;

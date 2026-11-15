@@ -100,6 +100,8 @@ impl QueueDeadLetterWorld {
         self.runtime
             .block_on(queue.list_dead(LISTING_LIMIT))
             .expect("list dead jobs around a deletion")
+            .into_parts()
+            .0
     }
 }
 

@@ -185,6 +185,11 @@ fn the_listing_contains_only_the_valid_dead_job(world: &QueueDeadLetterWorld) {
     world.assert_listing_contains_only_valid_dead_job();
 }
 
+#[then("the listing reports the malformed row instead of listing it")]
+fn the_listing_reports_the_malformed_row(world: &QueueDeadLetterWorld) {
+    world.assert_listing_skips_the_negative_attempt_row();
+}
+
 #[then("the operation fails because the dead job data is invalid")]
 fn the_operation_fails_because_dead_job_data_is_invalid(world: &QueueDeadLetterWorld) {
     world.assert_invalid_job_data_error();
