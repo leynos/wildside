@@ -76,6 +76,50 @@ impl RouteCoordinates {
     }
 }
 
+/// The keys a coordinate object is allowed to carry.
+///
+/// The visitor collects fields here so its map loop only dispatches keys, and
+/// so the duplicate, unknown, and missing-field rules live in one place.
+#[derive(Default)]
+struct CoordinateFields {
+    lat: Option<f64>,
+    lng: Option<f64>,
+}
+
+impl CoordinateFields {
+    /// Read the value belonging to `field` into the matching field.
+    ///
+    /// A repeated key and a key this object does not define are both errors,
+    /// so a coordinate object can never be silently ambiguous.
+    fn accept<'de, A>(&mut self, map: &mut A, field: &str) -> Result<(), A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        match field {
+            "lat" if self.lat.is_none() => self.lat = Some(map.next_value()?),
+            "lng" if self.lng.is_none() => self.lng = Some(map.next_value()?),
+            "lat" => return Err(serde::de::Error::duplicate_field("lat")),
+            "lng" => return Err(serde::de::Error::duplicate_field("lng")),
+            _ => return Err(serde::de::Error::unknown_field(field, &["lat", "lng"])),
+        }
+        Ok(())
+    }
+
+    /// Require both fields and validate them as WGS84 coordinates.
+    fn into_coordinates<E>(self) -> Result<RouteCoordinates, E>
+    where
+        E: serde::de::Error,
+    {
+        let lat = self
+            .lat
+            .ok_or_else(|| serde::de::Error::missing_field("lat"))?;
+        let lng = self
+            .lng
+            .ok_or_else(|| serde::de::Error::missing_field("lng"))?;
+        RouteCoordinates::new(lat, lng).map_err(|error| serde::de::Error::custom(error.message()))
+    }
+}
+
 struct RouteLocationVisitor;
 
 impl<'de> Visitor<'de> for RouteLocationVisitor {
@@ -103,22 +147,11 @@ impl<'de> Visitor<'de> for RouteLocationVisitor {
     where
         A: MapAccess<'de>,
     {
-        let mut lat = None;
-        let mut lng = None;
+        let mut fields = CoordinateFields::default();
         while let Some(field) = map.next_key::<String>()? {
-            match field.as_str() {
-                "lat" if lat.is_none() => lat = Some(map.next_value()?),
-                "lng" if lng.is_none() => lng = Some(map.next_value()?),
-                "lat" => return Err(serde::de::Error::duplicate_field("lat")),
-                "lng" => return Err(serde::de::Error::duplicate_field("lng")),
-                _ => return Err(serde::de::Error::unknown_field(&field, &["lat", "lng"])),
-            }
+            fields.accept(&mut map, &field)?;
         }
-        let lat = lat.ok_or_else(|| serde::de::Error::missing_field("lat"))?;
-        let lng = lng.ok_or_else(|| serde::de::Error::missing_field("lng"))?;
-        let coordinates = RouteCoordinates::new(lat, lng)
-            .map_err(|error| serde::de::Error::custom(error.message()))?;
-        Ok(RouteLocation::Coordinates(coordinates))
+        Ok(RouteLocation::Coordinates(fields.into_coordinates()?))
     }
 }
 
