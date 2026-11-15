@@ -8,8 +8,8 @@ use pretty_assertions::assert_eq;
 use rstest::rstest;
 
 use super::retry::{
-    JitterSample, JitterSampleError, JobErrorKind, JobFailure, JobRetryPolicy,
-    JobRetryPolicyBuildError, JobRetryPolicyConfig, MAX_BACKOFF_DELAY,
+    BoundedAttempt, JitterSample, JitterSampleError, JobAttemptBudget, JobErrorKind, JobFailure,
+    JobRetryPolicy, JobRetryPolicyBuildError, JobRetryPolicyConfig, MAX_BACKOFF_DELAY,
     MAX_JOB_FAILURE_MESSAGE_BYTES, RetryDecision,
 };
 use crate::domain::ports::EnrichmentSourceError;
@@ -179,11 +179,39 @@ fn decision_table_is_total_and_respects_failure_class_and_attempt_bound(
 ) {
     let policy = policy(valid_policy_config()).expect("valid policy should build");
     let jitter = JitterSample::new(0.5).expect("midpoint is valid");
-    let actual = policy.decide(
+    let delivery = BoundedAttempt::new(
         NonZeroU32::new(attempt).expect("case attempt is positive"),
-        kind,
-        jitter,
+        JobAttemptBudget::unlimited(),
     );
+    let actual = policy.decide(delivery, kind, jitter);
+    let expected = if should_dead_letter {
+        RetryDecision::DeadLetter
+    } else {
+        RetryDecision::Retry {
+            delay: Duration::from_secs(2),
+        }
+    };
+
+    assert_that!(actual, eq(expected));
+}
+
+#[rstest]
+#[case::policy_ceiling_binds(5, 3, true)]
+#[case::job_budget_binds(2, 2, true)]
+#[case::both_leave_another_attempt(5, 2, false)]
+#[case::zero_budget_forbids_the_first_attempt(0, 1, true)]
+fn decision_honours_the_lower_of_policy_ceiling_and_job_budget(
+    #[case] budget_cap: u32,
+    #[case] attempt: u32,
+    #[case] should_dead_letter: bool,
+) {
+    let policy = policy(valid_policy_config()).expect("valid policy should build");
+    let jitter = JitterSample::new(0.5).expect("midpoint is valid");
+    let delivery = BoundedAttempt::new(
+        NonZeroU32::new(attempt).expect("case attempt is positive"),
+        JobAttemptBudget::from_max_attempts(budget_cap),
+    );
+    let actual = policy.decide(delivery, JobErrorKind::Retryable, jitter);
     let expected = if should_dead_letter {
         RetryDecision::DeadLetter
     } else {

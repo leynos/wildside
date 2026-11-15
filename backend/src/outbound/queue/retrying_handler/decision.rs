@@ -3,7 +3,9 @@
 use std::num::NonZeroU32;
 use std::time::Duration;
 
-use crate::domain::jobs::retry::{JitterSample, JobErrorKind, JobRetryPolicy, RetryDecision};
+use crate::domain::jobs::retry::{
+    BoundedAttempt, JitterSample, JobAttemptBudget, JobErrorKind, JobRetryPolicy, RetryDecision,
+};
 use crate::outbound::queue::postgres_retry_scheduler::TerminalRetryReason;
 
 /// Outcome selected by the adapter's pure comparison of both attempt budgets.
@@ -29,8 +31,9 @@ pub(super) struct RetryDecisionContext {
 /// Select the durable action for a classified handler failure.
 ///
 /// The context limit reflects the `max_attempts` held by the fetched Apalis
-/// task. A retry is scheduled only while both that limit and the queue policy
-/// leave another attempt.
+/// task. It becomes the job's [`JobAttemptBudget`], so the domain weighs that
+/// limit and the queue policy together, and a retry is scheduled only while
+/// both leave another attempt.
 ///
 /// # Examples
 ///
@@ -55,12 +58,16 @@ pub(super) fn decide_retry_wrapper_action(
     policy: &JobRetryPolicy,
     context: RetryDecisionContext,
 ) -> RetryWrapperDecision {
-    let shrink_limit = context.attempt.get() < context.context_max_attempts;
-    match policy.decide(context.attempt, context.kind, context.jitter) {
-        RetryDecision::Retry { delay } if context.attempt.get() < context.context_max_attempts => {
-            RetryWrapperDecision::Schedule { delay }
-        }
-        RetryDecision::Retry { .. } => terminal_decision(context.kind, shrink_limit),
+    let delivery = BoundedAttempt::new(
+        context.attempt,
+        JobAttemptBudget::from_max_attempts(context.context_max_attempts),
+    );
+    // The adapter only reports whether the stored limit already forbids this
+    // attempt; lowering it is a scheduler concern, and the reason itself comes
+    // from the domain decision below.
+    let shrink_limit = delivery.is_permitted();
+    match policy.decide(delivery, context.kind, context.jitter) {
+        RetryDecision::Retry { delay } => RetryWrapperDecision::Schedule { delay },
         RetryDecision::DeadLetter => terminal_decision(context.kind, shrink_limit),
     }
 }
