@@ -1,10 +1,12 @@
-//! Side-effect tests for the retry wrapper's persistence contract.
+//! Scheduling-effect tests for the retry wrapper's persistence contract.
 //!
-//! When it can prove ownership, the wrapper attempts exactly one guarded write
+//! When it can prove ownership, the wrapper asks for exactly one guarded write
 //! per failed delivery. It writes nothing after a successful handler, and it
 //! writes nothing when the ownership proof is missing or the database guard
-//! refuses the update. The scheduler is behind [`RetryPersistence`], so these
-//! tests observe calls directly instead of inferring them from database state.
+//! refuses the update. Terminal writes and their cap-lowering fallback are
+//! covered by [`super::service_terminal`]. The scheduler is behind
+//! [`RetryPersistence`], so these tests observe calls directly instead of
+//! inferring them from database state.
 
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -19,90 +21,12 @@ use super::doubles::{
     DeliveryIdentity, FixedJitter, PersistenceCall, QUEUE, RecordingMetrics, RecordingPersistence,
     TASK_ID, TestJob, WORKER, WriteOutcome, service_with, task_with, wrapper_config,
 };
-use super::policy;
+use super::failure_run::{ATTEMPT, CONTEXT_MAX_ATTEMPTS, FailureRun};
 use crate::domain::jobs::retry::{
     JitterSample, JobErrorKind, JobFailure, JobRetryPolicy, JobRetryPolicyConfig,
 };
-use crate::domain::ports::{RouteDeadLetterOutcome, RouteRetryOutcome};
-use crate::outbound::queue::TerminalRetryReason;
+use crate::domain::ports::RouteRetryOutcome;
 use tracing_test::traced_test;
-
-/// Delivery attempt every case in this module exercises.
-///
-/// The wrapper's decision table is covered elsewhere; these tests only care
-/// which write a single failed delivery produces, so the attempt and the
-/// task's own attempt limit are held fixed.
-const ATTEMPT: u32 = 1;
-const CONTEXT_MAX_ATTEMPTS: u32 = 5;
-
-/// One failed delivery, observed through recording doubles.
-struct FailureRun {
-    persistence: RecordingPersistence,
-    metrics: RecordingMetrics,
-}
-
-impl FailureRun {
-    fn new(schedule: WriteOutcome, terminal: WriteOutcome) -> Self {
-        Self {
-            persistence: RecordingPersistence::new(schedule, terminal),
-            metrics: RecordingMetrics::default(),
-        }
-    }
-
-    /// Drive one failed delivery through the wrapper's failure path.
-    ///
-    /// The wrapper always asks Apalis to keep the task failed, so the error is
-    /// expected and deliberately dropped here.
-    async fn apply(&self, kind: JobErrorKind) {
-        self.apply_with_identity(kind, Some(TASK_ID), Some(WORKER))
-            .await;
-    }
-
-    /// Drive one failed delivery with a chosen task and worker identity.
-    ///
-    /// The scheduler is only reachable when both identities are present; a
-    /// `None` on either side exercises the wrapper's refusal to persist.
-    async fn apply_with_identity(
-        &self,
-        kind: JobErrorKind,
-        task_id: Option<&'static str>,
-        worker_id: Option<&'static str>,
-    ) {
-        let retry_policy = policy(3);
-        let jitter = FixedJitter(JitterSample::midpoint());
-        let context = RetryFailureContext {
-            attempt: NonZeroU32::new(ATTEMPT).expect("positive attempt"),
-            context_max_attempts: CONTEXT_MAX_ATTEMPTS,
-            policy: &retry_policy,
-            scheduler: &self.persistence,
-            metrics: &self.metrics,
-            jitter: &jitter,
-            queue_name: QUEUE,
-            task_id,
-            worker_id,
-        };
-        let failure = JobFailure::new(kind, "probe failure");
-        handle_failure(failure, &context)
-            .await
-            .expect_err("the wrapper asks Apalis to keep the task failed");
-    }
-
-    fn calls(&self) -> Vec<PersistenceCall> {
-        self.persistence.calls()
-    }
-
-    fn retries(&self) -> Vec<RouteRetryOutcome> {
-        self.metrics.retries()
-    }
-
-    fn dead_letters(&self) -> Vec<RouteDeadLetterOutcome> {
-        self.metrics.dead_letters()
-    }
-
-    fn terminal_write_failures(&self) -> Vec<RouteDeadLetterOutcome> {
-        self.metrics.terminal_write_failures()
-    }
-}
 
 #[tokio::test]
 async fn retryable_failure_schedules_exactly_one_write() {
@@ -115,6 +39,7 @@ async fn retryable_failure_schedules_exactly_one_write() {
         vec![PersistenceCall::Schedule {
             task_id: TASK_ID.to_owned(),
             worker_id: WORKER.to_owned(),
+            attempt: ATTEMPT,
             delay: Duration::from_millis(10),
         }]
     );
@@ -261,6 +186,7 @@ async fn configured_jitter_source_shapes_the_delivered_delay(
         vec![PersistenceCall::Schedule {
             task_id: TASK_ID.to_owned(),
             worker_id: WORKER.to_owned(),
+            attempt: ATTEMPT,
             delay: expected,
         }],
         "the persisted delay must follow the configured jitter sample"
@@ -276,61 +202,6 @@ async fn schedule_failure_warns_with_the_failure_decision() {
     run.apply(JobErrorKind::Retryable).await;
 
     assert!(logs_contain("schedule_failure"));
-}
-
-#[tokio::test]
-async fn fatal_failure_records_one_terminal_write() {
-    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Updated);
-
-    run.apply(JobErrorKind::Fatal).await;
-
-    assert_eq!(
-        run.calls(),
-        vec![PersistenceCall::Terminal {
-            task_id: TASK_ID.to_owned(),
-            worker_id: WORKER.to_owned(),
-            attempt: ATTEMPT,
-            reason: TerminalRetryReason::Fatal,
-            shrink_limit: true,
-        }]
-    );
-    assert_eq!(run.dead_letters(), vec![RouteDeadLetterOutcome::Fatal]);
-    assert!(run.retries().is_empty());
-}
-
-#[tokio::test]
-async fn terminal_write_failure_records_its_own_outcome_only() {
-    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::NotOwned);
-
-    run.apply(JobErrorKind::Fatal).await;
-
-    assert_eq!(run.calls().len(), 1);
-    assert!(
-        run.dead_letters().is_empty(),
-        "an unwritten terminal decision is not a dead letter"
-    );
-    assert_eq!(
-        run.terminal_write_failures(),
-        vec![RouteDeadLetterOutcome::Fatal],
-        "a refused terminal write has its own bounded counter"
-    );
-}
-
-#[tokio::test]
-async fn terminal_write_error_records_its_own_outcome_only() {
-    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Failed);
-
-    run.apply(JobErrorKind::Fatal).await;
-
-    assert_eq!(run.calls().len(), 1);
-    assert!(
-        run.dead_letters().is_empty(),
-        "a failed terminal write is not a dead letter"
-    );
-    assert_eq!(
-        run.terminal_write_failures(),
-        vec![RouteDeadLetterOutcome::Fatal]
-    );
 }
 
 #[rstest::rstest]
