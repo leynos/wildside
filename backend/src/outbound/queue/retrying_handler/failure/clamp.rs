@@ -26,8 +26,10 @@ const CLAMP_ATTEMPTS: usize = 3;
 
 /// The waits before the second and third attempts.
 ///
-/// The whole sequence costs less than a fifth of a second, which keeps the
-/// failure path inside a delivery's budget while still riding out a blip.
+/// The sleeps total 175 ms, which keeps the added wait inside a delivery's
+/// budget while still riding out a blip. The database calls and the pool
+/// acquisition each attempt needs are not included in that figure, so the
+/// elapsed time is the sleeps plus whatever those take.
 const CLAMP_RETRY_BACKOFF: [Duration; CLAMP_ATTEMPTS - 1] =
     [Duration::from_millis(25), Duration::from_millis(150)];
 
