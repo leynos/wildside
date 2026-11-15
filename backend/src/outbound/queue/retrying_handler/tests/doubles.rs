@@ -25,7 +25,10 @@ use crate::domain::jobs::retry::{JitterSample, JobFailure, JobRetryPolicy};
 use crate::domain::ports::{
     RouteDeadLetterOutcome, RouteQueueMetrics, RouteQueueOutcome, RouteRetryOutcome,
 };
-use crate::outbound::queue::{RetryPersistence, TerminalRetryReason, TerminalRetryUpdate};
+use crate::outbound::queue::{
+    RetryPersistence, RetryScheduleUpdate, TerminalCapClamp, TerminalRetryReason,
+    TerminalRetryUpdate,
+};
 
 pub(super) const QUEUE: &str = "wildside.wrapper-effects";
 pub(super) const WORKER: &str = "wrapper-effects-worker";
@@ -51,6 +54,7 @@ pub(super) enum PersistenceCall {
     Schedule {
         task_id: String,
         worker_id: String,
+        attempt: u32,
         delay: Duration,
     },
     Terminal {
@@ -60,22 +64,40 @@ pub(super) enum PersistenceCall {
         reason: TerminalRetryReason,
         shrink_limit: bool,
     },
+    Clamp {
+        task_id: String,
+        worker_id: String,
+        attempt: u32,
+    },
 }
 
 /// Scheduler double that records calls and returns a fixed outcome.
 pub(super) struct RecordingPersistence {
     schedule: WriteOutcome,
     terminal: WriteOutcome,
+    clamp: WriteOutcome,
     calls: Mutex<Vec<PersistenceCall>>,
 }
 
 impl RecordingPersistence {
+    /// Build a double whose fallback cap write succeeds.
+    ///
+    /// Only the tests that drive a failed terminal write care how the fallback
+    /// answers, so it starts out applied and [`with_clamp`](Self::with_clamp)
+    /// changes it.
     pub(super) fn new(schedule: WriteOutcome, terminal: WriteOutcome) -> Self {
         Self {
             schedule,
             terminal,
+            clamp: WriteOutcome::Updated,
             calls: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Choose how the fallback cap write answers.
+    pub(super) fn with_clamp(mut self, clamp: WriteOutcome) -> Self {
+        self.clamp = clamp;
+        self
     }
 
     pub(super) fn calls(&self) -> Vec<PersistenceCall> {
@@ -97,16 +119,12 @@ fn outcome(outcome: WriteOutcome) -> Result<bool, SqlxError> {
 
 #[async_trait]
 impl RetryPersistence for RecordingPersistence {
-    async fn schedule_retry(
-        &self,
-        task_id: &str,
-        worker_id: &str,
-        delay: Duration,
-    ) -> Result<bool, SqlxError> {
+    async fn schedule_retry(&self, update: RetryScheduleUpdate<'_>) -> Result<bool, SqlxError> {
         self.record(PersistenceCall::Schedule {
-            task_id: task_id.to_owned(),
-            worker_id: worker_id.to_owned(),
-            delay,
+            task_id: update.task_id.to_owned(),
+            worker_id: update.worker_id.to_owned(),
+            attempt: update.attempt.get(),
+            delay: update.delay,
         });
         outcome(self.schedule)
     }
@@ -123,6 +141,15 @@ impl RetryPersistence for RecordingPersistence {
             shrink_limit: update.shrink_limit,
         });
         outcome(self.terminal)
+    }
+
+    async fn clamp_terminal_cap(&self, clamp: TerminalCapClamp<'_>) -> Result<bool, SqlxError> {
+        self.record(PersistenceCall::Clamp {
+            task_id: clamp.task_id.to_owned(),
+            worker_id: clamp.worker_id.to_owned(),
+            attempt: clamp.attempt.get(),
+        });
+        outcome(self.clamp)
     }
 }
 

@@ -38,7 +38,8 @@ pub use postgres_dead_letter::{PostgresDeadLetterQueue, RequeueBudgets};
 
 mod postgres_retry_scheduler;
 pub use postgres_retry_scheduler::{
-    ClockSource, PostgresRetryScheduler, SystemClock, TerminalRetryReason, TerminalRetryUpdate,
+    ClockSource, PostgresRetryScheduler, RetryScheduleUpdate, SystemClock, TerminalCapClamp,
+    TerminalRetryReason, TerminalRetryUpdate,
 };
 
 mod retry_persistence;

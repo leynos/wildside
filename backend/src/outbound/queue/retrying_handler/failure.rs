@@ -11,10 +11,14 @@ use tracing::{error, warn};
 use super::JitterSource;
 use super::decision::{RetryDecisionContext, RetryWrapperDecision, decide_retry_wrapper_action};
 use crate::domain::jobs::retry::{JobErrorKind, JobFailure, JobRetryPolicy};
-use crate::domain::ports::{RouteDeadLetterOutcome, RouteQueueMetrics, RouteRetryOutcome};
+use crate::domain::ports::{RouteQueueMetrics, RouteRetryOutcome};
 use crate::outbound::queue::RetryPersistence;
-use crate::outbound::queue::TerminalRetryUpdate;
-use crate::outbound::queue::postgres_retry_scheduler::TerminalRetryReason;
+use crate::outbound::queue::RetryScheduleUpdate;
+
+mod clamp;
+mod terminal;
+
+use terminal::{TerminalRetryPlan, persist_terminal_failure};
 
 /// Everything one failed delivery needs to classify and persist its outcome.
 pub(super) struct RetryFailureContext<'a> {
@@ -99,12 +103,6 @@ struct RetryJobIdentity<'a> {
     worker_id: &'a str,
 }
 
-#[derive(Clone, Copy)]
-struct TerminalRetryPlan {
-    reason: TerminalRetryReason,
-    shrink_limit: bool,
-}
-
 /// Record that a failure could not be persisted because its identity is absent.
 ///
 /// A retryable decision counts as a scheduling failure, because the retry the
@@ -154,7 +152,12 @@ async fn persist_retry_schedule(
 ) {
     match context
         .scheduler
-        .schedule_retry(identity.task_id, identity.worker_id, delay)
+        .schedule_retry(RetryScheduleUpdate {
+            task_id: identity.task_id,
+            worker_id: identity.worker_id,
+            attempt: context.attempt,
+            delay,
+        })
         .await
     {
         Ok(true) => {
@@ -205,140 +208,6 @@ async fn persist_retry_schedule(
     }
 }
 
-/// Record a terminal failure's dead-letter classification.
-///
-/// Only an applied write counts as a dead-letter outcome. A lost ownership
-/// guard or a failed write changes no stored state, so it counts as neither a
-/// retry nor a dead letter; it increments the terminal-write-failure counter
-/// and logs a warning instead.
-#[tracing::instrument(
-    skip_all,
-    fields(
-        queue = context.queue_name,
-        task_id = identity.task_id,
-        worker_id = identity.worker_id,
-        attempt = context.attempt.get(),
-        reason = plan.reason.as_label(),
-        outcome = tracing::field::Empty,
-    )
-)]
-async fn persist_terminal_failure(
-    context: &RetryFailureContext<'_>,
-    identity: RetryJobIdentity<'_>,
-    kind: JobErrorKind,
-    plan: TerminalRetryPlan,
-) {
-    let TerminalRetryPlan {
-        reason,
-        shrink_limit,
-    } = plan;
-    let result = context
-        .scheduler
-        .record_terminal_failure(TerminalRetryUpdate {
-            task_id: identity.task_id,
-            worker_id: identity.worker_id,
-            attempt: context.attempt,
-            reason,
-            shrink_limit,
-        })
-        .await;
-    let write = TerminalWrite {
-        kind,
-        reason,
-        shrink_limit,
-    };
-    match result {
-        Ok(true) => record_dead_letter(context, identity, write),
-        Ok(false) => record_refused_terminal_write(context, identity, write, None),
-        Err(error) => record_refused_terminal_write(context, identity, write, Some(&error)),
-    }
-}
-
-/// The decision a terminal write was asked to persist.
-#[derive(Clone, Copy)]
-struct TerminalWrite {
-    kind: JobErrorKind,
-    reason: TerminalRetryReason,
-    shrink_limit: bool,
-}
-
-/// Record a terminal write that applied and stored its dead-letter reason.
-fn record_dead_letter(
-    context: &RetryFailureContext<'_>,
-    identity: RetryJobIdentity<'_>,
-    write: TerminalWrite,
-) {
-    let TerminalWrite {
-        kind,
-        reason,
-        shrink_limit,
-    } = write;
-    tracing::Span::current().record("outcome", "dead_lettered");
-    context
-        .metrics
-        .observe_dead_letter(dead_letter_outcome(reason));
-    warn!(
-        queue = context.queue_name,
-        task_id = identity.task_id,
-        worker_id = identity.worker_id,
-        attempt = context.attempt.get(),
-        error_kind = error_kind_label(kind),
-        decision = "dead_lettered",
-        reason = reason.as_label(),
-        shrink_limit,
-        "job failure recorded as terminal"
-    );
-}
-
-/// Record a terminal write the ownership guard or the database refused.
-///
-/// `error` distinguishes a write that failed from one whose guard matched no
-/// running row; both leave the stored row untouched and count the same way.
-fn record_refused_terminal_write(
-    context: &RetryFailureContext<'_>,
-    identity: RetryJobIdentity<'_>,
-    write: TerminalWrite,
-    error: Option<&sqlx::Error>,
-) {
-    let TerminalWrite { kind, reason, .. } = write;
-    tracing::Span::current().record("outcome", "terminal_write_failure");
-    context
-        .metrics
-        .observe_terminal_write_failure(dead_letter_outcome(reason));
-    if let Some(error) = error {
-        warn!(
-            queue = context.queue_name,
-            task_id = identity.task_id,
-            worker_id = identity.worker_id,
-            attempt = context.attempt.get(),
-            error_kind = error_kind_label(kind),
-            decision = "terminal_write_failure",
-            reason = reason.as_label(),
-            error = %error,
-            "job terminal update failed"
-        );
-    } else {
-        warn!(
-            queue = context.queue_name,
-            task_id = identity.task_id,
-            worker_id = identity.worker_id,
-            attempt = context.attempt.get(),
-            error_kind = error_kind_label(kind),
-            decision = "terminal_write_failure",
-            reason = reason.as_label(),
-            "job terminal update no longer owns a running row"
-        );
-    }
-}
-
-/// Map a terminal reason to the metric label it increments.
-fn dead_letter_outcome(reason: TerminalRetryReason) -> RouteDeadLetterOutcome {
-    match reason {
-        TerminalRetryReason::Fatal => RouteDeadLetterOutcome::Fatal,
-        TerminalRetryReason::Exhausted => RouteDeadLetterOutcome::Exhausted,
-    }
-}
-
 /// Return the worker that owns the row, if the delivery proves ownership.
 ///
 /// Apalis records the locking worker on the task context and the running
@@ -381,7 +250,7 @@ impl std::fmt::Display for RetryAckError {
 impl std::error::Error for RetryAckError {}
 
 /// Return the stable log label for a failure kind.
-fn error_kind_label(kind: JobErrorKind) -> &'static str {
+pub(super) fn error_kind_label(kind: JobErrorKind) -> &'static str {
     match kind {
         JobErrorKind::Retryable => "retryable",
         JobErrorKind::Fatal => "fatal",

@@ -54,6 +54,37 @@ pub struct TerminalRetryUpdate<'a> {
     pub shrink_limit: bool,
 }
 
+/// Details of one delivery's retry to schedule.
+///
+/// The fields describe a single delivery, so they travel as one value: passing
+/// them positionally would let a call site pair a worker with the wrong task's
+/// attempt, which is exactly the write the delivery guard exists to refuse.
+pub struct RetryScheduleUpdate<'a> {
+    /// Identity of the task to retry.
+    pub task_id: &'a str,
+    /// Worker that owns the task's lock.
+    pub worker_id: &'a str,
+    /// Attempt that just failed, as the delivery counts it.
+    pub attempt: NonZeroU32,
+    /// Delay before the task becomes eligible again.
+    pub delay: Duration,
+}
+
+/// Details of the fallback write that lowers a row's attempt cap.
+///
+/// The write exists for one case: a terminal classification whose reason could
+/// not be stored. Apalis still acknowledges that delivery as failed, and a
+/// failed row stays fetchable while `attempts < max_attempts`, so the cap is
+/// lowered to the terminating attempt before that acknowledgement lands.
+pub struct TerminalCapClamp<'a> {
+    /// Identity of the task that terminated.
+    pub task_id: &'a str,
+    /// Worker that owns the task's lock.
+    pub worker_id: &'a str,
+    /// Attempt that terminated the task.
+    pub attempt: NonZeroU32,
+}
+
 impl TerminalRetryReason {
     /// Stable value stored under `wildside.retry.dead_reason`.
     ///
@@ -87,7 +118,12 @@ impl PostgresRetryScheduler {
     /// ```text
     /// let scheduler = PostgresRetryScheduler::new(pool.clone());
     /// let updated = scheduler
-    ///     .schedule_retry(task_id, worker_id, delay)
+    ///     .schedule_retry(RetryScheduleUpdate {
+    ///         task_id,
+    ///         worker_id,
+    ///         attempt: NonZeroU32::new(2).expect("positive attempt"),
+    ///         delay,
+    ///     })
     ///     .await?;
     /// assert!(updated, "the worker still owns a running task");
     /// ```
@@ -117,15 +153,21 @@ impl PostgresRetryScheduler {
 
     /// Move a running, worker-owned task's next delivery time forward.
     ///
-    /// Returns `false` when the row is no longer owned by this worker or is not
-    /// running. The deadline is taken from the injected [`ClockSource`] and
-    /// bound as the new `run_at`.
+    /// Returns `false` when the row is no longer owned by this delivery: it is
+    /// not running, another worker holds the lock, or the row has since been
+    /// delivered again and its attempt counter moved on. The deadline is taken
+    /// from the injected [`ClockSource`] and bound as the new `run_at`.
     ///
     /// # Examples
     ///
     /// ```text
     /// let updated = scheduler
-    ///     .schedule_retry(task_id, worker_id, Duration::from_secs(2))
+    ///     .schedule_retry(RetryScheduleUpdate {
+    ///         task_id,
+    ///         worker_id,
+    ///         attempt,
+    ///         delay: Duration::from_secs(2),
+    ///     })
     ///     .await?;
     /// // `false` means the guarded update did not match this worker's row.
     /// ```
@@ -134,37 +176,41 @@ impl PostgresRetryScheduler {
     ///
     /// Returns the PostgreSQL error when the guarded update cannot be
     /// executed, or a protocol error when the delay is not representable as a
-    /// microsecond offset or the resulting deadline lies outside the supported
-    /// timestamp range.
+    /// microsecond offset, the resulting deadline lies outside the supported
+    /// timestamp range, or the attempt exceeds Apalis's integer range.
     #[tracing::instrument(
         skip_all,
         fields(
             operation = "schedule_retry",
-            task_id,
-            worker_id,
-            delay_micros = %delay.as_micros(),
+            task_id = update.task_id,
+            worker_id = update.worker_id,
+            attempt = update.attempt.get(),
+            delay_micros = %update.delay.as_micros(),
             scheduled_at = tracing::field::Empty,
         )
     )]
-    pub async fn schedule_retry(
-        &self,
-        task_id: &str,
-        worker_id: &str,
-        delay: Duration,
-    ) -> Result<bool, SqlxError> {
+    pub async fn schedule_retry(&self, update: RetryScheduleUpdate<'_>) -> Result<bool, SqlxError> {
+        let RetryScheduleUpdate {
+            task_id,
+            worker_id,
+            attempt,
+            delay,
+        } = update;
         let delay_micros = i64::try_from(delay.as_micros()).map_err(|_| {
             SqlxError::Protocol("retry delay exceeds PostgreSQL interval range".to_owned())
         })?;
+        let bounds = AttemptBounds::for_delivery(attempt)?;
         let scheduled_at = retry_deadline(self.clock.as_ref(), delay_micros)?;
         tracing::Span::current().record("scheduled_at", tracing::field::display(scheduled_at));
 
         let result = sqlx::query(
             "UPDATE apalis.jobs
-             SET run_at = $3
-             WHERE id = $1 AND lock_by = $2 AND status = 'Running'",
+             SET run_at = $4
+             WHERE id = $1 AND lock_by = $2 AND status = 'Running' AND attempts = $3",
         )
         .bind(task_id)
         .bind(worker_id)
+        .bind(bounds.stored)
         .bind(scheduled_at)
         .execute(&self.pool)
         .await?;
@@ -212,9 +258,7 @@ impl PostgresRetryScheduler {
         &self,
         update: TerminalRetryUpdate<'_>,
     ) -> Result<bool, SqlxError> {
-        let attempt = i32::try_from(update.attempt.get()).map_err(|_| {
-            SqlxError::Protocol("retry attempt exceeds Apalis integer range".to_owned())
-        })?;
+        let bounds = AttemptBounds::for_delivery(update.attempt)?;
         let result = sqlx::query(
             "UPDATE apalis.jobs
              SET max_attempts = CASE WHEN $3 THEN $4 ELSE max_attempts END,
@@ -224,17 +268,107 @@ impl PostgresRetryScheduler {
                      to_jsonb($5::text),
                      true
                  )
-             WHERE id = $1 AND lock_by = $2 AND status = 'Running'",
+             WHERE id = $1 AND lock_by = $2 AND status = 'Running' AND attempts = $6",
         )
         .bind(update.task_id)
         .bind(update.worker_id)
         .bind(update.shrink_limit)
-        .bind(attempt)
+        .bind(bounds.acknowledged)
         .bind(update.reason.as_label())
+        .bind(bounds.stored)
         .execute(&self.pool)
         .await?;
 
         Ok(result.rows_affected() == 1)
+    }
+
+    /// Lower a row's attempt cap to the attempt that just terminated it.
+    ///
+    /// This is the fallback for a terminal classification whose reason could
+    /// not be stored. It leaves the attempt cap no higher than the terminating
+    /// attempt, so the acknowledgement Apalis performs next stores a `Failed`
+    /// row that no fetch selects, instead of one the worker would run again.
+    /// A cap that is already lower is left alone.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// let clamped = scheduler.clamp_terminal_cap(TerminalCapClamp {
+    ///     task_id,
+    ///     worker_id,
+    ///     attempt: NonZeroU32::new(3).expect("positive attempt"),
+    /// }).await?;
+    /// // `false` means another actor has taken the row over.
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns the PostgreSQL error when the guarded update cannot be
+    /// executed, or a protocol error when the attempt exceeds Apalis's integer
+    /// range.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            operation = "clamp_terminal_cap",
+            task_id = clamp.task_id,
+            worker_id = clamp.worker_id,
+            attempt = clamp.attempt.get(),
+        )
+    )]
+    pub(crate) async fn clamp_terminal_cap(
+        &self,
+        clamp: TerminalCapClamp<'_>,
+    ) -> Result<bool, SqlxError> {
+        let TerminalCapClamp {
+            task_id,
+            worker_id,
+            attempt,
+        } = clamp;
+        let bounds = AttemptBounds::for_delivery(attempt)?;
+        let result = sqlx::query(
+            "UPDATE apalis.jobs
+             SET max_attempts = LEAST(COALESCE(max_attempts, $4), $4)
+             WHERE id = $1 AND lock_by = $2 AND status = 'Running' AND attempts = $3",
+        )
+        .bind(task_id)
+        .bind(worker_id)
+        .bind(bounds.stored)
+        .bind(bounds.acknowledged)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() == 1)
+    }
+}
+
+/// The attempt values a guarded write needs for one delivery.
+///
+/// Apalis increments the in-memory attempt on the first poll of a delivery, so
+/// while a handler runs the row still holds one less than the delivery counts.
+/// Guarding a write on [`stored`](Self::stored) binds it to the delivery that
+/// produced it: a row handed to a later delivery carries a higher counter and
+/// no longer matches. [`acknowledged`](Self::acknowledged) is the value the row
+/// takes when Apalis acknowledges this delivery as failed.
+#[derive(Clone, Copy, Debug)]
+struct AttemptBounds {
+    /// Attempt count the row holds during this delivery.
+    stored: i32,
+    /// Attempt count the row takes once this delivery is acknowledged.
+    acknowledged: i32,
+}
+
+impl AttemptBounds {
+    /// Derive both counts from the attempt the delivery reports.
+    ///
+    /// A delivery always reports at least one, so the stored count cannot
+    /// underflow.
+    fn for_delivery(attempt: NonZeroU32) -> Result<Self, SqlxError> {
+        let out_of_range =
+            || SqlxError::Protocol("retry attempt exceeds Apalis integer range".to_owned());
+        Ok(Self {
+            stored: i32::try_from(attempt.get() - 1).map_err(|_| out_of_range())?,
+            acknowledged: i32::try_from(attempt.get()).map_err(|_| out_of_range())?,
+        })
     }
 }
 
@@ -249,119 +383,4 @@ fn retry_deadline(clock: &dyn ClockSource, delay_micros: i64) -> Result<DateTime
 }
 
 #[cfg(test)]
-mod tests {
-    //! Unit checks for the range guards and the injected retry clock.
-
-    use super::{
-        ClockSource, PostgresRetryScheduler, TerminalRetryReason, TerminalRetryUpdate,
-        retry_deadline,
-    };
-    use chrono::{DateTime, TimeZone, Utc};
-    use sqlx::Error as SqlxError;
-    use sqlx::postgres::PgPoolOptions;
-    use std::num::NonZeroU32;
-    use std::sync::Arc;
-    use std::time::Duration;
-
-    /// Clock fixed at one instant so the deadline the scheduler writes is known.
-    #[derive(Debug, Clone, Copy)]
-    struct FixedClock(DateTime<Utc>);
-
-    impl ClockSource for FixedClock {
-        fn now(&self) -> DateTime<Utc> {
-            self.0
-        }
-    }
-
-    fn fixed_clock() -> FixedClock {
-        FixedClock(
-            Utc.with_ymd_and_hms(2030, 1, 1, 0, 0, 0)
-                .single()
-                .expect("the fixed instant is unambiguous"),
-        )
-    }
-
-    /// Build a scheduler whose pool never opens a connection.
-    ///
-    /// The range guards under test run before the query is executed, so a
-    /// lazily connected pool keeps them fast and independent of a server.
-    fn scheduler_without_server() -> PostgresRetryScheduler {
-        let pool = PgPoolOptions::new()
-            .connect_lazy("postgres://wildside@127.0.0.1:1/wildside")
-            .expect("lazy pool parses");
-        PostgresRetryScheduler::new(pool)
-    }
-
-    #[tokio::test]
-    async fn schedule_retry_rejects_a_delay_beyond_the_interval_range() {
-        let scheduler = scheduler_without_server();
-
-        let error = scheduler
-            .schedule_retry("task", "worker", Duration::from_secs(u64::MAX))
-            .await
-            .expect_err("the delay cannot be expressed in microseconds as i64");
-
-        assert!(
-            matches!(&error, SqlxError::Protocol(message)
-                if message.contains("retry delay exceeds")),
-            "expected a protocol error about the retry delay, got {error:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn record_terminal_failure_rejects_an_attempt_beyond_the_integer_range() {
-        let scheduler = scheduler_without_server();
-        let update = TerminalRetryUpdate {
-            task_id: "task",
-            worker_id: "worker",
-            attempt: NonZeroU32::new(u32::MAX).expect("u32::MAX is non-zero"),
-            reason: TerminalRetryReason::Exhausted,
-            shrink_limit: true,
-        };
-
-        let error = scheduler
-            .record_terminal_failure(update)
-            .await
-            .expect_err("the attempt cannot be stored in an i32 column");
-
-        assert!(
-            matches!(&error, SqlxError::Protocol(message)
-                if message.contains("retry attempt exceeds")),
-            "expected a protocol error about the retry attempt, got {error:?}"
-        );
-    }
-
-    #[test]
-    fn retry_deadline_offsets_the_clock_instant_by_the_delay() {
-        let clock = fixed_clock();
-
-        let deadline = retry_deadline(&clock, 1_500_000).expect("the deadline is representable");
-
-        assert_eq!(
-            deadline,
-            clock.0 + chrono::Duration::milliseconds(1_500),
-            "the deadline must be the injected instant plus the delay"
-        );
-    }
-
-    #[tokio::test]
-    async fn schedule_retry_computes_the_deadline_before_contacting_the_database() {
-        // A short acquire timeout keeps the unreachable-server probe fast; the
-        // deadline is computed before the pool is asked for a connection.
-        let pool = PgPoolOptions::new()
-            .acquire_timeout(Duration::from_millis(100))
-            .connect_lazy("postgres://wildside@127.0.0.1:1/wildside")
-            .expect("lazy pool parses");
-        let scheduler = PostgresRetryScheduler::new(pool).with_clock(Arc::new(fixed_clock()));
-
-        let error = scheduler
-            .schedule_retry("task", "worker", Duration::from_secs(1))
-            .await
-            .expect_err("the lazy pool cannot connect");
-
-        assert!(
-            !matches!(&error, SqlxError::Protocol(_)),
-            "the deadline computation must succeed and the failure must come from the connection attempt, got {error:?}"
-        );
-    }
-}
+mod tests;

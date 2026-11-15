@@ -259,12 +259,17 @@ impl IdentityCanary {
     }
 }
 
+/// Insert a running row this worker holds for its first delivery.
+///
+/// Apalis increments the in-memory attempt on the first poll, so the delivery
+/// below counts 1 while the row still records 0. The scheduler's delivery guard
+/// matches that recorded value, which is why the fixture seeds 0 rather than 1.
 async fn insert_running_row(canary: &IdentityCanary) {
     register_worker(&canary.environment.pool, canary.spec.worker).await;
     insert_job(
         &canary.environment.pool,
         JobRow::new(canary.spec.queue, &canary.id, "Running")
-            .attempts(1)
+            .attempts(0)
             .max_attempts(5)
             .run_at_offset_seconds(3_600.0)
             .metadata(json!({ "keep": "marker" }))
