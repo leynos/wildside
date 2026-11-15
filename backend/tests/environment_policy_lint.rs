@@ -93,14 +93,12 @@ fn forward(command: &mut Command, name: &str) {
     }
 }
 
-/// Compile `probe` with `clippy-driver` and return its diagnostics.
-fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
-    let sandbox = tempfile::tempdir()?;
-    let sandbox_dir = Dir::open_ambient_dir(sandbox.path(), ambient_authority())?;
-    sandbox_dir.write("probe.rs", probe)?;
-    sandbox_dir.create_dir("out")?;
-    let root = workspace_root()?;
-
+/// Build the `clippy-driver` command that compiles one probe.
+///
+/// The child's environment is cleared and rebuilt from the variables the probe
+/// needs, so nothing the harness happens to carry — coverage instrumentation in
+/// particular — reaches the compilation.
+fn probe_command(root: &Path, sandbox: &Path) -> TestResult<Command> {
     let mut command = Command::new("clippy-driver");
     command.env_clear();
     command.env(
@@ -111,8 +109,8 @@ fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
         forward(&mut command, name);
     }
     // The repository's own configuration must decide the outcome.
-    command.env("CLIPPY_CONF_DIR", &root);
-    command.current_dir(&root);
+    command.env("CLIPPY_CONF_DIR", root);
+    command.current_dir(root);
     command.args([
         "--edition",
         "2024",
@@ -133,10 +131,20 @@ fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
         "clippy::allow_attributes",
         "--error-format=json",
     ]);
-    command.arg(sandbox.path().join("probe.rs"));
-    command.arg("--out-dir").arg(sandbox.path().join("out"));
+    command.arg(sandbox.join("probe.rs"));
+    command.arg("--out-dir").arg(sandbox.join("out"));
+    Ok(command)
+}
 
-    let output = command.output()?;
+/// Compile `probe` with `clippy-driver` and return its diagnostics.
+fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
+    let sandbox = tempfile::tempdir()?;
+    let sandbox_dir = Dir::open_ambient_dir(sandbox.path(), ambient_authority())?;
+    sandbox_dir.write("probe.rs", probe)?;
+    sandbox_dir.create_dir("out")?;
+    let root = workspace_root()?;
+
+    let output = probe_command(&root, sandbox.path())?.output()?;
     let stderr = String::from_utf8(output.stderr)?;
     Ok(stderr.lines().filter_map(parse_diagnostic).collect())
 }
