@@ -56,63 +56,40 @@ fn schedule_update(delay: Duration) -> RetryScheduleUpdate<'static> {
 }
 
 #[tokio::test]
-async fn schedule_retry_rejects_a_delay_beyond_the_interval_range() {
+async fn range_guards_reject_values_the_columns_cannot_hold() {
     let scheduler = scheduler_without_server();
-
-    let error = scheduler
+    let delayed = scheduler
         .schedule_retry(schedule_update(Duration::from_secs(u64::MAX)))
-        .await
-        .expect_err("the delay cannot be expressed in microseconds as i64");
+        .await;
+    let failed = scheduler
+        .record_terminal_failure(TerminalRetryUpdate {
+            task_id: "task",
+            worker_id: "worker",
+            attempt: attempt(u32::MAX),
+            reason: TerminalRetryReason::Exhausted,
+            shrink_limit: true,
+        })
+        .await;
+    let clamped = scheduler
+        .clamp_terminal_cap(TerminalCapClamp {
+            task_id: "task",
+            worker_id: "worker",
+            attempt: attempt(u32::MAX),
+        })
+        .await;
 
-    assert!(
-        matches!(&error, SqlxError::Protocol(message)
-            if message.contains("retry delay exceeds")),
-        "expected a protocol error about the retry delay, got {error:?}"
-    );
-}
+    for (guard, result, expected) in [
+        ("schedule_retry", delayed, "retry delay exceeds"),
+        ("record_terminal_failure", failed, "retry attempt exceeds"),
+        ("clamp_terminal_cap", clamped, "retry attempt exceeds"),
+    ] {
+        let error = result.expect_err("the value cannot be stored in the column's range");
 
-#[tokio::test]
-async fn record_terminal_failure_rejects_an_attempt_beyond_the_integer_range() {
-    let scheduler = scheduler_without_server();
-    let update = TerminalRetryUpdate {
-        task_id: "task",
-        worker_id: "worker",
-        attempt: attempt(u32::MAX),
-        reason: TerminalRetryReason::Exhausted,
-        shrink_limit: true,
-    };
-
-    let error = scheduler
-        .record_terminal_failure(update)
-        .await
-        .expect_err("the attempt cannot be stored in an i32 column");
-
-    assert!(
-        matches!(&error, SqlxError::Protocol(message)
-            if message.contains("retry attempt exceeds")),
-        "expected a protocol error about the retry attempt, got {error:?}"
-    );
-}
-
-#[tokio::test]
-async fn clamp_terminal_cap_rejects_an_attempt_beyond_the_integer_range() {
-    let scheduler = scheduler_without_server();
-    let clamp = TerminalCapClamp {
-        task_id: "task",
-        worker_id: "worker",
-        attempt: attempt(u32::MAX),
-    };
-
-    let error = scheduler
-        .clamp_terminal_cap(clamp)
-        .await
-        .expect_err("the attempt cannot be stored in an i32 column");
-
-    assert!(
-        matches!(&error, SqlxError::Protocol(message)
-            if message.contains("retry attempt exceeds")),
-        "expected a protocol error about the retry attempt, got {error:?}"
-    );
+        assert!(
+            matches!(&error, SqlxError::Protocol(message) if message.contains(expected)),
+            "{guard} must reject the value before contacting the database, got {error:?}"
+        );
+    }
 }
 
 #[test]

@@ -112,12 +112,15 @@ fn constructor_rejects_invalid_configuration(
 }
 
 #[rstest]
-#[case::below_ceiling(Duration::from_secs(1799), true)]
-#[case::exactly_at_ceiling(Duration::from_secs(1800), true)]
-#[case::above_ceiling(Duration::from_secs(1801), false)]
+#[case::below_ceiling(Duration::from_secs(1799), None)]
+#[case::exactly_at_ceiling(Duration::from_secs(1800), None)]
+#[case::above_ceiling(
+    Duration::from_secs(1801),
+    Some(JobRetryPolicyBuildError::JitteredDelayExceedsMaximum)
+)]
 fn constructor_checks_the_jittered_delay_ceiling(
     #[case] max_delay: Duration,
-    #[case] should_accept: bool,
+    #[case] expected: Option<JobRetryPolicyBuildError>,
 ) {
     let result = policy(JobRetryPolicyConfig {
         multiplier: 1.0,
@@ -126,25 +129,31 @@ fn constructor_checks_the_jittered_delay_ceiling(
         ..valid_policy_config()
     });
 
-    assert_eq!(result.is_ok(), should_accept);
+    assert_eq!(
+        result.err(),
+        expected,
+        "only a jittered delay over the ceiling may be refused"
+    );
 }
 
 #[rstest]
-#[case::low_endpoint(0.0)]
-#[case::midpoint(0.5)]
-#[case::high_endpoint(1.0)]
-fn jitter_sample_accepts_the_closed_unit_interval(#[case] sample: f64) {
-    assert!(JitterSample::new(sample).is_ok());
-}
-
-#[rstest]
-#[case::negative(-f64::EPSILON)]
-#[case::above_one(1.0 + f64::EPSILON)]
-#[case::nan(f64::NAN)]
-#[case::positive_infinity(f64::INFINITY)]
-#[case::negative_infinity(f64::NEG_INFINITY)]
-fn jitter_sample_rejects_values_outside_the_closed_unit_interval(#[case] sample: f64) {
-    assert!(JitterSample::new(sample).is_err());
+#[case::low_endpoint(0.0, None)]
+#[case::midpoint(0.5, None)]
+#[case::high_endpoint(1.0, None)]
+#[case::negative(-f64::EPSILON, Some(JitterSampleError::OutOfRange))]
+#[case::above_one(1.0 + f64::EPSILON, Some(JitterSampleError::OutOfRange))]
+#[case::nan(f64::NAN, Some(JitterSampleError::NotFinite))]
+#[case::positive_infinity(f64::INFINITY, Some(JitterSampleError::NotFinite))]
+#[case::negative_infinity(f64::NEG_INFINITY, Some(JitterSampleError::NotFinite))]
+fn jitter_sample_isolates_the_closed_unit_interval(
+    #[case] sample: f64,
+    #[case] expected: Option<JitterSampleError>,
+) {
+    assert_eq!(
+        JitterSample::new(sample).err(),
+        expected,
+        "only the closed unit interval is a valid jitter sample"
+    );
 }
 
 #[rstest]
@@ -165,62 +174,88 @@ fn jitter_maps_linearly_around_the_nominal_delay(#[case] sample: f64, #[case] ex
     );
 }
 
-#[rstest]
-#[case::fatal_below_bound(JobErrorKind::Fatal, 2, true)]
-#[case::fatal_at_bound(JobErrorKind::Fatal, 3, true)]
-#[case::fatal_above_bound(JobErrorKind::Fatal, 4, true)]
-#[case::retryable_below_bound(JobErrorKind::Retryable, 2, false)]
-#[case::retryable_at_bound(JobErrorKind::Retryable, 3, true)]
-#[case::retryable_above_bound(JobErrorKind::Retryable, 4, true)]
-fn decision_table_is_total_and_respects_failure_class_and_attempt_bound(
-    #[case] kind: JobErrorKind,
-    #[case] attempt: u32,
-    #[case] should_dead_letter: bool,
-) {
-    let policy = policy(valid_policy_config()).expect("valid policy should build");
-    let jitter = JitterSample::new(0.5).expect("midpoint is valid");
-    let delivery = BoundedAttempt::new(
-        NonZeroU32::new(attempt).expect("case attempt is positive"),
-        JobAttemptBudget::unlimited(),
-    );
-    let actual = policy.decide(delivery, kind, jitter);
-    let expected = if should_dead_letter {
-        RetryDecision::DeadLetter
-    } else {
-        RetryDecision::Retry {
-            delay: Duration::from_secs(2),
-        }
-    };
-
-    assert_that!(actual, eq(expected));
+/// The once-retried delay the valid policy reaches on its second attempt.
+fn retried_delay() -> RetryDecision {
+    RetryDecision::Retry {
+        delay: Duration::from_secs(2),
+    }
 }
 
 #[rstest]
-#[case::policy_ceiling_binds(5, 3, true)]
-#[case::job_budget_binds(2, 2, true)]
-#[case::both_leave_another_attempt(5, 2, false)]
-#[case::zero_budget_forbids_the_first_attempt(0, 1, true)]
-fn decision_honours_the_lower_of_policy_ceiling_and_job_budget(
-    #[case] budget_cap: u32,
+#[case::fatal_below_policy_bound(
+    JobErrorKind::Fatal,
+    JobAttemptBudget::unlimited(),
+    2,
+    RetryDecision::DeadLetter
+)]
+#[case::fatal_at_policy_bound(
+    JobErrorKind::Fatal,
+    JobAttemptBudget::unlimited(),
+    3,
+    RetryDecision::DeadLetter
+)]
+#[case::fatal_above_policy_bound(
+    JobErrorKind::Fatal,
+    JobAttemptBudget::unlimited(),
+    4,
+    RetryDecision::DeadLetter
+)]
+#[case::retryable_below_policy_bound(
+    JobErrorKind::Retryable,
+    JobAttemptBudget::unlimited(),
+    2,
+    retried_delay()
+)]
+#[case::retryable_at_policy_bound(
+    JobErrorKind::Retryable,
+    JobAttemptBudget::unlimited(),
+    3,
+    RetryDecision::DeadLetter
+)]
+#[case::retryable_above_policy_bound(
+    JobErrorKind::Retryable,
+    JobAttemptBudget::unlimited(),
+    4,
+    RetryDecision::DeadLetter
+)]
+#[case::policy_ceiling_binds(
+    JobErrorKind::Retryable,
+    JobAttemptBudget::from_max_attempts(5),
+    3,
+    RetryDecision::DeadLetter
+)]
+#[case::job_budget_binds(
+    JobErrorKind::Retryable,
+    JobAttemptBudget::from_max_attempts(2),
+    2,
+    RetryDecision::DeadLetter
+)]
+#[case::both_leave_another_attempt(
+    JobErrorKind::Retryable,
+    JobAttemptBudget::from_max_attempts(5),
+    2,
+    retried_delay()
+)]
+#[case::zero_budget_forbids_the_first_attempt(
+    JobErrorKind::Retryable,
+    JobAttemptBudget::from_max_attempts(0),
+    1,
+    RetryDecision::DeadLetter
+)]
+fn decision_table_is_total_and_honours_every_lower_bound(
+    #[case] kind: JobErrorKind,
+    #[case] budget: JobAttemptBudget,
     #[case] attempt: u32,
-    #[case] should_dead_letter: bool,
+    #[case] expected: RetryDecision,
 ) {
     let policy = policy(valid_policy_config()).expect("valid policy should build");
     let jitter = JitterSample::new(0.5).expect("midpoint is valid");
     let delivery = BoundedAttempt::new(
         NonZeroU32::new(attempt).expect("case attempt is positive"),
-        JobAttemptBudget::from_max_attempts(budget_cap),
+        budget,
     );
-    let actual = policy.decide(delivery, JobErrorKind::Retryable, jitter);
-    let expected = if should_dead_letter {
-        RetryDecision::DeadLetter
-    } else {
-        RetryDecision::Retry {
-            delay: Duration::from_secs(2),
-        }
-    };
 
-    assert_that!(actual, eq(expected));
+    assert_that!(policy.decide(delivery, kind, jitter), eq(expected));
 }
 
 #[rstest]
