@@ -3908,3 +3908,83 @@ states that there are no compatibility shims or deprecated overloads because
 the crate is pre-1.0. The `list_dead` contract change is documented in the same
 guide's port list, which now says a listing reports unreadable rows with their
 identifier and the field that made them unreadable.
+
+### Gate runs of the 2026-11-15 repair set
+
+Run r11 covered the four reorganized commits at `c383132`. Every gate was
+started once, in repository order, and each exit status was recorded in a
+sidecar ledger rather than read from the log tail. Seven of the nine were green:
+
+- `check-fmt`, 1s; `spelling`, 12s; `markdownlint`, 15s over 133 files;
+  `nixie`, 1s.
+- `typecheck`, 6s: `ty` and the three `tsc --noEmit` projects were clean.
+- `test`, 1542s: nextest ran 2692 tests with 4 skipped and no failure, both
+  compile-fail suites passed, vitest 92, the Bun workspaces 3, workflow
+  contracts 658 with 1 skipped, scripts 115 with 13 skipped, and the action
+  linter 14.
+- `openapi`, 541s, regenerating the specification identically.
+
+`lint` exited 2 at `lint-whitaker`, after rustdoc and clippy had both passed.
+Two separate causes were behind that, and only one of them was this branch's.
+
+The branch's own row was `conditional_max_n_branches` on the three-way
+condition in `JobRetryPolicy::decide`. The policy now answers both attempt
+limits through one helper, `permits_another_attempt`, so the decision site
+compares only the failure class against a single answer:
+
+```rust
+if kind == JobErrorKind::Fatal || !self.permits_another_attempt(delivery) {
+    RetryDecision::DeadLetter
+} else {
+    RetryDecision::Retry { delay: self.backoff_delay(attempt, jitter) }
+}
+```
+
+The rule counts two branches there, and a local re-run of the backend
+`whitaker` command reported no diagnostic against `retry.rs` or `budget.rs`.
+
+The remaining three rows are `bumpy_road_function` findings in
+`route_submission.rs`, `overpass/http_source.rs`, and
+`diesel_catalogue_repository.rs`. All three files are byte-identical to
+`origin/main` (`git diff --quiet origin/main -- <path>` is clean, and none
+appears in `git diff --name-only origin/main...HEAD`), so the branch neither
+introduces nor edits them. They appear only because the local `whitaker`
+wrapper builds its suite from the shared checkout at
+`/home/leynos/.local/ share/whitaker`, now at `880939d1` of 2026-11-15, which
+is ahead of the pin CI installs: `.github/workflows/ci.yml` sets
+`WHITAKER_INSTALLER_VERSION: '0.2.12'`, released 2026-11-09. The hosted `build`
+check, which runs `make lint-whitaker` under that pin, was green on `85cae55`,
+whose tree contains all three functions unchanged.
+
+The evidence is therefore that this is local toolchain drift rather than a
+branch regression, and the branch does not refactor three untouched files to
+silence a rule CI does not run. The follow-up belongs either to the change that
+advances the pin or to a base pull request, if and when the pinned suite starts
+reporting them. Recorded here so a later red `make lint` in this worktree is
+not misread as this change's.
+
+Because `make lint` stops inside `lint-rust`, six sub-targets never ran in r11.
+Each was run separately afterwards and all six exited 0: `lint-architecture`,
+`lint-frontend`, `lint-specs`, `lint-python`, `lint-makefile`, and
+`lint-actions`.
+
+`audit` exited 2 for a second, unrelated reason: the two `extract-zip`
+exceptions in `security/audit-exceptions.json` expired on 2026-11-14, one day
+before this run, so a clean checkout of `origin/main` fails the same gate. Both
+advisories are still unpatched (`extract-zip` 2.0.1 remains the latest release)
+and both are still reachable only through `@puppeteer/browsers` 2.6.1 via
+`puppeteer` 23.11.1, so the entries' reasoning still holds. They were renewed
+to 2026-12-14 with the re-check recorded in each reason, and `make audit` then
+exited 0 with 17 allowed advisory warnings and no vulnerability. `audit-node`
+runs first, so `rust-audit`, `audit:validate`, and `audit:bun` were hidden in
+r11; the renewed run exercised all of them.
+
+`origin/main` had advanced four commits while the branch was open, including a
+rewritten documentation style guide that moved the ADRs to
+`docs/adrs/adr-nnnn-title-slug.md` and required `Status`, `Date`, `Context`, and
+`Decision` sections. Merging `794cb91` therefore came with a reconciliation:
+ADR-004 and ADR-005 moved into `docs/adrs` as `adr-0004` and `adr-0005`, their
+headings restyled, and every reference updated across `docs/contents.md`,
+`docs/developers-guide.md`, `docs/wildside-backend-architecture.md`, and this
+plan. `Cargo.lock` auto-merged against main's `quinn-udp` bump and was
+validated with `cargo metadata --locked`.
