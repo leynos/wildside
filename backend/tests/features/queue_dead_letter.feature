@@ -71,7 +71,7 @@ Feature: Dead-letter listing, requeue, and discard
   Scenario: A negative attempt count does not fail the dead-job listing
     Given a dead row has a negative attempt count
     When the operator lists dead jobs
-    Then the listing is empty
+    Then the listing reports the malformed row instead of listing it
 
   Scenario: Requeue rejects malformed counter metadata without changing the row
     Given a dead job has a malformed requeue count
