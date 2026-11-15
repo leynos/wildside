@@ -1,20 +1,29 @@
-# ADR-005: Dead letters as Apalis rows behind a domain port
+# Architecture Decision Record (ADR) 005: Dead letters as Apalis rows behind a domain port
 
-- Status: Accepted
-- Date: 2026-10-25
-- Deciders: Wildside maintainers
+## Status
 
-## Context and decision
+Accepted — 2026-10-25: expose terminal jobs through a domain `DeadLetterQueue`
+backed by guarded operations on dead rows in `apalis.jobs` and two namespaced
+metadata keys, instead of a separate dead-letter table or a discard marker.
 
-In the context of inspecting and managing terminal background jobs, facing
-Apalis-managed storage, ambiguous legacy failure states, and the need to retain
-requeue provenance across acknowledgements, we decided for a domain
-`DeadLetterQueue` backed by guarded operations on dead rows in `apalis.jobs`
-and two namespaced metadata keys, and against a separate dead-letter table, a
-discard marker, and automatic requeue without an operator decision, to achieve
-inspectable terminal outcomes and requeues with the queue's current retry
-budget, accepting dependence on the pinned Apalis row and acknowledgement
-contracts and the need to manage retained rows.
+## Date
+
+2026-10-25
+
+## Context
+
+Operators need to inspect and manage terminal background jobs, and Apalis
+already owns that storage. The rows hold ambiguous failure states left by
+earlier releases, and a requeue has to survive acknowledgement without losing
+its provenance or the queue's retry budget. A separate dead-letter table would
+duplicate the row lifecycle, a discard marker would destroy the evidence an
+operator inspects, and automatic requeue would take a decision that belongs to
+an operator.
+
+## Decision
+
+Expose terminal jobs through a domain `DeadLetterQueue` over dead rows in
+`apalis.jobs`, guarded by the two namespaced metadata keys.
 
 Dead rows are `Killed`, or `Failed` with a null limit or attempts at or above
 the limit. The terminal update records `fatal` or `exhausted` under

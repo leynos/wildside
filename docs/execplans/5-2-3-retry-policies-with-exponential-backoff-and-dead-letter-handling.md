@@ -495,15 +495,15 @@ the roadmap and architecture document are the governing artefacts):
   scope reservations (EP-522-SCOPE): job envelope stability and deferred
   retry/dead-letter ownership.
 - New ADRs produced by this plan:
-  `docs/adr-004-durable-retry-scheduling-for-apalis-jobs.md` (ADR-004, the
-  retry mechanism: durable `run_at` scheduling by a handler wrapper, the ban on
-  in-process retry middleware at the rc pins, fatal dead-lettering by shrinking
-  `max_attempts`, and the exact-pin policy) and
-  `docs/adr-005-dead-letters-as-apalis-rows-behind-a-domain-port.md` (ADR-005,
-  the dead-letter representation, guarded transitions, budget restoration,
-  requeue provenance, and the no-automated-requeue rule). The split follows the
-  style guide's one-decision-per-ADR rule. ADR-002 already records the
-  environment-seam taxonomy and is not renumbered.
+  `docs/adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md` (ADR-004,
+  the retry mechanism: durable `run_at` scheduling by a handler wrapper, the
+  ban on in-process retry middleware at the rc pins, fatal dead-lettering by
+  shrinking `max_attempts`, and the exact-pin policy) and
+  `docs/adrs/adr-0005-dead-letters-as-apalis-rows-behind-a-domain-port.md`
+  (ADR-005, the dead-letter representation, guarded transitions, budget
+  restoration, requeue provenance, and the no-automated-requeue rule). The
+  split follows the style guide's one-decision-per-ADR rule. ADR-002 already
+  records the environment-seam taxonomy and is not renumbered.
 
 Trace links:
 
