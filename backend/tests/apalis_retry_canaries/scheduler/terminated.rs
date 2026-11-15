@@ -8,6 +8,7 @@
 //! behaviour rather than only as a column value.
 
 use std::error::Error as StdError;
+use std::time::Duration;
 
 use apalis_core::error::BoxDynError;
 use apalis_core::worker::ext::ack::Acknowledge;
@@ -29,6 +30,24 @@ const PROTECTED_QUEUE: &str = "canary.terminated-protected";
 
 /// A queue whose row is acknowledged without the fallback.
 const UNPROTECTED_QUEUE: &str = "canary.terminated-unprotected";
+
+/// A queue whose fallback cannot reach a database.
+const UNREACHABLE_QUEUE: &str = "canary.terminated-unreachable";
+
+/// A scheduler whose database refuses every connection.
+///
+/// Port 1 refuses immediately, so the write fails deterministically instead of
+/// waiting on a timeout. The pool is built inside the canary runtime because
+/// `connect_lazy` registers its idle reaper immediately.
+fn unreachable_scheduler(canary: &Canary) -> PostgresRetryScheduler {
+    canary.environment.run(async {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .acquire_timeout(Duration::from_millis(500))
+            .connect_lazy("postgres://wildside:wildside@127.0.0.1:1/wildside")
+            .expect("build a lazily connected pool for an unreachable database");
+        PostgresRetryScheduler::new(pool)
+    })
+}
 
 /// Acknowledge the delivery as Apalis does after the handler reports a failure.
 fn acknowledge_failure(canary: &Canary) {
@@ -137,6 +156,46 @@ fn without_the_fallback_the_acknowledged_row_is_fetched_again() {
     assert_eq!(
         fetched.task_id, canary.id,
         "the fetcher must claim the row the fallback did not protect"
+    );
+}
+
+/// Scenario: the terminal write failed and the fallback cannot reach the
+/// database either.
+///
+/// Invariant: the acknowledgement leaves a failed row that the fetcher claims
+/// again. This is the residual window the `terminal_cap_clamp_exhausted` alarm
+/// reports, and asserting it keeps that alarm honest instead of implying the
+/// wrapper can always protect the row.
+#[test]
+fn a_fallback_that_never_lands_leaves_the_row_fetchable() {
+    let canary = Canary::start(SchedulerRow::running(UNREACHABLE_QUEUE, OWNER).due(), None);
+    let scheduler = unreachable_scheduler(&canary);
+
+    let outcome = canary
+        .environment
+        .run(scheduler.clamp_terminal_cap(TerminalCapClamp {
+            task_id: &canary.id,
+            worker_id: OWNER,
+            attempt: delivery_attempt(),
+        }));
+    assert!(
+        outcome.is_err(),
+        "an unreachable database must report a failed write, not an applied one"
+    );
+
+    acknowledge_failure(&canary);
+
+    let delivered = i32::try_from(DELIVERED_ATTEMPT).expect("the delivered attempt is an i32");
+    assert_eq!(
+        read_outcome(&canary),
+        ("Failed".to_owned(), delivered, FETCHED_MAX_ATTEMPTS),
+        "a fallback that never lands leaves the fetched attempt cap in place"
+    );
+    let fetched = fetch_one_task(canary.environment, UNREACHABLE_QUEUE, OWNER)
+        .expect("a failed row below its attempt cap is fetched again");
+    assert_eq!(
+        fetched.task_id, canary.id,
+        "the residual window hands the retired job back to the fetcher"
     );
 }
 
