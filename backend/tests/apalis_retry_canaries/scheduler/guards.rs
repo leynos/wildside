@@ -81,11 +81,9 @@ fn guarded_write_refuses_a_row_it_may_not_change(
     let caller = cause.caller();
     let canary = Canary::start(
         SchedulerRow {
-            queue: "canary.scheduler-refused",
-            worker: owner,
             status,
             attempts,
-            max_attempts: 5,
+            ..SchedulerRow::running("canary.scheduler-refused", owner)
         },
         Some(serde_json::json!({ "keep": "marker" })),
     );

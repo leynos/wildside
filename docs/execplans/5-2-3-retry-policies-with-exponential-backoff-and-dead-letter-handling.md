@@ -3794,9 +3794,10 @@ already carried for `route_queue_terminal_write_failure_total`.
 
 Two consequences of the repair needed documentation of their own, and were
 recorded in the ADR, the developers' guide, the runbook, and the users' guide:
-the guard now includes the inherited attempt count, and a terminal write has
-exactly one fallback with three log decisions (`terminal_cap_clamped`,
-`terminal_cap_clamp_refused`, `terminal_cap_clamp_failed`).
+the guard now includes the inherited attempt count, and a terminal write has a
+bounded fallback whose three original log decisions were later replaced by the
+sequence described in
+[Cap-fallback resilience of 2026-11-15](#cap-fallback-resilience-of-2026-11-15).
 
 The `apalis-postgres` source settled the question the second finding turned on,
 and it is worth recording because the numbers are easy to get wrong. `sink.sql`
@@ -4024,3 +4025,94 @@ and the realignment of the Domain Architecture row with
 after they were committed and exited 0. Neither correction touches Rust,
 `security/audit-exceptions.json`, or `spec/openapi.json`, so the `lint`,
 `typecheck`, `test`, `audit`, and `openapi` results stand for the final content.
+
+### Cap-fallback resilience of 2026-11-15
+
+The fourth review round's finding in comment 4576778093 was reopened after the
+fallback landed. The objection was specific and correct: the fallback handles a
+terminal write that fails, but if the fallback write *also* fails the wrapper
+only logs and returns, so the acknowledgement that follows can still leave a
+`Failed` row below its cap that the fetcher claims.
+
+The pinned `apalis-postgres` 1.0.0-rc.8 source settles what a handler can do
+about that. `ack.rs` binds `attempts = parts.attempt.current()` and derives the
+status from the same `parts` it cloned before the service ran, so a handler
+cannot change the acknowledged attempt or make the status `Killed`. `ack.sql`
+writes only `status`, `attempts`, `last_result`, and `done_at`, so nothing the
+handler writes after the decision can reach the acknowledgement. Returning `Ok`
+would store `Done` and hide the failure from both the retry and dead-letter
+paths. A row can therefore only be protected by a write that lands, and a
+database that refuses every write leaves no way to protect it.
+
+The repair keeps the write and makes it survive the ordinary transient failure:
+
+- The fallback is attempted three times, with waits of 25 ms and 150 ms before
+  the later attempts. The sequence costs under a fifth of a second, which keeps
+  it inside a delivery's budget.
+- A refused guard (`Ok(false)`) still ends the sequence immediately: the row is
+  another actor's, so retrying would only repeat a decision someone else now
+  owns.
+- The applied case logs `terminal_cap_clamped` with `tries`, so a recovered
+  failure is visible rather than silent. Exhaustion logs at `ERROR` with
+  `terminal_cap_clamp_exhausted`; this is the event that says a retired job may
+  run again, and it joins the terminal-write-failure counter as the alerting
+  signal.
+
+Parking `run_at` far in the future alongside the cap was considered and
+rejected. `apalis.get_jobs` treats every `Pending` row as eligible whatever its
+attempts, and `reenqueue_orphaned.sql` rewrites `status` to `Pending` and
+increments `attempts` without touching `run_at`. A parked row that is orphaned
+between the fallback and the acknowledgement would therefore never be fetched
+again and would never satisfy the dead-letter predicate either, replacing a
+bounded re-run with an invisible row. The cap alone is exact: the fallback
+binds the same `parts.attempt.current()` value the acknowledgement stores, so
+`attempts < max_attempts` is false for the row it protects.
+
+Evidence, against the modified tree and with the gate `RUSTFLAGS`:
+
+- `backend::apalis_retry_canaries::scheduler::terminated` drives the real
+  `PgAck` and the real `fetch_one_task`.
+  `a_terminated_delivery_is_not_fetched_after_acknowledgement` asserts the
+  acknowledged row is `Failed` at the lowered cap, is not fetched, and is still
+  selected by the dead-letter predicate.
+  `without_the_fallback_the_acknowledged_row_is_fetched_again` acknowledges the
+  same delivery without the fallback and asserts the fetcher claims it, so the
+  canary fails if the fallback stops protecting the row.
+- `service_terminal` gains `a_transient_cap_fallback_failure_is_retried`,
+  `a_refused_cap_fallback_is_not_retried`, and
+  `cap_fallback_exhaustion_retries_a_bounded_number_of_times`, and
+  `exhausted_cap_fallback_raises_the_alarm` replaces the
+  `terminal_cap_clamp_failed` log check.
+- The focused run over `binary(apalis_retry_canaries) | test(retrying_handler)`
+  executed 103 tests with 103 passed.
+
+The residual window is stated rather than hidden: a database that refuses all
+three fallback writes still leaves the row fetchable, and the runbook now pages
+on `terminal_cap_clamp_exhausted` for exactly that case.
+
+### Gate run r15 and the whitaker suite roll-out of 2026-11-15
+
+Run r15 re-ran all nine gates over the cap-fallback repair, once each and in
+repository order. Eight were green: `check-fmt`, `spelling`, `markdownlint`,
+`nixie`, `typecheck`, `audit`, `openapi`, and `test`, which ran 2695 tests with
+4 skipped and no failure, 92 vitest cases, the Bun workspaces, the workflow
+contracts, the script suites, and the action linter. The focused run recorded
+above is therefore consistent with the full suite.
+
+`lint` exited 2 at `lint-whitaker` for the same three `bumpy_road_function`
+rows the r11 note above describes, in the same three files, none of which this
+branch touches. The prediction that note makes has now come true: the hosted
+`build` check for head `16e7980` failed at 09:47 with those three rows and the
+same `Compilation failed with toolchain 'nightly-2026-05-28'` message, so the
+suite CI installs now reports them and no longer just the local wrapper.
+
+The suite moved, not the tree. The shared checkout at `~/.local/share/whitaker`
+took `880939d1`, "Implement the macro-aware cognitive complexity rule", on
+2026-11-15, and the local dylint library was rebuilt from it at 09:36. Run r14
+finished at 09:13, green, on the older library; r15 and the hosted run both
+started afterwards and both fail identically. Every file the rule flags is
+byte-identical to `origin/main`.
+
+Following the r11 note, the repair belongs in a base pull request rather than in
+this feature diff: three refactors, one per flagged function, delivered
+separately from the retry work.

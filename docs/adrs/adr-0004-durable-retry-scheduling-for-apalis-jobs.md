@@ -29,9 +29,13 @@ worker, and still carrying the attempt count this delivery inherited; the last
 predicate is what keeps a handler that stalled through orphan recovery from
 overwriting the decision of the delivery that replaced it. A terminal outcome
 reduces the stored attempt limit to the terminating attempt, either within its
-reason write or, if that write fails, as one following bounded write, so a later
-`Failed` row is unfetchable. A crash between the in-memory attempt increment
-and its acknowledgement can lose that one in-flight attempt.
+reason write or, if that write fails, as a short bounded sequence of fallback
+writes, so a later `Failed` row is unfetchable. The fallback is retried because
+it runs only after another write has already failed, which usually means a
+transiently failing database; a fallback that never lands is logged as
+`terminal_cap_clamp_exhausted`, because a database that refuses every write
+leaves no way for a handler to protect the row. A crash between the in-memory
+attempt increment and its acknowledgement can lose that one in-flight attempt.
 
 On the 1.0 upgrade
 ([issue #550](https://github.com/leynos/wildside/issues/550)), re-verify the

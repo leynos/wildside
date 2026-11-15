@@ -272,12 +272,17 @@ counter as well as the warnings, because the dead-letter counter alone will not
 show a terminal write that never applied.
 
 A terminal failure is not retried just because storing its reason failed. The
-wrapper follows a failed terminal write with one bounded write that lowers the
+wrapper follows a failed terminal write with a bounded fallback that lowers the
 row's attempt limit to the attempt that just terminated, so Apalis's
-acknowledgement leaves a row that no fetch selects. That fallback logs at
-`WARN` with decision `terminal_cap_clamped`, `terminal_cap_clamp_refused`, or
-`terminal_cap_clamp_failed`; only the last case leaves a terminal row that can
-still be fetched, and the existing attempt limit still bounds it.
+acknowledgement leaves a row that no fetch selects. The fallback is attempted
+three times with short waits, because it runs only after another write has
+already failed. It logs at `WARN` with decision `terminal_cap_clamped` when an
+attempt applies, including a `tries` field so a recovered transient failure is
+visible, and `terminal_cap_clamp_refused` when another actor has taken the row
+over; a refusal is not retried. If every attempt fails it logs at `ERROR` with
+`terminal_cap_clamp_exhausted`. Only that last case leaves a terminal row that
+can still be fetched: a database that refuses every write leaves no way to
+protect the row, and the existing attempt limit still bounds how often it runs.
 
 The `DeadLetterQueue` port defines the operations a future operator command
 will drive:

@@ -5,10 +5,17 @@
 //! current worker owns the row it asks for one guarded write, and it writes
 //! nothing when the identity is missing or disagrees. Those requests are the
 //! only *persistence* writes the wrapper can cause, with one bounded exception:
-//! a terminal write that fails is followed by a single cap-lowering write, so
-//! the failure Apalis is about to record cannot be fetched and run again. That
-//! fallback carries the same delivery guards, so it cannot change a row another
-//! actor owns.
+//! a terminal write that fails is followed by a short sequence of cap-lowering
+//! writes, so the failure Apalis is about to record cannot be fetched and run
+//! again. Every attempt carries the same delivery guards, so the fallback
+//! cannot change a row another actor owns, and a refused guard ends the
+//! sequence instead of repeating it.
+//!
+//! The fallback is retried because it runs only after another write has already
+//! failed, so the usual cause is a database failing transiently. It cannot make
+//! a row safe when the database refuses every write; such a delivery is logged
+//! as `terminal_cap_clamp_exhausted`, which is the signal that a retired job may
+//! be fetched again.
 //!
 //! The wrapper also logs every decision and records the metrics that describe a
 //! write outcome. A terminal decision whose delivery identity is missing or
@@ -61,7 +68,8 @@ pub trait RetryPersistence: Send + Sync {
     /// returning an error. The handler is about to acknowledge the delivery as
     /// failed, and a failed row stays fetchable while `attempts < max_attempts`,
     /// so the cap must come down to the terminating attempt or the job the
-    /// policy retired would run again.
+    /// policy retired would run again. The write rewrites one column, so it is
+    /// idempotent and the wrapper may repeat it while the database fails.
     async fn clamp_terminal_cap(&self, clamp: TerminalCapClamp<'_>) -> Result<bool, SqlxError>;
 }
 

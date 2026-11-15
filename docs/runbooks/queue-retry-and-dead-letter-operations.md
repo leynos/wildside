@@ -141,14 +141,21 @@ dead. Both log at `ERROR`
 both log events: the dead-letter counter alone will not show a terminal write
 that never applied.
 
-A failed terminal write is followed by one bounded fallback. The handler lowers
+A failed terminal write is followed by a bounded fallback. The handler lowers
 the row's `max_attempts` to the attempt that just terminated, so the `Failed`
-row Apalis records next is not fetched and run again. That fallback logs at
-`WARN` with decision `terminal_cap_clamped` when it applies,
-`terminal_cap_clamp_refused` when another actor has taken the row over, or
-`terminal_cap_clamp_failed` when the statement itself fails. Only the last case
-leaves a terminal row that is still re-fetchable; it is bounded by the existing
-`max_attempts` and is what the terminal-write-failure alert should page on.
+row Apalis records next is not fetched and run again. The fallback is attempted
+three times with short waits, because it runs only after another write has
+already failed and so usually meets a database failing transiently. It logs at
+`WARN` with decision `terminal_cap_clamped` when an attempt applies, which
+includes `tries` so a recovered transient failure is visible, and
+`terminal_cap_clamp_refused` when another actor has taken the row over; a
+refused guard is not retried. If every attempt fails, it logs at `ERROR` with
+decision `terminal_cap_clamp_exhausted`. Only that last case leaves a terminal
+row that is still re-fetchable: no handler can protect a row whose writes the
+database refuses, so this event, together with the terminal-write-failure
+counter, is what the alerting should page on. A row it leaves behind is still
+bounded by the existing `max_attempts`, so it is fetched no more often than an
+ordinary retry.
 
 Dead-letter backlog is the number of rows the dead predicate matches. This
 query is read-only, ignores no rows, and returns only a count:

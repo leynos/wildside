@@ -8,27 +8,12 @@
 use std::error::Error as StdError;
 
 use apalis_core::error::BoxDynError;
-use apalis_core::task::Task;
-use apalis_core::task::attempt::Attempt;
 use apalis_core::worker::ext::ack::Acknowledge;
-use apalis_postgres::{PgAck, PgContext, PgTask};
+use apalis_postgres::PgAck;
 use serde_json::{Value, json};
 
-use super::{CanaryEnvironment, JobRow, insert_job, register_worker};
+use super::{CanaryEnvironment, JobRow, insert_job, locked_task, register_worker};
 use crate::support::apalis_job_id::apalis_job_id;
-
-/// A running row locked by the canary worker, as the wrapper would see it.
-fn locked_task(id: &str, worker: &str, max_attempts: i32, attempt: usize) -> PgTask<Value> {
-    Task::builder(json!({ "v": "v1", "probeId": id }))
-        .with_ctx(
-            PgContext::new()
-                .with_max_attempts(max_attempts)
-                .with_lock_by(Some(worker.to_owned())),
-        )
-        .with_task_id(id.parse().expect("canary task id"))
-        .with_attempt(Attempt::new_with_value(attempt))
-        .build()
-}
 
 #[test]
 fn acknowledgement_preserves_scheduling_state() {

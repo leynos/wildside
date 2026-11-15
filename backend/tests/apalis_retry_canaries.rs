@@ -20,8 +20,10 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use apalis_core::backend::Backend;
+use apalis_core::task::Task;
+use apalis_core::task::attempt::Attempt;
 use apalis_core::worker::context::WorkerContext;
-use apalis_postgres::{Config, PgTask, PostgresStorage};
+use apalis_postgres::{Config, PgContext, PgTask, PostgresStorage};
 use futures::StreamExt;
 use pg_embedded_setup_unpriv::TemporaryDatabase;
 use serde_json::{Value, json};
@@ -268,6 +270,24 @@ fn read_state(runtime: &Runtime, pool: &PgPool, id: &str) -> RowState {
             lock_by: row.2,
         }
     })
+}
+
+/// A running row locked by a canary worker, as the wrapper would see it.
+///
+/// The attempt and its limit travel in the task rather than being read from the
+/// row, because that is where Apalis takes them from when it acknowledges a
+/// delivery: it decides the status from the context it cloned before the
+/// handler ran.
+fn locked_task(id: &str, worker: &str, max_attempts: i32, attempt: usize) -> PgTask<Value> {
+    Task::builder(json!({ "v": "v1", "probeId": id }))
+        .with_ctx(
+            PgContext::new()
+                .with_max_attempts(max_attempts)
+                .with_lock_by(Some(worker.to_owned())),
+        )
+        .with_task_id(id.parse().expect("canary task id"))
+        .with_attempt(Attempt::new_with_value(attempt))
+        .build()
 }
 
 fn describe(task: &PgTask<Value>) -> FetchedTask {

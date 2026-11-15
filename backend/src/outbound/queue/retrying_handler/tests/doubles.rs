@@ -5,6 +5,7 @@
 //! test can assert how many writes a delivery produced instead of inferring it
 //! from database state.
 
+use std::collections::VecDeque;
 use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -71,11 +72,12 @@ pub(super) enum PersistenceCall {
     },
 }
 
-/// Scheduler double that records calls and returns a fixed outcome.
+/// Scheduler double that records calls and returns a scripted outcome.
 pub(super) struct RecordingPersistence {
     schedule: WriteOutcome,
     terminal: WriteOutcome,
-    clamp: WriteOutcome,
+    clamps: Mutex<VecDeque<WriteOutcome>>,
+    clamp_default: WriteOutcome,
     calls: Mutex<Vec<PersistenceCall>>,
 }
 
@@ -83,20 +85,32 @@ impl RecordingPersistence {
     /// Build a double whose fallback cap write succeeds.
     ///
     /// Only the tests that drive a failed terminal write care how the fallback
-    /// answers, so it starts out applied and [`with_clamp`](Self::with_clamp)
-    /// changes it.
+    /// answers, so it starts out applied and
+    /// [`with_clamp_script`](Self::with_clamp_script) changes it.
     pub(super) fn new(schedule: WriteOutcome, terminal: WriteOutcome) -> Self {
         Self {
             schedule,
             terminal,
-            clamp: WriteOutcome::Updated,
+            clamps: Mutex::new(VecDeque::new()),
+            clamp_default: WriteOutcome::Updated,
             calls: Mutex::new(Vec::new()),
         }
     }
 
-    /// Choose how the fallback cap write answers.
-    pub(super) fn with_clamp(mut self, clamp: WriteOutcome) -> Self {
-        self.clamp = clamp;
+    /// Choose how each successive fallback cap write answers.
+    ///
+    /// The wrapper retries a failed fallback, so a test needs one outcome per
+    /// attempt. The last scripted outcome answers any further call, which lets
+    /// a test say "it keeps failing" once instead of counting attempts.
+    pub(super) fn with_clamp_script(
+        mut self,
+        outcomes: impl IntoIterator<Item = WriteOutcome>,
+    ) -> Self {
+        let clamps = outcomes.into_iter().collect::<VecDeque<_>>();
+        if let Some(last) = clamps.back() {
+            self.clamp_default = *last;
+        }
+        self.clamps = Mutex::new(clamps);
         self
     }
 
@@ -106,6 +120,14 @@ impl RecordingPersistence {
 
     fn record(&self, call: PersistenceCall) {
         self.calls.lock().expect("persistence calls").push(call);
+    }
+
+    fn next_clamp_outcome(&self) -> WriteOutcome {
+        self.clamps
+            .lock()
+            .expect("clamp script")
+            .pop_front()
+            .unwrap_or(self.clamp_default)
     }
 }
 
@@ -149,7 +171,7 @@ impl RetryPersistence for RecordingPersistence {
             worker_id: clamp.worker_id.to_owned(),
             attempt: clamp.attempt.get(),
         });
-        outcome(self.clamp)
+        outcome(self.next_clamp_outcome())
     }
 }
 
