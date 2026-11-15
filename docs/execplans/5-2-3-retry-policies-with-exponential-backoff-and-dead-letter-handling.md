@@ -4078,6 +4078,12 @@ Evidence, against the modified tree and with the gate `RUSTFLAGS`:
   `without_the_fallback_the_acknowledged_row_is_fetched_again` acknowledges the
   same delivery without the fallback and asserts the fetcher claims it, so the
   canary fails if the fallback stops protecting the row.
+- `a_fallback_that_never_lands_leaves_the_row_fetchable` runs the fallback
+  against a pool whose database refuses every connection, so the write fails
+  rather than being skipped, then acknowledges and fetches. It pins the
+  residual window that `terminal_cap_clamp_exhausted` reports, which keeps the
+  alarm honest: the wrapper cannot protect a row whose writes the database
+  refuses.
 - `service_terminal` gains `a_transient_cap_fallback_failure_is_retried`,
   `a_refused_cap_fallback_is_not_retried`, and
   `cap_fallback_exhaustion_retries_a_bounded_number_of_times`, and
