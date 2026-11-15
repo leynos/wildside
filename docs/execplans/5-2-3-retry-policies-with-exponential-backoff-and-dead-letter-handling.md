@@ -311,9 +311,17 @@ Hard invariants. Violation requires escalation, not workarounds.
   hand-rolled tower `Retry` (Decision D14). EP-M2 adds a conformance check for
   this.
 - Every scheduling update written by the handler wrapper must be guarded by
-  `id`, `lock_by = <this worker's name>`, and `status = 'Running'`, so it can
-  only affect the row this worker currently holds. An update that affects zero
-  rows is logged at `warn` level and never retried.
+  `id`, `lock_by = <this worker's name>`, `status = 'Running'`, and
+  `attempts = <the count this delivery inherited>`, so it can only affect the
+  row this worker holds for *this* delivery. Orphan recovery re-queues a
+  stalled row with `attempts` advanced, so without the fourth guard a stale
+  handler could overwrite a later delivery's decision. An update that affects
+  zero rows is logged at `warn` level and never retried.
+- The adapter may enforce the effective retry budget with one further bounded
+  write. When a terminal write fails, the handler lowers the row's
+  `max_attempts` to the terminating attempt before Apalis acknowledges the
+  failure, so the retired job is not fetched again. That fallback carries the
+  same four guards and never raises a cap.
 - The retry policy constructor must reject any configuration whose capped
   delay exceeds `MAX_BACKOFF_DELAY`, initially one hour (Decision D13).
 - Do not change the `RouteQueue` trait signature. `JobDispatchError`
@@ -407,10 +415,14 @@ Hard invariants. Violation requires escalation, not workarounds.
   low. Likelihood: low. Effect: for a retryable error, the ack still records
   `Failed`, but with an unchanged, past `run_at`, so the job is redelivered on
   the next poll without backoff. It remains bounded by `max_attempts`. For a
-  fatal error, the row stays re-fetchable and the handler fails fatally again
-  on redelivery, still bounded by `max_attempts`. Mitigation: `warn`-level log
-  plus a `schedule_failure` label on the retry counter. Retry no further; do
-  not escalate the failure into a panic.
+  terminal error, a second guarded write lowers `max_attempts` to the
+  terminating attempt, so the acknowledged `Failed` row is not fetched again.
+  If that fallback also fails, the row stays re-fetchable and the handler
+  repeats its decision on redelivery, still bounded by `max_attempts`.
+  Mitigation: a `warn`-level log for each outcome, the `schedule_failure` label
+  on `route_queue_retry_total`, and the `terminal_write_failure` counter
+  `route_queue_terminal_write_failure_total`. Retry no further; do not escalate
+  the failure into a panic.
 - Risk: backoff precision is bounded below by the storage poll interval,
   because failed rows are rediscovered only by polling (the notify trigger
   fires on insert only). Severity: low. Likelihood: certain. Mitigation:
@@ -737,8 +749,12 @@ wrapper):
   architecture document's per-job-type queue configuration. There is no global
   constant (Decision D7).
 - Metrics: dedicated `RouteQueueMetrics` methods (Decision D8):
-  - `observe_retry`, labelled `scheduled` or `schedule_failure`.
+  - `observe_retry` → `route_queue_retry_total`, labelled `scheduled` or
+    `schedule_failure`.
   - `observe_dead_letter`, labelled `exhausted` or `fatal`.
+  - `observe_terminal_write_failure` →
+    `route_queue_terminal_write_failure_total`, labelled with the same
+    `exhausted` or `fatal` reason, for a terminal write that stored nothing.
 
 The wrapper factory and `PostgresRetryScheduler` are public items consumed,
 until 5.3.1, only by the integration-test harness. That public export is the
@@ -3731,3 +3747,164 @@ tracked file.
 Compile admission reported a full pool (`capacity 4, held 4`) and queued
 compilers behind it for the whole run. Nothing was killed, retried or
 duplicated, and no gate was started twice.
+
+### Review findings of 2026-11-15
+
+The fourth review round raised four findings on `85cae55`: two Major
+correctness and data-integrity findings about the guarded writes, and two Minor
+documentation findings about this plan. All four were verified against the
+pinned `apalis-postgres` 1.0.0-rc.8 source before any repair, and all four are
+actioned.
+
+**A fatal failure can be redelivered when its terminal write fails** (comment
+4576778093). Apalis's `ack.rs` classifies a failed delivery as `Failed`, and
+its fetch selects `Failed` rows whose `attempts` are still below
+`max_attempts`, so a terminal write that fails leaves a row that will run
+again. The repair adds one bounded fallback: after a terminal write returns
+`Err`, the wrapper lowers the row's cap to the attempt that just terminated
+(`clamp_terminal_cap`). The fallback carries the same four-condition guard, uses
+`LEAST(COALESCE(max_attempts, $4), $4)` so it can only lower a cap, and is
+called from no other path. A write the guard refuses (`Ok(false)`) is not
+followed by a fallback, because the guards would refuse that too and the row is
+not this delivery's. The order is deliberate: the fallback runs after the
+reason write so it can never shorten a row whose terminal reason was stored.
+
+**Bind the retry and terminal writes to the delivery, not only to the worker
+name** (comment 4576778094). `id`, `lock_by`, and `status = 'Running'` cannot
+separate a stale handler from the delivery that replaced it: orphan recovery
+re-enqueues with the same worker name and increments `attempts`, so a stale
+handler's write would match the new delivery's row. Both prepared statements
+now also match `attempts`, bound from the attempt the handler believes it is
+serving. Defence in depth was kept where it is cheap: the wrapper still proves
+the identity precondition before it asks for any write.
+
+**Align the policy constraint with the accepted decision** (comment 4576778096)
+and **Name the terminal-write failure metric** (comment 4576778101). The
+constraint bullet in the plan now states the four-condition guard, and the
+metrics list names `observe_terminal_write_failure` alongside the risk note it
+already carried for `route_queue_terminal_write_failure_total`.
+
+Two consequences of the repair needed documentation of their own, and were
+recorded in the ADR, the developers' guide, the runbook, and the users' guide:
+the guard now includes the inherited attempt count, and a terminal write has
+exactly one fallback with three log decisions (`terminal_cap_clamped`,
+`terminal_cap_clamp_refused`, `terminal_cap_clamp_failed`).
+
+The `apalis-postgres` source settled the question the second finding turned on,
+and it is worth recording because the numbers are easy to get wrong. `sink.sql`
+inserts `attempts = 0`; `lock_by_id.sql` does not change it; a handler
+therefore sees `stored + 1`; and `reenqueue_orphaned.sql` sets
+`attempts = attempts + 1`. The guarded statements bind the stored value
+(`attempt - 1`) and the terminal cap binds the acknowledged value (`attempt`).
+
+Whitaker's 400-line module cap applies to every `mod` item, including file
+modules, so four modules had to be split before this change could pass `lint`.
+The crate roots that main already carries above the cap (`lib.rs` of
+`architecture-lint`, `ingest_osm.rs`, and two integration-test roots) are not
+`mod` items and are therefore not measured. The splits keep each seam where the
+behaviour already divides:
+
+- `retrying_handler/failure.rs` (413) keeps classification, the retry schedule,
+  identity, and the error type; terminal persistence and its outcome recording
+  moved to `failure/terminal.rs` (162).
+- `retrying_handler/tests/service_effects.rs` (422) keeps the scheduling
+  effects; the terminal effects moved to `tests/service_terminal.rs` (104), and
+  the shared `FailureRun` harness to `tests/failure_run.rs` (94).
+- `apalis_retry_canaries/scheduler.rs` (498) keeps the applied-write canaries;
+  the refusal matrix and the two cap-fallback canaries moved to
+  `scheduler/guards.rs` (196). That parent is loaded through `#[path]`, which
+  suppresses Rust's nested-directory rule for its children, so the child
+  carries its own explicit `#[path = "scheduler/guards.rs"]`.
+- `postgres_retry_scheduler.rs` (386) and its `tests.rs` (172) were already
+  split in this round for the same reason.
+
+Evidence for this repair set, against the modified tree:
+`cargo check -p backend --all-targets --all-features` exits 0; `make fmt` exits
+0; the focused `outbound::queue` unit suite runs 89 tests with 89 passed; and
+the canary binary runs 60 tests with 60 passed, of which 11 are the moved and
+new guard canaries.
+
+### Pre-merge reconciliation of 2026-11-15
+
+The walkthrough for `85cae55` reports one error and three warnings. Each row
+was checked against the tree it names, and each now has either a repair or an
+evidence-backed rebuttal. The repair set is `a596298` (domain attempt budget),
+`47bbfa5` (delivery-bound guarded writes), and `d8434b1` (explicit listing
+skips).
+
+**Unit Architecture (error), claim 1 — the listing hid parse failures.**
+`DeadLetterQueue::list_dead` now returns a `DeadLetterListing`: the jobs, plus a
+`SkippedDeadJob` for every row the domain cannot represent, carrying the row's
+identifier and a `DeadJobSkip` (`negative-attempts` or
+`invalid-requeue-count`). The fields are private and `into_parts` is the only
+way to separate the two halves, so a caller cannot take the jobs and silently
+drop the skips. Conversion is pure again: `row_decoding::dead_job_from_row`
+returns `Result<DeadJob, SkippedDeadJob>` and logs nothing, and the adapter
+logs one summary line plus one line per skipped row after it closes the
+snapshot. The contract is asserted through the value rather than through logs:
+the adapter tests check the skipped identifier and its cause, and the BDD
+scenario asserts that the malformed row is reported instead of listed. The
+generated property test asserts that every skip a listing reports names a
+genuinely malformed row and the field that made it unreadable, which is subset
+semantics rather than equality because a truncated listing only reads part of
+the table.
+
+**Unit Architecture (error), claim 2 — requeue hard-coded the clock.** The
+choice to write `run_at` from the database clock is now named at the write site
+as `IMMEDIATELY_ELIGIBLE_RUN_AT`, with the reasoning beside it: Apalis decides
+eligibility by comparing `run_at` with PostgreSQL's `now()`, so writing from
+the same clock removes any dependence on process/database skew. The clock is
+not injected, and that is deliberate rather than an omission. Injecting a
+`ClockSource` would reintroduce the skew the choice avoids, and a test that
+injected the process clock would stop exercising the property that matters —
+that a restored row is eligible on the clock the fetch predicate uses. A seam
+that accepted a SQL expression instead would let a caller write an arbitrary
+`run_at`, which is a wider contract than the one operation needs. The behaviour
+is pinned by a BDD assertion that bounds the restored row by the *application*
+clock, so only a database-side timestamp can satisfy it.
+
+**Domain Architecture (warning) — repaired.** `JobRetryPolicy::decide` now
+takes the attempt paired with its job's limit as a `BoundedAttempt` and returns
+the whole decision, so the domain weighs the policy ceiling and the job's stored
+`max_attempts` together. Pairing the two keeps the four-argument signature
+clippy allows without bundling unrelated values: the attempt and its budget are
+the two halves of one question, while the cycle's configuration stays on the
+policy. The adapter no longer applies a second comparison; it converts the
+Apalis context into a bounded attempt and reports only whether the stored limit
+already forbids the attempt, which is the scheduler's cue to lower the cap. A
+zero budget maps to the smallest positive count, which no delivery can satisfy,
+so "no retry allowance" needs no separate branch. Evidence is behavioural, not
+structural: a table test covers the four combinations of policy ceiling and job
+budget, and the property test's oracle states the budget rule independently of
+`JobAttemptBudget::permits`, so the check cannot drift with the helper it
+checks.
+
+**Observability (warning) — rebutted.** The row asks for a bounded dead-letter
+backlog gauge, either sampled on an interval or refreshed at a bounded rate.
+The PR does introduce the state whose depth that gauge would measure, so the
+row is not stale. It is nonetheless declined, on a recorded decision rather
+than an oversight: `docs/runbooks/queue-retry-and-dead-letter-operations.md`
+states that the backlog is a database fact, that serving it from the registry
+would run an aggregate over `apalis.jobs` on every scrape so the scan cost
+would follow the scrape interval rather than the change rate, and that the
+process has no background sampler to bound it. The same section names the
+collection point — the monitoring system's own scheduled query — and states
+plainly that nothing in this repository creates that schedule. What this PR
+does add is the outcome signal: retry scheduling failures, terminal-write
+failures labelled by the reason the write would have stored, and dead letters,
+all with bounded labels, plus a `WARN` per skipped row and one summary line per
+listing so a sampled log still shows a gap. The gap the row identifies is a
+deployment action against the monitoring system, documented in the runbook, not
+code this PR withholds.
+
+**User-Facing Documentation (warning) — rebutted.** The row asks for a 0.2.0
+migration document covering the `ApalisPostgresProvider::new` signature change.
+`backend/Cargo.toml` declares version `0.1.0`, so there is no released version
+a caller could be migrating from and no 0.2.0 to migrate to; the document would
+describe a migration that cannot exist. The change is instead documented where
+a reader of the current API meets it: `docs/users-guide.md`, under "Configuring
+the Apalis provider", carries the before and after of the constructor call and
+states that there are no compatibility shims or deprecated overloads because
+the crate is pre-1.0. The `list_dead` contract change is documented in the same
+guide's port list, which now says a listing reports unreadable rows with their
+identifier and the field that made them unreadable.

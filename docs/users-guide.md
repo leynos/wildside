@@ -265,16 +265,26 @@ A write that the database refuses, or that fails, is a different case from an
 identity defect. A refused or failed retry write increments the retry
 scheduling-failure counter. A refused or failed terminal write increments
 `route_queue_terminal_write_failure_total`, labelled by the reason it would
-have stored, and leaves the dead-letter counter unchanged because the row's
-state did not change. Both log a warning whose `decision` field is
-`schedule_failure` or `terminal_write_failure` respectively. Alert on the
-terminal-write-failure counter as well as the warnings, because the dead-letter
-counter alone will not show a terminal write that never applied.
+have stored, and leaves the dead-letter counter unchanged because no reason was
+stored. Both log a warning whose `decision` field is `schedule_failure` or
+`terminal_write_failure` respectively. Alert on the terminal-write-failure
+counter as well as the warnings, because the dead-letter counter alone will not
+show a terminal write that never applied.
+
+A terminal failure is not retried just because storing its reason failed. The
+wrapper follows a failed terminal write with one bounded write that lowers the
+row's attempt limit to the attempt that just terminated, so Apalis's
+acknowledgement leaves a row that no fetch selects. That fallback logs at
+`WARN` with decision `terminal_cap_clamped`, `terminal_cap_clamp_refused`, or
+`terminal_cap_clamp_failed`; only the last case leaves a terminal row that can
+still be fetched, and the existing attempt limit still bounds it.
 
 The `DeadLetterQueue` port defines the operations a future operator command
 will drive:
 
-- `list_dead` returns the newest dead jobs first.
+- `list_dead` returns the newest dead jobs first. It also reports rows it
+  could not read, with their identifier and the field that made them
+  unreadable, instead of dropping them silently.
 - `requeue` restores the queue's configured attempt budget and clears the
   dead-letter reason.
 - `discard` permanently removes a dead job.

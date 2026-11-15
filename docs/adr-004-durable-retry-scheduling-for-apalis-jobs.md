@@ -18,11 +18,15 @@ timing precision limited by the worker poll interval.
 
 The 2026-10-14 investigation found that in-process retries at the rc pins race
 with the storage fetcher: a failed row can be fetched while the retry layer is
-still processing it. The wrapper updates a row only while it is `Running` and
-locked by the current worker, before Apalis acknowledges the failure. A
-terminal outcome can also reduce the stored attempt limit, so a later `Failed`
-row is unfetchable. A crash between the in-memory attempt increment and its
-acknowledgement can lose that one in-flight attempt.
+still processing it. The wrapper updates a row only while it is `Running`,
+locked by the current worker, and still carrying the attempt count this
+delivery inherited; the last predicate is what keeps a handler that stalled
+through orphan recovery from overwriting the decision of the delivery that
+replaced it. A terminal outcome reduces the stored attempt limit to the
+terminating attempt, either within its reason write or, if that write fails, as
+one following bounded write, so a later `Failed` row is unfetchable. A crash
+between the in-memory attempt increment and its acknowledgement can lose that
+one in-flight attempt.
 
 On the 1.0 upgrade
 ([issue #550](https://github.com/leynos/wildside/issues/550)), re-verify the

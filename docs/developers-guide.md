@@ -1889,6 +1889,11 @@ A requeue is the other case: `PostgresDeadLetterQueue::requeue` sets
 `run_at = now()` inside its own transaction, so the row is due immediately
 according to the clock that will poll it. There is no application-side delay to
 reproduce, so no clock seam is injected there; the statement is the boundary.
+That timestamp expression is held in `IMMEDIATELY_ELIGIBLE_RUN_AT`, so the
+choice appears once, at the write site, rather than as an inline `now()`. The
+dead-letter behaviour tests assert the consequence: after a requeue the stored
+`run_at` is not later than the application clock, which only a database-side
+timestamp can satisfy.
 
 ## Root-level script tests
 
@@ -2590,7 +2595,12 @@ public API.
 The domain owns `JobRetryPolicy` and its validated `JobRetryPolicyConfig`,
 `JobErrorKind`, and the payload-free, 1,024-byte-bounded `JobFailure`. The
 `DeadLetterQueue` port exchanges `DeadJob`, `DeadJobId`, `DeadReason`, and
-`DeadLetterError` values without exposing Apalis rows.
+`DeadLetterError` values without exposing Apalis rows. `list_dead` returns a
+`DeadLetterListing`: the represented jobs plus the `SkippedDeadJob` rows whose
+stored attempt or requeue metadata cannot be represented, each labelled with a
+`DeadJobSkip` cause. Storage conversion is therefore fallible in the open, and
+the adapter, not the conversion, logs what it dropped. Callers read both parts
+through accessors, so a listing cannot be consumed down to its jobs alone.
 `PostgresDeadLetterQueue` implements that port and receives `RequeueBudgets`
 built from the configured queue policies. A requeue restores the appropriate
 policy limit and records its bounded count under
@@ -2608,15 +2618,38 @@ Apalis to acknowledge; a terminal failure records its dead-letter
 classification instead of scheduling another attempt.
 
 All persistence goes through the `RetryPersistence` port: `schedule_retry` for
-a durable retry and `record_terminal_failure` for a dead-letter classification.
+a durable retry, `record_terminal_failure` for a dead-letter classification, and
+`clamp_terminal_cap` for the fallback described below.
 `PostgresRetryScheduler` is its only production implementation, and the port
-exists so unit tests can use a recording double to assert the exactly-one-write
+exists so unit tests can use a recording double to assert the at-most-one-write
 contract without PostgreSQL. Do not add a second implementation speculatively;
 extend the trait only when a real second backend exists.
 
 `record_terminal_failure` takes a `TerminalRetryUpdate` value rather than its
-five columns as positional arguments. A call site cannot transpose a task
-identity, an attempt count, and a reason that all describe the same row.
+five columns as positional arguments, and `schedule_retry` takes a
+`RetryScheduleUpdate` for the same reason. A call site cannot transpose a task
+identity, an attempt count, and a value that all describe the same row.
+
+#### Delivery guards and the terminal-cap fallback
+
+Every guarded write matches `id`, `lock_by`, `status = 'Running'`, and
+`attempts` equal to the count the delivery inherited. Apalis increments the
+in-memory attempt on the first poll, so the row holds one less than the
+delivery counts; `AttemptBounds` derives both values in one place. The fourth
+predicate is what makes a write delivery-specific. Orphan recovery re-queues a
+stalled row with `attempts = attempts + 1`, so a worker that stalled and later
+resumes holds the same name but a stale counter, and its write is refused
+instead of overwriting the decision of the delivery that replaced it.
+
+A terminal classification fails the delivery, which Apalis acknowledges as
+`Failed`, and a failed row is fetched again while `attempts < max_attempts`. If
+the terminal write itself fails, the wrapper therefore issues one further
+guarded write, `clamp_terminal_cap`, which lowers `max_attempts` to the
+terminating attempt with `LEAST(COALESCE(max_attempts, $cap), $cap)`. The
+acknowledgement then leaves an unfetchable row. The fallback never raises a
+cap, carries the same four guards, and is best effort: a refusal or an error is
+logged with its own decision and never retried, because the delivery is already
+unwinding.
 
 Backoff frees the worker slot, and the polling interval is a precision floor. A
 crash between the in-memory attempt increment and its acknowledgement can lose
