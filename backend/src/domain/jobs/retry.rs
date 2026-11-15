@@ -8,8 +8,10 @@ use std::time::Duration;
 
 use thiserror::Error;
 
+mod budget;
 mod failure;
 
+pub use budget::{BoundedAttempt, JobAttemptBudget};
 pub use failure::{JobErrorKind, JobFailure, MAX_JOB_FAILURE_MESSAGE_BYTES};
 
 /// Maximum delay for one retry, regardless of policy configuration.
@@ -207,6 +209,11 @@ impl JobRetryPolicy {
 
     /// Decide whether to retry a classified failure at the supplied attempt.
     ///
+    /// The answer honours both attempt limits a job is subject to: the policy's
+    /// own ceiling and the budget the job was enqueued with. Whichever is
+    /// lower wins, so an entry whose stored limit has already been reached is
+    /// terminal even when the policy would allow more attempts.
+    ///
     /// # Examples
     ///
     /// ```
@@ -214,7 +221,8 @@ impl JobRetryPolicy {
     /// use std::time::Duration;
     ///
     /// use backend::domain::jobs::retry::{
-    ///     JobErrorKind, JobRetryPolicy, JobRetryPolicyConfig, JitterSample, RetryDecision,
+    ///     BoundedAttempt, JobAttemptBudget, JobErrorKind, JobRetryPolicy,
+    ///     JobRetryPolicyConfig, JitterSample, RetryDecision,
     /// };
     ///
     /// let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
@@ -225,26 +233,50 @@ impl JobRetryPolicy {
     ///     jitter_fraction: 0.0,
     /// })
     /// .expect("valid policy configuration");
-    /// let decision = policy.decide(
-    ///     NonZeroU32::new(1).expect("positive attempt"),
+    /// let jitter = JitterSample::new(0.5).expect("midpoint is valid");
+    /// let attempt = NonZeroU32::new(1).expect("positive attempt");
+    ///
+    /// let permitted = policy.decide(
+    ///     BoundedAttempt::new(attempt, JobAttemptBudget::unlimited()),
     ///     JobErrorKind::Retryable,
-    ///     JitterSample::new(0.5).expect("midpoint is valid"),
+    ///     jitter,
     /// );
-    /// assert_eq!(decision, RetryDecision::Retry { delay: Duration::from_secs(1) });
+    /// assert_eq!(permitted, RetryDecision::Retry { delay: Duration::from_secs(1) });
+    ///
+    /// let job_budget = JobAttemptBudget::from_max_attempts(1);
+    /// let exhausted = policy.decide(
+    ///     BoundedAttempt::new(attempt, job_budget),
+    ///     JobErrorKind::Retryable,
+    ///     jitter,
+    /// );
+    /// assert_eq!(exhausted, RetryDecision::DeadLetter);
     /// ```
     pub fn decide(
         &self,
-        attempt: NonZeroU32,
+        delivery: BoundedAttempt,
         kind: JobErrorKind,
         jitter: JitterSample,
     ) -> RetryDecision {
-        if kind == JobErrorKind::Fatal || attempt >= self.max_attempts {
+        let attempt = delivery.attempt();
+        if kind == JobErrorKind::Fatal || !self.permits_another_attempt(delivery) {
             RetryDecision::DeadLetter
         } else {
             RetryDecision::Retry {
                 delay: self.backoff_delay(attempt, jitter),
             }
         }
+    }
+
+    /// Report whether both attempt limits leave room for another delivery.
+    ///
+    /// The policy ceiling and the job's own budget are independent, so the
+    /// lower one decides. Keeping the comparison here means [`decide`] weighs
+    /// only the failure class against a single answer, rather than repeating
+    /// the pair of limit checks whenever it is called.
+    ///
+    /// [`decide`]: Self::decide
+    fn permits_another_attempt(&self, delivery: BoundedAttempt) -> bool {
+        delivery.is_permitted() && delivery.attempt() < self.max_attempts
     }
 
     /// Calculate the exponential delay after applying the validated jitter.

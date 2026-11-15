@@ -8,8 +8,8 @@ use proptest::prelude::*;
 use proptest::test_runner::{Config, TestRunner};
 
 use super::super::retry::{
-    JitterSample, JobErrorKind, JobRetryPolicy, JobRetryPolicyConfig, MAX_BACKOFF_DELAY,
-    RetryDecision,
+    BoundedAttempt, JitterSample, JobAttemptBudget, JobErrorKind, JobRetryPolicy,
+    JobRetryPolicyConfig, MAX_BACKOFF_DELAY, RetryDecision,
 };
 
 fn policy_inputs() -> impl Strategy<
@@ -114,6 +114,7 @@ proptest! {
     fn decision_is_dead_exactly_for_fatal_or_exhausted_attempts(
         max_attempts in 1u32..=100,
         attempt in 1u32..=u32::MAX,
+        budget_cap in 0u32..=100,
         is_fatal in any::<bool>(),
         sample_basis_points in 0u32..=10_000,
     ) {
@@ -134,8 +135,12 @@ proptest! {
         };
         let jitter = JitterSample::new(f64::from(sample_basis_points) / 10_000.0)
             .expect("generated jitter is in the closed unit interval");
-        let decision = policy.decide(attempt, kind, jitter);
-        let should_dead_letter = is_fatal || attempt.get() >= max_attempts;
+        let budget = JobAttemptBudget::from_max_attempts(budget_cap);
+        let decision = policy.decide(BoundedAttempt::new(attempt, budget), kind, jitter);
+        // Stated independently of `JobAttemptBudget::permits`, so the oracle
+        // cannot drift with the helper it is checking.
+        let within_budget = attempt.get() < budget_cap;
+        let should_dead_letter = is_fatal || attempt.get() >= max_attempts || !within_budget;
 
         match decision {
             RetryDecision::DeadLetter => {
