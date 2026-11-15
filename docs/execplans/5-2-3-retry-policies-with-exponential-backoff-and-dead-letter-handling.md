@@ -304,8 +304,13 @@ Hard invariants. Violation requires escalation, not workarounds.
   adapter code in `backend/src/outbound/queue/`. Background workers and caches
   interact with the domain exclusively via ports (roadmap section 5 preamble).
 - The domain policy is authoritative. Every retry or dead-letter outcome in
-  production must come from `JobRetryPolicy::decide`. No other code may compute
-  a delay or a retry decision.
+  production must come from `JobRetryPolicy::decide`, which weighs the policy
+  ceiling and the job's stored `max_attempts` together by taking them as a
+  `BoundedAttempt`. No other code may compute a delay or choose an outcome.
+  Persisting that outcome is adapter work, not a second decision: the wrapper
+  converts the Apalis context into a bounded attempt, records the reason the
+  domain returned, and lowers the stored cap only so the acknowledged row is
+  not fetched again.
 - Do not install any in-process retry middleware on an Apalis worker: no
   `apalis` facade dependency, no `RetryLayer`, no `.retry(...)`, and no
   hand-rolled tower `Retry` (Decision D14). EP-M2 adds a conformance check for
@@ -3503,10 +3508,13 @@ The remaining rows were re-checked and rebutted on evidence.
 - Unit Architecture: `tracing` is this adapter's observability boundary, as it
   is for `requeue` and `discard`, and `requeue` writes `run_at = now()` in SQL
   so the row is immediately eligible on the database clock.
-- Domain Architecture: the effective budget is already decided once, in
-  `decide_retry_wrapper_action`, from the policy limit and the fetched task's
-  stored limit; the Apalis conversion and the storage update stay in the
-  adapter as the row asks.
+- Domain Architecture: the effective budget is decided once, by
+  `JobRetryPolicy::decide`, from the policy limit and the fetched task's stored
+  limit; the Apalis conversion and the storage update stay in the adapter as
+  the row asks. An earlier revision of this bullet credited that decision to
+  `decide_retry_wrapper_action`; the reconciliation of 2026-11-15 moved the
+  comparison into the domain and left the wrapper reporting only whether the
+  stored limit already forbids the attempt.
 
 Verification for this round: `cargo check -p backend --tests --all-features`
 succeeds, the 41 focused retrying-handler and metrics unit tests pass, the
@@ -3948,25 +3956,28 @@ The remaining three rows are `bumpy_road_function` findings in
 `diesel_catalogue_repository.rs`. All three files are byte-identical to
 `origin/main` (`git diff --quiet origin/main -- <path>` is clean, and none
 appears in `git diff --name-only origin/main...HEAD`), so the branch neither
-introduces nor edits them. They appear only because the local `whitaker`
-wrapper builds its suite from the shared checkout at
-`/home/leynos/.local/ share/whitaker`, now at `880939d1` of 2026-11-15, which
-is ahead of the pin CI installs: `.github/workflows/ci.yml` sets
-`WHITAKER_INSTALLER_VERSION: '0.2.12'`, released 2026-11-09. The hosted `build`
+introduces nor edits them. They do not reproduce either: run r13 in the same
+worktree ran the same two `whitaker` commands and reported no finding at all.
+
+What changed between the runs was the suite, not the tree. The local wrapper
+builds its suite from the shared checkout at `~/.local/share/whitaker`, which
+is not this branch's to pin: it held `880939d1` (2026-11-15) when r11 ran and
+`00186d43` (2026-11-01) when r13 did, as its reflog records. CI pins
+`WHITAKER_INSTALLER_VERSION: '0.2.12'` (2026-11-09), and the hosted `build`
 check, which runs `make lint-whitaker` under that pin, was green on `85cae55`,
 whose tree contains all three functions unchanged.
 
-The evidence is therefore that this is local toolchain drift rather than a
-branch regression, and the branch does not refactor three untouched files to
-silence a rule CI does not run. The follow-up belongs either to the change that
-advances the pin or to a base pull request, if and when the pinned suite starts
-reporting them. Recorded here so a later red `make lint` in this worktree is
-not misread as this change's.
+The three rows are therefore a property of the shared suite revision, not of
+this branch, and the branch does not refactor three untouched files to satisfy
+a revision CI does not run. Recorded so a later red `make lint` in this
+worktree is not misread as this change's; if the pinned suite starts reporting
+them, the fix belongs to that pin's change or to a base pull request.
 
 Because `make lint` stops inside `lint-rust`, six sub-targets never ran in r11.
 Each was run separately afterwards and all six exited 0: `lint-architecture`,
 `lint-frontend`, `lint-specs`, `lint-python`, `lint-makefile`, and
-`lint-actions`.
+`lint-actions`. r13 then ran the whole `lint` target, which exercised all six
+inside the gate.
 
 `audit` exited 2 for a second, unrelated reason: the two `extract-zip`
 exceptions in `security/audit-exceptions.json` expired on 2026-11-14, one day
@@ -3988,3 +3999,28 @@ headings restyled, and every reference updated across `docs/contents.md`,
 `docs/developers-guide.md`, `docs/wildside-backend-architecture.md`, and this
 plan. `Cargo.lock` auto-merged against main's `quinn-udp` bump and was
 validated with `cargo metadata --locked`.
+
+#### Final run r13 (2026-11-15)
+
+Run r13 re-gated the merged, reconciled head `4b3a164` and all nine gates
+exited 0:
+
+- `check-fmt`, 3s, 132 files unchanged and 120 already formatted; `spelling`,
+  14s; `markdownlint`, 17s over 133 files with no error; `nixie`, 2s.
+- `lint`, 388s, the whole target: rustdoc, clippy, both `whitaker`
+  invocations against the workspace and `backend`, then architecture, frontend,
+  specs, Python, Makefile, and action lint. No diagnostic was emitted, so the
+  `conditional_max_n_branches` row is closed and the three
+  `bumpy_road_function` rows did not reproduce.
+- `typecheck`, 5s; `test`, 992s, with 2692 nextest tests passed and 4 skipped,
+  workflow contracts 658 passed with 1 skipped, scripts 115 passed with 13
+  skipped, and the action-linter tests 14 passed; `audit`, 6s, "Audit
+  exceptions valid and vulnerabilities accounted for" with 17 allowed warning;
+  `openapi`, 24s, regenerating the specification identically.
+
+Two Markdown corrections followed that run — the suite-revision paragraph above
+and the realignment of the Domain Architecture row with
+`JobRetryPolicy::decide` — so the four Markdown-scoped targets were re-run
+after they were committed and exited 0. Neither correction touches Rust,
+`security/audit-exceptions.json`, or `spec/openapi.json`, so the `lint`,
+`typecheck`, `test`, `audit`, and `openapi` results stand for the final content.
