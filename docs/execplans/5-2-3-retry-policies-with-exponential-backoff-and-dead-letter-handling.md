@@ -4188,3 +4188,41 @@ with 2720 passed and 4 skipped, and `audit`, `openapi`, `lint`, `typecheck`,
 `check-fmt`, `spelling`, `markdownlint`, and `nixie` all exited 0. Every hosted
 check the head reports passed as well: `build`, `coverage`, the CodeScene
 review, and the Gecko security review. That is the candidate offered for review.
+
+### The n+1 migration document and gate runs r19 to r20
+
+CodeRabbit's pre-merge table for this PR was saved at an older head (`85cae55`,
+base `0e2dadf`) and reports one error and three warnings. Two of the four rows
+describe defects that later commits had already repaired, and the table itself
+says as much only for the Unit Architecture row it repeats. The error asked for
+skipped-row reporting from `list_dead` and a documented requeue clock boundary;
+`backend/src/domain/ports/dead_letter_queue.rs` now returns `DeadLetterListing`
+with `skipped()`, and `IMMEDIATELY_ELIGIBLE_RUN_AT` documents the `now()`
+choice that the requeue behavioural test asserts. The Domain Architecture
+warning asked for the effective attempt budget to move into the domain, which
+`2472e09` ("Let the domain own the effective attempt budget") did. The
+Observability warning is argued rather than implemented: the
+terminal-write-failure counter exists and is described in the runbook, while
+the dead-letter backlog stays a database fact that the runbook queries, because
+nothing in this repository schedules a collection point.
+
+The User-Facing Documentation warning was the one still open. The users' guide
+already described the retry, dead-letter, and counter behaviour and carried a
+before/after snippet for the constructor, but no migration document existed and
+nothing linked one. `docs/backend-v0-2-0-migration-guide.md` now supplies it:
+the constructor's queue name and policy arguments, the handler contract
+`Fn(J, NonZeroU32) -> Fut` resolving to `Result<(), JobFailure>`, the stored
+attempt budget's effect on older rows, the retry wrapper's composition, the
+dead-letter port with `RequeueBudgets`, the three counters to alert on, and
+verification steps. It is linked from "Configuring the Apalis provider" in the
+users' guide and indexed in `docs/contents.md`.
+
+Run r19-docs covered only the four Markdown gates, because the Rust and
+frontend surfaces are unchanged from the green r18 head. It failed twice on the
+new guide: `mdtablefix --check` wanted a `+31 -32` rewrap, and `markdownlint`
+reported four MD060 table-alignment errors and one MD047 missing trailing
+newline. `mdtablefix --in-place` over that file plus an EOF normalisation
+repaired both, and r20-docs passed all four gates: `check-fmt` (mdtablefix 133
+files unchanged, `cargo fmt --all -- --check` clean, Biome 2.3.1 clean, Ruff
+120 files already formatted), `spelling`, `markdownlint` (134 files, 0 errors),
+and `nixie`.

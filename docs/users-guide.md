@@ -328,6 +328,10 @@ let provider =
     ApalisPostgresProvider::new(pool.clone(), "route.generate", policy.clone()).await?;
 ```
 
+The [backend v0.2.0 migration guide](backend-v0-2-0-migration-guide.md)
+collects this signature change and the retry and dead-letter adoption steps in
+one place for callers upgrading from v0.1.0.
+
 Changing the policy does not rewrite rows already in the table: each stored job
 keeps the `max_attempts` recorded when it was enqueued, and the new budget
 applies to jobs enqueued afterwards. The retry wrapper still applies the
