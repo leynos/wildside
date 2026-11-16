@@ -36,7 +36,11 @@ async fn fixture_service_accepts_requests() {
         .submit(request)
         .await
         .expect("submit should succeed");
-    assert_eq!(response.status, RouteSubmissionStatus::Accepted);
+    assert_eq!(
+        response.status,
+        RouteSubmissionStatus::Accepted,
+        "the fixture service should accept a request that carries no idempotency key"
+    );
 }
 
 #[tokio::test]
@@ -52,7 +56,11 @@ async fn fixture_service_accepts_requests_with_idempotency_key() {
         .submit(request)
         .await
         .expect("submit should succeed");
-    assert_eq!(response.status, RouteSubmissionStatus::Accepted);
+    assert_eq!(
+        response.status,
+        RouteSubmissionStatus::Accepted,
+        "the fixture service should accept a request that carries an idempotency key"
+    );
 }
 
 #[test]

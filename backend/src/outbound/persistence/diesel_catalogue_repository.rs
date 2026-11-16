@@ -1,4 +1,15 @@
 //! PostgreSQL-backed catalogue read adapter.
+//!
+//! [`DieselCatalogueRepository`] implements the [`CatalogueRepository`] port for
+//! the explore page. It reads every catalogue table inside one transaction, so
+//! the categories, themes, collections, route summaries, trending highlights and
+//! community pick in a returned snapshot all observe one MVCC version even when
+//! ingestion is running concurrently.
+//!
+//! Each fetched row is converted into its validated domain type before the
+//! snapshot is returned. One unconvertible row aborts the whole read and
+//! surfaces as a port-level query error, so a caller never receives a silently
+//! shortened catalogue.
 
 use async_trait::async_trait;
 use chrono::Utc;
