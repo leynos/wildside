@@ -56,12 +56,19 @@ use toml::Value;
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 const CLIPPY_POLICY: &str = include_str!("../../clippy.toml");
+
 const WORKSPACE_MANIFEST: &str = include_str!("../../Cargo.toml");
+
 const BACKEND_MANIFEST: &str = include_str!("../Cargo.toml");
+
 const PAGINATION_MANIFEST: &str = include_str!("../crates/pagination/Cargo.toml");
+
 const EXAMPLE_DATA_MANIFEST: &str = include_str!("../../crates/example-data/Cargo.toml");
+
 const ARCHITECTURE_LINT_MANIFEST: &str = include_str!("../../tools/architecture-lint/Cargo.toml");
+
 const MAKEFILE: &str = include_str!("../../Makefile");
+
 const CARGO_CONFIG: &str = include_str!("../../.cargo/config.toml");
 
 /// Every `std::env` API the policy prohibits.
@@ -305,6 +312,37 @@ fn makefile_globally_exports(makefile: &str, name: &str) -> bool {
         })
 }
 
+/// The Makefile directives the embedded-cluster test run depends on.
+const EMBEDDED_CLUSTER_DIRECTIVES: [&str; 4] = [
+    "PG_PASSWORD ?= wildside_embedded_test",
+    "POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries",
+    "shell_quote = '$(subst ','\"'\"',$(value $(1)))'",
+    "test-rust: workspace-sync prepare-pg-worker",
+];
+
+/// The overridable settings that belong to the `test-rust` recipe alone.
+const TEST_ONLY_EXPORTS: [&str; 2] = ["PG_PASSWORD", "POSTGRESQL_RELEASES_URL"];
+
+/// Report the first directive the Makefile does not carry as a live directive.
+///
+/// Returning the offender keeps the caller's assertions flat: a loop with an
+/// assertion inside it is a second cluster of nested conditionals, which
+/// Whitaker's `bumpy_road_function` rejects in the assembled test.
+fn first_missing_directive<'a>(directives: &[&'a str]) -> Option<&'a str> {
+    directives
+        .iter()
+        .copied()
+        .find(|directive| !makefile_declares(directive))
+}
+
+/// Report the first of `names` the Makefile exports outside any recipe.
+fn first_global_export<'a>(names: &[&'a str]) -> Option<&'a str> {
+    names
+        .iter()
+        .copied()
+        .find(|name| makefile_globally_exports(MAKEFILE, name))
+}
+
 /// Scenario: test-runner settings stop reaching the Rust test processes.
 ///
 /// Invariant: the Makefile declares both overridable defaults and exports
@@ -313,28 +351,30 @@ fn makefile_globally_exports(makefile: &str, name: &str) -> bool {
 /// a substring search would accept text inside a comment or global export.
 #[test]
 fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
-    for statement in [
-        "PG_PASSWORD ?= wildside_embedded_test",
-        "POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries",
-        "shell_quote = '$(subst ','\"'\"',$(value $(1)))'",
-        "test-rust: workspace-sync prepare-pg-worker",
-    ] {
-        assert!(
-            makefile_declares(statement),
-            "the Makefile must carry `{statement}` as a live directive, not \
-             inside a comment"
-        );
-    }
-    assert!(makefile_target_recipe_contains(
-        "test-rust: workspace-sync prepare-pg-worker",
-        "export PG_PASSWORD=$(call shell_quote,PG_PASSWORD) POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)",
-    ));
-    for name in ["PG_PASSWORD", "POSTGRESQL_RELEASES_URL"] {
-        assert!(
-            !makefile_globally_exports(MAKEFILE, name),
-            "{name} must not be exported to unrelated Make recipes"
-        );
-    }
+    const REQUIRED_RECIPE: &str = "test-rust: workspace-sync prepare-pg-worker";
+    const RECIPE_EXPORT: &str = concat!(
+        "export PG_PASSWORD=$(call shell_quote,PG_PASSWORD) ",
+        "POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)"
+    );
+
+    let missing = first_missing_directive(&EMBEDDED_CLUSTER_DIRECTIVES);
+    assert!(
+        missing.is_none(),
+        "the Makefile must carry every embedded-cluster directive as a live \
+         directive, not inside a comment; missing {missing:?}"
+    );
+
+    assert!(
+        makefile_target_recipe_contains(REQUIRED_RECIPE, RECIPE_EXPORT),
+        "the `{REQUIRED_RECIPE}` recipe must export the test-only PostgreSQL \
+         settings so only the test processes receive them"
+    );
+
+    let leaked = first_global_export(&TEST_ONLY_EXPORTS);
+    assert!(
+        leaked.is_none(),
+        "{leaked:?} must not be exported to unrelated Make recipes"
+    );
     Ok(())
 }
 
