@@ -141,6 +141,9 @@ ignore = [
   "n\\(\"the\\ HTTP\\ response\\ is\\ unauthorised\"\\)\\]",
   "n\\(\"the\\ HTTP\\ response\\ is\\ unauthorised\\ and\\ no\\ session\\ cookie\\ i",
   "n\\{query_lines\\}\\\\n\\);\\\\nout\\ center\\ tags;\",",
+  # The Overpass QL output modifier is spelled `out center tags`, so the
+  # assertion that pins the rendered query quotes the upstream keyword.
+  "\"out\\ center\\ tags;\"",
   "nd\\ Number\\.parseInt\\(\\)\\ in\\ favor\\ of\\ binary,\\ octal,\\ and\\ h",
   "ngle\\ transaction\\ so\\ all\\ SELECTs\\ observe",
   "no\\ Set\\-Cookie\\ header\\ on\\ unauthorised\\ responses\"",

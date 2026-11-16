@@ -93,9 +93,11 @@ impl DescriptorRepository for DieselDescriptorRepository {
     async fn descriptor_snapshot(&self) -> Result<DescriptorSnapshot, DescriptorRepositoryError> {
         let mut conn = self.pool.get().await.map_err(map_pool_error)?;
 
-        // Read all tables in a single transaction so all SELECTs observe
-        // a consistent MVCC snapshot, preventing mixed-version results
-        // during concurrent ingestion.
+        // Read all tables on one connection inside a single transaction. The
+        // transaction does not pin an isolation level, so at PostgreSQL's
+        // default `READ COMMITTED` each SELECT takes its own snapshot and a
+        // concurrent ingestion can be observed part-way through. Issue #624
+        // tracks pinning `REPEATABLE READ` for a cross-table view.
         let (tag_rows, badge_rows, toggle_rows, preset_rows, theme_rows) = conn
             .transaction(|conn| {
                 async move {

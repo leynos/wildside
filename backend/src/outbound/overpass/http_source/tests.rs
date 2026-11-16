@@ -6,8 +6,17 @@ use super::*;
 use crate::domain::BoundingBox;
 use crate::test_support::overpass_enrichment::enrichment_request;
 
-#[test]
-fn builds_query_with_bbox_reordered_for_overpass() {
+#[rstest]
+#[case::bbox_order(
+    "node[\"amenity\"](55.9,-3.3,56,-3.1);",
+    "the bbox in south,west,north,east order"
+)]
+#[case::configured_timeout("[out:json][timeout:180];", "the configured timeout")]
+#[case::escaped_quotes(
+    "way[\"name\"=\"coffee \\\"bar\\\"\"](55.9,-3.3,56,-3.1);",
+    "the escaped quoted value"
+)]
+fn builds_query_with_bbox_reordered_for_overpass(#[case] fragment: &str, #[case] detail: &str) {
     let query = build_overpass_query(
         &enrichment_request(vec!["amenity", "name=coffee \"bar\""]),
         180,
@@ -15,16 +24,102 @@ fn builds_query_with_bbox_reordered_for_overpass() {
     .expect("query should build");
 
     assert!(
-        query.contains("node[\"amenity\"](55.9,-3.3,56,-3.1);"),
-        "query should include bbox in south,west,north,east order"
+        query.contains(fragment),
+        "query should include {detail}, got `{query}`"
+    );
+}
+
+#[test]
+fn an_empty_tag_list_yields_one_unfiltered_selector() {
+    let selectors = collect_tag_selectors(&[]).expect("an empty tag list should be accepted");
+
+    assert_eq!(
+        selectors,
+        vec![String::new()],
+        "an empty tag list should still reach the whole bounding box, so exactly one \
+         unfiltered selector is produced"
+    );
+}
+
+#[test]
+fn each_requested_tag_yields_its_own_selector() {
+    let tags = vec!["amenity".to_owned(), "name=coffee".to_owned()];
+
+    let selectors = collect_tag_selectors(&tags).expect("well-formed tags should be accepted");
+
+    assert_eq!(
+        selectors,
+        vec![
+            "[\"amenity\"]".to_owned(),
+            "[\"name\"=\"coffee\"]".to_owned()
+        ],
+        "one selector per tag should be produced, in the order the tags were given"
+    );
+}
+
+#[rstest]
+#[case::blank_tag("   ", "tags must not include blank values")]
+#[case::missing_key("=coffee", "tags must provide a non-empty key")]
+#[case::missing_value("amenity=", "tags must not include empty values")]
+fn an_invalid_tag_is_rejected(#[case] tag: &str, #[case] expected: &str) {
+    let tags = vec![tag.to_owned()];
+
+    let error = collect_tag_selectors(&tags).expect_err("an invalid tag should be rejected");
+
+    assert!(
+        is_invalid_request(&error),
+        "`{tag}` should be refused as an invalid request, got {error:?}"
     );
     assert!(
-        query.starts_with("[out:json][timeout:180];"),
-        "query should include configured timeout"
+        error.to_string().contains(expected),
+        "the rejection of `{tag}` should explain `{expected}`, got `{error}`"
     );
+}
+
+#[test]
+fn render_query_repeats_each_selector_for_every_element_type() {
+    let selectors = vec!["[\"amenity\"=\"cafe\"]".to_owned()];
+    let expected = concat!(
+        "[out:json][timeout:25];\n",
+        "(\n",
+        "  node[\"amenity\"=\"cafe\"](1,2,3,4);\n",
+        "  way[\"amenity\"=\"cafe\"](1,2,3,4);\n",
+        "  relation[\"amenity\"=\"cafe\"](1,2,3,4);\n",
+        ");\n",
+        "out center tags;"
+    );
+
+    let query = render_query(&selectors, "(1,2,3,4)", 25);
+
+    assert_eq!(
+        query, expected,
+        "each selector should repeat per element type"
+    );
+}
+
+#[test]
+fn render_query_keeps_the_configured_timeout() {
+    let selectors = vec!["[\"amenity\"]".to_owned()];
+
+    let query = render_query(&selectors, "(1,2,3,4)", 90);
+    let header = "[out:json][timeout:90];";
+
     assert!(
-        query.contains("way[\"name\"=\"coffee \\\"bar\\\"\"](55.9,-3.3,56,-3.1);"),
-        "query should escape quoted values in tag selectors"
+        query.starts_with(header),
+        "the timeout should reach the header, got `{query}`"
+    );
+}
+
+#[test]
+fn render_query_emits_one_clause_per_selector_and_element_type() {
+    let selectors = vec!["[\"amenity\"]".to_owned(), "[\"name\"=\"cafe\"]".to_owned()];
+
+    let query = render_query(&selectors, "(1,2,3,4)", 90);
+    let clauses = query.matches("(1,2,3,4);").count();
+
+    assert_eq!(
+        clauses, 6,
+        "two selectors across three element types give six clauses"
     );
 }
 
@@ -100,11 +195,16 @@ fn parses_overpass_json_into_domain_pois() {
     }"#;
 
     let pois = parse_pois(body.as_bytes()).expect("JSON should decode");
-    assert_eq!(pois.len(), 2, "two POIs should be decoded");
-    assert_eq!(pois[0].element_type, "node");
-    assert_eq!(pois[0].longitude, -3.21);
-    assert_eq!(pois[1].element_type, "way");
-    assert_eq!(pois[1].latitude, 55.92);
+    let decoded: Vec<(&str, f64, f64)> = pois
+        .iter()
+        .map(|poi| (poi.element_type.as_str(), poi.longitude, poi.latitude))
+        .collect();
+
+    let expected = vec![("node", -3.21, 55.91), ("way", -3.22, 55.92)];
+    assert_eq!(
+        decoded, expected,
+        "each element should decode with its coordinates"
+    );
 }
 
 #[test]

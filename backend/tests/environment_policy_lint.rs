@@ -93,14 +93,12 @@ fn forward(command: &mut Command, name: &str) {
     }
 }
 
-/// Compile `probe` with `clippy-driver` and return its diagnostics.
-fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
-    let sandbox = tempfile::tempdir()?;
-    let sandbox_dir = Dir::open_ambient_dir(sandbox.path(), ambient_authority())?;
-    sandbox_dir.write("probe.rs", probe)?;
-    sandbox_dir.create_dir("out")?;
-    let root = workspace_root()?;
-
+/// Build the `clippy-driver` command that compiles one probe.
+///
+/// The child's environment is cleared and rebuilt from the variables the probe
+/// needs, so nothing the harness happens to carry — coverage instrumentation in
+/// particular — reaches the compilation.
+fn probe_command(root: &Path, sandbox: &Path) -> TestResult<Command> {
     let mut command = Command::new("clippy-driver");
     command.env_clear();
     command.env(
@@ -111,8 +109,8 @@ fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
         forward(&mut command, name);
     }
     // The repository's own configuration must decide the outcome.
-    command.env("CLIPPY_CONF_DIR", &root);
-    command.current_dir(&root);
+    command.env("CLIPPY_CONF_DIR", root);
+    command.current_dir(root);
     command.args([
         "--edition",
         "2024",
@@ -133,12 +131,41 @@ fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
         "clippy::allow_attributes",
         "--error-format=json",
     ]);
-    command.arg(sandbox.path().join("probe.rs"));
-    command.arg("--out-dir").arg(sandbox.path().join("out"));
+    command.arg(sandbox.join("probe.rs"));
+    command.arg("--out-dir").arg(sandbox.join("out"));
+    Ok(command)
+}
 
+/// Compile `probe` with `clippy-driver` and return its diagnostics.
+fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
+    let sandbox = stage_probe(probe)?;
+    let root = workspace_root()?;
+
+    let mut command = probe_command(&root, sandbox.path())?;
     let output = command.output()?;
-    let stderr = String::from_utf8(output.stderr)?;
-    Ok(stderr.lines().filter_map(parse_diagnostic).collect())
+    parse_diagnostics(&output.stderr)
+}
+
+/// Write `probe`, and the output directory it compiles into, to a fresh
+/// temporary directory the caller keeps alive for the compilation.
+fn stage_probe(probe: &str) -> TestResult<tempfile::TempDir> {
+    let sandbox = tempfile::tempdir()?;
+    let dir = create_output_directory(sandbox.path())?;
+    dir.write("probe.rs", probe)?;
+    Ok(sandbox)
+}
+
+/// Open `sandbox` and create the directory `clippy-driver` writes its output to.
+fn create_output_directory(sandbox: &Path) -> TestResult<Dir> {
+    let dir = Dir::open_ambient_dir(sandbox, ambient_authority())?;
+    dir.create_dir("out")?;
+    Ok(dir)
+}
+
+/// Parse the JSON diagnostics from a probe compilation's standard error.
+fn parse_diagnostics(stderr: &[u8]) -> TestResult<Vec<Diagnostic>> {
+    let text = std::str::from_utf8(stderr)?;
+    Ok(text.lines().filter_map(parse_diagnostic).collect())
 }
 
 /// Parse one JSON line into a [`Diagnostic`], skipping non-diagnostic lines

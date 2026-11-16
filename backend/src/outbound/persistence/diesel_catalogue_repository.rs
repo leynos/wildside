@@ -1,4 +1,20 @@
 //! PostgreSQL-backed catalogue read adapter.
+//!
+//! [`DieselCatalogueRepository`] implements the [`CatalogueRepository`] port for
+//! the explore page. It reads every catalogue table on one pooled connection
+//! inside a single transaction, so the categories, themes, collections, route
+//! summaries, trending highlights and community pick in a returned snapshot all
+//! come from that one connection.
+//!
+//! The transaction does not pin an isolation level, so at PostgreSQL's default
+//! `READ COMMITTED` every statement takes its own snapshot and an ingestion that
+//! commits between two reads is visible to the later ones. Making those reads
+//! observe one snapshot needs `REPEATABLE READ`; issue #624 tracks it.
+//!
+//! Each fetched row is converted into its validated domain type before the
+//! snapshot is returned. One unconvertible row aborts the whole read and
+//! surfaces as a port-level query error, so a caller never receives a silently
+//! shortened catalogue.
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -187,6 +203,26 @@ fn vec_to_pair(v: &[i32], field: &str) -> Result<[i32; 2], String> {
         .map_err(|_| format!("{field}: expected exactly 2 elements, got {}", v.len()))
 }
 
+/// Convert a whole result set, surfacing the first failure as a query error.
+fn convert_rows<Row, Domain>(
+    rows: Vec<Row>,
+    convert: fn(Row) -> Result<Domain, String>,
+) -> Result<Vec<Domain>, CatalogueRepositoryError> {
+    collect_rows(
+        rows.into_iter().map(convert),
+        CatalogueRepositoryError::query,
+    )
+}
+
+/// Convert the community pick when the query returned one.
+fn convert_community_pick(
+    row: Option<CommunityPickRow>,
+) -> Result<Option<CommunityPick>, CatalogueRepositoryError> {
+    row.map(row_to_community_pick)
+        .transpose()
+        .map_err(CatalogueRepositoryError::query)
+}
+
 // ---------------------------------------------------------------------------
 // Trait implementation
 // ---------------------------------------------------------------------------
@@ -230,9 +266,12 @@ type ConvertedCatalogueRows = (
 );
 
 impl DieselCatalogueRepository {
-    /// Fetch all catalogue rows in a single transaction so all SELECTs observe
-    /// a consistent MVCC snapshot, preventing mixed-version results during
-    /// concurrent ingestion.
+    /// Fetch all catalogue rows on one connection inside a single transaction.
+    ///
+    /// The transaction does not pin an isolation level, so under PostgreSQL's
+    /// default `READ COMMITTED` the statements below do not share a snapshot and
+    /// a concurrent ingestion can be observed part-way through. Issue #624
+    /// tracks pinning `REPEATABLE READ` for a cross-table view.
     async fn fetch_catalogue_rows(
         &self,
         conn: &mut AsyncPgConnection,
@@ -285,32 +324,17 @@ impl DieselCatalogueRepository {
     ) -> Result<ConvertedCatalogueRows, CatalogueRepositoryError> {
         let (category_rows, theme_rows, collection_rows, summary_rows, trending_rows, pick_row) =
             rows;
-        let map_err = CatalogueRepositoryError::query;
-        let categories = collect_rows(
-            category_rows.into_iter().map(row_to_route_category),
-            map_err,
-        )?;
-        let themes = collect_rows(theme_rows.into_iter().map(row_to_theme), map_err)?;
-        let collections = collect_rows(
-            collection_rows.into_iter().map(row_to_route_collection),
-            map_err,
-        )?;
-        let routes = collect_rows(summary_rows.into_iter().map(row_to_route_summary), map_err)?;
-        let trending = collect_rows(
-            trending_rows.into_iter().map(row_to_trending_highlight),
-            map_err,
-        )?;
-        let community_pick = pick_row
-            .map(row_to_community_pick)
-            .transpose()
-            .map_err(CatalogueRepositoryError::query)?;
         Ok((
-            categories,
-            themes,
-            collections,
-            routes,
-            trending,
-            community_pick,
+            convert_rows(category_rows, row_to_route_category)?,
+            convert_rows(theme_rows, row_to_theme)?,
+            convert_rows(collection_rows, row_to_route_collection)?,
+            convert_rows(summary_rows, row_to_route_summary)?,
+            convert_rows(trending_rows, row_to_trending_highlight)?,
+            convert_community_pick(pick_row)?,
         ))
     }
 }
+
+#[cfg(test)]
+#[path = "diesel_catalogue_repository/tests.rs"]
+mod tests;

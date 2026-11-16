@@ -126,36 +126,50 @@ fn parse_pois(body: &[u8]) -> Result<Vec<EnrichmentPoi>, EnrichmentSourceError> 
         .map_err(EnrichmentSourceError::decode)
 }
 
+/// The Overpass element types every selector is repeated for.
+const OVERPASS_ELEMENT_TYPES: [&str; 3] = ["node", "way", "relation"];
+
 fn build_overpass_query(
     request: &EnrichmentRequest,
     query_timeout_seconds: u32,
 ) -> Result<String, EnrichmentSourceError> {
-    // `BoundingBox` has already enforced WGS84 validity, so the adapter only
-    // reorders the coordinates into Overpass's south,west,north,east form.
-    let [min_lng, min_lat, max_lng, max_lat] = request.bounding_box.as_array();
-    let bbox = format!("({min_lat},{min_lng},{max_lat},{max_lng})");
+    let bbox = format_bbox(request.bounding_box.as_array());
+    let selectors = collect_tag_selectors(&request.tags)?;
+    Ok(render_query(&selectors, &bbox, query_timeout_seconds))
+}
 
-    let selectors = if request.tags.is_empty() {
-        vec![String::new()]
-    } else {
-        request
-            .tags
-            .iter()
-            .map(|tag| build_tag_selector(tag))
-            .collect::<Result<Vec<_>, _>>()?
-    };
+/// Reorder a bounding box into Overpass's south,west,north,east form.
+///
+/// `BoundingBox` has already enforced WGS84 validity, so the adapter only
+/// rearranges the coordinates; it never revalidates them.
+fn format_bbox([min_lng, min_lat, max_lng, max_lat]: [f64; 4]) -> String {
+    format!("({min_lat},{min_lng},{max_lat},{max_lng})")
+}
 
-    let mut lines = Vec::with_capacity(selectors.len() * 3);
+/// Build one selector per requested tag.
+///
+/// An empty tag list becomes a single unfiltered selector, so the query still
+/// covers the whole bounding box.
+fn collect_tag_selectors(tags: &[String]) -> Result<Vec<String>, EnrichmentSourceError> {
+    if tags.is_empty() {
+        return Ok(vec![String::new()]);
+    }
+    tags.iter().map(|tag| build_tag_selector(tag)).collect()
+}
+
+/// Render the Overpass query body for the supplied selectors.
+fn render_query(selectors: &[String], bbox: &str, query_timeout_seconds: u32) -> String {
+    let mut lines = Vec::with_capacity(selectors.len() * OVERPASS_ELEMENT_TYPES.len());
     for selector in selectors {
-        for element_type in ["node", "way", "relation"] {
+        for element_type in OVERPASS_ELEMENT_TYPES {
             lines.push(format!("  {element_type}{selector}{bbox};"));
         }
     }
 
-    Ok(format!(
+    format!(
         "[out:json][timeout:{query_timeout_seconds}];\n(\n{query_lines}\n);\nout center tags;",
         query_lines = lines.join("\n")
-    ))
+    )
 }
 
 fn build_tag_selector(tag: &str) -> Result<String, EnrichmentSourceError> {

@@ -19,24 +19,41 @@ const SAMPLE_COUNT: usize = 512;
 const COVERAGE_SEED: u64 = 0x51_04_2a;
 const ZERO_ROUNDING_CELL_BOUNDARY: f64 = 0.000_005;
 
-#[test]
-fn generated_strategies_reach_special_keys_and_all_v8_edits() {
-    let mut runner = TestRunner::new(Config {
+/// The fixed-seed runner both sample loops draw from.
+fn coverage_runner() -> TestRunner {
+    TestRunner::new(Config {
         cases: SAMPLE_COUNT as u32,
         rng_seed: RngSeed::Fixed(COVERAGE_SEED),
         ..Config::default()
-    });
-    let strategy = route_payload();
-    let mut observed = ObservedPayloadFeatures::default();
+    })
+}
 
+/// Draw `SAMPLE_COUNT` payloads and record the features they exercise.
+fn observe_payload_samples(runner: &mut TestRunner, observed: &mut ObservedPayloadFeatures) {
+    let strategy = route_payload();
     for _ in 0..SAMPLE_COUNT {
         let payload = strategy
-            .new_tree(&mut runner)
+            .new_tree(runner)
             .expect("route payload strategy should generate a value")
             .current();
-        observe_payload_features(&payload, None, &mut observed);
+        observe_payload_features(&payload, None, observed);
     }
+}
 
+/// Draw `SAMPLE_COUNT` V-8 edits and record the forms they exercise.
+fn observe_edit_samples(runner: &mut TestRunner, observed: &mut ObservedPayloadFeatures) {
+    let edits = payload_pair_with_single_leaf_edit();
+    for _ in 0..SAMPLE_COUNT {
+        let (edit, _, _) = edits
+            .new_tree(runner)
+            .expect("single-leaf strategy should generate a pair")
+            .current();
+        observed.edits.observe(edit);
+    }
+}
+
+/// Assert the payload samples exercised every feature the guard names.
+fn assert_payload_coverage(observed: &ObservedPayloadFeatures) {
     assert!(
         observed.has_theme_array,
         "fixed-seed samples missed an all-string theme array: {observed:?}"
@@ -49,17 +66,11 @@ fn generated_strategies_reach_special_keys_and_all_v8_edits() {
         observed.has_out_of_range_coordinate,
         "fixed-seed samples missed an out-of-range coordinate: {observed:?}"
     );
-    assert_non_numeric_coordinate_coverage(&observed);
+    assert_non_numeric_coordinate_coverage(observed);
+}
 
-    let edits = payload_pair_with_single_leaf_edit();
-    for _ in 0..SAMPLE_COUNT {
-        let (edit, _, _) = edits
-            .new_tree(&mut runner)
-            .expect("single-leaf strategy should generate a pair")
-            .current();
-        observed.edits.observe(edit);
-    }
-
+/// Assert the edit samples exercised every V-8 edit form.
+fn assert_edit_coverage(observed: &ObservedPayloadFeatures) {
     assert!(
         observed.edits.has_string_value_change,
         "fixed-seed samples missed a string-value edit: {:?}",
@@ -75,6 +86,18 @@ fn generated_strategies_reach_special_keys_and_all_v8_edits() {
         "fixed-seed samples missed a fresh-key insertion: {:?}",
         observed.edits
     );
+}
+
+#[test]
+fn generated_strategies_reach_special_keys_and_all_v8_edits() {
+    let mut runner = coverage_runner();
+    let mut observed = ObservedPayloadFeatures::default();
+
+    observe_payload_samples(&mut runner, &mut observed);
+    assert_payload_coverage(&observed);
+
+    observe_edit_samples(&mut runner, &mut observed);
+    assert_edit_coverage(&observed);
 }
 
 fn assert_non_numeric_coordinate_coverage(observed: &ObservedPayloadFeatures) {

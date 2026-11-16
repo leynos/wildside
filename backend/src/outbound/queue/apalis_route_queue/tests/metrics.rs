@@ -101,19 +101,34 @@ fn normalize_route_queue_metrics(text: &str) -> Result<String, String> {
     Ok(lines.join("\n"))
 }
 
+/// The samples whose values are nondeterministic, with the placeholder each
+/// takes.
+///
+/// Both describe latency, so their values change between runs; the labels and
+/// counts around them are what the snapshot can assert.
+const NORMALIZED_SAMPLES: [(&str, &str); 2] = [
+    (
+        "route_queue_enqueue_latency_seconds_bucket",
+        "<bucket_count>",
+    ),
+    ("route_queue_enqueue_latency_seconds_sum", "<latency_sum>"),
+];
+
+/// Replace the sample value after the labels with `placeholder`.
+fn mask_sample_value(line: &str, placeholder: &str) -> Result<String, String> {
+    let (labels, _) = line
+        .rsplit_once(' ')
+        .ok_or_else(|| format!("metric sample has no value separator: {line}"))?;
+    Ok(format!("{labels} {placeholder}"))
+}
+
 /// Replace nondeterministic timing values while preserving labels and counts.
 fn normalize_timing_sample(line: &str) -> Result<String, String> {
-    if line.starts_with("route_queue_enqueue_latency_seconds_bucket") {
-        let (labels, _) = line
-            .rsplit_once(' ')
-            .ok_or_else(|| format!("metric sample has no value separator: {line}"))?;
-        return Ok(format!("{labels} <bucket_count>"));
+    match NORMALIZED_SAMPLES
+        .iter()
+        .find(|(prefix, _)| line.starts_with(prefix))
+    {
+        Some((_, placeholder)) => mask_sample_value(line, placeholder),
+        None => Ok(line.to_string()),
     }
-    if line.starts_with("route_queue_enqueue_latency_seconds_sum") {
-        let (labels, _) = line
-            .rsplit_once(' ')
-            .ok_or_else(|| format!("metric sample has no value separator: {line}"))?;
-        return Ok(format!("{labels} <latency_sum>"));
-    }
-    Ok(line.to_string())
 }
