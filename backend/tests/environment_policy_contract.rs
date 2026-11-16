@@ -56,13 +56,14 @@ const ARCHITECTURE_LINT_MANIFEST: &str = include_str!("../../tools/architecture-
 const MAKEFILE: &str = include_str!("../../Makefile");
 
 /// Every `std::env` API the policy prohibits.
-const PROHIBITED_ENVIRONMENT_APIS: [&str; 6] = [
+const PROHIBITED_ENVIRONMENT_APIS: [&str; 7] = [
     "std::env::var",
     "std::env::var_os",
     "std::env::vars",
     "std::env::vars_os",
     "std::env::set_var",
     "std::env::remove_var",
+    "std::env::set_current_dir",
 ];
 
 /// Manifests that must make `clippy::disallowed_methods` a hard error, paired
@@ -150,8 +151,8 @@ fn resolved_lint_level(manifest: &str, contents: &str, lint: &str) -> TestResult
 /// Scenario: a contributor removes one of the prohibited `std::env` entries
 /// from `clippy.toml`.
 ///
-/// Invariant: every one of the six APIs stays listed, so the lint keeps
-/// reporting ambient environment access.
+/// Invariant: every one of the seven APIs stays listed, so the lint keeps
+/// reporting ambient environment and working-directory access.
 #[test]
 fn clippy_configuration_disallows_every_ambient_environment_api() -> TestResult {
     let declared = disallowed_method_paths()?;

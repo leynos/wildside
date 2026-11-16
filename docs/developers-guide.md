@@ -1334,8 +1334,10 @@ Three pieces cooperate here:
 
 No code outside a composition root may read or write the process environment.
 `clippy.toml` disallows `std::env::var`, `var_os`, `vars`, `vars_os`,
-`set_var`, and `remove_var`, and `clippy::disallowed_methods` is denied, so
-`make lint-clippy` turns any such call into a build failure across
+`set_var`, and `remove_var`, and also `set_current_dir`, which changes the
+whole process's working directory (pass the directory in, or use
+`Command::current_dir` for a child process). `clippy::disallowed_methods` is
+denied, so `make lint-clippy` turns any such call into a build failure across
 `--workspace --all-targets --all-features`.
 
 The rule exists for two reasons. Ambient reads couple pure logic to a

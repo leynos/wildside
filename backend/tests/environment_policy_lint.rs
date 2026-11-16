@@ -45,7 +45,7 @@ const EXPECT_ATTRIBUTE_PROBE: &str =
 const CONTROL_PROBE: &str = include_str!("fixtures/environment_policy/control.rs.txt");
 
 /// The prohibited APIs paired with the reason `clippy.toml` configures.
-const PROHIBITED_APIS_AND_REASONS: [(&str, &str); 6] = [
+const PROHIBITED_APIS_AND_REASONS: [(&str, &str); 7] = [
     ("std::env::var", "inject an environment reader"),
     ("std::env::var_os", "inject an environment reader"),
     ("std::env::vars", "inject an environment reader"),
@@ -57,6 +57,10 @@ const PROHIBITED_APIS_AND_REASONS: [(&str, &str); 6] = [
     (
         "std::env::remove_var",
         "inject the value, or configure the subprocess; in tests use a stub environment",
+    ),
+    (
+        "std::env::set_current_dir",
+        "process-wide working directory; pass the directory in or use Command::current_dir",
     ),
 ];
 
@@ -203,14 +207,14 @@ fn parse_diagnostic(line: &str) -> Option<Diagnostic> {
     })
 }
 
-/// Scenario: a source calls each of the six prohibited process-environment
-/// APIs once.
+/// Scenario: a source calls each of the seven prohibited process-wide
+/// environment and working-directory APIs once.
 ///
-/// Invariant: Clippy reports exactly six `disallowed_methods` diagnostics, and
-/// each names its API and carries that API's configured reason string. A
-/// seventh diagnostic would mean a sanctioned `#[expect]` had stopped being
-/// honoured; a sixth reason in the wrong diagnostic would mean an entry had
-/// been rewritten.
+/// Invariant: Clippy reports exactly seven `disallowed_methods` diagnostics, and
+/// each names its API and carries that API's configured reason string. An
+/// eighth diagnostic would mean a sanctioned `#[expect]` had stopped being
+/// honoured; a reason in the wrong diagnostic would mean an entry had been
+/// rewritten.
 #[test]
 fn the_lint_reports_every_prohibited_call() -> TestResult {
     let diagnostics = lint_probe(PROHIBITED_CALLS_PROBE)?;
