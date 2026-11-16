@@ -4138,6 +4138,53 @@ conflicted: `security/audit-exceptions.json` is byte-identical to the landed
 renewal, `typos.toml` and `typos.local.toml` keep both branches' allowlist
 entries, and the two environment-policy contract tests kept both sides' changes.
 
-The merge is expected to clear the r15 `lint-whitaker` failure, because the
-three flagged files now arrive from `main` already refactored. The gate run
-that follows re-ran all nine gates over `e07d2fc` to confirm it.
+The merge cleared the three files the r15 `lint-whitaker` failure named,
+because they now arrive from `main` already refactored, but it did not leave
+the gate green: combining both sides' assertions in
+`the_makefile_composes_the_embedded_postgres_environment` gave that test a
+second cluster of nested conditionals that neither side had on its own. Runs
+r16 to r18, below, record the repair and its confirmation.
+
+### Gate runs r16 to r18: the merged test and the CodeScene advisory
+
+Run r16 started at `78d0c26` and re-ran all nine gates in repository order.
+Three passed before `lint`: `spelling`, `markdownlint`, and `nixie`.
+`check-fmt` failed, asking for a `+1 -2` rewrap of the merge paragraph above.
+`lint` failed after 2039 s at `lint-whitaker`, in the same place the merge was
+meant to clear but for a different function: `bumpy_road_function` reported
+`Multiple clusters of nested conditional logic in
+the_makefile_composes_the_embedded_postgres_environment`
+(`backend/tests/environment_policy_contract.rs`). `typecheck` passed. The run
+was then stopped before `test`, so that a repair made during it could not be
+attributed to `78d0c26`.
+
+An offline probe put the assembled test's shape against both parents: `main`'s
+version has one loop containing one assertion, and this branch's version added
+a recipe-containment assertion plus a second loop, which is what makes two
+clusters. The repair in `75c653c` removed the loops rather than the assertions.
+`first_missing_directive` and `first_global_export` return the first offender,
+so the test states the same contract with flat assertions, and the recipe
+assertion gained the diagnostic message it had been missing. `dd3eaa1` carries
+the Markdown rewrap. A focused run over the `environment_policy_contract`
+binary passed 13 of 13, the Whitaker backend pass reported no findings, and
+`cargo fmt --all -- --check` was clean.
+
+Run r17, over `dd3eaa1`, passed all nine gates: `test` ran 2720 tests with 2720
+passed and 4 skipped. The hosted `build` and `coverage` checks also passed. The
+hosted `CodeScene Code Health Review` check failed, however, on one advisory
+rule in the same file: "String Heavy Function Arguments", which took its code
+health from 10.00 to 9.69 because both new predicates accepted a slice of
+string slices.
+
+`ed1b960` answers that advisory by giving each predicate no arguments at all:
+they read the constant they are paired with, so `first_missing_directive()`
+reports the first of `EMBEDDED_CLUSTER_DIRECTIVES` the Makefile lacks and
+`first_global_export()` the first of `TEST_ONLY_EXPORTS` it exports outside a
+recipe. `cs delta main` reports no issues, and the focused binary still passes
+13 of 13.
+
+Run r18, over `ed1b960`, passed all nine gates again: `test` ran 2720 tests
+with 2720 passed and 4 skipped, and `audit`, `openapi`, `lint`, `typecheck`,
+`check-fmt`, `spelling`, `markdownlint`, and `nixie` all exited 0. Every hosted
+check the head reports passed as well: `build`, `coverage`, the CodeScene
+review, and the Gecko security review. That is the candidate offered for review.
