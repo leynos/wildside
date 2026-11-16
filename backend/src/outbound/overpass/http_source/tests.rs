@@ -28,6 +28,91 @@ fn builds_query_with_bbox_reordered_for_overpass() {
     );
 }
 
+#[test]
+fn an_empty_tag_list_yields_one_unfiltered_selector() {
+    let selectors = collect_tag_selectors(&[]).expect("an empty tag list should be accepted");
+
+    assert_eq!(
+        selectors,
+        vec![String::new()],
+        "an empty tag list should still reach the whole bounding box, so exactly one \
+         unfiltered selector is produced"
+    );
+}
+
+#[test]
+fn each_requested_tag_yields_its_own_selector() {
+    let tags = vec!["amenity".to_owned(), "name=coffee".to_owned()];
+
+    let selectors = collect_tag_selectors(&tags).expect("well-formed tags should be accepted");
+
+    assert_eq!(
+        selectors,
+        vec![
+            "[\"amenity\"]".to_owned(),
+            "[\"name\"=\"coffee\"]".to_owned()
+        ],
+        "one selector per tag should be produced, in the order the tags were given"
+    );
+}
+
+#[rstest]
+#[case::blank_tag("   ", "tags must not include blank values")]
+#[case::missing_key("=coffee", "tags must provide a non-empty key")]
+#[case::missing_value("amenity=", "tags must not include empty values")]
+fn an_invalid_tag_is_rejected(#[case] tag: &str, #[case] expected: &str) {
+    let tags = vec![tag.to_owned()];
+
+    let error = collect_tag_selectors(&tags).expect_err("an invalid tag should be rejected");
+
+    assert!(
+        is_invalid_request(&error),
+        "`{tag}` should be refused as an invalid request, got {error:?}"
+    );
+    assert!(
+        error.to_string().contains(expected),
+        "the rejection of `{tag}` should explain `{expected}`, got `{error}`"
+    );
+}
+
+#[test]
+fn render_query_repeats_each_selector_for_every_element_type() {
+    let selectors = vec!["[\"amenity\"=\"cafe\"]".to_owned()];
+
+    let query = render_query(&selectors, "(1,2,3,4)", 25);
+
+    assert_eq!(
+        query,
+        concat!(
+            "[out:json][timeout:25];\n",
+            "(\n",
+            "  node[\"amenity\"=\"cafe\"](1,2,3,4);\n",
+            "  way[\"amenity\"=\"cafe\"](1,2,3,4);\n",
+            "  relation[\"amenity\"=\"cafe\"](1,2,3,4);\n",
+            ");\n",
+            "out center tags;"
+        ),
+        "each selector should be repeated for nodes, ways, and relations inside one union"
+    );
+}
+
+#[test]
+fn render_query_keeps_every_selector_and_the_configured_timeout() {
+    let selectors = vec!["[\"amenity\"]".to_owned(), "[\"name\"=\"cafe\"]".to_owned()];
+
+    let query = render_query(&selectors, "(1,2,3,4)", 90);
+
+    assert!(
+        query.starts_with("[out:json][timeout:90];"),
+        "the configured timeout should reach the query header, got `{query}`"
+    );
+    assert_eq!(
+        query.matches("(1,2,3,4);").count(),
+        6,
+        "two selectors across three element types should produce six clauses, got `{query}`"
+    );
+}
+
 #[rstest]
 #[case::rate_limited(
     StatusCode::TOO_MANY_REQUESTS,

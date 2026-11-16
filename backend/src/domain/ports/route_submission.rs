@@ -300,47 +300,5 @@ impl RouteSubmissionService for FixtureRouteSubmissionService {
 }
 
 #[cfg(test)]
-mod tests {
-    //! Regression coverage for this module.
-    use super::*;
-
-    fn route_payload() -> RouteSubmissionPayload {
-        RouteSubmissionPayload {
-            origin: RouteLocation::Identifier("A".to_owned()),
-            destination: RouteLocation::Identifier("B".to_owned()),
-            preferences: None,
-        }
-    }
-
-    #[tokio::test]
-    async fn fixture_service_accepts_requests() {
-        let service = FixtureRouteSubmissionService;
-        let request = RouteSubmissionRequest {
-            idempotency_key: None,
-            user_id: UserId::random(),
-            payload: route_payload(),
-        };
-
-        let response = service
-            .submit(request)
-            .await
-            .expect("submit should succeed");
-        assert_eq!(response.status, RouteSubmissionStatus::Accepted);
-    }
-
-    #[tokio::test]
-    async fn fixture_service_accepts_requests_with_idempotency_key() {
-        let service = FixtureRouteSubmissionService;
-        let request = RouteSubmissionRequest {
-            idempotency_key: Some(IdempotencyKey::random()),
-            user_id: UserId::random(),
-            payload: route_payload(),
-        };
-
-        let response = service
-            .submit(request)
-            .await
-            .expect("submit should succeed");
-        assert_eq!(response.status, RouteSubmissionStatus::Accepted);
-    }
-}
+#[path = "route_submission/tests.rs"]
+mod tests;

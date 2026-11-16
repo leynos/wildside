@@ -315,3 +315,7 @@ impl DieselCatalogueRepository {
         ))
     }
 }
+
+#[cfg(test)]
+#[path = "diesel_catalogue_repository/tests.rs"]
+mod tests;
