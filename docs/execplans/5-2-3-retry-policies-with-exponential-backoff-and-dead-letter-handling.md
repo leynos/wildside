@@ -4221,7 +4221,7 @@ Run r19-docs covered only the four Markdown gates, because the Rust and
 frontend surfaces are unchanged from the green r18 head. It failed twice on the
 new guide: `mdtablefix --check` wanted a `+31 -32` rewrap, and `markdownlint`
 reported four MD060 table-alignment errors and one MD047 missing trailing
-newline. `mdtablefix --in-place` over that file plus an EOF normalisation
+newline. `mdtablefix --in-place` over that file plus an EOF normalization
 repaired both, and r20-docs passed all four gates: `check-fmt` (mdtablefix 133
 files unchanged, `cargo fmt --all -- --check` clean, Biome 2.3.1 clean, Ruff
 120 files already formatted), `spelling`, `markdownlint` (134 files, 0 errors),
