@@ -130,32 +130,41 @@ fn build_overpass_query(
     request: &EnrichmentRequest,
     query_timeout_seconds: u32,
 ) -> Result<String, EnrichmentSourceError> {
-    // `BoundingBox` has already enforced WGS84 validity, so the adapter only
-    // reorders the coordinates into Overpass's south,west,north,east form.
-    let [min_lng, min_lat, max_lng, max_lat] = request.bounding_box.as_array();
-    let bbox = format!("({min_lat},{min_lng},{max_lat},{max_lng})");
-
-    let selectors = if request.tags.is_empty() {
-        vec![String::new()]
-    } else {
-        request
-            .tags
-            .iter()
-            .map(|tag| build_tag_selector(tag))
-            .collect::<Result<Vec<_>, _>>()?
-    };
-
-    let mut lines = Vec::with_capacity(selectors.len() * 3);
-    for selector in selectors {
-        for element_type in ["node", "way", "relation"] {
-            lines.push(format!("  {element_type}{selector}{bbox};"));
-        }
-    }
+    let bbox = overpass_bbox(request);
+    let selectors = tag_selectors(&request.tags)?;
+    let lines = element_query_lines(&selectors, &bbox);
 
     Ok(format!(
         "[out:json][timeout:{query_timeout_seconds}];\n(\n{query_lines}\n);\nout center tags;",
         query_lines = lines.join("\n")
     ))
+}
+
+/// Formats the request's bounding box as an Overpass `(south,west,north,east)` filter.
+fn overpass_bbox(request: &EnrichmentRequest) -> String {
+    // `BoundingBox` has already enforced WGS84 validity, so the adapter only
+    // reorders the coordinates into Overpass's south,west,north,east form.
+    let [min_lng, min_lat, max_lng, max_lat] = request.bounding_box.as_array();
+    format!("({min_lat},{min_lng},{max_lat},{max_lng})")
+}
+
+/// Builds one selector per tag, or a single empty selector when there are no tags.
+fn tag_selectors(tags: &[String]) -> Result<Vec<String>, EnrichmentSourceError> {
+    if tags.is_empty() {
+        return Ok(vec![String::new()]);
+    }
+    tags.iter().map(|tag| build_tag_selector(tag)).collect()
+}
+
+/// Queries every element type for each selector within `bbox`, one line apiece.
+fn element_query_lines(selectors: &[String], bbox: &str) -> Vec<String> {
+    selectors
+        .iter()
+        .flat_map(|selector| {
+            ["node", "way", "relation"]
+                .map(|element_type| format!("  {element_type}{selector}{bbox};"))
+        })
+        .collect()
 }
 
 fn build_tag_selector(tag: &str) -> Result<String, EnrichmentSourceError> {

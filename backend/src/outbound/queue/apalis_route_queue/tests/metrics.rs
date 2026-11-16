@@ -104,16 +104,18 @@ fn normalize_route_queue_metrics(text: &str) -> Result<String, String> {
 /// Replace nondeterministic timing values while preserving labels and counts.
 fn normalize_timing_sample(line: &str) -> Result<String, String> {
     if line.starts_with("route_queue_enqueue_latency_seconds_bucket") {
-        let (labels, _) = line
-            .rsplit_once(' ')
-            .ok_or_else(|| format!("metric sample has no value separator: {line}"))?;
-        return Ok(format!("{labels} <bucket_count>"));
+        return mask_sample_value(line, "<bucket_count>");
     }
     if line.starts_with("route_queue_enqueue_latency_seconds_sum") {
-        let (labels, _) = line
-            .rsplit_once(' ')
-            .ok_or_else(|| format!("metric sample has no value separator: {line}"))?;
-        return Ok(format!("{labels} <latency_sum>"));
+        return mask_sample_value(line, "<latency_sum>");
     }
     Ok(line.to_string())
+}
+
+/// Replace the value after the last space of a metric sample with `placeholder`.
+fn mask_sample_value(line: &str, placeholder: &str) -> Result<String, String> {
+    let (labels, _) = line
+        .rsplit_once(' ')
+        .ok_or_else(|| format!("metric sample has no value separator: {line}"))?;
+    Ok(format!("{labels} {placeholder}"))
 }

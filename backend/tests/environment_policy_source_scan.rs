@@ -120,6 +120,8 @@
 
 mod environment_policy_scan;
 
+use std::path::PathBuf;
+
 use environment_policy_scan::{
     SOURCE_ROOTS, TestResult, rust_sources, suppressed_lints, unreadable_includes, workspace_root,
 };
@@ -165,11 +167,7 @@ fn no_source_file_allows_a_policy_lint() -> TestResult {
 /// finding nothing, which is how a source scan usually rots.
 #[test]
 fn the_scan_reads_the_workspace_sources() -> TestResult {
-    let root = workspace_root()?;
-    let mut sources = Vec::new();
-    for source_root in SOURCE_ROOTS {
-        sources.extend(rust_sources(&root.join(source_root), source_root)?);
-    }
+    let sources = every_workspace_source()?;
 
     assert!(
         sources.len() > 300,
@@ -182,13 +180,28 @@ fn the_scan_reads_the_workspace_sources() -> TestResult {
         "tools/architecture-lint/src/main.rs",
     ] {
         assert!(
-            sources
-                .iter()
-                .any(|(path, _)| path.to_string_lossy().replace('\\', "/") == expected),
+            scan_reaches(&sources, expected),
             "the scan should reach {expected}"
         );
     }
     Ok(())
+}
+
+/// Reads every Rust source under every scanned root, in root order.
+fn every_workspace_source() -> TestResult<Vec<(PathBuf, String)>> {
+    let root = workspace_root()?;
+    let mut sources = Vec::new();
+    for source_root in SOURCE_ROOTS {
+        sources.extend(rust_sources(&root.join(source_root), source_root)?);
+    }
+    Ok(sources)
+}
+
+/// Whether `sources` includes the file at the workspace-relative path `expected`.
+fn scan_reaches(sources: &[(PathBuf, String)], expected: &str) -> bool {
+    sources
+        .iter()
+        .any(|(path, _)| path.to_string_lossy().replace('\\', "/") == expected)
 }
 
 /// Scenario: the workspace's own sources, read for unreadable inclusions.

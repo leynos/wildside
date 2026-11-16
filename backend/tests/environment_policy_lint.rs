@@ -99,8 +99,16 @@ fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
     let sandbox_dir = Dir::open_ambient_dir(sandbox.path(), ambient_authority())?;
     sandbox_dir.write("probe.rs", probe)?;
     sandbox_dir.create_dir("out")?;
-    let root = workspace_root()?;
+    let mut command = probe_command(&workspace_root()?)?;
+    add_probe_arguments(&mut command, sandbox.path());
 
+    let output = command.output()?;
+    let stderr = String::from_utf8(output.stderr)?;
+    Ok(stderr.lines().filter_map(parse_diagnostic).collect())
+}
+
+/// Build the `clippy-driver` command that runs in `root` from a cleared environment.
+fn probe_command(root: &Path) -> TestResult<Command> {
     let mut command = Command::new("clippy-driver");
     command.env_clear();
     command.env(
@@ -111,8 +119,13 @@ fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
         forward(&mut command, name);
     }
     // The repository's own configuration must decide the outcome.
-    command.env("CLIPPY_CONF_DIR", &root);
-    command.current_dir(&root);
+    command.env("CLIPPY_CONF_DIR", root);
+    command.current_dir(root);
+    Ok(command)
+}
+
+/// Point `command` at the probe in `sandbox` and ask for JSON diagnostics.
+fn add_probe_arguments(command: &mut Command, sandbox: &Path) {
     command.args([
         "--edition",
         "2024",
@@ -133,12 +146,8 @@ fn lint_probe(probe: &str) -> TestResult<Vec<Diagnostic>> {
         "clippy::allow_attributes",
         "--error-format=json",
     ]);
-    command.arg(sandbox.path().join("probe.rs"));
-    command.arg("--out-dir").arg(sandbox.path().join("out"));
-
-    let output = command.output()?;
-    let stderr = String::from_utf8(output.stderr)?;
-    Ok(stderr.lines().filter_map(parse_diagnostic).collect())
+    command.arg(sandbox.join("probe.rs"));
+    command.arg("--out-dir").arg(sandbox.join("out"));
 }
 
 /// Parse one JSON line into a [`Diagnostic`], skipping non-diagnostic lines

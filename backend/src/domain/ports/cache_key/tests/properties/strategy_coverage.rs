@@ -26,17 +26,29 @@ fn generated_strategies_reach_special_keys_and_all_v8_edits() {
         rng_seed: RngSeed::Fixed(COVERAGE_SEED),
         ..Config::default()
     });
+    let mut observed = sample_payload_features(&mut runner);
+    assert_payload_coverage(&observed);
+
+    sample_edit_forms(&mut runner, &mut observed);
+    assert_edit_coverage(&observed);
+}
+
+/// Draws `SAMPLE_COUNT` route payloads and records the features they exhibit.
+fn sample_payload_features(runner: &mut TestRunner) -> ObservedPayloadFeatures {
     let strategy = route_payload();
     let mut observed = ObservedPayloadFeatures::default();
-
     for _ in 0..SAMPLE_COUNT {
         let payload = strategy
-            .new_tree(&mut runner)
+            .new_tree(runner)
             .expect("route payload strategy should generate a value")
             .current();
         observe_payload_features(&payload, None, &mut observed);
     }
+    observed
+}
 
+/// Asserts the sampled payloads reached every special key and coordinate form.
+fn assert_payload_coverage(observed: &ObservedPayloadFeatures) {
     assert!(
         observed.has_theme_array,
         "fixed-seed samples missed an all-string theme array: {observed:?}"
@@ -49,17 +61,23 @@ fn generated_strategies_reach_special_keys_and_all_v8_edits() {
         observed.has_out_of_range_coordinate,
         "fixed-seed samples missed an out-of-range coordinate: {observed:?}"
     );
-    assert_non_numeric_coordinate_coverage(&observed);
+    assert_non_numeric_coordinate_coverage(observed);
+}
 
+/// Draws `SAMPLE_COUNT` single-leaf edits and records each form into `observed.edits`.
+fn sample_edit_forms(runner: &mut TestRunner, observed: &mut ObservedPayloadFeatures) {
     let edits = payload_pair_with_single_leaf_edit();
     for _ in 0..SAMPLE_COUNT {
         let (edit, _, _) = edits
-            .new_tree(&mut runner)
+            .new_tree(runner)
             .expect("single-leaf strategy should generate a pair")
             .current();
         observed.edits.observe(edit);
     }
+}
 
+/// Asserts the sampled edits reached every V-8 edit form.
+fn assert_edit_coverage(observed: &ObservedPayloadFeatures) {
     assert!(
         observed.edits.has_string_value_change,
         "fixed-seed samples missed a string-value edit: {:?}",

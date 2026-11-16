@@ -229,6 +229,16 @@ type ConvertedCatalogueRows = (
     Option<CommunityPick>,
 );
 
+/// Domain models converted from the category, theme and collection rows.
+type BrowseModels = (Vec<RouteCategory>, Vec<Theme>, Vec<RouteCollection>);
+
+/// Domain models converted from the summary, trending and community pick rows.
+type HighlightModels = (
+    Vec<RouteSummary>,
+    Vec<TrendingRouteHighlight>,
+    Option<CommunityPick>,
+);
+
 impl DieselCatalogueRepository {
     /// Fetch all catalogue rows in a single transaction so all SELECTs observe
     /// a consistent MVCC snapshot, preventing mixed-version results during
@@ -285,6 +295,27 @@ impl DieselCatalogueRepository {
     ) -> Result<ConvertedCatalogueRows, CatalogueRepositoryError> {
         let (category_rows, theme_rows, collection_rows, summary_rows, trending_rows, pick_row) =
             rows;
+        let (categories, themes, collections) =
+            Self::convert_browse_rows(category_rows, theme_rows, collection_rows)?;
+        let (routes, trending, community_pick) =
+            Self::convert_highlight_rows(summary_rows, trending_rows, pick_row)?;
+        Ok((
+            categories,
+            themes,
+            collections,
+            routes,
+            trending,
+            community_pick,
+        ))
+    }
+
+    /// Convert the category, theme and collection rows used to browse the
+    /// catalogue, failing on the first row that violates a domain invariant.
+    fn convert_browse_rows(
+        category_rows: Vec<RouteCategoryRow>,
+        theme_rows: Vec<ThemeRow>,
+        collection_rows: Vec<RouteCollectionRow>,
+    ) -> Result<BrowseModels, CatalogueRepositoryError> {
         let map_err = CatalogueRepositoryError::query;
         let categories = collect_rows(
             category_rows.into_iter().map(row_to_route_category),
@@ -295,6 +326,17 @@ impl DieselCatalogueRepository {
             collection_rows.into_iter().map(row_to_route_collection),
             map_err,
         )?;
+        Ok((categories, themes, collections))
+    }
+
+    /// Convert the route summary, trending highlight and optional community
+    /// pick rows, failing on the first row that violates a domain invariant.
+    fn convert_highlight_rows(
+        summary_rows: Vec<RouteSummaryRow>,
+        trending_rows: Vec<TrendingRouteHighlightRow>,
+        pick_row: Option<CommunityPickRow>,
+    ) -> Result<HighlightModels, CatalogueRepositoryError> {
+        let map_err = CatalogueRepositoryError::query;
         let routes = collect_rows(summary_rows.into_iter().map(row_to_route_summary), map_err)?;
         let trending = collect_rows(
             trending_rows.into_iter().map(row_to_trending_highlight),
@@ -303,14 +345,7 @@ impl DieselCatalogueRepository {
         let community_pick = pick_row
             .map(row_to_community_pick)
             .transpose()
-            .map_err(CatalogueRepositoryError::query)?;
-        Ok((
-            categories,
-            themes,
-            collections,
-            routes,
-            trending,
-            community_pick,
-        ))
+            .map_err(map_err)?;
+        Ok((routes, trending, community_pick))
     }
 }

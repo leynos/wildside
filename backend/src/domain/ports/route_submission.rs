@@ -103,19 +103,52 @@ impl<'de> Visitor<'de> for RouteLocationVisitor {
     where
         A: MapAccess<'de>,
     {
-        let mut lat = None;
-        let mut lng = None;
+        let mut fields = CoordinateFields::default();
         while let Some(field) = map.next_key::<String>()? {
-            match field.as_str() {
-                "lat" if lat.is_none() => lat = Some(map.next_value()?),
-                "lng" if lng.is_none() => lng = Some(map.next_value()?),
-                "lat" => return Err(serde::de::Error::duplicate_field("lat")),
-                "lng" => return Err(serde::de::Error::duplicate_field("lng")),
-                _ => return Err(serde::de::Error::unknown_field(&field, &["lat", "lng"])),
-            }
+            fields.read_field(&field, &mut map)?;
         }
-        let lat = lat.ok_or_else(|| serde::de::Error::missing_field("lat"))?;
-        let lng = lng.ok_or_else(|| serde::de::Error::missing_field("lng"))?;
+        fields.into_location()
+    }
+}
+
+/// Latitude and longitude as read from a coordinate object, in either order.
+#[derive(Default)]
+struct CoordinateFields {
+    lat: Option<f64>,
+    lng: Option<f64>,
+}
+
+impl CoordinateFields {
+    /// Reads the value that follows `field` from `map`.
+    ///
+    /// Rejects a repeated `lat` or `lng` before reading its value, and any other field name.
+    fn read_field<'de, A>(&mut self, field: &str, map: &mut A) -> Result<(), A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let (name, slot) = match field {
+            "lat" => ("lat", &mut self.lat),
+            "lng" => ("lng", &mut self.lng),
+            _ => return Err(serde::de::Error::unknown_field(field, &["lat", "lng"])),
+        };
+        if slot.is_some() {
+            return Err(serde::de::Error::duplicate_field(name));
+        }
+        *slot = Some(map.next_value()?);
+        Ok(())
+    }
+
+    /// Requires both fields and validates them as WGS84 coordinates.
+    fn into_location<E>(self) -> Result<RouteLocation, E>
+    where
+        E: serde::de::Error,
+    {
+        let lat = self
+            .lat
+            .ok_or_else(|| serde::de::Error::missing_field("lat"))?;
+        let lng = self
+            .lng
+            .ok_or_else(|| serde::de::Error::missing_field("lng"))?;
         let coordinates = RouteCoordinates::new(lat, lng)
             .map_err(|error| serde::de::Error::custom(error.message()))?;
         Ok(RouteLocation::Coordinates(coordinates))
