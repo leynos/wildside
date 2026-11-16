@@ -1,10 +1,15 @@
 //! PostgreSQL-backed catalogue read adapter.
 //!
 //! [`DieselCatalogueRepository`] implements the [`CatalogueRepository`] port for
-//! the explore page. It reads every catalogue table inside one transaction, so
-//! the categories, themes, collections, route summaries, trending highlights and
-//! community pick in a returned snapshot all observe one MVCC version even when
-//! ingestion is running concurrently.
+//! the explore page. It reads every catalogue table on one pooled connection
+//! inside a single transaction, so the categories, themes, collections, route
+//! summaries, trending highlights and community pick in a returned snapshot all
+//! come from that one connection.
+//!
+//! The transaction does not pin an isolation level, so at PostgreSQL's default
+//! `READ COMMITTED` every statement takes its own snapshot and an ingestion that
+//! commits between two reads is visible to the later ones. Making those reads
+//! observe one snapshot needs `REPEATABLE READ`; issue #624 tracks it.
 //!
 //! Each fetched row is converted into its validated domain type before the
 //! snapshot is returned. One unconvertible row aborts the whole read and
@@ -261,9 +266,12 @@ type ConvertedCatalogueRows = (
 );
 
 impl DieselCatalogueRepository {
-    /// Fetch all catalogue rows in a single transaction so all SELECTs observe
-    /// a consistent MVCC snapshot, preventing mixed-version results during
-    /// concurrent ingestion.
+    /// Fetch all catalogue rows on one connection inside a single transaction.
+    ///
+    /// The transaction does not pin an isolation level, so under PostgreSQL's
+    /// default `READ COMMITTED` the statements below do not share a snapshot and
+    /// a concurrent ingestion can be observed part-way through. Issue #624
+    /// tracks pinning `REPEATABLE READ` for a cross-table view.
     async fn fetch_catalogue_rows(
         &self,
         conn: &mut AsyncPgConnection,
