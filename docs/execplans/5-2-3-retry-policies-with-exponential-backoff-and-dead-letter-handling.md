@@ -4136,8 +4136,7 @@ extracted helper, and the renewed `extract-zip` audit exceptions.
 retry commit was rewritten. Both sides had touched five files and none of them
 conflicted: `security/audit-exceptions.json` is byte-identical to the landed
 renewal, `typos.toml` and `typos.local.toml` keep both branches' allowlist
-entries, and the two environment-policy contract tests kept both sides'
-changes.
+entries, and the two environment-policy contract tests kept both sides' changes.
 
 The merge is expected to clear the r15 `lint-whitaker` failure, because the
 three flagged files now arrive from `main` already refactored. The gate run
