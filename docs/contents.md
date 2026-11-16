@@ -131,6 +131,9 @@
 - [Wildside server users guide](users-guide.md) – user-visible backend API
   behaviour, including users list pagination errors. _Audience: API consumers
   and backend developers._
+- [Backend v0.2.0 migration guide](backend-v0-2-0-migration-guide.md) – upgrades
+  the provider constructor, retry wrapper, and dead-letter port from v0.1.0.
+  _Audience: backend developers and consumers of the `backend` crate._
 - [OSM ingestion end-to-end runbook](runbooks/osm-ingestion-e2e.md) – operator
   procedure for executing and verifying `ingest-osm` runs, including
   deterministic reruns. _Audience: backend operators and developers._
