@@ -323,21 +323,23 @@ const EMBEDDED_CLUSTER_DIRECTIVES: [&str; 4] = [
 /// The overridable settings that belong to the `test-rust` recipe alone.
 const TEST_ONLY_EXPORTS: [&str; 2] = ["PG_PASSWORD", "POSTGRESQL_RELEASES_URL"];
 
-/// Report the first directive the Makefile does not carry as a live directive.
+/// Report the first of [`EMBEDDED_CLUSTER_DIRECTIVES`] the Makefile does not
+/// carry as a live directive.
 ///
 /// Returning the offender keeps the caller's assertions flat: a loop with an
 /// assertion inside it is a second cluster of nested conditionals, which
 /// Whitaker's `bumpy_road_function` rejects in the assembled test.
-fn first_missing_directive<'a>(directives: &[&'a str]) -> Option<&'a str> {
-    directives
+fn first_missing_directive() -> Option<&'static str> {
+    EMBEDDED_CLUSTER_DIRECTIVES
         .iter()
         .copied()
         .find(|directive| !makefile_declares(directive))
 }
 
-/// Report the first of `names` the Makefile exports outside any recipe.
-fn first_global_export<'a>(names: &[&'a str]) -> Option<&'a str> {
-    names
+/// Report the first of [`TEST_ONLY_EXPORTS`] the Makefile exports outside any
+/// recipe.
+fn first_global_export() -> Option<&'static str> {
+    TEST_ONLY_EXPORTS
         .iter()
         .copied()
         .find(|name| makefile_globally_exports(MAKEFILE, name))
@@ -357,7 +359,7 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
         "POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)"
     );
 
-    let missing = first_missing_directive(&EMBEDDED_CLUSTER_DIRECTIVES);
+    let missing = first_missing_directive();
     assert!(
         missing.is_none(),
         "the Makefile must carry every embedded-cluster directive as a live \
@@ -370,7 +372,7 @@ fn the_makefile_composes_the_embedded_postgres_environment() -> TestResult {
          settings so only the test processes receive them"
     );
 
-    let leaked = first_global_export(&TEST_ONLY_EXPORTS);
+    let leaked = first_global_export();
     assert!(
         leaked.is_none(),
         "{leaked:?} must not be exported to unrelated Make recipes"
