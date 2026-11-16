@@ -4123,3 +4123,22 @@ byte-identical to `origin/main`.
 Following the r11 note, the repair belongs in a base pull request rather than
 in this feature diff: three refactors, one per flagged function, delivered
 separately from the retry work.
+
+### Main merge of 2026-11-16: the base repair lands
+
+The base pull request the r15 note called for is merged. PR #622, "Fix the
+three bumpy-road findings and renew the expired audit exceptions", landed on
+`main` as `aa0532b`. It carries the three behaviour-preserving extractions, one
+per function the macro-aware rule flags, direct unit coverage for each
+extracted helper, and the renewed `extract-zip` audit exceptions.
+
+`main` was merged into this branch at `e07d2fc` rather than replayed, so no
+retry commit was rewritten. Both sides had touched five files and none of them
+conflicted: `security/audit-exceptions.json` is byte-identical to the landed
+renewal, `typos.toml` and `typos.local.toml` keep both branches' allowlist
+entries, and the two environment-policy contract tests kept both sides'
+changes.
+
+The merge is expected to clear the r15 `lint-whitaker` failure, because the
+three flagged files now arrive from `main` already refactored. The gate run
+that follows re-ran all nine gates over `e07d2fc` to confirm it.
