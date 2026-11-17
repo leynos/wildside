@@ -1,5 +1,6 @@
 //! Behaviour assertions for dead-letter operations.
 
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use backend::domain::ports::{DeadJob, DeadJobSkip, DeadLetterError, DeadLetterQueue, DeadReason};
@@ -60,20 +61,62 @@ impl QueueDeadLetterWorld {
         assert_eq!(snapshot.status, "Pending");
         assert_eq!(snapshot.attempts, 0);
         assert_eq!(snapshot.max_attempts, Some(3));
-        // Requeue writes `run_at` from the database clock, so the restored row
-        // must already be eligible when this read observes it. Boundary the
-        // assertion with the application clock, which is deliberately not the
-        // clock the write used: only a database-side timestamp can satisfy it.
+        // Requeue writes `run_at` from the database clock, and the fetch
+        // predicate compares it with that same clock. Reading the deadline
+        // through the application clock would mix two clocks: a database clock
+        // behind the application's would let a future deadline look due.
+        let database_now = self.database_now();
         assert!(
-            snapshot.run_at <= chrono::Utc::now(),
+            is_due(snapshot.run_at, database_now),
             "a requeued row is immediately eligible, not scheduled for later"
         );
+        self.assert_future_deadline_is_not_due();
         assert_eq!(snapshot.lock_by, None);
         assert_eq!(snapshot.lock_at, None);
         let metadata = snapshot.metadata.expect("requeue metadata");
         assert_eq!(metadata["wildside.retry.requeue_count"], 5);
         assert!(metadata.get("wildside.retry.dead_reason").is_none());
         assert_eq!(metadata["operator.note"], "preserve-me");
+    }
+
+    /// Read the pool's clock, the one the fetch predicate compares with.
+    fn database_now(&self) -> DateTime<Utc> {
+        self.runtime
+            .block_on(sqlx::query_scalar::<_, DateTime<Utc>>("SELECT now()").fetch_one(&self.pool))
+            .expect("read the database clock")
+    }
+
+    /// Show that the eligibility check rejects a future database deadline.
+    ///
+    /// A positive assertion alone cannot distinguish a working check from one
+    /// that accepts everything, so the same predicate is applied to a deadline
+    /// it must refuse. The staged deadline is written inside a transaction that
+    /// is rolled back, so the row the scenario observes keeps its requeued
+    /// values, and both readings come from the transaction's clock.
+    fn assert_future_deadline_is_not_due(&self) {
+        let id = self.current_id();
+        self.runtime.block_on(async {
+            let mut transaction = self.pool.begin().await.expect("begin deadline probe");
+            sqlx::query("UPDATE apalis.jobs SET run_at = now() + interval '1 hour' WHERE id = $1")
+                .bind(id.as_str())
+                .execute(&mut *transaction)
+                .await
+                .expect("stage a future deadline");
+            let (run_at, database_now): (DateTime<Utc>, DateTime<Utc>) =
+                sqlx::query_as("SELECT run_at, now() FROM apalis.jobs WHERE id = $1")
+                    .bind(id.as_str())
+                    .fetch_one(&mut *transaction)
+                    .await
+                    .expect("read the staged deadline");
+            transaction
+                .rollback()
+                .await
+                .expect("roll back the deadline probe");
+            assert!(
+                !is_due(run_at, database_now),
+                "a future database deadline must not count as due"
+            );
+        });
     }
 
     pub(crate) fn assert_legacy_row_not_fetched(&self) {
@@ -229,4 +272,12 @@ impl QueueDeadLetterWorld {
             Err(DeadLetterError::UnknownQueue { .. })
         ));
     }
+}
+
+/// Whether a stored deadline is already due under one clock.
+///
+/// The stored `run_at` and the comparison point have to come from the same
+/// clock, because Apalis's fetch predicate evaluates both in PostgreSQL.
+fn is_due(run_at: DateTime<Utc>, database_now: DateTime<Utc>) -> bool {
+    run_at <= database_now
 }

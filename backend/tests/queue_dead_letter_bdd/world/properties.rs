@@ -197,18 +197,30 @@ proptest! {
         prop_assert_eq!(world.listed_ids(), expected);
 
         // A truncated listing stops walking once it holds `limit` jobs, so it
-        // reports only the unreadable rows it actually read. The check that
-        // holds for every limit is that each reported skip names a genuinely
-        // malformed row with the field that made it unreadable: no phantom
-        // skips, no misattributed causes.
+        // reports only the unreadable rows it actually read. A limit larger
+        // than the number of valid rows forces the walk through the whole
+        // table instead, so every malformed row it holds is read and must be
+        // reported; a subset check there would let a listing drop diagnostics
+        // and still pass.
         let reported = world.reported_skips();
         let expected_skips = expected_skips(requeue_ids, attempt_ids);
-        prop_assert!(
-            reported.iter().all(|entry| expected_skips.contains(entry)),
-            "reported skips {:?} must all be genuine among {:?}",
-            reported,
-            expected_skips
-        );
+        if wanted > valid {
+            prop_assert_eq!(
+                reported,
+                expected_skips,
+                "an untruncated listing must report every malformed row it read"
+            );
+        } else {
+            // Each reported skip must still name a genuinely malformed row
+            // with the field that made it unreadable: no phantom skips, no
+            // misattributed causes.
+            prop_assert!(
+                reported.iter().all(|entry| expected_skips.contains(entry)),
+                "reported skips {:?} must all be genuine among {:?}",
+                reported,
+                expected_skips
+            );
+        }
 
         let after: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();
         prop_assert_eq!(after, before, "listing must not modify the rows it skips");
@@ -256,6 +268,16 @@ fn listing_crosses_two_batch_boundaries() {
     assert!(
         reported.iter().all(|entry| expected.contains(entry)),
         "every reported skip names a genuinely malformed row and its cause: {reported:?}"
+    );
+
+    // A limit above the valid-row count reads the whole table, so the report
+    // must name every malformed row rather than a subset of those it read.
+    world.list_dead(16);
+    assert_eq!(world.listed_ids(), newest_first);
+    assert_eq!(
+        world.reported_skips(),
+        expected,
+        "an untruncated listing must report every malformed row"
     );
 
     let after: Vec<_> = malformed_ids.iter().map(|id| world.snapshot(id)).collect();

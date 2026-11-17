@@ -1892,8 +1892,10 @@ reproduce, so no clock seam is injected there; the statement is the boundary.
 That timestamp expression is held in `IMMEDIATELY_ELIGIBLE_RUN_AT`, so the
 choice appears once, at the write site, rather than as an inline `now()`. The
 dead-letter behaviour tests assert the consequence: after a requeue the stored
-`run_at` is not later than the application clock, which only a database-side
-timestamp can satisfy.
+`run_at` is not later than the database's `now()`, read through the same
+database clock that decides eligibility. A negative control stages a future
+database deadline in a transaction that is rolled back, and requires the same
+comparison to refuse it.
 
 ## Root-level script tests
 

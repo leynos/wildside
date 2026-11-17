@@ -5,6 +5,7 @@ mod failure_run;
 mod service_decode;
 mod service_effects;
 mod service_identity;
+mod service_spent_attempt;
 mod service_terminal;
 
 use std::num::NonZeroU32;

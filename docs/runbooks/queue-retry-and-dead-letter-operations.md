@@ -154,8 +154,9 @@ decision `terminal_cap_clamp_exhausted`. Only that last case leaves a terminal
 row that is still re-fetchable: no handler can protect a row whose writes the
 database refuses, so this event, together with the terminal-write-failure
 counter, is what the alerting should page on. A row it leaves behind is still
-bounded by the existing `max_attempts`, so it is fetched no more often than an
-ordinary retry.
+bounded by the existing `max_attempts`, which limits the number of deliveries.
+The fallback does not change `run_at`. An already-due row is therefore fetched
+on the next poll, without the ordinary retry backoff.
 
 Dead-letter backlog is the number of rows the dead predicate matches. This
 query is read-only, ignores no rows, and returns only a count:
@@ -186,6 +187,10 @@ alerting rule — its only metrics block is the horizontal pod autoscaler — so
 the collection is a deployment action against the monitoring system, not a
 chart value. Until that schedule exists, the count is available only by running
 the query by hand, and the backlog has no collected signal to alert on.
+Building that collection point, together with its scrape and alert
+configuration, is tracked as
+[issue #630](https://github.com/leynos/wildside/issues/630) and belongs with
+the worker rollout in roadmap item 5.3.1.
 
 ## Detect repeated worker crashes
 

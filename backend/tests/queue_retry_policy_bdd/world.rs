@@ -18,7 +18,7 @@ use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_clu
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::queue_retry_worker::{
     DEFAULT_WORKER_DEADLINE, QueueRetryProbeJob, QueueRetryWorkerConfig, WorkerRunReport,
-    run_queue_retry_worker,
+    run_queue_retry_worker, unique_worker_name,
 };
 
 mod state;
@@ -75,6 +75,9 @@ pub(crate) struct QueueRetryPolicyWorld {
     queue: Mutex<GenericApalisRouteQueue<Value, ApalisPostgresProvider>>,
     handler_mode: Mutex<RetryHandlerMode>,
     probe_id: String,
+    /// Name the scenario worker registers under, distinct per world so a run
+    /// cannot be confused with another worker holding the same name.
+    worker_name: String,
     observations: Arc<Mutex<Vec<AttemptObservation>>>,
     worker_report: Mutex<Option<WorkerRunReport>>,
     metrics: RecordingRetryMetrics,
@@ -114,6 +117,7 @@ impl QueueRetryPolicyWorld {
             queue: Mutex::new(queue),
             handler_mode: Mutex::new(RetryHandlerMode::AlwaysRetryable),
             probe_id: uuid::Uuid::new_v4().to_string(),
+            worker_name: unique_worker_name(),
             observations: Arc::new(Mutex::new(Vec::new())),
             worker_report: Mutex::new(None),
             metrics,
@@ -229,6 +233,7 @@ impl QueueRetryPolicyWorld {
         let config = QueueRetryWorkerConfig {
             pool: self.pool.clone(),
             queue_name: QUEUE_NAME.to_owned(),
+            worker_name: self.worker_name.clone(),
             probe_id: self.probe_id.clone(),
             policy,
             metrics: Arc::new(self.metrics.clone()),

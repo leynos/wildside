@@ -28,6 +28,17 @@ const QUIET_POLL_ITERATIONS: usize = 5;
 /// `cargo test` invocation, which has no Nextest timeout.
 pub const DEFAULT_WORKER_DEADLINE: Duration = Duration::from_secs(20);
 
+/// Generate a worker name that no other running worker will register under.
+///
+/// Apalis matches an acknowledgement on `id` and `lock_by` alone, so a name
+/// shared between two worker instances lets one instance's late acknowledgement
+/// overwrite the row the other instance now owns. A per-instance suffix keeps
+/// that case out of the scenarios, which test the wrapper rather than Apalis's
+/// acknowledgement predicate.
+pub fn unique_worker_name() -> String {
+    format!("queue-retry-policy-bdd-{}", uuid::Uuid::new_v4())
+}
+
 /// Typed `v1` envelope decoded by the production retry wrapper under test.
 ///
 /// The BDD payloads carry only an envelope version and a probe id. Handlers in
@@ -56,6 +67,14 @@ pub struct WorkerRunReport {
 pub struct QueueRetryWorkerConfig {
     pub pool: PgPool,
     pub queue_name: String,
+    /// Name this worker registers under in `apalis.workers`.
+    ///
+    /// Apalis acknowledges a delivery by `id` and `lock_by` alone, so two
+    /// worker instances sharing a name would let a stale acknowledgement land
+    /// on whichever row now carries that name. Scenarios therefore give each
+    /// run a distinct name, matching the mitigation ADR-0004 records for a
+    /// worker that runs more than one instance.
+    pub worker_name: String,
     pub probe_id: String,
     pub policy: JobRetryPolicy,
     pub metrics: Arc<dyn RouteQueueMetrics>,
@@ -75,6 +94,9 @@ impl QueueRetryWorkerConfig {
         }
         if self.deadline.is_zero() {
             return Err("worker deadline must be greater than zero".to_owned());
+        }
+        if self.worker_name.trim().is_empty() {
+            return Err("worker name must not be blank".to_owned());
         }
         Ok(())
     }
@@ -146,6 +168,7 @@ where
     let QueueRetryWorkerConfig {
         pool,
         queue_name,
+        worker_name,
         probe_id,
         policy,
         metrics,
@@ -175,7 +198,7 @@ where
             .build(),
     );
     let storage = PostgresStorage::<Value>::new_with_config(&pool, &config);
-    let worker = WorkerBuilder::new("queue-retry-policy-bdd")
+    let worker = WorkerBuilder::new(worker_name)
         .backend(storage)
         .build(service);
     let result = Arc::new(std::sync::Mutex::new(None));

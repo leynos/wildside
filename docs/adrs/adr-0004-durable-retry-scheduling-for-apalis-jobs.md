@@ -27,15 +27,34 @@ wrapper, with a one-hour ceiling on each delay.
 The wrapper updates a row only while it is `Running`, locked by the current
 worker, and still carrying the attempt count this delivery inherited; the last
 predicate is what keeps a handler that stalled through orphan recovery from
-overwriting the decision of the delivery that replaced it. A terminal outcome
-reduces the stored attempt limit to the terminating attempt, either within its
-reason write or, if that write fails, as a short bounded sequence of fallback
-writes, so a later `Failed` row is unfetchable. The fallback is retried because
-it runs only after another write has already failed, which usually means a
-transiently failing database; a fallback that never lands is logged as
-`terminal_cap_clamp_exhausted`, because a database that refuses every write
-leaves no way for a handler to protect the row. A crash between the in-memory
-attempt increment and its acknowledgement can lose that one in-flight attempt.
+overwriting the decision of the delivery that replaced it. That guard covers
+the wrapper's own writes only. The acknowledgement Apalis performs afterwards
+is not guarded by row status or attempt count: `ack.sql` at the pinned release
+matches on `id` and `lock_by` alone and then overwrites `status`, `attempts`,
+and `last_result`. A stale delivery whose replacement is locked under the same
+worker name can therefore overwrite the replacement's `Running` row with its
+own attempt count and a terminal status while the replacement still runs. This
+repository does not control `ack.sql`. The mitigation is a distinct worker name
+per worker instance, which makes a stale acknowledgement match no row at all;
+the risk returns to review at the 1.0 upgrade described below.
+
+A terminal outcome reduces the stored attempt limit to the terminating attempt,
+either within its reason write or, if that write fails, as a short bounded
+sequence of fallback writes, so a later `Failed` row is unfetchable. The
+fallback is retried because it runs only after another write has already
+failed, which usually means a transiently failing database; a fallback that
+never lands is logged as `terminal_cap_clamp_exhausted`, because a database
+that refuses every write leaves no way for a handler to protect the row. A
+crash between the in-memory attempt increment and its acknowledgement can lose
+that one in-flight attempt.
+
+The reduced cap also has to hold against the fetch predicate, which accepts a
+`Pending` row without consulting `max_attempts`. Orphan recovery returns a
+retired row to `Pending` and increments `attempts`, so a row retired between
+its terminal write and its acknowledgement can become deliverable once more.
+The wrapper therefore refuses a delivery whose attempt count already exceeds
+the row's stored `max_attempts`, without invoking the handler; the
+acknowledgement that follows records a delivery that never ran.
 
 On the 1.0 upgrade
 ([issue #550](https://github.com/leynos/wildside/issues/550)), re-verify the
@@ -44,7 +63,7 @@ restored to a fetched task, and the acknowledgement leaving `run_at`,
 `max_attempts`, and `metadata` untouched. Also re-evaluate the middleware
 ordering before changing the no-retry-layer rule. The canaries and their
 positive and negative cases are specified in the
-[ExecPlan](execplans/5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.md).
+[ExecPlan](../execplans/5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.md).
 
 ## Consequences
 

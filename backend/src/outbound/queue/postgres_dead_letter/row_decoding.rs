@@ -1,9 +1,13 @@
 //! Conversion of stored dead-letter rows into domain values.
 //!
-//! Every function here is pure: a row that the domain cannot represent is
-//! rejected with the field that made it unreadable, and the caller decides
-//! whether, and where, to report it. Keeping the conversion side-effect free
-//! is what lets the listing contract be tested without inspecting logs.
+//! The conversion functions are pure: a row that the domain cannot represent
+//! is rejected with the field that made it unreadable, and the caller decides
+//! whether, and where, to report it. Keeping the conversion side-effect free is
+//! what lets the listing contract be tested without inspecting logs.
+//!
+//! [`report_skipped_rows`] is the one exception. It turns the collected
+//! rejections into `tracing` warnings, so it is the reporting boundary rather
+//! than part of the conversion.
 
 use crate::domain::ports::{DeadJob, DeadJobId, DeadJobSkip, DeadReason, SkippedDeadJob};
 
