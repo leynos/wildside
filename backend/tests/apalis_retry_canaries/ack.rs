@@ -12,7 +12,7 @@ use apalis_core::worker::ext::ack::Acknowledge;
 use apalis_postgres::PgAck;
 use serde_json::{Value, json};
 
-use super::{CanaryEnvironment, JobRow, insert_job, locked_task, register_worker};
+use super::fixtures::{CanaryEnvironment, JobRow, insert_job, locked_task, register_worker};
 use crate::support::apalis_job_id::apalis_job_id;
 
 #[test]

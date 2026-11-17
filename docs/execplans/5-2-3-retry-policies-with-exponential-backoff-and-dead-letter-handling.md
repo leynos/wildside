@@ -642,7 +642,9 @@ pub struct DeadJob {
 pub trait DeadLetterQueue: Send + Sync {
     /// Newest-dead first. `limit` is a page size; pagination is an
     /// additive future evolution of this pre-1.0 internal port.
-    async fn list_dead(&self, limit: u32) -> Result<Vec<DeadJob>, DeadLetterError>;
+    /// Rows storage holds that the domain cannot represent come back as
+    /// skipped entries rather than being dropped.
+    async fn list_dead(&self, limit: u32) -> Result<DeadLetterListing, DeadLetterError>;
     /// Guarded: fails with `DeadLetterError::NotDead` if the row does not
     /// currently satisfy the dead predicate (absent, live, or running).
     /// Restores the queue's configured retry budget (Decision D12).

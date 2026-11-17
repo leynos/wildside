@@ -40,13 +40,13 @@ On the 1.0 upgrade
 V8 canaries for dead-row fetch exclusion, persisted attempts, acknowledgement
 preservation of `run_at`, `max_attempts`, and `metadata`, and the
 terminal-reason and requeue metadata transitions. The
-[ExecPlan](execplans/5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.md)
+[ExecPlan](../execplans/5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.md)
 records the positive and negative cases.
 
 ## Consequences
 
 - Operators use the port or the guarded procedures in the
-  [queue runbook](runbooks/queue-retry-and-dead-letter-operations.md); no
+  [queue runbook](../runbooks/queue-retry-and-dead-letter-operations.md); no
   automatic requeue policy is introduced.
 - Requeue requires a configured policy for the row's queue and refuses invalid
   attempt or counter data. Legacy rows without a recognized reason are not

@@ -18,7 +18,10 @@ mod decision;
 mod failure;
 
 pub use config::{JitterSource, RetryingJobServiceConfig, ThreadRngJitter};
-use failure::{RetryFailureContext, current_attempt, handle_failure, running_worker_id};
+use failure::{
+    RetryFailureContext, current_attempt, handle_failure, is_spent_attempt, refuse_spent_attempt,
+    running_worker_id,
+};
 
 use crate::domain::jobs::retry::{JobErrorKind, JobFailure, JobRetryPolicy};
 use crate::domain::ports::RouteQueueMetrics;
@@ -121,6 +124,19 @@ where
             tracing::Span::current().record("task_id", tracing::field::debug(task_id.as_deref()));
             tracing::Span::current()
                 .record("worker_id", tracing::field::debug(worker_id.as_deref()));
+            // A row retired by an earlier delivery can become fetchable again
+            // after orphan recovery, which returns it to `Pending` without
+            // consulting its cap. Refusing here keeps the retired job from
+            // running once more, and the acknowledgement then records the
+            // refusal.
+            if is_spent_attempt(attempt, context_max_attempts) {
+                return Err(refuse_spent_attempt(
+                    attempt,
+                    context_max_attempts,
+                    &queue_name,
+                ));
+            }
+
             let failure_context = RetryFailureContext {
                 attempt,
                 context_max_attempts,

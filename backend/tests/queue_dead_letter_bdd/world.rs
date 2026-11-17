@@ -34,11 +34,10 @@ use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_clu
 use crate::support::embedded_postgres::provision_template_database;
 use crate::support::queue_retry_worker::{
     DEFAULT_WORKER_DEADLINE, QueueRetryProbeJob, QueueRetryWorkerConfig, WorkerRunReport,
-    run_queue_retry_worker,
+    run_queue_retry_worker, unique_worker_name,
 };
 
 const QUEUE_NAME: &str = "wildside.dead-letter-bdd";
-const WORKER_NAME: &str = "queue-retry-policy-bdd";
 const LEGACY_ROW_POLL_INTERVALS: usize = 10;
 
 #[derive(Clone, Copy)]
@@ -63,6 +62,9 @@ pub(crate) struct QueueDeadLetterWorld {
     queue: GenericApalisRouteQueue<Value, ApalisPostgresProvider>,
     dead_letters: PostgresDeadLetterQueue,
     probe_id: String,
+    /// Name this scenario's worker registers under, distinct per world so a
+    /// late acknowledgement cannot match another worker's row.
+    worker_name: String,
     handler_mode: Mutex<HandlerMode>,
     handler_calls: Mutex<usize>,
     current_job_id: Mutex<Option<DeadJobId>>,
@@ -110,6 +112,7 @@ impl QueueDeadLetterWorld {
             queue,
             dead_letters,
             probe_id: uuid::Uuid::new_v4().to_string(),
+            worker_name: unique_worker_name(),
             handler_mode: Mutex::new(HandlerMode::RetryableFailure),
             handler_calls: Mutex::new(0),
             current_job_id: Mutex::new(None),
@@ -173,7 +176,7 @@ impl QueueDeadLetterWorld {
         self.runtime
             .block_on(
                 sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM apalis.workers WHERE id = $1)")
-                    .bind(WORKER_NAME)
+                    .bind(&self.worker_name)
                     .fetch_one(&self.pool),
             )
             .expect("check bounded-poll worker registration")
@@ -327,6 +330,7 @@ impl QueueDeadLetterWorld {
                 QueueRetryWorkerConfig {
                     pool: self.pool.clone(),
                     queue_name: QUEUE_NAME.to_owned(),
+                    worker_name: self.worker_name.clone(),
                     probe_id: self.probe_id.clone(),
                     policy: self.policy.clone(),
                     metrics: Arc::new(NoOpRouteQueueMetrics),

@@ -21,7 +21,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use serde_json::Value;
 use sqlx::PgPool;
 
-use super::{CanaryEnvironment, JobRow, insert_job, register_worker};
+use super::fixtures::{CanaryEnvironment, JobRow, insert_job, register_worker};
 use crate::support::apalis_job_id::apalis_job_id;
 
 // The parent module is loaded through `#[path]`, which stops Rust from

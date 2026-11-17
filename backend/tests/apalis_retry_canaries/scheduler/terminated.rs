@@ -15,7 +15,7 @@ use apalis_core::worker::ext::ack::Acknowledge;
 use apalis_postgres::PgAck;
 
 use super::{Canary, DELIVERED_ATTEMPT, OWNER, SchedulerRow, delivery_attempt};
-use crate::fetch_one_task;
+use crate::fixtures::{claim_due_rows, fetch_one_task, locked_task};
 use backend::outbound::queue::{
     PostgresRetryScheduler, RetryPersistence, TerminalCapClamp, TerminalRetryReason,
     TerminalRetryUpdate,
@@ -76,7 +76,7 @@ fn terminal_write_fails(canary: &Canary, scheduler: &PostgresRetryScheduler) -> 
 fn acknowledge_failure(canary: &Canary) {
     let attempt = usize::try_from(DELIVERED_ATTEMPT).expect("the delivered attempt is a usize");
     canary.environment.run(async {
-        let task = crate::locked_task(&canary.id, OWNER, FETCHED_MAX_ATTEMPTS, attempt);
+        let task = locked_task(&canary.id, OWNER, FETCHED_MAX_ATTEMPTS, attempt);
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
 
         PgAck::new(canary.pool.clone())
@@ -154,8 +154,9 @@ fn a_terminated_delivery_is_not_fetched_after_acknowledgement() {
         ("Failed".to_owned(), attempt, attempt),
         "the acknowledgement stores a failed row whose cap is the delivered attempt"
     );
-    assert!(
-        fetch_one_task(canary.environment, PROTECTED_QUEUE, OWNER).is_none(),
+    assert_eq!(
+        claim_due_rows(canary.environment, PROTECTED_QUEUE, OWNER),
+        0,
         "a failed row at its attempt cap must not be delivered again"
     );
     assert!(
@@ -174,8 +175,7 @@ fn without_the_fallback_the_acknowledged_row_is_fetched_again() {
 
     acknowledge_failure(&canary);
 
-    let fetched = fetch_one_task(canary.environment, UNPROTECTED_QUEUE, OWNER)
-        .expect("a failed row below its attempt cap is fetched again");
+    let fetched = fetch_one_task(canary.environment, UNPROTECTED_QUEUE, OWNER);
     assert_eq!(
         fetched.task_id, canary.id,
         "the fetcher must claim the row the fallback did not protect"
@@ -218,8 +218,7 @@ fn a_fallback_that_never_lands_leaves_the_row_fetchable() {
         ("Failed".to_owned(), delivered, FETCHED_MAX_ATTEMPTS),
         "a fallback that never lands leaves the fetched attempt cap in place"
     );
-    let fetched = fetch_one_task(canary.environment, UNREACHABLE_QUEUE, OWNER)
-        .expect("a failed row below its attempt cap is fetched again");
+    let fetched = fetch_one_task(canary.environment, UNREACHABLE_QUEUE, OWNER);
     assert_eq!(
         fetched.task_id, canary.id,
         "the residual window hands the retired job back to the fetcher"

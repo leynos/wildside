@@ -272,10 +272,24 @@ impl<'a> DeliveryIdentity<'a> {
     }
 }
 
-/// Build a delivery with the chosen identity.
+/// Build a delivery with the chosen identity and a five-attempt stored cap.
 pub(super) fn task_with(
     payload: Value,
     attempt: usize,
+    identity: DeliveryIdentity<'_>,
+) -> PgTask<Value> {
+    task_with_budget(payload, attempt, 5, identity)
+}
+
+/// Build a delivery whose context carries an explicit stored attempt cap.
+///
+/// The wrapper compares the delivered attempt with the cap Apalis restored
+/// from the row, so a test that exercises a spent cap has to set both numbers
+/// the way a recovered row would carry them.
+pub(super) fn task_with_budget(
+    payload: Value,
+    attempt: usize,
+    max_attempts: i32,
     identity: DeliveryIdentity<'_>,
 ) -> PgTask<Value> {
     let mut data = Extensions::default();
@@ -287,7 +301,7 @@ pub(super) fn task_with(
     let mut builder = Task::builder(payload)
         .with_ctx(
             PgContext::new()
-                .with_max_attempts(5)
+                .with_max_attempts(max_attempts)
                 .with_lock_by(identity.lock_by.map(str::to_owned)),
         )
         .with_data(data)

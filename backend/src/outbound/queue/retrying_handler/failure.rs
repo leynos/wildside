@@ -208,8 +208,77 @@ async fn persist_retry_schedule(
     }
 }
 
-/// Return the worker that owns the row, if the delivery proves ownership.
+/// Report whether a delivery has already spent its job's stored attempt cap.
 ///
+/// Apalis stores `attempts` as the number of deliveries a row has received and
+/// increments the in-memory attempt on the first poll, so a legal delivery
+/// carries an attempt at or below the row's `max_attempts`. A larger attempt
+/// means the row was made fetchable without its cap agreeing: orphan recovery
+/// returns a row to `Pending` and increments `attempts`, and the fetch
+/// predicate accepts `Pending` rows without consulting `max_attempts`. That is
+/// the window in which a job classified as terminal between its terminal write
+/// and its acknowledgement becomes deliverable again.
+///
+/// The comparison is deliberately not
+/// [`JobAttemptBudget::permits`](crate::domain::jobs::retry::JobAttemptBudget::permits): that
+/// answers whether another retry may follow, so it refuses the legal final
+/// delivery at the cap. This question is whether the delivery may run at all,
+/// which the cap itself answers.
+///
+/// # Examples
+///
+/// ```text
+/// assert!(!is_spent_attempt(attempt(5), 5), "the final permitted attempt runs");
+/// assert!(is_spent_attempt(attempt(6), 5), "a recovered row past its cap does not");
+/// ```
+pub(super) fn is_spent_attempt(attempt: NonZeroU32, context_max_attempts: u32) -> bool {
+    attempt.get() > context_max_attempts
+}
+
+/// Refuse one delivery whose stored attempt cap is already spent.
+///
+/// The refusal returns an error without invoking the handler, so the
+/// acknowledgement that follows records a delivery that never ran. Logging the
+/// values keeps the case visible: an ordinary fetch cannot produce it, so a
+/// line here means orphan recovery returned a row whose cap had already
+/// retired it.
+pub(super) fn refuse_spent_attempt(
+    attempt: NonZeroU32,
+    context_max_attempts: u32,
+    queue_name: &str,
+) -> BoxDynError {
+    warn!(
+        queue = queue_name,
+        attempt = attempt.get(),
+        max_attempts = context_max_attempts,
+        decision = "spent_attempt_refused",
+        "delivery exceeds the job's stored attempt cap; skipping the handler"
+    );
+    Box::new(SpentAttemptError {
+        attempt,
+        max_attempts: context_max_attempts,
+    })
+}
+
+/// A delivery whose attempt count already exceeds its job's stored cap.
+#[derive(Debug)]
+struct SpentAttemptError {
+    attempt: NonZeroU32,
+    max_attempts: u32,
+}
+
+impl std::fmt::Display for SpentAttemptError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "delivery attempt {} exceeds the stored attempt cap {}",
+            self.attempt, self.max_attempts
+        )
+    }
+}
+
+impl std::error::Error for SpentAttemptError {}
+
 /// Apalis records the locking worker on the task context and the running
 /// worker in the task data. The wrapper persists only when both are present
 /// and name the same worker, so a stale or foreign delivery cannot overwrite
