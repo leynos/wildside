@@ -4226,3 +4226,19 @@ repaired both, and r20-docs passed all four gates: `check-fmt` (mdtablefix 133
 files unchanged, `cargo fmt --all -- --check` clean, Biome 2.3.1 clean, Ruff
 120 files already formatted), `spelling`, `markdownlint` (134 files, 0 errors),
 and `nixie`.
+
+Run r21 started over `9216b28` and was stopped after `spelling`: the shared
+dictionary only accepts the -ization form of that word, and `markdownlint` runs
+the same spelling prerequisite, so both failed while `check-fmt` and `nixie`
+passed. `8c89bd3` carries that one-word repair. Run r22 then passed all nine
+gates over `8c89bd3`: `test` ran 2720 with 2720 passed and 4 skipped, `openapi`
+regenerated a byte-identical specification, and `check-fmt` and `lint` were
+read stage by stage rather than trusted through their exit status. The hosted
+checks for that head pass as well: `build`, `coverage`, the CodeScene review,
+and the Gecko review.
+
+The pre-merge reconciliation was posted as PR comment 6932389421 and names, for
+each row of the saved table, the commit or file that answers it. The queued
+full review (`comenq` request `67de92d9`) had not run at the time of writing;
+the `CodeRabbit` commit status for `8c89bd3` reads SKIPPED, which is the
+incremental review being skipped rather than a completed review.
