@@ -79,6 +79,40 @@ impl QueueDeadLetterWorld {
         assert_eq!(metadata["operator.note"], "preserve-me");
     }
 
+    /// Assert a requeue replaced a future deadline with an eligible one.
+    ///
+    /// The seed advances the deadline an hour past the database clock, and the
+    /// assertion first requires that deadline to be ineligible. That is the
+    /// negative control for the requeue write: a requeue that left `run_at`
+    /// alone, or replaced it with another future value, keeps the row
+    /// ineligible and fails the second assertion. Both readings pair the
+    /// deadline with the database clock in one statement, because that is the
+    /// comparison Apalis's fetch predicate performs.
+    pub(crate) fn assert_requeued_deadline_is_immediately_eligible(&self) {
+        self.take_operation_result()
+            .expect("dead-job requeue succeeds");
+        let before = self
+            .deadline_before_requeue
+            .lock()
+            .expect("pre-requeue deadline mutex")
+            .take()
+            .expect("pre-requeue deadline reading");
+        assert!(
+            !is_due(before.run_at, before.database_now),
+            "the seed must store a deadline the database has not reached, else the \
+             requeue write would be unobservable: {:?}",
+            before
+        );
+        let after = self.read_deadline_and_clock(&self.current_id());
+        assert!(
+            is_due(after.run_at, after.database_now),
+            "requeue must make the restored row immediately eligible: stored run_at {:?}, \
+             database now {:?}",
+            after.run_at,
+            after.database_now
+        );
+    }
+
     /// Read the pool's clock, the one the fetch predicate compares with.
     fn database_now(&self) -> DateTime<Utc> {
         self.runtime

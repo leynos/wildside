@@ -6,6 +6,7 @@ mod isolation;
 mod plan;
 mod properties;
 mod rows;
+use self::rows::DeadlineReading;
 use self::rows::JobSeed;
 use self::rows::JobSnapshot;
 
@@ -73,6 +74,9 @@ pub(crate) struct QueueDeadLetterWorld {
     listing: Mutex<DeadLetterListing>,
     operation_result: Mutex<Option<Result<(), DeadLetterError>>>,
     state_before_operation: Mutex<Option<JobSnapshot>>,
+    /// The deadline observed before a requeue, kept so the assertion can show
+    /// the row was ineligible beforehand rather than only eligible afterwards.
+    deadline_before_requeue: Mutex<Option<DeadlineReading>>,
 }
 
 impl Default for QueueDeadLetterWorld {
@@ -121,6 +125,7 @@ impl QueueDeadLetterWorld {
             listing: Mutex::new(DeadLetterListing::default()),
             operation_result: Mutex::new(None),
             state_before_operation: Mutex::new(None),
+            deadline_before_requeue: Mutex::new(None),
         }
     }
 

@@ -60,6 +60,11 @@ fn the_job_now_fails_retryably(world: &QueueDeadLetterWorld) {
     world.fail_retryably();
 }
 
+#[given("a dead job's stored deadline is an hour in the future")]
+fn a_dead_job_has_a_future_deadline(world: &QueueDeadLetterWorld) {
+    world.insert_dead_job_with_future_deadline();
+}
+
 #[given("a pending job exists")]
 fn a_pending_job_exists(world: &QueueDeadLetterWorld) {
     world.insert_pending_job();
@@ -210,6 +215,11 @@ fn the_requeue_restores_budget_and_metadata(world: &QueueDeadLetterWorld) {
     world.assert_requeue_restored_state();
 }
 
+#[then("the restored job is immediately eligible under the database clock")]
+fn the_restored_job_is_immediately_eligible(world: &QueueDeadLetterWorld) {
+    world.assert_requeued_deadline_is_immediately_eligible();
+}
+
 #[then("the fatal reason has been replaced with exhausted")]
 fn the_fatal_reason_has_been_replaced(world: &QueueDeadLetterWorld) {
     world.assert_exhausted_reason_replaced_fatal();
@@ -271,6 +281,12 @@ fn dead_jobs_are_listed_with_failure_context(world: QueueDeadLetterWorld) {}
     name = "A requeued dead job runs again and can succeed"
 )]
 fn requeued_dead_job_runs_again_and_succeeds(world: QueueDeadLetterWorld) {}
+
+#[scenario(
+    path = "tests/features/queue_dead_letter.feature",
+    name = "Requeue makes a dead job with a future deadline immediately eligible"
+)]
+fn requeue_makes_a_future_deadline_immediately_eligible(world: QueueDeadLetterWorld) {}
 
 #[scenario(
     path = "tests/features/queue_dead_letter.feature",

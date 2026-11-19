@@ -4244,3 +4244,56 @@ each row of the saved table, the commit or file that answers it. The queued
 full review (`comenq` request `67de92d9`) had not run at the time of writing;
 the `CodeRabbit` commit status for `8c89bd3` reads SKIPPED, which is the
 incremental review being skipped rather than a completed review.
+
+### Requeue-clock and spent-attempt rounds of 2026-11-18 to 2026-11-19
+
+The review that completed afterwards asked for two behavioural repairs and left
+one warning open. `33bd605` carries the repairs:
+
+- **Spent-attempt guard.** Orphan recovery returns a retired row to `Pending`
+  without consulting its cap, and `apalis-postgres`'s fetch will hand it out
+  again. `RetryingJobService::call` now refuses a delivery whose attempt number
+  is strictly greater than the stored budget before the handler runs, and the
+  acknowledgement records the refusal. The guard uses `>` rather than
+  `JobRetryPolicy::permits`, because `permits` answers whether another retry
+  may follow and would refuse the legal final delivery at the cap.
+- **Requeue clock.** The behavioural assertion compares the stored `run_at` with
+  `SELECT now()` read through the same pool, and a negative control stages
+  `run_at = now() + interval '1 hour'` in a rolled-back transaction and
+  requires the eligibility predicate to reject it.
+
+The dead-letter backlog gauge stays out of this PR. The chart declares no
+metrics port, scrape annotation, `ServiceMonitor`, or alerting rule for any
+workload, so a gauge added here would have no verified collection path, and
+`docs/backend-roadmap.md` already scopes operator surfaces to 5.3.1. The design
+is filed as issue #630 and linked from the runbook's backlog section.
+
+Runs r23 and r24 were started and stopped rather than allowed to verify a tree
+that was still changing. Run r25 then passed all nine gates over `33bd605`:
+`check-fmt`, `spelling`, `markdownlint` (134 files, 0 errors), `nixie`, `lint`
+(rustdoc, Clippy, Whitaker on both manifests, architecture-lint, AsyncAPI and
+Redocly, Ruff, `interrogate` 100%, Pylint 10.00, checkmake, mbake), `typecheck`,
+`test` (nextest 2726 passed / 4 skipped, both compile-fail suites, Vitest 92,
+workflow contracts 658, script suites, action-lint), `audit`, and `openapi`
+(byte-identical spec). Hosted CI run 44053867645 is green for `33bd605`.
+
+### Closing the requeue `run_at` test gap
+
+The next pre-merge table kept one Testing (Overall) error open: every requeue
+test would still pass if the `run_at = now()` write were removed, because the
+seed already stored a due deadline. The scenario
+`Requeue makes a dead job with a future deadline immediately eligible` closes
+it:
+
+- the seed moves the dead row's deadline an hour past the database clock and
+  records that reading as a pair with the clock, so the row is provably
+  ineligible before the requeue;
+- `requeue` runs through the `DeadLetterQueue` port as an operator would;
+- the assertion first requires the recorded deadline to be ineligible — the
+  negative control — and then requires the stored deadline to be eligible
+  against a fresh `SELECT now()` from the same pool.
+
+The control was exercised against the implementation, not asserted on paper:
+setting `IMMEDIATELY_ELIGIBLE_RUN_AT` to `run_at` (a stale-value mutation of
+the same write) makes the scenario fail with the stored deadline an hour ahead
+of the database clock, and restoring `now()` makes it pass.
