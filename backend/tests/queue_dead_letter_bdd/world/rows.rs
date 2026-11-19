@@ -19,6 +19,17 @@ pub(super) struct JobSeed<'a> {
     pub(super) done_age_seconds: i64,
 }
 
+/// A stored deadline read together with the clock that judged it.
+///
+/// Apalis's fetch predicate compares `run_at` with PostgreSQL's `now()`, so the
+/// two values are only meaningful as a pair: a deadline read here and judged
+/// against an application clock would describe a different comparison.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct DeadlineReading {
+    pub(super) run_at: DateTime<Utc>,
+    pub(super) database_now: DateTime<Utc>,
+}
+
 #[derive(Clone, Debug, FromRow, PartialEq)]
 pub(super) struct JobSnapshot {
     id: String,
@@ -102,6 +113,39 @@ impl QueueDeadLetterWorld {
                 .fetch_one(&self.pool),
             )
             .expect("read Apalis job snapshot")
+    }
+
+    /// Move a row's deadline an hour past the database clock.
+    ///
+    /// [`Self::insert_job`] stores a deadline the database has already reached,
+    /// which would hide a requeue that never rewrote it. Staging a future
+    /// deadline makes the rewrite observable.
+    pub(super) fn set_run_at_after_database_clock(&self, id: &DeadJobId) {
+        self.runtime
+            .block_on(
+                sqlx::query(
+                    "UPDATE apalis.jobs SET run_at = now() + interval '1 hour' WHERE id = $1",
+                )
+                .bind(id.as_str())
+                .execute(&self.pool),
+            )
+            .expect("stage a deadline after the database clock");
+    }
+
+    /// Read a row's deadline in the same statement as the database clock.
+    pub(super) fn read_deadline_and_clock(&self, id: &DeadJobId) -> DeadlineReading {
+        let (run_at, database_now): (DateTime<Utc>, DateTime<Utc>) = self
+            .runtime
+            .block_on(
+                sqlx::query_as("SELECT run_at, now() FROM apalis.jobs WHERE id = $1")
+                    .bind(id.as_str())
+                    .fetch_one(&self.pool),
+            )
+            .expect("read the row deadline with the database clock");
+        DeadlineReading {
+            run_at,
+            database_now,
+        }
     }
 
     pub(super) fn set_requeue_count(&self, id: &DeadJobId, value: &str) {

@@ -123,6 +123,23 @@ impl QueueDeadLetterWorld {
         *self.current_job_id.lock().expect("current id mutex") = Some(newest);
     }
 
+    /// Insert a dead row whose stored deadline is an hour in the future.
+    ///
+    /// The ordinary seed already stores a due deadline, which a requeue that
+    /// never rewrote `run_at` would still leave looking eligible. Advancing the
+    /// deadline first is what makes the requeue's write observable, so the
+    /// reading taken here is kept for the assertion to compare against.
+    pub(crate) fn insert_dead_job_with_future_deadline(&self) {
+        self.insert_current_failed_dead_row(QUEUE_NAME, "exhausted", Some("future deadline"));
+        let id = self.current_id();
+        self.set_run_at_after_database_clock(&id);
+        let reading = self.read_deadline_and_clock(&id);
+        *self
+            .deadline_before_requeue
+            .lock()
+            .expect("pre-requeue deadline mutex") = Some(reading);
+    }
+
     pub(crate) fn insert_unconfigured_dead_job(&self) {
         self.insert_current_failed_dead_row("wildside.unconfigured-queue", "exhausted", None);
     }

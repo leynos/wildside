@@ -13,6 +13,11 @@ Feature: Dead-letter listing, requeue, and discard
     Then the job completes with status "Done"
     And the job retains one requeue in its metadata
 
+  Scenario: Requeue makes a dead job with a future deadline immediately eligible
+    Given a dead job's stored deadline is an hour in the future
+    When the operator requeues the dead job
+    Then the restored job is immediately eligible under the database clock
+
   Scenario: A legacy failed row with a null attempt limit is listed
     Given a disposable legacy schema permits a null max_attempts value
     And a failed row has 3 attempts, below Apalis's null fallback of 25
