@@ -4297,3 +4297,40 @@ The control was exercised against the implementation, not asserted on paper:
 setting `IMMEDIATELY_ELIGIBLE_RUN_AT` to `run_at` (a stale-value mutation of
 the same write) makes the scenario fail with the stored deadline an hour ahead
 of the database clock, and restoring `now()` makes it pass.
+
+### Rebase onto the actix-http advisory fix of 2026-11-20
+
+Run r26 failed only the `audit` gate: three RustSec advisories published on
+2026-11-16 flag `actix-http` 3.20.3, which `main` pins through `actix-web`. The
+failure reproduced on `origin/main` itself, so it was repository-wide rather
+than caused by this branch. The remediation went into a separate prerequisite
+PR, #633, whose lockfile-only change resolves `actix-http` 3.22.0 and clears
+all three advisories; it merged as `f37928e`.
+
+The branch was then replayed from `aa0532b` onto `f37928e` with the native
+merge backend and `zdiff3`, and with `core.attributesFile` pointed at
+`/dev/null` because the repository has no tracked attributes opting in to
+Weave. Two of the 132 replay steps landed empty because their content had
+already reached `main`, and both were checked rather than assumed redundant:
+
+- `33fc2ae` bumps `quinn-udp` for RUSTSEC-2026-0538; `f37928e` already pins
+  0.5.16.
+- `5896967` renews the extract-zip audit exceptions to 2026-12-14; `main`
+  carries the same renewal with the same wording.
+
+`git range-diff` over `aa0532b..58e4895` against the rebased series reports 125
+identical patches, the two skips above, and five whose patch differs. Four of
+the five follow `main`'s newer content: the `std::env::set_current_dir`
+prohibition added to the environment policy tests, and the relocation and
+renumbering of the ADRs under `docs/adrs/`. Every ADR link in
+`docs/contents.md` resolves in the result. The fifth is the driver artefact
+described next.
+
+Weave participated despite the attribute override, through the global
+`merge.weave.driver` registration, in the replay of `5085a6c`; it separated the
+`const ... include_str!` items in
+`backend/tests/environment_policy_contract.rs` with blank lines that neither
+parent carries. Commit `bfa7c51` deletes them, and this record follows it. The
+rebased tree is now byte-identical to `git merge-tree --write-tree` of the old
+head over `f37928e`, which is the acceptance evidence for the replay: no branch
+work was dropped, no parent work was resurrected, and no artefact remains.
