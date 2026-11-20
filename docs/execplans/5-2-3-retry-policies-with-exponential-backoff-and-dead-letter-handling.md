@@ -4442,11 +4442,15 @@ additions and 13 deletions of whitespace only, and it is committed as
 exercised: mdtablefix reports 133 files unchanged, `cargo fmt` is clean, and
 pinned Biome 2.3.1 and Ruff 0.16.8 are clean.
 
-One evidence gap remains: `markdownlint` and `nixie` were measured at
-`da41574`, before the rewrap. A docs-scoped re-run of the four Markdown targets
-at the head that carries this record closes it, because nothing outside those
-two files changed between the two commits.
+One evidence gap remained after r28b: `markdownlint` and `nixie` were measured
+at `da41574`, before the rewrap, and nothing outside the two rewrapped files
+changed between the two commits. Run r28c closed it over the four Markdown
+targets at `075111c`. `check-fmt` passed with mdtablefix reporting 133 files
+unchanged and `cargo fmt`, Biome 2.3.1 and Ruff 0.16.8 clean; `spelling`
+regenerated `typos.toml` to the same hash; `markdownlint` linted 134 files with
+0 errors; and `nixie` validated all 28 diagram blocks.
 
 The ledger is `/tmp/gates-wildside-457-r28.status`; each gate's log is
-`/tmp/<gate>-wildside-457-r28.out`, and the check-fmt re-run is at
-`/tmp/check-fmt-wildside-457-r28b.out`.
+`/tmp/<gate>-wildside-457-r28.out`, the check-fmt re-run is at
+`/tmp/check-fmt-wildside-457-r28b.out`, and the docs-scoped run is at
+`/tmp/<target>-wildside-457-r28c.out`.
