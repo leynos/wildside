@@ -56,19 +56,12 @@ use toml::Value;
 type TestResult<T = ()> = Result<T, Box<dyn StdError>>;
 
 const CLIPPY_POLICY: &str = include_str!("../../clippy.toml");
-
 const WORKSPACE_MANIFEST: &str = include_str!("../../Cargo.toml");
-
 const BACKEND_MANIFEST: &str = include_str!("../Cargo.toml");
-
 const PAGINATION_MANIFEST: &str = include_str!("../crates/pagination/Cargo.toml");
-
 const EXAMPLE_DATA_MANIFEST: &str = include_str!("../../crates/example-data/Cargo.toml");
-
 const ARCHITECTURE_LINT_MANIFEST: &str = include_str!("../../tools/architecture-lint/Cargo.toml");
-
 const MAKEFILE: &str = include_str!("../../Makefile");
-
 const CARGO_CONFIG: &str = include_str!("../../.cargo/config.toml");
 
 /// Every `std::env` API the policy prohibits.
