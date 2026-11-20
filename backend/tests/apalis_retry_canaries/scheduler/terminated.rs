@@ -15,7 +15,7 @@ use apalis_core::worker::ext::ack::Acknowledge;
 use apalis_postgres::PgAck;
 
 use super::{Canary, DELIVERED_ATTEMPT, OWNER, SchedulerRow, delivery_attempt};
-use crate::fixtures::{claim_due_rows, fetch_one_task, locked_task};
+use crate::fixtures::{Delivery, claim_due_rows, delivery_task, fetch_one_task};
 use backend::outbound::queue::{
     PostgresRetryScheduler, RetryPersistence, TerminalCapClamp, TerminalRetryReason,
     TerminalRetryUpdate,
@@ -76,7 +76,10 @@ fn terminal_write_fails(canary: &Canary, scheduler: &PostgresRetryScheduler) -> 
 fn acknowledge_failure(canary: &Canary) {
     let attempt = usize::try_from(DELIVERED_ATTEMPT).expect("the delivered attempt is a usize");
     canary.environment.run(async {
-        let task = locked_task(&canary.id, OWNER, FETCHED_MAX_ATTEMPTS, attempt);
+        let task = delivery_task(
+            &canary.id,
+            Delivery::new(OWNER, FETCHED_MAX_ATTEMPTS, attempt),
+        );
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
 
         PgAck::new(canary.pool.clone())

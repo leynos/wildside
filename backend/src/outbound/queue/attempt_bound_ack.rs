@@ -10,14 +10,16 @@
 //! per instance keep another instance's stale delivery away, but they cannot
 //! separate two deliveries handled by the same instance.
 //!
-//! [`AttemptBoundStorage`] composes the same lock and acknowledgement layers as
-//! the pinned backend, replacing `PgAck` with [`AttemptBoundAck`]. That
-//! acknowledgement adds the attempt count the row holds during the delivery to
-//! its predicate. A delivery always reports one more than the count the row
-//! stored while it owned the row, so a re-delivered row no longer matches its
-//! predecessor's acknowledgement. A worker must be built over this storage to
-//! gain the guard; `apalis_postgres::PostgresStorage` alone leaves the narrower
-//! predicate in place.
+//! [`AttemptBoundStorage`] composes a lock layer and an acknowledgement layer
+//! in place of the pinned backend's. The lock layer stamps each claim with a
+//! generation token, and [`AttemptBoundAck`] requires the row to still carry
+//! that token *and* the attempt count the row held during the delivery. The
+//! attempt count alone would leave one window open: a dead-letter requeue
+//! resets it to zero, after which a stale delivery and its successor report the
+//! same count. The token never repeats, because only a new claim changes it. A
+//! worker must be built over this storage to gain the guard;
+//! `apalis_postgres::PostgresStorage` alone leaves the narrower predicate in
+//! place.
 
 use apalis_core::backend::{Backend, TaskStream};
 use apalis_core::error::BoxDynError;
@@ -26,7 +28,7 @@ use apalis_core::task::Parts;
 use apalis_core::task::status::Status;
 use apalis_core::worker::context::WorkerContext;
 use apalis_core::worker::ext::ack::{Acknowledge, AcknowledgeLayer};
-use apalis_postgres::{Config, LockTaskLayer, PgContext, PgTask, PostgresStorage};
+use apalis_postgres::{Config, PgContext, PgTask, PostgresStorage};
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
 use futures_util::stream::BoxStream;
@@ -35,6 +37,8 @@ use serde_json::Value;
 use sqlx::PgPool;
 use tracing::warn;
 use ulid::Ulid;
+
+use super::attempt_bound_lock::{AttemptBoundLock, claim_token};
 
 /// Apalis PostgreSQL storage whose acknowledgements are attempt-bound.
 ///
@@ -70,7 +74,10 @@ impl Backend for AttemptBoundStorage {
     type Error = sqlx::Error;
     type Stream = TaskStream<PgTask<Value>, sqlx::Error>;
     type Beat = BoxStream<'static, Result<(), sqlx::Error>>;
-    type Layer = Stack<LockTaskLayer, AcknowledgeLayer<AttemptBoundAck>>;
+    // `tower_layer::Stack::new` takes the inner layer first, so the lock is
+    // the outer layer here: it must stamp the context before the
+    // acknowledgement clones the parts it will later acknowledge with.
+    type Layer = Stack<AcknowledgeLayer<AttemptBoundAck>, AttemptBoundLock>;
 
     fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
         Backend::heartbeat(&self.inner, worker)
@@ -78,8 +85,8 @@ impl Backend for AttemptBoundStorage {
 
     fn middleware(&self) -> Self::Layer {
         Stack::new(
-            LockTaskLayer::new(self.pool.clone()),
             AcknowledgeLayer::new(AttemptBoundAck::new(self.pool.clone())),
+            AttemptBoundLock::new(self.pool.clone()),
         )
     }
 
@@ -90,10 +97,11 @@ impl Backend for AttemptBoundStorage {
 
 /// Acknowledge one delivery only while the row still belongs to it.
 ///
-/// The write binds the attempt count the row held during the delivery, so an
-/// acknowledgement that arrives after orphan recovery and a re-lock changes no
-/// row and reports `RowNotFound`, mirroring what the pinned acknowledgement
-/// does when `lock_by` no longer matches.
+/// The write binds the claim token of the delivery's generation and the attempt
+/// count the row held during it, so an acknowledgement that arrives after
+/// orphan recovery and a re-lock, or after a dead-letter requeue and a new
+/// claim, changes no row and reports `RowNotFound`. That mirrors what the
+/// pinned acknowledgement does when `lock_by` no longer matches.
 #[derive(Clone)]
 pub struct AttemptBoundAck {
     pool: PgPool,
@@ -118,6 +126,7 @@ impl<Res: Serialize> Acknowledge<Res, PgContext, Ulid> for AttemptBoundAck {
         let task_id = parts.task_id;
         let worker_id = parts.ctx.lock_by().clone();
         let attempt = parts.attempt.current();
+        let token = claim_token(&parts.ctx).map(str::to_owned);
         let status = acknowledgement_status(parts, res);
         let response = serde_json::to_value(res.as_ref().map_err(|error| error.to_string()));
         let pool = self.pool.clone();
@@ -133,7 +142,8 @@ impl<Res: Serialize> Acknowledge<Res, PgContext, Ulid> for AttemptBoundAck {
             let updated = sqlx::query(
                 "UPDATE apalis.jobs
                  SET status = $4, attempts = $2, last_result = $3, done_at = NOW()
-                 WHERE id = $1 AND lock_by = $5 AND status = 'Running' AND attempts = $6",
+                 WHERE id = $1 AND lock_by = $5 AND status = 'Running' AND attempts = $6
+                   AND metadata->>'wildside.retry.claim_token' = $7",
             )
             .bind(&task_id)
             .bind(delivered)
@@ -141,6 +151,7 @@ impl<Res: Serialize> Acknowledge<Res, PgContext, Ulid> for AttemptBoundAck {
             .bind(status.to_string())
             .bind(&worker_id)
             .bind(stored)
+            .bind(token.as_deref().unwrap_or_default())
             .execute(&pool)
             .await?;
 
@@ -153,6 +164,7 @@ impl<Res: Serialize> Acknowledge<Res, PgContext, Ulid> for AttemptBoundAck {
                     worker_id = %worker_id,
                     attempt = delivered,
                     stored_attempt = stored,
+                    has_claim_token = token.is_some(),
                     decision = "acknowledgement_refused",
                     "delivery no longer owns its row; skipping the acknowledgement"
                 );

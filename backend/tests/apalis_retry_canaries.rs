@@ -156,6 +156,7 @@ fn ineligible_rows_are_not_fetched(#[case] case: IneligibleRow) {
             status: case.status.to_owned(),
             attempts: case.attempts,
             lock_by: None,
+            claim_token: None,
         },
         "{} must stay unclaimed",
         case.status

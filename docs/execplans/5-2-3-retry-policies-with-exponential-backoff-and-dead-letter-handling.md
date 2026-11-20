@@ -4454,3 +4454,100 @@ The ledger is `/tmp/gates-wildside-457-r28.status`; each gate's log is
 `/tmp/<gate>-wildside-457-r28.out`, the check-fmt re-run is at
 `/tmp/check-fmt-wildside-457-r28b.out`, and the docs-scoped run is at
 `/tmp/<target>-wildside-457-r28c.out`.
+
+### The claim-token guard
+
+CodeRabbit's second review accepted neither earlier disposition. It showed that
+the attempt count is not a delivery generation:
+`PostgresDeadLetterQueue::requeue` resets `attempts` to zero, so a stale
+delivery that reported attempt 1 and its successor, delivered after the
+requeue, agree on the identifier, the worker name, the `Running` status, and
+the stored attempt count. It also asked for the terminal-write window to be
+driven end to end through the real worker rather than seeded.
+
+The guard now uses a claim token. `AttemptBoundLock`, a new layer in
+`backend/src/outbound/queue/attempt_bound_lock.rs`, runs the pinned
+`lock_by_id.sql` predicate and additionally writes a fresh ULID into the row's
+metadata under `wildside.retry.claim_token`; the same token is carried in the
+task's `PgContext`. `AttemptBoundAck` requires
+`metadata->>'wildside.retry.claim_token'` to equal the delivery's token as well
+as `id`, `lock_by`, `status = 'Running'`, and the stored attempt count.
+Recovery, `schedule_retry`, `record_terminal_failure`, `clamp_terminal_cap`,
+and the requeue all preserve unrelated metadata keys, so only a new claim
+changes the token. A delivery whose claim token no longer matches is refused
+with `RowNotFound` and an `acknowledgement_refused` warning that records
+whether the delivery carried a token at all.
+
+`AttemptBoundStorage` composes the two layers with the lock outside the
+acknowledgement. `tower_layer::Stack::new` takes the inner layer first, and the
+first composition had them the other way round: the pipeline canaries failed
+because `AcknowledgeService` clones the parts before the lock stamped them, so
+the acknowledgement carried `token = None`. The probe that established this was
+temporary and is not in the change; the canaries remain as the regression
+evidence, because a future ordering change reproduces exactly that failure.
+
+New and extended canaries:
+
+- `apalis_retry_canaries/ack_guard.rs` adds
+  `a_requeued_row_cannot_be_overwritten_by_its_previous_delivery`: it inserts
+  the terminal row a replacement delivery leaves behind, requeues it through
+  `PostgresDeadLetterQueue::requeue`, and asserts the requeue reset the attempt
+  count to zero while preserving the replaced generation's token. It then
+  claims the row through `AttemptBoundLock` and asserts the row carries the
+  fresh token that claim stamped, which never repeats. The stale delivery
+  reports attempt 1 under its old token and is refused with `RowNotFound`,
+  leaving the `Running` row unchanged, and the generation that claimed it
+  acknowledges the same attempt count successfully. Every other discriminator
+  is equal, so only the token separates the two. The claim is driven directly
+  rather than through a worker: a worker would acknowledge before the stale
+  delivery could be replayed, and the stored status would then differ for a
+  reason unrelated to the token.
+- `apalis_retry_canaries/pipeline.rs` adds
+  `the_worker_pipeline_refuses_a_row_recovered_from_a_terminal_write`: it
+  registers a worker under the queue, seeds a `Running` row one attempt below
+  the cap, drives the real `RetryPersistence::record_terminal_failure`, checks
+  the write preserved the claim token beside the reason, backdates and recovers
+  the row through Apalis's own heartbeat, then runs a real worker. It asserts
+  the recovered count, `runs_at_terminal == 0`, status `Killed`, and
+  `attempts == cap + 1`. The positive control for the final permitted attempt
+  is retained.
+- The fixtures now carry a `Delivery` value object for the worker, cap,
+  attempt, and claim token, because the fifth positional argument tripped
+  `clippy::too_many_arguments`; `recover_orphaned_row` registers its sweeper
+  under the queue first, since `keep_alive` matches on the worker type and
+  otherwise fails with `WORKER_DOES_NOT_EXIST`.
+- The fixture file outgrew Whitaker's 400-line limit once the new helpers
+  arrived, so it is now a module directory: `fixtures/environment.rs` owns the
+  embedded cluster, pool, and worker registration, and `fixtures/rows.rs` owns
+  the row, delivery, and fetch helpers. `fixtures.rs` re-exports both. The
+  children are declared with explicit `#[path]` attributes because the parent
+  is itself loaded through `#[path]`, which stops Rust deriving a nested
+  directory for it.
+
+ADR 0004 now records the requeue window and why the token is the generation;
+the retry runbook and the backend architecture document describe the token, the
+`acknowledgement_refused` warning, and the storage-type deployment contract.
+The runbook already states the paging contract CodeRabbit asked to verify:
+alert on `route_queue_terminal_write_failure_total` and both terminal-write log
+events, and page on `terminal_cap_clamp_exhausted` together with that counter.
+
+The canary binary passes in full: 71 tests, 71 passed, in 247s.
+
+The r29 run is green across all nine gates. `check-fmt` passed all four stages:
+mdtablefix reports 133 files unchanged, `cargo fmt` is clean, and pinned Biome
+2.3.1 and Ruff 0.16.8 are clean. `spelling` regenerated `typos.toml` to the
+same hash, `markdownlint` linted 134 files with 0 errors, and `nixie` validated
+every diagram block. `lint` passed all eight stages, including `lint-rust` —
+rustdoc, Clippy with `-D warnings`, and Whitaker on both manifests — which
+clears the `module-max-lines` finding that stopped the first r29 attempt on the
+451-line `fixtures.rs`; that attempt's lint log is preserved at
+`/tmp/lint-wildside-457-r29.prior-lint-rust-red.out`. `typecheck`, `test` (five
+sub-suites, 1064s), `audit`, and `openapi` (regenerated spec byte-identical to
+the tree) all passed. Each gate's log is `/tmp/<gate>-wildside-457-r29.out`.
+
+The r29 logs were captured before these notes were added, so the Markdown gates
+were re-run over the final tree. `check-fmt` reports mdtablefix unchanged
+across 133 files with `cargo fmt`, Biome 2.3.1, and Ruff 0.16.8 clean;
+`markdownlint` linted 134 files with 0 errors; `spelling` regenerated
+`typos.toml` to the same hash; and `nixie` validated every diagram block. Those
+logs are `/tmp/<target>-wildside-457-r29e.out`.
