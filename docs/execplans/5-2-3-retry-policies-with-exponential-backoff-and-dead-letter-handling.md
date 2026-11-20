@@ -4334,3 +4334,33 @@ parent carries. Commit `bfa7c51` deletes them, and this record follows it. The
 rebased tree is now byte-identical to `git merge-tree --write-tree` of the old
 head over `f37928e`, which is the acceptance evidence for the replay: no branch
 work was dropped, no parent work was resurrected, and no artefact remains.
+
+### Run r27 over the rebased candidate
+
+All nine gates passed over `f7ed88e`, once each and in repository order, in
+43m08s (2026-11-20T14:19:24Z to 15:02:32Z), with compile admission healthy
+throughout. The ledger is `/tmp/gates-wildside-457-r27.status` and each gate's
+log is `/tmp/<gate>-wildside-457-r27.out`.
+
+- `check-fmt`: mdtablefix 133 files unchanged, cargo fmt 120 files formatted,
+  pinned Biome 2.3.1 and Ruff clean.
+- `spelling`: `typos.toml` regenerated to the same hash.
+- `markdownlint`: 134 files, 0 errors.
+- `nixie`: every diagram validated.
+- `lint`: rustdoc, Clippy `-D warnings`, Whitaker on both manifests,
+  architecture-lint, AsyncAPI, Redocly, Ruff, `interrogate` 100%, Pylint 10.00,
+  checkmake, mbake, actionlint.
+- `typecheck`: `ty` and `tsc --noEmit` clean across the three TypeScript
+  packages.
+- `test`: nextest 2727 passed / 4 skipped, both compile-fail suites, Vitest 92,
+  bun workspaces 170 and 3, workflow contracts 658 passed / 1 skipped, script
+  suites 115 passed / 13 skipped, action-lint 14.
+- `audit`: no vulnerabilities; 45 ignored advisories remain covered by
+  `CARGO_AUDIT_IGNORES`. This gate was the only red one at r26, and it is green
+  now that `f37928e` pins `actix-http` 3.22.0, which discharges the
+  prerequisite.
+- `openapi`: the regenerated specification is byte-identical.
+
+Three warnings remain and none fails a gate: actionlint's `truthy` warning in
+`.github/workflows/dependabot-automerge.yml`, Redocly's two
+`no-unused-components` warnings, and the audit ledger's allowed advisories.
