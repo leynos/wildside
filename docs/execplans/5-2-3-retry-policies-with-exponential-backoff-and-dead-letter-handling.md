@@ -4417,5 +4417,36 @@ New canaries:
   `RowNotFound` specifically, and gives the stale delivery its own attempt
   count rather than the replacement's.
 
-The next gate run over the resulting candidate is pending when this record is
-written.
+### Run r28 over the attempt-bound guard
+
+Run r28 started at 18:13 and finished at 19:21 CET over `da41574`, once each
+and in repository order. Eight of the nine gates passed:
+
+- `spelling`: the regenerated `typos.toml` is unchanged.
+- `markdownlint`: 134 files, 0 errors.
+- `nixie`: every diagram validated.
+- `lint`: all eight sub-stages, 755s.
+- `typecheck`: clean.
+- `test`: 2176s. Nextest ran 2731 passed and 4 skipped, which includes the four
+  new canaries; both compile-fail suites, Vitest 92, bun 170 and 3, workflow
+  contracts 658 passed and 1 skipped, the script suites 115 passed and 13
+  skipped, and action-lint 14 also passed.
+- `audit`: 0 vulnerabilities, 45 allowed warnings.
+- `openapi`: the specification blob is unchanged (`658590a7`).
+
+`check-fmt` failed at its first stage: `mdtablefix --check --wrap` would
+reformat the two Markdown files this change appends to, so the recipe stopped
+before `cargo fmt`, Biome and Ruff ran. `make fmt` applied that rewrap, 12
+additions and 13 deletions of whitespace only, and it is committed as
+`3cec366`. The r28b re-run at `3cec366` passed `check-fmt` with all four stages
+exercised: mdtablefix reports 133 files unchanged, `cargo fmt` is clean, and
+pinned Biome 2.3.1 and Ruff 0.16.8 are clean.
+
+One evidence gap remains: `markdownlint` and `nixie` were measured at
+`da41574`, before the rewrap. A docs-scoped re-run of the four Markdown targets
+at the head that carries this record closes it, because nothing outside those
+two files changed between the two commits.
+
+The ledger is `/tmp/gates-wildside-457-r28.status`; each gate's log is
+`/tmp/<gate>-wildside-457-r28.out`, and the check-fmt re-run is at
+`/tmp/check-fmt-wildside-457-r28b.out`.
