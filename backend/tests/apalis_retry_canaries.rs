@@ -18,14 +18,23 @@
 //! [`fixtures`], so each module below reads as assertions about the contract.
 
 include!("support/entrypoint.rs");
-declare_test_support!(apalis_job_id, atexit_cleanup, embedded_postgres);
+declare_test_support!(
+    apalis_job_id,
+    atexit_cleanup,
+    embedded_postgres,
+    queue_retry_worker
+);
 
 #[path = "apalis_retry_canaries/ack.rs"]
 mod ack;
+#[path = "apalis_retry_canaries/ack_guard.rs"]
+mod ack_guard;
 #[path = "apalis_retry_canaries/fixtures.rs"]
 mod fixtures;
 #[path = "apalis_retry_canaries/identity.rs"]
 mod identity;
+#[path = "apalis_retry_canaries/pipeline.rs"]
+mod pipeline;
 #[path = "apalis_retry_canaries/recovery.rs"]
 mod recovery;
 #[path = "apalis_retry_canaries/scheduler.rs"]

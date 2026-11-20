@@ -5,7 +5,9 @@
 //! row without consulting `max_attempts`. A job retired between its terminal
 //! write and its acknowledgement can therefore be handed out again. These
 //! canaries pin the wrapper's refusal on the delivery side, and the extent of
-//! what a stale acknowledgement can reach on the persistence side.
+//! what a stale acknowledgement can reach on the persistence side. The refusal
+//! is exercised here against a delivered task directly; `pipeline` runs the same
+//! window through a real worker, whose poll increments the attempt count.
 
 use std::error::Error as StdError;
 use std::num::NonZeroU32;
@@ -16,11 +18,11 @@ use std::time::Duration;
 use apalis_core::error::BoxDynError;
 use apalis_core::layers::Service;
 use apalis_core::worker::ext::ack::Acknowledge;
-use apalis_postgres::PgAck;
 use backend::domain::jobs::retry::{JobRetryPolicy, JobRetryPolicyConfig};
 use backend::domain::ports::{NoOpRouteQueueMetrics, RouteQueueMetrics};
 use backend::outbound::queue::{
-    PostgresRetryScheduler, RetryPersistence, RetryingJobService, RetryingJobServiceConfig,
+    AttemptBoundAck, PostgresRetryScheduler, RetryPersistence, RetryingJobService,
+    RetryingJobServiceConfig,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -42,10 +44,14 @@ struct ProbeJob {
 /// The attempt cap a terminal write leaves on a retired row.
 const RETIRED_CAP: i32 = 5;
 
-/// The attempt count orphan recovery leaves after re-queueing a retired row.
+/// The attempt count a row carries after recovery has incremented it past the
+/// cap.
 ///
-/// Recovery increments `attempts`, and the retry policy had already removed
-/// every attempt the row was permitted, so the count lands one past the cap.
+/// `fetch_task` hands the wrapper the count the row stores rather than a
+/// worker's incremented view of it, so the refusal needs the stored count to be
+/// past the cap already. That state is reachable: recovery only selects
+/// `Running` rows, so a re-locked row whose worker is lost again is returned to
+/// `Pending` with one more attempt each time, without any handler running.
 const RECOVERED_ATTEMPTS: i32 = 6;
 
 /// The queue holding a row orphan recovery returned to the fetcher.
@@ -142,18 +148,21 @@ const REPLACEMENT_WORKER: &str = "canary-recovery-replacement";
 /// The worker whose acknowledgement arrives after it lost the row.
 const STALE_WORKER: &str = "canary-recovery-stale";
 
+/// The attempt count the replacement row stored when it was locked.
+const REPLACEMENT_ATTEMPTS: i32 = 2;
+
 /// Scenario: a delivery acknowledges after another worker took the row over.
 ///
-/// Invariant: the acknowledgement matches no row, so the replacement's
-/// `Running` state and attempt count survive. The acknowledgement SQL matches on
-/// `id` and `lock_by` alone, which is why distinct worker names are what keep a
-/// stale delivery away from another instance's row.
+/// Invariant: the acknowledgement matches no row and reports `RowNotFound`, so
+/// the replacement's `Running` state and attempt count survive. This is the
+/// cross-instance layer: the stale delivery carries its own worker name, and
+/// `lock_by` alone already refuses it. The same-name case, where the attempt
+/// count is the only discriminator, is pinned in `ack_guard`.
 #[test]
 fn a_stale_acknowledgement_cannot_overwrite_a_replacements_row() {
     let environment = CanaryEnvironment::shared();
     let pool = environment.pool.clone();
     let id = apalis_job_id();
-    const REPLACEMENT_ATTEMPTS: i32 = 2;
 
     environment.run(async {
         register_worker(&pool, REPLACEMENT_WORKER).await;
@@ -170,8 +179,10 @@ fn a_stale_acknowledgement_cannot_overwrite_a_replacements_row() {
     let before = read_state(&environment.runtime, &pool, &id);
 
     let acknowledged = environment.run(async {
-        // The stale delivery is the one the row used to belong to, so it
-        // carries that worker's name and the attempt count it inherited.
+        // The stale delivery is the one the row belonged to before recovery
+        // returned it, so it carries that worker's name and its own attempt
+        // count. Recovery has since incremented the stored count, which is why
+        // the two no longer agree.
         let stale_task = locked_task(
             &id,
             STALE_WORKER,
@@ -179,14 +190,14 @@ fn a_stale_acknowledgement_cannot_overwrite_a_replacements_row() {
             REPLACEMENT_ATTEMPTS as usize,
         );
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
-        PgAck::new(pool.clone())
+        AttemptBoundAck::new(pool.clone())
             .ack(&result, &stale_task.parts)
             .await
     });
 
     assert!(
-        acknowledged.is_err(),
-        "a stale acknowledgement must match no row and report that"
+        matches!(acknowledged, Err(sqlx::Error::RowNotFound)),
+        "a stale acknowledgement must report the row it could not match: {acknowledged:?}"
     );
     assert_eq!(
         read_state(&environment.runtime, &pool, &id),

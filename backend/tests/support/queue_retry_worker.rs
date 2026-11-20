@@ -8,14 +8,13 @@ use std::time::Duration;
 
 use apalis_core::backend::poll_strategy::{IntervalStrategy, StrategyBuilder};
 use apalis_core::worker::builder::WorkerBuilder;
-use apalis_postgres::{Config, PgPool, PostgresStorage};
+use apalis_postgres::{Config, PgPool};
 use backend::domain::jobs::retry::JobRetryPolicy;
 use backend::domain::ports::RouteQueueMetrics;
 use backend::outbound::queue::{
-    PostgresRetryScheduler, RetryingJobService, RetryingJobServiceConfig,
+    AttemptBoundStorage, PostgresRetryScheduler, RetryingJobService, RetryingJobServiceConfig,
 };
 use serde::Deserialize;
-use serde_json::Value;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(20);
 const MAX_POLL_ITERATIONS: usize = 250;
@@ -30,11 +29,11 @@ pub const DEFAULT_WORKER_DEADLINE: Duration = Duration::from_secs(20);
 
 /// Generate a worker name that no other running worker will register under.
 ///
-/// Apalis matches an acknowledgement on `id` and `lock_by` alone, so a name
-/// shared between two worker instances lets one instance's late acknowledgement
-/// overwrite the row the other instance now owns. A per-instance suffix keeps
-/// that case out of the scenarios, which test the wrapper rather than Apalis's
-/// acknowledgement predicate.
+/// A distinct name per instance keeps one instance's stale delivery from
+/// matching another instance's row at all. The attempt-bound acknowledgement
+/// the worker runs supplies the second layer, covering re-deliveries by the
+/// same instance. A per-instance suffix keeps both guards out of the way of
+/// scenarios that are about the wrapper's own decisions.
 pub fn unique_worker_name() -> String {
     format!("queue-retry-policy-bdd-{}", uuid::Uuid::new_v4())
 }
@@ -69,11 +68,10 @@ pub struct QueueRetryWorkerConfig {
     pub queue_name: String,
     /// Name this worker registers under in `apalis.workers`.
     ///
-    /// Apalis acknowledges a delivery by `id` and `lock_by` alone, so two
-    /// worker instances sharing a name would let a stale acknowledgement land
-    /// on whichever row now carries that name. Scenarios therefore give each
-    /// run a distinct name, matching the mitigation ADR-0004 records for a
-    /// worker that runs more than one instance.
+    /// Distinct names per instance keep a stale delivery from matching another
+    /// instance's row, and the attempt-bound acknowledgement covers a
+    /// re-delivery by the same instance. Scenarios still give each run a
+    /// distinct name so neither guard is exercised by accident.
     pub worker_name: String,
     pub probe_id: String,
     pub policy: JobRetryPolicy,
@@ -197,7 +195,7 @@ where
             .apply(IntervalStrategy::new(POLL_INTERVAL))
             .build(),
     );
-    let storage = PostgresStorage::<Value>::new_with_config(&pool, &config);
+    let storage = AttemptBoundStorage::new(&pool, &config);
     let worker = WorkerBuilder::new(worker_name)
         .backend(storage)
         .build(service);

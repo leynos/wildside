@@ -33,6 +33,8 @@ pagination = { path = "crates/pagination" }
 # Queue adapter (Apalis with PostgreSQL)
 apalis-core = "=1.0.0-rc.9"
 apalis-postgres = "=1.0.0-rc.8"
+# Names the task id type the PostgreSQL backend assigns to every delivery.
+ulid = "1"
 # SQLx for Apalis PostgreSQL pool
 sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio-rustls"] }
 

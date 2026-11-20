@@ -19,6 +19,11 @@
 //! receives them. This keeps version rejection and domain validation at the
 //! queue boundary rather than duplicating it in each handler.
 //!
+//! A worker must be built over [`AttemptBoundStorage`], not
+//! `apalis_postgres::PostgresStorage` directly: the pinned acknowledgement
+//! matches a delivery on `id` and `lock_by` alone, and the attempt-bound
+//! replacement keeps a stale delivery from rewriting the row that replaced it.
+//!
 //! # Delivery scope
 //!
 //! Durable retry scheduling and dead-letter operations are implemented here.
@@ -32,6 +37,9 @@ pub use stub_route_queue::StubRouteQueue;
 
 mod apalis_route_queue;
 pub use apalis_route_queue::{ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue};
+
+mod attempt_bound_ack;
+pub use attempt_bound_ack::{AttemptBoundAck, AttemptBoundStorage};
 
 mod postgres_dead_letter;
 pub use postgres_dead_letter::{PostgresDeadLetterQueue, RequeueBudgets};
