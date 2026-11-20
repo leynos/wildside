@@ -41,7 +41,8 @@ use backend::outbound::queue::{
 use serde_json::Value;
 
 use super::fixtures::{
-    CanaryEnvironment, Delivery, JobRow, delivery_task, insert_job, read_state, register_worker,
+    CanaryEnvironment, ClaimToken, Delivery, JobId, JobRow, QueueName, delivery_task, insert_job,
+    read_state, register_worker,
 };
 use crate::support::apalis_job_id::apalis_job_id;
 
@@ -73,38 +74,57 @@ const REPLACEMENT_CLAIM: &str = "canary-ack-replacement-claim";
 /// The claim token the stale delivery carries from its own claim.
 const STALE_CLAIM: &str = "canary-ack-stale-claim";
 
-/// Insert a `Running` row under the shared worker name, as the owning
-/// delivery's lock step leaves it.
-fn insert_locked_row(environment: &CanaryEnvironment, queue: &str, id: &str, attempts: i32) {
+/// A `Running` row as the replacement delivery's lock step leaves it.
+///
+/// The lock step writes the claim token, so a replacement that is still
+/// running carries that token and no dead reason.
+fn locked_row<'a>(queue: QueueName<'a>, id: JobId<'a>, attempts: i32) -> JobRow<'a> {
+    JobRow::new(queue.as_str(), id.as_str(), "Running")
+        .attempts(attempts)
+        .max_attempts(GUARD_CAP)
+        .run_at_offset_seconds(3_600.0)
+        .metadata(serde_json::json!({
+            "wildside.retry.claim_token": REPLACEMENT_CLAIM
+        }))
+        .locked_by(SHARED_WORKER)
+}
+
+/// The terminal row a replacement leaves before an operator requeues it.
+///
+/// The replacement claimed the row under [`REPLACEMENT_CLAIM`] before it ran,
+/// and neither its acknowledgement nor the later requeue clears that token, so
+/// the token is the only part of the row that still identifies the generation.
+fn dead_row<'a>(queue: QueueName<'a>, id: JobId<'a>, attempts: i32) -> JobRow<'a> {
+    JobRow::new(queue.as_str(), id.as_str(), "Killed")
+        .attempts(attempts)
+        .max_attempts(GUARD_CAP)
+        .metadata(serde_json::json!({
+            "wildside.retry.claim_token": REPLACEMENT_CLAIM,
+            "wildside.retry.dead_reason": "exhausted"
+        }))
+        .locked_by(SHARED_WORKER)
+}
+
+/// Insert one builder row under the shared worker name.
+fn insert_row(environment: &CanaryEnvironment, row: JobRow<'_>) {
     let pool = environment.pool.clone();
     environment.run(async {
         register_worker(&pool, SHARED_WORKER).await;
-        insert_job(
-            &pool,
-            JobRow::new(queue, id, "Running")
-                .attempts(attempts)
-                .max_attempts(GUARD_CAP)
-                .run_at_offset_seconds(3_600.0)
-                .metadata(serde_json::json!({
-                    "wildside.retry.claim_token": REPLACEMENT_CLAIM
-                }))
-                .locked_by(SHARED_WORKER),
-        )
-        .await;
+        insert_job(&pool, row).await;
     });
 }
 
 /// Acknowledge a delivery reporting one attempt count under one claim token.
 fn acknowledge_attempt(
     environment: &CanaryEnvironment,
-    id: &str,
+    id: JobId<'_>,
     attempt: usize,
-    claim: &str,
+    claim: ClaimToken<'_>,
 ) -> Result<(), sqlx::Error> {
     environment.run(async {
         let task = delivery_task(
-            id,
-            Delivery::new(SHARED_WORKER, GUARD_CAP, attempt).claimed(claim),
+            id.as_str(),
+            Delivery::new(SHARED_WORKER, GUARD_CAP, attempt).claimed(claim.as_str()),
         );
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
         AttemptBoundAck::new(environment.pool.clone())
@@ -113,35 +133,11 @@ fn acknowledge_attempt(
     })
 }
 
-/// Insert the row a terminal replacement leaves behind before a requeue.
-///
-/// The replacement claimed the row under [`REPLACEMENT_CLAIM`] before it ran,
-/// and its acknowledgement stored `Killed` without clearing the claim, so the
-/// token is the only part of the row that still identifies the generation.
-fn insert_dead_row(environment: &CanaryEnvironment, queue: &str, id: &str, attempts: i32) {
-    let pool = environment.pool.clone();
-    environment.run(async {
-        register_worker(&pool, SHARED_WORKER).await;
-        insert_job(
-            &pool,
-            JobRow::new(queue, id, "Killed")
-                .attempts(attempts)
-                .max_attempts(GUARD_CAP)
-                .metadata(serde_json::json!({
-                    "wildside.retry.claim_token": REPLACEMENT_CLAIM,
-                    "wildside.retry.dead_reason": "exhausted"
-                }))
-                .locked_by(SHARED_WORKER),
-        )
-        .await;
-    });
-}
-
 /// Requeue one dead row through the production dead-letter adapter.
 ///
 /// The budget is the guard cap, so the restored row is claimable and the
 /// replacement delivery below it fails rather than retiring.
-fn requeue_dead_job(environment: &CanaryEnvironment, queue: &str, id: &str) {
+fn requeue_dead_job(environment: &CanaryEnvironment, queue: QueueName<'_>, id: JobId<'_>) {
     let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
         max_attempts: NonZeroU32::new(u32::try_from(GUARD_CAP).expect("positive guard cap"))
             .expect("non-zero guard cap"),
@@ -153,10 +149,10 @@ fn requeue_dead_job(environment: &CanaryEnvironment, queue: &str, id: &str) {
     .expect("valid canary retry policy");
     let dead_letters = PostgresDeadLetterQueue::new(
         environment.pool.clone(),
-        RequeueBudgets::from_policies([(queue, policy)]),
+        RequeueBudgets::from_policies([(queue.as_str(), policy)]),
     );
     environment
-        .run(dead_letters.requeue(&DeadJobId::new(id)))
+        .run(dead_letters.requeue(&DeadJobId::new(id.as_str())))
         .expect("the dead job is requeued");
 }
 
@@ -167,11 +163,11 @@ fn requeue_dead_job(environment: &CanaryEnvironment, queue: &str, id: &str) {
 /// keeps the replacement in flight: a real worker would acknowledge before the
 /// stale delivery could be replayed, and the stored status would then differ
 /// for a reason unrelated to the token.
-fn claim_row(environment: &CanaryEnvironment, id: &str) -> String {
+fn claim_row(environment: &CanaryEnvironment, id: JobId<'_>) -> String {
     let mut service = AttemptBoundLock::new(environment.pool.clone()).layer(ContextProbe);
     let ctx = environment
         .run(async {
-            let mut task = delivery_task(id, Delivery::new(SHARED_WORKER, GUARD_CAP, 1));
+            let mut task = delivery_task(id.as_str(), Delivery::new(SHARED_WORKER, GUARD_CAP, 1));
             // A delivery reaches the lock inside a worker, which has already
             // put its own context in the task's extensions.
             task.parts
@@ -222,13 +218,20 @@ fn a_stale_acknowledgement_cannot_overwrite_a_same_name_replacement() {
     let pool = environment.pool.clone();
     let id = apalis_job_id();
 
-    insert_locked_row(environment, GUARD_QUEUE, &id, RECOVERED_ATTEMPTS);
+    insert_row(
+        environment,
+        locked_row(QueueName(GUARD_QUEUE), JobId(&id), RECOVERED_ATTEMPTS),
+    );
     let before = read_state(&environment.runtime, &pool, &id);
 
     // The stale delivery reported the count the row held while it owned it,
     // one below the count recovery left behind.
-    let acknowledged =
-        acknowledge_attempt(environment, &id, RECOVERED_ATTEMPTS as usize, STALE_CLAIM);
+    let acknowledged = acknowledge_attempt(
+        environment,
+        JobId(&id),
+        RECOVERED_ATTEMPTS as usize,
+        ClaimToken(STALE_CLAIM),
+    );
 
     assert!(
         matches!(acknowledged, Err(sqlx::Error::RowNotFound)),
@@ -253,12 +256,15 @@ fn the_owning_delivery_still_acknowledges_its_same_name_row() {
     let pool = environment.pool.clone();
     let id = apalis_job_id();
 
-    insert_locked_row(environment, GUARD_QUEUE, &id, RECOVERED_ATTEMPTS);
+    insert_row(
+        environment,
+        locked_row(QueueName(GUARD_QUEUE), JobId(&id), RECOVERED_ATTEMPTS),
+    );
     let acknowledged = acknowledge_attempt(
         environment,
-        &id,
+        JobId(&id),
         RECOVERED_ATTEMPTS as usize + 1,
-        REPLACEMENT_CLAIM,
+        ClaimToken(REPLACEMENT_CLAIM),
     );
 
     acknowledged.expect("the delivery that owns the row acknowledges it");
@@ -295,8 +301,11 @@ fn a_requeued_row_cannot_be_overwritten_by_its_previous_delivery() {
     let pool = environment.pool.clone();
     let id = apalis_job_id();
 
-    insert_dead_row(environment, GUARD_QUEUE, &id, DEAD_ATTEMPTS);
-    requeue_dead_job(environment, GUARD_QUEUE, &id);
+    insert_row(
+        environment,
+        dead_row(QueueName(GUARD_QUEUE), JobId(&id), DEAD_ATTEMPTS),
+    );
+    requeue_dead_job(environment, QueueName(GUARD_QUEUE), JobId(&id));
 
     let requeued = read_state(&environment.runtime, &pool, &id);
     assert_eq!(
@@ -313,7 +322,8 @@ fn a_requeued_row_cannot_be_overwritten_by_its_previous_delivery() {
         "a requeue preserves the token of the generation it replaced"
     );
 
-    let claim = claim_row(environment, &id);
+    let token = claim_row(environment, JobId(&id));
+    let claim = ClaimToken(token.as_str());
     let running = read_state(&environment.runtime, &pool, &id);
     assert_eq!(running.status, "Running", "the lock step promotes the row");
     assert_eq!(
@@ -322,13 +332,14 @@ fn a_requeued_row_cannot_be_overwritten_by_its_previous_delivery() {
         "the row now carries the token the new claim stamped"
     );
     assert_ne!(
-        claim, REPLACEMENT_CLAIM,
+        claim.as_str(),
+        REPLACEMENT_CLAIM,
         "every claim mints a token that never repeats"
     );
 
     // Both generations report attempt 1 against a row storing zero, so the
     // token is the only discriminator left.
-    let stale = acknowledge_attempt(environment, &id, 1, STALE_CLAIM);
+    let stale = acknowledge_attempt(environment, JobId(&id), 1, ClaimToken(STALE_CLAIM));
 
     assert!(
         matches!(stale, Err(sqlx::Error::RowNotFound)),
@@ -340,7 +351,7 @@ fn a_requeued_row_cannot_be_overwritten_by_its_previous_delivery() {
         "the re-claimed row keeps its Running status, attempts, and claim token"
     );
 
-    acknowledge_attempt(environment, &id, 1, &claim)
+    acknowledge_attempt(environment, JobId(&id), 1, claim)
         .expect("the generation that claimed the row acknowledges it");
     let state = read_state(&environment.runtime, &pool, &id);
     assert_eq!(

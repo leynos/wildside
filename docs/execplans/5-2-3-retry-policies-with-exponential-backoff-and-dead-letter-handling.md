@@ -4551,3 +4551,41 @@ across 133 files with `cargo fmt`, Biome 2.3.1, and Ruff 0.16.8 clean;
 `markdownlint` linted 134 files with 0 errors; `spelling` regenerated
 `typos.toml` to the same hash; and `nixie` validated every diagram block. Those
 logs are `/tmp/<target>-wildside-457-r29e.out`.
+
+### Clearing the CodeScene findings
+
+The hosted `CodeScene Code Health Review (main)` check failed on the r29 head
+at three changed files, under the `Pay Down Tech Debt` profile's advisory
+rules. Every finding is a real complexity signal, so the code changed rather
+than the gate's configuration.
+
+- `ack_guard.rs` (9.10) reported `Code Duplication` between its two insert
+  helpers and `String Heavy Function Arguments`. The two helpers are gone: a
+  `locked_row` and a `dead_row` builder now describe the two rows, and one
+  `insert_row` inserts either, so the shared worker registration and insert run
+  once.
+- `fixtures/environment.rs` (9.10) reported the same two rules;
+  `register_worker` and `register_queue_worker` duplicated the insert, and 53
+  percent of arguments were strings. One `register_typed_worker` now owns the
+  insert, with a `WorkerType` enum naming the two registration scopes.
+- `pipeline.rs` (9.57) reported `Large Method` for
+  `the_worker_pipeline_refuses_a_row_recovered_from_a_terminal_write` at 78
+  lines against a 70-line recommendation. Seeding, the terminal write, and
+  recovery are now `seed_crashed_delivery`, `retire_delivery`, and
+  `recover_retired_row`; the test body reads as assertions over their results.
+
+The string-argument findings are answered with the identifier newtypes the
+repository's style already asks for. `fixtures/ids.rs` defines `QueueName`,
+`WorkerName`, `JobId`, and `ClaimToken`; a caller can no longer pass a queue
+where a worker name belongs, and the fixture signatures are no longer
+string-heavy. `cs review` now scores all three files at 10.0, and
+`fixtures/ids.rs` at 10.0 as well.
+
+The r30 suite is green over the new tree, across all nine gates. `check-fmt`
+reports mdtablefix unchanged across 133 files with Biome 2.3.1 and Ruff 0.16.8
+clean; `lint` passed all its stages, including Clippy with `-D warnings` and
+Whitaker on both manifests; `typecheck`, `spelling`, `markdownlint`, and
+`nixie` passed; the canary binary passes 71 of 71 tests and the full `test`
+target exits 0; `audit` reports only the repository's accepted warnings; and
+`openapi` regenerates the committed spec unchanged. Logs are
+`/tmp/<target>-wildside-457-r30.out` and `/tmp/test-457-csfix.out`.
