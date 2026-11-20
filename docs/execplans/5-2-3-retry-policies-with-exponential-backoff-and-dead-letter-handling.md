@@ -4402,18 +4402,17 @@ shares a name across instances would rely on the attempt predicate alone.
 New canaries:
 
 - `apalis_retry_canaries/pipeline.rs` runs a real `WorkerBuilder` worker over
-  `AttemptBoundStorage`. The refused case seeds the row recovery actually
-  leaves (`Pending`, `attempts = max_attempts = 5`, terminal reason in
-  metadata) and asserts `runs_at_terminal == 0`, status `Killed`, and
-  `attempts == 6`. The positive control seeds one below the cap and asserts the
-  delivery reaches the handler once, status `Done`, `attempts == 5`. These
-  replace the earlier direct-delivery model of the single-recovery row, which
-  had to seed a count past the cap because `fetch_task` skips the poll
-  increment.
+  `AttemptBoundStorage`. The refused case seeds the row recovery actually leaves
+  (`Pending`, `attempts = max_attempts = 5`, terminal reason in metadata) and
+  asserts `runs_at_terminal == 0`, status `Killed`, and `attempts == 6`. The
+  positive control seeds one below the cap and asserts the delivery reaches the
+  handler once, status `Done`, `attempts == 5`. These replace the earlier
+  direct-delivery model of the single-recovery row, which had to seed a count
+  past the cap because `fetch_task` skips the poll increment.
 - `apalis_retry_canaries/ack_guard.rs` holds the worker name equal across
-  generations. A stale delivery reporting the pre-recovery count is refused
-  with `RowNotFound` and the `Running` row is unchanged; the owning delivery at
-  the recovered count is acknowledged as `Failed` with `attempts` stored.
+  generations. A stale delivery reporting the pre-recovery count is refused with
+  `RowNotFound` and the `Running` row is unchanged; the owning delivery at the
+  recovered count is acknowledged as `Failed` with `attempts` stored.
 - `recovery.rs`'s cross-instance canary now uses `AttemptBoundAck`, asserts
   `RowNotFound` specifically, and gives the stale delivery its own attempt
   count rather than the replacement's.
