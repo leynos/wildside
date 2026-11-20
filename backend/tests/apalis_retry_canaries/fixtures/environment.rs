@@ -17,6 +17,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 use tokio::runtime::Runtime;
 
+use super::ids::{JobId, QueueName, WorkerName};
 use crate::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use crate::support::embedded_postgres::provision_template_database;
 
@@ -81,36 +82,54 @@ fn canary_pool(runtime: &Runtime, url: &str) -> PgPool {
     })
 }
 
+/// The worker type a generic canary registers as.
+///
+/// Apalis's orphan recovery matches on `worker_type`, so a worker registered
+/// this way never has its rows recovered.
+const CANARY_WORKER_TYPE: &str = "canary";
+
+/// What a worker row registers as, which decides who recovers its rows.
+pub(crate) enum WorkerType<'a> {
+    /// The generic canary type, which recovery never matches.
+    Canary,
+    /// The queue name, which is the type recovery matches on.
+    Queue(QueueName<'a>),
+}
+
 /// Register the canary worker so `lock_by` satisfies its foreign key.
 pub(crate) async fn register_worker(pool: &PgPool, worker: &str) {
-    sqlx::query(
-        "INSERT INTO apalis.workers (id, worker_type, storage_name)
-         VALUES ($1, 'canary', 'canary')
-         ON CONFLICT (id) DO NOTHING",
-    )
-    .bind(worker)
-    .execute(pool)
-    .await
-    .expect("register canary worker");
+    register_typed_worker(pool, WorkerName(worker), WorkerType::Canary).await;
 }
 
 /// Register a worker under the queue name its rows belong to.
 ///
-/// Apalis's orphan recovery only returns rows whose owner's `worker_type`
-/// equals the queue, so a canary that wants recovery to see its crashed worker
-/// must register it with that type rather than the generic one
-/// [`register_worker`] uses.
-pub(crate) async fn register_queue_worker(pool: &PgPool, worker: &str, queue: &str) {
+/// A canary that wants recovery to see its crashed worker must register it
+/// with the queue as its type rather than the generic one [`register_worker`]
+/// uses, because that is the only type the recovery predicate matches.
+pub(crate) async fn register_queue_worker(
+    pool: &PgPool,
+    worker: WorkerName<'_>,
+    queue: QueueName<'_>,
+) {
+    register_typed_worker(pool, worker, WorkerType::Queue(queue)).await;
+}
+
+/// Insert one worker row with the type its recovery scope needs.
+async fn register_typed_worker(pool: &PgPool, worker: WorkerName<'_>, kind: WorkerType<'_>) {
+    let worker_type = match kind {
+        WorkerType::Canary => CANARY_WORKER_TYPE,
+        WorkerType::Queue(queue) => queue.as_str(),
+    };
     sqlx::query(
         "INSERT INTO apalis.workers (id, worker_type, storage_name)
          VALUES ($1, $2, 'canary')
          ON CONFLICT (id) DO NOTHING",
     )
-    .bind(worker)
-    .bind(queue)
+    .bind(worker.as_str())
+    .bind(worker_type)
     .execute(pool)
     .await
-    .expect("register canary queue worker");
+    .expect("register canary worker");
 }
 
 /// Backdate a worker's heartbeat so orphan recovery treats its rows as stale.
@@ -133,20 +152,20 @@ const RECOVERY_WINDOW: Duration = Duration::from_secs(10);
 /// refresh the heartbeat that makes its row orphaned.
 pub(crate) fn recover_orphaned_row(
     environment: &CanaryEnvironment,
-    queue: &str,
-    sweeper: &str,
-    id: &str,
+    queue: QueueName<'_>,
+    sweeper: WorkerName<'_>,
+    id: JobId<'_>,
 ) {
     environment.run(async {
         // `keep_alive` updates the sweeper's own row and matches on the
         // worker type, so the heartbeat fails with `WORKER_DOES_NOT_EXIST`
         // unless the sweeper is registered under the queue first.
         register_queue_worker(&environment.pool, sweeper, queue).await;
-        let config = Config::new(queue)
+        let config = Config::new(queue.as_str())
             .set_keep_alive(Duration::from_millis(50))
             .set_reenqueue_orphaned_after(Duration::from_secs(30));
         let storage = PostgresStorage::<Value>::new_with_config(&environment.pool, &config);
-        let beat = Backend::heartbeat(&storage, &WorkerContext::new::<Value>(sweeper));
+        let beat = Backend::heartbeat(&storage, &WorkerContext::new::<Value>(sweeper.as_str()));
         futures::pin_mut!(beat);
 
         let recovered = tokio::time::timeout(RECOVERY_WINDOW, async {
@@ -165,9 +184,9 @@ pub(crate) fn recover_orphaned_row(
 }
 
 /// Read one row's persisted status.
-async fn row_status(pool: &PgPool, id: &str) -> String {
+async fn row_status(pool: &PgPool, id: JobId<'_>) -> String {
     sqlx::query_scalar("SELECT status FROM apalis.jobs WHERE id = $1")
-        .bind(id)
+        .bind(id.as_str())
         .fetch_one(pool)
         .await
         .expect("read the recovered row")

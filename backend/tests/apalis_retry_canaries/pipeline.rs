@@ -20,8 +20,8 @@ use backend::outbound::queue::{
 use sqlx::PgPool;
 
 use super::fixtures::{
-    CanaryEnvironment, JobRow, insert_job, mark_worker_stale, read_state, recover_orphaned_row,
-    register_queue_worker,
+    CanaryEnvironment, JobId, JobRow, QueueName, RowState, WorkerName, insert_job,
+    mark_worker_stale, read_state, recover_orphaned_row, register_queue_worker,
 };
 use super::support::queue_retry_worker::{
     DEFAULT_WORKER_DEADLINE, QueueRetryProbeJob, QueueRetryWorkerConfig, run_queue_retry_worker,
@@ -158,6 +158,56 @@ fn record_terminal_failure(
         .expect("the terminal write completes")
 }
 
+/// The row the crashed delivery owned when its policy retired it.
+///
+/// Its `run_at` stays due: recovery does not move it, and the recovered row
+/// must be fetchable for the window to be exercised.
+fn crashed_row<'a>(queue: QueueName<'a>, id: JobId<'a>) -> JobRow<'a> {
+    JobRow::new(queue.as_str(), id.as_str(), "Running")
+        .attempts(RETIRED_CAP - 1)
+        .max_attempts(RETIRED_CAP)
+        .metadata(serde_json::json!({
+            "wildside.retry.claim_token": CRASHED_CLAIM
+        }))
+        .locked_by(CRASHED_WORKER)
+}
+
+/// Seed the queue worker and the row its delivery owned.
+fn seed_crashed_delivery(environment: &CanaryEnvironment, queue: QueueName<'_>, id: JobId<'_>) {
+    let pool = environment.pool.clone();
+    environment.run(async {
+        register_queue_worker(&pool, WorkerName(CRASHED_WORKER), queue).await;
+        insert_job(&pool, crashed_row(queue, id)).await;
+    });
+}
+
+/// The row a terminal write leaves, and whether the write still owned it.
+struct RetiredDelivery {
+    still_owned: bool,
+    state: RowState,
+}
+
+/// Drive the production terminal write and read the row it leaves.
+fn retire_delivery(environment: &CanaryEnvironment, id: JobId<'_>) -> RetiredDelivery {
+    let still_owned =
+        record_terminal_failure(environment, id.as_str(), CRASHED_WORKER, RETIRED_CAP as u32);
+    RetiredDelivery {
+        still_owned,
+        state: read_state(&environment.runtime, &environment.pool, id.as_str()),
+    }
+}
+
+/// Backdate the crashed worker and return the row recovery hands back.
+fn recover_retired_row(
+    environment: &CanaryEnvironment,
+    queue: QueueName<'_>,
+    id: JobId<'_>,
+) -> RowState {
+    environment.run(mark_worker_stale(&environment.pool, CRASHED_WORKER));
+    recover_orphaned_row(environment, queue, WorkerName(&unique_worker_name()), id);
+    read_state(&environment.runtime, &environment.pool, id.as_str())
+}
+
 /// Scenario: the terminating delivery recorded its terminal failure and died
 /// before its acknowledgement, and orphan recovery returned the row.
 ///
@@ -172,54 +222,32 @@ fn the_worker_pipeline_refuses_a_row_recovered_from_a_terminal_write() {
     let environment = CanaryEnvironment::shared();
     let pool = environment.pool.clone();
     let id = apalis_job_id();
+    let queue = QueueName(TERMINAL_WINDOW_QUEUE);
+    let job = JobId(&id);
 
-    environment.run(async {
-        register_queue_worker(&pool, CRASHED_WORKER, TERMINAL_WINDOW_QUEUE).await;
-        // The row the crashed delivery owned when its policy retired it. Its
-        // `run_at` stays due: recovery does not move it, and the recovered row
-        // must be fetchable for the window to be exercised.
-        insert_job(
-            &pool,
-            JobRow::new(TERMINAL_WINDOW_QUEUE, &id, "Running")
-                .attempts(RETIRED_CAP - 1)
-                .max_attempts(RETIRED_CAP)
-                .metadata(serde_json::json!({
-                    "wildside.retry.claim_token": CRASHED_CLAIM
-                }))
-                .locked_by(CRASHED_WORKER),
-        )
-        .await;
-    });
+    seed_crashed_delivery(environment, queue, job);
 
+    let retired = retire_delivery(environment, job);
     assert!(
-        record_terminal_failure(environment, &id, CRASHED_WORKER, RETIRED_CAP as u32),
+        retired.still_owned,
         "the terminating delivery still owns a running row"
     );
-    let retired = read_state(&environment.runtime, &pool, &id);
     assert_eq!(
-        retired.status, "Running",
+        retired.state.status, "Running",
         "the terminal write leaves the status for the acknowledgement"
     );
     assert_eq!(
-        retired.attempts,
+        retired.state.attempts,
         RETIRED_CAP - 1,
         "the terminal write leaves the attempt count for the acknowledgement"
     );
     assert_eq!(
-        retired.claim_token.as_deref(),
+        retired.state.claim_token.as_deref(),
         Some(CRASHED_CLAIM),
         "storing the terminal reason must preserve the claim token beside it"
     );
 
-    environment.run(mark_worker_stale(&pool, CRASHED_WORKER));
-    recover_orphaned_row(
-        environment,
-        TERMINAL_WINDOW_QUEUE,
-        &unique_worker_name(),
-        &id,
-    );
-
-    let recovered = read_state(&environment.runtime, &pool, &id);
+    let recovered = recover_retired_row(environment, queue, job);
     assert_eq!(
         recovered.status, "Pending",
         "orphan recovery returns the retired row to the fetcher"
