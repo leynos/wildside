@@ -33,22 +33,36 @@ the wrapper's own writes only.
 The acknowledgement that follows carries the same predicate through
 `AttemptBoundStorage`, which builds the worker over
 `apalis_postgres::PostgresStorage` while replacing `PgAck` with
-`AttemptBoundAck`. The pinned `ack.sql` matches on `id` and `lock_by` alone and
-then overwrites `status`, `attempts`, and `last_result`, so a worker that
-re-claims its own row after orphan recovery is not separated from the stale
-delivery by the lock owner: both deliveries carry the same worker name. The
-attempt-bound acknowledgement adds `status = 'Running'` and the attempt count
-the row stored during the delivery, and returns `RowNotFound` without writing
-when a delivery no longer owns its row. Recovery increments the stored count,
-so a predecessor's acknowledgement no longer matches the row that replaced it.
+`AttemptBoundAck` and adding a claim step. The pinned `ack.sql` matches on `id`
+and `lock_by` alone and then overwrites `status`, `attempts`, and
+`last_result`, so a worker that re-claims its own row after orphan recovery is
+not separated from the stale delivery by the lock owner: both deliveries carry
+the same worker name. The attempt-bound acknowledgement adds
+`status = 'Running'` and the attempt count the row stored during the delivery,
+and returns `RowNotFound` without writing when a delivery no longer owns its
+row. Recovery increments the stored count, so a predecessor's acknowledgement
+no longer matches the row that replaced it.
+
+The attempt count alone is not a delivery generation. A dead-letter requeue
+resets `attempts` to zero, so a stale delivery that reported attempt 1 and its
+successor, delivered after the requeue, agree on the identifier, the worker
+name, the `Running` status, and the stored attempt count. The claim step
+therefore writes a fresh token into the row's metadata under
+`wildside.retry.claim_token` on every lock and carries the same token in the
+task context; the acknowledgement requires the row to still hold that token.
+Recovery, retry scheduling, the terminal reason write, the cap clamp, and the
+requeue all preserve unrelated metadata keys, so only a new claim changes it.
+`AttemptBoundStorage` composes the claim step outside the acknowledgement,
+because the acknowledgement clones the context it later acknowledges with and
+must clone one that already carries the token.
 
 Distinct worker names per instance remain the outer layer, and they cover what
-the attempt predicate cannot state on its own: a stale acknowledgement from
-another instance matches no row whatever count it carries. Worker deployment
-(roadmap 5.3.1) must therefore enforce a distinct name per instance; a
-deployment that shares a name across instances relies on the attempt predicate
-alone. Both layers return to review at the 1.0 upgrade described below, where
-the pinned acknowledgement may change.
+the token cannot state on its own: a stale acknowledgement from another
+instance names a worker that does not own the row. Worker deployment (roadmap
+5.3.1) must therefore enforce a distinct name per instance; a deployment that
+shares a name across instances relies on the token alone. Both layers return to
+review at the 1.0 upgrade described below, where the pinned acknowledgement may
+change.
 
 A terminal outcome reduces the stored attempt limit to the terminating attempt,
 either within its reason write or, if that write fails, as a short bounded
@@ -73,11 +87,12 @@ On the 1.0 upgrade
 V8 canaries: fetch eligibility before and after `run_at`, the stored attempt
 restored to a fetched task, and the acknowledgement leaving `run_at`,
 `max_attempts`, and `metadata` untouched. Re-check whether the released
-acknowledgement binds row status and the stored attempt count; if it does, the
-attempt-bound replacement can be retired, and if it does not, its predicate
-must still agree with the new schema. Also re-evaluate the middleware ordering
-before changing the no-retry-layer rule. The canaries and their positive and
-negative cases are specified in the
+acknowledgement binds row status, the stored attempt count, and a claim value
+that a requeue does not repeat; if it does, the attempt-bound replacement can
+be retired, and if it does not, its predicate must still agree with the new
+schema, including the metadata key the claim step writes. Also re-evaluate the
+middleware ordering before changing the no-retry-layer rule. The canaries and
+their positive and negative cases are specified in the
 [ExecPlan](../execplans/5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.md).
 
 ## Consequences
@@ -94,5 +109,11 @@ negative cases are specified in the
   the deadline is computed also shortens the effective delay. Mitigate by
   synchronizing hosts with a time service and monitoring clock offset; the
   fixed-clock tests verify the stored delay, not eligibility.
+- Every claim writes `wildside.retry.claim_token` into the row's metadata, and
+  the acknowledgement refuses a delivery whose token no longer matches. A
+  worker built directly over `apalis_postgres::PostgresStorage` therefore keeps
+  the narrower pinned predicate, and its acknowledgements are refused once a
+  claim step has stamped a token, so the storage type is part of the deployment
+  contract rather than an implementation detail.
 - The pinned acknowledgement and fetch contracts are upgrade prerequisites,
   rather than assumptions that can be carried over to 1.0 without evidence.

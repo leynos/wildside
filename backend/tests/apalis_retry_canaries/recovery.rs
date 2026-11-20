@@ -28,7 +28,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::fixtures::{
-    CanaryEnvironment, JobRow, fetch_task, insert_job, locked_task, read_state, register_worker,
+    CanaryEnvironment, Delivery, JobRow, delivery_task, fetch_task, insert_job, read_state,
+    register_worker,
 };
 use crate::support::apalis_job_id::apalis_job_id;
 
@@ -151,6 +152,12 @@ const STALE_WORKER: &str = "canary-recovery-stale";
 /// The attempt count the replacement row stored when it was locked.
 const REPLACEMENT_ATTEMPTS: i32 = 2;
 
+/// The claim token the replacement generation stamped on the row.
+const REPLACEMENT_CLAIM: &str = "canary-replacement-claim";
+
+/// The claim token the stale delivery carries from before recovery.
+const STALE_CLAIM: &str = "canary-stale-claim";
+
 /// Scenario: a delivery acknowledges after another worker took the row over.
 ///
 /// Invariant: the acknowledgement matches no row and reports `RowNotFound`, so
@@ -172,6 +179,9 @@ fn a_stale_acknowledgement_cannot_overwrite_a_replacements_row() {
                 .attempts(REPLACEMENT_ATTEMPTS)
                 .max_attempts(RETIRED_CAP)
                 .run_at_offset_seconds(3_600.0)
+                .metadata(serde_json::json!({
+                    "wildside.retry.claim_token": REPLACEMENT_CLAIM
+                }))
                 .locked_by(REPLACEMENT_WORKER),
         )
         .await;
@@ -183,11 +193,10 @@ fn a_stale_acknowledgement_cannot_overwrite_a_replacements_row() {
         // returned it, so it carries that worker's name and its own attempt
         // count. Recovery has since incremented the stored count, which is why
         // the two no longer agree.
-        let stale_task = locked_task(
+        let stale_task = delivery_task(
             &id,
-            STALE_WORKER,
-            RETIRED_CAP,
-            REPLACEMENT_ATTEMPTS as usize,
+            Delivery::new(STALE_WORKER, RETIRED_CAP, REPLACEMENT_ATTEMPTS as usize)
+                .claimed(STALE_CLAIM),
         );
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
         AttemptBoundAck::new(pool.clone())

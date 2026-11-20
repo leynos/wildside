@@ -14,9 +14,15 @@ use std::time::Duration;
 
 use backend::domain::jobs::retry::{JobFailure, JobRetryPolicy, JobRetryPolicyConfig};
 use backend::domain::ports::NoOpRouteQueueMetrics;
+use backend::outbound::queue::{
+    PostgresRetryScheduler, RetryPersistence, TerminalRetryReason, TerminalRetryUpdate,
+};
 use sqlx::PgPool;
 
-use super::fixtures::{CanaryEnvironment, JobRow, insert_job, read_state};
+use super::fixtures::{
+    CanaryEnvironment, JobRow, insert_job, mark_worker_stale, read_state, recover_orphaned_row,
+    register_queue_worker,
+};
 use super::support::queue_retry_worker::{
     DEFAULT_WORKER_DEADLINE, QueueRetryProbeJob, QueueRetryWorkerConfig, run_queue_retry_worker,
     unique_worker_name,
@@ -120,6 +126,133 @@ fn the_worker_pipeline_refuses_a_recovered_terminal_row() {
         state.attempts,
         RETIRED_CAP + 1,
         "the acknowledgement stores the attempt the delivery reported"
+    );
+}
+
+/// The queue holding a row recovered after its terminal write.
+const TERMINAL_WINDOW_QUEUE: &str = "canary.worker-terminal-window";
+
+/// The worker that recorded the terminal failure and then stopped heartbeating.
+const CRASHED_WORKER: &str = "canary-terminal-window-crashed";
+
+/// The claim token the crashed delivery's lock step stamped on the row.
+const CRASHED_CLAIM: &str = "canary-terminal-window-claim";
+
+/// Drive the production terminal write for one delivery, as the wrapper does
+/// when its policy retires the job.
+fn record_terminal_failure(
+    environment: &CanaryEnvironment,
+    id: &str,
+    worker: &str,
+    attempt: u32,
+) -> bool {
+    let scheduler = PostgresRetryScheduler::new(environment.pool.clone());
+    environment
+        .run(scheduler.record_terminal_failure(TerminalRetryUpdate {
+            task_id: id,
+            worker_id: worker,
+            attempt: NonZeroU32::new(attempt).expect("positive terminating attempt"),
+            reason: TerminalRetryReason::Exhausted,
+            shrink_limit: true,
+        }))
+        .expect("the terminal write completes")
+}
+
+/// Scenario: the terminating delivery recorded its terminal failure and died
+/// before its acknowledgement, and orphan recovery returned the row.
+///
+/// Invariant: the pipeline refuses the recovered delivery without reaching the
+/// handler, then acknowledges it into a `Killed` row past the cap. This drives
+/// the whole window through production code — the real terminal write, the real
+/// recovery stream, and a real worker — rather than seeding the row recovery
+/// would have left behind. The terminal write is also shown to preserve the
+/// claim token beside the reason it stores.
+#[test]
+fn the_worker_pipeline_refuses_a_row_recovered_from_a_terminal_write() {
+    let environment = CanaryEnvironment::shared();
+    let pool = environment.pool.clone();
+    let id = apalis_job_id();
+
+    environment.run(async {
+        register_queue_worker(&pool, CRASHED_WORKER, TERMINAL_WINDOW_QUEUE).await;
+        // The row the crashed delivery owned when its policy retired it. Its
+        // `run_at` stays due: recovery does not move it, and the recovered row
+        // must be fetchable for the window to be exercised.
+        insert_job(
+            &pool,
+            JobRow::new(TERMINAL_WINDOW_QUEUE, &id, "Running")
+                .attempts(RETIRED_CAP - 1)
+                .max_attempts(RETIRED_CAP)
+                .metadata(serde_json::json!({
+                    "wildside.retry.claim_token": CRASHED_CLAIM
+                }))
+                .locked_by(CRASHED_WORKER),
+        )
+        .await;
+    });
+
+    assert!(
+        record_terminal_failure(environment, &id, CRASHED_WORKER, RETIRED_CAP as u32),
+        "the terminating delivery still owns a running row"
+    );
+    let retired = read_state(&environment.runtime, &pool, &id);
+    assert_eq!(
+        retired.status, "Running",
+        "the terminal write leaves the status for the acknowledgement"
+    );
+    assert_eq!(
+        retired.attempts,
+        RETIRED_CAP - 1,
+        "the terminal write leaves the attempt count for the acknowledgement"
+    );
+    assert_eq!(
+        retired.claim_token.as_deref(),
+        Some(CRASHED_CLAIM),
+        "storing the terminal reason must preserve the claim token beside it"
+    );
+
+    environment.run(mark_worker_stale(&pool, CRASHED_WORKER));
+    recover_orphaned_row(
+        environment,
+        TERMINAL_WINDOW_QUEUE,
+        &unique_worker_name(),
+        &id,
+    );
+
+    let recovered = read_state(&environment.runtime, &pool, &id);
+    assert_eq!(
+        recovered.status, "Pending",
+        "orphan recovery returns the retired row to the fetcher"
+    );
+    assert_eq!(
+        recovered.attempts, RECOVERED_ATTEMPTS,
+        "orphan recovery increments the retired row's attempt count"
+    );
+
+    let report = environment
+        .run(run_queue_retry_worker(
+            worker_config(&pool, TERMINAL_WINDOW_QUEUE, &id),
+            succeeding_handler,
+        ))
+        .expect("the worker run completes within its deadline");
+
+    assert!(
+        report.reached_terminal,
+        "the refused delivery is acknowledged into a terminal row"
+    );
+    assert_eq!(
+        report.runs_at_terminal, 0,
+        "a row recovered after its terminal write must not reach the handler"
+    );
+    let state = read_state(&environment.runtime, &pool, &id);
+    assert_eq!(
+        state.status, "Killed",
+        "the acknowledgement records the recovered delivery that never ran"
+    );
+    assert_eq!(
+        state.attempts,
+        RETIRED_CAP + 1,
+        "the acknowledgement stores the attempt the recovered delivery reported"
     );
 }
 

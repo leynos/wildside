@@ -2225,10 +2225,13 @@ increment and acknowledgement can lose that in-flight attempt.
 Orphan recovery can return a retired row to the fetcher, so the wrapper also
 refuses a delivery whose attempt count already exceeds the stored
 `max_attempts`, and a worker is built over `AttemptBoundStorage` so that
-acknowledgements bind the attempt count the row stored during the delivery. The
-two guards together keep a delivery that no longer owns its row from running a
-handler or rewriting the replacement's row. See
-[ADR 0004](adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).
+acknowledgements bind the attempt count the row stored during the delivery and
+the `wildside.retry.claim_token` its claim stamped into the row's metadata. The
+token is what separates a stale delivery from a successor produced by a
+dead-letter requeue, which resets `attempts` to zero and so makes the attempt
+count useless as a generation. The guards together keep a delivery that no
+longer owns its row from running a handler or rewriting the replacement's row.
+See [ADR 0004](adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).
 
 Fatal failures and exhausted retry budgets leave dead rows in `apalis.jobs`. The
 `DeadLetterQueue` port lists them and provides guarded requeue and discard

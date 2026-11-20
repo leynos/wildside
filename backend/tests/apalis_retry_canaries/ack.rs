@@ -12,7 +12,9 @@ use apalis_core::worker::ext::ack::Acknowledge;
 use apalis_postgres::PgAck;
 use serde_json::{Value, json};
 
-use super::fixtures::{CanaryEnvironment, JobRow, insert_job, locked_task, register_worker};
+use super::fixtures::{
+    CanaryEnvironment, Delivery, JobRow, delivery_task, insert_job, register_worker,
+};
 use crate::support::apalis_job_id::apalis_job_id;
 
 #[test]
@@ -54,7 +56,7 @@ fn acknowledgement_preserves_scheduling_state() {
         .expect("read the scheduled deadline before acknowledgement");
 
     environment.run(async {
-        let task = locked_task(&id, worker, 7, 2);
+        let task = delivery_task(&id, Delivery::new(worker, 7, 2));
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
         PgAck::new(pool.clone())
             .ack(&result, &task.parts)
@@ -109,7 +111,7 @@ fn acknowledgement_keeps_a_shrunk_limit_and_terminal_reason() {
         )
         .await;
 
-        let task = locked_task(&id, worker, 3, 3);
+        let task = delivery_task(&id, Delivery::new(worker, 3, 3));
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
         PgAck::new(pool.clone())
             .ack(&result, &task.parts)

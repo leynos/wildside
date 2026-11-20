@@ -222,8 +222,14 @@ as `Killed`; a rising attempt count on such a row is not a crash loop. Two
 worker-side safeguards make that refusal and the surrounding acknowledgement
 behave as described, and the rollout in roadmap item 5.3.1 must supply both:
 build each worker over `AttemptBoundStorage`, and give every instance a
-distinct worker name. Without the first, an acknowledgement matches on `id` and
-`lock_by` alone and can overwrite a replacement row produced by the same
-instance; without the second, a stale acknowledgement from one instance can
-match another instance's row. See
+distinct worker name. `AttemptBoundStorage` stamps a fresh
+`wildside.retry.claim_token` into the row's metadata on every lock and requires
+that token, together with the stored attempt count, when acknowledging, so a
+delivery that lost its row can overwrite neither a re-locked replacement nor
+one produced by a dead-letter requeue, which resets `attempts` to zero. Without
+it, an acknowledgement matches on `id` and `lock_by` alone and can overwrite a
+replacement row produced by the same instance; without the distinct name, a
+stale acknowledgement from one instance can match another instance's row. A
+refused acknowledgement logs at `WARN` with decision `acknowledgement_refused`
+and leaves the row with its current owner. See
 [ADR 0004](../adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).

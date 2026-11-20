@@ -39,7 +39,9 @@ mod apalis_route_queue;
 pub use apalis_route_queue::{ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue};
 
 mod attempt_bound_ack;
+mod attempt_bound_lock;
 pub use attempt_bound_ack::{AttemptBoundAck, AttemptBoundStorage};
+pub use attempt_bound_lock::{AttemptBoundLock, AttemptBoundLockService};
 
 mod postgres_dead_letter;
 pub use postgres_dead_letter::{PostgresDeadLetterQueue, RequeueBudgets};
