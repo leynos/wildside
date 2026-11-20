@@ -28,15 +28,27 @@ The wrapper updates a row only while it is `Running`, locked by the current
 worker, and still carrying the attempt count this delivery inherited; the last
 predicate is what keeps a handler that stalled through orphan recovery from
 overwriting the decision of the delivery that replaced it. That guard covers
-the wrapper's own writes only. The acknowledgement Apalis performs afterwards
-is not guarded by row status or attempt count: `ack.sql` at the pinned release
-matches on `id` and `lock_by` alone and then overwrites `status`, `attempts`,
-and `last_result`. A stale delivery whose replacement is locked under the same
-worker name can therefore overwrite the replacement's `Running` row with its
-own attempt count and a terminal status while the replacement still runs. This
-repository does not control `ack.sql`. The mitigation is a distinct worker name
-per worker instance, which makes a stale acknowledgement match no row at all;
-the risk returns to review at the 1.0 upgrade described below.
+the wrapper's own writes only.
+
+The acknowledgement that follows carries the same predicate through
+`AttemptBoundStorage`, which builds the worker over
+`apalis_postgres::PostgresStorage` while replacing `PgAck` with
+`AttemptBoundAck`. The pinned `ack.sql` matches on `id` and `lock_by` alone and
+then overwrites `status`, `attempts`, and `last_result`, so a worker that
+re-claims its own row after orphan recovery is not separated from the stale
+delivery by the lock owner: both deliveries carry the same worker name. The
+attempt-bound acknowledgement adds `status = 'Running'` and the attempt count
+the row stored during the delivery, and returns `RowNotFound` without writing
+when a delivery no longer owns its row. Recovery increments the stored count,
+so a predecessor's acknowledgement no longer matches the row that replaced it.
+
+Distinct worker names per instance remain the outer layer, and they cover what
+the attempt predicate cannot state on its own: a stale acknowledgement from
+another instance matches no row whatever count it carries. Worker deployment
+(roadmap 5.3.1) must therefore enforce a distinct name per instance; a
+deployment that shares a name across instances relies on the attempt predicate
+alone. Both layers return to review at the 1.0 upgrade described below, where
+the pinned acknowledgement may change.
 
 A terminal outcome reduces the stored attempt limit to the terminating attempt,
 either within its reason write or, if that write fails, as a short bounded
@@ -60,9 +72,12 @@ On the 1.0 upgrade
 ([issue #550](https://github.com/leynos/wildside/issues/550)), re-verify the
 V8 canaries: fetch eligibility before and after `run_at`, the stored attempt
 restored to a fetched task, and the acknowledgement leaving `run_at`,
-`max_attempts`, and `metadata` untouched. Also re-evaluate the middleware
-ordering before changing the no-retry-layer rule. The canaries and their
-positive and negative cases are specified in the
+`max_attempts`, and `metadata` untouched. Re-check whether the released
+acknowledgement binds row status and the stored attempt count; if it does, the
+attempt-bound replacement can be retired, and if it does not, its predicate
+must still agree with the new schema. Also re-evaluate the middleware ordering
+before changing the no-retry-layer rule. The canaries and their positive and
+negative cases are specified in the
 [ExecPlan](../execplans/5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.md).
 
 ## Consequences

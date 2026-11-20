@@ -214,3 +214,16 @@ a missing marker in a later snapshot does not establish that a worker was
 healthy. Investigate the worker and the underlying fault before requeuing a
 terminal job. Retention and pruning of accumulated history need a separate
 operational policy; see roadmap section 6.
+
+Recovery can return a row that was already retired — a terminal write lowers
+`max_attempts` to the terminating attempt, and recovery increments `attempts`
+past it. The next delivery is refused before the handler runs and acknowledged
+as `Killed`; a rising attempt count on such a row is not a crash loop. Two
+worker-side safeguards make that refusal and the surrounding acknowledgement
+behave as described, and the rollout in roadmap item 5.3.1 must supply both:
+build each worker over `AttemptBoundStorage`, and give every instance a distinct
+worker name. Without the first, an acknowledgement matches on `id` and
+`lock_by` alone and can overwrite a replacement row produced by the same
+instance; without the second, a stale acknowledgement from one instance can
+match another instance's row. See
+[ADR 0004](../adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).

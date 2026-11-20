@@ -317,6 +317,11 @@ queue, cache, and repository ports defined in section 1.
 - [ ] 5.3.1. Deploy Apalis worker pools in Kubernetes with queue partitioning,
   bounded retries, and dead-letter handling for `GenerateRoute` and
   `Enrichment` jobs.
+  - Build each worker over `AttemptBoundStorage` and give every instance a
+    distinct worker name. The attempt-bound acknowledgement needs the former;
+    the latter keeps another instance's stale delivery from matching a row at
+    all. See
+    [ADR 0004](adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).
 
 ### 5.4. Caching strategy
 

@@ -2878,6 +2878,13 @@ Queue observability:
   Terminal outcomes persist `wildside.retry.dead_reason` in the existing Apalis
   JSONB metadata instead of scheduling another attempt, and acknowledgements
   preserve that value and other metadata.
+- Build every retry worker over `AttemptBoundStorage`, not
+  `apalis_postgres::PostgresStorage` directly. The pinned acknowledgement
+  matches a delivery on `id` and `lock_by` alone; `AttemptBoundAck` adds
+  `status = 'Running'` and the attempt count the row stored during the
+  delivery, so a stale delivery cannot overwrite the row that replaced it.
+  Distinct worker names per instance remain a separate layer that keeps one
+  instance's stale acknowledgement from matching another instance's row.
 - `tracing` – The adapter emits `debug` on enqueue success and `warn` on
   failure points (serialization, push, and setup failures), including latency
   and the adapter outcome.
@@ -2893,6 +2900,8 @@ The queue adapter requires:
 - `sqlx` (features: `postgres`, `runtime-tokio-rustls`) – Async PostgreSQL
   pool used by `ApalisPostgresProvider`
 - `serde` / `serde_json` – Payload serialization
+- `ulid` – Names the task id type the PostgreSQL backend assigns to a delivery,
+  which the attempt-bound acknowledgement is generic over
 
 The Apalis dependencies are pinned exactly to `apalis-core = "=1.0.0-rc.9"` and
 `apalis-postgres = "=1.0.0-rc.8"` because their 1.0.0 final release changes the

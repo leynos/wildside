@@ -4364,3 +4364,59 @@ log is `/tmp/<gate>-wildside-457-r27.out`.
 Three warnings remain and none fails a gate: actionlint's `truthy` warning in
 `.github/workflows/dependabot-automerge.yml`, Redocly's two
 `no-unused-components` warnings, and the audit ledger's allowed advisories.
+
+### The same-instance acknowledgement window of 2026-11-20
+
+CodeRabbit raised two linked findings against `02eaed6`. The first asked for
+the recovered-terminal-row window to be exercised through a real worker
+pipeline, asserting that the recovered delivery never reaches the handler while
+retaining the legal delivery at the cap. The second asked for a same-name
+negative control with different attempt counts, a check that deployment
+enforces distinct names, and an additional guard if the same instance can
+reacquire its own delivery.
+
+The same instance can reacquire its own delivery. Orphan recovery returns a
+stale `Running` row to `Pending` without excluding its former owner, and a
+worker re-registers under the same name while its original handler is still
+active. The pinned `ack.sql` matches on `id` and `lock_by` alone, so the stale
+acknowledgement could rewrite the row the replacement delivery now holds.
+`AcknowledgementExt::ack_with` cannot close this: it layers outside the pinned
+acknowledgement rather than replacing it.
+
+The guard is therefore the new `AttemptBoundStorage`, a `Backend` newtype over
+`PostgresStorage<Value>` whose middleware stack keeps `LockTaskLayer` and
+substitutes `AttemptBoundAck` for `PgAck`. The acknowledgement binds
+`status = 'Running'` and the attempt count the row stored during the delivery
+(`attempt - 1`, since Apalis increments the in-memory attempt on first poll),
+and returns `RowNotFound` with an `acknowledgement_refused` warning instead of
+writing when no row matches. Recovery increments the stored count, so a
+predecessor's acknowledgement no longer matches the row that replaced it. The
+queue module documents that workers must be built over `AttemptBoundStorage`,
+and the BDD worker harness now does so.
+
+Deployment currently starts no worker, so the distinct-name requirement is a
+rollout precondition rather than something this PR can enforce. It is recorded
+in ADR 0004, in roadmap item 5.3.1, and in the retry runbook; a deployment that
+shares a name across instances would rely on the attempt predicate alone.
+
+New canaries:
+
+- `apalis_retry_canaries/pipeline.rs` runs a real `WorkerBuilder` worker over
+  `AttemptBoundStorage`. The refused case seeds the row recovery actually
+  leaves (`Pending`, `attempts = max_attempts = 5`, terminal reason in
+  metadata) and asserts `runs_at_terminal == 0`, status `Killed`, and
+  `attempts == 6`. The positive control seeds one below the cap and asserts the
+  delivery reaches the handler once, status `Done`, `attempts == 5`. These
+  replace the earlier direct-delivery model of the single-recovery row, which
+  had to seed a count past the cap because `fetch_task` skips the poll
+  increment.
+- `apalis_retry_canaries/ack_guard.rs` holds the worker name equal across
+  generations. A stale delivery reporting the pre-recovery count is refused
+  with `RowNotFound` and the `Running` row is unchanged; the owning delivery at
+  the recovered count is acknowledged as `Failed` with `attempts` stored.
+- `recovery.rs`'s cross-instance canary now uses `AttemptBoundAck`, asserts
+  `RowNotFound` specifically, and gives the stale delivery its own attempt
+  count rather than the replacement's.
+
+The next gate run over the resulting candidate is pending when this record is
+written.
