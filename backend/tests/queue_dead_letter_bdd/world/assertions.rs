@@ -271,6 +271,63 @@ impl QueueDeadLetterWorld {
         );
     }
 
+    /// Assert the discard removed its target and left the other dead row behind.
+    ///
+    /// The scenario seeds a live row and an unrelated dead row beside the
+    /// target, so a listing of only the unrelated dead row distinguishes an
+    /// identifier-scoped discard from one that deleted every dead row.
+    pub(crate) fn assert_listing_contains_only_unrelated_dead_job(&self) {
+        let unrelated = {
+            let controls = self
+                .discard_controls
+                .lock()
+                .expect("discard controls mutex");
+            controls
+                .as_ref()
+                .expect("discard controls")
+                .unrelated_dead_job_id
+                .clone()
+        };
+        self.list_dead(100);
+        let listing = self.listing.lock().expect("dead-job listing mutex");
+        assert_eq!(
+            listing.jobs().len(),
+            1,
+            "the discard removes only its target: {:?}",
+            listing.jobs()
+        );
+        assert_eq!(
+            listing.jobs()[0].id,
+            unrelated,
+            "the surviving dead row is the unrelated one the scenario seeded"
+        );
+        assert!(
+            listing.skipped().is_empty(),
+            "the seeded rows are all readable: {:?}",
+            listing.skipped()
+        );
+    }
+
+    /// Assert the discard left the seeded live row exactly as it was.
+    pub(crate) fn assert_live_control_row_unchanged(&self) {
+        let (live_id, before) = {
+            let controls = self
+                .discard_controls
+                .lock()
+                .expect("discard controls mutex");
+            let controls = controls.as_ref().expect("discard controls");
+            (
+                controls.live_job_id.clone(),
+                controls.live_state_before.clone(),
+            )
+        };
+        assert_eq!(
+            self.snapshot(&live_id),
+            before,
+            "a live row must survive a dead-job discard unchanged"
+        );
+    }
+
     pub(crate) fn assert_job_absent(&self) {
         let exists = self
             .runtime

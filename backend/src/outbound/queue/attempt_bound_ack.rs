@@ -36,9 +36,14 @@ use serde::Serialize;
 use serde_json::Value;
 use sqlx::PgPool;
 use tracing::warn;
-use ulid::Ulid;
 
 use super::attempt_bound_lock::{AttemptBoundLock, claim_token};
+
+/// The identifier type the pinned PostgreSQL backend assigns to a delivery.
+///
+/// Naming it through the wrapped backend keeps this adapter independent of the
+/// pinned release's id crate; only the backend decides how a delivery is keyed.
+type DeliveryId = <PostgresStorage<Value> as Backend>::IdType;
 
 /// Apalis PostgreSQL storage whose acknowledgements are attempt-bound.
 ///
@@ -69,7 +74,9 @@ impl AttemptBoundStorage {
 
 impl Backend for AttemptBoundStorage {
     type Args = Value;
-    type IdType = Ulid;
+    // The wrapped storage names the backend's identifier type, so the guard
+    // follows the pinned release instead of depending on its id crate.
+    type IdType = DeliveryId;
     type Context = PgContext;
     type Error = sqlx::Error;
     type Stream = TaskStream<PgTask<Value>, sqlx::Error>;
@@ -114,14 +121,14 @@ impl AttemptBoundAck {
     }
 }
 
-impl<Res: Serialize> Acknowledge<Res, PgContext, Ulid> for AttemptBoundAck {
+impl<Res: Serialize> Acknowledge<Res, PgContext, DeliveryId> for AttemptBoundAck {
     type Error = sqlx::Error;
     type Future = BoxFuture<'static, Result<(), Self::Error>>;
 
     fn ack(
         &mut self,
         res: &Result<Res, BoxDynError>,
-        parts: &Parts<PgContext, Ulid>,
+        parts: &Parts<PgContext, DeliveryId>,
     ) -> Self::Future {
         let task_id = parts.task_id;
         let worker_id = parts.ctx.lock_by().clone();
@@ -195,7 +202,7 @@ fn attempt_bounds(attempt: usize) -> Result<(i32, i32), sqlx::Error> {
 /// stored cap is `Killed`, and a failure below it is `Failed` — without its
 /// lossy `as` cast, so an out-of-range cap cannot wrap into a spurious `Killed`.
 fn acknowledgement_status<Res>(
-    parts: &Parts<PgContext, Ulid>,
+    parts: &Parts<PgContext, DeliveryId>,
     res: &Result<Res, BoxDynError>,
 ) -> Status {
     match res {
@@ -205,7 +212,7 @@ fn acknowledgement_status<Res>(
     }
 }
 
-fn attempt_cap_reached(parts: &Parts<PgContext, Ulid>) -> bool {
+fn attempt_cap_reached(parts: &Parts<PgContext, DeliveryId>) -> bool {
     let cap = usize::try_from(parts.ctx.max_attempts()).unwrap_or(usize::MAX);
     cap <= parts.attempt.current()
 }

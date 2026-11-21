@@ -2900,8 +2900,10 @@ The queue adapter requires:
 - `sqlx` (features: `postgres`, `runtime-tokio-rustls`) – Async PostgreSQL
   pool used by `ApalisPostgresProvider`
 - `serde` / `serde_json` – Payload serialization
-- `ulid` – Names the task id type the PostgreSQL backend assigns to a delivery,
-  which the attempt-bound acknowledgement is generic over
+
+The attempt-bound acknowledgement is generic over the delivery identifier type
+the PostgreSQL backend assigns, which it names through the wrapped storage
+rather than by depending on the pinned release's id crate.
 
 The Apalis dependencies are pinned exactly to `apalis-core = "=1.0.0-rc.9"` and
 `apalis-postgres = "=1.0.0-rc.8"` because their 1.0.0 final release changes the

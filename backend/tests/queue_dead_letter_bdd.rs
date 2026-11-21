@@ -75,6 +75,11 @@ fn pending_and_running_jobs_exist(world: &QueueDeadLetterWorld) {
     world.insert_pending_and_running_jobs();
 }
 
+#[given("a live row and an unrelated dead row exist")]
+fn a_live_row_and_an_unrelated_dead_row_exist(world: &QueueDeadLetterWorld) {
+    world.insert_discard_controls();
+}
+
 #[given("a failed dead row has no recognized terminal reason")]
 fn a_failed_dead_row_has_no_recognized_reason(world: &QueueDeadLetterWorld) {
     world.insert_unclassified_dead_row();
@@ -225,11 +230,6 @@ fn the_fatal_reason_has_been_replaced(world: &QueueDeadLetterWorld) {
     world.assert_exhausted_reason_replaced_fatal();
 }
 
-#[then("the requeue count remains one")]
-fn the_requeue_count_remains_one(world: &QueueDeadLetterWorld) {
-    world.assert_requeue_count(1);
-}
-
 #[then("the requeue counter advances to five")]
 fn the_requeue_counter_advances_to_five(world: &QueueDeadLetterWorld) {
     world.assert_requeue_count(5);
@@ -253,6 +253,16 @@ fn the_listing_is_empty(world: &QueueDeadLetterWorld) {
 #[then("the dead job row is gone")]
 fn the_dead_job_row_is_gone(world: &QueueDeadLetterWorld) {
     world.assert_job_absent();
+}
+
+#[then("the listing contains only the unrelated dead job")]
+fn the_listing_contains_only_the_unrelated_dead_job(world: &QueueDeadLetterWorld) {
+    world.assert_listing_contains_only_unrelated_dead_job();
+}
+
+#[then("the live row is unchanged")]
+fn the_live_row_is_unchanged(world: &QueueDeadLetterWorld) {
+    world.assert_live_control_row_unchanged();
 }
 
 #[then("only the newest dead job is listed")]

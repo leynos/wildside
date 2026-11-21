@@ -6,6 +6,7 @@ mod isolation;
 mod plan;
 mod properties;
 mod rows;
+use self::dead_job_fixtures::DiscardControls;
 use self::rows::DeadlineReading;
 use self::rows::JobSeed;
 use self::rows::JobSnapshot;
@@ -77,6 +78,9 @@ pub(crate) struct QueueDeadLetterWorld {
     /// The deadline observed before a requeue, kept so the assertion can show
     /// the row was ineligible beforehand rather than only eligible afterwards.
     deadline_before_requeue: Mutex<Option<DeadlineReading>>,
+    /// Rows seeded beside a discard target, recorded so the assertion can show
+    /// the discard removed only its target.
+    discard_controls: Mutex<Option<DiscardControls>>,
 }
 
 impl Default for QueueDeadLetterWorld {
@@ -126,6 +130,7 @@ impl QueueDeadLetterWorld {
             operation_result: Mutex::new(None),
             state_before_operation: Mutex::new(None),
             deadline_before_requeue: Mutex::new(None),
+            discard_controls: Mutex::new(None),
         }
     }
 

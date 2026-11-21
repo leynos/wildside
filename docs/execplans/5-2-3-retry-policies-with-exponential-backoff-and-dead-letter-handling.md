@@ -344,12 +344,14 @@ Hard invariants. Violation requires escalation, not workarounds.
   statements. Accepted D15 authorizes guarded writes to the existing JSONB
   `metadata` column for the namespaced requeue counter and terminal reason,
   preserving every other key. The user accepted these two additional values on
-  2026-10-25; no other Apalis metadata writes are authorized. One additive
-  exception is pre-authorized: the dead-letter adapter may create a partial
-  index supporting the dead-jobs predicate, through the adapter's setup path
-  alongside `PostgresStorage::setup`, if and only if milestone EP-M3's
-  `EXPLAIN` check shows a sequential scan (Decision D6). A separate dead-letter
-  table is out of scope (Decision D3).
+  2026-10-25. The claim-token amendment of 2026-11-21 adds exactly one more key,
+  `wildside.retry.claim_token`, with the scope and provenance recorded under
+  "D15 scope amendment of 2026-11-21"; no other Apalis metadata writes are
+  authorized. One additive exception is pre-authorized: the dead-letter adapter
+  may create a partial index supporting the dead-jobs predicate, through the
+  adapter's setup path alongside `PostgresStorage::setup`, if and only if
+  milestone EP-M3's `EXPLAIN` check shows a sequential scan (Decision D6). A
+  separate dead-letter table is out of scope (Decision D3).
 - Dead-letter state transitions must be guarded compare-and-swap updates.
   `requeue` and `discard` take effect only when the row currently satisfies the
   dead predicate, and an ineffective update surfaces as a port error, never as
@@ -2957,7 +2959,10 @@ change is reverted by restoring the two caret requirements.
   An application-owned envelope in `last_result` was considered and rejected
   because it would change Apalis's serialized error representation. The user
   accepted the two metadata writes on 2026-10-25 Europe/Berlin. Date/author:
-  2026-10-23 Europe/Berlin, implementation review; acceptance: user.
+  2026-10-23 Europe/Berlin, implementation review; acceptance: user. Amended
+  2026-11-21: one further key, `wildside.retry.claim_token`, is authorized by
+  the replacement-delivery guard recorded under "D15 scope amendment of
+  2026-11-21"; no other metadata write is authorized.
 - D16 — Cap `JobFailure` messages at 1,024 UTF-8 bytes and truncate only at a
   character boundary. Rationale: the failure is payload-free and later becomes
   the bounded plain Apalis `last_result`; a byte cap gives that boundary an
@@ -3359,9 +3364,18 @@ round-trips through `shell_quote` unchanged, and that an unrelated recipe does
 not inherit the password.
 
 The compile-time row asked for const-context usage of the new public
-`const fn`s. `backend/tests/retry_const_api_compile_time.rs` evaluates
+`const fn`s, exercised through a UI-test harness. The trybuild binary
+`backend/tests/retry_const_api_ui.rs` compiles
+`backend/tests/support/ui/retry_const_api_const_context.rs`, which evaluates
 `JitterSample::midpoint` and the four `as_label` methods in `const` items, so
 losing a `const` qualifier is a compile failure rather than a silent change.
+The same harness compiles the negative fixture
+`backend/tests/support/ui/jitter_sample_private_constructor.rs`, which pins
+that a `JitterSample` can only be built through its validating constructor. The
+runtime values those methods return stay pinned separately in
+`backend/tests/retry_api_values.rs`. The harness is gated behind
+`trybuild-tests`, excluded from the nextest suite, and named in both the
+`test-rust` recipe and the CI `Compile-fail tests` step.
 
 The user-facing row asked for a versioned migration guide. The backend crate is
 `0.1.0`; there is no 0.2.0 release to migrate from, so the user guide carries
@@ -4589,3 +4603,107 @@ Whitaker on both manifests; `typecheck`, `spelling`, `markdownlint`, and
 target exits 0; `audit` reports only the repository's accepted warnings; and
 `openapi` regenerates the committed spec unchanged. Logs are
 `/tmp/<target>-wildside-457-r30.out` and `/tmp/test-457-csfix.out`.
+
+### Review findings of 2026-11-21
+
+The review of the r30 head raised five actionable findings. Four are repaired
+here. The fifth, the claim-token metadata key, is retained and is covered by
+the dated, scoped amendment recorded below rather than by a fresh user
+authorization.
+
+**The `ulid` dependency deviation.** The attempt-bound acknowledgement had added
+`ulid = "1"` to name the backend's identifier type. The plan's hard constraint
+says no production dependency may be added, and `ulid` was not otherwise part
+of the backend's dependency set. The adapter now names the type through the
+wrapped storage,
+`type DeliveryId = <PostgresStorage<Value> as Backend>::IdType`, so the pinned
+release continues to own the key. The claim token is minted with
+`uuid::Uuid::new_v4()`, already a production dependency, and `ulid` disappears
+from the manifest; `Cargo.lock` retains it only as an `apalis-postgres`
+transitive dependency. Behaviour is unchanged.
+
+**The discard scenario proved too little.** "A discarded dead job is gone"
+asserted an empty listing, which cannot distinguish deleting the target from
+deleting every dead row, and could not see a live row caught in the same
+delete. The scenario now seeds a live `Pending` row and an unrelated dead row
+beside the target (`insert_discard_controls`). The listing assertion requires
+exactly the unrelated dead row to remain, and a further assertion compares the
+live row's whole stored state with the seed. A discard that dropped its
+identifier predicate now fails the listing assertion; one that treated a live
+row as dead fails the state comparison.
+
+**The architecture note overstated the guards.** The design document said the
+guards keep a delivery that no longer owns its row from running a handler or
+rewriting the replacement's row. The two guards act at different points: the
+spent-attempt check refuses a delivery before its handler starts, and the
+acknowledgement refuses the stale write. Neither stops a handler that is
+already running, whose side effects can overlap with a replacement delivery's
+work. The paragraph now says so and states the consequence: handlers must
+remain idempotent.
+
+**Const-context coverage became a UI test.** The compile-time row asked for
+const-context usage, and the previous target mixed that with runtime value
+assertions in one file. The const items moved to the trybuild compile-pass
+fixture `backend/tests/support/ui/retry_const_api_const_context.rs`, driven by
+`backend/tests/retry_const_api_ui.rs` behind the `trybuild-tests` feature. The
+same harness compiles the negative fixture
+`backend/tests/support/ui/jitter_sample_private_constructor.rs`, whose committed
+`.stderr` is fixture-local (it names no standard-library source), and pins
+that a jitter sample can only be built through its validating constructor. The
+documented values stay pinned at run time in
+`backend/tests/retry_api_values.rs`. The harness is excluded from nextest and
+named in both the `test-rust` recipe and the CI `Compile-fail tests` step; the
+workflow-contract constants pin the exclusion expression and the step's whole
+script.
+
+**The claim is now bound to the fetched delivery.** One finding of the same
+round observes that a delivery which stalled after its fetch can still claim a
+row that orphan recovery or a requeue has moved on, because its in-memory
+attempt count can equal the row's again. `AttemptBoundLock` now reads the
+worker name, task identifier, and fetched attempt count from the delivery and
+requires the row to still name that worker in `lock_by` and to still hold that
+attempt count. Both predicates hold for a fresh delivery, because
+`apalis.get_jobs` recorded the worker during the fetch and nothing changes the
+count before the claim. A delivery that lost its row is refused with
+`RowNotFound` before its handler is polled. Two canaries in
+`apalis_retry_canaries/claim_guard.rs` pin the recovery window and the requeue
+window, each ending with the replacement delivery's claim succeeding; the
+`ack_guard` requeue canary now performs the pinned fetch before its claim so
+that its attempt count matches what a real delivery carries.
+
+**The third metadata key is authorized by amendment.** The same round observes
+that `wildside.retry.claim_token` is a third Apalis metadata key, beyond the
+two values D15 authorizes. The `ulid` production dependency named in the same
+finding was removed outright, so only the key remains. It is authorized by the
+dated, scoped amendment in the next section, which also records its provenance:
+the decision is the agent's, taken under the user's standing instruction to
+bring this PR to equilibrium and merge it.
+
+### D15 scope amendment of 2026-11-21
+
+D15's user acceptance of 2026-10-25 covers two namespaced metadata keys. The
+claim-token guard adds a third, `wildside.retry.claim_token`, because the
+review's other findings require a delivery generation that a requeue does not
+repeat. Removing the token is not available: it is the discriminator the review
+asked for, and without it a requeued row can be overwritten by the delivery the
+requeue replaced. The token is also already part of the accepted design:
+ADR-0004 records the claim step and the token under Decision and Consequences,
+and the runbook, the backend architecture document, and the review replies of
+2026-11-20 describe it as the deployment contract.
+
+This amendment extends D15 by exactly one key, dated 2026-11-21:
+
+- **Scope.** Guarded writes to `metadata->'wildside.retry.claim_token'` from the
+  claim step in `backend/src/outbound/queue/attempt_bound_lock.rs`, and reads
+  of the same key by the acknowledgement. No other Apalis metadata write is
+  authorized, and every adapter continues to preserve unrelated keys.
+- **Provenance.** The decision is the implementation agent's, taken under the
+  user's standing instruction to bring this PR to equilibrium and merge it. It
+  is not a fresh user authorization. It is recorded here, with its date and
+  scope, so that the plan and the code agree. The user can reverse it by
+  directing the token's removal, which also removes the guard the review
+  requested and returns the finding to the review.
+
+The amendment adds no schema object, no column, and no dependency. It changes
+which keys the existing guarded `jsonb_set` writes, and the key remains
+namespaced and covered by the rc-coupled canaries listed above.

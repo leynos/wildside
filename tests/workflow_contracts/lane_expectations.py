@@ -38,6 +38,8 @@ COMPILE_FAIL_SCRIPT = (
     "declare_test_support_compile_fail\n"
     "cargo test --locked --all-features -p backend --test "
     "sha2_digest_formatting_compile_fail\n"
+    "cargo test --locked --all-features -p backend --test "
+    "retry_const_api_ui\n"
     "cargo test --locked --features trybuild-tests -p pagination "
     "cursor_trait_bound_compile_fail_tests\n"
 )
@@ -67,7 +69,7 @@ COVERAGE_ACTOR_CLAUSE = "github.actor != 'dependabot[bot]'"
 #: leaves the names in place while changing what the filter selects.
 #:
 #: The two constants below pin the lane's spelling of this value and the
-#: runner passes it by reference. The expression is 122 characters and
+#: runner passes it by reference. The expression is 151 characters and
 #: the workflow's linter allows 120, and neither a reflow nor a pattern
 #: can close that gap: the linter's `allow-non-breakable-words` escape
 #: needs a line with no space at all, and a `binary(~compile_fail)`
@@ -78,7 +80,7 @@ COVERAGE_ACTOR_CLAUSE = "github.actor != 'dependabot[bot]'"
 #: would let the reference point somewhere else.
 NEXTEST_EXCLUSION = (
     "not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests) "
-    "| binary(sha2_digest_formatting_compile_fail))"
+    "| binary(sha2_digest_formatting_compile_fail) | binary(retry_const_api_ui))"
 )
 
 #: The variable the lane declares the expression in, and the shell word

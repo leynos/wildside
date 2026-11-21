@@ -41,8 +41,8 @@ use backend::outbound::queue::{
 use serde_json::Value;
 
 use super::fixtures::{
-    CanaryEnvironment, ClaimToken, Delivery, JobId, JobRow, QueueName, delivery_task, insert_job,
-    read_state, register_worker,
+    CanaryEnvironment, ClaimToken, Delivery, JobId, JobRow, QueueName, claim_due_rows,
+    delivery_task, insert_job, read_state, register_worker,
 };
 use crate::support::apalis_job_id::apalis_job_id;
 
@@ -137,7 +137,11 @@ fn acknowledge_attempt(
 ///
 /// The budget is the guard cap, so the restored row is claimable and the
 /// replacement delivery below it fails rather than retiring.
-fn requeue_dead_job(environment: &CanaryEnvironment, queue: QueueName<'_>, id: JobId<'_>) {
+pub(super) fn requeue_dead_job(
+    environment: &CanaryEnvironment,
+    queue: QueueName<'_>,
+    id: JobId<'_>,
+) {
     let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
         max_attempts: NonZeroU32::new(u32::try_from(GUARD_CAP).expect("positive guard cap"))
             .expect("non-zero guard cap"),
@@ -163,11 +167,21 @@ fn requeue_dead_job(environment: &CanaryEnvironment, queue: QueueName<'_>, id: J
 /// keeps the replacement in flight: a real worker would acknowledge before the
 /// stale delivery could be replayed, and the stored status would then differ
 /// for a reason unrelated to the token.
-fn claim_row(environment: &CanaryEnvironment, id: JobId<'_>) -> String {
+///
+/// The claim is bound to the fetch that queued the row, so the canary performs
+/// that fetch first with the pinned backend's own function. The delivery then
+/// carries the attempt count the row holds before it is polled, which is the
+/// count the claim compares against the stored one.
+fn claim_row(environment: &CanaryEnvironment, queue: QueueName<'_>, id: JobId<'_>) -> String {
+    let claimed = claim_due_rows(environment, queue.as_str(), SHARED_WORKER);
+    assert_eq!(
+        claimed, 1,
+        "the pinned fetcher queues exactly the requeued row"
+    );
     let mut service = AttemptBoundLock::new(environment.pool.clone()).layer(ContextProbe);
     let ctx = environment
         .run(async {
-            let mut task = delivery_task(id.as_str(), Delivery::new(SHARED_WORKER, GUARD_CAP, 1));
+            let mut task = delivery_task(id.as_str(), Delivery::new(SHARED_WORKER, GUARD_CAP, 0));
             // A delivery reaches the lock inside a worker, which has already
             // put its own context in the task's extensions.
             task.parts
@@ -322,7 +336,7 @@ fn a_requeued_row_cannot_be_overwritten_by_its_previous_delivery() {
         "a requeue preserves the token of the generation it replaced"
     );
 
-    let token = claim_row(environment, JobId(&id));
+    let token = claim_row(environment, QueueName(GUARD_QUEUE), JobId(&id));
     let claim = ClaimToken(token.as_str());
     let running = read_state(&environment.runtime, &pool, &id);
     assert_eq!(running.status, "Running", "the lock step promotes the row");

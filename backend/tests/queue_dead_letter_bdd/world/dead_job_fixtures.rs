@@ -2,8 +2,21 @@
 
 use backend::domain::ports::DeadJobId;
 
-use super::rows::JobSeed;
+use super::rows::{JobSeed, JobSnapshot};
 use super::{QUEUE_NAME, QueueDeadLetterWorld};
+
+/// Rows seeded beside a discard target, recorded before the operation runs.
+///
+/// A discard names one identifier. Reading back only the target's absence
+/// cannot distinguish deleting that row from deleting every dead row, and
+/// cannot see a live row caught in the same delete. The controls therefore
+/// carry the live row's seeded state for comparison and the unrelated dead
+/// row's identifier for the listing assertion.
+pub(super) struct DiscardControls {
+    pub(super) live_job_id: DeadJobId,
+    pub(super) live_state_before: JobSnapshot,
+    pub(super) unrelated_dead_job_id: DeadJobId,
+}
 
 impl QueueDeadLetterWorld {
     /// Insert an exhausted-shaped dead row and make it the current job.
@@ -142,5 +155,41 @@ impl QueueDeadLetterWorld {
 
     pub(crate) fn insert_unconfigured_dead_job(&self) {
         self.insert_current_failed_dead_row("wildside.unconfigured-queue", "exhausted", None);
+    }
+
+    /// Seed a live row and an unrelated dead row beside the current dead target.
+    ///
+    /// Call this after the scenario has established the target: the rows are
+    /// inserted then, so a discard that matched by queue or status rather than
+    /// identifier would take them too. The live row's state is read here so
+    /// the assertion can compare against what the seed actually stored.
+    pub(crate) fn insert_discard_controls(&self) {
+        let live_job_id = self.insert_job(JobSeed {
+            job_type: QUEUE_NAME,
+            status: "Pending",
+            attempts: 0,
+            max_attempts: Some(3),
+            reason: None,
+            last_error: None,
+            done_age_seconds: 0,
+        });
+        let live_state_before = self.snapshot(&live_job_id);
+        let unrelated_dead_job_id = self.insert_job(JobSeed {
+            job_type: QUEUE_NAME,
+            status: "Failed",
+            attempts: 3,
+            max_attempts: Some(3),
+            reason: Some("exhausted"),
+            last_error: Some("unrelated dead job"),
+            done_age_seconds: 60,
+        });
+        *self
+            .discard_controls
+            .lock()
+            .expect("discard controls mutex") = Some(DiscardControls {
+            live_job_id,
+            live_state_before,
+            unrelated_dead_job_id,
+        });
     }
 }

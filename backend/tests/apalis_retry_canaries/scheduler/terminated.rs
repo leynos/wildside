@@ -37,6 +37,17 @@ const UNPROTECTED_QUEUE: &str = "canary.terminated-unprotected";
 /// A queue whose fallback cannot reach a database.
 const UNREACHABLE_QUEUE: &str = "canary.terminated-unreachable";
 
+/// The worker that owns the row acknowledged without the fallback.
+///
+/// The fetching canaries each name their own worker because the pinned backend
+/// takes a session advisory lock while it registers a worker, so two fetches
+/// under one name would refuse each other when they land on different pooled
+/// connections. A worker of its own keeps each canary independent of the other.
+const UNPROTECTED_OWNER: &str = "canary-terminated-unprotected-owner";
+
+/// The worker that owns the row whose fallback cannot reach the database.
+const UNREACHABLE_OWNER: &str = "canary-terminated-unreachable-owner";
+
 /// A scheduler whose database refuses every connection.
 ///
 /// Port 1 refuses immediately, so the write fails deterministically instead of
@@ -73,12 +84,12 @@ fn terminal_write_fails(canary: &Canary, scheduler: &PostgresRetryScheduler) -> 
 }
 
 /// Acknowledge the delivery as Apalis does after the handler reports a failure.
-fn acknowledge_failure(canary: &Canary) {
+fn acknowledge_failure(canary: &Canary, worker: &str) {
     let attempt = usize::try_from(DELIVERED_ATTEMPT).expect("the delivered attempt is a usize");
     canary.environment.run(async {
         let task = delivery_task(
             &canary.id,
-            Delivery::new(OWNER, FETCHED_MAX_ATTEMPTS, attempt),
+            Delivery::new(worker, FETCHED_MAX_ATTEMPTS, attempt),
         );
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
 
@@ -149,7 +160,7 @@ fn a_terminated_delivery_is_not_fetched_after_acknowledgement() {
         clamp_cap(&canary),
         "the recorded lock owner still owns a running row"
     );
-    acknowledge_failure(&canary);
+    acknowledge_failure(&canary, OWNER);
 
     let attempt = i32::try_from(DELIVERED_ATTEMPT).expect("the delivered attempt is an i32");
     assert_eq!(
@@ -174,11 +185,14 @@ fn a_terminated_delivery_is_not_fetched_after_acknowledgement() {
 /// exists to prevent, and asserting it is what gives the other canary teeth.
 #[test]
 fn without_the_fallback_the_acknowledged_row_is_fetched_again() {
-    let canary = Canary::start(SchedulerRow::running(UNPROTECTED_QUEUE, OWNER).due(), None);
+    let canary = Canary::start(
+        SchedulerRow::running(UNPROTECTED_QUEUE, UNPROTECTED_OWNER).due(),
+        None,
+    );
 
-    acknowledge_failure(&canary);
+    acknowledge_failure(&canary, UNPROTECTED_OWNER);
 
-    let fetched = fetch_one_task(canary.environment, UNPROTECTED_QUEUE, OWNER);
+    let fetched = fetch_one_task(canary.environment, UNPROTECTED_QUEUE, UNPROTECTED_OWNER);
     assert_eq!(
         fetched.task_id, canary.id,
         "the fetcher must claim the row the fallback did not protect"
@@ -194,7 +208,10 @@ fn without_the_fallback_the_acknowledged_row_is_fetched_again() {
 /// wrapper can always protect the row.
 #[test]
 fn a_fallback_that_never_lands_leaves_the_row_fetchable() {
-    let canary = Canary::start(SchedulerRow::running(UNREACHABLE_QUEUE, OWNER).due(), None);
+    let canary = Canary::start(
+        SchedulerRow::running(UNREACHABLE_QUEUE, UNREACHABLE_OWNER).due(),
+        None,
+    );
     let scheduler = unreachable_scheduler(&canary);
 
     assert!(
@@ -213,7 +230,7 @@ fn a_fallback_that_never_lands_leaves_the_row_fetchable() {
         "an unreachable database must report the fallback as failed, not applied"
     );
 
-    acknowledge_failure(&canary);
+    acknowledge_failure(&canary, UNREACHABLE_OWNER);
 
     let delivered = i32::try_from(DELIVERED_ATTEMPT).expect("the delivered attempt is an i32");
     assert_eq!(
@@ -221,7 +238,7 @@ fn a_fallback_that_never_lands_leaves_the_row_fetchable() {
         ("Failed".to_owned(), delivered, FETCHED_MAX_ATTEMPTS),
         "a fallback that never lands leaves the fetched attempt cap in place"
     );
-    let fetched = fetch_one_task(canary.environment, UNREACHABLE_QUEUE, OWNER);
+    let fetched = fetch_one_task(canary.environment, UNREACHABLE_QUEUE, UNREACHABLE_OWNER);
     assert_eq!(
         fetched.task_id, canary.id,
         "the residual window hands the retired job back to the fetcher"
