@@ -115,6 +115,12 @@ pub(crate) async fn register_queue_worker(
 }
 
 /// Insert one worker row with the type its recovery scope needs.
+///
+/// A re-registration takes the requested type rather than keeping the first one
+/// the name used. Recovery matches a crashed worker on its type, and the
+/// heartbeat refuses a worker whose type differs from the polling queue, so a
+/// name reused by a second canary under another queue would otherwise fail both
+/// lookups with no visible cause.
 async fn register_typed_worker(pool: &PgPool, worker: WorkerName<'_>, kind: WorkerType<'_>) {
     let worker_type = match kind {
         WorkerType::Canary => CANARY_WORKER_TYPE,
@@ -123,7 +129,7 @@ async fn register_typed_worker(pool: &PgPool, worker: WorkerName<'_>, kind: Work
     sqlx::query(
         "INSERT INTO apalis.workers (id, worker_type, storage_name)
          VALUES ($1, $2, 'canary')
-         ON CONFLICT (id) DO NOTHING",
+         ON CONFLICT (id) DO UPDATE SET worker_type = EXCLUDED.worker_type",
     )
     .bind(worker.as_str())
     .bind(worker_type)

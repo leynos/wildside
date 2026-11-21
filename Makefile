@@ -411,8 +411,8 @@ test-rust: workspace-sync prepare-pg-worker
 	export PG_PASSWORD=$(call shell_quote,PG_PASSWORD) POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)
 	cargo fetch --locked
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(GATE_RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
-		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail))'
-	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --all-features --test declare_test_support_compile_fail --test sha2_digest_formatting_compile_fail
+		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail) | binary(retry_const_api_ui))'
+	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --all-features --test declare_test_support_compile_fail --test sha2_digest_formatting_compile_fail --test retry_const_api_ui
 
 test-frontend: deps typecheck
 	pnpm run test

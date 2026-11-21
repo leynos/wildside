@@ -54,9 +54,11 @@ Feature: Dead-letter listing, requeue, and discard
 
   Scenario: A discarded dead job is gone
     Given a job has been dead-lettered after exhausting its retries
+    And a live row and an unrelated dead row exist
     When the operator discards the dead job
-    Then the listing is empty
+    Then the listing contains only the unrelated dead job
     And the dead job row is gone
+    And the live row is unchanged
 
   Scenario: Listing dead jobs ignores live jobs
     Given a pending job and a running job exist

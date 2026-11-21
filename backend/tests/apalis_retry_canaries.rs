@@ -29,6 +29,8 @@ declare_test_support!(
 mod ack;
 #[path = "apalis_retry_canaries/ack_guard.rs"]
 mod ack_guard;
+#[path = "apalis_retry_canaries/claim_guard.rs"]
+mod claim_guard;
 #[path = "apalis_retry_canaries/fixtures.rs"]
 mod fixtures;
 #[path = "apalis_retry_canaries/identity.rs"]
