@@ -137,10 +137,11 @@ pub(crate) const DEFAULT_PG_PASSWORD: &str = "wildside_embedded_test";
 /// The resolution is pure: it returns an existing `PG_PASSWORD` unchanged and
 /// otherwise yields [`DEFAULT_PG_PASSWORD`]. Nothing here writes to the
 /// process. The value that the embedded PostgreSQL layer itself reads is
-/// composed by the test runner — see the `[env]` table in
-/// `.config/nextest.toml`, which supplies `PG_PASSWORD` and
-/// `POSTGRESQL_RELEASES_URL` without overriding a value already present in the
-/// parent environment.
+/// supplied by the test runner. Make and CI provide `PG_PASSWORD`; direct Cargo
+/// test runs must set it explicitly because Cargo configuration also applies
+/// to non-test commands that may initialize a real cluster. The `[env]` table
+/// in `.cargo/config.toml` supplies only the non-secret version and
+/// release-mirror defaults.
 ///
 /// `postgresql_embedded::Settings::default()` generates a random password on
 /// each call. When the data directory already exists, `setup()` skips `initdb`,

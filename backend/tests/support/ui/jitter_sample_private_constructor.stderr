@@ -1,0 +1,17 @@
+error[E0423]: cannot initialize a tuple struct which contains private fields
+  --> tests/support/ui/jitter_sample_private_constructor.rs:12:13
+   |
+12 |     let _ = JitterSample(1.5);
+   |             ^^^^^^^^^^^^
+   |
+   = note: a struct named `JitterSample` exists in another namespace
+note: constructor is not visible here due to private fields
+  --> src/domain/jobs/retry.rs
+   |
+   | pub struct JitterSample(f64);
+   |                         ^^^ private field
+help: you might have meant to use the `midpoint` associated function
+   |
+12 -     let _ = JitterSample(1.5);
+12 +     let _ = JitterSample::midpoint();
+   |

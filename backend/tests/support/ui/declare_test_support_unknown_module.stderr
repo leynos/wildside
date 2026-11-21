@@ -9,8 +9,8 @@ error: no rules expected `not_a_real_module`
    | macro_rules! declare_test_support {
    | --------------------------------- when calling this macro
    |
-note: while trying to match `atexit_cleanup`
+note: while trying to match `apalis_job_id`
   --> tests/support/ui/../entrypoint.rs
    |
-   |     (@module atexit_cleanup) => {
-   |              ^^^^^^^^^^^^^^
+   |     (@module apalis_job_id) => {
+   |              ^^^^^^^^^^^^^

@@ -547,7 +547,8 @@ jobs:
           # below, so neither can drift alone.
           NEXTEST_EXCLUSION: >-
             not (binary(declare_test_support_compile_fail) |
-            binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail))
+            binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail) |
+            binary(retry_const_api_ui))
         run: |
           # Clean stale pg-embed directories that may conflict with new runs.
           find target/ -maxdepth 1 -type d -name 'pg-embed-*' -exec rm -rf {} + 2>/dev/null || true
@@ -562,6 +563,7 @@ jobs:
         run: |
           cargo test --locked --all-features -p backend --test declare_test_support_compile_fail
           cargo test --locked --all-features -p backend --test sha2_digest_formatting_compile_fail
+          cargo test --locked --all-features -p backend --test retry_const_api_ui
           cargo test --locked --features trybuild-tests -p pagination cursor_trait_bound_compile_fail_tests
 
       # OpenAPI dump (at runtime or via a small bin)

@@ -1,9 +1,15 @@
-//! Password-file repair for embedded PostgreSQL integration tests.
+//! Retained-state repair for embedded PostgreSQL integration tests.
 //!
 //! `postgresql_embedded` only writes the initdb password file when it does not
 //! already exist. When the shared stable test password changes, a stale
 //! `.pgpass` can initialize a fresh data directory with the old password while
 //! clients connect with the new one.
+//!
+//! The same directory is also retained across a change to `PG_VERSION_REQ`,
+//! and across a bootstrap that never finished. PostgreSQL refuses to start when
+//! the stored `PG_VERSION` names a different major version from the server
+//! binary, and `initdb` refuses a directory that is not empty. A default data
+//! directory carrying either fault is removed before the cluster bootstraps.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -20,6 +26,11 @@ pub(super) fn repair_default_password_state(
     password: &[u8],
     paths: &PasswordStatePaths,
 ) -> io::Result<()> {
+    // A data directory the next bootstrap cannot reuse fails before any
+    // password is checked, so it is repaired first and independently of the
+    // install directory's presence.
+    repair_unusable_data_directory(paths)?;
+
     // A missing install directory means there is nothing to repair, so treat
     // it as a quiet success. Genuine failures (permissions, a path that is not
     // a directory, and so on) are propagated so the caller can surface them at
@@ -57,6 +68,7 @@ pub(crate) struct PasswordStatePaths {
     data_parent: PathBuf,
     data_name: PathBuf,
     should_remove_data_dir: bool,
+    expected_major_version: Option<u32>,
 }
 
 impl PasswordStatePaths {
@@ -64,7 +76,10 @@ impl PasswordStatePaths {
     ///
     /// `PG_RUNTIME_DIR` and `PG_DATA_DIR` override the per-uid defaults under
     /// `/var/tmp`. Only the default data directory is eligible for deletion:
-    /// an explicitly configured one belongs to the caller.
+    /// an explicitly configured one belongs to the caller. An exact
+    /// `PG_VERSION_REQ` pin supplies the major version a retained data
+    /// directory must match; a range requirement supplies none, because more
+    /// than one stored major satisfies it.
     pub(crate) fn resolve(read_env: impl Fn(&str) -> Option<String>) -> Self {
         // SAFETY: `geteuid` has no preconditions and does not modify memory.
         let uid = unsafe { libc::geteuid() };
@@ -90,8 +105,187 @@ impl PasswordStatePaths {
             data_parent,
             data_name,
             should_remove_data_dir,
+            expected_major_version: read_env("PG_VERSION_REQ")
+                .as_deref()
+                .and_then(major_version),
         }
     }
+}
+
+/// Extract the major version from an exact pin or a `PG_VERSION` file.
+///
+/// PostgreSQL writes a bare number into `PG_VERSION`, and a bare number is
+/// also an exact `PG_VERSION_REQ`. A `=` requirement such as `=16.10.0` pins
+/// the same way. Every other operator denotes a range: `>=17` is satisfied by
+/// an 18 directory, so treating it as a pin to 17 would delete a directory the
+/// requirement still accepts. Ranges therefore yield `None`, which leaves a
+/// retained directory in place rather than guessing at a mismatch.
+fn major_version(text: &str) -> Option<u32> {
+    let trimmed = text.trim();
+    let is_exact = trimmed
+        .chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_digit() || first == '=');
+    if !is_exact {
+        return None;
+    }
+    let digits: String = trimmed
+        .trim_start_matches(|character: char| !character.is_ascii_digit())
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
+}
+
+/// Report whether `path` exists inside `dir`, propagating real I/O failures.
+fn path_exists(dir: &Dir, path: &Path) -> io::Result<bool> {
+    match dir.metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+/// Report whether a running postmaster holds the data directory.
+///
+/// `/var/tmp/pg-embed-<uid>` is shared by every project under the same user,
+/// and another project's cluster does not take Wildside's process lock, so the
+/// lock alone cannot prove the directory is ours. A `postmaster.pid` naming a
+/// live process is the only ownership evidence available at this boundary; a
+/// stale pid file left by an exited cluster does not block removal, because
+/// that is exactly the state the repair exists to clean up.
+///
+/// The pinned library places `postmaster.pid` directly in the data directory,
+/// but a newer layout may give each cluster its own subdirectory beneath it.
+/// Only the first level is inspected: this is a safety check, not a recursive
+/// scan, and a cluster nested deeper than one level is outside the layout any
+/// released version of the library has used.
+fn data_directory_is_in_use(data_parent: &Dir, data_name: &Path) -> io::Result<bool> {
+    if pid_file_names_live_process(data_parent, &data_name.join("postmaster.pid"))? {
+        return Ok(true);
+    }
+    let entries = match data_parent.read_dir(data_name) {
+        Ok(entries) => entries,
+        // An absent data directory holds no cluster, so there is nothing to
+        // protect and nothing to remove.
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    for entry in entries {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let nested = data_name.join(entry.file_name()).join("postmaster.pid");
+        if pid_file_names_live_process(data_parent, &nested)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Report whether the pid file at `path` names a process that is still running.
+fn pid_file_names_live_process(dir: &Dir, path: &Path) -> io::Result<bool> {
+    let Some(contents) = read_optional_text(dir, path)? else {
+        return Ok(false);
+    };
+    let pid = contents
+        .lines()
+        .next()
+        .and_then(|line| line.trim().parse::<i32>().ok());
+    Ok(pid.is_some_and(pid_is_live))
+}
+
+/// Read a text file inside `dir`, treating an absent file as `None`.
+fn read_optional_text(dir: &Dir, path: &Path) -> io::Result<Option<String>> {
+    match dir.read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// Report whether `pid` names a process that is currently running.
+fn pid_is_live(pid: i32) -> bool {
+    if pid <= 0 {
+        return false;
+    }
+    // SAFETY: signal 0 performs the existence and permission check only; it
+    // delivers no signal and has no other side effect.
+    if unsafe { libc::kill(pid, 0) } == 0 {
+        return true;
+    }
+    // `EPERM` means the process exists but belongs to another user, which is
+    // still a live holder of the directory.
+    io::Error::last_os_error().kind() == io::ErrorKind::PermissionDenied
+}
+
+/// Remove the default data directory when the next bootstrap cannot reuse it.
+///
+/// `postgresql_embedded` decides whether to run `initdb` by looking for
+/// `<data dir>/postgresql.conf` alone, and `initdb` then refuses a directory
+/// that is not empty. Two retained states therefore block every later
+/// bootstrap until the directory is gone:
+///
+/// * a directory left by a bootstrap that never finished, which has files but
+///   no `postgresql.conf`, so the library runs `initdb` over it; and
+/// * a directory initialized by another major version, whose stored
+///   `PG_VERSION` disagrees with `PG_VERSION_REQ`, so PostgreSQL refuses to
+///   start.
+///
+/// Removing the default directory lets the next bootstrap initialize a
+/// matching one. An explicitly configured `PG_DATA_DIR` belongs to the caller
+/// and is never removed, an absent directory is a quiet no-op, and a directory
+/// held by a running cluster is left alone because it may belong to another
+/// project sharing the per-user default.
+fn repair_unusable_data_directory(paths: &PasswordStatePaths) -> io::Result<()> {
+    if !paths.should_remove_data_dir {
+        return Ok(());
+    }
+    let Some(data_parent) = open_dir_if_exists(&paths.data_parent)? else {
+        return Ok(());
+    };
+    let data_name = &paths.data_name;
+
+    if data_directory_is_reusable(&data_parent, data_name, paths.expected_major_version)? {
+        return Ok(());
+    }
+
+    // The default data directory is shared with every other project under the
+    // same user, and those clusters do not hold Wildside's lock. A running one
+    // is not ours to repair or delete, so leave its data alone.
+    //
+    // This check deliberately sits as close to the removal as it can: another
+    // project may start a cluster after any earlier check, and the check and
+    // the removal cannot be made atomic without a lock protocol that every
+    // project sharing the per-user directory takes. Keeping the gap to a single
+    // intervening call is the narrowest window this side of that protocol.
+    if data_directory_is_in_use(&data_parent, data_name)? {
+        return Ok(());
+    }
+    remove_dir_if_exists(&data_parent, data_name)
+}
+
+/// Report whether the next bootstrap can reuse an existing data directory.
+///
+/// The library reuses a directory only when it holds `postgresql.conf`, and
+/// PostgreSQL then refuses to start if the stored `PG_VERSION` disagrees with
+/// the configured major version. Without a version requirement there is
+/// nothing to contradict, so an initialized directory is reusable whatever it
+/// holds.
+fn data_directory_is_reusable(
+    data_parent: &Dir,
+    data_name: &Path,
+    expected_major: Option<u32>,
+) -> io::Result<bool> {
+    if !path_exists(data_parent, &data_name.join("postgresql.conf"))? {
+        return Ok(false);
+    }
+    let Some(expected) = expected_major else {
+        return Ok(true);
+    };
+    let stored = read_optional_text(data_parent, &data_name.join("PG_VERSION"))?;
+    Ok(stored.is_some_and(|stored| major_version(&stored) == Some(expected)))
 }
 
 /// Compare the stored `.pgpass` with `password` and clear the stale state.
@@ -122,7 +316,11 @@ fn repair_password_file_state(
         // a quiet no-op rather than a reason to skip the `.pgpass` cleanup
         // below.
         if let Some(data_parent) = open_dir_if_exists(&paths.data_parent)? {
-            remove_dir_if_exists(&data_parent, &paths.data_name)?;
+            // The shared directory may belong to another project's running
+            // cluster; removing it would disrupt that project's tests.
+            if !data_directory_is_in_use(&data_parent, &paths.data_name)? {
+                remove_dir_if_exists(&data_parent, &paths.data_name)?;
+            }
         }
     }
 
@@ -141,5 +339,13 @@ fn remove_dir_if_exists(parent: &Dir, path: &Path) -> io::Result<()> {
 }
 
 #[cfg(test)]
+#[path = "password_state_fixture.rs"]
+mod fixture;
+
+#[cfg(test)]
 #[path = "password_state_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "password_state_paths_tests.rs"]
+mod paths_tests;

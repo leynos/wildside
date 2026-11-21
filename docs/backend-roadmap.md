@@ -307,8 +307,9 @@ queue, cache, and repository ports defined in section 1.
 - [x] 5.2.1. Implement `RouteQueue` using Apalis with PostgreSQL backend,
   replacing the current stub adapter.
 - [x] 5.2.2. Define job structs for `GenerateRouteJob` and `EnrichmentJob`.
-- [ ] 5.2.3. Implement retry policies with exponential backoff and dead-letter
-  handling.
+- [x] 5.2.3. Implement retry policies with exponential backoff and dead-letter
+  handling. Durable scheduling, guarded dead-letter operations, and their
+  canaries are implemented; worker composition remains in 5.3.1.
 - [ ] 5.2.4. Propagate trace IDs through job metadata for observability.
 
 ### 5.3. Worker deployment
@@ -316,6 +317,11 @@ queue, cache, and repository ports defined in section 1.
 - [ ] 5.3.1. Deploy Apalis worker pools in Kubernetes with queue partitioning,
   bounded retries, and dead-letter handling for `GenerateRoute` and
   `Enrichment` jobs.
+  - Build each worker over `AttemptBoundStorage` and give every instance a
+    distinct worker name. The attempt-bound acknowledgement needs the former;
+    the latter keeps another instance's stale delivery from matching a row at
+    all. See
+    [ADR 0004](adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).
 
 ### 5.4. Caching strategy
 
@@ -331,6 +337,11 @@ queue, cache, and repository ports defined in section 1.
 
 Tile serving and telemetry must remain adapter concerns; domain services
 publish events and metrics through their ports only.
+
+Queue observability also needs an operator or admin surface for dead-letter
+operations and an agreed owner and policy for retaining and pruning completed
+and dead `apalis.jobs` rows as history grows. Define that surface and policy
+alongside the worker and operational rollout; they are not implemented by 5.2.3.
 
 ### 6.1. Tile service rollout
 
