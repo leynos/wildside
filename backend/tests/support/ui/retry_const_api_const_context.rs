@@ -9,11 +9,8 @@
 
 use backend::domain::jobs::retry::JitterSample;
 use backend::domain::ports::{RouteDeadLetterOutcome, RouteQueueOutcome, RouteRetryOutcome};
-use backend::outbound::queue::TerminalRetryReason;
 
 const MIDPOINT: JitterSample = JitterSample::midpoint();
-const EXHAUSTED_LABEL: &str = TerminalRetryReason::Exhausted.as_label();
-const FATAL_LABEL: &str = TerminalRetryReason::Fatal.as_label();
 const ENQUEUE_LABEL: &str = RouteQueueOutcome::Success.as_label();
 const RETRY_LABEL: &str = RouteRetryOutcome::Scheduled.as_label();
 const DEAD_LETTER_LABEL: &str = RouteDeadLetterOutcome::Exhausted.as_label();
@@ -21,8 +18,6 @@ const DEAD_LETTER_LABEL: &str = RouteDeadLetterOutcome::Exhausted.as_label();
 fn main() {
     let _ = (
         MIDPOINT,
-        EXHAUSTED_LABEL,
-        FATAL_LABEL,
         ENQUEUE_LABEL,
         RETRY_LABEL,
         DEAD_LETTER_LABEL,

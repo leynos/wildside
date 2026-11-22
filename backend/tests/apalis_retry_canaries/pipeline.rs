@@ -13,10 +13,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backend::domain::jobs::retry::{JobFailure, JobRetryPolicy, JobRetryPolicyConfig};
-use backend::domain::ports::NoOpRouteQueueMetrics;
-use backend::outbound::queue::{
-    PostgresRetryScheduler, RetryPersistence, TerminalRetryReason, TerminalRetryUpdate,
-};
+use backend::domain::ports::{DeadReason, NoOpRouteQueueMetrics};
+use backend::outbound::queue::{PostgresRetryScheduler, RetryPersistence, TerminalRetryUpdate};
 use sqlx::PgPool;
 
 use super::fixtures::{
@@ -151,8 +149,9 @@ fn record_terminal_failure(
         .run(scheduler.record_terminal_failure(TerminalRetryUpdate {
             task_id: id,
             worker_id: worker,
+            claim_token: CRASHED_CLAIM,
             attempt: NonZeroU32::new(attempt).expect("positive terminating attempt"),
-            reason: TerminalRetryReason::Exhausted,
+            reason: DeadReason::Exhausted,
             shrink_limit: true,
         }))
         .expect("the terminal write completes")

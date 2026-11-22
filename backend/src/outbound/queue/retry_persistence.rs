@@ -47,16 +47,16 @@ use super::postgres_retry_scheduler::{
 pub trait RetryPersistence: Send + Sync {
     /// Move a running, worker-owned task's next delivery time forward.
     ///
-    /// The four fields describing the delivery travel together as a
+    /// The fields describing the delivery travel together as a
     /// [`RetryScheduleUpdate`], so a call site cannot pair a worker with
-    /// another task's attempt.
+    /// another task's attempt or token.
     async fn schedule_retry(&self, update: RetryScheduleUpdate<'_>) -> Result<bool, SqlxError>;
 
     /// Persist a terminal reason and optionally shrink the attempt limit.
     ///
-    /// The five columns that describe a terminal failure travel together, so
-    /// they are passed as [`TerminalRetryUpdate`] rather than as a long
-    /// positional argument list that call sites can silently transpose.
+    /// The columns that describe a terminal failure travel together, so they
+    /// are passed as [`TerminalRetryUpdate`] rather than as a long positional
+    /// argument list that call sites can silently transpose.
     async fn record_terminal_failure(
         &self,
         update: TerminalRetryUpdate<'_>,

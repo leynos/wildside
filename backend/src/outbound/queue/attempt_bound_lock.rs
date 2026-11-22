@@ -8,10 +8,11 @@
 //!
 //! This layer therefore writes a claim token into the row's metadata every time
 //! a delivery is locked, and carries the same token in the task's context. The
-//! acknowledgement requires the row to still hold the token its delivery
-//! claimed under. Recovery, retry scheduling, terminal writes, and the cap
-//! clamp update other columns without touching unrelated metadata keys, and a
-//! dead-letter requeue preserves them, so only a new claim changes the token.
+//! acknowledgement and the wrapper's retry, terminal, and cap-clamp writes all
+//! require the row to still hold the token its delivery claimed under.
+//! Recovery and a dead-letter requeue update other columns without touching
+//! unrelated metadata keys, and the guarded writes preserve them, so only a new
+//! claim changes the token.
 //!
 //! The claim itself is bound to the delivery that fetched the row. A fetched
 //! task may wait in the worker's buffer while its row moves on: orphan recovery
@@ -105,12 +106,16 @@ where
         // A version-4 UUID is random rather than time-ordered, which is all a
         // claim token needs: it must never repeat, and nothing orders by it.
         let token = Uuid::new_v4().to_string();
+        // The refusal below reports the queue, and the context that carries it
+        // moves into the inner service with `req`.
+        let queue = req.parts.ctx.queue().clone();
         req.parts.ctx = with_claim_token(req.parts.ctx, &token);
         let fut = self.inner.call(req);
         async move {
             let claim = Claim {
                 task_id: &task_id,
                 worker: &worker_id,
+                queue: queue.as_deref(),
                 fetched_attempt,
                 token: &token,
             };
@@ -158,6 +163,7 @@ fn with_claim_token(ctx: PgContext, token: &str) -> PgContext {
 struct Claim<'a> {
     task_id: &'a str,
     worker: &'a str,
+    queue: Option<&'a str>,
     fetched_attempt: i32,
     token: &'a str,
 }
@@ -206,6 +212,7 @@ async fn claim_row(pool: &PgPool, claim: &Claim<'_>) -> Result<(), sqlx::Error> 
     // only sees `RowNotFound`.
     warn!(
         decision = "claim_refused",
+        queue = claim.queue,
         task_id = claim.task_id,
         attempt = claim.fetched_attempt,
         "claim update affected no row; the delivery no longer owns the row"

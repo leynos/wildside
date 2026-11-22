@@ -1,12 +1,16 @@
 //! Guarded PostgreSQL writes for durable Apalis retry scheduling.
 
+mod updates;
+pub use updates::{RetryScheduleUpdate, TerminalCapClamp, TerminalRetryUpdate};
+
 use std::num::NonZeroU32;
 use std::sync::Arc;
-use std::time::Duration;
 
 use apalis_postgres::PgPool;
 use chrono::{DateTime, Utc};
 use sqlx::Error as SqlxError;
+
+use crate::domain::ports::DeadReason;
 
 /// Time source for the retry deadline the scheduler writes.
 ///
@@ -28,79 +32,30 @@ impl ClockSource for SystemClock {
     }
 }
 
-/// Terminal classification stored in D15's namespaced metadata field.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TerminalRetryReason {
-    /// The handler classified the error as permanent.
-    Fatal,
-    /// A retryable error reached a configured attempt limit.
-    Exhausted,
-}
-
-/// Details persisted when a task reaches a terminal retry outcome.
+/// The text stored under `wildside.retry.dead_reason`, if storage has one.
 ///
-/// The port accepts this value rather than five positional arguments so a
-/// call site cannot transpose the columns that describe one row.
-pub struct TerminalRetryUpdate<'a> {
-    /// Identity of the task that terminated.
-    pub task_id: &'a str,
-    /// Worker that owns the task's lock.
-    pub worker_id: &'a str,
-    /// Attempt that terminated the task.
-    pub attempt: NonZeroU32,
-    /// Why the task will not be retried.
-    pub reason: TerminalRetryReason,
-    /// Whether the attempt limit shrinks to the terminating attempt.
-    pub shrink_limit: bool,
+/// `Unclassified` describes a row read back without a recognized reason. It is
+/// a read-side classification, so writing it would invent a terminal outcome;
+/// callers must refuse it rather than store a sentinel. Keeping the mapping
+/// here, beside the statement that writes it, leaves the domain free of
+/// storage vocabulary.
+const fn stored_dead_reason_label(reason: DeadReason) -> Option<&'static str> {
+    match reason {
+        DeadReason::Fatal => Some("fatal"),
+        DeadReason::Exhausted => Some("exhausted"),
+        DeadReason::Unclassified => None,
+    }
 }
 
-/// Details of one delivery's retry to schedule.
+/// Bounded log label for any terminal reason.
 ///
-/// The fields describe a single delivery, so they travel as one value: passing
-/// them positionally would let a call site pair a worker with the wrong task's
-/// attempt, which is exactly the write the delivery guard exists to refuse.
-pub struct RetryScheduleUpdate<'a> {
-    /// Identity of the task to retry.
-    pub task_id: &'a str,
-    /// Worker that owns the task's lock.
-    pub worker_id: &'a str,
-    /// Attempt that just failed, as the delivery counts it.
-    pub attempt: NonZeroU32,
-    /// Delay before the task becomes eligible again.
-    pub delay: Duration,
-}
-
-/// Details of the fallback write that lowers a row's attempt cap.
-///
-/// The write exists for one case: a terminal classification whose reason could
-/// not be stored. Apalis still acknowledges that delivery as failed, and a
-/// failed row stays fetchable while `attempts < max_attempts`, so the cap is
-/// lowered to the terminating attempt before that acknowledgement lands.
-#[derive(Clone, Copy)]
-pub struct TerminalCapClamp<'a> {
-    /// Identity of the task that terminated.
-    pub task_id: &'a str,
-    /// Worker that owns the task's lock.
-    pub worker_id: &'a str,
-    /// Attempt that terminated the task.
-    pub attempt: NonZeroU32,
-}
-
-impl TerminalRetryReason {
-    /// Stable value stored under `wildside.retry.dead_reason`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use backend::outbound::queue::TerminalRetryReason;
-    ///
-    /// assert_eq!(TerminalRetryReason::Exhausted.as_label(), "exhausted");
-    /// ```
-    pub const fn as_label(self) -> &'static str {
-        match self {
-            Self::Fatal => "fatal",
-            Self::Exhausted => "exhausted",
-        }
+/// Logging also has to name the refused `Unclassified` case, but that text must
+/// not be mistaken for a value storage could hold, so it names the
+/// classification defect directly rather than reusing a stored label.
+pub(super) const fn dead_reason_log_label(reason: DeadReason) -> &'static str {
+    match stored_dead_reason_label(reason) {
+        Some(label) => label,
+        None => "unclassified",
     }
 }
 
@@ -122,6 +77,7 @@ impl PostgresRetryScheduler {
     ///     .schedule_retry(RetryScheduleUpdate {
     ///         task_id,
     ///         worker_id,
+    ///         claim_token,
     ///         attempt: NonZeroU32::new(2).expect("positive attempt"),
     ///         delay,
     ///     })
@@ -155,8 +111,9 @@ impl PostgresRetryScheduler {
     /// Move a running, worker-owned task's next delivery time forward.
     ///
     /// Returns `false` when the row is no longer owned by this delivery: it is
-    /// not running, another worker holds the lock, or the row has since been
-    /// delivered again and its attempt counter moved on. The deadline is taken
+    /// not running, another worker holds the lock, the row has since been
+    /// delivered again and its attempt counter moved on, or a later claim
+    /// replaced the token this delivery claimed under. The deadline is taken
     /// from the injected [`ClockSource`] and bound as the new `run_at`.
     ///
     /// # Examples
@@ -166,6 +123,7 @@ impl PostgresRetryScheduler {
     ///     .schedule_retry(RetryScheduleUpdate {
     ///         task_id,
     ///         worker_id,
+    ///         claim_token,
     ///         attempt,
     ///         delay: Duration::from_secs(2),
     ///     })
@@ -194,6 +152,7 @@ impl PostgresRetryScheduler {
         let RetryScheduleUpdate {
             task_id,
             worker_id,
+            claim_token,
             attempt,
             delay,
         } = update;
@@ -207,12 +166,14 @@ impl PostgresRetryScheduler {
         let result = sqlx::query(
             "UPDATE apalis.jobs
              SET run_at = $4
-             WHERE id = $1 AND lock_by = $2 AND status = 'Running' AND attempts = $3",
+             WHERE id = $1 AND lock_by = $2 AND status = 'Running' AND attempts = $3
+               AND metadata->>'wildside.retry.claim_token' = $5",
         )
         .bind(task_id)
         .bind(worker_id)
         .bind(bounds.stored)
         .bind(scheduled_at)
+        .bind(claim_token)
         .execute(&self.pool)
         .await?;
 
@@ -224,7 +185,8 @@ impl PostgresRetryScheduler {
     /// The guarded statement runs before Apalis acknowledgement. Shrinking the
     /// cap only when requested makes the later acknowledgement leave a
     /// `Failed` row unfetchable when the policy limit is lower than the row's
-    /// existing cap. The metadata update preserves unrelated keys.
+    /// existing cap. The metadata update preserves unrelated keys, including
+    /// the claim token the predicate requires.
     ///
     /// # Examples
     ///
@@ -232,8 +194,9 @@ impl PostgresRetryScheduler {
     /// let recorded = scheduler.record_terminal_failure(TerminalRetryUpdate {
     ///     task_id,
     ///     worker_id,
+    ///     claim_token,
     ///     attempt: NonZeroU32::new(3).expect("positive attempt"),
-    ///     reason: TerminalRetryReason::Exhausted,
+    ///     reason: DeadReason::Exhausted,
     ///     shrink_limit: true,
     /// }).await?;
     /// assert!(recorded, "the worker still owns a running task");
@@ -242,8 +205,8 @@ impl PostgresRetryScheduler {
     /// # Errors
     ///
     /// Returns the PostgreSQL error when the guarded update cannot be
-    /// executed, or a protocol error when the attempt exceeds Apalis's integer
-    /// range.
+    /// executed, or a protocol error when the reason has no stored label or
+    /// the attempt exceeds Apalis's integer range.
     #[tracing::instrument(
         skip_all,
         fields(
@@ -251,7 +214,7 @@ impl PostgresRetryScheduler {
             task_id = update.task_id,
             worker_id = update.worker_id,
             attempt = update.attempt.get(),
-            reason = update.reason.as_label(),
+            reason = dead_reason_log_label(update.reason),
             shrink_limit = update.shrink_limit,
         )
     )]
@@ -259,6 +222,9 @@ impl PostgresRetryScheduler {
         &self,
         update: TerminalRetryUpdate<'_>,
     ) -> Result<bool, SqlxError> {
+        let stored_reason = stored_dead_reason_label(update.reason).ok_or_else(|| {
+            SqlxError::Protocol("unclassified dead reason cannot be stored".to_owned())
+        })?;
         let bounds = AttemptBounds::for_delivery(update.attempt)?;
         let result = sqlx::query(
             "UPDATE apalis.jobs
@@ -269,14 +235,16 @@ impl PostgresRetryScheduler {
                      to_jsonb($5::text),
                      true
                  )
-             WHERE id = $1 AND lock_by = $2 AND status = 'Running' AND attempts = $6",
+             WHERE id = $1 AND lock_by = $2 AND status = 'Running' AND attempts = $6
+               AND metadata->>'wildside.retry.claim_token' = $7",
         )
         .bind(update.task_id)
         .bind(update.worker_id)
         .bind(update.shrink_limit)
         .bind(bounds.acknowledged)
-        .bind(update.reason.as_label())
+        .bind(stored_reason)
         .bind(bounds.stored)
+        .bind(update.claim_token)
         .execute(&self.pool)
         .await?;
 
@@ -289,7 +257,8 @@ impl PostgresRetryScheduler {
     /// not be stored. It leaves the attempt cap no higher than the terminating
     /// attempt, so the acknowledgement Apalis performs next stores a `Failed`
     /// row that no fetch selects, instead of one the worker would run again.
-    /// A cap that is already lower is left alone.
+    /// A cap that is already lower is left alone, and the row must still hold
+    /// the token this delivery claimed under.
     ///
     /// # Examples
     ///
@@ -297,6 +266,7 @@ impl PostgresRetryScheduler {
     /// let clamped = scheduler.clamp_terminal_cap(TerminalCapClamp {
     ///     task_id,
     ///     worker_id,
+    ///     claim_token,
     ///     attempt: NonZeroU32::new(3).expect("positive attempt"),
     /// }).await?;
     /// // `false` means another actor has taken the row over.
@@ -323,18 +293,21 @@ impl PostgresRetryScheduler {
         let TerminalCapClamp {
             task_id,
             worker_id,
+            claim_token,
             attempt,
         } = clamp;
         let bounds = AttemptBounds::for_delivery(attempt)?;
         let result = sqlx::query(
             "UPDATE apalis.jobs
              SET max_attempts = LEAST(COALESCE(max_attempts, $4), $4)
-             WHERE id = $1 AND lock_by = $2 AND status = 'Running' AND attempts = $3",
+             WHERE id = $1 AND lock_by = $2 AND status = 'Running' AND attempts = $3
+               AND metadata->>'wildside.retry.claim_token' = $5",
         )
         .bind(task_id)
         .bind(worker_id)
         .bind(bounds.stored)
         .bind(bounds.acknowledged)
+        .bind(claim_token)
         .execute(&self.pool)
         .await?;
 

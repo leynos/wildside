@@ -32,6 +32,6 @@ pub(super) use environment::{
 };
 pub(super) use ids::{ClaimToken, JobId, QueueName, WorkerName};
 pub(super) use rows::{
-    Delivery, JobRow, RowState, claim_due_rows, delivery_task, fetch_one_task, fetch_task,
-    insert_job, read_state,
+    Delivery, GuardedRowState, JobRow, RowState, claim_due_rows, delivery_task, fetch_one_task,
+    fetch_task, insert_job, read_guarded_row, read_state,
 };

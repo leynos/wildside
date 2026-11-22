@@ -16,8 +16,7 @@ use super::doubles::{
     PersistenceCall, RecordingMetrics, RecordingPersistence, TestJob, WORKER, WriteOutcome,
     service, task,
 };
-use crate::domain::ports::RouteDeadLetterOutcome;
-use crate::outbound::queue::TerminalRetryReason;
+use crate::domain::ports::{DeadReason, RouteDeadLetterOutcome};
 
 /// One delivery through the wrapper, with every effect recorded.
 struct Harness {
@@ -71,8 +70,15 @@ fn assert_single_terminal_write(persistence: &RecordingPersistence) {
         ] => {
             assert_eq!(worker_id, WORKER);
             assert_eq!(*attempt, 1);
-            assert_eq!(*reason, TerminalRetryReason::Fatal);
-            assert!(*shrink_limit);
+            assert_eq!(
+                *reason,
+                DeadReason::Fatal,
+                "a malformed payload must be dead-lettered as a fatal failure"
+            );
+            assert!(
+                *shrink_limit,
+                "the first attempt sits below the task's stored attempt cap"
+            );
         }
         other => panic!("expected exactly one terminal write, got {other:?}"),
     }

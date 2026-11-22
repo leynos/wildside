@@ -3,7 +3,6 @@
 use std::num::NonZeroU32;
 use std::time::Duration;
 
-use googletest::prelude::*;
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 
@@ -12,9 +11,10 @@ use super::retry::{
     JobRetryPolicy, JobRetryPolicyBuildError, JobRetryPolicyConfig, MAX_BACKOFF_DELAY,
     MAX_JOB_FAILURE_MESSAGE_BYTES, RetryDecision,
 };
-use crate::domain::ports::EnrichmentSourceError;
+use crate::domain::ports::{DeadReason, EnrichmentSourceError};
 
 mod properties;
+mod reasons;
 
 fn policy(config: JobRetryPolicyConfig) -> Result<JobRetryPolicy, JobRetryPolicyBuildError> {
     JobRetryPolicy::new(config)
@@ -181,24 +181,38 @@ fn retried_delay() -> RetryDecision {
     }
 }
 
+/// The terminal decision a fatal failure selects.
+fn fatal_dead_letter() -> RetryDecision {
+    RetryDecision::DeadLetter {
+        reason: DeadReason::Fatal,
+    }
+}
+
+/// The terminal decision an exhausted retryable failure selects.
+fn exhausted_dead_letter() -> RetryDecision {
+    RetryDecision::DeadLetter {
+        reason: DeadReason::Exhausted,
+    }
+}
+
 #[rstest]
 #[case::fatal_below_policy_bound(
     JobErrorKind::Fatal,
     JobAttemptBudget::unlimited(),
     2,
-    RetryDecision::DeadLetter
+    fatal_dead_letter()
 )]
 #[case::fatal_at_policy_bound(
     JobErrorKind::Fatal,
     JobAttemptBudget::unlimited(),
     3,
-    RetryDecision::DeadLetter
+    fatal_dead_letter()
 )]
 #[case::fatal_above_policy_bound(
     JobErrorKind::Fatal,
     JobAttemptBudget::unlimited(),
     4,
-    RetryDecision::DeadLetter
+    fatal_dead_letter()
 )]
 #[case::retryable_below_policy_bound(
     JobErrorKind::Retryable,
@@ -210,25 +224,25 @@ fn retried_delay() -> RetryDecision {
     JobErrorKind::Retryable,
     JobAttemptBudget::unlimited(),
     3,
-    RetryDecision::DeadLetter
+    exhausted_dead_letter()
 )]
 #[case::retryable_above_policy_bound(
     JobErrorKind::Retryable,
     JobAttemptBudget::unlimited(),
     4,
-    RetryDecision::DeadLetter
+    exhausted_dead_letter()
 )]
 #[case::policy_ceiling_binds(
     JobErrorKind::Retryable,
     JobAttemptBudget::from_max_attempts(5),
     3,
-    RetryDecision::DeadLetter
+    exhausted_dead_letter()
 )]
 #[case::job_budget_binds(
     JobErrorKind::Retryable,
     JobAttemptBudget::from_max_attempts(2),
     2,
-    RetryDecision::DeadLetter
+    exhausted_dead_letter()
 )]
 #[case::both_leave_another_attempt(
     JobErrorKind::Retryable,
@@ -240,7 +254,7 @@ fn retried_delay() -> RetryDecision {
     JobErrorKind::Retryable,
     JobAttemptBudget::from_max_attempts(0),
     1,
-    RetryDecision::DeadLetter
+    exhausted_dead_letter()
 )]
 fn decision_table_is_total_and_honours_every_lower_bound(
     #[case] kind: JobErrorKind,
@@ -255,7 +269,11 @@ fn decision_table_is_total_and_honours_every_lower_bound(
         budget,
     );
 
-    assert_that!(policy.decide(delivery, kind, jitter), eq(expected));
+    assert_eq!(
+        policy.decide(delivery, kind, jitter),
+        expected,
+        "kind={kind:?}, budget={budget:?}, attempt={attempt} must select {expected:?}"
+    );
 }
 
 #[rstest]

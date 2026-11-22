@@ -10,14 +10,14 @@ use tracing::warn;
 use super::clamp::clamp_terminal_cap;
 use super::{RetryFailureContext, RetryJobIdentity, error_kind_label};
 use crate::domain::jobs::retry::JobErrorKind;
-use crate::domain::ports::RouteDeadLetterOutcome;
+use crate::domain::ports::{DeadReason, RouteDeadLetterOutcome};
 use crate::outbound::queue::TerminalRetryUpdate;
-use crate::outbound::queue::postgres_retry_scheduler::TerminalRetryReason;
+use crate::outbound::queue::postgres_retry_scheduler::dead_reason_log_label;
 
 /// The terminal decision a failed delivery asked the wrapper to persist.
 #[derive(Clone, Copy)]
 pub(super) struct TerminalRetryPlan {
-    pub(super) reason: TerminalRetryReason,
+    pub(super) reason: DeadReason,
     pub(super) shrink_limit: bool,
 }
 
@@ -37,7 +37,7 @@ pub(super) struct TerminalRetryPlan {
         task_id = identity.task_id,
         worker_id = identity.worker_id,
         attempt = context.attempt.get(),
-        reason = plan.reason.as_label(),
+        reason = dead_reason_log_label(plan.reason),
         outcome = tracing::field::Empty,
     )
 )]
@@ -56,6 +56,7 @@ pub(super) async fn persist_terminal_failure(
         .record_terminal_failure(TerminalRetryUpdate {
             task_id: identity.task_id,
             worker_id: identity.worker_id,
+            claim_token: context.claim_token.unwrap_or_default(),
             attempt: context.attempt,
             reason,
             shrink_limit,
@@ -80,7 +81,7 @@ pub(super) async fn persist_terminal_failure(
 #[derive(Clone, Copy)]
 struct TerminalWrite {
     kind: JobErrorKind,
-    reason: TerminalRetryReason,
+    reason: DeadReason,
     shrink_limit: bool,
 }
 
@@ -96,9 +97,9 @@ fn record_dead_letter(
         shrink_limit,
     } = write;
     tracing::Span::current().record("outcome", "dead_lettered");
-    context
-        .metrics
-        .observe_dead_letter(dead_letter_outcome(reason));
+    if let Some(outcome) = dead_letter_outcome(reason) {
+        context.metrics.observe_dead_letter(outcome);
+    }
     warn!(
         queue = context.queue_name,
         task_id = identity.task_id,
@@ -106,7 +107,7 @@ fn record_dead_letter(
         attempt = context.attempt.get(),
         error_kind = error_kind_label(kind),
         decision = "dead_lettered",
-        reason = reason.as_label(),
+        reason = dead_reason_log_label(reason),
         shrink_limit,
         "job failure recorded as terminal"
     );
@@ -125,9 +126,9 @@ fn record_refused_terminal_write(
 ) {
     let TerminalWrite { kind, reason, .. } = write;
     tracing::Span::current().record("outcome", "terminal_write_failure");
-    context
-        .metrics
-        .observe_terminal_write_failure(dead_letter_outcome(reason));
+    if let Some(outcome) = dead_letter_outcome(reason) {
+        context.metrics.observe_terminal_write_failure(outcome);
+    }
     if let Some(error) = error {
         warn!(
             queue = context.queue_name,
@@ -136,7 +137,7 @@ fn record_refused_terminal_write(
             attempt = context.attempt.get(),
             error_kind = error_kind_label(kind),
             decision = "terminal_write_failure",
-            reason = reason.as_label(),
+            reason = dead_reason_log_label(reason),
             error = %error,
             "job terminal update failed"
         );
@@ -148,16 +149,22 @@ fn record_refused_terminal_write(
             attempt = context.attempt.get(),
             error_kind = error_kind_label(kind),
             decision = "terminal_write_failure",
-            reason = reason.as_label(),
+            reason = dead_reason_log_label(reason),
             "job terminal update no longer owns a running row"
         );
     }
 }
 
 /// Map a terminal reason to the metric label it increments.
-fn dead_letter_outcome(reason: TerminalRetryReason) -> RouteDeadLetterOutcome {
+///
+/// Only reasons the adapter can store have a metric label. `Unclassified`
+/// describes a row read back without a recognized reason and is never produced
+/// by a retry decision, so counting it as a terminal write would invent an
+/// outcome the write never attempted.
+const fn dead_letter_outcome(reason: DeadReason) -> Option<RouteDeadLetterOutcome> {
     match reason {
-        TerminalRetryReason::Fatal => RouteDeadLetterOutcome::Fatal,
-        TerminalRetryReason::Exhausted => RouteDeadLetterOutcome::Exhausted,
+        DeadReason::Fatal => Some(RouteDeadLetterOutcome::Fatal),
+        DeadReason::Exhausted => Some(RouteDeadLetterOutcome::Exhausted),
+        DeadReason::Unclassified => None,
     }
 }

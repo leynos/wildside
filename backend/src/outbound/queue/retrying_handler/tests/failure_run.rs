@@ -14,8 +14,7 @@ use super::doubles::{
 };
 use super::policy;
 use crate::domain::jobs::retry::{JitterSample, JobErrorKind, JobFailure};
-use crate::domain::ports::{RouteDeadLetterOutcome, RouteRetryOutcome};
-use crate::outbound::queue::TerminalRetryReason;
+use crate::domain::ports::{DeadReason, RouteDeadLetterOutcome, RouteRetryOutcome};
 
 /// Delivery attempt every effect test exercises.
 ///
@@ -82,6 +81,7 @@ impl FailureRun {
             queue_name: QUEUE,
             task_id,
             worker_id,
+            claim_token: None,
         };
         let failure = JobFailure::new(kind, "probe failure");
         handle_failure(failure, &context)
@@ -112,7 +112,7 @@ pub(super) fn terminal_call() -> PersistenceCall {
         task_id: TASK_ID.to_owned(),
         worker_id: WORKER.to_owned(),
         attempt: ATTEMPT,
-        reason: TerminalRetryReason::Fatal,
+        reason: DeadReason::Fatal,
         shrink_limit: true,
     }
 }

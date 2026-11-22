@@ -31,6 +31,11 @@ pub(super) struct RetryFailureContext<'a> {
     pub(super) queue_name: &'a str,
     pub(super) task_id: Option<&'a str>,
     pub(super) worker_id: Option<&'a str>,
+    /// Claim token the delivery was locked under, if its context carried one.
+    ///
+    /// A delivery that never passed through the lock step has no token, and
+    /// its guarded writes bind the empty string so they match no row.
+    pub(super) claim_token: Option<&'a str>,
 }
 
 /// Classify one failed delivery and persist its retry or terminal outcome.
@@ -155,6 +160,7 @@ async fn persist_retry_schedule(
         .schedule_retry(RetryScheduleUpdate {
             task_id: identity.task_id,
             worker_id: identity.worker_id,
+            claim_token: context.claim_token.unwrap_or_default(),
             attempt: context.attempt,
             delay,
         })

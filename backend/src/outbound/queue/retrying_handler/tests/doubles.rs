@@ -24,11 +24,10 @@ use super::super::{JitterSource, RetryingJobService, RetryingJobServiceConfig};
 use super::policy;
 use crate::domain::jobs::retry::{JitterSample, JobFailure, JobRetryPolicy};
 use crate::domain::ports::{
-    RouteDeadLetterOutcome, RouteQueueMetrics, RouteQueueOutcome, RouteRetryOutcome,
+    DeadReason, RouteDeadLetterOutcome, RouteQueueMetrics, RouteQueueOutcome, RouteRetryOutcome,
 };
 use crate::outbound::queue::{
-    RetryPersistence, RetryScheduleUpdate, TerminalCapClamp, TerminalRetryReason,
-    TerminalRetryUpdate,
+    RetryPersistence, RetryScheduleUpdate, TerminalCapClamp, TerminalRetryUpdate,
 };
 
 pub(super) const QUEUE: &str = "wildside.wrapper-effects";
@@ -62,7 +61,7 @@ pub(super) enum PersistenceCall {
         task_id: String,
         worker_id: String,
         attempt: u32,
-        reason: TerminalRetryReason,
+        reason: DeadReason,
         shrink_limit: bool,
     },
     Clamp {

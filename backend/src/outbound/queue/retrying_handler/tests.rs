@@ -18,7 +18,7 @@ use super::failure::current_attempt;
 use crate::domain::jobs::retry::{
     JitterSample, JobErrorKind, JobRetryPolicy, JobRetryPolicyConfig,
 };
-use crate::outbound::queue::postgres_retry_scheduler::TerminalRetryReason;
+use crate::domain::ports::DeadReason;
 
 #[derive(Debug)]
 struct RetryWrapperCase {
@@ -50,7 +50,7 @@ struct RetryWrapperCase {
     policy_limit: 3,
     context_limit: 25,
     expected: RetryWrapperDecision::Terminal {
-        reason: TerminalRetryReason::Exhausted,
+        reason: DeadReason::Exhausted,
         shrink_limit: true,
     },
 })]
@@ -60,7 +60,7 @@ struct RetryWrapperCase {
     policy_limit: 3,
     context_limit: 5,
     expected: RetryWrapperDecision::Terminal {
-        reason: TerminalRetryReason::Fatal,
+        reason: DeadReason::Fatal,
         shrink_limit: true,
     },
 })]
@@ -70,7 +70,7 @@ struct RetryWrapperCase {
     policy_limit: 3,
     context_limit: 3,
     expected: RetryWrapperDecision::Terminal {
-        reason: TerminalRetryReason::Fatal,
+        reason: DeadReason::Fatal,
         shrink_limit: false,
     },
 })]
@@ -80,7 +80,7 @@ struct RetryWrapperCase {
     policy_limit: 5,
     context_limit: 1,
     expected: RetryWrapperDecision::Terminal {
-        reason: TerminalRetryReason::Exhausted,
+        reason: DeadReason::Exhausted,
         shrink_limit: false,
     },
 })]
@@ -90,7 +90,7 @@ struct RetryWrapperCase {
     policy_limit: 5,
     context_limit: 2,
     expected: RetryWrapperDecision::Terminal {
-        reason: TerminalRetryReason::Exhausted,
+        reason: DeadReason::Exhausted,
         shrink_limit: false,
     },
 })]
@@ -100,7 +100,7 @@ struct RetryWrapperCase {
     policy_limit: 3,
     context_limit: 25,
     expected: RetryWrapperDecision::Terminal {
-        reason: TerminalRetryReason::Fatal,
+        reason: DeadReason::Fatal,
         shrink_limit: true,
     },
 })]
@@ -116,7 +116,11 @@ fn retry_wrapper_maps_policy_and_context_budget(#[case] case: RetryWrapperCase) 
         },
     );
 
-    assert_eq!(decision, case.expected);
+    assert_eq!(
+        decision, case.expected,
+        "kind={:?}, attempt={}, policy limit={}, context limit={} must select {:?}",
+        case.kind, case.attempt, case.policy_limit, case.context_limit, case.expected
+    );
 }
 
 /// Scenario: Apalis delivers an attempt counter outside the domain's
@@ -195,7 +199,7 @@ fn expected_retry_wrapper_decision(
 ) -> RetryWrapperDecision {
     if kind == JobErrorKind::Fatal {
         return RetryWrapperDecision::Terminal {
-            reason: TerminalRetryReason::Fatal,
+            reason: DeadReason::Fatal,
             shrink_limit: has_context_attempt,
         };
     }
@@ -205,7 +209,7 @@ fn expected_retry_wrapper_decision(
         };
     }
     RetryWrapperDecision::Terminal {
-        reason: TerminalRetryReason::Exhausted,
+        reason: DeadReason::Exhausted,
         shrink_limit: has_context_attempt,
     }
 }

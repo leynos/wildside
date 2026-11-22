@@ -11,6 +11,7 @@ use super::super::retry::{
     BoundedAttempt, JitterSample, JobAttemptBudget, JobErrorKind, JobRetryPolicy,
     JobRetryPolicyConfig, MAX_BACKOFF_DELAY, RetryDecision,
 };
+use crate::domain::ports::DeadReason;
 
 fn policy_inputs() -> impl Strategy<
     Value = (
@@ -142,9 +143,16 @@ proptest! {
         let within_budget = attempt.get() < budget_cap;
         let should_dead_letter = is_fatal || attempt.get() >= max_attempts || !within_budget;
 
+        let expected_reason = if is_fatal {
+            DeadReason::Fatal
+        } else {
+            DeadReason::Exhausted
+        };
+
         match decision {
-            RetryDecision::DeadLetter => {
+            RetryDecision::DeadLetter { reason } => {
                 prop_assert!(should_dead_letter);
+                prop_assert_eq!(reason, expected_reason);
             }
             RetryDecision::Retry { delay } => {
                 prop_assert!(!should_dead_letter);

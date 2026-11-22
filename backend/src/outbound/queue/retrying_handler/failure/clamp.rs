@@ -59,6 +59,7 @@ pub(super) async fn clamp_terminal_cap(
     let clamp = TerminalCapClamp {
         task_id: identity.task_id,
         worker_id: identity.worker_id,
+        claim_token: context.claim_token.unwrap_or_default(),
         attempt: context.attempt,
     };
     // Each attempt after the first is preceded by its own wait, so the two

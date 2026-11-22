@@ -8,7 +8,6 @@
 
 use backend::domain::jobs::retry::JitterSample;
 use backend::domain::ports::{RouteDeadLetterOutcome, RouteQueueOutcome, RouteRetryOutcome};
-use backend::outbound::queue::TerminalRetryReason;
 
 #[test]
 fn retry_api_keeps_its_documented_values() {
@@ -16,16 +15,6 @@ fn retry_api_keeps_its_documented_values() {
         JitterSample::midpoint(),
         JitterSample::new(0.5).expect("0.5 is a valid sample"),
         "the midpoint sample is the neutral 0.5 jitter"
-    );
-    assert_eq!(
-        TerminalRetryReason::Exhausted.as_label(),
-        "exhausted",
-        "an exhausted retry reports the exhausted label"
-    );
-    assert_eq!(
-        TerminalRetryReason::Fatal.as_label(),
-        "fatal",
-        "a fatal failure reports the fatal label"
     );
     assert_eq!(
         RouteQueueOutcome::Success.as_label(),

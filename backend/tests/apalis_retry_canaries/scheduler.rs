@@ -13,9 +13,9 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::Duration;
 
+use backend::domain::ports::DeadReason;
 use backend::outbound::queue::{
-    ClockSource, PostgresRetryScheduler, RetryPersistence, RetryScheduleUpdate,
-    TerminalRetryReason, TerminalRetryUpdate,
+    ClockSource, PostgresRetryScheduler, RetryPersistence, RetryScheduleUpdate, TerminalRetryUpdate,
 };
 use chrono::{DateTime, TimeZone, Utc};
 use serde_json::Value;
@@ -78,6 +78,12 @@ fn delivery_attempt() -> NonZeroU32 {
     NonZeroU32::new(DELIVERED_ATTEMPT).expect("the delivered attempt is non-zero")
 }
 
+/// The claim token every scheduler canary's delivery was locked under.
+///
+/// The canaries model a delivery that passed through the lock step, so the
+/// guarded writes must carry the token the row holds to match it.
+pub(super) const CLAIM_TOKEN: &str = "canary-scheduler-claim";
+
 /// The queue, worker, status, and counters that describe one canary row.
 struct SchedulerRow<'a> {
     queue: &'a str,
@@ -87,6 +93,8 @@ struct SchedulerRow<'a> {
     max_attempts: i32,
     /// When the row becomes eligible, in seconds from now; negative is due.
     run_at_offset_seconds: f64,
+    /// Claim token the delivery that owns the row was locked under.
+    claim_token: &'a str,
 }
 
 impl<'a> SchedulerRow<'a> {
@@ -103,6 +111,7 @@ impl<'a> SchedulerRow<'a> {
             attempts: STORED_ATTEMPTS,
             max_attempts: 5,
             run_at_offset_seconds: 3_600.0,
+            claim_token: CLAIM_TOKEN,
         }
     }
 
@@ -124,21 +133,39 @@ async fn insert_scheduler_row(
     metadata: Option<Value>,
 ) {
     register_worker(pool, row.worker).await;
-    let mut job = JobRow::new(row.queue, id, row.status)
+    let job = JobRow::new(row.queue, id, row.status)
         .attempts(row.attempts)
         .max_attempts(row.max_attempts)
         .run_at_offset_seconds(row.run_at_offset_seconds)
-        .locked_by(row.worker);
-    if let Some(metadata) = metadata {
-        job = job.metadata(metadata);
-    }
+        .locked_by(row.worker)
+        .metadata(claimed_metadata(metadata, row.claim_token));
     insert_job(pool, job).await;
+}
+
+/// Merge the delivery's claim token into a canary row's metadata.
+///
+/// The guarded writes now require the row to still hold the token its delivery
+/// claimed under, so every canary row carries one. A caller that seeds
+/// unrelated keys gets them back beside the token.
+fn claimed_metadata(metadata: Option<Value>, claim_token: &str) -> Value {
+    let mut object = match metadata {
+        Some(Value::Object(object)) => object,
+        Some(other) => panic!("canary metadata must be a JSON object, got {other}"),
+        None => serde_json::Map::new(),
+    };
+    object.insert(
+        "wildside.retry.claim_token".to_owned(),
+        Value::String(claim_token.to_owned()),
+    );
+    Value::Object(object)
 }
 
 /// A canary row together with the environment and pool that hold it.
 struct Canary {
     environment: &'static CanaryEnvironment,
     pool: PgPool,
+    /// The queue the row belongs to, so a canary can requeue and re-claim it.
+    queue: String,
     id: String,
 }
 
@@ -148,10 +175,12 @@ impl Canary {
         let environment = CanaryEnvironment::shared();
         let pool = environment.pool.clone();
         let id = apalis_job_id();
+        let queue = row.queue.to_owned();
         environment.run(insert_scheduler_row(&pool, &id, row, metadata));
         Self {
             environment,
             pool,
+            queue,
             id,
         }
     }
@@ -190,18 +219,21 @@ impl Canary {
 
     /// Assert a guarded write reports no update and leaves the row unchanged.
     ///
-    /// Reading the row twice, rather than trusting the boolean alone, is what
+    /// Reading the row twice, rather than trusting the outcome alone, is what
     /// proves a refused write did not persist a partial change.
     fn assert_write_is_refused<T: PartialEq + std::fmt::Debug>(
         &self,
         read: impl Fn(&Self) -> T,
-        write: impl FnOnce() -> bool,
+        write: impl FnOnce() -> Result<bool, sqlx::Error>,
         reason: &str,
     ) {
         let before = read(self);
-        let updated = write();
+        let outcome = write();
 
-        assert!(!updated, "{reason}");
+        assert!(
+            matches!(&outcome, Ok(false)),
+            "{reason}: the guarded update must match no row, got {outcome:?}"
+        );
         assert_eq!(
             read(self),
             before,
@@ -221,12 +253,13 @@ struct TerminalState {
 fn terminal_update<'a>(
     id: &'a str,
     worker: &'a str,
-    reason: TerminalRetryReason,
+    reason: DeadReason,
     shrink_limit: bool,
 ) -> TerminalRetryUpdate<'a> {
     TerminalRetryUpdate {
         task_id: id,
         worker_id: worker,
+        claim_token: CLAIM_TOKEN,
         attempt: delivery_attempt(),
         reason,
         shrink_limit,
@@ -244,6 +277,7 @@ fn scheduler_advances_the_deadline_for_an_owned_running_row() {
             PostgresRetryScheduler::new(canary.pool.clone()).schedule_retry(RetryScheduleUpdate {
                 task_id: &canary.id,
                 worker_id: OWNER,
+                claim_token: CLAIM_TOKEN,
                 attempt: delivery_attempt(),
                 delay: RETRY_DELAY,
             }),
@@ -292,6 +326,7 @@ fn scheduler_persists_the_injected_instant_plus_the_delay() {
         .run(scheduler.schedule_retry(RetryScheduleUpdate {
             task_id: &canary.id,
             worker_id: OWNER,
+            claim_token: CLAIM_TOKEN,
             attempt: delivery_attempt(),
             delay: RETRY_DELAY,
         }))
@@ -317,7 +352,7 @@ fn terminal_write_records_the_reason_for_an_owned_running_row() {
         .environment
         .run(
             PostgresRetryScheduler::new(canary.pool.clone()).record_terminal_failure(
-                terminal_update(&canary.id, OWNER, TerminalRetryReason::Exhausted, true),
+                terminal_update(&canary.id, OWNER, DeadReason::Exhausted, true),
             ),
         )
         .expect("the guarded update executes");

@@ -61,7 +61,7 @@ pub struct DeadJob {
     pub attempts: u32,
     /// A bounded error string, without the serialized job payload.
     pub last_error: Option<String>,
-    /// Number of operator requeues recorded in D15 metadata.
+    /// Number of times the job has been requeued.
     pub requeue_count: u32,
     /// When the job went dead, when the adapter records it.
     pub dead_at: Option<DateTime<Utc>>,
@@ -77,7 +77,7 @@ pub struct DeadJob {
 pub enum DeadJobSkip {
     /// The stored attempt count is negative, which no attempt count can be.
     NegativeAttempts,
-    /// The stored requeue count is present but not a number.
+    /// The stored requeue counter is not a valid count.
     InvalidRequeueCount,
 }
 

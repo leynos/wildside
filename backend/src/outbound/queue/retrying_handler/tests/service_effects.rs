@@ -98,6 +98,7 @@ async fn scheduled_delay_for_sample(policy: &JobRetryPolicy, sample: f64) -> Dur
         queue_name: QUEUE,
         task_id: Some(TASK_ID),
         worker_id: Some(WORKER),
+        claim_token: None,
     };
     let failure = JobFailure::new(JobErrorKind::Retryable, "probe failure");
     handle_failure(failure, &context)

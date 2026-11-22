@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::domain::jobs::retry::{
     BoundedAttempt, JitterSample, JobAttemptBudget, JobErrorKind, JobRetryPolicy, RetryDecision,
 };
-use crate::outbound::queue::postgres_retry_scheduler::TerminalRetryReason;
+use crate::domain::ports::DeadReason;
 
 /// Outcome selected by the adapter's pure comparison of both attempt budgets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,7 +15,7 @@ pub(super) enum RetryWrapperDecision {
     Schedule { delay: Duration },
     /// Persist a terminal reason, optionally lowering the stored attempt cap.
     Terminal {
-        reason: TerminalRetryReason,
+        reason: DeadReason,
         shrink_limit: bool,
     },
 }
@@ -62,24 +62,18 @@ pub(super) fn decide_retry_wrapper_action(
         context.attempt,
         JobAttemptBudget::from_max_attempts(context.context_max_attempts),
     );
-    // The adapter only reports whether the stored limit already forbids this
-    // attempt; lowering it is a scheduler concern, and the reason itself comes
-    // from the domain decision below.
+    // Apalis acknowledges a failed delivery by storing this attempt count, and
+    // it keeps fetching a failed row while that count is below the row's cap.
+    // The cap therefore needs lowering only when this attempt is strictly
+    // below the cap the fetched task carried. `is_permitted` compares exactly
+    // those two values; the terminal reason itself comes from the domain
+    // decision below, so the flag and the reason stay independent.
     let shrink_limit = delivery.is_permitted();
     match policy.decide(delivery, context.kind, context.jitter) {
         RetryDecision::Retry { delay } => RetryWrapperDecision::Schedule { delay },
-        RetryDecision::DeadLetter => terminal_decision(context.kind, shrink_limit),
-    }
-}
-
-/// Map a refused retry to its terminal reason and cap-shrinking plan.
-fn terminal_decision(kind: JobErrorKind, shrink_limit: bool) -> RetryWrapperDecision {
-    let reason = match kind {
-        JobErrorKind::Fatal => TerminalRetryReason::Fatal,
-        JobErrorKind::Retryable => TerminalRetryReason::Exhausted,
-    };
-    RetryWrapperDecision::Terminal {
-        reason,
-        shrink_limit,
+        RetryDecision::DeadLetter { reason } => RetryWrapperDecision::Terminal {
+            reason,
+            shrink_limit,
+        },
     }
 }

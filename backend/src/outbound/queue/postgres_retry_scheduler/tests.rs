@@ -2,8 +2,9 @@
 
 use super::{
     AttemptBounds, ClockSource, PostgresRetryScheduler, RetryScheduleUpdate, TerminalCapClamp,
-    TerminalRetryReason, TerminalRetryUpdate, retry_deadline,
+    TerminalRetryUpdate, retry_deadline, stored_dead_reason_label,
 };
+use crate::domain::ports::DeadReason;
 use chrono::{DateTime, TimeZone, Utc};
 use sqlx::Error as SqlxError;
 use sqlx::postgres::PgPoolOptions;
@@ -50,6 +51,7 @@ fn schedule_update(delay: Duration) -> RetryScheduleUpdate<'static> {
     RetryScheduleUpdate {
         task_id: "task",
         worker_id: "worker",
+        claim_token: "claim-token",
         attempt: attempt(2),
         delay,
     }
@@ -65,8 +67,9 @@ async fn range_guards_reject_values_the_columns_cannot_hold() {
         .record_terminal_failure(TerminalRetryUpdate {
             task_id: "task",
             worker_id: "worker",
+            claim_token: "claim-token",
             attempt: attempt(u32::MAX),
-            reason: TerminalRetryReason::Exhausted,
+            reason: DeadReason::Exhausted,
             shrink_limit: true,
         })
         .await;
@@ -74,6 +77,7 @@ async fn range_guards_reject_values_the_columns_cannot_hold() {
         .clamp_terminal_cap(TerminalCapClamp {
             task_id: "task",
             worker_id: "worker",
+            claim_token: "claim-token",
             attempt: attempt(u32::MAX),
         })
         .await;
@@ -90,6 +94,47 @@ async fn range_guards_reject_values_the_columns_cannot_hold() {
             "{guard} must reject the value before contacting the database, got {error:?}"
         );
     }
+}
+
+#[test]
+fn stored_labels_use_the_persisted_vocabulary() {
+    assert_eq!(
+        stored_dead_reason_label(DeadReason::Fatal),
+        Some("fatal"),
+        "a fatal failure must be stored under the fatal label"
+    );
+    assert_eq!(
+        stored_dead_reason_label(DeadReason::Exhausted),
+        Some("exhausted"),
+        "an exhausted retry must be stored under the exhausted label"
+    );
+    assert_eq!(
+        stored_dead_reason_label(DeadReason::Unclassified),
+        None,
+        "a read-side classification must have no stored label"
+    );
+}
+
+#[tokio::test]
+async fn an_unclassified_dead_reason_is_refused_before_the_database() {
+    let scheduler = scheduler_without_server();
+
+    let error = scheduler
+        .record_terminal_failure(TerminalRetryUpdate {
+            task_id: "task",
+            worker_id: "worker",
+            claim_token: "claim-token",
+            attempt: attempt(2),
+            reason: DeadReason::Unclassified,
+            shrink_limit: true,
+        })
+        .await
+        .expect_err("storage has no label for an unclassified reason");
+
+    assert!(
+        matches!(&error, SqlxError::Protocol(message) if message.contains("unclassified")),
+        "the terminal write must refuse a reason storage cannot represent, got {error:?}"
+    );
 }
 
 #[test]

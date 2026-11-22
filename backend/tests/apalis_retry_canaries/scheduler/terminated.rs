@@ -14,11 +14,11 @@ use apalis_core::error::BoxDynError;
 use apalis_core::worker::ext::ack::Acknowledge;
 use apalis_postgres::PgAck;
 
-use super::{Canary, DELIVERED_ATTEMPT, OWNER, SchedulerRow, delivery_attempt};
+use super::{CLAIM_TOKEN, Canary, DELIVERED_ATTEMPT, OWNER, SchedulerRow, delivery_attempt};
 use crate::fixtures::{Delivery, claim_due_rows, delivery_task, fetch_one_task};
+use backend::domain::ports::DeadReason;
 use backend::outbound::queue::{
-    PostgresRetryScheduler, RetryPersistence, TerminalCapClamp, TerminalRetryReason,
-    TerminalRetryUpdate,
+    PostgresRetryScheduler, RetryPersistence, TerminalCapClamp, TerminalRetryUpdate,
 };
 
 /// The attempt limit the delivery was fetched with.
@@ -74,8 +74,9 @@ fn terminal_write_fails(canary: &Canary, scheduler: &PostgresRetryScheduler) -> 
             .record_terminal_failure(TerminalRetryUpdate {
                 task_id: &canary.id,
                 worker_id: OWNER,
+                claim_token: CLAIM_TOKEN,
                 attempt: delivery_attempt(),
-                reason: TerminalRetryReason::Fatal,
+                reason: DeadReason::Fatal,
                 shrink_limit: true,
             })
             .await
@@ -141,6 +142,7 @@ fn clamp_cap(canary: &Canary) -> bool {
             PostgresRetryScheduler::new(canary.pool.clone()).clamp_terminal_cap(TerminalCapClamp {
                 task_id: &canary.id,
                 worker_id: OWNER,
+                claim_token: CLAIM_TOKEN,
                 attempt: delivery_attempt(),
             }),
         )
@@ -223,6 +225,7 @@ fn a_fallback_that_never_lands_leaves_the_row_fetchable() {
         .run(scheduler.clamp_terminal_cap(TerminalCapClamp {
             task_id: &canary.id,
             worker_id: OWNER,
+            claim_token: CLAIM_TOKEN,
             attempt: delivery_attempt(),
         }));
     assert!(

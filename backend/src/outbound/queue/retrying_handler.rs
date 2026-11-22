@@ -120,6 +120,12 @@ where
                 u32::try_from(task.parts.ctx.max_attempts()).unwrap_or_default();
             let worker_id = running_worker_id(&task);
             let task_id = task.parts.task_id.as_ref().map(ToString::to_string);
+            // The lock step stamps the token before the wrapper runs. A
+            // delivery built without one binds the empty string in every
+            // guarded write, which matches no row, exactly as the
+            // acknowledgement refuses a missing token.
+            let claim_token =
+                super::attempt_bound_lock::claim_token(&task.parts.ctx).map(str::to_owned);
             tracing::Span::current().record("attempt", tracing::field::display(attempt));
             tracing::Span::current().record("task_id", tracing::field::debug(task_id.as_deref()));
             tracing::Span::current()
@@ -147,6 +153,7 @@ where
                 queue_name: &queue_name,
                 task_id: task_id.as_deref(),
                 worker_id: worker_id.as_deref(),
+                claim_token: claim_token.as_deref(),
             };
 
             let payload = match decode_job::<J>(&task.args) {

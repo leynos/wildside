@@ -1,12 +1,16 @@
 //! Pure retry policy and classified failure types for background jobs.
 //!
-//! The domain decides whether a failure is retryable and how long a retry
-//! should wait. Queue adapters supply jitter samples and perform scheduling.
+//! The domain decides whether a failure is retryable, why a refused retry is
+//! terminal, and how long a retry should wait. Queue adapters supply jitter
+//! samples, map the terminal reason to their own stored vocabulary, and perform
+//! scheduling.
 
 use std::num::NonZeroU32;
 use std::time::Duration;
 
 use thiserror::Error;
+
+use crate::domain::ports::DeadReason;
 
 mod budget;
 mod failure;
@@ -101,8 +105,11 @@ pub enum RetryDecision {
         /// Delay the queue must wait before redelivering the job.
         delay: Duration,
     },
-    /// Stop retrying and dead-letter the job.
-    DeadLetter,
+    /// Stop retrying and dead-letter the job for the given reason.
+    DeadLetter {
+        /// Terminal classification the dead-letter record must carry.
+        reason: DeadReason,
+    },
 }
 
 /// Exponential retry policy with a validated maximum delay and jitter range.
@@ -212,7 +219,9 @@ impl JobRetryPolicy {
     /// The answer honours both attempt limits a job is subject to: the policy's
     /// own ceiling and the budget the job was enqueued with. Whichever is
     /// lower wins, so an entry whose stored limit has already been reached is
-    /// terminal even when the policy would allow more attempts.
+    /// terminal even when the policy would allow more attempts. A terminal
+    /// answer names the reason: the failure itself was permanent, or a
+    /// retryable failure ran out of attempts.
     ///
     /// # Examples
     ///
@@ -224,6 +233,7 @@ impl JobRetryPolicy {
     ///     BoundedAttempt, JobAttemptBudget, JobErrorKind, JobRetryPolicy,
     ///     JobRetryPolicyConfig, JitterSample, RetryDecision,
     /// };
+    /// use backend::domain::ports::DeadReason;
     ///
     /// let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
     ///     max_attempts: NonZeroU32::new(3).expect("positive attempt limit"),
@@ -249,7 +259,12 @@ impl JobRetryPolicy {
     ///     JobErrorKind::Retryable,
     ///     jitter,
     /// );
-    /// assert_eq!(exhausted, RetryDecision::DeadLetter);
+    /// assert_eq!(
+    ///     exhausted,
+    ///     RetryDecision::DeadLetter {
+    ///         reason: DeadReason::Exhausted,
+    ///     }
+    /// );
     /// ```
     pub fn decide(
         &self,
@@ -257,13 +272,26 @@ impl JobRetryPolicy {
         kind: JobErrorKind,
         jitter: JitterSample,
     ) -> RetryDecision {
-        let attempt = delivery.attempt();
-        if kind == JobErrorKind::Fatal || !self.permits_another_attempt(delivery) {
-            RetryDecision::DeadLetter
-        } else {
-            RetryDecision::Retry {
-                delay: self.backoff_delay(attempt, jitter),
+        match self.terminal_reason(delivery, kind) {
+            Some(reason) => RetryDecision::DeadLetter { reason },
+            None => RetryDecision::Retry {
+                delay: self.backoff_delay(delivery.attempt(), jitter),
+            },
+        }
+    }
+
+    /// Return why a delivery is terminal, or `None` when it may be retried.
+    ///
+    /// A fatal failure is terminal on its own. A retryable failure is terminal
+    /// only once the policy ceiling or the job's stored budget leaves no
+    /// further attempt.
+    fn terminal_reason(&self, delivery: BoundedAttempt, kind: JobErrorKind) -> Option<DeadReason> {
+        match kind {
+            JobErrorKind::Fatal => Some(DeadReason::Fatal),
+            JobErrorKind::Retryable if !self.permits_another_attempt(delivery) => {
+                Some(DeadReason::Exhausted)
             }
+            JobErrorKind::Retryable => None,
         }
     }
 

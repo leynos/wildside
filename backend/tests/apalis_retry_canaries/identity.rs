@@ -3,7 +3,9 @@
 //! The wrapper may only persist a failure outcome while it can prove the
 //! current worker owns the row. These canaries drive the real service against
 //! a real `apalis.jobs` row, so they prove the refusal at the storage boundary
-//! and assert the metrics the wrapper records.
+//! and assert the metrics the wrapper records. The positive canary claims the
+//! row through the production lock step first, so the token its write binds is
+//! the one the delivery was actually locked under.
 
 use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
@@ -29,7 +31,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 
-use super::fixtures::{CanaryEnvironment, JobRow, insert_job, register_worker};
+use super::fixtures::{
+    CanaryEnvironment, GuardedRowState, JobId, JobRow, QueueName, insert_job, read_guarded_row,
+    register_worker,
+};
+use crate::ack_guard::claim_row;
 use crate::support::apalis_job_id::apalis_job_id;
 
 /// Typed `v1` envelope the production wrapper decodes before invoking the
@@ -74,44 +80,6 @@ impl RouteQueueMetrics for RecordingMetrics {
     fn observe_terminal_write_failure(&self, _reason: RouteDeadLetterOutcome) {}
 }
 
-/// Scheduling state the wrapper must leave untouched when it refuses to write.
-#[derive(Debug, PartialEq, Eq)]
-struct SchedulingState {
-    status: String,
-    attempts: i32,
-    max_attempts: i32,
-    lock_by: Option<String>,
-    run_at_micros: i64,
-    metadata: Option<String>,
-}
-
-fn read_scheduling_state(
-    runtime: &tokio::runtime::Runtime,
-    pool: &PgPool,
-    id: &str,
-) -> SchedulingState {
-    runtime.block_on(async {
-        let row: (String, i32, i32, Option<String>, i64, Option<String>) = sqlx::query_as(
-            "SELECT status, attempts, max_attempts, lock_by,
-                    (extract(epoch FROM run_at) * 1000000)::bigint,
-                    metadata::text
-             FROM apalis.jobs WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .expect("read canary job state");
-        SchedulingState {
-            status: row.0,
-            attempts: row.1,
-            max_attempts: row.2,
-            lock_by: row.3,
-            run_at_micros: row.4,
-            metadata: row.5,
-        }
-    })
-}
-
 /// The row and worker names one canary scenario uses.
 struct CanarySpec {
     queue: &'static str,
@@ -153,28 +121,39 @@ enum DeliveryIdentity {
 }
 
 /// Build a delivery whose worker context, `lock_by`, and identity vary.
+///
+/// A claimed canary carries the token the production lock step stamped; a
+/// synthetic delivery for a refusal case carries none, because the wrapper
+/// refuses it before any guarded write.
 fn task_for(
-    spec: &CanarySpec,
-    id: &str,
+    canary: &IdentityCanary,
     lock_by: Option<&str>,
     identity: DeliveryIdentity,
 ) -> PgTask<Value> {
     let mut data = Extensions::default();
     if !matches!(identity, DeliveryIdentity::MissingWorkerContext) {
-        data.insert(WorkerContext::new::<Value>(spec.worker));
+        data.insert(WorkerContext::new::<Value>(canary.spec.worker));
     }
-    let builder = Task::builder(json!({ "v": "v1", "probeId": id }))
+    let mut meta = serde_json::Map::new();
+    if let Some(token) = canary.claim_token.as_deref() {
+        meta.insert(
+            "wildside.retry.claim_token".to_owned(),
+            Value::String(token.to_owned()),
+        );
+    }
+    let builder = Task::builder(json!({ "v": "v1", "probeId": canary.id }))
         .with_ctx(
             PgContext::new()
                 .with_max_attempts(5)
-                .with_lock_by(lock_by.map(str::to_owned)),
+                .with_lock_by(lock_by.map(str::to_owned))
+                .with_meta(meta),
         )
         .with_data(data)
         .with_attempt(Attempt::new_with_value(1));
     let builder = match identity {
         DeliveryIdentity::MissingTaskId => builder,
         DeliveryIdentity::Complete | DeliveryIdentity::MissingWorkerContext => {
-            builder.with_task_id(id.parse().expect("canary task id"))
+            builder.with_task_id(canary.id.parse().expect("canary task id"))
         }
     };
     builder.build()
@@ -213,23 +192,48 @@ struct IdentityCanary {
     spec: &'static CanarySpec,
     id: String,
     metrics: Arc<RecordingMetrics>,
+    /// The token the production lock claim stamped, for a claimed row.
+    claim_token: Option<String>,
 }
 
 impl IdentityCanary {
     /// Insert a running row the canary worker owns.
+    ///
+    /// This row supports the refusal canaries, which drive a delivery whose
+    /// identity the lock step could never produce and never write.
     fn start(spec: &'static CanarySpec) -> Self {
         let canary = Self {
             environment: CanaryEnvironment::shared(),
             spec,
             id: apalis_job_id(),
             metrics: Arc::new(RecordingMetrics::default()),
+            claim_token: None,
         };
         canary.environment.run(insert_running_row(&canary));
         canary
     }
 
-    fn state(&self) -> SchedulingState {
-        read_scheduling_state(&self.environment.runtime, &self.environment.pool, &self.id)
+    /// Insert a due row and claim it through the production lock step.
+    ///
+    /// The claim stamps the row and the delivery context with the same token,
+    /// so this is the state the wrapper's guarded writes require. The wrapper's
+    /// own write then proves the token reached it.
+    fn start_claimed(spec: &'static CanarySpec) -> Self {
+        let environment = CanaryEnvironment::shared();
+        let id = apalis_job_id();
+        environment.run(insert_pending_row(environment, spec, &id));
+        let token = claim_row(environment, spec.worker, QueueName(spec.queue), JobId(&id));
+        Self {
+            environment,
+            spec,
+            id,
+            metrics: Arc::new(RecordingMetrics::default()),
+            claim_token: Some(token),
+        }
+    }
+
+    fn state(&self) -> GuardedRowState {
+        read_guarded_row(&self.environment.runtime, &self.environment.pool, &self.id)
     }
 
     fn retry_outcomes(&self) -> Vec<RouteRetryOutcome> {
@@ -253,7 +257,7 @@ impl IdentityCanary {
         self.environment.run(deliver(
             &self.environment.pool,
             self.spec.queue,
-            task_for(self.spec, &self.id, owner.lock_by(self.spec), identity),
+            task_for(self, owner.lock_by(self.spec), identity),
             metrics,
         ))
     }
@@ -274,6 +278,20 @@ async fn insert_running_row(canary: &IdentityCanary) {
             .run_at_offset_seconds(3_600.0)
             .metadata(json!({ "keep": "marker" }))
             .locked_by(canary.spec.worker),
+    )
+    .await;
+}
+
+/// Insert a due `Pending` row the production fetch can hand to the lock step.
+async fn insert_pending_row(environment: &CanaryEnvironment, spec: &CanarySpec, id: &str) {
+    register_worker(&environment.pool, spec.worker).await;
+    insert_job(
+        &environment.pool,
+        JobRow::new(spec.queue, id, "Pending")
+            .attempts(0)
+            .max_attempts(5)
+            .run_at_offset_seconds(-1.0)
+            .metadata(json!({ "keep": "marker" })),
     )
     .await;
 }
@@ -341,7 +359,7 @@ fn wrapper_writes_nothing_without_proven_identity(#[case] identity: DeliveryIden
 
 #[test]
 fn wrapper_schedules_the_retry_when_the_lock_owner_agrees() {
-    let canary = IdentityCanary::start(&OWNED);
+    let canary = IdentityCanary::start_claimed(&OWNED);
     let before = canary.state();
 
     let result = canary.deliver(LockOwner::Worker);
@@ -353,6 +371,10 @@ fn wrapper_schedules_the_retry_when_the_lock_owner_agrees() {
     assert_eq!(after.max_attempts, before.max_attempts);
     assert_eq!(after.lock_by, before.lock_by);
     assert_eq!(after.metadata, before.metadata);
+    assert_eq!(
+        after.claim_token, before.claim_token,
+        "an owned write must leave the claimed token in place"
+    );
     assert_ne!(
         after.run_at_micros, before.run_at_micros,
         "an owned row must receive the scheduled retry deadline"

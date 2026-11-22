@@ -160,7 +160,7 @@ pub(super) fn requeue_dead_job(
         .expect("the dead job is requeued");
 }
 
-/// Claim the requeued row through the production lock step.
+/// Claim a requeued row through the production lock step under `worker`.
 ///
 /// Returns the token the claim stamped, which the replacement delivery carries
 /// into its acknowledgement. Driving the lock directly rather than a worker
@@ -172,8 +172,13 @@ pub(super) fn requeue_dead_job(
 /// that fetch first with the pinned backend's own function. The delivery then
 /// carries the attempt count the row holds before it is polled, which is the
 /// count the claim compares against the stored one.
-fn claim_row(environment: &CanaryEnvironment, queue: QueueName<'_>, id: JobId<'_>) -> String {
-    let claimed = claim_due_rows(environment, queue.as_str(), SHARED_WORKER);
+pub(super) fn claim_row(
+    environment: &CanaryEnvironment,
+    worker: &str,
+    queue: QueueName<'_>,
+    id: JobId<'_>,
+) -> String {
+    let claimed = claim_due_rows(environment, queue.as_str(), worker);
     assert_eq!(
         claimed, 1,
         "the pinned fetcher queues exactly the requeued row"
@@ -181,12 +186,10 @@ fn claim_row(environment: &CanaryEnvironment, queue: QueueName<'_>, id: JobId<'_
     let mut service = AttemptBoundLock::new(environment.pool.clone()).layer(ContextProbe);
     let ctx = environment
         .run(async {
-            let mut task = delivery_task(id.as_str(), Delivery::new(SHARED_WORKER, GUARD_CAP, 0));
+            let mut task = delivery_task(id.as_str(), Delivery::new(worker, GUARD_CAP, 0));
             // A delivery reaches the lock inside a worker, which has already
             // put its own context in the task's extensions.
-            task.parts
-                .data
-                .insert(WorkerContext::new::<Value>(SHARED_WORKER));
+            task.parts.data.insert(WorkerContext::new::<Value>(worker));
             service.call(task).await
         })
         .expect("the lock step claims the requeued row");
@@ -336,7 +339,12 @@ fn a_requeued_row_cannot_be_overwritten_by_its_previous_delivery() {
         "a requeue preserves the token of the generation it replaced"
     );
 
-    let token = claim_row(environment, QueueName(GUARD_QUEUE), JobId(&id));
+    let token = claim_row(
+        environment,
+        SHARED_WORKER,
+        QueueName(GUARD_QUEUE),
+        JobId(&id),
+    );
     let claim = ClaimToken(token.as_str());
     let running = read_state(&environment.runtime, &pool, &id);
     assert_eq!(running.status, "Running", "the lock step promotes the row");

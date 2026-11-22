@@ -214,6 +214,48 @@ pub(crate) fn read_state(runtime: &Runtime, pool: &PgPool, id: &str) -> RowState
     })
 }
 
+/// Persisted state a guarded retry-scheduler write could change.
+///
+/// Every column here is one an owned write names or rewrites, so comparing two
+/// readings proves a refused write changed nothing at all.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct GuardedRowState {
+    pub(crate) status: String,
+    pub(crate) attempts: i32,
+    pub(crate) max_attempts: i32,
+    pub(crate) lock_by: Option<String>,
+    pub(crate) run_at_micros: i64,
+    pub(crate) metadata: Option<String>,
+    pub(crate) claim_token: Option<String>,
+}
+
+/// Read every column a guarded retry-scheduler write could change.
+pub(crate) fn read_guarded_row(runtime: &Runtime, pool: &PgPool, id: &str) -> GuardedRowState {
+    runtime.block_on(async {
+        let (status, attempts, max_attempts, lock_by, run_at_micros, metadata, claim_token) =
+            sqlx::query_as(
+                "SELECT status, attempts, max_attempts, lock_by,
+                        (extract(epoch FROM run_at) * 1000000)::bigint,
+                        metadata::text,
+                        metadata->>'wildside.retry.claim_token'
+                 FROM apalis.jobs WHERE id = $1",
+            )
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .expect("read canary guarded row state");
+        GuardedRowState {
+            status,
+            attempts,
+            max_attempts,
+            lock_by,
+            run_at_micros,
+            metadata,
+            claim_token,
+        }
+    })
+}
+
 /// Identity of one delivery, as the task context carries it.
 ///
 /// The four fields travel together because Apalis reads the worker, the attempt
