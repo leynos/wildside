@@ -31,6 +31,7 @@ use apalis_postgres::{PgContext, PgPool, PgTask};
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
 use serde_json::Value;
+use tracing::warn;
 use uuid::Uuid;
 
 /// Metadata key that names the delivery generation that owns the row.
@@ -199,5 +200,15 @@ async fn claim_row(pool: &PgPool, claim: &Claim<'_>) -> Result<(), sqlx::Error> 
     if updated.rows_affected() == 1 {
         return Ok(());
     }
+    // Only a delivery that fetched the row reaches this point, so a refused
+    // claim means the row moved on between the fetch and the handler. Report
+    // the delivery's own fields: the row no longer holds them, and the caller
+    // only sees `RowNotFound`.
+    warn!(
+        decision = "claim_refused",
+        task_id = claim.task_id,
+        attempt = claim.fetched_attempt,
+        "claim update affected no row; the delivery no longer owns the row"
+    );
     Err(sqlx::Error::RowNotFound)
 }

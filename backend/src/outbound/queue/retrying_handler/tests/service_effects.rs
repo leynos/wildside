@@ -204,6 +204,33 @@ async fn schedule_failure_warns_with_the_failure_decision() {
     assert!(logs_contain("schedule_failure"));
 }
 
+#[traced_test]
+#[tokio::test]
+async fn a_scheduled_retry_reports_at_info_not_warn() {
+    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Updated);
+
+    run.apply(JobErrorKind::Retryable).await;
+
+    logs_assert(|lines: &[&str]| {
+        let scheduled = lines
+            .iter()
+            .find(|line| line.contains("job failure scheduled for durable retry"))
+            .ok_or_else(|| "the scheduled retry must log its outcome".to_owned())?;
+        if !scheduled.contains("INFO") {
+            return Err(format!(
+                "a scheduled retry must log at INFO so warnings mean refused writes: {scheduled}"
+            ));
+        }
+        if lines
+            .iter()
+            .any(|line| line.contains("WARN") && line.contains("scheduled for durable retry"))
+        {
+            return Err("a scheduled retry must not also log at WARN".to_owned());
+        }
+        Ok(())
+    });
+}
+
 #[rstest::rstest]
 #[case::retryable_missing_task_id(JobErrorKind::Retryable, None, Some(WORKER))]
 #[case::retryable_missing_worker_id(JobErrorKind::Retryable, Some(TASK_ID), None)]

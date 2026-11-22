@@ -267,9 +267,11 @@ scheduling-failure counter. A refused or failed terminal write increments
 `route_queue_terminal_write_failure_total`, labelled by the reason it would
 have stored, and leaves the dead-letter counter unchanged because no reason was
 stored. Both log a warning whose `decision` field is `schedule_failure` or
-`terminal_write_failure` respectively. Alert on the terminal-write-failure
-counter as well as the warnings, because the dead-letter counter alone will not
-show a terminal write that never applied.
+`terminal_write_failure` respectively. A retry the wrapper schedules
+successfully logs at `INFO`, so a warning from the wrapper always means a
+refused or failed write rather than an ordinary retry. Alert on the
+terminal-write-failure counter as well as the warnings, because the dead-letter
+counter alone will not show a terminal write that never applied.
 
 A terminal failure is not retried just because storing its reason failed. The
 wrapper follows a failed terminal write with a bounded fallback that lowers the

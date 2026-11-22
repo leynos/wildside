@@ -125,6 +125,11 @@ skipped and a bounded `reason` (`negative-attempts` or
 summary line with the number skipped, so a sampled log still shows that a gap
 existed.
 
+A retry the wrapper schedules successfully logs at `INFO` with decision
+`scheduled`, the queue, the task and worker identifiers, the attempt, the error
+kind, and the stored delay. A warning from the retry wrapper therefore means a
+refused or failed write, not merely that a job is being retried.
+
 The retry scheduling-failure counter covers refused retry decisions only. A
 terminal write the database refuses or fails increments
 `route_queue_terminal_write_failure_total`, labelled by the reason the write
@@ -179,7 +184,10 @@ the count from the registry would run this aggregate over `apalis.jobs` on
 every scrape, so the scan cost would follow the scrape interval rather than the
 change rate. The collection point is therefore the monitoring system's own
 scheduled query, run on an interval the alerting owner sets, with its result
-plotted and alerted on like any other collected series.
+plotted and alerted on like any other collected series. The planned collected
+series is named `route_queue_dead_jobs` and carries only a `queue` label, drawn
+from the configured queue set. The worker rollout's alerting owner sets its
+threshold and paging route, and issue #630 records both as acceptance criteria.
 
 Nothing in this repository creates that schedule. The Helm chart under
 `deploy/charts/wildside` declares no scrape configuration, `ServiceMonitor` or
@@ -231,5 +239,8 @@ it, an acknowledgement matches on `id` and `lock_by` alone and can overwrite a
 replacement row produced by the same instance; without the distinct name, a
 stale acknowledgement from one instance can match another instance's row. A
 refused acknowledgement logs at `WARN` with decision `acknowledgement_refused`
-and leaves the row with its current owner. See
+and leaves the row with its current owner. The claim that precedes the handler
+can be refused the same way when the row moved on between the fetch and the
+lock: it logs at `WARN` with decision `claim_refused` and the delivery's
+`task_id` and `attempt`, because its caller sees only a missing row. See
 [ADR 0004](../adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).

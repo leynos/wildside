@@ -6,7 +6,7 @@ use std::time::Duration;
 use apalis_core::{error::BoxDynError, worker::context::WorkerContext};
 use apalis_postgres::PgTask;
 use serde_json::Value;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use super::JitterSource;
 use super::decision::{RetryDecisionContext, RetryWrapperDecision, decide_retry_wrapper_action};
@@ -163,7 +163,10 @@ async fn persist_retry_schedule(
         Ok(true) => {
             tracing::Span::current().record("outcome", "scheduled");
             context.metrics.observe_retry(RouteRetryOutcome::Scheduled);
-            warn!(
+            // A scheduled retry is the wrapper's normal degraded path, not a
+            // fault: the job will run again, so this is an informational
+            // outcome and warnings stay reserved for refused or failed writes.
+            info!(
                 queue = context.queue_name,
                 task_id = identity.task_id,
                 worker_id = identity.worker_id,

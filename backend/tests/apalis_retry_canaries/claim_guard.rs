@@ -23,6 +23,7 @@ use apalis_core::worker::context::WorkerContext;
 use apalis_postgres::{PgContext, PgTask};
 use backend::outbound::queue::AttemptBoundLock;
 use serde_json::Value;
+use tracing_test::traced_test;
 
 use super::ack_guard::requeue_dead_job;
 use super::fixtures::{
@@ -117,6 +118,7 @@ impl Service<PgTask<Value>> for ContextProbe {
 /// incremented the attempt count and cleared the lock owner, so either bound
 /// predicate alone would refuse the obsolete delivery here; a claim that
 /// checked neither would take the row the replacement had just fetched.
+#[traced_test]
 #[test]
 fn a_stale_delivery_cannot_claim_a_recovered_row() {
     let environment = CanaryEnvironment::shared();
@@ -159,6 +161,10 @@ fn a_stale_delivery_cannot_claim_a_recovered_row() {
     assert!(
         stale.is_err(),
         "the stalled delivery must not claim the recovered row: {stale:?}"
+    );
+    assert!(
+        logs_contain("claim_refused"),
+        "a refused claim must log its decision, because the caller only sees a missing row"
     );
     assert_eq!(
         read_state(&environment.runtime, &environment.pool, &id),
