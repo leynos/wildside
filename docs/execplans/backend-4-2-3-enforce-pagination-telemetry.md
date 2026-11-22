@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: BLOCKED (execution approved; awaiting prerequisite PR #460)
+Status: IN PROGRESS (PR #460 merged; implementation authorized)
 
 ## Purpose / big picture
 
@@ -47,8 +47,9 @@ which satisfies the roadmap wording without touching a shared wire format.
 
 ## Constraints
 
-- This plan must remain a draft until explicitly approved. Opening the plan
-  pull request authorizes no implementation.
+- The user explicitly authorized implementation on 2026-11-22 by directing
+  continuation of this plan. PR #459 remains a draft until `pr-babysitting`
+  clears its readiness gate.
 - **Sequencing.** This work must land *after*
   `docs/execplans/competing-metrics-patterns.md` (branch
   `feat/competing-metrics-patterns`), which establishes the single sanctioned
@@ -208,8 +209,25 @@ which satisfies the roadmap wording without touching a shared wire format.
   found the required metrics-pattern PR #460 is still open. Stopped before
   EP-M0; no implementation files have changed. Resume after #460 lands and
   verify its port shape against this plan.
+- [x] (2026-11-22) User directed implementation to resume. PR #460 is merged
+  at `380e7e8`, and that commit is reachable from `origin/main` at `f37928e`.
+  The merged `PaginationErrorMetrics` port uses the required provided `record`
+  method, `increment` hook, `NoOp`, injected Prometheus adapter, and
+  composition-root selection. The selected `/metrics` ingress exclusion and
+  in-cluster ServiceMonitor are confirmed as part of this plan.
+- [x] (2026-11-22) Replayed the three child-owned commits from exclusive base
+  `ed897e0` onto `f37928e`. The rebase helper could not infer a stacked-parent
+  boundary because PR #460 was never inherited; PR #459 records `ed897e0` as
+  its base, it is the unique parent/child merge base, and every commit in the
+  replay range changes only this ExecPlan. `range-diff` matched all three
+  commits one-to-one. New candidate: `bc8cd03`.
+- [x] (2026-11-22) The rebased `state_builders.rs` has 374 lines, down from
+  the 383-line baseline recorded when the plan was written. CodeGraph reindex
+  and symbol lookup each timed out at 300 seconds; use targeted source reads as
+  the documented fallback, with no CodeGraph result claimed.
 - [ ] EP-M0: split `backend/src/server/state_builders.rs` below the
-  400-line cap (separate atomic refactor, no behaviour change).
+  400-line cap (374 lines at the rebased baseline; separate atomic refactor, no
+  behaviour change).
 - [ ] EP-M1: `PaginationPageMetrics` port, label enums, observation type,
   and `NoOp` implementation (red tests first).
 - [ ] EP-M2: `PrometheusPaginationPageMetrics` adapter.
@@ -226,8 +244,9 @@ which satisfies the roadmap wording without touching a shared wire format.
 - Observation (2026-10-14): the required
   `feat/competing-metrics-patterns` branch is PR #460 and remains open. Its
   latest head is `2d1070a`; the live `main` ref is `9f4baf0`. Impact: the
-  sequencing constraint and tolerance are not met, so implementation must wait
-  for that work to land.
+  sequencing constraint and tolerance were not met at that observation, so
+  implementation correctly waited for that work to land. Resolved on 2026-10-19
+  when PR #460 merged; see the 2026-11-22 progress entry.
 
 - Observation: the production container never enabled the `metrics` feature.
   Evidence: `deploy/docker/backend.Dockerfile:18` runs
@@ -243,7 +262,9 @@ which satisfies the roadmap wording without touching a shared wire format.
   template exists in `deploy/charts/wildside/templates/`, and
   `deployment.yaml:71` exposes only `containerPort: 8080`. Impact: the
   documentation asserts a capability that does not exist, which is how the
-  previous point survived unnoticed. EP-M6 corrects it and makes it true.
+  previous point survived unnoticed. EP-M6 corrects it and makes it true. The
+  requester confirmed this mitigation by explicitly directing execution of this
+  plan on 2026-11-22; V-IMAGE-SCRAPE remains the acceptance check.
 
 - Observation: `Cursor::decode` does not use the derived `Deserialize`
   implementation. It deserializes into a separate `CursorWire` struct and
@@ -285,6 +306,21 @@ which satisfies the roadmap wording without touching a shared wire format.
   GitHub readback on 2026-10-14 showed PR #460 still open at head `2d1070a`,
   while `main` is at `9f4baf0`. Recheck the merged adapter and port shape
   before resuming. Date/Author: 2026-10-14, execution lead.
+
+- Decision: resume the plan after PR #460 merged, preserving its metrics port
+  pattern and the selected ingress exclusion plus in-cluster ServiceMonitor.
+  Rationale: the user directed execution of this exact plan on 2026-11-22,
+  after the prerequisite landed; this resolves the plan's explicit approval
+  gate for the selected deployment mitigation. V-IMAGE-SCRAPE will verify the
+  rendered ingress and live image before completion. Date/Author: 2026-11-22,
+  user instruction, recorded by execution lead.
+
+- Decision: replay only `ed897e0..c614dcf` onto `f37928e`. Rationale: PR #459
+  records `ed897e0` as its base; it is the unique merge base with PR #460's
+  preserved head; the complete three-commit suffix contains only plan
+  revisions, with no merge commits or inherited metrics-pattern changes.
+  `range-diff` confirmed the replay preserved all three commits. Date/Author:
+  2026-11-22, execution lead.
 
 - Decision: do not carry a traversal-depth counter inside the opaque cursor.
   Rationale: six independent objections, each sufficient alone. The cursor is
@@ -399,7 +435,10 @@ which satisfies the roadmap wording without touching a shared wire format.
 
 ## Outcomes & retrospective
 
-To be completed at milestone boundaries and at completion.
+Implementation is active. The sequencing blocker is resolved and the child
+branch is rebased onto the merged metrics-pattern baseline. Record each
+milestone outcome and any changed verification assumptions below as work
+proceeds.
 
 ## Context and orientation
 
@@ -677,10 +716,11 @@ Stage A, complete: reconnaissance, six-lens design review, and this document.
 Stages B and C run per milestone, red tests before production code throughout.
 Stage D is the documentation and deployment milestone.
 
-**EP-M0 — make room.** Split `backend/src/server/state_builders.rs` (383 of 400
-lines) along a cohesive seam so the wiring in EP-M5 has room. No behaviour
-change; this is a separate atomic refactor committed on its own, per
-`AGENTS.md`. Gates must be green before and after.
+**EP-M0 — make room.** Split `backend/src/server/state_builders.rs` (374 of 400
+lines at the rebased baseline; it was 383 when this plan was written) along a
+cohesive seam so the wiring in EP-M5 has room. No behaviour change; this is a
+separate atomic refactor committed on its own, per `AGENTS.md`. Gates must be
+green before and after.
 
 **EP-M1 — the port.** Create
 `backend/src/domain/ports/pagination_page_metrics.rs` with the label enums, the
