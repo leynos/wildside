@@ -9,11 +9,13 @@ Status: IN PROGRESS — implementation complete, pending merge (approved for
 execution 2026-10-30 and published as the pull request `leynos/wildside#457`).
 The head `1a82dad` passes the nine repository gates and the hosted `build`,
 `coverage`, CodeScene, and Gecko checks, and every review finding has a
-disposition recorded below. One decision remains open and is the user's: the
-2026-11-20 reply on the claim-token thread requires explicit user approval of
-the D15 amendment, because `Constraints` reserves further mechanism changes to
-the user. The dated sections that follow record each reconciliation in full;
-this line states only the current position.
+disposition recorded below; those gate results apply to `1a82dad`. The later
+head `d821d3d` was reviewed separately and also passes the nine repository
+gates. One decision remains open and is the user's: the 2026-11-20 reply on the
+claim-token thread requires explicit user approval of the D15 amendment, because
+`Constraints` reserves further mechanism changes to the user. The dated
+sections that follow record each reconciliation in full; this line states only
+the current position.
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -3004,8 +3006,12 @@ gates passed. The pin, durable scheduling, and acknowledgement assumptions were
 exercised by the M0 probe and V8 canaries; none was falsified. V1–V6 and V9 are
 covered by policy, behavioural, negative-control, and boundary checks, and the
 V1 job snapshots remain unchanged (V7). No formal proof artefact was introduced
-or materially changed. Publication and the hosted PR delivery handoff remain
-pending.
+or materially changed. The implementation is complete and published as the pull
+request `leynos/wildside#457`. The head `d821d3d` passes the nine repository
+gates and the hosted `build`, `coverage`, CodeScene, and Gecko checks. The D15
+claim-token amendment remains pending explicit user approval; the CodeRabbit
+review of 2026-11-22 requires that approval before it will treat the finding as
+addressed.
 
 ## Revision note
 
@@ -4736,3 +4742,50 @@ explicit user approval of the D15 amendment before it treats that finding as
 addressed. That decision is the user's: the plan's Constraints reserve further
 mechanism changes to the user. It is recorded as pending here rather than
 assumed.
+
+### Third review of 2026-11-22: domain terminal reason and guarded-write tokens
+
+The review of the `d821d3d` head (review `6010796810`) raised one inline
+finding and four failed pre-merge rows. All five are implemented in this round.
+
+**Guarded writes carry the claim token (Testing).** The reviewer asked for
+canaries that model the replacement generation rather than an attempt-count
+mismatch, and named the remedy if the current SQL failed them. It does fail
+them: `schedule_retry`, `record_terminal_failure`, and `clamp_terminal_cap`
+matched `id`, `lock_by`, `status = 'Running'`, and `attempts` only, so a
+requeue that resets `attempts` to zero let a stale delivery's write match the
+row its own instance had just re-claimed. The three updates now bind
+`metadata->>'wildside.retry.claim_token'`, exactly as the acknowledgement does,
+and a tokenless delivery binds the empty string so it matches no row.
+`apalis_retry_canaries/scheduler/guards.rs` drives the production requeue, the
+production claim, and each stale write, leaving every non-token discriminator
+equal.
+
+**Domain terminal reason (Domain Architecture).** `RetryDecision::DeadLetter`
+now carries a `DeadReason` that `JobRetryPolicy::decide` derives from the
+`JobErrorKind`; the adapter's duplicate `TerminalRetryReason` is gone, and only
+the adapter maps the reason to the stored `fatal` / `exhausted` label. The
+wrapper passes the domain reason through and no longer re-derives it. Domain
+tests pin the reason for each kind, and adapter tests pin the storage label.
+
+**Documentation (Developer Documentation).** The guide names
+`AttemptBoundLock`/`AttemptBoundLockService` and the token predicate in both
+the acknowledgement and the guarded writes, documents `JobAttemptBudget` and
+`BoundedAttempt` as the domain's budget, names the `test-support` listing
+seams, and lists `tooling_doubles.py`. The plan's `Outcomes & retrospective`
+section now states the current position.
+
+**Dead-job backlog (Observability, inline finding).** The runbook's backlog
+query now returns one row per configured queue, so it can produce the
+`route_queue_dead_jobs{queue=...}` series, and it states that a configured
+queue with no dead jobs reports zero. The `claim_refused` warning carries the
+`queue` field. The gauge itself remains issue #630's, on the disposition of
+2026-11-20.
+
+**Amendment scope.** The claim-token amendment of 2026-11-21 described reads of
+the key by the acknowledgement. This round adds reads by the wrapper's three
+guarded writes, which is the reviewer's own instructed remedy for the Testing
+row. The provenance is unchanged and still one decision: the implementation
+agent's, under the user's standing instruction to bring this PR to equilibrium
+and merge it, reversible by directing the token's removal. That removal now
+also withdraws the guarded-write refusals recorded here.

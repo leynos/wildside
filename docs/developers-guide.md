@@ -2073,7 +2073,8 @@ Command-level Makefile coverage lives in
 `make test-workflow-contracts`, which is part of `make test`. The tests place
 command doubles on `PATH` while executing the real recipes, so runner choice,
 arguments, and environment propagation remain covered without downloading the
-tools under test.
+tools under test. The doubles and the invocation log those contracts share live
+in `tests/workflow_contracts/tooling_doubles.py`.
 
 UV-backed Makefile targets export repository-absolute `UV_CACHE_DIR` and
 `UV_TOOL_DIR` values that point to the ignored `.uv-cache` and `.uv-tools`
@@ -2625,6 +2626,14 @@ policy limit and records its bounded count under
 policy constructor validates delay parameters before jitter, so a configuration
 with several invalid fields reports the same first error.
 
+`PostgresDeadLetterQueue` has two listing controls for tests:
+`with_listing_isolation` and `with_listing_page_probe`, in
+`backend/src/outbound/queue/postgres_dead_letter/listing_controls.rs`. They
+exist only under `cfg(any(test, feature = "test-support"))`. The first runs the
+listing under a chosen isolation level, and the second observes page
+boundaries, so a test can change the row set between two pages of the real
+`list_dead` loop.
+
 `RetryingJobService<J, F>`, configured with `RetryingJobServiceConfig`, applies
 one policy to one queue. It decodes the stored payload into the queue's concrete
 `v1` job type `J` before invoking `F`, so a handler never observes a body that
@@ -2646,6 +2655,16 @@ five columns as positional arguments, and `schedule_retry` takes a
 `RetryScheduleUpdate` for the same reason. A call site cannot transpose a task
 identity, an attempt count, and a value that all describe the same row.
 
+#### Attempt budget and policy decision
+
+The domain owns the effective attempt budget for a delivery. `JobAttemptBudget`
+and `BoundedAttempt`, in `backend/src/domain/jobs/retry/budget.rs`, hold the
+job's stored limit and pair it with the attempt that just failed.
+`JobRetryPolicy::decide` takes that `BoundedAttempt` and weighs it against the
+policy ceiling, so the effective budget is the lower of the policy's ceiling
+and the job's stored limit. No adapter computes an outcome or a delay of its
+own; the wrapper applies what the policy returned.
+
 #### Jitter source seam
 
 `RetryingJobService` asks a `JitterSource` for exactly one `JitterSample` per
@@ -2664,14 +2683,18 @@ source at all.
 
 #### Delivery guards and the terminal-cap fallback
 
-Every guarded write matches `id`, `lock_by`, `status = 'Running'`, and
-`attempts` equal to the count the delivery inherited. Apalis increments the
-in-memory attempt on the first poll, so the row holds one less than the
-delivery counts; `AttemptBounds` derives both values in one place. The fourth
-predicate is what makes a write delivery-specific. Orphan recovery re-queues a
-stalled row with `attempts = attempts + 1`, so a worker that stalled and later
-resumes holds the same name but a stale counter, and its write is refused
-instead of overwriting the decision of the delivery that replaced it.
+Every guarded write matches `id`, `lock_by`, `status = 'Running'`, `attempts`
+equal to the count the delivery inherited, and the claim token its claim
+stamped. Apalis increments the in-memory attempt on the first poll, so the row
+holds one less than the delivery counts; `AttemptBounds` derives both values in
+one place. Orphan recovery re-queues a stalled row with
+`attempts = attempts + 1`, so a worker that stalled and later resumes holds the
+same name but a stale counter, and its write is refused instead of overwriting
+the decision of the delivery that replaced it. The attempt count alone is not a
+delivery generation, because a dead-letter requeue resets it to zero: the token
+is what separates the delivery that lost the row from the one that replaced it
+under the same worker name. A delivery that never claimed binds no token, so
+its write matches no row.
 
 A terminal classification fails the delivery, which Apalis acknowledges as
 `Failed`, and a failed row is fetched again while `attempts < max_attempts`. If
@@ -2680,7 +2703,7 @@ writes through `clamp_terminal_cap`, which lowers `max_attempts` to the
 terminating attempt with `LEAST(COALESCE(max_attempts, $cap), $cap)`. The
 acknowledgement then leaves an unfetchable row, because the cap binds exactly
 the value the acknowledgement stores as `attempts`. The fallback never raises a
-cap and carries the same four guards. It is idempotent, so a failed attempt is
+cap and carries the same guards. It is idempotent, so a failed attempt is
 retried up to three times with short waits: it runs only after another write
 has failed, which usually means a transiently failing database, and one attempt
 would leave the retired job fetchable for the rest of the delivery's life. A
@@ -2935,12 +2958,16 @@ Queue observability:
   JSONB metadata instead of scheduling another attempt, and acknowledgements
   preserve that value and other metadata.
 - Build every retry worker over `AttemptBoundStorage`, not
-  `apalis_postgres::PostgresStorage` directly. The pinned acknowledgement
-  matches a delivery on `id` and `lock_by` alone; `AttemptBoundAck` adds
-  `status = 'Running'` and the attempt count the row stored during the
-  delivery, so a stale delivery cannot overwrite the row that replaced it.
-  Distinct worker names per instance remain a separate layer that keeps one
-  instance's stale acknowledgement from matching another instance's row.
+  `apalis_postgres::PostgresStorage` directly. `AttemptBoundLock` and
+  `AttemptBoundLockService`, in
+  `backend/src/outbound/queue/attempt_bound_lock.rs`, stamp a fresh
+  `wildside.retry.claim_token` on every claim and carry it in the delivery
+  context. The pinned acknowledgement matches a delivery on `id` and `lock_by`
+  alone; `AttemptBoundAck` matches `id`, `lock_by`, `status = 'Running'`, the
+  attempt count the row stored during the delivery, and that token, so a stale
+  delivery cannot overwrite the row that replaced it. Distinct worker names per
+  instance remain a separate layer that keeps one instance's stale
+  acknowledgement from matching another instance's row.
 - `tracing` – The adapter emits `debug` on enqueue success and `warn` on
   failure points (serialization, push, and setup failures), including latency
   and the adapter outcome.

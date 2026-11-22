@@ -163,19 +163,32 @@ bounded by the existing `max_attempts`, which limits the number of deliveries.
 The fallback does not change `run_at`. An already-due row is therefore fetched
 on the next poll, without the ordinary retry backoff.
 
-Dead-letter backlog is the number of rows the dead predicate matches. This
-query is read-only, ignores no rows, and returns only a count:
+Dead-letter backlog is the number of rows the dead predicate matches, counted
+per configured queue and job type. This query is read-only, returns only
+identifiers and counts, and produces one row per configured queue:
 
 ```sql
-SELECT count(*) AS dead_jobs
-FROM apalis.jobs
-WHERE status = 'Killed'
-   OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts));
+SELECT configured.queue, count(jobs.id) AS dead_jobs
+FROM (VALUES ('route.generate')) AS configured(queue)
+LEFT JOIN apalis.jobs AS jobs
+  ON jobs.job_type = configured.queue
+ AND (jobs.status = 'Killed'
+      OR (jobs.status = 'Failed'
+          AND (jobs.max_attempts IS NULL OR jobs.attempts >= jobs.max_attempts)))
+GROUP BY configured.queue
+ORDER BY configured.queue;
 ```
 
-Alert on that count crossing the level the team has agreed to act on, and on a
-rising rate of skipped-row warnings, which indicate metadata that no longer
-matches the schema. The listing limit below caps a page, not the backlog.
+Each row is one `route_queue_dead_jobs{queue=...}` sample. The `VALUES` list is
+the deployment's configured queue set and must be kept in step with it: a queue
+the workers serve but the list omits has no series. A configured queue with no
+dead jobs still yields a row, with `dead_jobs = 0`, and that row is what keeps
+the series continuous; a missing sample would be a gap that resets the rate
+calculation.
+
+Alert on any queue's count crossing the level the team has agreed to act on,
+and on a rising rate of skipped-row warnings, which indicate metadata that no
+longer matches the schema. The listing limit below caps a page, not the backlog.
 
 The application does not export this count. Its metrics registry carries the
 three counters described above, which are scraped from the process, but the
@@ -193,9 +206,9 @@ Nothing in this repository creates that schedule. The Helm chart under
 `deploy/charts/wildside` declares no scrape configuration, `ServiceMonitor` or
 alerting rule — its only metrics block is the horizontal pod autoscaler — so
 the collection is a deployment action against the monitoring system, not a
-chart value. Until that schedule exists, the count is available only by running
-the query by hand, and the backlog has no collected signal to alert on.
-Building that collection point, together with its scrape and alert
+chart value. Until that schedule exists, the per-queue counts are available
+only by running the query by hand, and the backlog has no collected signal to
+alert on. Building that collection point, together with its scrape and alert
 configuration, is tracked as
 [issue #630](https://github.com/leynos/wildside/issues/630) and belongs with
 the worker rollout in roadmap item 5.3.1.
