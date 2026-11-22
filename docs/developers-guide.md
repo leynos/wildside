@@ -582,6 +582,11 @@ flag, and the places that assign `RUSTFLAGS` restate both flags:
   Whitaker builds its lint driver on a different toolchain that must not
   inherit these flags. The coverage jobs also assign `-D warnings` alone, so a
   measurement stays on the platform linker.
+- `make lint-whitaker` runs Whitaker once for the root workspace and once for
+  `backend/Cargo.toml`, and each run selects the suite with
+  `--lib whitaker_suite`. `--fail-on-no-libraries` turns an empty selection
+  into a failure, so a renamed, uninstalled, or filtered-out lint library fails
+  the gate instead of passing after linting nothing.
 
 The first run after this change misses the compiler cache for every crate,
 because the flags are part of the cache key, so it takes as long as a cold
@@ -1318,7 +1323,16 @@ Three pieces cooperate here:
   and CI enable it via `--all-features`. Fixture `.stderr` files are blessed
   against the pinned toolchain in `rust-toolchain.toml`; re-bless with
   `TRYBUILD=overwrite cargo test -p backend --features trybuild-tests` after a
-  deliberate toolchain bump.
+  deliberate toolchain bump. `backend/tests/retry_const_api_ui.rs` is the third
+  suite. It requires the same feature, compiles
+  `tests/support/ui/retry_const_api_const_context.rs` as a passing fixture, and
+  requires `tests/support/ui/jitter_sample_private_constructor.rs` to fail with
+  the committed `.stderr`. Nextest never runs it: `test-rust` and the CI
+  `build` job exclude the binary by name in full, because the explicit
+  compile-fail step is the only place these suites execute. Add a new
+  compile-fail suite to both the exclusion expression and that step; a pattern
+  in place of the enumerated list would silently absorb a suite and run it
+  nowhere.
 
 - **Shared embedded-cluster password repair** lives in
   `backend/tests/support/stable_cluster_env.rs`
@@ -2632,6 +2646,22 @@ five columns as positional arguments, and `schedule_retry` takes a
 `RetryScheduleUpdate` for the same reason. A call site cannot transpose a task
 identity, an attempt count, and a value that all describe the same row.
 
+#### Jitter source seam
+
+`RetryingJobService` asks a `JitterSource` for exactly one `JitterSample` per
+failed delivery. `ThreadRngJitter` is the production source: it draws from the
+thread-local generator and falls back to `JitterSample::midpoint()`, which
+leaves the nominal delay unchanged, if a draw cannot be represented.
+`RetryingJobServiceConfig::new` installs it, and
+`RetryingJobServiceConfig::with_jitter` replaces it.
+
+Inject a fixed sample whenever a test asserts a scheduled delay. The usual
+choice, `FixedJitter(JitterSample::midpoint())`, keeps the policy's nominal
+delay so the expected `run_at` can be computed from the policy alone; another
+sample exercises the jitter band. A zero jitter fraction is not a substitute: a
+policy with no jitter would still pass if the wrapper never consulted the
+source at all.
+
 #### Delivery guards and the terminal-cap fallback
 
 Every guarded write matches `id`, `lock_by`, `status = 'Running'`, and
@@ -2674,6 +2704,26 @@ support, not a production worker abstraction. The environment-policy contract
 similarly pairs each manifest's path and contents in a test-only `Manifest`
 value so diagnostics refer to the source being checked.
 
+#### Version-coupling canaries
+
+`backend/tests/apalis_retry_canaries.rs` pins the behaviour the wrapper takes
+from the pinned `apalis-postgres` release and its `apalis.get_jobs` function:
+the scheduling columns and their names, which rows a fetch selects, the attempt
+count a delivery inherits, and what an acknowledgement leaves intact. Add a
+canary there only for behaviour an upgrade could change underneath the wrapper;
+wrapper decisions belong in the unit and BDD suites. A failure in the canary
+suite means the Apalis upgrade changed the contract, not that the wrapper
+regressed. Shared fixtures live in `apalis_retry_canaries/fixtures`, so each
+module reads as assertions about the contract.
+
+`backend/tests/support/queue_retry_worker.rs` is the harness those canaries and
+both retry BDD suites run. `run_queue_retry_worker` builds a worker over
+`AttemptBoundStorage`, polls on a short interval, and stops after a quiet
+period or at `DEFAULT_WORKER_DEADLINE`; `unique_worker_name` gives each
+instance a distinct worker name so one instance's stale delivery cannot match
+another's row. It is test support only: no production binary gains a worker
+loop from this plan.
+
 ### Queue architecture and public API
 
 Public production API:
@@ -2683,6 +2733,12 @@ Public production API:
 - `ApalisPostgresProvider` – The production `QueueProvider` implementation.
   Wraps `apalis_postgres::PostgresStorage<serde_json::Value>` and provisions
   the Apalis schema via `PostgresStorage::<(), (), ()>::setup`.
+  `ApalisPostgresProvider::new(pool, queue_name, policy)` performs that
+  provisioning and stores the policy's `max_attempts` as the attempt budget
+  every job it enqueues carries. The constructor returns
+  `JobDispatchError::Rejected` when the limit does not fit the signed `INTEGER`
+  column Apalis stores it in, so an unrepresentable policy fails at
+  construction rather than at the first enqueue.
 - `decode_job<J>` – The worker-side decode boundary for JSON loaded from
   `apalis.jobs`. It is pure: it returns a validated versioned envelope or a
   bounded `JobDispatchError::Rejected` diagnostic; malformed and unsupported

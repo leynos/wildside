@@ -5,21 +5,15 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS (approved for execution 2026-10-30; implementation
-complete, replayed onto `main` `c5bd108`, and published as the pull request
-`leynos/wildside#457`; the pre-merge reconciliation of 2026-11-07 added the
-terminal-write canaries, the Makefile command-boundary tests, the const-context
-tests, and the module and user-guide documentation; the review of 2026-11-08
-then corrected the metric labels, the `make` probe environment, the version-pin
-and shared-directory repair rules, the representative test commands, and the
-user-guide constructor, counter, runbook, and delay claims, and added the
-delivery-counter and jitter tests; the second reconciliation on 2026-11-08
-split the password-state fixture to stay inside the module limit, reduced
-`repair_unusable_data_directory` below the complexity gate, exercised the real
-`test-rust` recipe behind a `cargo` double, pinned the scheduler's persisted
-deadline to an injected instant, added a generated listing property test, and
-gave the dead-letter adapter error and requeue boundary events; the remaining
-work is to publish that repair, confirm the gates and hosted checks, and merge)
+Status: IN PROGRESS — implementation complete, pending merge (approved for
+execution 2026-10-30 and published as the pull request `leynos/wildside#457`).
+The head `1a82dad` passes the nine repository gates and the hosted `build`,
+`coverage`, CodeScene, and Gecko checks, and every review finding has a
+disposition recorded below. One decision remains open and is the user's: the
+2026-11-20 reply on the claim-token thread requires explicit user approval of
+the D15 amendment, because `Constraints` reserves further mechanism changes to
+the user. The dated sections that follow record each reconciliation in full;
+this line states only the current position.
 
 Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
 Review metadata may use UTC and therefore show the previous calendar date.
@@ -4707,3 +4701,38 @@ This amendment extends D15 by exactly one key, dated 2026-11-21:
 The amendment adds no schema object, no column, and no dependency. It changes
 which keys the existing guarded `jsonb_set` writes, and the key remains
 namespaced and covered by the rc-coupled canaries listed above.
+
+### Second review of 2026-11-21: observability and developer documentation
+
+The review of the `1a82dad` head raised no new inline findings and two failed
+pre-merge rows, both warnings.
+
+**Observability.** Two log changes are made. A refused claim in
+`attempt_bound_lock.rs` now logs at `WARN` with decision `claim_refused` and
+the delivery's `task_id` and `attempt`; previously the only evidence was the
+`RowNotFound` its caller received. The successful scheduled-retry log in
+`retrying_handler/failure.rs` moves from `WARN` to `INFO`, so a warning from
+the wrapper means a refused or failed write rather than a job that is retrying.
+The runbook's "Signals and alerting" section records both, and its backlog
+section names the planned collected series, `route_queue_dead_jobs`, labelled
+only by `queue`, with the threshold and paging route set by the worker
+rollout's alerting owner. The collector itself stays out of this PR: the
+roadmap scopes queue observability to the worker rollout, the chart declares no
+scrape configuration for any workload, and the reply of 2026-11-20 on this PR
+instructed that #630's collector not be added here without a scope change.
+
+**Developer documentation.** The guide now documents
+`ApalisPostgresProvider::new(pool, queue_name, policy)` and its rejection of
+attempt limits outside Apalis's signed range; a `JitterSource` seam subsection
+covering `ThreadRngJitter`, the midpoint fallback, `with_jitter`, and when a
+test must inject a fixed sample; the `lint-whitaker` invocation and
+`--fail-on-no-libraries`; the `retry_const_api_ui` lane's exclusion from
+nextest and its single execution point in the compile-fail step; and the
+`apalis_retry_canaries` and `queue_retry_worker` harnesses, with the rule that
+a canary exists only for behaviour an upgrade can change underneath the wrapper.
+
+**Open decision.** The reply of 2026-11-20 on the claim-token thread requires
+explicit user approval of the D15 amendment before it treats that finding as
+addressed. That decision is the user's: the plan's Constraints reserve further
+mechanism changes to the user. It is recorded as pending here rather than
+assumed.
