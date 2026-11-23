@@ -166,11 +166,10 @@ which satisfies the roadmap wording without touching a shared wire format.
   grounds that registration failures are deterministic configuration bugs that
   should fail fast in staging.
 
-- Risk: `backend/src/server/state_builders.rs` is 383 lines against the
-  400-line cap, and is exactly where composition wiring lands. Severity:
-  medium. Likelihood: high. Mitigation: EP-M0 splits it as a separate atomic
-  refactor before any wiring is added, per the `AGENTS.md` separate-refactor
-  rule.
+- Risk (resolved by EP-M0): `backend/src/server/state_builders.rs` was 374
+  lines against the 400-line cap and is exactly where composition wiring lands.
+  Severity: medium. Likelihood: high. Mitigation: EP-M0 extracted user-state
+  assembly into `state_builders/user_state.rs` before any wiring was added.
 
 - Risk: `build_users_page_response` already takes exactly four arguments and
   `clippy.toml` sets `too-many-arguments-threshold = 4`. Passing a telemetry
@@ -234,9 +233,11 @@ which satisfies the roadmap wording without touching a shared wire format.
   cases, both compile-fail tests, 656 workflow-contract tests, 115 script
   tests, and 14 lint-actions tests; see
   `/tmp/test-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-3.out`.
-- [ ] EP-M0: split `backend/src/server/state_builders.rs` below the
-  400-line cap (374 lines at the rebased baseline; separate atomic refactor, no
-  behaviour change).
+- [x] (2026-11-23) EP-M0 extracted the cohesive user-state builders into
+  `backend/src/server/state_builders/user_state.rs`. The parent is 143 lines
+  and the new module is 250 lines, both below the 400-line cap. The public
+  composition path and adapters are unchanged. The focused composition test and
+  all six full Make gates passed; see the EP-M0 evidence below.
 - [ ] EP-M1: `PaginationPageMetrics` port, label enums, observation type,
   and `NoOp` implementation (red tests first).
 - [ ] EP-M2: `PrometheusPaginationPageMetrics` adapter.
@@ -249,6 +250,12 @@ which satisfies the roadmap wording without touching a shared wire format.
 - [ ] EP-M6: deployment change, documentation, and roadmap tick.
 
 ## Surprises & discoveries
+
+- Observation (2026-11-23): the first focused compile after extraction found
+  that `PaginationErrorMetrics` remained part of the parent builder's public
+  signature. Restoring that import kept the port dependency explicit; the
+  focused test and complete gates passed afterwards. The split is structural
+  only and did not alter composition behaviour.
 
 - Observation (2026-10-14): the required
   `feat/competing-metrics-patterns` branch is PR #460 and remains open. Its
@@ -736,7 +743,9 @@ Stage D is the documentation and deployment milestone.
 lines at the rebased baseline; it was 383 when this plan was written) along a
 cohesive seam so the wiring in EP-M5 has room. No behaviour change; this is a
 separate atomic refactor committed on its own, per `AGENTS.md`. Gates must be
-green before and after.
+green before and after. **Complete:** user-state composition now lives in
+`backend/src/server/state_builders/user_state.rs`; the parent is 143 lines and
+the child module is 250 lines.
 
 **EP-M1 — the port.** Create
 `backend/src/domain/ports/pagination_page_metrics.rs` with the label enums, the
@@ -822,11 +831,13 @@ Conventions belong in the developers' guide.
 
 ## Milestones and plateaus
 
-- EP-M0 — `state_builders.rs` split; behaviour identical.
-  Requirements: none discharged; unblocks EP-M5. Acceptance: full gates green;
-  no diff in behaviour. Conformance: no interface, dependency, or format
-  change. Recovery: revert the single commit. Remaining: all telemetry work.
-  Compatibility: none required; application-internal.
+- EP-M0 — complete: user-state builders moved into
+  `state_builders/user_state.rs`; parent and child are 143 and 250 lines.
+  Requirements: none discharged; unblocks EP-M5. Acceptance: focused
+  composition test and full gates green; no behaviour change. Conformance: no
+  interface, dependency, or format change. Recovery: revert the single commit.
+  Remaining: all telemetry work. Compatibility: none required;
+  application-internal.
 
 - EP-M1 — port, enums, observation, and `NoOp` exist and are tested; no
   caller changed. Requirements: ROADMAP-4.2.3 partially; CONS-PATTERN-A.
@@ -989,8 +1000,24 @@ Reconnaissance evidence gathered 2026-08-16.
 - Unwired adapters demonstrating the failure V-WIRED prevents:
   `PrometheusRouteQueueMetrics` and `PrometheusEnrichmentJobMetrics` are
   constructed only under `#[cfg(test)]`.
-- Line-count headroom: `backend/src/server/state_builders.rs` 383,
+- Line-count headroom before EP-M0: `backend/src/server/state_builders.rs` 374;
+  after extraction, the parent is 143 and `user_state.rs` is 250,
   `backend/src/inbound/http/users_pagination.rs` 316, against a 400 cap.
+- EP-M0 gate evidence (all exit 0, run sequentially on the same candidate):
+  `make check-fmt` at
+  `/tmp/check-fmt-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-epm0.out`;
+  `make lint` at
+  `/tmp/lint-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-epm0.out`;
+  `make typecheck` at
+  `/tmp/typecheck-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-epm0.out`;
+  `make test` at
+  `/tmp/test-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-epm0.out`;
+  `make markdownlint` at
+  `/tmp/markdownlint-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-epm0.out`;
+  `make nixie` at
+  `/tmp/nixie-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-epm0.out`.
+  The full test gate passed 1,898 nextest cases, both trybuild tests, 656
+  workflow-contract tests, 115 script tests, and 14 lint-actions tests.
 - `clippy.toml`: `too-many-arguments-threshold = 4`,
   `cognitive-complexity-threshold = 9`, `too-many-lines-threshold = 70`.
 - `.config/nextest.toml:54` already places `users_list_pagination_bdd` in
