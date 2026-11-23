@@ -39,13 +39,14 @@ CANCEL_IN_PROGRESS: typ.Final = "${{ github.event_name == 'pull_request' }}"
 #: one pull request cancels another's run: a constant such as ``ci``, or
 #: ``${{ github.workflow }}`` alone, puts every pull request in one group. A
 #: per-run key such as ``github.run_id`` or ``github.sha`` serializes nothing
-#: and never cancels a predecessor. The ``github.ref`` fallback keys a push or
-#: a dispatch by its branch, since those events carry no pull-request number.
+#: and never cancels a predecessor. The ``github.run_id`` fallback gives a push or
+#: a dispatch a group of its own, since those events carry no pull-request
+#: number, so GitHub never drops a pending run for an earlier push.
 #: Equality rather than a list of required fragments, because a fragment test
 #: accepts a group that names the pull request only inside a different
 #: expression.
 GROUP_EXPRESSION: typ.Final = (
-    "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+    "${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}"
 )
 
 
