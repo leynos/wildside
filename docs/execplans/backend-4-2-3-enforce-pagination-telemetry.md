@@ -225,6 +225,15 @@ which satisfies the roadmap wording without touching a shared wire format.
   the 383-line baseline recorded when the plan was written. CodeGraph reindex
   and symbol lookup each timed out at 300 seconds; use targeted source reads as
   the documented fallback, with no CodeGraph result claimed.
+- [x] (2026-11-23) Established the full validation baseline before EP-M0.
+  Biome formatting in two existing frontend audit test files was the only
+  initial `check-fmt` and `lint` failure; formatting-only changes were
+  committed as `17241cc`. Against that exact candidate, `make check-fmt`,
+  `make lint`, `make typecheck`, `make test`, `make markdownlint`, and
+  `make nixie` all pass. The full `make test` target passed all 1,898 nextest
+  cases, both compile-fail tests, 656 workflow-contract tests, 115 script
+  tests, and 14 lint-actions tests; see
+  `/tmp/test-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-3.out`.
 - [ ] EP-M0: split `backend/src/server/state_builders.rs` below the
   400-line cap (374 lines at the rebased baseline; separate atomic refactor, no
   behaviour change).
@@ -297,6 +306,13 @@ which satisfies the roadmap wording without touching a shared wire format.
   traversal regardless of `has_more`. Impact: `outcome` must be derived from
   the emitted boundary link for the traversal direction, not from `has_more`.
   This is V-OUTCOME-DERIVED.
+
+- Observation (2026-11-23): the first complete baseline `make test` attempt had
+  one transient embedded-PostgreSQL startup failure; a subsequent nextest run
+  passed that case, and the full `make test` target then passed. Its initial
+  trybuild fixture compilation took about 117 minutes under the healthy shared
+  compiler queue. Impact: a slow trybuild stage is not evidence of a stuck
+  gate; preserve the running command and wait for its terminal result.
 
 ## Decision log
 
