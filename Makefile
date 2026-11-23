@@ -47,7 +47,14 @@ export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go
 # libsqlite3-sys 0.39 or later (diesel is not in this path: its libsqlite3-sys
 # cap, which blocked mxd, does not apply because wildside uses diesel with
 # PostgreSQL only): https://github.com/leynos/wildside/issues/600
-CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258 --ignore RUSTSEC-2026-0459
+# RUSTSEC-2026-0594 (cookie private-jar nonces can repeat in processes that
+# fork) is fixed in cookie 0.18.3, but actix-web 4.20.0 and awc 3.11.0, the
+# latest releases, still depend on cookie ^0.16, so no patched version is
+# reachable. The server runs one process with worker threads and never forks
+# after startup, which is the condition the advisory needs. Review by
+# 2026-12-23, and end this ignore when actix-web moves to cookie 0.18.3 or
+# later.
+CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258 --ignore RUSTSEC-2026-0459 --ignore RUSTSEC-2026-0594
 
 define ensure_tool
 	@command -v $(1) >/dev/null 2>&1 || { \
