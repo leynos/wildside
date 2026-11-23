@@ -119,7 +119,11 @@ def test_the_conforming_shape_is_accepted() -> None:
                 ("workflow-only-group", "${{ github.workflow }}"),
                 (
                     "pull-request-only-group",
-                    "${{ github.event.pull_request.number || github.ref }}",
+                    "${{ github.event.pull_request.number || github.run_id }}",
+                ),
+                (
+                    "ref-fallback",
+                    "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
                 ),
                 ("run-id-group", "ci-${{ github.run_id }}"),
                 ("sha-group", "${{ github.workflow }}-${{ github.sha }}"),
