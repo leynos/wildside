@@ -3369,10 +3369,12 @@ The compile-time row asked for const-context usage of the new public
 `backend/tests/support/ui/retry_const_api_const_context.rs`, which evaluates
 `JitterSample::midpoint` and the four `as_label` methods in `const` items, so
 losing a `const` qualifier is a compile failure rather than a silent change.
-The same harness compiles the negative fixture
-`backend/tests/support/ui/jitter_sample_private_constructor.rs`, which pins
-that a `JitterSample` can only be built through its validating constructor. The
-runtime values those methods return stay pinned separately in
+(The label methods later moved out of the domain into the adapters, so the
+fixture now covers the domain's remaining `const` surface and the label strings
+are pinned by adapter unit tests.) The same harness compiles the negative
+fixture `backend/tests/support/ui/jitter_sample_private_constructor.rs`, which
+pins that a `JitterSample` can only be built through its validating
+constructor. The runtime values those methods return stay pinned separately in
 `backend/tests/retry_api_values.rs`. The harness is gated behind
 `trybuild-tests`, excluded from the nextest suite, and named in both the
 `test-rust` recipe and the CI `Compile-fail tests` step.
@@ -4789,3 +4791,66 @@ row. The provenance is unchanged and still one decision: the implementation
 agent's, under the user's standing instruction to bring this PR to equilibrium
 and merge it, reversible by directing the token's removal. That removal now
 also withdraws the guarded-write refusals recorded here.
+
+### Fourth review of 2026-11-22: the fetch-bound claim and domain vocabulary
+
+The review of `8a0e63e` (review `6014779923`) raised one outside-diff finding,
+one inline finding, and one failed pre-merge row. All three are implemented.
+
+**Fetch-bound claim (outside diff).** The claim matched `lock_by` and
+`attempts` but not the fetch that produced the delivery. A delivery fetched
+before a dead-letter requeue could therefore claim the row its own instance
+fetched afterwards, mint a token, and acknowledge it: the requeue resets
+`attempts` and the re-fetch restores `lock_by`, so the two deliveries agreed on
+every earlier predicate. The claim now also requires the
+`wildside.retry.requeue_count` the fetch captured in the delivery context, and
+a requeue increments that counter. The pinned fetch cannot be changed, and its
+context exposes `lock_at` only at whole-second precision, so the captured
+counter is the precise fetch-time generation available; the module doc, ADR
+0004, the architecture document, and the developers guide state the resulting
+guard. `a_delivery_fetched_before_a_requeue_cannot_claim_the_replacement`
+drives the pinned fetch, the production requeue, and the production claim with
+the same identifier, worker, and attempt count.
+
+**Test-double fidelity (inline).** `PersistenceCall` records each request's
+claim token for schedule, terminal, and clamp writes, including clamp retries.
+The wrapper tests use a non-empty token in claimed-delivery fixtures and assert
+it is preserved, and a separate tokenless case pins the empty binding.
+
+**Domain vocabulary (Domain Architecture).** `DeadJobSkip`'s label moved to the
+dead-letter row decoder, the three route-queue outcome labels moved to the
+Prometheus adapter, and the two domain doc comments that named a database and
+its task library were reworded. The label strings are unchanged and pinned in
+the adapters. The domain grep for `sqlx`, `apalis`, `postgres`, `tracing`, and
+`as_label` now reports only plain-English uses of "tracing", one deliberate
+port that emits its own structured log, and three pre-existing illustrative
+mentions of the database in port docs.
+
+**Decision note.** The claim's requeue-generation predicate reads a key the
+user accepted on 2026-10-25; it adds no key, column, or dependency. The claim
+token itself remains the single pending user decision recorded above.
+
+### Gate round of 2026-11-23 to 2026-11-24: advisories and the ledger
+
+Three newly published RustSec advisories landed while this branch was under
+review, and each was handled on its merits rather than ignored:
+
+- RUSTSEC-2026-0592 (`url` 2.5.8) was fixed by moving the lockfile to the
+  patched 2.5.9.
+- RUSTSEC-2026-0386 (`tokio` 1.50.0) was fixed by moving the lockfile to
+  1.54.1. `backend/Cargo.toml` requires `tokio = "1"`, so this is a
+  within-caret lockfile update; the full suite was re-run against it and
+  nextest, Clippy, rustdoc, Whitaker, and the timer and embedded-PostgreSQL
+  suites all pass.
+- RUSTSEC-2026-0594 (`cookie` 0.16.2) has no compatible fix: every actix-web
+  4.x release through 4.20.0 requires `cookie ^0.16`, and 0.16.2 is the last
+  0.16 release, so the patched 0.18.3 cannot be selected. The Makefile audit
+  ledger therefore gains a dated entry recording the upstream block, why the
+  advisory's precondition (a forked child inheriting the nonce generator) is
+  absent from this deployment, and a review date. This follows the ledger
+  pattern the repository already uses for RUSTSEC-2026-0258 and
+  RUSTSEC-2026-0459; it is a recorded, reviewable acceptance, not a silent
+  suppression.
+
+The `normalise`/`normalize` spellings the spelling gate flagged in the claim
+module were corrected to the shared en-US policy.

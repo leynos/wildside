@@ -254,6 +254,7 @@ stale acknowledgement from one instance can match another instance's row. A
 refused acknowledgement logs at `WARN` with decision `acknowledgement_refused`
 and leaves the row with its current owner. The claim that precedes the handler
 can be refused the same way when the row moved on between the fetch and the
-lock: it logs at `WARN` with decision `claim_refused` and the delivery's
-`task_id` and `attempt`, because its caller sees only a missing row. See
+lock: it logs at `WARN` with decision `claim_refused`, the queue, the delivery's
+`task_id` and `attempt`, and the requeue generation it captured when it
+fetched the row, because its caller sees only a missing row. See
 [ADR 0004](../adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).

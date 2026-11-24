@@ -2960,14 +2960,19 @@ Queue observability:
 - Build every retry worker over `AttemptBoundStorage`, not
   `apalis_postgres::PostgresStorage` directly. `AttemptBoundLock` and
   `AttemptBoundLockService`, in
-  `backend/src/outbound/queue/attempt_bound_lock.rs`, stamp a fresh
-  `wildside.retry.claim_token` on every claim and carry it in the delivery
-  context. The pinned acknowledgement matches a delivery on `id` and `lock_by`
-  alone; `AttemptBoundAck` matches `id`, `lock_by`, `status = 'Running'`, the
-  attempt count the row stored during the delivery, and that token, so a stale
-  delivery cannot overwrite the row that replaced it. Distinct worker names per
-  instance remain a separate layer that keeps one instance's stale
-  acknowledgement from matching another instance's row.
+  `backend/src/outbound/queue/attempt_bound_lock.rs`, claim a row only while it
+  still names the fetching worker, still holds the attempt count the fetch
+  captured, and still carries the `wildside.retry.requeue_count` that fetch
+  read. The claim then stamps a fresh `wildside.retry.claim_token` and carries
+  it in the delivery context. The pinned acknowledgement matches a delivery on
+  `id` and `lock_by` alone; `AttemptBoundAck` matches `id`, `lock_by`,
+  `status = 'Running'`, the attempt count the row stored during the delivery,
+  and that token. Together the fetch-bound claim and the token-bound
+  acknowledgement keep a stale delivery from claiming or overwriting the row
+  that replaced it, including the case where a requeue reset the attempt count
+  and the same worker fetched the row again under the same name. Distinct
+  worker names per instance remain a separate layer that keeps one instance's
+  stale delivery from matching another instance's row.
 - `tracing` – The adapter emits `debug` on enqueue success and `warn` on
   failure points (serialization, push, and setup failures), including latency
   and the adapter outcome.

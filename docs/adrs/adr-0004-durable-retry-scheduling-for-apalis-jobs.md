@@ -56,6 +56,18 @@ requeue all preserve unrelated metadata keys, so only a new claim changes it.
 because the acknowledgement clones the context it later acknowledges with and
 must clone one that already carries the token.
 
+The claim is also bound to the fetch that produced the delivery, not only to
+the worker and the attempt count. A delivery fetched before a requeue can
+otherwise claim the row its own instance fetched afterwards, mint a new token,
+and acknowledge it: the requeue resets the attempt count and the re-fetch
+restores the lock owner, so the two deliveries agree on every earlier
+discriminator. The claim therefore additionally requires the
+`wildside.retry.requeue_count` the fetch captured in the delivery context, and
+a requeue increments that counter. `lock_at` cannot serve as the generation,
+because the pinned context exposes it only at whole-second precision. This
+extends the guard to the claim; the token still covers the acknowledgement, and
+the wrapper's retry, terminal, and clamp writes carry it as well.
+
 Distinct worker names per instance remain the outer layer, and they cover what
 the token cannot state on its own: a stale acknowledgement from another
 instance names a worker that does not own the row. Worker deployment (roadmap

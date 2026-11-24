@@ -2224,16 +2224,20 @@ increment and acknowledgement can lose that in-flight attempt.
 
 Orphan recovery can return a retired row to the fetcher, so the wrapper also
 refuses a delivery whose attempt count already exceeds the stored
-`max_attempts`, and a worker is built over `AttemptBoundStorage` so that
-acknowledgements bind the attempt count the row stored during the delivery and
-the `wildside.retry.claim_token` its claim stamped into the row's metadata. The
-token is what separates a stale delivery from a successor produced by a
-dead-letter requeue, which resets `attempts` to zero and so makes the attempt
-count useless as a generation. Together the guards keep a spent delivery from
-starting a handler and a stale delivery from rewriting the replacement's row.
-Neither guard stops a handler that is already running: its side effects can
-still overlap with a replacement delivery's work, so handlers must remain
-idempotent. See
+`max_attempts`, and a worker is built over `AttemptBoundStorage`. The claim
+step then admits a row only while it still names the fetching worker, still
+holds the attempt count the fetch captured, and still carries the
+`wildside.retry.requeue_count` that fetch read; it stamps a fresh
+`wildside.retry.claim_token`, and the acknowledgement binds the attempt count
+the row stored during the delivery together with that token. The token is what
+separates a stale delivery from a successor produced by a dead-letter requeue,
+which resets `attempts` to zero and so makes the attempt count useless as a
+generation, while the captured requeue counter stops that same stale delivery
+from claiming the requeued row in the first place. Together the guards keep a
+spent delivery from starting a handler and a stale delivery from claiming or
+rewriting the replacement's row. Neither guard stops a handler that is already
+running: its side effects can still overlap with a replacement delivery's work,
+so handlers must remain idempotent. See
 [ADR 0004](adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).
 
 Fatal failures and exhausted retry budgets leave dead rows in `apalis.jobs`. The
