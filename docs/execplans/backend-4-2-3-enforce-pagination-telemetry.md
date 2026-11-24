@@ -247,9 +247,19 @@ which satisfies the roadmap wording without touching a shared wire format.
   V-OBS-SATURATES are discharged. The first final lint attempt ended with exit
   143 during Whitaker dependency checks; the subsequent complete run passed.
   Documentation gates remain after this ExecPlan update.
+- [x] (2026-11-24) EP-M2 added the feature-gated Prometheus adapter and an
+  exhaustive integration test. The adapter resolves all 21 bounded label
+  children during construction; the recording path indexes the closed enums and
+  performs only the two counter increments. The integration sweep uses distinct
+  row totals for each traversal, detecting a `First`/`Next` index swap. Both
+  seeded label mutations produced the planned outcomes. All six gates passed
+  sequentially on the strengthened candidate; the test target passed 1,904
+  nextest tests, both compile-fail tests, workflow and lint-actions tests,
+  frontend tests, and script tests. Lint reported only the existing Dependabot
+  workflow truthy-value warning. See the V-LABEL evidence and gate logs below.
 - [x] EP-M1: `PaginationPageMetrics` port, label enums, observation type,
   and `NoOp` implementation (red tests first).
-- [ ] EP-M2: `PrometheusPaginationPageMetrics` adapter.
+- [x] EP-M2: `PrometheusPaginationPageMetrics` adapter.
 - [ ] EP-M3: move `PageTraversal` into the domain and delete
   `UsersPageDirection`.
 - [ ] EP-M4: inbound emission from the users endpoint via a parameter
@@ -597,20 +607,24 @@ non-vacuity argument.
 - Obligation: V-LABEL-CLOSED — every label tuple this adapter can emit is
   drawn from a finite set of at most 21 combinations per endpoint, namely 18 for
   `pages_total` (3 traversals × 2 outcomes × 3 limit sources) and 3 for
-  `rows_returned_total` (3 traversals). Method: exhaustive parameterized test
+  `rows_returned_total` (3 traversals). Method: exhaustive table-driven sweep
   over the full Cartesian product, asserting each combination produces a
   distinct, gatherable series, plus the compile-time closure that every label
   value originates from a fieldless enum with `const fn as_label`. Rationale:
   the domain is finite and small, so enumeration is complete; property
   generation would add nothing a full sweep does not already give. Domain: all
   18 and all 3 combinations. Artefact:
-  `backend/src/outbound/metrics/prometheus_pagination_pages.rs` tests.
-  Evidence: red — the test file fails to compile before the adapter exists;
-  green — `cargo nextest run -p backend prometheus_pagination` passes and
-  `Registry::gather` reports exactly 21 series after the sweep. Non-vacuity: a
-  seeded mutation making two `as_label` arms return the same string collapses
-  two series into one and the gathered count drops to 20, failing the test for
-  the intended reason.
+  `backend/tests/prometheus_pagination_pages_unit.rs`. Evidence: red — the
+  focused test failed to compile before the adapter existed, as expected; see
+  `/tmp/red-prometheus-pagination-pages-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44.out`;
+  green — the strengthened `make test` passed; `Registry::gather` reported 21
+  series, and the row totals for `first`, `next`, and `prev` were 6, 12, and
+  18. See
+  `/tmp/test-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m2-strengthened.out`.
+  Non-vacuity: mapping `LimitSource::Clamped` to the `Default` label collapses
+  six page series, reducing the total from 21 to 15; the aggregate-series
+  assertion fails with that observed count. See
+  `/tmp/mutation-pagination-label-closed-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44.out`.
 
 - Obligation: V-LABEL-CORRECT — each gathered series carries the label
   *names* paired with the intended *values*, not merely a distinct combination
@@ -625,13 +639,38 @@ non-vacuity argument.
   assertion is required. This is the vacuity hole V-LABEL-CLOSED cannot close
   by itself. Domain: one series per metric family, chosen so that all four
   label values differ from one another, so that no transposition is a fixed
-  point. Artefact:
-  `backend/src/outbound/metrics/prometheus_pagination_pages.rs` tests.
-  Evidence: red — fails before the adapter exists; green — the pairing
-  assertions pass. Non-vacuity: a seeded mutation swapping the `traversal` and
-  `outcome` arguments in the `with_label_values` call must fail this test while
-  leaving V-LABEL-CLOSED green. Both halves of that statement must be recorded,
-  since the point of the obligation is the gap between them.
+  point. Artefact: `backend/tests/prometheus_pagination_pages_unit.rs`.
+  Evidence: red — the focused test failed to compile before the adapter
+  existed; see
+  `/tmp/red-prometheus-pagination-pages-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44.out`;
+  green — the full test gate passed and the pairing assertions passed.
+  Non-vacuity: swapping `traversal` and `outcome` in the label array makes this
+  pairing test fail, while the label-count test still passes; see
+  `/tmp/mutation-pagination-label-correct-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44.out`
+  and
+  `/tmp/mutation-pagination-label-closed-transposed-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44.out`.
+  Both outcomes are recorded because they demonstrate the gap between these
+  obligations.
+
+The complete EP-M2 gate sequence passed sequentially after the row-counter
+sweep was strengthened with distinct traversal totals. Logs:
+
+- `make check-fmt`:
+  `/tmp/check-fmt-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m2-strengthened.out`.
+- `make lint`:
+  `/tmp/lint-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m2-strengthened.out`.
+- `make typecheck`:
+  `/tmp/typecheck-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m2-strengthened.out`.
+- `make test`:
+  `/tmp/test-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m2-strengthened.out`.
+- `make markdownlint`:
+  `/tmp/markdownlint-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m2-strengthened.out`.
+- `make nixie`:
+  `/tmp/nixie-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m2-strengthened.out`.
+
+`make lint` passed both Whitaker manifests and architecture lint. It emitted
+the pre-existing warning at `.github/workflows/dependabot-automerge.yml:7:1`
+about a truthy value; the gate exited successfully.
 
 - Obligation: V-RECORD-NOT-INCREMENT — the inbound adapter reaches the port
   through `record`, so the structured log is emitted on every delivered page,
