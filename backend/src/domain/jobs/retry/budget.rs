@@ -5,10 +5,10 @@ use std::num::NonZeroU32;
 /// How many deliveries one job may still receive.
 ///
 /// The queue policy holds the operator's ceiling, but a job also carries a
-/// limit of its own: the Apalis task context stores the `max_attempts` the
-/// entry was enqueued with, and that value decides when the entry stops being
-/// fetched. A retry decision therefore needs both numbers. Keeping the job's
-/// limit as a value the domain understands lets
+/// limit of its own: the queue's stored task context records the
+/// `max_attempts` the entry was enqueued with, and that value decides when the
+/// entry stops being fetched. A retry decision therefore needs both numbers.
+/// Keeping the job's limit as a value the domain understands lets
 /// [`JobRetryPolicy::decide`](super::JobRetryPolicy::decide) answer the whole
 /// question, instead of leaving the adapter to apply a second comparison after
 /// the policy has already spoken.

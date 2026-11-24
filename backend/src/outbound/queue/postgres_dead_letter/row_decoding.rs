@@ -57,9 +57,21 @@ pub(super) fn report_skipped_rows(skipped: &[SkippedDeadJob]) {
     for row in skipped {
         tracing::warn!(
             job_id = %row.id.as_str(),
-            reason = row.cause.as_label(),
+            reason = skip_label(row.cause),
             "omitted dead-letter row"
         );
+    }
+}
+
+/// The bounded log label for a row the listing could not represent.
+///
+/// The label vocabulary belongs to the adapter: it is what a log reader filters
+/// on, and the domain only has to say which field was unreadable. Its values
+/// are pinned by `skip_labels_stay_bounded_and_stable` in the adapter's tests.
+pub(super) const fn skip_label(cause: DeadJobSkip) -> &'static str {
+    match cause {
+        DeadJobSkip::NegativeAttempts => "negative-attempts",
+        DeadJobSkip::InvalidRequeueCount => "invalid-requeue-count",
     }
 }
 

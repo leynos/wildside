@@ -50,6 +50,35 @@ const ENQUEUE_LATENCY_BUCKETS_SECONDS: &[f64] = &[
     0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
 ];
 
+// Bounded label mappings. The domain enums only name the outcomes; the strings
+// an operator filters on belong to the adapter, beside the counters that emit
+// them. `outcome_labels_stay_bounded_and_stable` pins the values.
+
+/// The bounded `outcome` label for an enqueue result.
+const fn enqueue_label(outcome: RouteQueueOutcome) -> &'static str {
+    match outcome {
+        RouteQueueOutcome::Success => "success",
+        RouteQueueOutcome::Failure => "failure",
+    }
+}
+
+/// The bounded `outcome` label for a durable retry scheduling result.
+const fn retry_label(outcome: RouteRetryOutcome) -> &'static str {
+    match outcome {
+        RouteRetryOutcome::Scheduled => "scheduled",
+        RouteRetryOutcome::ScheduleFailure => "schedule_failure",
+    }
+}
+
+/// The bounded `reason` label for a dead-letter outcome, shared by the
+/// dead-letter and terminal-write-failure counters so a reason means one thing.
+const fn dead_letter_label(outcome: RouteDeadLetterOutcome) -> &'static str {
+    match outcome {
+        RouteDeadLetterOutcome::Exhausted => "exhausted",
+        RouteDeadLetterOutcome::Fatal => "fatal",
+    }
+}
+
 /// Prometheus-backed recorder for route queue enqueue outcomes.
 #[derive(Clone)]
 pub struct PrometheusRouteQueueMetrics {
@@ -122,7 +151,7 @@ impl PrometheusRouteQueueMetrics {
 
 impl RouteQueueMetrics for PrometheusRouteQueueMetrics {
     fn observe_enqueue(&self, outcome: RouteQueueOutcome, latency: Duration) {
-        let outcome_label = outcome.as_label();
+        let outcome_label = enqueue_label(outcome);
         self.total.with_label_values(&[outcome_label]).inc();
         self.latency_seconds
             .with_label_values(&[outcome_label])
@@ -131,19 +160,19 @@ impl RouteQueueMetrics for PrometheusRouteQueueMetrics {
 
     fn observe_retry(&self, outcome: RouteRetryOutcome) {
         self.retry_total
-            .with_label_values(&[outcome.as_label()])
+            .with_label_values(&[retry_label(outcome)])
             .inc();
     }
 
     fn observe_dead_letter(&self, outcome: RouteDeadLetterOutcome) {
         self.dead_letter_total
-            .with_label_values(&[outcome.as_label()])
+            .with_label_values(&[dead_letter_label(outcome)])
             .inc();
     }
 
     fn observe_terminal_write_failure(&self, reason: RouteDeadLetterOutcome) {
         self.terminal_write_failure_total
-            .with_label_values(&[reason.as_label()])
+            .with_label_values(&[dead_letter_label(reason)])
             .inc();
     }
 }
@@ -244,6 +273,40 @@ route_queue_enqueue_total{outcome="success"} 1
         assert!(!text.contains("outcome=\"fatal\""));
     }
 
+    #[test]
+    fn outcome_labels_stay_bounded_and_stable() {
+        assert_eq!(
+            enqueue_label(RouteQueueOutcome::Success),
+            "success",
+            "a delivered enqueue reports the success label"
+        );
+        assert_eq!(
+            enqueue_label(RouteQueueOutcome::Failure),
+            "failure",
+            "a refused enqueue reports the failure label"
+        );
+        assert_eq!(
+            retry_label(RouteRetryOutcome::Scheduled),
+            "scheduled",
+            "a scheduled retry reports the scheduled label"
+        );
+        assert_eq!(
+            retry_label(RouteRetryOutcome::ScheduleFailure),
+            "schedule_failure",
+            "a refused retry write reports the schedule_failure label"
+        );
+        assert_eq!(
+            dead_letter_label(RouteDeadLetterOutcome::Exhausted),
+            "exhausted",
+            "a dead-lettered exhaustion reports the exhausted reason"
+        );
+        assert_eq!(
+            dead_letter_label(RouteDeadLetterOutcome::Fatal),
+            "fatal",
+            "a dead-lettered fatal failure reports the fatal reason"
+        );
+    }
+
     proptest! {
         #[test]
         fn records_bounded_outcome_labels_and_latency(
@@ -255,7 +318,7 @@ route_queue_enqueue_total{outcome="success"} 1
             metrics.observe_enqueue(outcome, Duration::from_millis(latency_millis));
 
             let text = encode_route_queue_metrics(&registry);
-            let label = outcome.as_label();
+            let label = enqueue_label(outcome);
             let expected_total = format!("route_queue_enqueue_total{{outcome=\"{label}\"}} 1");
             let expected_count = format!(
                 "route_queue_enqueue_latency_seconds_count{{outcome=\"{label}\"}} 1"

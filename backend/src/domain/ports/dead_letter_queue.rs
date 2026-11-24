@@ -14,7 +14,7 @@ define_port_error! {
         UnknownQueue { message: String } => "dead job queue has no retry budget: {message}",
         /// The dead row has invalid attempt or requeue metadata.
         InvalidJobData { message: String } => "dead job has invalid data: {message}",
-        /// PostgreSQL could not complete the operation.
+        /// The dead-letter store could not complete the operation.
         Unavailable { message: String } => "dead-letter storage is unavailable: {message}",
     }
 }
@@ -79,24 +79,6 @@ pub enum DeadJobSkip {
     NegativeAttempts,
     /// The stored requeue counter is not a valid count.
     InvalidRequeueCount,
-}
-
-impl DeadJobSkip {
-    /// Return a short, bounded label for logging and test assertions.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use backend::domain::ports::DeadJobSkip;
-    ///
-    /// assert_eq!(DeadJobSkip::NegativeAttempts.as_label(), "negative-attempts");
-    /// ```
-    pub const fn as_label(self) -> &'static str {
-        match self {
-            Self::NegativeAttempts => "negative-attempts",
-            Self::InvalidRequeueCount => "invalid-requeue-count",
-        }
-    }
 }
 
 /// A dead-letter row the listing could not represent, and why.

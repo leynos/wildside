@@ -1,11 +1,10 @@
 //! Trybuild coverage for the retry API's compile-time surface.
 //!
-//! The compile-pass fixture is the assertion that `JitterSample::midpoint` and
-//! the outcome-label methods stay callable in a `const` item: a signature that
-//! stops being `const`, or stops resolving in that position, fails to compile
-//! the fixture. The compile-fail fixture pins the other half of the same
-//! boundary, that a `JitterSample` is only ever built through its validating
-//! constructor.
+//! The compile-pass fixture is the assertion that `JitterSample::midpoint`
+//! stays callable in a `const` item: a signature that stops being `const`, or
+//! stops resolving in that position, fails to compile the fixture. The
+//! compile-fail fixture pins the other half of the same boundary, that a
+//! `JitterSample` is only ever built through its validating constructor.
 //!
 //! Gated behind the `trybuild-tests` feature so ordinary `cargo test` runs stay
 //! fast; `make test` and CI enable it via `--all-features`.

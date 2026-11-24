@@ -110,15 +110,17 @@ impl QueueDeadLetterWorld {
     /// Return the skipped rows from the most recent listing, sorted by id.
     ///
     /// Skipped rows are reported as a set: their order within the listing is
-    /// the storage order of rows that are, by definition, not listed.
-    fn reported_skips(&self) -> Vec<(String, &'static str)> {
+    /// the storage order of rows that are, by definition, not listed. Each
+    /// entry carries the domain's skip cause rather than a log label, so the
+    /// assertion does not depend on adapter-owned vocabulary.
+    fn reported_skips(&self) -> Vec<(String, DeadJobSkip)> {
         let listing = self.listing.lock().expect("listing mutex");
-        let mut skips: Vec<(String, &'static str)> = listing
+        let mut skips: Vec<(String, DeadJobSkip)> = listing
             .skipped()
             .iter()
-            .map(|row| (row.id.as_str().to_owned(), row.cause.as_label()))
+            .map(|row| (row.id.as_str().to_owned(), row.cause))
             .collect();
-        skips.sort();
+        skips.sort_by(|left, right| left.0.cmp(&right.0));
         skips
     }
 }
@@ -126,28 +128,23 @@ impl QueueDeadLetterWorld {
 /// Pair each generated malformed identifier with the cause it should report.
 ///
 /// The identifiers arrive grouped by kind, matching the order the rows are
-/// seeded, and are sorted so the expectation can be compared with the listing's
-/// own sorted report.
+/// seeded, and are sorted by identifier so the expectation can be compared
+/// with the listing's own sorted report. Identifiers are unique, so ordering by
+/// identifier alone is a total order.
 fn expected_skips(
     requeue_rows: &[DeadJobId],
     attempt_rows: &[DeadJobId],
-) -> Vec<(String, &'static str)> {
-    let mut skips: Vec<(String, &'static str)> = requeue_rows
+) -> Vec<(String, DeadJobSkip)> {
+    let mut skips: Vec<(String, DeadJobSkip)> = requeue_rows
         .iter()
-        .map(|id| {
-            (
-                id.as_str().to_owned(),
-                DeadJobSkip::InvalidRequeueCount.as_label(),
-            )
-        })
-        .chain(attempt_rows.iter().map(|id| {
-            (
-                id.as_str().to_owned(),
-                DeadJobSkip::NegativeAttempts.as_label(),
-            )
-        }))
+        .map(|id| (id.as_str().to_owned(), DeadJobSkip::InvalidRequeueCount))
+        .chain(
+            attempt_rows
+                .iter()
+                .map(|id| (id.as_str().to_owned(), DeadJobSkip::NegativeAttempts)),
+        )
         .collect();
-    skips.sort();
+    skips.sort_by(|left, right| left.0.cmp(&right.0));
     skips
 }
 

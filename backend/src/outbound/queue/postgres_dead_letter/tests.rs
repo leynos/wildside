@@ -1,7 +1,7 @@
 //! Mapping and dead-row predicate tests for the PostgreSQL adapter.
 
 use super::row_decoding::{
-    dead_job_from_row, dead_reason_from_metadata, next_count_value, next_requeue_count,
+    dead_job_from_row, dead_reason_from_metadata, next_count_value, next_requeue_count, skip_label,
     truncate_utf8,
 };
 use super::{DeadJobRow, is_dead_row};
@@ -47,6 +47,20 @@ fn representable_rows_map_every_listed_field() {
     assert_eq!(job.requeue_count, 2);
     assert_eq!(job.last_error.as_deref(), Some("probe failure"));
     assert!(job.dead_at.is_none());
+}
+
+#[test]
+fn skip_labels_stay_bounded_and_stable() {
+    assert_eq!(
+        skip_label(DeadJobSkip::NegativeAttempts),
+        "negative-attempts",
+        "a negative attempt count logs the negative-attempts reason"
+    );
+    assert_eq!(
+        skip_label(DeadJobSkip::InvalidRequeueCount),
+        "invalid-requeue-count",
+        "an unparsable requeue count logs the invalid-requeue-count reason"
+    );
 }
 
 #[test]

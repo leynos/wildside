@@ -21,16 +21,6 @@ pub enum RouteQueueOutcome {
     Failure,
 }
 
-impl RouteQueueOutcome {
-    /// Return the stable metrics label for this outcome.
-    pub const fn as_label(self) -> &'static str {
-        match self {
-            Self::Success => "success",
-            Self::Failure => "failure",
-        }
-    }
-}
-
 /// Bounded outcomes for durable retry scheduling metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RouteRetryOutcome {
@@ -40,24 +30,6 @@ pub enum RouteRetryOutcome {
     ScheduleFailure,
 }
 
-impl RouteRetryOutcome {
-    /// Return the stable metrics label for this outcome.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use backend::domain::ports::RouteRetryOutcome;
-    ///
-    /// assert_eq!(RouteRetryOutcome::Scheduled.as_label(), "scheduled");
-    /// ```
-    pub const fn as_label(self) -> &'static str {
-        match self {
-            Self::Scheduled => "scheduled",
-            Self::ScheduleFailure => "schedule_failure",
-        }
-    }
-}
-
 /// Bounded reasons for durable dead-letter metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RouteDeadLetterOutcome {
@@ -65,24 +37,6 @@ pub enum RouteDeadLetterOutcome {
     Exhausted,
     /// A handler reported a permanent failure.
     Fatal,
-}
-
-impl RouteDeadLetterOutcome {
-    /// Return the stable metrics label for this outcome.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use backend::domain::ports::RouteDeadLetterOutcome;
-    ///
-    /// assert_eq!(RouteDeadLetterOutcome::Fatal.as_label(), "fatal");
-    /// ```
-    pub const fn as_label(self) -> &'static str {
-        match self {
-            Self::Exhausted => "exhausted",
-            Self::Fatal => "fatal",
-        }
-    }
 }
 
 /// Metrics recorder for route queue enqueue and retry outcomes.
