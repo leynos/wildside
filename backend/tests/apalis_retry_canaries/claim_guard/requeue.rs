@@ -39,17 +39,12 @@ const REQUEUE_COUNT_KEY: &str = "wildside.retry.requeue_count";
 const CLAIM_TOKEN_KEY: &str = "wildside.retry.claim_token";
 
 /// Register the worker and insert a due row that spends its only attempt.
-fn insert_due_row(environment: &CanaryEnvironment, queue: &str, id: &str) {
+fn insert_due_row(environment: &CanaryEnvironment, queue: QueueName<'_>, id: JobId<'_>) {
     environment.run(async {
-        register_queue_worker(
-            &environment.pool,
-            WorkerName(REQUEUE_WORKER),
-            QueueName(queue),
-        )
-        .await;
+        register_queue_worker(&environment.pool, WorkerName(REQUEUE_WORKER), queue).await;
         insert_job(
             &environment.pool,
-            JobRow::new(queue, id, "Pending")
+            JobRow::new(queue.as_str(), id.as_str(), "Pending")
                 .attempts(0)
                 .max_attempts(REQUEUE_FIRST_CAP),
         )
@@ -58,8 +53,8 @@ fn insert_due_row(environment: &CanaryEnvironment, queue: &str, id: &str) {
 }
 
 /// Fetch one due row through the pinned fetcher and assert it was claimed.
-fn fetch_one(environment: &CanaryEnvironment, queue: &str) {
-    let fetched = claim_due_rows(environment, queue, REQUEUE_WORKER);
+fn fetch_one(environment: &CanaryEnvironment, queue: QueueName<'_>) {
+    let fetched = claim_due_rows(environment, queue.as_str(), REQUEUE_WORKER);
     assert_eq!(fetched, 1, "the pinned fetcher claims exactly one due row");
 }
 
@@ -67,9 +62,13 @@ fn fetch_one(environment: &CanaryEnvironment, queue: &str) {
 ///
 /// A delivery carries the metadata object as the fetch returned it, so the
 /// requeue generation and any other observed value travel unchanged.
-fn fetched_delivery(id: &str, max_attempts: i32, metadata: &Map<String, Value>) -> PgTask<Value> {
+fn fetched_delivery(
+    id: JobId<'_>,
+    max_attempts: i32,
+    metadata: &Map<String, Value>,
+) -> PgTask<Value> {
     let mut task = delivery_task(
-        id,
+        id.as_str(),
         Delivery::new(REQUEUE_WORKER, max_attempts, 0).fetched(metadata),
     );
     task.parts
@@ -100,10 +99,10 @@ fn claim_stale_delivery(environment: &CanaryEnvironment, task: &PgTask<Value>) -
 /// delivery reaching its attempt cap: it claims, is acknowledged as killed, and
 /// then replays that same claim after the requeue. The claim under test is that
 /// replay, so what it observes is what the fetch captured before the requeue.
-fn retire_row(environment: &CanaryEnvironment, id: &str, token: &str) {
+fn retire_row(environment: &CanaryEnvironment, id: JobId<'_>, token: &str) {
     let acknowledged = environment.run(async {
         let task = delivery_task(
-            id,
+            id.as_str(),
             Delivery::new(REQUEUE_WORKER, REQUEUE_FIRST_CAP, 1).claimed(token),
         );
         let result: Result<(), BoxDynError> = Err(Box::new(ProbeFailure));
@@ -115,14 +114,14 @@ fn retire_row(environment: &CanaryEnvironment, id: &str, token: &str) {
 }
 
 /// Assert the requeue advanced the counter and reset the attempt count.
-fn assert_requeue_advanced(environment: &CanaryEnvironment, id: &str) {
-    let requeued = read_fetched_metadata(&environment.runtime, &environment.pool, id);
+fn assert_requeue_advanced(environment: &CanaryEnvironment, id: JobId<'_>) {
+    let requeued = read_fetched_metadata(&environment.runtime, &environment.pool, id.as_str());
     assert_eq!(
         requeued.get(REQUEUE_COUNT_KEY),
         Some(&Value::from(1)),
         "the requeue advances the counter the replacement fetch will carry"
     );
-    let state = read_state(&environment.runtime, &environment.pool, id);
+    let state = read_state(&environment.runtime, &environment.pool, id.as_str());
     assert_eq!(state.attempts, 0, "the requeue resets the attempt count");
     assert_eq!(
         state.lock_by, None,
@@ -132,8 +131,8 @@ fn assert_requeue_advanced(environment: &CanaryEnvironment, id: &str) {
 
 /// Assert the replacement fetch restored the discriminators the stale delivery
 /// carries.
-fn assert_replacement_fetch_matches(environment: &CanaryEnvironment, id: &str) {
-    let state = read_state(&environment.runtime, &environment.pool, id);
+fn assert_replacement_fetch_matches(environment: &CanaryEnvironment, id: JobId<'_>) {
+    let state = read_state(&environment.runtime, &environment.pool, id.as_str());
     assert_eq!(
         state.status, "Queued",
         "the replacement fetch queues the requeued row"
@@ -150,8 +149,8 @@ fn assert_replacement_fetch_matches(environment: &CanaryEnvironment, id: &str) {
 }
 
 /// Assert the replacement's claim promoted the row under its own worker.
-fn assert_claimed(environment: &CanaryEnvironment, id: &str) {
-    let state = read_state(&environment.runtime, &environment.pool, id);
+fn assert_claimed(environment: &CanaryEnvironment, id: JobId<'_>) {
+    let state = read_state(&environment.runtime, &environment.pool, id.as_str());
     assert_eq!(
         state.status, "Running",
         "the replacement's claim promotes the row"
@@ -180,29 +179,31 @@ fn a_delivery_fetched_before_a_requeue_cannot_claim_the_replacement() {
     let queue_name = queue_for(&id);
     let queue = QueueName(queue_name.as_str());
 
-    insert_due_row(environment, queue_name.as_str(), &id);
-    fetch_one(environment, queue_name.as_str());
+    let job = JobId(id.as_str());
+
+    insert_due_row(environment, queue, job);
+    fetch_one(environment, queue);
     let stale_metadata = read_fetched_metadata(&environment.runtime, &environment.pool, &id);
     assert!(
         !stale_metadata.contains_key(REQUEUE_COUNT_KEY),
         "the stale delivery is fetched before any requeue counter exists: {stale_metadata:?}"
     );
-    let stale_task = fetched_delivery(&id, REQUEUE_FIRST_CAP, &stale_metadata);
+    let stale_task = fetched_delivery(job, REQUEUE_FIRST_CAP, &stale_metadata);
     let token = claim_stale_delivery(environment, &stale_task);
-    retire_row(environment, &id, &token);
+    retire_row(environment, job, &token);
 
     // The operator requeues the retired row, which resets the attempt count
     // and advances the counter the stale delivery never saw.
-    requeue_dead_job(environment, queue, JobId(&id));
-    assert_requeue_advanced(environment, &id);
+    requeue_dead_job(environment, queue, job);
+    assert_requeue_advanced(environment, job);
 
     // The same worker name fetches the replacement, so every discriminator the
     // old predicate compared now matches the stale delivery again.
-    fetch_one(environment, queue_name.as_str());
-    assert_replacement_fetch_matches(environment, &id);
+    fetch_one(environment, queue);
+    assert_replacement_fetch_matches(environment, job);
     let replacement_metadata = read_fetched_metadata(&environment.runtime, &environment.pool, &id);
     let before = read_state(&environment.runtime, &environment.pool, &id);
-    let replacement_task = fetched_delivery(&id, CLAIM_CAP, &replacement_metadata);
+    let replacement_task = fetched_delivery(job, CLAIM_CAP, &replacement_metadata);
 
     let stale = claim_task(environment, stale_task);
     assert!(
@@ -221,5 +222,5 @@ fn a_delivery_fetched_before_a_requeue_cannot_claim_the_replacement() {
 
     claim_task(environment, replacement_task)
         .expect("the replacement delivery claims the row its fetch returned");
-    assert_claimed(environment, &id);
+    assert_claimed(environment, job);
 }
