@@ -137,6 +137,7 @@ pub(crate) fn build_http_state_with_metrics(
             enrichment_provenance,
             walk_sessions,
             walk_sessions_query,
+            ..HttpStateExtraPorts::default()
         },
         pagination_error_metrics,
     ))

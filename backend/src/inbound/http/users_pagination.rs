@@ -18,10 +18,13 @@ use utoipa::ToSchema;
 
 use crate::domain::pagination_errors::{invalid_cursor_error, unsupported_direction_error};
 use crate::domain::ports::{
-    ListUsersPageRequest, PageTraversal, PaginationErrorMetrics, PaginationErrorSource, UsersPage,
+    ListUsersPageRequest, PageTraversal, PaginationErrorMetrics, PaginationErrorSource,
 };
 use crate::domain::{Error, User, UserCursorKey};
 use crate::inbound::http::schemas::UserSchema;
+
+mod telemetry;
+pub use telemetry::UsersPageResponse;
 
 /// Raw users list query parameters.
 ///
@@ -31,7 +34,7 @@ use crate::inbound::http::schemas::UserSchema;
 #[derive(Debug, Clone, Deserialize)]
 pub struct UsersListQueryParams {
     cursor: Option<String>,
-    limit: Option<String>,
+    pub(super) limit: Option<String>,
 }
 
 /// OpenAPI schema for pagination links in `GET /api/v1/users` responses.
@@ -81,6 +84,7 @@ pub struct PaginatedUsersResponse {
 /// # Examples
 ///
 /// ```ignore
+/// use std::num::NonZeroUsize;
 /// use backend::domain::ports::ListUsersPageRequest;
 /// use backend::domain::ports::NoOpPaginationErrorMetrics;
 /// use backend::inbound::http::users_pagination::{
@@ -92,21 +96,31 @@ pub struct PaginatedUsersResponse {
 ///     cursor: None,
 ///     limit: Some("2".to_owned()),
 /// };
-/// let (params, request, direction): (
+/// let (params, request, direction, page_limit): (
 ///     PageParams,
 ///     ListUsersPageRequest,
 ///     PageTraversal,
+///     NonZeroUsize,
 /// ) = parse_users_page_params(query, &NoOpPaginationErrorMetrics)
 ///     .expect("valid users pagination params");
 ///
-/// assert_eq!(params.limit(), 2);
-/// assert_eq!(request.limit(), 2);
-/// assert_eq!(direction, PageTraversal::First);
+/// assert_eq!(params.limit(), 2, "the parsed page limit must be retained");
+/// assert_eq!(request.limit(), 2, "the query request uses the parsed limit");
+/// assert_eq!(direction, PageTraversal::First, "a missing cursor starts a traversal");
+/// assert_eq!(page_limit.get(), 2, "the validated limit remains non-zero");
 /// ```
 pub fn parse_users_page_params(
     params: UsersListQueryParams,
     pagination_error_metrics: &dyn PaginationErrorMetrics,
-) -> Result<(PageParams, ListUsersPageRequest, PageTraversal), Error> {
+) -> Result<
+    (
+        PageParams,
+        ListUsersPageRequest,
+        PageTraversal,
+        NonZeroUsize,
+    ),
+    Error,
+> {
     let limit = parse_limit(params.limit.as_deref())?;
     let page_params = PageParams::new(params.cursor.clone(), limit)
         .map_err(|_| invalid_limit_error(params.limit.as_deref()))?;
@@ -122,7 +136,7 @@ pub fn parse_users_page_params(
     let limit = NonZeroUsize::new(page_params.limit())
         .ok_or_else(|| invalid_limit_error(params.limit.as_deref()))?;
     let request = ListUsersPageRequest::new(cursor, limit);
-    Ok((page_params, request, direction))
+    Ok((page_params, request, direction, limit))
 }
 
 /// Build the paginated HTTP response envelope for one users page.
@@ -139,8 +153,9 @@ pub fn parse_users_page_params(
 /// use backend::domain::ports::UsersPage;
 /// use backend::domain::ports::PageTraversal;
 /// use backend::domain::User;
+/// use backend::domain::ports::{LimitSource, NoOpPaginationPageMetrics};
 /// use backend::inbound::http::users_pagination::{
-///     build_users_page_response,
+///     UsersPageResponse, build_users_page_response,
 /// };
 /// use pagination::{PageParams, Paginated};
 ///
@@ -156,29 +171,36 @@ pub fn parse_users_page_params(
 /// .expect("valid user");
 /// let page = UsersPage::new(vec![user], false);
 ///
-/// let response: Paginated<User> = build_users_page_response(
-///     &request,
-///     &params,
+/// let response: Paginated<User> = build_users_page_response(UsersPageResponse {
+///     request: &request,
+///     params: &params,
 ///     page,
-///     PageTraversal::First,
-/// )
+///     traversal: PageTraversal::First,
+///     limit_source: LimitSource::Explicit,
+///     page_limit: NonZeroUsize::new(2).expect("the example limit is non-zero"),
+///     metrics: &NoOpPaginationPageMetrics,
+/// })
 /// .expect("users page response");
 ///
-/// assert_eq!(response.data.len(), 1);
-/// assert_eq!(response.limit, 2);
-/// assert!(response.links.next.is_none());
-/// assert!(response.links.prev.is_none());
+/// assert_eq!(response.data.len(), 1, "the response carries the returned row");
+/// assert_eq!(response.limit, 2, "the response retains its effective limit");
+/// assert!(response.links.next.is_none(), "a short first page has no next link");
+/// assert!(response.links.prev.is_none(), "the first page has no previous link");
 /// ```
-pub fn build_users_page_response(
-    request: &HttpRequest,
-    params: &PageParams,
-    page: UsersPage,
-    direction: PageTraversal,
-) -> Result<Paginated<User>, Error> {
+pub fn build_users_page_response(input: UsersPageResponse<'_>) -> Result<Paginated<User>, Error> {
+    let UsersPageResponse {
+        request,
+        params,
+        page,
+        traversal,
+        limit_source,
+        page_limit,
+        metrics,
+    } = input;
     let has_more = page.has_more();
     let rows = page.into_rows();
-    let next_cursor = boundary_cursor(rows.last(), Direction::Next, direction, has_more)?;
-    let prev_cursor = boundary_cursor(rows.first(), Direction::Prev, direction, has_more)?;
+    let next_cursor = boundary_cursor(rows.last(), Direction::Next, traversal, has_more)?;
+    let prev_cursor = boundary_cursor(rows.first(), Direction::Prev, traversal, has_more)?;
     let request_url = current_request_url(request)?;
     let links = PaginationLinks::from_request(
         &request_url,
@@ -186,6 +208,16 @@ pub fn build_users_page_response(
         next_cursor.as_deref(),
         prev_cursor.as_deref(),
     );
+
+    telemetry::record_page_delivery(&telemetry::UsersPageTelemetry {
+        metrics,
+        traversal,
+        limit_source,
+        page_limit,
+        returned_rows: rows.len(),
+        has_next_link: next_cursor.is_some(),
+        has_prev_link: prev_cursor.is_some(),
+    });
 
     Ok(Paginated::new(rows, params.limit(), links))
 }

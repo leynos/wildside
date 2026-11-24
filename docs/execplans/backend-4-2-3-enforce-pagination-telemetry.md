@@ -264,12 +264,66 @@ which satisfies the roadmap wording without touching a shared wire format.
   returns no references. All six gates passed. The first lint attempt was
   terminated with exit 143 while backend Whitaker was queued; the complete
   retry passed in 734 seconds without findings.
+- [x] (2026-11-25) EP-M4 records a page observation after the users response
+  links are built. The handler classifies raw `limit` presence, carries the
+  validated non-zero effective limit, and passes the response builder a
+  parameter object. The exhaustive 12-case link-boundary test and exact-count
+  BDD scenarios cover traversal, outcome, limit source, page limit, and rows.
+  Focused unit tests pass (15 cases), and the pagination BDD target passes all
+  31 tests with a task-scoped `PG_DATA_DIR`. All six full gates passed on the
+  pre-rebase M4 worktree based on local HEAD
+  `e937fbdd08c16e371bd716d814341f75f844c024`: `make check-fmt`, `make lint`,
+  `make typecheck`, `make test`, `make markdownlint`, and `make nixie`. The
+  full test passed 1,920 nextest tests (4 skipped), both compile-fail targets,
+  workflow tests (656 passed, 1 skipped), script tests (115 passed, 13
+  skipped), frontend tests (170 passed), token tests (3 passed), and
+  lint-actions tests (14 passed). Exact-head gate logs are under `/tmp` with the
+  `-m4-corrected.out` suffix. The first lint run rejected a three-branch test
+  condition; extracting it into a named predicate cleared both Whitaker passes.
+  These gate results are historical after the rebase recorded next.
+- [x] (2026-11-25) Remote `main` advanced from `f37928e` to
+  `1e9dfc95e51c4071a58dda3b23b76841cd6e8279` while the full gates ran. Replayed
+  the linear 11-commit series `f37928e..dac4a3e` onto that fetched target.
+  `range-diff` matched all 11 commits one-to-one; no conflicts, empty commits,
+  or target-path deletions occurred. The target's six changed paths have no
+  overlap with the 20 paths in the child diff. The rebase bypassed ambient
+  Weave selection with the built-in `zdiff3` merge driver. Recovery refs and a
+  verified binary patch are recorded under `/tmp`. The first full gate run on
+  candidate `11b155b25bf2b7d8e3bf80b68a4102e346654d90` exposed one stale
+  frontend Makefile audit expectation; the other five gates passed. The exact
+  first-run logs are under `/tmp` with the `-post-replay.out` suffix.
+- [x] (2026-11-25) Reconciled the baseline audit test with the current
+  Makefile by adding its `RUSTSEC-2026-0594` ignore to
+  `scripts/makefile-audit.test.mjs`. This correction is independent of
+  pagination telemetry and keeps the full test gate meaningful after the remote
+  `main` update. The complete six-gate sequence then passed on the corrected
+  worktree: check-fmt, lint, typecheck, test, markdownlint, and nixie.
+  `make test` passed 1,920 nextest cases (4 skipped), both compile-fail
+  targets, 632 workflow-contract tests (1 skipped), 115 script tests (13
+  skipped), 14 lint-actions tests, 170 frontend tests, and 3 token tests. Logs
+  use the `-rustsec-fix.out` suffix under `/tmp`. These results became
+  historical after `main` advanced again; the latest replay's gates are
+  recorded below.
+- [x] (2026-11-25) The post-rebase test failure was in the unchanged baseline
+  frontend audit test: `Makefile` now includes `RUSTSEC-2026-0594`, but
+  `scripts/makefile-audit.test.mjs::EXPECTED_CARGO_AUDIT` does not. The failure
+  is at `scripts/makefile-audit.test.mjs:93`; log:
+  `/tmp/test-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-post-replay.out`.
+  The fixture correction is recorded above; the first post-rebase failure log
+  is retained as evidence of the baseline mismatch.
+- [x] (2026-11-25) After the second replay onto
+  `a52e231c069656402dcc5899a9a4cce05b5dc397`, all six gates passed on candidate
+  `f9963640b8d9f2a4958477ad2e6b96af3c57e30c`: check-fmt, lint, typecheck, test,
+  markdownlint, and nixie. Nextest passed 1,920 tests (4 skipped); both
+  compile-fail targets passed; workflow, script, frontend, token, and
+  lint-actions suites passed. Exact logs use the `-rebased-f996.out` suffix
+  under `/tmp`. M4 is complete on the latest base.
 - [x] EP-M1: `PaginationPageMetrics` port, label enums, observation type,
   and `NoOp` implementation (red tests first).
 - [x] EP-M2: `PrometheusPaginationPageMetrics` adapter.
 - [x] EP-M3: move `PageTraversal` into the domain and delete
   `UsersPageDirection`.
-- [ ] EP-M4: inbound emission from the users endpoint via a parameter
+- [x] EP-M4: inbound emission from the users endpoint via a parameter
   object.
 - [ ] EP-M5: composition-root wiring, registration-failure policy, and the
   wiring-assertion tests.
@@ -288,6 +342,20 @@ which satisfies the roadmap wording without touching a shared wire format.
   signature. Restoring that import kept the port dependency explicit; the
   focused test and complete gates passed afterwards. The split is structural
   only and did not alter composition behaviour.
+
+- Observation (2026-11-24): the V-OUTCOME-DERIVED mutation note assumed that
+  `!has_more` would differ from the traversal-direction link in the
+  `(First, Prev)` case. The exhaustive boundary table shows that the first-page
+  next link still tracks `has_more`, while the previous link is absent in both
+  cases. Impact: the planned `!has_more` mutation is not discriminating; the
+  named negative control catches use of the opposite boundary link instead.
+
+- Observation (2026-11-24): the default shared PostgreSQL data directory failed
+  to start with `pg_ctl: control file appears to be corrupt`. The focused BDD
+  target passed all 31 tests when run with a task-scoped `PG_DATA_DIR` under
+  `/var/tmp`; no shared cluster files were changed. Use the same explicit data
+  directory for later gates in this worktree so the broken default directory
+  does not mask the application tests.
 
 - Observation (2026-10-14): the required
   `feat/competing-metrics-patterns` branch is PR #460 and remains open. Its
@@ -352,6 +420,26 @@ which satisfies the roadmap wording without touching a shared wire format.
   trybuild fixture compilation took about 117 minutes under the healthy shared
   compiler queue. Impact: a slow trybuild stage is not evidence of a stuck
   gate; preserve the running command and wait for its terminal result.
+
+- Observation (2026-11-25): after rebasing onto the current `main`,
+  `make test` passed all 1,920 nextest cases (4 skipped) and both compile-fail
+  harnesses, but one frontend audit test failed. The Makefile's exact Cargo
+  audit command includes `RUSTSEC-2026-0594`; the test's expected command omits
+  it. The mismatch was independent of pagination telemetry. Resolution:
+  `scripts/makefile-audit.test.mjs` now includes the Makefile's ignore, and the
+  complete test target passes. The first failing log is retained as evidence:
+  `/tmp/test-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-post-replay.out`.
+
+- Observation (2026-11-25): remote `main` advanced again after the complete
+  six-gate run. The new target adds three commits across seven paths, with no
+  overlap against the current 11-commit child diff. Replayed those 11 commits
+  onto `a52e231c069656402dcc5899a9a4cce05b5dc397`; `range-diff` matched every
+  commit, with no conflicts or empty commits. The second replay used the
+  built-in `zdiff3` merge file driver to bypass ambient Weave selection.
+  Recovery refs, path manifests, and the binary patch are recorded in
+  `/tmp/backend-4-2-3-enforce-pagination-telemetry-pre-rebase2-2026-11-25.md`.
+  New candidate: `f9963640b8d9f2a4958477ad2e6b96af3c57e30c`. The full six-gate
+  sequence passed on that candidate; earlier gate results are historical.
 
 ## Decision log
 
@@ -717,20 +805,26 @@ references. Logs:
 
 - Obligation: V-OUTCOME-DERIVED — `outcome` is `Terminal` exactly when the
   boundary link for the direction of travel is absent, and `Continuing`
-  otherwise. It is *not* `!has_more`. Method: exhaustive parameterized test
-  over the same tuple space that `boundary_cursor` dispatches on — page
-  direction × cursor direction × `has_more` — asserting the derived outcome
-  against the emitted links. Rationale: the domain is 3 × 2 × 2 = 12 cases.
-  Exhaustive enumeration over a finite domain is a complete argument, so a
-  deductive proof would restate rather than strengthen it. This is why no
-  `verus` obligation is raised. Domain: all 12 combinations, including the two
-  where `has_more` is true but the direction-specific link is absent. Artefact:
+  otherwise. The handler must consume the emitted link rather than duplicate
+  the query's `has_more` decision. Method: exhaustive parameterized test over
+  the same tuple space that `boundary_cursor` dispatches on — page direction ×
+  cursor direction × `has_more` — asserting the derived outcome against the
+  emitted links. Rationale: the domain is 3 × 2 × 2 = 12 cases. Exhaustive
+  enumeration over a finite domain is a complete argument, so a deductive proof
+  would restate rather than strengthen it. This is why no `verus` obligation is
+  raised. Domain: all 12 combinations, including the first-page missing
+  previous link and the unconditional next/previous links on next/previous
+  traversals. Artefact:
   `backend/src/inbound/http/users_pagination/telemetry.rs` tests. Evidence: red
-  — written before the derivation exists; green — all 12 pass. Non-vacuity: a
-  seeded fault deriving `outcome` from `!has_more` must fail on the
-  `(First, Prev)` case, where `boundary_cursor` emits no previous link
-  regardless of `has_more`. That case is the negative control and must be named
-  in the test.
+  — written before the derivation exists; green — all 12 pass. Non-vacuity: the
+  `(First, Prev)` case is the named negative control: it has no previous link
+  while the first-page next link can exist, so deriving a first-page outcome
+  from the previous link must fail. Inspection of all 12 dispatch cases shows
+  that the link in the current traversal direction equals `has_more` in each
+  case; therefore a mutation that substitutes `!has_more` is observationally
+  equivalent on this finite domain and cannot serve as a discriminating mutant.
+  The test instead checks the actual emitted link and guards against using the
+  opposite boundary.
 
 - Obligation: V-OBS-SATURATES — a constructed observation always satisfies
   `returned_rows <= page_limit`, and `returned_rows < page_limit` implies

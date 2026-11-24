@@ -257,6 +257,7 @@ fn build_http_state_for_tests(doubles: HttpStateTestDoubles) -> HttpState {
             enrichment_provenance: Arc::new(enrichment_provenance),
             walk_sessions: Arc::new(walk_sessions),
             walk_sessions_query: Arc::new(FixtureWalkSessionQuery),
+            ..HttpStateExtraPorts::default()
         },
     )
 }

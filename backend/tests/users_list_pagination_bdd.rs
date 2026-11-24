@@ -1,5 +1,6 @@
 //! Behavioural coverage for keyset-paginated users listing.
 
+use backend::domain::ports::{LimitSource, PageOutcome, PageTraversal};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 
@@ -19,12 +20,14 @@ use crate::support::cluster_skip::handle_cluster_setup_failure;
 
 #[path = "users_list_pagination_bdd/flow_support.rs"]
 mod flow_support;
+#[path = "users_list_pagination_bdd/page_metrics.rs"]
+mod page_metrics;
 
 use flow_support::{
     ORDERED_USER_IDS, World, assert_error, assert_error_trace_id, assert_full_traversal,
     assert_next_only, assert_prev_only, assert_status, assert_users, run_authenticated_request,
-    run_first_page, run_follow_next_to_final, run_next_then_prev, run_unauthenticated_request,
-    seed_users, setup_db_context, skip, store_db,
+    run_default_and_explicit_limits, run_first_page, run_follow_next_to_final, run_next_then_prev,
+    run_unauthenticated_request, seed_users, setup_db_context, skip, store_db,
 };
 
 #[fixture]
@@ -56,6 +59,11 @@ fn the_client_follows_users_next_links_with_limit_2_until_the_final_page(world: 
 #[when("the client follows next then prev users links with limit 2")]
 fn the_client_follows_next_then_prev_users_links_with_limit_2(world: &mut World) {
     run_next_then_prev(world);
+}
+
+#[when("the client requests the users list with default then explicit limits")]
+fn the_client_requests_the_users_list_with_default_then_explicit_limits(world: &mut World) {
+    run_default_and_explicit_limits(world);
 }
 
 #[when("the client requests the users list with limit 200")]
@@ -121,6 +129,96 @@ fn forward_traversal_returned_every_seeded_user_once(world: &mut World) {
     assert_full_traversal(world);
 }
 
+#[then("page telemetry records three forward pages and five rows")]
+fn page_telemetry_records_three_forward_pages_and_five_rows(world: &mut World) {
+    page_metrics::assert_page_metrics(
+        world,
+        &[
+            (
+                PageTraversal::First,
+                PageOutcome::Continuing,
+                LimitSource::Explicit,
+                2,
+                2,
+            ),
+            (
+                PageTraversal::Next,
+                PageOutcome::Continuing,
+                LimitSource::Explicit,
+                2,
+                2,
+            ),
+            (
+                PageTraversal::Next,
+                PageOutcome::Terminal,
+                LimitSource::Explicit,
+                2,
+                1,
+            ),
+        ],
+    );
+}
+
+#[then("page telemetry records the backward page after the forward traversal")]
+fn page_telemetry_records_the_backward_page_after_the_forward_traversal(world: &mut World) {
+    page_metrics::assert_page_metrics(
+        world,
+        &[
+            (
+                PageTraversal::First,
+                PageOutcome::Continuing,
+                LimitSource::Explicit,
+                2,
+                2,
+            ),
+            (
+                PageTraversal::Next,
+                PageOutcome::Continuing,
+                LimitSource::Explicit,
+                2,
+                2,
+            ),
+            (
+                PageTraversal::Next,
+                PageOutcome::Terminal,
+                LimitSource::Explicit,
+                2,
+                1,
+            ),
+            (
+                PageTraversal::Prev,
+                PageOutcome::Continuing,
+                LimitSource::Explicit,
+                2,
+                2,
+            ),
+        ],
+    );
+}
+
+#[then("page telemetry distinguishes default and explicit limits")]
+fn page_telemetry_distinguishes_default_and_explicit_limits(world: &mut World) {
+    page_metrics::assert_page_metrics(
+        world,
+        &[
+            (
+                PageTraversal::First,
+                PageOutcome::Terminal,
+                LimitSource::Default,
+                20,
+                5,
+            ),
+            (
+                PageTraversal::First,
+                PageOutcome::Terminal,
+                LimitSource::Explicit,
+                5,
+                5,
+            ),
+        ],
+    );
+}
+
 #[then("the users response is bad request with invalid_limit details")]
 fn the_users_response_is_bad_request_with_invalid_limit_details(world: &mut World) {
     assert_error(world, 400, "invalid_limit");
@@ -167,6 +265,14 @@ fn following_next_reaches_the_final_users_page(world: World) {
     name = "Following prev from the final users page returns the prior page"
 )]
 fn following_prev_from_the_final_users_page_returns_the_prior_page(world: World) {
+    drop(world);
+}
+
+#[scenario(
+    path = "tests/features/users_list_pagination.feature",
+    name = "Page telemetry distinguishes default and explicit limits"
+)]
+fn page_telemetry_distinguishes_default_and_explicit_limits_scenario(world: World) {
     drop(world);
 }
 

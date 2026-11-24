@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use crate::domain::ports::{
     CatalogueRepository, DescriptorRepository, LoginService, NoOpPaginationErrorMetrics,
-    PaginationErrorMetrics, RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService,
-    UserInterestsCommand, UserPreferencesCommand, UserPreferencesQuery, UserProfileQuery,
-    UsersQuery,
+    NoOpPaginationPageMetrics, PaginationErrorMetrics, PaginationPageMetrics,
+    RouteAnnotationsCommand, RouteAnnotationsQuery, RouteSubmissionService, UserInterestsCommand,
+    UserPreferencesCommand, UserPreferencesQuery, UserProfileQuery, UsersQuery,
 };
 use crate::domain::ports::{
     EnrichmentProvenanceRepository, FixtureEnrichmentProvenanceRepository,
@@ -48,6 +48,8 @@ pub struct HttpStatePorts {
 /// Optional ports for endpoints introduced after the initial HTTP state shape.
 #[derive(Clone)]
 pub struct HttpStateExtraPorts {
+    /// Recorder for successful page deliveries, chosen by the composition root.
+    pub pagination_page_metrics: Arc<dyn PaginationPageMetrics>,
     /// Driving port for offline bundle mutations.
     pub offline_bundles: Arc<dyn OfflineBundleCommand>,
     /// Driving port for offline bundle reads.
@@ -63,6 +65,7 @@ pub struct HttpStateExtraPorts {
 impl Default for HttpStateExtraPorts {
     fn default() -> Self {
         Self {
+            pagination_page_metrics: Arc::new(NoOpPaginationPageMetrics),
             offline_bundles: Arc::new(FixtureOfflineBundleCommand),
             offline_bundles_query: Arc::new(FixtureOfflineBundleQuery),
             enrichment_provenance: Arc::new(FixtureEnrichmentProvenanceRepository),
@@ -109,6 +112,8 @@ pub struct HttpState {
     pub walk_sessions_query: Arc<dyn WalkSessionQuery>,
     /// Recorder for pagination error observations, chosen by the composition root.
     pub pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
+    /// Recorder for successful page observations, chosen by the composition root.
+    pub pagination_page_metrics: Arc<dyn PaginationPageMetrics>,
 }
 
 impl From<HttpStatePorts> for HttpState {
@@ -184,6 +189,9 @@ impl HttpState {
     ///     descriptors: Arc::new(FixtureDescriptorRepository),
     /// };
     /// let extras = HttpStateExtraPorts {
+    ///     pagination_page_metrics: Arc::new(
+    ///         backend::domain::ports::NoOpPaginationPageMetrics,
+    ///     ),
     ///     offline_bundles: Arc::new(FixtureOfflineBundleCommand),
     ///     offline_bundles_query: Arc::new(FixtureOfflineBundleQuery),
     ///     enrichment_provenance: Arc::new(FixtureEnrichmentProvenanceRepository),
@@ -237,6 +245,7 @@ impl HttpState {
             descriptors,
         } = ports;
         let HttpStateExtraPorts {
+            pagination_page_metrics,
             offline_bundles,
             offline_bundles_query,
             enrichment_provenance,
@@ -261,6 +270,7 @@ impl HttpState {
             walk_sessions,
             walk_sessions_query,
             pagination_error_metrics,
+            pagination_page_metrics,
         }
     }
 }
