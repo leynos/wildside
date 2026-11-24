@@ -6,11 +6,12 @@
 //! rather than being restated in each module.
 
 use std::num::NonZeroU32;
+use std::time::Duration;
 
 use super::super::{RetryFailureContext, handle_failure};
 use super::doubles::{
-    FixedJitter, PersistenceCall, QUEUE, RecordingMetrics, RecordingPersistence, TASK_ID, WORKER,
-    WriteOutcome,
+    CLAIM_TOKEN, FixedJitter, PersistenceCall, QUEUE, RecordingMetrics, RecordingPersistence,
+    TASK_ID, WORKER, WriteOutcome,
 };
 use super::policy;
 use crate::domain::jobs::retry::{JitterSample, JobErrorKind, JobFailure};
@@ -52,8 +53,10 @@ impl FailureRun {
 
     /// Drive one failed delivery through the wrapper's failure path.
     ///
-    /// The wrapper always asks Apalis to keep the task failed, so the error is
-    /// expected and deliberately dropped here.
+    /// The delivery is the claimed one the lock step hands over, so every
+    /// guarded write it causes must carry [`CLAIM_TOKEN`]. The wrapper always
+    /// asks Apalis to keep the task failed, so the error is expected and
+    /// deliberately dropped here.
     pub(super) async fn apply(&self, kind: JobErrorKind) {
         self.apply_with_identity(kind, Some(TASK_ID), Some(WORKER))
             .await;
@@ -62,13 +65,34 @@ impl FailureRun {
     /// Drive one failed delivery with a chosen task and worker identity.
     ///
     /// The scheduler is only reachable when both identities are present; a
-    /// `None` on either side exercises the wrapper's refusal to persist.
+    /// `None` on either side exercises the wrapper's refusal to persist. The
+    /// delivery carries [`CLAIM_TOKEN`], which the guarded writes must forward.
     pub(super) async fn apply_with_identity(
         &self,
         kind: JobErrorKind,
         task_id: Option<&'static str>,
         worker_id: Option<&'static str>,
     ) {
+        self.run_with(kind, (task_id, worker_id), Some(CLAIM_TOKEN))
+            .await;
+    }
+
+    /// Drive one failed delivery that never passed through the lock step.
+    ///
+    /// Its guarded writes bind the empty string, which matches no row.
+    pub(super) async fn apply_without_claim_token(&self, kind: JobErrorKind) {
+        self.run_with(kind, (Some(TASK_ID), Some(WORKER)), None)
+            .await;
+    }
+
+    /// Drive one failed delivery carrying the chosen identity and claim token.
+    async fn run_with(
+        &self,
+        kind: JobErrorKind,
+        identity: (Option<&'static str>, Option<&'static str>),
+        claim_token: Option<&'static str>,
+    ) {
+        let (task_id, worker_id) = identity;
         let retry_policy = policy(3);
         let jitter = FixedJitter(JitterSample::midpoint());
         let context = RetryFailureContext {
@@ -81,7 +105,7 @@ impl FailureRun {
             queue_name: QUEUE,
             task_id,
             worker_id,
-            claim_token: None,
+            claim_token,
         };
         let failure = JobFailure::new(kind, "probe failure");
         handle_failure(failure, &context)
@@ -106,22 +130,41 @@ impl FailureRun {
     }
 }
 
-/// The terminal write a fatal failure of the shared delivery performs.
+/// The terminal write a fatal failure of the claimed delivery performs.
+///
+/// The token is the one the shared delivery carries, so a wrapper that dropped
+/// or replaced it would fail the recorded call.
 pub(super) fn terminal_call() -> PersistenceCall {
     PersistenceCall::Terminal {
         task_id: TASK_ID.to_owned(),
         worker_id: WORKER.to_owned(),
+        claim_token: CLAIM_TOKEN.to_owned(),
         attempt: ATTEMPT,
         reason: DeadReason::Fatal,
         shrink_limit: true,
     }
 }
 
-/// The cap-lowering fallback the shared delivery performs.
+/// The cap-lowering fallback the claimed delivery performs.
+///
+/// The wrapper can repeat this write, so every recorded clamp must carry the
+/// same claim token as the terminal write it follows.
 pub(super) fn clamp_call() -> PersistenceCall {
     PersistenceCall::Clamp {
         task_id: TASK_ID.to_owned(),
         worker_id: WORKER.to_owned(),
+        claim_token: CLAIM_TOKEN.to_owned(),
         attempt: ATTEMPT,
+    }
+}
+
+/// The retry write a retryable failure of the claimed delivery performs.
+pub(super) fn schedule_call(delay: Duration) -> PersistenceCall {
+    PersistenceCall::Schedule {
+        task_id: TASK_ID.to_owned(),
+        worker_id: WORKER.to_owned(),
+        claim_token: CLAIM_TOKEN.to_owned(),
+        attempt: ATTEMPT,
+        delay,
     }
 }

@@ -14,8 +14,8 @@ use apalis_postgres::PgTask;
 use serde_json::{Value, json};
 
 use super::doubles::{
-    DeliveryIdentity, RecordingMetrics, RecordingPersistence, TestJob, WORKER, WriteOutcome,
-    service, task_with,
+    CLAIM_TOKEN, DeliveryIdentity, PersistenceCall, RecordingMetrics, RecordingPersistence,
+    TestJob, WORKER, WriteOutcome, service, task_with,
 };
 use crate::domain::jobs::retry::{JobErrorKind, JobFailure};
 use crate::domain::ports::RouteRetryOutcome;
@@ -120,9 +120,44 @@ async fn matching_worker_and_lock_by_persists_the_retry() {
         .await;
 
     assert!(result.is_err(), "the delivery stays failed");
-    assert_eq!(harness.persistence.calls().len(), 1);
+    let calls = harness.persistence.calls();
+    match calls.as_slice() {
+        [PersistenceCall::Schedule { claim_token, .. }] => assert_eq!(
+            claim_token, CLAIM_TOKEN,
+            "the wrapper must forward the token the delivery was locked under"
+        ),
+        other => panic!("expected exactly one schedule write, got {other:?}"),
+    }
     assert_eq!(
         harness.metrics.retries(),
-        vec![RouteRetryOutcome::Scheduled]
+        vec![RouteRetryOutcome::Scheduled],
+        "the owned delivery must record one scheduled retry"
     );
+}
+
+/// Scenario: a delivery reaches the wrapper without the lock step's token.
+///
+/// Invariant: the schedule request binds the empty string, which matches no
+/// row. The claimed-delivery case above asserts the sentinel, so a wrapper that
+/// dropped the token would fail there; this case pins what a tokenless delivery
+/// records instead of leaving that value unobserved.
+#[tokio::test]
+async fn an_unclaimed_delivery_binds_the_empty_token() {
+    let harness = Harness::new();
+
+    let result = harness
+        .deliver(
+            json!({"v": "v1", "probeId": "probe"}),
+            DeliveryIdentity::new(Some(WORKER), Some(WORKER)).without_claim_token(),
+        )
+        .await;
+
+    assert!(result.is_err(), "the delivery stays failed");
+    match harness.persistence.calls().as_slice() {
+        [PersistenceCall::Schedule { claim_token, .. }] => assert_eq!(
+            claim_token, "",
+            "a delivery with no claim token must bind the empty string"
+        ),
+        other => panic!("expected exactly one schedule write, got {other:?}"),
+    }
 }

@@ -42,7 +42,7 @@ use serde_json::Value;
 
 use super::fixtures::{
     CanaryEnvironment, ClaimToken, Delivery, JobId, JobRow, QueueName, claim_due_rows,
-    delivery_task, insert_job, read_state, register_worker,
+    delivery_task, insert_job, read_fetched_metadata, read_state, register_worker,
 };
 use crate::support::apalis_job_id::apalis_job_id;
 
@@ -168,10 +168,9 @@ pub(super) fn requeue_dead_job(
 /// stale delivery could be replayed, and the stored status would then differ
 /// for a reason unrelated to the token.
 ///
-/// The claim is bound to the fetch that queued the row, so the canary performs
-/// that fetch first with the pinned backend's own function. The delivery then
-/// carries the attempt count the row holds before it is polled, which is the
-/// count the claim compares against the stored one.
+/// The claim is bound to the fetch, so the canary performs that fetch first
+/// with the pinned backend's own function. The delivery carries the attempt
+/// count and the metadata the fetch returned.
 pub(super) fn claim_row(
     environment: &CanaryEnvironment,
     worker: &str,
@@ -179,14 +178,14 @@ pub(super) fn claim_row(
     id: JobId<'_>,
 ) -> String {
     let claimed = claim_due_rows(environment, queue.as_str(), worker);
-    assert_eq!(
-        claimed, 1,
-        "the pinned fetcher queues exactly the requeued row"
-    );
+    assert_eq!(claimed, 1, "the pinned fetcher queues the requeued row");
+    // The fetch above changes only the status and lock, not the metadata.
+    let metadata = read_fetched_metadata(&environment.runtime, &environment.pool, id.as_str());
     let mut service = AttemptBoundLock::new(environment.pool.clone()).layer(ContextProbe);
     let ctx = environment
         .run(async {
-            let mut task = delivery_task(id.as_str(), Delivery::new(worker, GUARD_CAP, 0));
+            let delivery = Delivery::new(worker, GUARD_CAP, 0).fetched(&metadata);
+            let mut task = delivery_task(id.as_str(), delivery);
             // A delivery reaches the lock inside a worker, which has already
             // put its own context in the task's extensions.
             task.parts.data.insert(WorkerContext::new::<Value>(worker));
@@ -202,8 +201,8 @@ pub(super) fn claim_row(
 
 /// Inner service that hands back the context the lock layer stamped.
 ///
-/// The lock is the only production behaviour under test here, so the wrapped
-/// service does nothing except expose the mutated context to the canary.
+/// The lock is the only production behaviour under test, so the wrapped service
+/// does nothing except expose the mutated context to the canary.
 #[derive(Clone, Copy)]
 struct ContextProbe;
 
@@ -388,7 +387,7 @@ fn a_requeued_row_cannot_be_overwritten_by_its_previous_delivery() {
 
 /// The failure an acknowledged delivery reports.
 #[derive(Debug)]
-struct ProbeFailure;
+pub(super) struct ProbeFailure;
 
 impl std::fmt::Display for ProbeFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

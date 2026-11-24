@@ -3,21 +3,17 @@
 //! The wrapper talks to its scheduler through [`RetryPersistence`] and to
 //! metrics through [`RouteQueueMetrics`]. These doubles record every call so a
 //! test can assert how many writes a delivery produced instead of inferring it
-//! from database state.
+//! from database state. The task builders live in
+//! [`deliveries`](super::deliveries) and are re-exported here, so a test
+//! imports one fixture module.
 
 use std::collections::VecDeque;
 use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use apalis_core::task::Task;
-use apalis_core::task::attempt::Attempt;
-use apalis_core::task::extensions::Extensions;
-use apalis_core::worker::context::WorkerContext;
-use apalis_postgres::{PgContext, PgTask};
 use async_trait::async_trait;
 use serde::Deserialize;
-use serde_json::Value;
 use sqlx::Error as SqlxError;
 
 use super::super::{JitterSource, RetryingJobService, RetryingJobServiceConfig};
@@ -33,6 +29,13 @@ use crate::outbound::queue::{
 pub(super) const QUEUE: &str = "wildside.wrapper-effects";
 pub(super) const WORKER: &str = "wrapper-effects-worker";
 pub(super) const TASK_ID: &str = "01J00000000000000000000000";
+
+/// Claim token a delivery that passed through the lock step carries.
+///
+/// The production lock stamps a random token before the wrapper runs, so the
+/// claimed-delivery fixtures carry a sentinel and the effect tests assert it
+/// reaches every guarded write. A tokenless delivery is covered separately.
+pub(super) const CLAIM_TOKEN: &str = "wrapper-effects-claim-token";
 
 /// Concrete `v1` envelope the wrapper must decode before invoking the handler.
 #[derive(Clone, Debug, Deserialize)]
@@ -54,12 +57,14 @@ pub(super) enum PersistenceCall {
     Schedule {
         task_id: String,
         worker_id: String,
+        claim_token: String,
         attempt: u32,
         delay: Duration,
     },
     Terminal {
         task_id: String,
         worker_id: String,
+        claim_token: String,
         attempt: u32,
         reason: DeadReason,
         shrink_limit: bool,
@@ -67,6 +72,7 @@ pub(super) enum PersistenceCall {
     Clamp {
         task_id: String,
         worker_id: String,
+        claim_token: String,
         attempt: u32,
     },
 }
@@ -144,6 +150,7 @@ impl RetryPersistence for RecordingPersistence {
         self.record(PersistenceCall::Schedule {
             task_id: update.task_id.to_owned(),
             worker_id: update.worker_id.to_owned(),
+            claim_token: update.claim_token.to_owned(),
             attempt: update.attempt.get(),
             delay: update.delay,
         });
@@ -157,6 +164,7 @@ impl RetryPersistence for RecordingPersistence {
         self.record(PersistenceCall::Terminal {
             task_id: update.task_id.to_owned(),
             worker_id: update.worker_id.to_owned(),
+            claim_token: update.claim_token.to_owned(),
             attempt: update.attempt.get(),
             reason: update.reason,
             shrink_limit: update.shrink_limit,
@@ -168,6 +176,7 @@ impl RetryPersistence for RecordingPersistence {
         self.record(PersistenceCall::Clamp {
             task_id: clamp.task_id.to_owned(),
             worker_id: clamp.worker_id.to_owned(),
+            claim_token: clamp.claim_token.to_owned(),
             attempt: clamp.attempt.get(),
         });
         outcome(self.next_clamp_outcome())
@@ -223,93 +232,7 @@ impl RecordingMetrics {
     }
 }
 
-/// Build a delivery whose worker context and `lock_by` agree.
-pub(super) fn task(payload: Value, attempt: usize) -> PgTask<Value> {
-    task_with(
-        payload,
-        attempt,
-        DeliveryIdentity::new(Some(WORKER), Some(WORKER)),
-    )
-}
-
-/// The identity a task double carries.
-///
-/// The wrapper writes only when it can name both the row and the worker that
-/// owns it, so tests vary these three fields independently. The identity
-/// starts out naming [`TASK_ID`]; [`without_task_id`](Self::without_task_id)
-/// removes that name to exercise the refusal path.
-#[derive(Clone, Copy, Debug)]
-pub(super) struct DeliveryIdentity<'a> {
-    worker: Option<&'a str>,
-    lock_by: Option<&'a str>,
-    task_id: Option<&'a str>,
-}
-
-impl<'a> DeliveryIdentity<'a> {
-    /// An identity for a delivery that names [`TASK_ID`].
-    ///
-    /// `worker` is the name stored in the task's [`WorkerContext`]; `lock_by`
-    /// is the worker recorded on the Apalis context. The wrapper persists a
-    /// failure only when both are present and agree, so tests pass each
-    /// missing or mismatched combination.
-    pub(super) fn new(worker: Option<&'a str>, lock_by: Option<&'a str>) -> Self {
-        Self {
-            worker,
-            lock_by,
-            task_id: Some(TASK_ID),
-        }
-    }
-
-    /// The same identity on a delivery that carries no task identifier.
-    ///
-    /// The wrapper needs the identifier to address the row it would update, so
-    /// a delivery without one must be refused even when the worker identities
-    /// agree.
-    pub(super) fn without_task_id(mut self) -> Self {
-        self.task_id = None;
-        self
-    }
-}
-
-/// Build a delivery with the chosen identity and a five-attempt stored cap.
-pub(super) fn task_with(
-    payload: Value,
-    attempt: usize,
-    identity: DeliveryIdentity<'_>,
-) -> PgTask<Value> {
-    task_with_budget(payload, attempt, 5, identity)
-}
-
-/// Build a delivery whose context carries an explicit stored attempt cap.
-///
-/// The wrapper compares the delivered attempt with the cap Apalis restored
-/// from the row, so a test that exercises a spent cap has to set both numbers
-/// the way a recovered row would carry them.
-pub(super) fn task_with_budget(
-    payload: Value,
-    attempt: usize,
-    max_attempts: i32,
-    identity: DeliveryIdentity<'_>,
-) -> PgTask<Value> {
-    let mut data = Extensions::default();
-    if let Some(worker) = identity.worker {
-        // `WorkerContext::new` carries the service type only for diagnostics,
-        // so the unit is sufficient here.
-        data.insert(WorkerContext::new::<()>(worker));
-    }
-    let mut builder = Task::builder(payload)
-        .with_ctx(
-            PgContext::new()
-                .with_max_attempts(max_attempts)
-                .with_lock_by(identity.lock_by.map(str::to_owned)),
-        )
-        .with_data(data)
-        .with_attempt(Attempt::new_with_value(attempt));
-    if let Some(task_id) = identity.task_id {
-        builder = builder.with_task_id(task_id.parse().expect("task id"));
-    }
-    builder.build()
-}
+pub(super) use super::deliveries::{DeliveryIdentity, task, task_with, task_with_budget};
 
 /// Jitter source that always returns the same sample.
 pub(super) struct FixedJitter(pub(super) JitterSample);

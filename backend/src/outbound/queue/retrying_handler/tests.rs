@@ -1,5 +1,6 @@
 //! Unit tests for retry wrapper decisions and scheduling context.
 
+mod deliveries;
 mod doubles;
 mod failure_run;
 mod service_decode;

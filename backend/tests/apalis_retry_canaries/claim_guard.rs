@@ -3,16 +3,24 @@
 //! The lock step runs on a task the worker fetched earlier, and the row can
 //! move on while that task waits in the worker's buffer. Orphan recovery
 //! returns the row to `Pending`, clears `lock_by`, and increments `attempts`;
-//! a dead-letter requeue clears `lock_by` and resets `attempts` to zero. Either
-//! way another worker can fetch the row first. [`AttemptBoundLock`] therefore
-//! claims a row only while it still names the fetching worker and still holds
-//! the attempt count the delivery was built with.
+//! a retry acknowledgement increments `attempts`; and a dead-letter requeue
+//! clears `lock_by` and resets `attempts` to zero. Another worker can fetch the
+//! row first in each case. [`AttemptBoundLock`] therefore claims a row only
+//! while it still names the fetching worker, still holds the attempt count the
+//! delivery was built with, and still reports the requeue generation the fetch
+//! captured.
 //!
-//! Both canaries drive the pinned fetcher, the production step that moves the
+//! The requeue is the one path that restores every other discriminator: it
+//! resets `attempts` to zero, and a later fetch by the same worker name restores
+//! `lock_by`, so only the requeue counter separates the delivery fetched before
+//! it from the replacement fetched after it.
+//!
+//! The canaries drive the pinned fetcher, the production step that moves the
 //! row on, and the production lock step in sequence, because the window only
 //! exists between a fetch and the claim that follows it. Each ends with the
 //! replacement delivery claiming the row, so the guard is shown to refuse only
-//! a delivery that lost its row.
+//! a delivery that lost its row. The requeue window, which needs the same
+//! worker name to fetch both generations, lives in [`requeue`].
 
 use std::future::Ready;
 use std::task::{Context, Poll};
@@ -28,10 +36,15 @@ use tracing_test::traced_test;
 use super::ack_guard::requeue_dead_job;
 use super::fixtures::{
     CanaryEnvironment, Delivery, JobId, JobRow, QueueName, WorkerName, claim_due_rows,
-    delivery_task, insert_job, mark_worker_stale, read_state, recover_orphaned_row,
-    register_queue_worker,
+    delivery_task, insert_job, mark_worker_stale, read_fetched_metadata, read_state,
+    recover_orphaned_row, register_queue_worker,
 };
 use crate::support::apalis_job_id::apalis_job_id;
+
+// The parent module is loaded through `#[path]`, which stops Rust from
+// deriving a nested directory for its children, so the path is explicit.
+#[path = "claim_guard/requeue.rs"]
+mod requeue;
 
 /// The attempt cap that lets a delivery fail without being retired.
 const CLAIM_CAP: i32 = 10;
@@ -75,18 +88,25 @@ fn dead_row<'a>(queue: &'a str, id: &'a str) -> JobRow<'a> {
 /// Run the production lock step for one delivery and report its outcome.
 fn claim_delivery(
     environment: &CanaryEnvironment,
-    worker: &str,
+    delivery: Delivery<'_>,
     id: &str,
-    fetched_attempt: usize,
+) -> Result<PgContext, BoxDynError> {
+    let mut task = delivery_task(id, delivery);
+    // A delivery reaches the lock inside a worker, which has already put its
+    // own context in the task's extensions.
+    task.parts
+        .data
+        .insert(WorkerContext::new::<Value>(delivery.worker()));
+    claim_task(environment, task)
+}
+
+/// Run the production lock step for an already built delivery task.
+fn claim_task(
+    environment: &CanaryEnvironment,
+    task: PgTask<Value>,
 ) -> Result<PgContext, BoxDynError> {
     let mut service = AttemptBoundLock::new(environment.pool.clone()).layer(ContextProbe);
-    environment.run(async {
-        let mut task = delivery_task(id, Delivery::new(worker, CLAIM_CAP, fetched_attempt));
-        // A delivery reaches the lock inside a worker, which has already put
-        // its own context in the task's extensions.
-        task.parts.data.insert(WorkerContext::new::<Value>(worker));
-        service.call(task).await
-    })
+    environment.run(service.call(task))
 }
 
 /// Inner service that hands back the context the lock layer stamped.
@@ -157,7 +177,7 @@ fn a_stale_delivery_cannot_claim_a_recovered_row() {
     );
     let before = read_state(&environment.runtime, &environment.pool, &id);
 
-    let stale = claim_delivery(environment, STALE_WORKER, &id, 0);
+    let stale = claim_delivery(environment, Delivery::new(STALE_WORKER, CLAIM_CAP, 0), &id);
     assert!(
         stale.is_err(),
         "the stalled delivery must not claim the recovered row: {stale:?}"
@@ -172,8 +192,12 @@ fn a_stale_delivery_cannot_claim_a_recovered_row() {
         "the refused claim leaves the replacement's row untouched"
     );
 
-    claim_delivery(environment, REPLACEMENT_WORKER, &id, 1)
-        .expect("the delivery that fetched the row still claims it");
+    claim_delivery(
+        environment,
+        Delivery::new(REPLACEMENT_WORKER, CLAIM_CAP, 1),
+        &id,
+    )
+    .expect("the delivery that fetched the row still claims it");
     let claimed = read_state(&environment.runtime, &environment.pool, &id);
     assert_eq!(
         claimed.status, "Running",
@@ -191,8 +215,8 @@ fn a_stale_delivery_cannot_claim_a_recovered_row() {
 ///
 /// Invariant: the previous delivery's claim matches no row even though its
 /// attempt count now equals the row's, because the requeue cleared the lock
-/// owner. A claim bound to the attempt count alone would take the row before
-/// its replacement could fetch it.
+/// owner and advanced the requeue counter. A claim bound to the attempt count
+/// alone would take the row before its replacement could fetch it.
 #[test]
 fn a_requeued_row_cannot_be_claimed_by_its_previous_delivery() {
     let environment = CanaryEnvironment::shared();
@@ -220,7 +244,7 @@ fn a_requeued_row_cannot_be_claimed_by_its_previous_delivery() {
         "a requeue clears the recorded lock owner"
     );
 
-    let stale = claim_delivery(environment, STALE_WORKER, &id, 0);
+    let stale = claim_delivery(environment, Delivery::new(STALE_WORKER, CLAIM_CAP, 0), &id);
     assert!(
         stale.is_err(),
         "the previous delivery must not claim the requeued row: {stale:?}"
@@ -236,8 +260,13 @@ fn a_requeued_row_cannot_be_claimed_by_its_previous_delivery() {
         replacement_fetch, 1,
         "the replacement fetches the requeued row"
     );
-    claim_delivery(environment, REPLACEMENT_WORKER, &id, 0)
-        .expect("the delivery that fetched the requeued row claims it");
+    let metadata = read_fetched_metadata(&environment.runtime, &environment.pool, &id);
+    claim_delivery(
+        environment,
+        Delivery::new(REPLACEMENT_WORKER, CLAIM_CAP, 0).fetched(&metadata),
+        &id,
+    )
+    .expect("the delivery that fetched the requeued row claims it");
     assert_eq!(
         read_state(&environment.runtime, &environment.pool, &id).status,
         "Running",

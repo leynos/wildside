@@ -18,10 +18,11 @@ use serde_json::json;
 
 use super::super::{RetryFailureContext, handle_failure};
 use super::doubles::{
-    DeliveryIdentity, FixedJitter, PersistenceCall, QUEUE, RecordingMetrics, RecordingPersistence,
-    TASK_ID, TestJob, WORKER, WriteOutcome, service_with, task_with, wrapper_config,
+    CLAIM_TOKEN, DeliveryIdentity, FixedJitter, PersistenceCall, QUEUE, RecordingMetrics,
+    RecordingPersistence, TASK_ID, TestJob, WORKER, WriteOutcome, service_with, task_with,
+    wrapper_config,
 };
-use super::failure_run::{ATTEMPT, CONTEXT_MAX_ATTEMPTS, FailureRun};
+use super::failure_run::{ATTEMPT, CONTEXT_MAX_ATTEMPTS, FailureRun, schedule_call};
 use crate::domain::jobs::retry::{
     JitterSample, JobErrorKind, JobFailure, JobRetryPolicy, JobRetryPolicyConfig,
 };
@@ -36,15 +37,40 @@ async fn retryable_failure_schedules_exactly_one_write() {
 
     assert_eq!(
         run.calls(),
-        vec![PersistenceCall::Schedule {
-            task_id: TASK_ID.to_owned(),
-            worker_id: WORKER.to_owned(),
-            attempt: ATTEMPT,
-            delay: Duration::from_millis(10),
-        }]
+        vec![schedule_call(Duration::from_millis(10))],
+        "the retry write must carry the delivery's claim token"
     );
-    assert_eq!(run.retries(), vec![RouteRetryOutcome::Scheduled]);
-    assert!(run.dead_letters().is_empty());
+    assert_eq!(
+        run.retries(),
+        vec![RouteRetryOutcome::Scheduled],
+        "the applied retry must record one scheduling outcome"
+    );
+    assert!(
+        run.dead_letters().is_empty(),
+        "a scheduled retry must not count as a dead letter"
+    );
+}
+
+/// Scenario: a retryable failure arrives from a delivery that never passed
+/// through the lock step.
+///
+/// Invariant: the schedule request binds the empty string rather than a stale
+/// or invented token, which is the value that matches no row. This case is
+/// kept apart from the claimed-delivery tests so a wrapper that dropped the
+/// token from every request could not pass them by coincidence.
+#[tokio::test]
+async fn a_tokenless_delivery_binds_the_empty_string() {
+    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Updated);
+
+    run.apply_without_claim_token(JobErrorKind::Retryable).await;
+
+    match run.calls().as_slice() {
+        [PersistenceCall::Schedule { claim_token, .. }] => assert_eq!(
+            claim_token, "",
+            "a delivery with no claim token must bind the empty string"
+        ),
+        other => panic!("expected exactly one schedule write, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -98,7 +124,7 @@ async fn scheduled_delay_for_sample(policy: &JobRetryPolicy, sample: f64) -> Dur
         queue_name: QUEUE,
         task_id: Some(TASK_ID),
         worker_id: Some(WORKER),
-        claim_token: None,
+        claim_token: Some(CLAIM_TOKEN),
     };
     let failure = JobFailure::new(JobErrorKind::Retryable, "probe failure");
     handle_failure(failure, &context)
@@ -106,7 +132,17 @@ async fn scheduled_delay_for_sample(policy: &JobRetryPolicy, sample: f64) -> Dur
         .expect_err("the wrapper asks Apalis to keep the task failed");
 
     match persistence.calls().as_slice() {
-        [PersistenceCall::Schedule { delay, .. }] => *delay,
+        [
+            PersistenceCall::Schedule {
+                claim_token, delay, ..
+            },
+        ] => {
+            assert_eq!(
+                claim_token, CLAIM_TOKEN,
+                "the schedule write must carry the delivery's claim token"
+            );
+            *delay
+        }
         other => panic!("expected exactly one schedule write, got {other:?}"),
     }
 }
@@ -184,15 +220,14 @@ async fn configured_jitter_source_shapes_the_delivered_delay(
     assert!(result.is_err(), "the delivery stays failed");
     assert_eq!(
         persistence.calls(),
-        vec![PersistenceCall::Schedule {
-            task_id: TASK_ID.to_owned(),
-            worker_id: WORKER.to_owned(),
-            attempt: ATTEMPT,
-            delay: expected,
-        }],
-        "the persisted delay must follow the configured jitter sample"
+        vec![schedule_call(expected)],
+        "the persisted call must follow the configured jitter sample and carry the claim token"
     );
-    assert_eq!(metrics.retries(), vec![RouteRetryOutcome::Scheduled]);
+    assert_eq!(
+        metrics.retries(),
+        vec![RouteRetryOutcome::Scheduled],
+        "the configured jitter delivery must record one scheduled retry"
+    );
 }
 
 #[traced_test]

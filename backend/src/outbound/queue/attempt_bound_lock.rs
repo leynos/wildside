@@ -16,14 +16,21 @@
 //!
 //! The claim itself is bound to the delivery that fetched the row. A fetched
 //! task may wait in the worker's buffer while its row moves on: orphan recovery
-//! returns the row to `Pending`, clears `lock_by`, and increments `attempts`,
-//! and a dead-letter requeue clears `lock_by` and resets `attempts` to zero.
-//! Either way another worker can fetch the row in the meantime. The claim
-//! therefore requires the row to still name this worker in `lock_by` and to
-//! still hold the attempt count this delivery was built with, which refuses an
-//! obsolete delivery before its handler is polled. Both predicates hold for a
-//! fresh delivery, because `apalis.get_jobs` recorded this worker in `lock_by`
-//! during the fetch and nothing else changes the count before the claim.
+//! returns the row to `Pending`, clears `lock_by`, and increments `attempts`;
+//! an ordinary retry acknowledgement increments `attempts`; and a dead-letter
+//! requeue clears `lock_by` and resets `attempts` to zero. Another worker can
+//! fetch the row in each case. The claim therefore requires the row to still
+//! name this worker in `lock_by`, to still hold the attempt count this delivery
+//! was built with, and to still report the dead-letter requeue generation the
+//! fetch captured, which refuses an obsolete delivery before its handler is
+//! polled. All three hold for a fresh delivery, because `apalis.get_jobs`
+//! records this worker in `lock_by` during the fetch and nothing else changes
+//! the row before the claim. A requeue is the one path that resets the count,
+//! and it increments `wildside.retry.requeue_count` as it does so, so that
+//! counter separates a delivery fetched before the requeue from the replacement
+//! fetched after it. `lock_at` cannot serve that purpose: the pinned context
+//! exposes it at whole-second precision, so two fetches within one second are
+//! indistinguishable.
 
 use apalis_core::error::{AbortError, BoxDynError};
 use apalis_core::layers::{Layer, Service};
@@ -38,9 +45,34 @@ use uuid::Uuid;
 /// Metadata key that names the delivery generation that owns the row.
 pub(super) const CLAIM_TOKEN_KEY: &str = "wildside.retry.claim_token";
 
+/// Metadata key that counts the dead-letter requeues a row has undergone.
+const REQUEUE_COUNT_KEY: &str = "wildside.retry.requeue_count";
+
+/// The requeue generation of a row that has never been requeued.
+///
+/// The claim's SQL `COALESCE` reads a missing or JSON-null counter as the same
+/// text, so these two defaults must stay equal.
+const DEFAULT_REQUEUE_GENERATION: &str = "0";
+
 /// Read the claim token a task's context carries, if it has one.
 pub(super) fn claim_token(ctx: &PgContext) -> Option<&str> {
     ctx.meta().get(CLAIM_TOKEN_KEY).and_then(Value::as_str)
+}
+
+/// Read the dead-letter requeue generation a fetched delivery carries.
+///
+/// The dead-letter adapter stores the counter as a `jsonb` number, which
+/// PostgreSQL's `->>` renders as decimal text. A row written by another tool
+/// may hold a JSON string instead, so both shapes are normalized to the text
+/// the claim's predicate compares. A missing or JSON-null counter, and any
+/// other shape, reads as [`DEFAULT_REQUEUE_GENERATION`]; the latter makes the
+/// claim refuse a row whose counter this delivery cannot identify exactly.
+fn fetched_requeue_generation(ctx: &PgContext) -> String {
+    match ctx.meta().get(REQUEUE_COUNT_KEY) {
+        Some(Value::Number(count)) => count.to_string(),
+        Some(Value::String(text)) => text.clone(),
+        _ => DEFAULT_REQUEUE_GENERATION.to_owned(),
+    }
 }
 
 /// Middleware that claims a row for one delivery generation.
@@ -103,6 +135,9 @@ where
             Ok(inputs) => inputs,
             Err(error) => return async { Err(AbortError::new(error).into()) }.boxed(),
         };
+        // The generation must be read before the claim token is written into
+        // the context, because that write replaces the metadata map.
+        let requeue_generation = fetched_requeue_generation(&req.parts.ctx);
         // A version-4 UUID is random rather than time-ordered, which is all a
         // claim token needs: it must never repeat, and nothing orders by it.
         let token = Uuid::new_v4().to_string();
@@ -117,6 +152,7 @@ where
                 worker: &worker_id,
                 queue: queue.as_deref(),
                 fetched_attempt,
+                requeue_generation: &requeue_generation,
                 token: &token,
             };
             claim_row(&pool, &claim).await.map_err(AbortError::new)?;
@@ -126,12 +162,13 @@ where
     }
 }
 
-/// Read the delivery fields the claim compares against the row.
+/// Read the delivery identity the claim compares against the row.
 ///
 /// A delivery always arrives from a worker that fetched it, so a missing worker
 /// context, a missing task identifier, or an attempt count that cannot be
 /// stored as the row's `INTEGER` is a wiring fault rather than a row that
-/// merely moved on.
+/// merely moved on. The requeue generation is read separately, because it is
+/// not an identity the delivery must carry but a value the fetch captured.
 fn claim_inputs<Args>(req: &PgTask<Args>) -> Result<(String, String, i32), sqlx::Error> {
     let worker_id = req
         .parts
@@ -165,18 +202,28 @@ struct Claim<'a> {
     worker: &'a str,
     queue: Option<&'a str>,
     fetched_attempt: i32,
+    requeue_generation: &'a str,
     token: &'a str,
 }
 
 /// Claim one due row for a delivery and stamp it with the claim token.
 ///
 /// The predicate mirrors `lock_by_id.sql` from the pinned release and adds the
-/// two checks that tie the claim to the fetch this delivery came from. The row
-/// must still name this worker in `lock_by`, which `apalis.get_jobs` recorded
-/// and orphan recovery or a requeue clears, and it must still hold the attempt
-/// count the delivery was built with, which both of those steps change. A row
-/// that no longer satisfies the predicate is reported as missing, which is what
-/// a delivery that lost the row should see before its handler runs.
+/// three checks that tie the claim to the fetch this delivery came from. The row
+/// must still name this worker in `lock_by`, still hold the attempt count the
+/// delivery was built with, and still report the requeue generation the fetch
+/// captured. Between them, these checks refuse every way a row can move on
+/// after its delivery was fetched:
+///
+/// - orphan recovery returns the row to `Pending`, clears `lock_by`, and
+///   increments `attempts`;
+/// - an ordinary retry acknowledgement increments `attempts`;
+/// - a dead-letter requeue clears `lock_by` and resets `attempts` to zero, so
+///   once the same worker fetches the replacement, only the requeue counter
+///   still separates the generations.
+///
+/// A row that no longer satisfies the predicate is reported as missing, which
+/// is what a delivery that lost the row should see before its handler runs.
 async fn claim_row(pool: &PgPool, claim: &Claim<'_>) -> Result<(), sqlx::Error> {
     let ids = [claim.task_id.to_owned()];
     let updated = sqlx::query(
@@ -194,12 +241,14 @@ async fn claim_row(pool: &PgPool, claim: &Claim<'_>) -> Result<(), sqlx::Error> 
            AND run_at < now()
            AND id = ANY($1)
            AND lock_by = $2
-           AND attempts = $4",
+           AND attempts = $4
+           AND COALESCE(metadata->>'wildside.retry.requeue_count', '0') = $5",
     )
     .bind(&ids[..])
     .bind(claim.worker)
     .bind(claim.token)
     .bind(claim.fetched_attempt)
+    .bind(claim.requeue_generation)
     .execute(pool)
     .await?;
 
@@ -215,7 +264,65 @@ async fn claim_row(pool: &PgPool, claim: &Claim<'_>) -> Result<(), sqlx::Error> 
         queue = claim.queue,
         task_id = claim.task_id,
         attempt = claim.fetched_attempt,
+        requeue_generation = claim.requeue_generation,
         "claim update affected no row; the delivery no longer owns the row"
     );
     Err(sqlx::Error::RowNotFound)
+}
+
+#[cfg(test)]
+mod tests {
+    //! Tests for the requeue generation the claim compares.
+
+    use apalis_postgres::PgContext;
+    use rstest::rstest;
+    use serde_json::{Map, Value, json};
+
+    use super::{DEFAULT_REQUEUE_GENERATION, REQUEUE_COUNT_KEY, fetched_requeue_generation};
+
+    /// Build a delivery context whose metadata is `stored`.
+    fn context(stored: Option<Value>) -> PgContext {
+        let mut meta = Map::new();
+        if let Some(value) = stored {
+            meta.insert(REQUEUE_COUNT_KEY.to_owned(), value);
+        }
+        PgContext::new().with_meta(meta)
+    }
+
+    /// Scenario: the stored counter has each shape a fetch can return.
+    ///
+    /// Invariant: a `jsonb` number and a JSON string normalize to the same
+    /// decimal text PostgreSQL's `->>` renders, and a row that never carried a
+    /// counter reads as generation zero. A shape this delivery cannot identify
+    /// exactly falls back to zero, so the claim refuses the row rather than
+    /// matching a generation it did not read.
+    #[rstest]
+    #[case::absent(None, "0")]
+    #[case::json_null(Some(Value::Null), "0")]
+    #[case::zero(Some(json!(0)), "0")]
+    #[case::number(Some(json!(3)), "3")]
+    #[case::large_number(Some(json!(u64::from(u32::MAX))), "4294967295")]
+    #[case::string(Some(json!("7")), "7")]
+    #[case::unreadable_shape(Some(json!({"nested": 1})), "0")]
+    fn a_fetched_counter_normalizes_to_the_text_the_claim_compares(
+        #[case] stored: Option<Value>,
+        #[case] expected: &str,
+    ) {
+        let ctx = context(stored);
+
+        assert_eq!(
+            fetched_requeue_generation(&ctx),
+            expected,
+            "a stored counter must normalize to the text the row predicate uses"
+        );
+    }
+
+    /// The Rust default and the SQL `COALESCE` literal must not drift apart.
+    #[test]
+    fn the_default_generation_matches_the_claim_default() {
+        assert_eq!(
+            DEFAULT_REQUEUE_GENERATION, "0",
+            "the Rust default must match the SQL claim's COALESCE literal"
+        );
+    }
 }

@@ -14,7 +14,7 @@ use apalis_core::task::attempt::Attempt;
 use apalis_core::worker::context::WorkerContext;
 use apalis_postgres::{Config, PgContext, PgTask, PostgresStorage};
 use futures::StreamExt;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use sqlx::PgPool;
 use tokio::runtime::Runtime;
 
@@ -214,6 +214,29 @@ pub(crate) fn read_state(runtime: &Runtime, pool: &PgPool, id: &str) -> RowState
     })
 }
 
+/// The metadata map a pinned fetch returned for one row.
+///
+/// `apalis.get_jobs` changes the row's status and lock but leaves its metadata
+/// object alone, so the map read after a fetch is the one the fetched delivery
+/// carries in its context.
+pub(crate) fn read_fetched_metadata(
+    runtime: &Runtime,
+    pool: &PgPool,
+    id: &str,
+) -> Map<String, Value> {
+    runtime.block_on(async {
+        let (stored,): (Option<Value>,) =
+            sqlx::query_as("SELECT metadata FROM apalis.jobs WHERE id = $1")
+                .bind(id)
+                .fetch_one(pool)
+                .await
+                .expect("read canary job metadata");
+        stored
+            .and_then(|json| json.as_object().cloned())
+            .unwrap_or_default()
+    })
+}
+
 /// Persisted state a guarded retry-scheduler write could change.
 ///
 /// Every column here is one an owned write names or rewrites, so comparing two
@@ -268,6 +291,7 @@ pub(crate) struct Delivery<'a> {
     max_attempts: i32,
     attempt: usize,
     claim_token: Option<&'a str>,
+    metadata: Option<&'a Map<String, Value>>,
 }
 
 impl<'a> Delivery<'a> {
@@ -278,6 +302,7 @@ impl<'a> Delivery<'a> {
             max_attempts,
             attempt,
             claim_token: None,
+            metadata: None,
         }
     }
 
@@ -290,6 +315,22 @@ impl<'a> Delivery<'a> {
         self.claim_token = Some(claim_token);
         self
     }
+
+    /// The same delivery carrying the metadata its fetch returned.
+    ///
+    /// A fetched delivery's context is the row's metadata object as it stood at
+    /// fetch time. A canary that replays a fetch hands that object back here
+    /// rather than restating the keys, so the delivery carries the requeue
+    /// generation and any other value the fetch observed.
+    pub(crate) fn fetched(mut self, metadata: &'a Map<String, Value>) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// The worker name this delivery belongs to.
+    pub(crate) fn worker(self) -> &'a str {
+        self.worker
+    }
 }
 
 /// A running row reduced to the delivery a worker hands the wrapper.
@@ -299,7 +340,7 @@ impl<'a> Delivery<'a> {
 /// delivery: it decides the status from the context it cloned before the
 /// handler ran.
 pub(crate) fn delivery_task(id: &str, delivery: Delivery<'_>) -> PgTask<Value> {
-    let mut meta = serde_json::Map::new();
+    let mut meta = delivery.metadata.cloned().unwrap_or_default();
     if let Some(token) = delivery.claim_token {
         meta.insert(
             "wildside.retry.claim_token".to_owned(),

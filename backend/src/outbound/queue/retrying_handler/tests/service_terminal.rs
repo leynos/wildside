@@ -5,7 +5,7 @@
 //! terminal-write-failure counter instead, and a failed write is followed by a
 //! cap-lowering fallback that is retried a bounded number of times.
 
-use super::doubles::WriteOutcome;
+use super::doubles::{PersistenceCall, WriteOutcome};
 use super::failure_run::{FailureRun, clamp_call, terminal_call};
 use crate::domain::jobs::retry::JobErrorKind;
 use crate::domain::ports::RouteDeadLetterOutcome;
@@ -24,6 +24,27 @@ async fn fatal_failure_records_one_terminal_write() {
     );
     assert_eq!(run.dead_letters(), vec![RouteDeadLetterOutcome::Fatal]);
     assert!(run.retries().is_empty());
+}
+
+/// Scenario: a fatal failure arrives from a delivery that never passed through
+/// the lock step.
+///
+/// Invariant: the terminal write binds the empty string rather than a stale or
+/// invented token. Kept apart from the claimed-delivery cases so a wrapper that
+/// dropped the token from every request could not pass them by coincidence.
+#[tokio::test]
+async fn a_tokenless_terminal_delivery_binds_the_empty_string() {
+    let run = FailureRun::new(WriteOutcome::Updated, WriteOutcome::Updated);
+
+    run.apply_without_claim_token(JobErrorKind::Fatal).await;
+
+    match run.calls().as_slice() {
+        [PersistenceCall::Terminal { claim_token, .. }] => assert_eq!(
+            claim_token, "",
+            "a delivery with no claim token must bind the empty string"
+        ),
+        other => panic!("expected exactly one terminal write, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -109,7 +130,7 @@ async fn cap_fallback_exhaustion_retries_a_bounded_number_of_times() {
     assert_eq!(
         run.calls(),
         vec![terminal_call(), clamp_call(), clamp_call(), clamp_call()],
-        "the fallback must be attempted three times and then abandoned"
+        "the fallback must be attempted three times, each carrying the claim token"
     );
 }
 

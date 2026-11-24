@@ -13,8 +13,8 @@ use apalis_core::layers::Service;
 use serde_json::{Value, json};
 
 use super::doubles::{
-    PersistenceCall, RecordingMetrics, RecordingPersistence, TestJob, WORKER, WriteOutcome,
-    service, task,
+    CLAIM_TOKEN, PersistenceCall, RecordingMetrics, RecordingPersistence, TestJob, WORKER,
+    WriteOutcome, service, task,
 };
 use crate::domain::ports::{DeadReason, RouteDeadLetterOutcome};
 
@@ -62,14 +62,25 @@ fn assert_single_terminal_write(persistence: &RecordingPersistence) {
         [
             PersistenceCall::Terminal {
                 worker_id,
+                claim_token,
                 attempt,
                 reason,
                 shrink_limit,
                 ..
             },
         ] => {
-            assert_eq!(worker_id, WORKER);
-            assert_eq!(*attempt, 1);
+            assert_eq!(
+                worker_id, WORKER,
+                "the terminal write must name the worker that owns the row"
+            );
+            assert_eq!(
+                claim_token, CLAIM_TOKEN,
+                "the terminal write must carry the delivery's claim token"
+            );
+            assert_eq!(
+                *attempt, 1,
+                "the terminal write must record the delivered attempt"
+            );
             assert_eq!(
                 *reason,
                 DeadReason::Fatal,
