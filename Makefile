@@ -50,10 +50,14 @@ export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go
 # RUSTSEC-2026-0594 (cookie private-jar nonces can repeat in processes that
 # fork) is fixed in cookie 0.18.3, but actix-web 4.20.0 and awc 3.11.0, the
 # latest releases, still depend on cookie ^0.16, so no patched version is
-# reachable. The server runs one process with worker threads and never forks
-# after startup, which is the condition the advisory needs. Review by
-# 2026-12-23, and end this ignore when actix-web moves to cookie 0.18.3 or
-# later.
+# reachable. The session cookie is a private (AES-256-GCM) cookie under the
+# configured session key, so its integrity depends on nonce uniqueness: a
+# nonce repeated under the same key would let an attacker forge cookies. The
+# advisory needs a forked child to inherit the nonce generator. The server runs
+# one process with worker threads and never forks after startup, so that
+# condition does not hold here; review this exception if the process ever forks
+# after the generator is seeded. Review by 2026-12-23, and end this ignore when
+# actix-web moves to cookie 0.18.3 or later.
 CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258 --ignore RUSTSEC-2026-0459 --ignore RUSTSEC-2026-0594
 
 define ensure_tool
