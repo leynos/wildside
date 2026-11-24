@@ -257,10 +257,17 @@ which satisfies the roadmap wording without touching a shared wire format.
   nextest tests, both compile-fail tests, workflow and lint-actions tests,
   frontend tests, and script tests. Lint reported only the existing Dependabot
   workflow truthy-value warning. See the V-LABEL evidence and gate logs below.
+  Commit: `82cf838`.
+- [x] (2026-11-24) EP-M3 replaced the users HTTP helper's duplicate traversal
+  enum with the domain `PageTraversal`, including response parsing, cursor
+  boundary matching, and doctest examples. `rg UsersPageDirection backend`
+  returns no references. All six gates passed. The first lint attempt was
+  terminated with exit 143 while backend Whitaker was queued; the complete
+  retry passed in 734 seconds without findings.
 - [x] EP-M1: `PaginationPageMetrics` port, label enums, observation type,
   and `NoOp` implementation (red tests first).
 - [x] EP-M2: `PrometheusPaginationPageMetrics` adapter.
-- [ ] EP-M3: move `PageTraversal` into the domain and delete
+- [x] EP-M3: move `PageTraversal` into the domain and delete
   `UsersPageDirection`.
 - [ ] EP-M4: inbound emission from the users endpoint via a parameter
   object.
@@ -671,6 +678,27 @@ sweep was strengthened with distinct traversal totals. Logs:
 `make lint` passed both Whitaker manifests and architecture lint. It emitted
 the pre-existing warning at `.github/workflows/dependabot-automerge.yml:7:1`
 about a truthy value; the gate exited successfully.
+
+EP-M3 also passed all six gates. The first lint attempt was terminated with
+exit 143 during backend Whitaker while compiler requests were queued; its log
+contains no code finding. A complete retry passed all lint stages in 734
+seconds. The acceptance search `rg UsersPageDirection backend` returned no
+references. Logs:
+
+- `make check-fmt`:
+  `/tmp/check-fmt-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m3-2.out`.
+- First `make lint` attempt (terminated):
+  `/tmp/lint-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m3.out`.
+- Successful `make lint` retry:
+  `/tmp/lint-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m3-lint-retry.out`.
+- `make typecheck`:
+  `/tmp/typecheck-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m3.out`.
+- `make test`:
+  `/tmp/test-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m3.out`.
+- `make markdownlint`:
+  `/tmp/markdownlint-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m3.out`.
+- `make nixie`:
+  `/tmp/nixie-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m3.out`.
 
 - Obligation: V-RECORD-NOT-INCREMENT — the inbound adapter reaches the port
   through `record`, so the structured log is emitted on every delivered page,

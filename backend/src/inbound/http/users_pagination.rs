@@ -18,7 +18,7 @@ use utoipa::ToSchema;
 
 use crate::domain::pagination_errors::{invalid_cursor_error, unsupported_direction_error};
 use crate::domain::ports::{
-    ListUsersPageRequest, PaginationErrorMetrics, PaginationErrorSource, UsersPage,
+    ListUsersPageRequest, PageTraversal, PaginationErrorMetrics, PaginationErrorSource, UsersPage,
 };
 use crate::domain::{Error, User, UserCursorKey};
 use crate::inbound::http::schemas::UserSchema;
@@ -71,32 +71,6 @@ pub struct PaginatedUsersResponse {
     links: PaginationLinksSchema,
 }
 
-/// Direction implied by a users page request.
-///
-/// # Examples
-///
-/// ```
-/// use backend::inbound::http::users_pagination::UsersPageDirection;
-///
-/// let direction = UsersPageDirection::Next;
-/// let label = match direction {
-///     UsersPageDirection::First => "first",
-///     UsersPageDirection::Next => "next",
-///     UsersPageDirection::Prev => "prev",
-/// };
-///
-/// assert_eq!(label, "next");
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UsersPageDirection {
-    /// The first page was requested without a cursor.
-    First,
-    /// A forward cursor was requested.
-    Next,
-    /// A backward cursor was requested.
-    Prev,
-}
-
 /// Convert raw HTTP query parameters into pagination request objects.
 ///
 /// # Errors
@@ -110,8 +84,9 @@ pub enum UsersPageDirection {
 /// use backend::domain::ports::ListUsersPageRequest;
 /// use backend::domain::ports::NoOpPaginationErrorMetrics;
 /// use backend::inbound::http::users_pagination::{
-///     PageParams, UsersListQueryParams, UsersPageDirection, parse_users_page_params,
+///     PageParams, UsersListQueryParams, parse_users_page_params,
 /// };
+/// use backend::domain::ports::PageTraversal;
 ///
 /// let query = UsersListQueryParams {
 ///     cursor: None,
@@ -120,18 +95,18 @@ pub enum UsersPageDirection {
 /// let (params, request, direction): (
 ///     PageParams,
 ///     ListUsersPageRequest,
-///     UsersPageDirection,
+///     PageTraversal,
 /// ) = parse_users_page_params(query, &NoOpPaginationErrorMetrics)
 ///     .expect("valid users pagination params");
 ///
 /// assert_eq!(params.limit(), 2);
 /// assert_eq!(request.limit(), 2);
-/// assert_eq!(direction, UsersPageDirection::First);
+/// assert_eq!(direction, PageTraversal::First);
 /// ```
 pub fn parse_users_page_params(
     params: UsersListQueryParams,
     pagination_error_metrics: &dyn PaginationErrorMetrics,
-) -> Result<(PageParams, ListUsersPageRequest, UsersPageDirection), Error> {
+) -> Result<(PageParams, ListUsersPageRequest, PageTraversal), Error> {
     let limit = parse_limit(params.limit.as_deref())?;
     let page_params = PageParams::new(params.cursor.clone(), limit)
         .map_err(|_| invalid_limit_error(params.limit.as_deref()))?;
@@ -143,7 +118,7 @@ pub fn parse_users_page_params(
         .map_err(|error| map_cursor_error(error, pagination_error_metrics))?;
     let direction = cursor
         .as_ref()
-        .map_or(UsersPageDirection::First, cursor_direction);
+        .map_or(PageTraversal::First, cursor_direction);
     let limit = NonZeroUsize::new(page_params.limit())
         .ok_or_else(|| invalid_limit_error(params.limit.as_deref()))?;
     let request = ListUsersPageRequest::new(cursor, limit);
@@ -162,9 +137,10 @@ pub fn parse_users_page_params(
 /// ```
 /// use actix_web::test::TestRequest;
 /// use backend::domain::ports::UsersPage;
+/// use backend::domain::ports::PageTraversal;
 /// use backend::domain::User;
 /// use backend::inbound::http::users_pagination::{
-///     UsersPageDirection, build_users_page_response,
+///     build_users_page_response,
 /// };
 /// use pagination::{PageParams, Paginated};
 ///
@@ -184,7 +160,7 @@ pub fn parse_users_page_params(
 ///     &request,
 ///     &params,
 ///     page,
-///     UsersPageDirection::First,
+///     PageTraversal::First,
 /// )
 /// .expect("users page response");
 ///
@@ -197,7 +173,7 @@ pub fn build_users_page_response(
     request: &HttpRequest,
     params: &PageParams,
     page: UsersPage,
-    direction: UsersPageDirection,
+    direction: PageTraversal,
 ) -> Result<Paginated<User>, Error> {
     let has_more = page.has_more();
     let rows = page.into_rows();
@@ -227,26 +203,26 @@ fn parse_limit(raw: Option<&str>) -> Result<Option<usize>, Error> {
     Ok(Some(value))
 }
 
-fn cursor_direction(cursor: &Cursor<UserCursorKey>) -> UsersPageDirection {
+fn cursor_direction(cursor: &Cursor<UserCursorKey>) -> PageTraversal {
     match cursor.direction() {
-        Direction::Next => UsersPageDirection::Next,
-        Direction::Prev => UsersPageDirection::Prev,
+        Direction::Next => PageTraversal::Next,
+        Direction::Prev => PageTraversal::Prev,
     }
 }
 
 fn boundary_cursor(
     row: Option<&User>,
     cursor_dir: Direction,
-    page_dir: UsersPageDirection,
+    page_dir: PageTraversal,
     has_more: bool,
 ) -> Result<Option<String>, Error> {
     let should_emit = match (page_dir, cursor_dir) {
-        (UsersPageDirection::First, Direction::Next) => has_more,
-        (UsersPageDirection::First, Direction::Prev) => false,
-        (UsersPageDirection::Next, Direction::Next) => has_more,
-        (UsersPageDirection::Next, Direction::Prev) => true,
-        (UsersPageDirection::Prev, Direction::Next) => true,
-        (UsersPageDirection::Prev, Direction::Prev) => has_more,
+        (PageTraversal::First, Direction::Next) => has_more,
+        (PageTraversal::First, Direction::Prev) => false,
+        (PageTraversal::Next, Direction::Next) => has_more,
+        (PageTraversal::Next, Direction::Prev) => true,
+        (PageTraversal::Prev, Direction::Next) => true,
+        (PageTraversal::Prev, Direction::Prev) => has_more,
     };
     encode_boundary_cursor(row, cursor_dir, should_emit)
 }
