@@ -237,8 +237,17 @@ which satisfies the roadmap wording without touching a shared wire format.
   `backend/src/server/state_builders/user_state.rs`. The parent is 143 lines
   and the new module is 250 lines, both below the 400-line cap. The public
   composition path and adapters are unchanged. The focused composition test and
-  all six full Make gates passed; see the EP-M0 evidence below.
-- [ ] EP-M1: `PaginationPageMetrics` port, label enums, observation type,
+  all six full Make gates passed; see the EP-M0 evidence below. Commit:
+  `e9b20dc`.
+- [x] (2026-11-24) EP-M1 established the domain port, closed label enums,
+  saturated observation, and logging `NoOp`. The focused event test and
+  property test cover the promised fields and short, full, and overflow pages
+  with both continuation values. The full documentation, lint, typecheck, and
+  test gates passed; evidence is recorded below. V-LOG-ALWAYS and
+  V-OBS-SATURATES are discharged. The first final lint attempt ended with exit
+  143 during Whitaker dependency checks; the subsequent complete run passed.
+  Documentation gates remain after this ExecPlan update.
+- [x] EP-M1: `PaginationPageMetrics` port, label enums, observation type,
   and `NoOp` implementation (red tests first).
 - [ ] EP-M2: `PrometheusPaginationPageMetrics` adapter.
 - [ ] EP-M3: move `PageTraversal` into the domain and delete
@@ -250,6 +259,12 @@ which satisfies the roadmap wording without touching a shared wire format.
 - [ ] EP-M6: deployment change, documentation, and roadmap tick.
 
 ## Surprises & discoveries
+
+- Observation (2026-11-23): tracing omits an event field when its value is
+  `None`. The no-op recorder test exposed that an absent trace context removed
+  the promised `trace_id` field from the event. The port now emits the bounded
+  placeholder `unknown` when no trace ID is active, preserving a stable event
+  schema without allocating a replacement string.
 
 - Observation (2026-11-23): the first focused compile after extraction found
   that `PaginationErrorMetrics` remained part of the parent builder's public
@@ -415,6 +430,16 @@ which satisfies the roadmap wording without touching a shared wire format.
   4.2.4 would need a third or a conversion. Date/Author: 2026-08-16, drafting
   agent.
 
+- Decision (2026-11-23): group the page limit, row count, limit provenance,
+  and continuation signal in `PaginationPageDelivery`, the input to
+  `PaginationPageObservation::new`. Rationale: the initial six-argument
+  constructor exceeded the repository's configured Clippy threshold of four. A
+  Leta and text search found no existing domain value with this response shape.
+  The value type is owned by the pagination metrics port and is used only to
+  construct a saturated observation; adapters continue to consume the
+  observation. This keeps the constructor small without adding a runtime
+  abstraction or dependency. Date/Author: 2026-11-23, execution lead.
+
 - Decision: `LimitSource` has three variants, `Default`, `Explicit`, and
   `Clamped`. Rationale: `normalize_limit` in
   `backend/crates/pagination/src/params.rs:98-104` clamps with
@@ -459,9 +484,12 @@ which satisfies the roadmap wording without touching a shared wire format.
 ## Outcomes & retrospective
 
 Implementation is active. The sequencing blocker is resolved and the child
-branch is rebased onto the merged metrics-pattern baseline. Record each
-milestone outcome and any changed verification assumptions below as work
-proceeds.
+branch is rebased onto the merged metrics-pattern baseline. EP-M1 is complete:
+the domain-owned observation saturates inconsistent row counts and treats a
+short page as terminal, while the provided `record` method emits the structured
+event before invoking the infallible counter hook. The first completed
+milestone changed no callers; later milestones will add the Prometheus adapter
+and delivery wiring.
 
 ## Context and orientation
 
@@ -648,10 +676,11 @@ non-vacuity argument.
   `returned_rows` in `0..=usize::MAX`, `has_more` both values. Artefact:
   `backend/src/domain/ports/pagination_page_metrics.rs` tests. Evidence: red —
   fails before the saturating constructor exists; green — passes with a
-  recorded case count. Non-vacuity: the test must classify and assert that both
-  the in-range and the out-of-range generation classes are reached, so a
-  generator that only ever produced valid pairs is itself a failure. A mutation
-  removing the `.min()` clamp must be rejected by the first out-of-range case.
+  recorded case count. Non-vacuity: every property case must exercise short,
+  full, and over-limit row counts, each with both continuation values. A
+  mutation that fails to clamp short-page continuation or returned rows must be
+  rejected by the corresponding case. A mutation removing the `.min()` clamp
+  must be rejected by the first over-limit case.
 
 - Obligation: V-LOG-ALWAYS — the provided `record` method emits the
   structured event with correct field values for every implementation, including
@@ -1018,6 +1047,20 @@ Reconnaissance evidence gathered 2026-08-16.
   `/tmp/nixie-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-epm0.out`.
   The full test gate passed 1,898 nextest cases, both trybuild tests, 656
   workflow-contract tests, 115 script tests, and 14 lint-actions tests.
+- EP-M1 gate evidence (all exit 0, run sequentially on the same code
+  candidate): `make check-fmt` at
+  `/tmp/check-fmt-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m1-final.out`;
+  `make lint` at
+  `/tmp/lint-wildside-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m1-final-4.out`;
+  `make typecheck` at
+  `/tmp/typecheck-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m1-final.out`;
+  `make test` at
+  `/tmp/test-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-m1-final-2.out`.
+  The test gate passed 1,902 nextest cases (4 skipped), both compile-fail
+  cases, 170 frontend tests, 3 token tests, 656 workflow-contract tests (1
+  skipped), 115 script tests (13 skipped), and 14 lint-actions tests. The lint
+  gate reported the existing `dependabot-automerge.yml` truthy-value warning;
+  all lint stages passed.
 - `clippy.toml`: `too-many-arguments-threshold = 4`,
   `cognitive-complexity-threshold = 9`, `too-many-lines-threshold = 70`.
 - `.config/nextest.toml:54` already places `users_list_pagination_bdd` in
@@ -1064,6 +1107,15 @@ pub enum LimitSource {
     Default,
     Explicit,
     Clamped,
+}
+
+/// Page facts passed into the observation constructor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaginationPageDelivery {
+    pub limit_source: LimitSource,
+    pub page_limit: NonZeroUsize,
+    pub returned_rows: usize,
+    pub has_more: bool,
 }
 
 /// One delivered page. `Copy`; pass by value.
