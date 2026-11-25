@@ -115,6 +115,50 @@ struct LockedDeadJob {
     requeue_count: Option<String>,
 }
 
+impl LockedDeadJob {
+    /// Reject a locked row whose stored attempt count is negative.
+    ///
+    /// A negative count is not a row any delivery produced, so it is reported
+    /// rather than repaired.
+    fn reject_negative_attempts(&self) -> Result<(), DeadLetterError> {
+        if self.attempts < 0 {
+            return Err(DeadLetterError::invalid_job_data(
+                "attempt count is negative",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Resolve the row's queue budget to the `INTEGER` the update stores.
+    fn max_attempts(&self, budgets: &RequeueBudgets) -> Result<i32, DeadLetterError> {
+        let budget = budgets
+            .get(&self.job_type)
+            .ok_or_else(|| DeadLetterError::unknown_queue(&self.job_type))?;
+        i32::try_from(budget.get()).map_err(|_| {
+            DeadLetterError::unavailable(format!(
+                "retry budget for queue {} exceeds Apalis integer range",
+                self.job_type
+            ))
+        })
+    }
+
+    /// The generation the restored row will carry.
+    ///
+    /// The counter is the claim's delivery generation, so a requeue that
+    /// cannot advance it must be refused: a repeated value would let a
+    /// delivery fetched before the requeue claim the restored row.
+    fn next_generation(&self) -> Result<u32, DeadLetterError> {
+        next_requeue_count(self.requeue_count.as_deref()).map_err(|error| match error {
+            RequeueCountError::NotNumeric => {
+                DeadLetterError::invalid_job_data("requeue count is not numeric")
+            }
+            RequeueCountError::Exhausted => DeadLetterError::invalid_job_data(
+                "requeue count has reached its maximum and cannot advance",
+            ),
+        })
+    }
+}
+
 #[async_trait::async_trait]
 impl DeadLetterQueue for PostgresDeadLetterQueue {
     /// List dead-lettered rows newest first, skipping malformed metadata.
@@ -235,35 +279,9 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
             .await
             .map_err(|error| unavailable("lock dead job for requeue", error))?
             .ok_or_else(|| DeadLetterError::not_dead(id.as_str()))?;
-        if dead_job.attempts < 0 {
-            return Err(DeadLetterError::invalid_job_data(
-                "attempt count is negative",
-            ));
-        }
-        let budget = self
-            .requeue_budgets
-            .get(&dead_job.job_type)
-            .ok_or_else(|| DeadLetterError::unknown_queue(&dead_job.job_type))?;
-        let max_attempts = i32::try_from(budget.get()).map_err(|_| {
-            DeadLetterError::unavailable(format!(
-                "retry budget for queue {} exceeds Apalis integer range",
-                dead_job.job_type
-            ))
-        })?;
-        let next_count =
-            next_requeue_count(dead_job.requeue_count.as_deref()).map_err(|error| {
-                match error {
-                    RequeueCountError::NotNumeric => {
-                        DeadLetterError::invalid_job_data("requeue count is not numeric")
-                    }
-                    // The counter is the claim's generation, so a requeue that
-                    // cannot advance it would leave a stale delivery able to claim
-                    // the restored row. Refuse rather than repeat the value.
-                    RequeueCountError::Exhausted => DeadLetterError::invalid_job_data(
-                        "requeue count has reached its maximum and cannot advance",
-                    ),
-                }
-            })?;
+        dead_job.reject_negative_attempts()?;
+        let max_attempts = dead_job.max_attempts(&self.requeue_budgets)?;
+        let next_count = dead_job.next_generation()?;
         let update = format!(
             "UPDATE apalis.jobs
              SET status = 'Pending', attempts = 0, max_attempts = $2,

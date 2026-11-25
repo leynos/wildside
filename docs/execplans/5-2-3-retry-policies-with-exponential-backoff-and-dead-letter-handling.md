@@ -4854,3 +4854,30 @@ review, and each was handled on its merits rather than ignored:
 
 The `normalise`/`normalize` spellings the spelling gate flagged in the claim
 module were corrected to the shared en-US policy.
+
+### Fifth review of 2026-11-24: generation exhaustion and cookie integrity
+
+The review of `39a2d71` (review 6038700352) raised two inline findings, and
+CodeScene raised one advisory against the new canary module.
+
+**Requeue generation exhaustion.** The requeue counter saturated at `u32::MAX`,
+so a requeue at the ceiling left the generation unchanged and a delivery
+fetched before it could still match the claim predicate. The adapter now
+refuses a requeue whose counter has reached its maximum rather than writing the
+value the row already holds: `next_requeue_count` reports a distinct
+`Exhausted` fault, the requeue returns `InvalidJobData` with a message naming
+the exhausted counter, and the runbook's operator SQL applies the same bound.
+Ordinary requeues still advance, and the unit tests pin both the advance and
+the refusal.
+
+**Cookie integrity rationale.** The audit ledger's first wording said the
+session key, rather than a nonce counter, protected cookie integrity. The
+session does use a private (AES-256-GCM) cookie, whose integrity does depend on
+nonce uniqueness. The entry now states that dependence, the exact fork
+condition the deployment does not meet, and that the exception must be reviewed
+if the backend ever forks after the generator is seeded.
+
+**CodeScene.** The new canary module took several `&str` parameters in a row,
+which the String Heavy Function Arguments rule charges against a changed file.
+Its helpers now take the existing `QueueName` and `JobId` newtypes, and the
+file scores 10.00. No rule exemption was widened.

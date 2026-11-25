@@ -41,8 +41,11 @@ JSON-string `Err` are both required before either surface exposes an error.
 Correct the underlying fault first. Find the row's queue name and obtain that
 queue's **current configured** `JobRetryPolicy.max_attempts`; do not derive the
 budget from the dead row, whose limit may have been reduced on a fatal failure.
-The adapter refuses an unknown queue, negative attempts, or an invalid counter.
-It increments a valid counter with saturation at `u32::MAX` and preserves other
+The adapter refuses an unknown queue, negative attempts, an invalid counter, or
+a counter that has reached its maximum. That last refusal is deliberate: the
+counter is the claim's delivery generation, so a requeue that could not change
+it would leave a delivery fetched before the requeue able to claim the restored
+row. Every accepted requeue increments the counter and preserves other
 metadata. The following transaction applies the row-state, attempt, counter
 range, and integer budget range guards, but it does not check `job_type` against
 `RequeueBudgets` or verify that `retry_budget` matches that queue's policy.
@@ -79,11 +82,11 @@ SET status = 'Pending', attempts = 0, max_attempts = :'retry_budget'::integer,
     metadata = jsonb_set(
         coalesce(jobs.metadata, '{}'::jsonb) - 'wildside.retry.dead_reason',
         '{wildside.retry.requeue_count}',
-        to_jsonb(least(parsed.count_value + 1, 4294967295)::bigint), true)
+        to_jsonb((parsed.count_value + 1)::bigint), true)
 FROM parsed
 WHERE jobs.id = parsed.id AND jobs.job_type = parsed.job_type
   AND parsed.attempts >= 0
-  AND parsed.count_value BETWEEN 0 AND 18446744073709551615
+  AND parsed.count_value BETWEEN 0 AND 4294967294
   AND :'retry_budget'::bigint BETWEEN 1 AND 2147483647
   AND (jobs.status = 'Killed' OR
        (jobs.status = 'Failed' AND (jobs.max_attempts IS NULL OR jobs.attempts >= jobs.max_attempts)))
