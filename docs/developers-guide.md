@@ -537,6 +537,20 @@ Four consequences follow from the table.
   where its `coverage` job is skipped because `coverage-main.yml` already
   covers that branch.
 
+## Cognitive complexity
+
+Cognitive complexity is not gated by Clippy. Clippy's `cognitive_complexity`
+scores code after macro expansion, so it counts branching a macro generated,
+and neither `Cargo.toml` nor `clippy.toml` enables it. Whitaker's experimental
+`macro_aware_cognitive_complexity` gates it at `max_complexity = 9`,
+CodeScene's ceiling. `dylint.toml` opts in with
+`experimental = ["macro_aware_cognitive_complexity"]` in its `[whitaker]` table.
+`make lint-whitaker` runs under `-D warnings`, so a finding fails the build.
+Fix a finding by extracting named helpers, never by raising the threshold. A
+Whitaker suite installed before the lint existed does not register it and
+silently leaves the gate inactive, so rerun `whitaker-installer` to refresh the
+suite after updating a checkout.
+
 ## Rust build standard and development build footprint
 
 Two Concordat rules set the estate's Rust build defaults, and
