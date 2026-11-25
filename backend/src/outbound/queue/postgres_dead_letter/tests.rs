@@ -1,8 +1,8 @@
 //! Mapping and dead-row predicate tests for the PostgreSQL adapter.
 
 use super::row_decoding::{
-    dead_job_from_row, dead_reason_from_metadata, next_count_value, next_requeue_count, skip_label,
-    truncate_utf8,
+    RequeueCountError, dead_job_from_row, dead_reason_from_metadata, next_count_value,
+    next_requeue_count, skip_label, truncate_utf8,
 };
 use super::{DeadJobRow, is_dead_row};
 use crate::domain::ports::{DeadJobId, DeadJobSkip, DeadReason, SkippedDeadJob};
@@ -93,13 +93,52 @@ fn dead_predicate_matches_only_terminal_rows(
     assert_eq!(is_dead_row(status, attempts, max_attempts), expected);
 }
 
+/// Scenario: a requeue advances a stored counter.
+///
+/// Invariant: every accepted requeue writes a different value, because the
+/// counter is the claim's delivery generation and a repeated generation would
+/// let a delivery fetched before the requeue claim the restored row.
 #[test]
-fn requeue_counter_starts_at_one_and_saturates_at_u32_max() {
+fn requeue_counter_starts_at_one_and_advances() {
     assert_eq!(next_requeue_count(None), Ok(1));
-    assert_eq!(next_requeue_count(Some("0")), Ok(1));
-    assert_eq!(next_requeue_count(Some("7")), Ok(8));
-    assert_eq!(next_requeue_count(Some("4294967295")), Ok(u32::MAX));
-    assert_eq!(next_requeue_count(Some("not-a-count")), Err(()));
+    assert_eq!(
+        next_requeue_count(Some("0")),
+        Ok(1),
+        "an empty counter advances to the first generation"
+    );
+    assert_eq!(
+        next_requeue_count(Some("7")),
+        Ok(8),
+        "an ordinary counter advances by one"
+    );
+    assert_eq!(
+        next_requeue_count(Some("4294967294")),
+        Ok(u32::MAX),
+        "the last counter below the ceiling still advances"
+    );
+}
+
+/// Scenario: the stored counter already holds its maximum.
+///
+/// Invariant: the requeue is refused rather than writing the value the row
+/// already carries, because a saturated counter cannot name a new generation.
+#[test]
+fn a_saturated_requeue_counter_is_refused() {
+    assert_eq!(
+        next_requeue_count(Some("4294967295")),
+        Err(RequeueCountError::Exhausted),
+        "a counter at its maximum cannot advance, so the requeue must be refused"
+    );
+    assert_eq!(
+        next_requeue_count(Some("4294967296")),
+        Err(RequeueCountError::Exhausted),
+        "an out-of-range stored counter is bounded to the maximum and refused"
+    );
+    assert_eq!(
+        next_requeue_count(Some("not-a-count")),
+        Err(RequeueCountError::NotNumeric),
+        "a non-numeric counter is a different fault from an exhausted one"
+    );
 }
 
 #[test]

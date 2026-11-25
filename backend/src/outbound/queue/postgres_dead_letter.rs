@@ -13,7 +13,7 @@ mod listing_controls;
 mod row_decoding;
 #[cfg(any(test, feature = "test-support"))]
 use listing_controls::ListingControls;
-use row_decoding::{dead_job_from_row, next_requeue_count, report_skipped_rows};
+use row_decoding::{RequeueCountError, dead_job_from_row, next_requeue_count, report_skipped_rows};
 
 const DEAD_LISTING_BATCH_SIZE: usize = 100;
 const DEAD_PREDICATE: &str = "status = 'Killed' OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts))";
@@ -250,8 +250,20 @@ impl DeadLetterQueue for PostgresDeadLetterQueue {
                 dead_job.job_type
             ))
         })?;
-        let next_count = next_requeue_count(dead_job.requeue_count.as_deref())
-            .map_err(|()| DeadLetterError::invalid_job_data("requeue count is not numeric"))?;
+        let next_count =
+            next_requeue_count(dead_job.requeue_count.as_deref()).map_err(|error| {
+                match error {
+                    RequeueCountError::NotNumeric => {
+                        DeadLetterError::invalid_job_data("requeue count is not numeric")
+                    }
+                    // The counter is the claim's generation, so a requeue that
+                    // cannot advance it would leave a stale delivery able to claim
+                    // the restored row. Refuse rather than repeat the value.
+                    RequeueCountError::Exhausted => DeadLetterError::invalid_job_data(
+                        "requeue count has reached its maximum and cannot advance",
+                    ),
+                }
+            })?;
         let update = format!(
             "UPDATE apalis.jobs
              SET status = 'Pending', attempts = 0, max_attempts = $2,

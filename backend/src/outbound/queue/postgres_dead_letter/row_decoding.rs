@@ -85,11 +85,25 @@ pub(super) fn dead_reason_from_metadata(value: Option<&str>) -> DeadReason {
     }
 }
 
-/// The requeue counter a restored row should carry: one more than it had,
-/// saturating rather than wrapping.
-pub(super) fn next_requeue_count(value: Option<&str>) -> Result<u32, ()> {
-    let current = next_count_value(value)?;
-    Ok(current.saturating_add(1))
+/// Why a stored requeue counter cannot be advanced.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RequeueCountError {
+    /// The stored value is not a decimal count.
+    NotNumeric,
+    /// The counter already holds its maximum, so advancing it would repeat.
+    Exhausted,
+}
+
+/// The requeue counter a restored row should carry: one more than it had.
+///
+/// The counter is the claim's delivery generation, so it must change on every
+/// accepted requeue. A saturated counter cannot advance, so the requeue is
+/// refused instead of writing the value it already holds: a repeated
+/// generation would let a delivery fetched before the requeue claim the row
+/// afterwards.
+pub(super) fn next_requeue_count(value: Option<&str>) -> Result<u32, RequeueCountError> {
+    let current = next_count_value(value).map_err(|()| RequeueCountError::NotNumeric)?;
+    current.checked_add(1).ok_or(RequeueCountError::Exhausted)
 }
 
 /// Read a stored counter, bounding an out-of-range value instead of failing so
