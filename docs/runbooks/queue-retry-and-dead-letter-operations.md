@@ -182,39 +182,40 @@ GROUP BY configured.queue
 ORDER BY configured.queue;
 ```
 
-Each row is one `route_queue_dead_jobs{queue=...}` sample. The `VALUES` list is
-the deployment's configured queue set and must be kept in step with it: a queue
-the workers serve but the list omits has no series. A configured queue with no
-dead jobs still yields a row, with `dead_jobs = 0`, and that row is what keeps
-the series continuous; a missing sample would be a gap that resets the rate
-calculation.
-
-Alert on any queue's count crossing the level the team has agreed to act on,
-and on a rising rate of skipped-row warnings, which indicate metadata that no
-longer matches the schema. The listing limit below caps a page, not the backlog.
+This is an operator diagnostic, not the definition of a collected series. It
+groups by the configured queue set so a human can see which queue is
+accumulating dead rows; the `VALUES` list must be kept in step with the queues
+the deployment serves, and a configured queue with no dead jobs still yields a
+row with `dead_jobs = 0`. Alert on a rising rate of skipped-row warnings, which
+indicate metadata that no longer matches the schema; the listing limit below
+caps a page, not the backlog.
 
 The application does not export this count. Its metrics registry carries the
 three counters described above, which are scraped from the process, but the
 backlog is a database fact and the process has no background sampler: serving
 the count from the registry would run this aggregate over `apalis.jobs` on
 every scrape, so the scan cost would follow the scrape interval rather than the
-change rate. The collection point is therefore the monitoring system's own
-scheduled query, run on an interval the alerting owner sets, with its result
-plotted and alerted on like any other collected series. The planned collected
-series is named `route_queue_dead_jobs` and carries only a `queue` label, drawn
-from the configured queue set. The worker rollout's alerting owner sets its
-threshold and paging route, and issue #630 records both as acceptance criteria.
+change rate.
 
-Nothing in this repository creates that schedule. The Helm chart under
+The collected signal is owned by
+[issue #630](https://github.com/leynos/wildside/issues/630), which specifies a
+deployment-owned collector run as its own workload rather than in the API
+request path. The collector samples on a configurable interval, 60 seconds by
+default, and refreshes an unlabelled `IntGauge` between scrapes, so a scrape
+itself only reads the gauge. The sampled count must use the same predicate as
+the dead-letter listing, so the gauge and this runbook agree, and the issue
+requires that no job identifier, queue name, or raw error text appears in a
+metric label. The issue also requires a stale reading to be distinguishable
+from an empty backlog, and a non-empty backlog to produce a non-zero reading
+through the deployment's scrape path.
+
+Nothing in this repository creates that collector yet. The Helm chart under
 `deploy/charts/wildside` declares no scrape configuration, `ServiceMonitor` or
 alerting rule — its only metrics block is the horizontal pod autoscaler — so
-the collection is a deployment action against the monitoring system, not a
-chart value. Until that schedule exists, the per-queue counts are available
-only by running the query by hand, and the backlog has no collected signal to
-alert on. Building that collection point, together with its scrape and alert
-configuration, is tracked as
-[issue #630](https://github.com/leynos/wildside/issues/630) and belongs with
-the worker rollout in roadmap item 5.3.1.
+the collection point, its scrape and alert configuration, and its threshold and
+paging route all belong to that issue and to the worker rollout in roadmap item
+5.3.1. Until they exist, the per-queue counts above are available only by
+running the query by hand, and the backlog has no collected signal to alert on.
 
 ## Detect repeated worker crashes
 

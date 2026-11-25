@@ -579,8 +579,8 @@ pub struct JobRetryPolicy {
 pub enum RetryDecision {
     /// Retry no earlier than the given delay from now.
     Retry { delay: Duration },
-    /// Stop retrying; the job is dead-lettered.
-    DeadLetter,
+    /// Stop retrying; the job is dead-lettered for the given reason.
+    DeadLetter { reason: DeadReason },
 }
 
 impl JobRetryPolicy {
@@ -588,7 +588,7 @@ impl JobRetryPolicy {
     /// delay (including jitter) fits MAX_BACKOFF_DELAY. `max_attempts` is a
     /// `NonZeroU32`, so zero attempts cannot be configured.
     pub fn new(config: JobRetryPolicyConfig) -> Result<Self, JobRetryPolicyBuildError>;
-    pub fn decide(&self, attempt: NonZeroU32, kind: JobErrorKind, jitter: JitterSample) -> RetryDecision;
+    pub fn decide(&self, attempt: BoundedAttempt, kind: JobErrorKind, jitter: JitterSample) -> RetryDecision;
     pub fn backoff_delay(&self, attempt: NonZeroU32, jitter: JitterSample) -> Duration;
     pub fn max_attempts(&self) -> NonZeroU32;
 }
@@ -4881,3 +4881,24 @@ if the backend ever forks after the generator is seeded.
 which the String Heavy Function Arguments rule charges against a changed file.
 Its helpers now take the existing `QueueName` and `JobId` newtypes, and the
 file scores 10.00. No rule exemption was widened.
+
+### Replay of 2026-11-25 and the sixth review
+
+`main` advanced to `1e9dfc9` while this branch was under review, bringing the
+same `url` advisory fix this branch had made independently, a reviewed
+`RUSTSEC-2026-0594` ledger entry, the CI concurrency change from #636, and a
+documentation-style refresh. The branch therefore replayed onto `main`: 152
+commits were unchanged, the duplicate `url` commit was dropped as already
+upstream, and the two ledger commits were replayed onto main's entry, keeping
+main's review date and the nonce-integrity rationale the review had asked for.
+One further commit resolves the regenerated lockfile, where `dirs` moves to
+`windows-sys 0.60.2` because tokio 1.54.1 no longer pulls `0.59.0`. The full
+nine-gate set was re-run on the rebased head and passes.
+
+The review of the rebased head raised two documentation findings, both applied:
+the retry API sketch now shows `decide` taking a `BoundedAttempt` and
+`DeadLetter { reason: DeadReason }`, matching the code; and the runbook's
+backlog section now describes issue #630's actual contract — a deployment-owned
+collector refreshing an unlabelled `IntGauge`, no queue label, no recorded
+threshold — instead of presenting the per-queue diagnostic query as the planned
+series.
