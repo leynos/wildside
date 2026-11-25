@@ -1,0 +1,264 @@
+# Queue retry and dead-letter operations
+
+This runbook describes the PostgreSQL operations behind the `DeadLetterQueue`
+port at the pinned Apalis release candidates. Roadmap section 6 anticipates an
+operator or admin surface; item 5.3.1 owns worker deployment and may add
+worker-side tooling. Until an operator surface is available, use the port where
+it is composed, or the guarded SQL below in a `psql` session connected to the
+correct database. These examples never select job payloads.
+
+## List terminal jobs
+
+The dead predicate includes `Killed` rows and `Failed` rows whose limit is null
+or exhausted. A missing or unrecognized terminal reason is `Unclassified`. The
+adapter also omits rows with negative attempts or malformed requeue counts: the
+listing reports each one as a skipped entry with its identifier and cause,
+alongside the jobs it did return. This diagnostic query shows the raw rows so
+an operator can investigate them.
+
+```sql
+SELECT id, job_type, attempts, max_attempts, done_at,
+       CASE WHEN metadata->>'wildside.retry.dead_reason' IN ('fatal', 'exhausted')
+            THEN metadata->>'wildside.retry.dead_reason'
+            ELSE 'Unclassified' END AS reason,
+       metadata->>'wildside.retry.requeue_count' AS requeue_count,
+       CASE WHEN metadata->>'wildside.retry.dead_reason' IN ('fatal', 'exhausted')
+                 AND jsonb_typeof(last_result->'Err') = 'string'
+            THEN left(last_result->>'Err', 256) END AS last_error
+FROM apalis.jobs
+WHERE status = 'Killed'
+   OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts))
+ORDER BY done_at DESC NULLS LAST, id DESC
+LIMIT 100;
+```
+
+The SQL example limits the diagnostic to 256 characters; the adapter limits it
+to 1,024 UTF-8 bytes at a character boundary. A recognized reason and a
+JSON-string `Err` are both required before either surface exposes an error.
+
+## Requeue one dead job
+
+Correct the underlying fault first. Find the row's queue name and obtain that
+queue's **current configured** `JobRetryPolicy.max_attempts`; do not derive the
+budget from the dead row, whose limit may have been reduced on a fatal failure.
+The adapter refuses an unknown queue, negative attempts, an invalid counter, or
+a counter that has reached its maximum. That last refusal is deliberate: the
+counter is the claim's delivery generation, so a requeue that could not change
+it would leave a delivery fetched before the requeue able to claim the restored
+row. Every accepted requeue increments the counter and preserves other
+metadata. The following transaction applies the row-state, attempt, counter
+range, and integer budget range guards, but it does not check `job_type` against
+`RequeueBudgets` or verify that `retry_budget` matches that queue's policy.
+Confirming the queue name and its current configured budget is therefore an
+operator precondition. Enter the exact queue name and an integer policy budget
+in the PostgreSQL `integer` range.
+
+```sql
+\prompt 'Dead job id: ' job_id
+\prompt 'Configured queue name: ' job_type
+\prompt 'Current queue max attempts: ' retry_budget
+BEGIN;
+WITH candidate AS (
+    SELECT id, job_type, attempts,
+           metadata->>'wildside.retry.requeue_count' AS raw_count
+    FROM apalis.jobs
+    WHERE id = :'job_id' AND job_type = :'job_type'
+      AND (status = 'Killed' OR
+           (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts)))
+    FOR UPDATE
+), normalized AS (
+    SELECT *, CASE WHEN raw_count IS NULL THEN '0'
+                   WHEN raw_count ~ '^[+]?[0-9]+$'
+                   THEN coalesce(nullif(ltrim(raw_count, '+0'), ''), '0')
+              END AS digits
+    FROM candidate
+), parsed AS (
+    SELECT *, CASE WHEN length(digits) <= 20 THEN digits::numeric END AS count_value
+    FROM normalized
+)
+UPDATE apalis.jobs AS jobs
+SET status = 'Pending', attempts = 0, max_attempts = :'retry_budget'::integer,
+    run_at = now(), lock_by = NULL, lock_at = NULL,
+    metadata = jsonb_set(
+        coalesce(jobs.metadata, '{}'::jsonb) - 'wildside.retry.dead_reason',
+        '{wildside.retry.requeue_count}',
+        to_jsonb((parsed.count_value + 1)::bigint), true)
+FROM parsed
+WHERE jobs.id = parsed.id AND jobs.job_type = parsed.job_type
+  AND parsed.attempts >= 0
+  AND parsed.count_value BETWEEN 0 AND 4294967294
+  AND :'retry_budget'::bigint BETWEEN 1 AND 2147483647
+  AND (jobs.status = 'Killed' OR
+       (jobs.status = 'Failed' AND (jobs.max_attempts IS NULL OR jobs.attempts >= jobs.max_attempts)))
+RETURNING jobs.id, jobs.job_type, jobs.attempts, jobs.max_attempts, jobs.run_at,
+          jobs.metadata->>'wildside.retry.requeue_count' AS requeue_count;
+```
+
+Check that exactly one row is returned, then run `COMMIT;`. If no row is
+returned, run `ROLLBACK;` and investigate the identity, queue policy, status,
+attempt count, and counter. A malformed or out-of-range counter and negative
+attempts do not mutate the row. An invalid budget or incompatible metadata can
+raise a SQL error; roll back the transaction. Requeue removes the old terminal
+reason but leaves unrelated metadata and `last_result` intact, matching the
+adapter.
+
+## Discard one dead job
+
+Discard deletes the row. Verify the identifier and retain any required audit
+record before executing it. A live or missing row returns no result.
+
+```sql
+\prompt 'Dead job id: ' job_id
+DELETE FROM apalis.jobs
+WHERE id = :'job_id'
+  AND (status = 'Killed' OR
+       (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts)))
+RETURNING id, job_type;
+```
+
+## Signals and alerting
+
+Each adapter operation runs inside a `tracing` span whose `operation` field
+names it (`list_dead`, `requeue`, or `discard`, with `job_id` on the last two).
+A failure is recorded on that span, so every error return has a boundary event
+to alert on. Successful requeues and discards log at `INFO` with the `job_id`,
+and a row the domain cannot represent logs at `WARN` with the `job_id` that was
+skipped and a bounded `reason` (`negative-attempts` or
+`invalid-requeue-count`). Each listing that skipped anything also logs one
+summary line with the number skipped, so a sampled log still shows that a gap
+existed.
+
+A retry the wrapper schedules successfully logs at `INFO` with decision
+`scheduled`, the queue, the task and worker identifiers, the attempt, the error
+kind, and the stored delay. A warning from the retry wrapper therefore means a
+refused or failed write, not merely that a job is being retried.
+
+The retry scheduling-failure counter covers refused retry decisions only. A
+terminal write the database refuses or fails increments
+`route_queue_terminal_write_failure_total`, labelled by the reason the write
+would have stored (`fatal` or `exhausted`), and not the dead-letter counter,
+because no reason was stored. Missing or mismatched worker identity writes
+nothing at all, and which counter moves depends on the decision the policy
+reached. A scheduling decision increments the retry scheduling-failure counter,
+because the retry that was asked for will not happen. A terminal decision
+increments none of the three counters, because the row was never classified as
+dead. Both log at `ERROR`
+(`retry metadata missing; cannot persist failure outcome`) with the refused
+`decision`. A refused or failed write also logs at `WARN` with decision
+`terminal_write_failure`. Alert on the terminal-write-failure counter and on
+both log events: the dead-letter counter alone will not show a terminal write
+that never applied.
+
+A failed terminal write is followed by a bounded fallback. The handler lowers
+the row's `max_attempts` to the attempt that just terminated, so the `Failed`
+row Apalis records next is not fetched and run again. The fallback is attempted
+three times with short waits, because it runs only after another write has
+already failed and so usually meets a database failing transiently. It logs at
+`WARN` with decision `terminal_cap_clamped` when an attempt applies, which
+includes `tries` so a recovered transient failure is visible, and
+`terminal_cap_clamp_refused` when another actor has taken the row over; a
+refused guard is not retried. If every attempt fails, it logs at `ERROR` with
+decision `terminal_cap_clamp_exhausted`. Only that last case leaves a terminal
+row that is still re-fetchable: no handler can protect a row whose writes the
+database refuses, so this event, together with the terminal-write-failure
+counter, is what the alerting should page on. A row it leaves behind is still
+bounded by the existing `max_attempts`, which limits the number of deliveries.
+The fallback does not change `run_at`. An already-due row is therefore fetched
+on the next poll, without the ordinary retry backoff.
+
+Dead-letter backlog is the number of rows the dead predicate matches, counted
+per configured queue and job type. This query is read-only, returns only
+identifiers and counts, and produces one row per configured queue:
+
+```sql
+SELECT configured.queue, count(jobs.id) AS dead_jobs
+FROM (VALUES ('route.generate')) AS configured(queue)
+LEFT JOIN apalis.jobs AS jobs
+  ON jobs.job_type = configured.queue
+ AND (jobs.status = 'Killed'
+      OR (jobs.status = 'Failed'
+          AND (jobs.max_attempts IS NULL OR jobs.attempts >= jobs.max_attempts)))
+GROUP BY configured.queue
+ORDER BY configured.queue;
+```
+
+This is an operator diagnostic, not the definition of a collected series. It
+groups by the configured queue set so a human can see which queue is
+accumulating dead rows; the `VALUES` list must be kept in step with the queues
+the deployment serves, and a configured queue with no dead jobs still yields a
+row with `dead_jobs = 0`. Alert on a rising rate of skipped-row warnings, which
+indicate metadata that no longer matches the schema; the listing limit below
+caps a page, not the backlog.
+
+The application does not export this count. Its metrics registry carries the
+three counters described above, which are scraped from the process, but the
+backlog is a database fact and the process has no background sampler: serving
+the count from the registry would run this aggregate over `apalis.jobs` on
+every scrape, so the scan cost would follow the scrape interval rather than the
+change rate.
+
+The collected signal is owned by
+[issue #630](https://github.com/leynos/wildside/issues/630), which specifies a
+deployment-owned collector run as its own workload rather than in the API
+request path. The collector samples on a configurable interval, 60 seconds by
+default, and refreshes an unlabelled `IntGauge` between scrapes, so a scrape
+itself only reads the gauge. The sampled count must use the same predicate as
+the dead-letter listing, so the gauge and this runbook agree, and the issue
+requires that no job identifier, queue name, or raw error text appears in a
+metric label. The issue also requires a stale reading to be distinguishable
+from an empty backlog, and a non-empty backlog to produce a non-zero reading
+through the deployment's scrape path.
+
+Nothing in this repository creates that collector yet. The Helm chart under
+`deploy/charts/wildside` declares no scrape configuration, `ServiceMonitor` or
+alerting rule — its only metrics block is the horizontal pod autoscaler — so
+the collection point, its scrape and alert configuration, and its threshold and
+paging route all belong to that issue and to the worker rollout in roadmap item
+5.3.1. Until they exist, the per-queue counts above are available only by
+running the query by hand, and the backlog has no collected signal to alert on.
+
+## Detect repeated worker crashes
+
+At `apalis-postgres` rc.8, orphan recovery changes a stale `Running` or
+`Queued` row to `Pending`, clears its lock and completion time, increments
+`attempts`, and writes the exact error below. Capture successive snapshots and
+correlate them with worker heartbeat and restart logs:
+
+```sql
+SELECT id, job_type, status, attempts, run_at, lock_by, lock_at
+FROM apalis.jobs
+WHERE status IN ('Pending', 'Queued', 'Running')
+  AND last_result->>'Err' = 'Re-enqueued due to worker heartbeat timeout.'
+ORDER BY job_type, id;
+```
+
+Repeated sightings of the same job with rising attempts, together with worker
+restarts or missed heartbeats, indicate a possible crash loop. One sighting can
+be ordinary orphan recovery. A later acknowledgement replaces `last_result`, so
+a missing marker in a later snapshot does not establish that a worker was
+healthy. Investigate the worker and the underlying fault before requeuing a
+terminal job. Retention and pruning of accumulated history need a separate
+operational policy; see roadmap section 6.
+
+Recovery can return a row that was already retired — a terminal write lowers
+`max_attempts` to the terminating attempt, and recovery increments `attempts`
+past it. The next delivery is refused before the handler runs and acknowledged
+as `Killed`; a rising attempt count on such a row is not a crash loop. Two
+worker-side safeguards make that refusal and the surrounding acknowledgement
+behave as described, and the rollout in roadmap item 5.3.1 must supply both:
+build each worker over `AttemptBoundStorage`, and give every instance a
+distinct worker name. `AttemptBoundStorage` stamps a fresh
+`wildside.retry.claim_token` into the row's metadata on every lock and requires
+that token, together with the stored attempt count, when acknowledging, so a
+delivery that lost its row can overwrite neither a re-locked replacement nor
+one produced by a dead-letter requeue, which resets `attempts` to zero. Without
+it, an acknowledgement matches on `id` and `lock_by` alone and can overwrite a
+replacement row produced by the same instance; without the distinct name, a
+stale acknowledgement from one instance can match another instance's row. A
+refused acknowledgement logs at `WARN` with decision `acknowledgement_refused`
+and leaves the row with its current owner. The claim that precedes the handler
+can be refused the same way when the row moved on between the fetch and the
+lock: it logs at `WARN` with decision `claim_refused`, the queue, the delivery's
+`task_id` and `attempt`, and the requeue generation it captured when it
+fetched the row, because its caller sees only a missing row. See
+[ADR 0004](../adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md).

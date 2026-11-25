@@ -1,105 +1,8 @@
-//! Unit tests for stale embedded PostgreSQL password-state repair and for
-//! repair-path resolution through an injected reader.
+//! Unit tests for stale embedded PostgreSQL password-state repair.
 
+use super::fixture::PasswordStateFixture;
 use super::*;
 use rstest::rstest;
-use std::collections::HashMap;
-
-struct PasswordStateFixture {
-    _sandbox: tempfile::TempDir,
-    install_dir: Dir,
-    data_parent: Dir,
-    paths: PasswordStatePaths,
-}
-
-impl PasswordStateFixture {
-    /// Build a fixture whose data parent is seeded by `create_data_entry`.
-    fn with_data_entry(should_remove_data_dir: bool, create_data_entry: impl FnOnce(&Dir)) -> Self {
-        let sandbox = tempfile::tempdir().expect("tempdir");
-        let install_path = sandbox.path().join("install");
-        let data_parent_path = sandbox.path().join("data-parent");
-        Dir::create_ambient_dir_all(&install_path, ambient_authority())
-            .expect("create install dir");
-        Dir::create_ambient_dir_all(&data_parent_path, ambient_authority())
-            .expect("create data parent");
-        let install_dir =
-            Dir::open_ambient_dir(&install_path, ambient_authority()).expect("open install");
-        let data_parent = Dir::open_ambient_dir(&data_parent_path, ambient_authority())
-            .expect("open data parent");
-
-        create_data_entry(&data_parent);
-
-        Self {
-            _sandbox: sandbox,
-            install_dir,
-            data_parent,
-            paths: PasswordStatePaths {
-                install_dir: install_path,
-                data_parent: data_parent_path,
-                data_name: PathBuf::from("data"),
-                should_remove_data_dir,
-            },
-        }
-    }
-
-    /// Build a fixture whose data parent holds an ordinary `data` directory.
-    fn new(should_remove_data_dir: bool) -> Self {
-        Self::with_data_entry(should_remove_data_dir, |data_parent| {
-            data_parent.create_dir("data").expect("create data dir");
-        })
-    }
-
-    /// Build a fixture whose data parent directory does not exist on disk.
-    ///
-    /// The install directory (and its `.pgpass`) is still created so stale
-    /// password cleanup can be exercised, but `paths.data_parent` points at
-    /// an absent path to prove the repair does not depend on it.
-    fn with_absent_data_parent() -> Self {
-        let sandbox = tempfile::tempdir().expect("tempdir");
-        let install_path = sandbox.path().join("install");
-        let data_parent_path = sandbox.path().join("absent-data-parent");
-        Dir::create_ambient_dir_all(&install_path, ambient_authority())
-            .expect("create install dir");
-        let install_dir =
-            Dir::open_ambient_dir(&install_path, ambient_authority()).expect("open install");
-        // Open the sandbox root as a stand-in handle for `data_parent`; the
-        // absent path in `paths` is what the repair actually resolves.
-        let data_parent =
-            Dir::open_ambient_dir(sandbox.path(), ambient_authority()).expect("open sandbox");
-
-        Self {
-            _sandbox: sandbox,
-            install_dir,
-            data_parent,
-            paths: PasswordStatePaths {
-                install_dir: install_path,
-                data_parent: data_parent_path,
-                data_name: PathBuf::from("data"),
-                should_remove_data_dir: true,
-            },
-        }
-    }
-
-    /// Build a fixture whose data entry is a regular file, not a directory.
-    ///
-    /// Removing it via `remove_dir_all` then fails with a non-NotFound error
-    /// (ENOTDIR), exercising the path where data cleanup fails while the
-    /// stale `.pgpass` must remain in place for a retry.
-    fn with_data_entry_as_file() -> Self {
-        Self::with_data_entry(true, |data_parent| {
-            // The "data" entry is a file, so `remove_dir_all` fails with a
-            // non-NotFound error rather than deleting a directory.
-            data_parent.write("data", b"x").expect("write data file");
-        })
-    }
-
-    /// Seed the install directory's `.pgpass` with `contents`.
-    fn write_pgpass(&self, contents: &[u8]) {
-        self.install_dir
-            .write(".pgpass", contents)
-            .expect("write pgpass");
-    }
-}
 
 struct ExpectedPasswordState {
     should_keep_pgpass: bool,
@@ -157,6 +60,166 @@ fn repair_password_file_state_handles_password_state(
     );
 }
 
+/// Scenario: a retained default data directory the next bootstrap cannot reuse.
+///
+/// Invariant: only the default data directory is removed, and only when a
+/// bootstrap could not reuse it — because it was never initialized, or because
+/// its stored `PG_VERSION` disagrees with the configured major version.
+#[rstest]
+// A bootstrap that never finished writes `PG_VERSION` but no
+// `postgresql.conf`, so the library re-runs `initdb` over a non-empty
+// directory and fails.
+#[case::aborted_initialization_removed(Some(16), Some("16"), false, true)]
+#[case::never_started_removed(Some(16), None, false, true)]
+#[case::older_version_removed(Some(16), Some("17"), true, true)]
+#[case::matching_version_kept(Some(16), Some("16"), true, false)]
+// Without a requirement the stored version cannot be contradicted, so an
+// initialized directory is kept whatever it holds.
+#[case::unpinned_initialized_directory_kept(None, Some("17"), true, false)]
+fn repair_unusable_data_directory_handles_retained_state(
+    #[case] expected: Option<u32>,
+    #[case] stored: Option<&str>,
+    #[case] is_initialized: bool,
+    #[case] should_remove_data: bool,
+) {
+    let fixture = PasswordStateFixture::new(true).requiring_major_version(expected);
+    if let Some(stored) = stored {
+        fixture.write_pg_version(stored);
+    }
+    if is_initialized {
+        fixture.write_postgresql_conf();
+    }
+
+    repair_unusable_data_directory(&fixture.paths).expect("data directory repair should succeed");
+
+    assert_eq!(
+        fixture.data_parent.exists("data"),
+        !should_remove_data,
+        "a retained directory must be removed only when a bootstrap cannot reuse it"
+    );
+}
+
+/// Scenario: the default data directory is held by a running cluster.
+///
+/// Invariant: another project's live cluster owns the shared directory, so the
+/// repair neither removes it nor treats its presence as a fault.
+#[test]
+fn repair_unusable_data_directory_keeps_a_directory_in_use() {
+    let fixture = PasswordStateFixture::new(true).requiring_major_version(Some(16));
+    // The test process is a live pid, standing in for another project's
+    // postmaster; the directory is uninitialized, so an unguarded repair would
+    // delete it.
+    fixture.write_data_file("postmaster.pid", &format!("{}\n", std::process::id()));
+
+    repair_unusable_data_directory(&fixture.paths).expect("data directory repair should succeed");
+
+    assert!(
+        fixture.data_parent.exists("data"),
+        "a directory held by a running cluster must not be removed"
+    );
+}
+
+/// Scenario: a stale `postmaster.pid` names a process that has exited.
+///
+/// Invariant: the leftover pid file does not block cleanup, because an exited
+/// cluster is exactly the retained state the repair exists to remove.
+#[test]
+fn repair_unusable_data_directory_ignores_a_stale_postmaster_pid() {
+    let fixture = PasswordStateFixture::new(true).requiring_major_version(Some(16));
+    // `i32::MAX` is not a valid live process id on any supported platform.
+    fixture.write_data_file("postmaster.pid", &format!("{}\n", i32::MAX));
+
+    repair_unusable_data_directory(&fixture.paths).expect("data directory repair should succeed");
+
+    assert!(
+        !fixture.data_parent.exists("data"),
+        "a stale pid file must not keep an unusable directory in place"
+    );
+}
+
+/// Scenario: a layout nests a cluster's `postmaster.pid` below the shared root.
+///
+/// Invariant: a pid file one level down is ownership evidence exactly like the
+/// top-level one. A live pid keeps the whole tree; a stale pid keeps nothing,
+/// so the nested check cannot make a retained layout permanent.
+#[rstest]
+#[case::live(None, true)]
+#[case::stale(Some(i32::MAX as u32), false)]
+fn repair_unusable_data_directory_reads_a_nested_postmaster_pid(
+    #[case] pid: Option<u32>,
+    #[case] should_keep_data: bool,
+) {
+    let fixture = PasswordStateFixture::new(true).requiring_major_version(Some(16));
+    // The test process stands in for another project's postmaster unless the
+    // case names a pid that cannot be running.
+    let pid = pid.unwrap_or_else(std::process::id);
+    fixture.write_nested_data_file("cluster-1/postmaster.pid", &format!("{pid}\n"));
+
+    repair_unusable_data_directory(&fixture.paths).expect("data directory repair should succeed");
+
+    assert_eq!(
+        fixture.data_parent.exists("data"),
+        should_keep_data,
+        "only a live nested cluster may keep the shared directory in place"
+    );
+}
+
+#[test]
+fn repair_password_file_state_keeps_a_directory_in_use() {
+    let fixture = PasswordStateFixture::new(true);
+    fixture.write_pgpass(b"old-password");
+    fixture.write_data_file("postmaster.pid", &format!("{}\n", std::process::id()));
+
+    repair_password_file_state(b"new-password", &fixture.install_dir, &fixture.paths)
+        .expect("repair should succeed");
+
+    assert!(
+        !fixture.install_dir.exists(".pgpass"),
+        "the stale password file is still removed"
+    );
+    assert!(
+        fixture.data_parent.exists("data"),
+        "a running cluster's data directory must survive a password repair"
+    );
+}
+
+#[test]
+fn repair_unusable_data_directory_keeps_an_explicit_data_directory() {
+    // The fixture's data directory has no `postgresql.conf`, so it is the
+    // state the repair would otherwise delete; an explicit `PG_DATA_DIR`
+    // belongs to the caller and must survive.
+    let fixture = PasswordStateFixture::new(false).requiring_major_version(Some(16));
+
+    repair_unusable_data_directory(&fixture.paths).expect("data directory repair should succeed");
+
+    assert!(
+        fixture.data_parent.exists("data"),
+        "an explicitly configured data directory belongs to the caller"
+    );
+}
+
+#[test]
+fn major_version_reads_exact_pins_and_postgres_files_alike() {
+    assert_eq!(major_version("=16.10.0"), Some(16));
+    assert_eq!(major_version("16.10.0"), Some(16));
+    assert_eq!(major_version(" 18\n"), Some(18));
+    assert_eq!(major_version(""), None);
+    assert_eq!(major_version("latest"), None);
+}
+
+#[test]
+fn major_version_rejects_range_requirements() {
+    // A range accepts more than one stored major, so it is not a pin: an 18
+    // directory satisfies `>=17` and must not be removed as a mismatch.
+    for requirement in [">=17", ">17", "<17", "<=17"] {
+        assert_eq!(
+            major_version(requirement),
+            None,
+            "{requirement} is a range, not an exact pin"
+        );
+    }
+}
+
 #[test]
 fn repair_removes_stale_pgpass_when_data_parent_is_absent() {
     // A stale `.pgpass` must be repaired even when the default data parent
@@ -180,9 +243,11 @@ fn repair_removes_stale_pgpass_when_data_parent_is_absent() {
 
 #[test]
 fn repair_keeps_pgpass_when_data_cleanup_fails() {
-    // When the data-directory removal fails, `.pgpass` must remain so a
-    // retry still detects the stale state. Cleaning the data directory
-    // before deleting `.pgpass` keeps the repair retryable.
+    // When the data-directory cleanup fails, `.pgpass` must remain so a
+    // retry still detects the stale state. Here the in-use probe fails
+    // because `data` is a regular file, and the probe runs before the
+    // deletion; cleaning the data directory before deleting `.pgpass` keeps
+    // the repair retryable either way.
     let fixture = PasswordStateFixture::with_data_entry_as_file();
     fixture.write_pgpass(b"old-password");
 
@@ -247,47 +312,4 @@ fn repair_password_file_state_propagates_non_not_found_read_errors() {
         io::ErrorKind::NotFound,
         "an unreadable password file must surface as a real error"
     );
-}
-
-/// Build a stub environment reader over a fixed variable list.
-fn stub_env(vars: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
-    let vars: HashMap<&str, &str> = vars.iter().copied().collect();
-    move |name| vars.get(name).map(|value| (*value).to_owned())
-}
-
-/// Scenario: `PG_DATA_DIR` and `PG_RUNTIME_DIR` are absent or supplied by
-/// the injected reader.
-///
-/// Invariant: absent variables select the per-uid defaults under
-/// `/var/tmp`, an explicit data directory suppresses deletion, and the
-/// resolution never touches the process environment.
-#[rstest]
-#[case::defaults(&[], true)]
-#[case::explicit_data_dir(&[("PG_DATA_DIR", "/tmp/wildside-data/data")], false)]
-#[case::explicit_runtime_dir(&[("PG_RUNTIME_DIR", "/tmp/wildside-install")], true)]
-fn resolve_reads_overrides_from_the_injected_reader(
-    #[case] vars: &'static [(&'static str, &'static str)],
-    #[case] expected_should_remove_data_dir: bool,
-) {
-    let paths = PasswordStatePaths::resolve(stub_env(vars));
-
-    assert_eq!(
-        paths.should_remove_data_dir, expected_should_remove_data_dir,
-        "only a default data directory may be deleted by the repair"
-    );
-    let expected_install: Option<PathBuf> = vars
-        .iter()
-        .find(|(name, _)| *name == "PG_RUNTIME_DIR")
-        .map(|(_, value)| PathBuf::from(*value));
-    if let Some(expected_install) = expected_install {
-        assert_eq!(
-            paths.install_dir, expected_install,
-            "an explicit PG_RUNTIME_DIR must be used verbatim"
-        );
-    } else {
-        assert!(
-            paths.install_dir.ends_with("install"),
-            "the default install directory must sit under the per-uid base"
-        );
-    }
 }

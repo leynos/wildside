@@ -596,6 +596,11 @@ flag, and the places that assign `RUSTFLAGS` restate both flags:
   Whitaker builds its lint driver on a different toolchain that must not
   inherit these flags. The coverage jobs also assign `-D warnings` alone, so a
   measurement stays on the platform linker.
+- `make lint-whitaker` runs Whitaker once for the root workspace and once for
+  `backend/Cargo.toml`, and each run selects the suite with
+  `--lib whitaker_suite`. `--fail-on-no-libraries` turns an empty selection
+  into a failure, so a renamed, uninstalled, or filtered-out lint library fails
+  the gate instead of passing after linting nothing.
 
 The first run after this change misses the compiler cache for every crate,
 because the flags are part of the cache key, so it takes as long as a cold
@@ -1097,6 +1102,20 @@ When a phase introduces a new lint, accessibility, Playwright, or semantic CSS
 gate, update this guide and the corresponding phase ExecPlan under
 `docs/execplans/` in the same change.
 
+### Pinned front-end tool versions
+
+`make check-fmt` and `make lint` run Biome through `BIOME_VERSION` (currently
+`2.3.1`), not through whatever `biome` the `PATH` happens to hold. Formatter
+output is not upward-compatible across Biome releases: code shaped by `2.4.13`
+is reported as unformatted by `2.3.1` and vice versa, so preferring a `PATH`
+binary makes local checks fail on files that CI, which resolves the pin,
+accepts. The `biome_cmd` macro in the `Makefile` selects the pinned version and
+falls back to `bun x --package=@biomejs/biome@$(BIOME_VERSION)` when no
+matching binary is installed. The fallback needs network access the first time;
+later runs reuse the Bun cache. Bump `BIOME_VERSION` and the formatter in the
+same change, then reformat the whole front end so the diff shows only the
+version's real effects.
+
 ### Dependency audit helper modules
 
 The JavaScript dependency-audit flow is split by responsibility:
@@ -1318,7 +1337,16 @@ Three pieces cooperate here:
   and CI enable it via `--all-features`. Fixture `.stderr` files are blessed
   against the pinned toolchain in `rust-toolchain.toml`; re-bless with
   `TRYBUILD=overwrite cargo test -p backend --features trybuild-tests` after a
-  deliberate toolchain bump.
+  deliberate toolchain bump. `backend/tests/retry_const_api_ui.rs` is the third
+  suite. It requires the same feature, compiles
+  `tests/support/ui/retry_const_api_const_context.rs` as a passing fixture, and
+  requires `tests/support/ui/jitter_sample_private_constructor.rs` to fail with
+  the committed `.stderr`. Nextest never runs it: `test-rust` and the CI
+  `build` job exclude the binary by name in full, because the explicit
+  compile-fail step is the only place these suites execute. Add a new
+  compile-fail suite to both the exclusion expression and that step; a pattern
+  in place of the enumerated list would silently absorb a suite and run it
+  nowhere.
 
 - **Shared embedded-cluster password repair** lives in
   `backend/tests/support/stable_cluster_env.rs`
@@ -1332,17 +1360,67 @@ Three pieces cooperate here:
   `support::process_env` to those pure helpers. The helpers are unit-tested by
   the dedicated `atexit_cleanup_tests` target, which drives them entirely from
   stub readers and sandbox directories.
-- **`PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` are composed by the runner**,
-  not by test code: the `test-rust` Make recipe passes them on the
-  `cargo nextest run` command line (with `?=` defaults that an existing value
-  overrides), and in CI every step that runs the suite sets them in its `env:`
-  block. That is the coverage steps in `ci.yml` and `coverage-main.yml`, and
-  also `ci.yml`'s guarded `Rust tests` step, which is the Dependabot lane's
-  only backend run and so the only producer of these values on a Dependabot
-  pull request. `backend/tests/environment_policy_contract.rs` fails if the
-  Make recipe stops doing so, and
-  `tests/workflow_contracts/embedded_postgres_env_test.py` fails if any of
-  those steps does.
+- **Embedded PostgreSQL settings are composed by the runner**, not by test
+  code. `.cargo/config.toml` supplies non-forcing defaults for `PG_VERSION_REQ`
+  and `POSTGRESQL_RELEASES_URL` on direct Cargo runs from the workspace root or
+  a member directory. It deliberately does not set `PG_PASSWORD`: Cargo applies
+  this file to every command, including the non-test cluster initializer, which
+  must receive an explicit operator-supplied secret. Make and CI set the stable
+  test password for test runs. The `PG_VERSION_REQ` default pins the test
+  server to `=16.10.0`, matching the warmed archive version. This matters
+  because SQLx requests the `UTC` timezone during connection setup, and newer
+  embedded archives may not include PostgreSQL's `UTC` alias. Explicit parent
+  environment values take precedence. Make exports the password and release URL
+  defaults only within the `test-rust` target scope. In CI, each step that runs
+  the suite sets them in its `env:` block. These are the coverage steps in
+  `ci.yml` and `coverage-main.yml`, plus `ci.yml`'s guarded `Rust tests` step,
+  which is the Dependabot lane's only backend run and so the only producer of
+  those values on a Dependabot pull request.
+  `backend/tests/environment_policy_contract.rs` fails if the Make recipe stops
+  doing so, and `tests/workflow_contracts/embedded_postgres_env_test.py` fails
+  if any of those steps does.
+- **Direct Cargo integration-test runs need an explicit test password.** Cargo
+  supplies the pinned test-server version and release mirror before launching
+  test processes, including scratch integration targets and Nextest. Run
+  `make prepare-pg-worker` once, then launch the desired target with the
+  disposable test-cluster password. Separate paths give a direct run its own
+  cluster and temporary files when other test processes are active:
+
+  ```sh
+  pg_test_root="$(mktemp -d /var/tmp/wildside-pg.XXXXXX)"
+  mkdir -p "$pg_test_root/tmp"
+  PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" \
+  POSTGRESQL_RELEASES_URL="${POSTGRESQL_RELEASES_URL:-https://github.com/theseus-rs/postgresql-binaries}" \
+  PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  PG_DATA_DIR="$pg_test_root/data" PG_RUNTIME_DIR="$pg_test_root/runtime" \
+  TMPDIR="$pg_test_root/tmp" \
+    cargo test -p backend --test TEST_TARGET -- --nocapture
+  ```
+
+  Replace `TEST_TARGET` with the integration-test target. The worker path above
+  assumes the workspace root. Keep the task-owned root until its test and
+  PostgreSQL processes have exited, then remove it if it is no longer needed.
+  Use this test-only password only for disposable embedded test clusters; the
+  [cluster initializer guide](pg-embed-setup-unpriv-users-guide.md) requires a
+  strong secret for non-test use. Explicit `PG_PASSWORD`, `PG_VERSION_REQ`, and
+  `POSTGRESQL_RELEASES_URL` values remain supported. Cargo discovers workspace
+  configuration from the current directory and its ancestors; invoking it from
+  elsewhere with `--manifest-path` alone does not load the version and mirror
+  defaults. Supply the environment explicitly in that case or when invoking a
+  test binary directly. `ensure_stable_cluster_environment` reconciles retained
+  cluster state only: a stale `.pgpass`, and a default data directory the next
+  bootstrap could not reuse. A data directory is unusable when it has no
+  `postgresql.conf` — a bootstrap that never finished — or when its
+  `PG_VERSION` names a different major version from `PG_VERSION_REQ`. The
+  default is a per-user shared path (`/var/tmp/pg-embed-<uid>`), so another
+  project on the same host can leave a cluster there. The repair keeps a
+  directory whose `postmaster.pid`, at the top level or one level down, names a
+  running process, but a stopped cluster that fails the reuse test is removed
+  even when another project created it. Set `PG_DATA_DIR` and `PG_RUNTIME_DIR`
+  to project-specific paths when several projects share a host; the repair
+  never removes an explicitly configured `PG_DATA_DIR`, and it does not mutate
+  the test process environment. The environment policy contract tests guard the
+  Makefile password and all non-forcing defaults.
 
 ## Environment seams
 
@@ -1807,6 +1885,46 @@ The backend includes an Apalis-backed `RouteQueue` adapter that persists jobs
 to PostgreSQL storage via `apalis-postgres` / `PostgresStorage`. The adapter
 implements the hexagonal `RouteQueue` port defined in the domain layer.
 
+### Retry scheduling and the injected clock
+
+`PostgresRetryScheduler` computes a retry deadline from a `ClockSource` rather
+than from the database's clock. `ClockSource::now` returns a UTC instant;
+`SystemClock` is the production adapter, and
+`PostgresRetryScheduler::with_clock` installs a fixed one in tests.
+`schedule_retry` adds the policy's delay to that instant and binds the result
+as the literal `run_at` value, so a test can infer the stored deadline from the
+sample it injected without racing the server's `now()`.
+
+This splits the two clocks deliberately. The application clock decides the
+deadline, which makes the scheduled value reproducible and keeps the retry
+policy's timing independent of the database host's time zone and load. The
+database clock still decides when a row becomes eligible, because `apalis`
+compares `run_at` with its own `now()` when it polls. The scheduling canaries
+therefore read `run_at - now()` inside a single statement: comparing the
+application's computed instant with a separately read database instant would
+measure the gap between two clocks rather than the delay the scheduler stored.
+
+One statement removes that sampling gap, not clock skew. The stored deadline is
+an application-clock instant that Apalis compares with the database's `now()`,
+so a worker clock behind the database makes a retry eligible early and a clock
+ahead delays it. Time spent waiting for a pool connection after the deadline
+was computed also shortens the effective delay. `SystemClock` reads the host
+clock, so synchronize hosts with a time service and monitor clock offset; the
+fixed-clock assertions verify the stored delay, not eligibility. ADR-004
+records the accepted risk.
+
+A requeue is the other case: `PostgresDeadLetterQueue::requeue` sets
+`run_at = now()` inside its own transaction, so the row is due immediately
+according to the clock that will poll it. There is no application-side delay to
+reproduce, so no clock seam is injected there; the statement is the boundary.
+That timestamp expression is held in `IMMEDIATELY_ELIGIBLE_RUN_AT`, so the
+choice appears once, at the write site, rather than as an inline `now()`. The
+dead-letter behaviour tests assert the consequence: after a requeue the stored
+`run_at` is not later than the database's `now()`, read through the same
+database clock that decides eligibility. A negative control stages a future
+database deadline in a transaction that is rolled back, and requires the same
+comparison to refuse it.
+
 ## Root-level script tests
 
 Repository-level Node.js scripts under `scripts/` are tested with
@@ -1969,7 +2087,8 @@ Command-level Makefile coverage lives in
 `make test-workflow-contracts`, which is part of `make test`. The tests place
 command doubles on `PATH` while executing the real recipes, so runner choice,
 arguments, and environment propagation remain covered without downloading the
-tools under test.
+tools under test. The doubles and the invocation log those contracts share live
+in `tests/workflow_contracts/tooling_doubles.py`.
 
 UV-backed Makefile targets export repository-absolute `UV_CACHE_DIR` and
 `UV_TOOL_DIR` values that point to the ignored `.uv-cache` and `.uv-tools`
@@ -2504,6 +2623,144 @@ Domain code depends only on the `RouteQueue` port trait. The Apalis adapter
 implements this port without exposing `apalis-postgres` or `sqlx` types in the
 public API.
 
+The domain owns `JobRetryPolicy` and its validated `JobRetryPolicyConfig`,
+`JobErrorKind`, and the payload-free, 1,024-byte-bounded `JobFailure`. The
+`DeadLetterQueue` port exchanges `DeadJob`, `DeadJobId`, `DeadReason`, and
+`DeadLetterError` values without exposing Apalis rows. `list_dead` returns a
+`DeadLetterListing`: the represented jobs plus the `SkippedDeadJob` rows whose
+stored attempt or requeue metadata cannot be represented, each labelled with a
+`DeadJobSkip` cause. Storage conversion is therefore fallible in the open, and
+the adapter, not the conversion, logs what it dropped. Callers read both parts
+through accessors, so a listing cannot be consumed down to its jobs alone.
+`PostgresDeadLetterQueue` implements that port and receives `RequeueBudgets`
+built from the configured queue policies. A requeue restores the appropriate
+policy limit and records its bounded count under
+`wildside.retry.requeue_count`; terminal failures record
+`wildside.retry.dead_reason`. Both updates preserve unrelated metadata. The
+policy constructor validates delay parameters before jitter, so a configuration
+with several invalid fields reports the same first error.
+
+`PostgresDeadLetterQueue` has two listing controls for tests:
+`with_listing_isolation` and `with_listing_page_probe`, in
+`backend/src/outbound/queue/postgres_dead_letter/listing_controls.rs`. They
+exist only under `cfg(any(test, feature = "test-support"))`. The first runs the
+listing under a chosen isolation level, and the second observes page
+boundaries, so a test can change the row set between two pages of the real
+`list_dead` loop.
+
+`RetryingJobService<J, F>`, configured with `RetryingJobServiceConfig`, applies
+one policy to one queue. It decodes the stored payload into the queue's concrete
+`v1` job type `J` before invoking `F`, so a handler never observes a body that
+passed the version check but failed the type check. For a retryable failure it
+schedules `run_at` with an ownership guard before returning the error for
+Apalis to acknowledge; a terminal failure records its dead-letter
+classification instead of scheduling another attempt.
+
+All persistence goes through the `RetryPersistence` port: `schedule_retry` for
+a durable retry, `record_terminal_failure` for a dead-letter classification, and
+`clamp_terminal_cap` for the fallback described below.
+`PostgresRetryScheduler` is its only production implementation, and the port
+exists so unit tests can use a recording double to assert the at-most-one-write
+contract without PostgreSQL. Do not add a second implementation speculatively;
+extend the trait only when a real second backend exists.
+
+`record_terminal_failure` takes a `TerminalRetryUpdate` value rather than its
+five columns as positional arguments, and `schedule_retry` takes a
+`RetryScheduleUpdate` for the same reason. A call site cannot transpose a task
+identity, an attempt count, and a value that all describe the same row.
+
+#### Attempt budget and policy decision
+
+The domain owns the effective attempt budget for a delivery. `JobAttemptBudget`
+and `BoundedAttempt`, in `backend/src/domain/jobs/retry/budget.rs`, hold the
+job's stored limit and pair it with the attempt that just failed.
+`JobRetryPolicy::decide` takes that `BoundedAttempt` and weighs it against the
+policy ceiling, so the effective budget is the lower of the policy's ceiling
+and the job's stored limit. No adapter computes an outcome or a delay of its
+own; the wrapper applies what the policy returned.
+
+#### Jitter source seam
+
+`RetryingJobService` asks a `JitterSource` for exactly one `JitterSample` per
+failed delivery. `ThreadRngJitter` is the production source: it draws from the
+thread-local generator and falls back to `JitterSample::midpoint()`, which
+leaves the nominal delay unchanged, if a draw cannot be represented.
+`RetryingJobServiceConfig::new` installs it, and
+`RetryingJobServiceConfig::with_jitter` replaces it.
+
+Inject a fixed sample whenever a test asserts a scheduled delay. The usual
+choice, `FixedJitter(JitterSample::midpoint())`, keeps the policy's nominal
+delay so the expected `run_at` can be computed from the policy alone; another
+sample exercises the jitter band. A zero jitter fraction is not a substitute: a
+policy with no jitter would still pass if the wrapper never consulted the
+source at all.
+
+#### Delivery guards and the terminal-cap fallback
+
+Every guarded write matches `id`, `lock_by`, `status = 'Running'`, `attempts`
+equal to the count the delivery inherited, and the claim token its claim
+stamped. Apalis increments the in-memory attempt on the first poll, so the row
+holds one less than the delivery counts; `AttemptBounds` derives both values in
+one place. Orphan recovery re-queues a stalled row with
+`attempts = attempts + 1`, so a worker that stalled and later resumes holds the
+same name but a stale counter, and its write is refused instead of overwriting
+the decision of the delivery that replaced it. The attempt count alone is not a
+delivery generation, because a dead-letter requeue resets it to zero: the token
+is what separates the delivery that lost the row from the one that replaced it
+under the same worker name. A delivery that never claimed binds no token, so
+its write matches no row.
+
+A terminal classification fails the delivery, which Apalis acknowledges as
+`Failed`, and a failed row is fetched again while `attempts < max_attempts`. If
+the terminal write itself fails, the wrapper therefore issues further guarded
+writes through `clamp_terminal_cap`, which lowers `max_attempts` to the
+terminating attempt with `LEAST(COALESCE(max_attempts, $cap), $cap)`. The
+acknowledgement then leaves an unfetchable row, because the cap binds exactly
+the value the acknowledgement stores as `attempts`. The fallback never raises a
+cap and carries the same guards. It is idempotent, so a failed attempt is
+retried up to three times with short waits: it runs only after another write
+has failed, which usually means a transiently failing database, and one attempt
+would leave the retired job fetchable for the rest of the delivery's life. A
+refusal still ends the sequence, because the row is another actor's and a retry
+would repeat their decision. Exhaustion logs `terminal_cap_clamp_exhausted` at
+`ERROR`; nothing in a handler can protect a row whose writes the database
+refuses. Parking `run_at` is deliberately not used: orphan recovery rewrites
+`status` to `Pending`, which the fetch selects whatever the attempt count, so a
+parked row would never run and would never be listed as dead either.
+
+Backoff frees the worker slot, and the polling interval is a precision floor. A
+crash between the in-memory attempt increment and its acknowledgement can lose
+that one in-flight attempt. Do not install an in-process retry layer on these
+pinned release candidates. See
+[ADR-004](adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md), [ADR-005](adrs/adr-0005-dead-letters-as-apalis-rows-behind-a-domain-port.md),
+and the [operator runbook](runbooks/queue-retry-and-dead-letter-operations.md).
+
+The queue BDD suites share `WorkerObservation` within their test worker harness
+to run bounded polling and capture terminal and quiet-period counts. It is test
+support, not a production worker abstraction. The environment-policy contract
+similarly pairs each manifest's path and contents in a test-only `Manifest`
+value so diagnostics refer to the source being checked.
+
+#### Version-coupling canaries
+
+`backend/tests/apalis_retry_canaries.rs` pins the behaviour the wrapper takes
+from the pinned `apalis-postgres` release and its `apalis.get_jobs` function:
+the scheduling columns and their names, which rows a fetch selects, the attempt
+count a delivery inherits, and what an acknowledgement leaves intact. Add a
+canary there only for behaviour an upgrade could change underneath the wrapper;
+wrapper decisions belong in the unit and BDD suites. A failure in the canary
+suite means the Apalis upgrade changed the contract, not that the wrapper
+regressed. Shared fixtures live in `apalis_retry_canaries/fixtures`, so each
+module reads as assertions about the contract.
+
+`backend/tests/support/queue_retry_worker.rs` is the harness those canaries and
+both retry BDD suites run. `run_queue_retry_worker` builds a worker over
+`AttemptBoundStorage`, polls on a short interval, and stops after a quiet
+period or at `DEFAULT_WORKER_DEADLINE`; `unique_worker_name` gives each
+instance a distinct worker name so one instance's stale delivery cannot match
+another's row. It is test support only: no production binary gains a worker
+loop from this plan.
+
 ### Queue architecture and public API
 
 Public production API:
@@ -2513,6 +2770,12 @@ Public production API:
 - `ApalisPostgresProvider` – The production `QueueProvider` implementation.
   Wraps `apalis_postgres::PostgresStorage<serde_json::Value>` and provisions
   the Apalis schema via `PostgresStorage::<(), (), ()>::setup`.
+  `ApalisPostgresProvider::new(pool, queue_name, policy)` performs that
+  provisioning and stores the policy's `max_attempts` as the attempt budget
+  every job it enqueues carries. The constructor returns
+  `JobDispatchError::Rejected` when the limit does not fit the signed `INTEGER`
+  column Apalis stores it in, so an unrepresentable policy fails at
+  construction rather than at the first enqueue.
 - `decode_job<J>` – The worker-side decode boundary for JSON loaded from
   `apalis.jobs`. It is pure: it returns a validated versioned envelope or a
   bounded `JobDispatchError::Rejected` diagnostic; malformed and unsupported
@@ -2626,14 +2889,14 @@ UTF-8 bytes of the version; this diagnostic limit is unrelated to the V1
 enrichment limits of 64 tags and 64 UTF-8 bytes per tag. The raw payload is
 never logged. `decode_job` emits no warnings or metrics: roadmap item 5.2.2
 defines no decode metric. The future 5.3.1 worker/consumer boundary owns safe
-warning and rejection metrics. Retry and dead-letter policy remain owned by
+warning and rejection metrics. Retry and dead-letter policy are implemented by
 roadmap item 5.2.3.
 
 The payloads carry `idempotency_key` as part of the domain job contract. The
 current `Cargo.lock` resolves `apalis-core` 1.0.0-rc.9 and `apalis-postgres`
 1.0.0-rc.8, whose framework-native task identity is available. The adapter
-nevertheless currently serializes the payload and calls
-`storage.push(payload)`; mapping the V1 field to `TaskBuilder::id(...)` is
+nevertheless currently builds a task with the queue's attempt limit and calls
+`storage.push_task(task)`; mapping the V1 field to `TaskBuilder::id(...)` is
 deferred. Until that adapter mapping is deliberately introduced, the V1
 `idempotency_key` is authoritative and remains the only documented source of
 truth. Trace IDs are intentionally absent from V1; roadmap item 5.2.4 owns
@@ -2668,11 +2931,16 @@ tests may use Prometheus to assert isolated registries.
 Queue observability:
 
 - `RouteQueueMetrics` – The domain-owned metrics port used by queue adapters
-  to record enqueue outcomes without depending on Prometheus or process-global
-  state.
+  to record enqueue, retry, and dead-letter outcomes without depending on
+  Prometheus or process-global state.
 - `RouteQueueOutcome` – The bounded outcome label type for queue metrics. It
   currently exposes only `success` and `failure`, keeping metric cardinality
   predictable.
+- `RouteRetryOutcome` – The bounded durable retry label type. It distinguishes
+  `scheduled` from `schedule_failure` without adding queue or job identifiers
+  to metric labels.
+- `RouteDeadLetterOutcome` – The bounded terminal-reason label type. It
+  distinguishes `exhausted` from `fatal`.
 - `NoOpRouteQueueMetrics` – The no-op implementation used by tests and
   metrics-disabled builds. Prefer it whenever a test is not asserting metrics
   behaviour.
@@ -2690,6 +2958,35 @@ Queue observability:
 - `route_queue_enqueue_latency_seconds{outcome=success|failure}` – A
   feature-gated Prometheus histogram for end-to-end queue enqueue latency in
   seconds.
+- `route_queue_retry_total{outcome=scheduled|schedule_failure}` – A
+  feature-gated counter for durable retry scheduling results.
+- `route_queue_dead_letter_total{reason=exhausted|fatal}` – A feature-gated
+  counter for terminal retry outcomes.
+- `route_queue_terminal_write_failure_total{reason=exhausted|fatal}` – A
+  feature-gated counter for terminal writes the database refused or failed to
+  apply, which change no stored state and so cannot be counted as dead letters.
+- Retry policy belongs to one queue/job family. For a retryable failure the
+  Apalis handler wrapper persists `run_at` before returning the failure to the
+  PostgreSQL acknowledgement; it installs no in-process retry middleware.
+  Terminal outcomes persist `wildside.retry.dead_reason` in the existing Apalis
+  JSONB metadata instead of scheduling another attempt, and acknowledgements
+  preserve that value and other metadata.
+- Build every retry worker over `AttemptBoundStorage`, not
+  `apalis_postgres::PostgresStorage` directly. `AttemptBoundLock` and
+  `AttemptBoundLockService`, in
+  `backend/src/outbound/queue/attempt_bound_lock.rs`, claim a row only while it
+  still names the fetching worker, still holds the attempt count the fetch
+  captured, and still carries the `wildside.retry.requeue_count` that fetch
+  read. The claim then stamps a fresh `wildside.retry.claim_token` and carries
+  it in the delivery context. The pinned acknowledgement matches a delivery on
+  `id` and `lock_by` alone; `AttemptBoundAck` matches `id`, `lock_by`,
+  `status = 'Running'`, the attempt count the row stored during the delivery,
+  and that token. Together the fetch-bound claim and the token-bound
+  acknowledgement keep a stale delivery from claiming or overwriting the row
+  that replaced it, including the case where a requeue reset the attempt count
+  and the same worker fetched the row again under the same name. Distinct
+  worker names per instance remain a separate layer that keeps one instance's
+  stale delivery from matching another instance's row.
 - `tracing` – The adapter emits `debug` on enqueue success and `warn` on
   failure points (serialization, push, and setup failures), including latency
   and the adapter outcome.
@@ -2706,6 +3003,16 @@ The queue adapter requires:
   pool used by `ApalisPostgresProvider`
 - `serde` / `serde_json` – Payload serialization
 
+The attempt-bound acknowledgement is generic over the delivery identifier type
+the PostgreSQL backend assigns, which it names through the wrapped storage
+rather than by depending on the pinned release's id crate.
+
+The Apalis dependencies are pinned exactly to `apalis-core = "=1.0.0-rc.9"` and
+`apalis-postgres = "=1.0.0-rc.8"` because their 1.0.0 final release changes the
+queue integration contract. Re-run the V8 storage and acknowledgement canaries
+before changing the pins. The upgrade is tracked in
+[issue #550](https://github.com/leynos/wildside/issues/550).
+
 #### Test infrastructure
 
 - `pg-embedded-setup-unpriv` – Embedded PostgreSQL cluster for BDD tests
@@ -2713,15 +3020,23 @@ The queue adapter requires:
 - No feature flags required; BDD tests are in the `tests/` integration
   harness and run unconditionally with `cargo test`
 
-To run BDD tests locally:
+To run BDD tests locally, first prepare the worker as described in
+[embedded PostgreSQL integration tests](#embedded-postgresql-integration-tests).
+For example, select either target with the disposable test password:
 
 ```bash
 # Run the Apalis BDD suite
-cargo test -p backend --test route_queue_apalis_bdd
+PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  cargo test -p backend --test route_queue_apalis_bdd
 
 # Exercise typed payload persistence and decode
-cargo test -p backend --test job_structs_postgres_bdd
+PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}" PG_EMBEDDED_WORKER="$PWD/target/pg_worker" \
+  cargo test -p backend --test job_structs_postgres_bdd
 ```
+
+On a host shared with other projects, apply the separate data, runtime, and
+temporary paths from the earlier example to every direct run, not only
+concurrent ones, so no run can repair or bootstrap the shared default cluster.
 
 ### Queue test infrastructure
 

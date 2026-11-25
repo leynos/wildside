@@ -1,0 +1,4904 @@
+# Implement retry policies with exponential backoff and dead-letter handling (backend 5.2.3)
+
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+`Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
+be kept up to date as work proceeds.
+
+Status: IN PROGRESS — implementation complete, pending merge (approved for
+execution 2026-10-30 and published as the pull request `leynos/wildside#457`).
+The head `1a82dad` passes the nine repository gates and the hosted `build`,
+`coverage`, CodeScene, and Gecko checks, and every review finding has a
+disposition recorded below; those gate results apply to `1a82dad`. The later
+head `d821d3d` was reviewed separately and also passes the nine repository
+gates. One decision remains open and is the user's: the 2026-11-20 reply on the
+claim-token thread requires explicit user approval of the D15 amendment, because
+`Constraints` reserves further mechanism changes to the user. The dated
+sections that follow record each reconciliation in full; this line states only
+the current position.
+
+Unqualified calendar dates in this plan use the `Europe/Berlin` timezone.
+Review metadata may use UTC and therefore show the previous calendar date.
+
+This plan covers backend roadmap item 5.2.3 only:
+
+> Implement retry policies with exponential backoff and dead-letter handling.
+
+The user approved this plan and authorized execution on 2026-10-13. On
+2026-10-17 the user accepted the revised mechanism (D10: exact Apalis pins;
+D11: durable, storage-scheduled backoff). This approval does not cover worker
+consumption or deployment (roadmap 5.3.1), trace-identifier propagation
+(5.2.4), the Apalis 1.0.0 upgrade (issue
+[#550](https://github.com/leynos/wildside/issues/550)), or request-path
+dispatch changes. The `TODO(#276)` markers in
+`backend/src/domain/route_submission/mod.rs` stay in place.
+
+## Read this first (revision of 2026-10-25)
+
+For readers of an earlier version, these are the changes that matter:
+
+- There is **no tower retry layer**. Do not add the `apalis` facade crate, and
+  do not call `.retry(...)` on any `WorkerBuilder`. At the pinned versions an
+  in-process retry layer races with the storage fetcher (see
+  `Surprises & discoveries`, 2026-10-14).
+- Backoff is **durable**. When a job fails, a handler wrapper writes the next
+  `run_at` for a retry, or shrinks `max_attempts` for a terminal failure on the
+  still-locked row *before* the ack runs. The library's ack then records
+  `Failed` or `Killed`, and the existing fetch predicate does the rest
+  (Decision D11). Accepted D15 also records a namespaced terminal reason in
+  JSONB `metadata` because those statuses alone cannot distinguish fatality
+  from exhaustion when the current policy is lower than a stored limit.
+- Apalis is **pinned exactly**, to `apalis-core = "=1.0.0-rc.9"` and
+  `apalis-postgres = "=1.0.0-rc.8"` (Decision D10). The 1.0.0 upgrade is issue
+  #550, which is out of scope here.
+- AXIOM-FACADE and AXIOM-ATTEMPT are retired. AXIOM-PIN, AXIOM-DURABLE, and
+  AXIOM-ACK replace them, and EP-M0 discharges them.
+- `TOTAL_BACKOFF_BUDGET` is retired. Workers no longer hold a slot during
+  backoff, so the per-delay cap `MAX_BACKOFF_DELAY` replaces it (Decision D13).
+- `requeue` must restore the queue's configured `max_attempts` because a
+  terminal path may shrink it (Decision D12).
+- EP-M1 (the pure domain policy) is unaffected in shape. EP-M2 has been
+  rewritten. EP-M3 gains the budget restoration. EP-M4 names the renamed ADRs.
+
+## Purpose / big picture
+
+Wildside enqueues background jobs (`GenerateRouteJob`, `EnrichmentJob`) through
+the `RouteQueue` port into an Apalis-backed PostgreSQL queue (`apalis.jobs`
+table). Today a job that fails during processing would be redelivered using
+Apalis defaults: up to 25 attempts, with no deliberate backoff. A permanently
+failing job would linger with no dead-letter story. Nothing bounds retries
+deliberately, nothing classifies errors as retryable or fatal, and no interface
+exists to inspect or requeue dead jobs.
+
+This plan adds the retry and dead-letter policy layer:
+
+- A pure domain retry policy. It computes bounded exponential backoff delays
+  with jitter and decides, per attempt and error class, whether to retry a job
+  or dead-letter it. The domain policy is the policy production executes: the
+  adapter's handler wrapper calls it directly, so the verified function and the
+  running function are the same function.
+- A domain error classification for job execution failures (retryable or
+  fatal), following the precedent of `EnrichmentSourceError::is_retryable()`.
+- Durable retry scheduling in the outbound queue adapter. A handler wrapper
+  turns each failure into a guarded update on the still-locked `apalis.jobs`
+  row: a future `run_at` for a retry, or a shrunken `max_attempts` for a
+  terminal failure. The library's own ack and fetch predicate then enforce the
+  backoff and the dead state.
+- A `DeadLetterQueue` driven port and a PostgreSQL adapter that lists,
+  requeues, and discards dead jobs, with guarded state transitions, distinct
+  fatal and exhausted reasons for rows with D15 metadata, an unclassified
+  fallback for legacy rows, restoration of the retry budget on requeue, and
+  durable requeue provenance.
+- Enqueue-side persistence of the policy's `max_attempts` on every job, and
+  retry and dead-letter event counters through dedicated `RouteQueueMetrics`
+  methods.
+
+Observable outcomes:
+
+- `cargo test -p backend` demonstrates the following against embedded
+  PostgreSQL via `rstest-bdd` scenarios:
+  - A job whose handler always fails retryably runs exactly `max_attempts`
+    times in total across storage redeliveries. Each redelivery happens no
+    earlier than the `run_at` the previous failure scheduled, and the job then
+    ends `Killed`.
+  - A fatal failure runs the handler exactly once and leaves a row that the
+    storage fetcher can never pick up again.
+  - A dead job can be listed and requeued through the `DeadLetterQueue` port,
+    regains its full retry budget, and then observably runs to success.
+  - Requeuing a live or absent job fails cleanly.
+- Property tests pin the backoff invariants: delays bounded above and below,
+  jitter within the configured fraction, monotone non-decreasing growth until
+  the cap binds, and retry decisions that never exceed `max_attempts`.
+- `make check-fmt`, `make typecheck`, `make lint`, and `make test` pass after
+  each major milestone.
+- Roadmap item 5.2.3 is marked done only after every gate passes and the
+  documentation updates land.
+
+## Context and orientation
+
+Everything below is verifiable in the working tree. No prior plan is required
+reading, though
+`docs/execplans/backend-5-2-2-job-structs-for-generate-route-and-enrichment.md`
+records the scope boundaries this plan inherits.
+
+Repository state relevant to this task:
+
+- Port: `backend/src/domain/ports/route_queue.rs` defines `RouteQueue` (one
+  method, `enqueue`) and `JobDispatchError` (`Unavailable`, `Rejected`) via the
+  `define_port_error!` macro in `backend/src/domain/ports/macros.rs`.
+  `JobDispatchError` has no retryable/fatal distinction; it describes
+  enqueue-side failures only.
+- Adapter: `backend/src/outbound/queue/apalis_route_queue.rs` implements the
+  enqueue side. `ApalisPostgresProvider` wraps
+  `apalis_postgres::PostgresStorage<serde_json::Value>` over a dedicated
+  `sqlx::PgPool`, and `setup` creates the `apalis.jobs` schema at runtime (no
+  Diesel migration). At plan-authoring time `push_job` called
+  `storage.push(payload)` and inherited the default `max_attempts = 25`; the
+  implemented adapter now builds a task with the queue's policy and calls
+  `storage.push_task(task)`. `QueueProvider` is the crate-internal test seam,
+  with `FakeQueueProvider` and `FailingQueueProvider` doubles in
+  `backend/src/outbound/queue/test_helpers.rs`.
+- Consumer-side scaffolding: `backend/src/outbound/queue/job_decode.rs`
+  provides the pure `decode_job<J>` helper. Its module documentation and
+  `docs/wildside-backend-architecture.md` (section "Background Job Execution
+  (Apalis Workers)") both state that the queue-processing error path applies
+  "the retry/dead-letter policy owned by 5.2.3". That seam is where this plan's
+  handler wrapper attaches. `decode_job` deliberately never logs payload
+  contents, and the same privacy stance applies to every retry and dead-letter
+  surface in this plan. A decode failure is the canonical fatal error.
+- Jobs: `backend/src/domain/jobs/generate_route.rs` and
+  `backend/src/domain/jobs/enrichment.rs` define versioned V1 envelopes. At
+  plan-authoring time the module documentation of
+  `backend/src/domain/jobs/mod.rs` scoped the module to job payloads; it now
+  also describes the retry module's pure failure classification and bounded
+  backoff policy.
+- Error-classification precedent:
+  `backend/src/domain/ports/enrichment_source.rs` exposes
+  `EnrichmentSourceError::is_retryable()`, and
+  `backend/src/domain/overpass_enrichment_worker/attempt_error.rs` shows the
+  house pattern for attempt-local error taxonomies.
+- Metrics: the `RouteQueueMetrics` port with `RouteQueueOutcome`
+  (`success`/`failure`) and the Prometheus adapter exist. Enqueue outcomes and
+  latency remain enqueue-only. The port gains separate retry and dead-letter
+  event counters (Decision D8). Queue-depth and age gauges remain deferred to
+  roadmap 6.x.
+- Randomness: `rand = { version = "0.8", features = ["small_rng"] }` is
+  already a production dependency in `backend/Cargo.toml`. The adapter draws
+  jitter samples from it, so no new dependency is needed.
+- No worker, `Monitor`, or `WorkerBuilder` exists anywhere in the crate, and
+  nothing configures Apalis orphan recovery (`reenqueue_orphaned_after`) yet.
+  Production worker consumption and orphan-recovery configuration belong to
+  roadmap 5.3.1. Until 5.3.1 lands, a worker process that dies mid-job leaves
+  the row `Running` indefinitely. This plan documents that fact rather than
+  fixing it. Test-only consumption harnesses are in scope, because behavioural
+  evidence of retry and dead-letter behaviour requires driving job execution in
+  tests.
+
+Apalis versions: the current `backend/Cargo.toml:34-35` pins
+`apalis-core = "=1.0.0-rc.9"` and `apalis-postgres = "=1.0.0-rc.8"`, matching
+`Cargo.lock`. The earlier caret requirements (`"1.0.0-rc.7"` and
+`"1.0.0-rc.6"`) also admitted the breaking `1.0.0` final release; EP-M0
+replaced them with exact pins on the resolved versions (Decision D10). All
+facts below are verified against rc.9/rc.8, the code that actually compiles.
+The cached sources are under
+`~/.cargo/registry/src/*/apalis-{core-1.0.0-rc.9,postgres-1.0.0-rc.8,sql-1.0.0-rc.9}`.
+They are external axioms for this plan:
+
+- Worker middleware order (`apalis-core` `src/worker/mod.rs`), outermost
+  first: `Data`, user middleware, backend middleware (`Ack` around `LockTask`),
+  `Readiness`, `Tracker`, then the handler. The tracker's `AttemptOnPollFuture`
+  increments the task's `Attempt` on first poll, so inside the handler
+  `Attempt::current()` is the 1-based number of the current attempt.
+- Fetch (`apalis.get_jobs`, migration `20251018165056_queue_jobs.sql`) selects
+  rows with
+  `status = 'Pending' OR (status = 'Failed' AND attempts < max_attempts)` and
+  `run_at < now()`, and marks them `Queued`. `LockTask`
+  (`queries/task/lock_by_id.sql`) moves a row to `Running` and sets `lock_by`
+  to the worker name, again only when `run_at < now()`. The `queue_by_id.sql`
+  path also requires `run_at < now()`. The notify trigger fires only on
+  `INSERT`. **Every fetch path therefore honours `run_at`**, which is the
+  property D11 relies on.
+- Hydration (`apalis-sql` `src/from_row.rs`): a fetched row becomes a task
+  whose `Attempt` starts at the persisted `attempts` and whose context
+  `max_attempts` is the persisted `max_attempts` (default 25 if null). This
+  fallback happens only after fetch; `get_jobs` compares
+  `attempts < max_attempts`, so a nullable legacy `Failed` row is not fetched
+  at all.
+- Ack (`apalis-postgres` `src/ack.rs`, `queries/task/ack.sql`): after the
+  handler returns, the ack writes `status`, `attempts = Attempt::current()`,
+  `last_result`, and `done_at`, guarded by `id` and `lock_by`. It never touches
+  `run_at`, `max_attempts`, or the JSONB `metadata` column. `calculate_status`
+  returns `Done` on `Ok`, and `Killed` on `Err` when the *in-memory* context
+  `max_attempts` is at most `Attempt::current()`; otherwise it returns
+  `Failed`. The `Error::Abort => Killed` arm is commented out, so abort errors
+  are not persisted as `Killed`.
+- Extractors (`apalis-core`): `Attempt`, `TaskId`, and `WorkerContext`
+  implement `FromRequest`, so a handler can obtain the attempt number, the task
+  id, and the worker name (`WorkerContext::name()`, which is the value
+  `LockTask` writes to `lock_by`).
+- Enqueue context: `PgContext` (`apalis_sql::context::SqlContext<PgPool>`)
+  has `with_max_attempts(i32)`, and `TaskSink::push_task` accepts a built task.
+  The adapter can therefore persist a per-job `max_attempts` without importing
+  `apalis-sql` directly.
+- There is no built-in dead-letter table or requeue API. Dead jobs are rows
+  that remain in `apalis.jobs`. Listing and requeuing require direct SQL. No
+  pruning or retention mechanism exists upstream at these pins.
+- The `apalis` facade crate's `RetryLayer` exists, but this plan does not use
+  it (Decision D14). Installed as user middleware at these pins, it re-enters
+  the ack on every in-process attempt. The ack leaves a re-fetchable `Failed`
+  row while the layer sleeps, so another worker can run the same job
+  concurrently.
+
+Named external axioms, each discharged in EP-M0 and then guarded permanently by
+the V8 canaries. The upstream-surprises tolerance attaches to each:
+
+- AXIOM-PIN: after EP-M0's pin change, `cargo tree -p backend` resolves
+  exactly `apalis-core 1.0.0-rc.9` and `apalis-postgres 1.0.0-rc.8`, and no
+  other Apalis release.
+- AXIOM-DURABLE: a handler that updates its own locked row's `run_at` (or
+  `max_attempts`) before returning `Err` controls redelivery. The row is not
+  fetched before `run_at`; it is fetched after it; the next run observes
+  `Attempt::current()` one higher; exhaustion persists `Killed`; and a row whose
+  `max_attempts` was shrunk to the current attempt is never fetched again.
+  EP-M0's runtime probe tests these five predictions.
+- AXIOM-ACK: the ack writes only `status`, `attempts`, `last_result`, and
+  `done_at`, guarded by `id` and `lock_by`, and computes status from the
+  in-memory context as described above. It leaves `metadata` unchanged.
+
+Terms used in this plan:
+
+- "Dead-letter" a job: stop retrying it and park it in a state the storage
+  fetcher can never redeliver, for operator inspection and optional requeue.
+  Dead rows satisfy this predicate:
+
+  ```sql
+  status = 'Killed'
+  OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts))
+  ```
+
+  The pinned PostgreSQL migration declares `max_attempts` non-null, but Apalis
+  hydration accepts null and defaults it to 25 only after a row is fetched. The
+  fetch query's `attempts < max_attempts` comparison cannot select a row with a
+  null limit, regardless of its attempt count. The listing therefore includes
+  every nullable legacy `Failed` row so it remains visible for operator
+  inspection and optional requeue; without a recognized reason key, it is
+  `Unclassified`. D15's namespaced metadata key records whether a
+  wrapper-originated terminal failure was fatal or exhausted. Rows without a
+  recognized reason key are `Unclassified` because status and attempts cannot
+  reliably distinguish their terminal cause.
+- "Fatal error": a job-execution failure that retrying cannot fix (for
+  example, a payload that fails decoding or validation). It is classified so
+  the job dead-letters immediately rather than burning attempts.
+- "Retryable error": a transient failure (timeout, transport, rate limit)
+  worth retrying with backoff.
+- "Handler wrapper": the adapter-owned service passed to
+  `WorkerBuilder::build`. It runs the job-specific handler, classifies its
+  failure, consults `JobRetryPolicy`, applies the guarded scheduling update,
+  records metrics and logs, and then returns the error so the library's ack
+  persists it.
+- "Attempt": one handler invocation. Attempts are persisted by the ack after
+  every invocation, so `max_attempts` is a lifetime bound. The one exception is
+  an invocation that crashes the worker process before its ack (see `Risks`).
+
+## Constraints
+
+Hard invariants. Violation requires escalation, not workarounds.
+
+- Do not begin a milestone before the previous plateau is committed and its
+  gates pass. D10 and D11 are approved; any further mechanism change needs the
+  user's approval.
+- Keep scope to roadmap item 5.2.3. Do not implement 5.2.4 (trace
+  propagation), 5.3.1 (worker pools, Kubernetes deployment, queue partitioning,
+  orphan-recovery configuration), the Apalis 1.0.0 upgrade (#550), or
+  request-path dispatch. Production binaries must not gain a worker loop from
+  this plan; consumption harnesses are test-only.
+- Preserve hexagonal architecture. The retry policy, error classification,
+  and job failure type live in the domain layer and must not import Apalis,
+  tower, SQLx, Diesel, or Actix types. The `DeadLetterQueue` port is defined by
+  the domain, and the PostgreSQL adapter implements it in
+  `backend/src/outbound/`. The handler wrapper and its scheduling SQL are
+  adapter code in `backend/src/outbound/queue/`. Background workers and caches
+  interact with the domain exclusively via ports (roadmap section 5 preamble).
+- The domain policy is authoritative. Every retry or dead-letter outcome in
+  production must come from `JobRetryPolicy::decide`, which weighs the policy
+  ceiling and the job's stored `max_attempts` together by taking them as a
+  `BoundedAttempt`. No other code may compute a delay or choose an outcome.
+  Persisting that outcome is adapter work, not a second decision: the wrapper
+  converts the Apalis context into a bounded attempt, records the reason the
+  domain returned, and lowers the stored cap only so the acknowledged row is
+  not fetched again.
+- Do not install any in-process retry middleware on an Apalis worker: no
+  `apalis` facade dependency, no `RetryLayer`, no `.retry(...)`, and no
+  hand-rolled tower `Retry` (Decision D14). EP-M2 adds a conformance check for
+  this.
+- Every scheduling update written by the handler wrapper must be guarded by
+  `id`, `lock_by = <this worker's name>`, `status = 'Running'`, and
+  `attempts = <the count this delivery inherited>`, so it can only affect the
+  row this worker holds for *this* delivery. Orphan recovery re-queues a
+  stalled row with `attempts` advanced, so without the fourth guard a stale
+  handler could overwrite a later delivery's decision. An update that affects
+  zero rows is logged at `warn` level and never retried.
+- The adapter may enforce the effective retry budget with one further bounded
+  write. When a terminal write fails, the handler lowers the row's
+  `max_attempts` to the terminating attempt before Apalis acknowledges the
+  failure, so the retired job is not fetched again. That fallback carries the
+  same four guards and never raises a cap.
+- The retry policy constructor must reject any configuration whose capped
+  delay exceeds `MAX_BACKOFF_DELAY`, initially one hour (Decision D13).
+- Do not change the `RouteQueue` trait signature. `JobDispatchError`
+  variants may only be extended, not changed, and only if a milestone
+  demonstrates the need. The default position is to leave enqueue-side errors
+  untouched, because retry classification concerns job execution, not enqueue.
+- Dependencies: pin `apalis-core = "=1.0.0-rc.9"` and
+  `apalis-postgres = "=1.0.0-rc.8"` exactly (D10). Do not upgrade or replace
+  them, `sqlx`, or `rand`. `googletest` is the single permitted dev-dependency
+  addition. No production dependency may be added.
+- Do not alter or migrate the Apalis-owned schema (`apalis.jobs` columns,
+  statuses, functions), and do not add Diesel migrations for Apalis tables. The
+  scheduling and dead-letter adapters may *write* existing columns (`run_at`,
+  `max_attempts`, `status`, `attempts`, `last_result`) through guarded
+  statements. Accepted D15 authorizes guarded writes to the existing JSONB
+  `metadata` column for the namespaced requeue counter and terminal reason,
+  preserving every other key. The user accepted these two additional values on
+  2026-10-25. The claim-token amendment of 2026-11-21 adds exactly one more key,
+  `wildside.retry.claim_token`, with the scope and provenance recorded under
+  "D15 scope amendment of 2026-11-21"; no other Apalis metadata writes are
+  authorized. One additive exception is pre-authorized: the dead-letter adapter
+  may create a partial index supporting the dead-jobs predicate, through the
+  adapter's setup path alongside `PostgresStorage::setup`, if and only if
+  milestone EP-M3's `EXPLAIN` check shows a sequential scan (Decision D6). A
+  separate dead-letter table is out of scope (Decision D3).
+- Dead-letter state transitions must be guarded compare-and-swap updates.
+  `requeue` and `discard` take effect only when the row currently satisfies the
+  dead predicate, and an ineffective update surfaces as a port error, never as
+  silence.
+- Automated requeue is forbidden. `requeue` is an operator action, and any
+  future automation must carry a per-job requeue budget (recorded in ADR-005).
+  Accepted D15 records requeue provenance so repeat offenders are visible.
+- Retry and dead-letter surfaces (the `DeadJob` type, the error text the
+  wrapper returns to the ack, logs, and metrics) must not expose raw job
+  payloads. Error strings must be size-bounded. This matches the existing
+  `decode_job` privacy stance.
+- Behavioural tests may assert counts, orderings (including comparisons
+  between persisted timestamps), and terminal states. They must not assert
+  wall-clock magnitudes. The test consumption harness must have a hard
+  iteration and deadline cap, so a wiring bug fails fast instead of hanging the
+  suite. Test policies use millisecond-scale delays and a short poll interval.
+- Versioned job envelopes and their JSON shape (pinned by `insta`
+  snapshots from 5.2.2) must not change.
+- Keep documentation in en-GB-oxendict style per
+  `docs/documentation-style-guide.md`: wrap prose at 80 columns and code at 120
+  columns, and use sentence-case headings.
+- Keep source files below 400 lines. Split modules before finishing a
+  milestone if needed.
+- Run gates sequentially (build caching), never in parallel, and capture
+  long output with `tee` to
+  `/tmp/$ACTION-wildside-$(git branch --show-current).out`. Prefer Makefile
+  targets. Delegate full gate runs to the `scrutineer` subagent.
+- Commit each milestone only after its gates pass. Do not amend earlier
+  commits; add new ones.
+- Do not mark roadmap item 5.2.3 done until all gates and reviews are clean.
+
+## Tolerances (exception triggers)
+
+- Scope budget: stop and escalate if the implementation needs more than
+  twelve production source files changed or more than 900 net non-test lines.
+  Tests, snapshots, feature files, and documentation are excluded from the
+  budget.
+- Port shape: stop and escalate before changing `RouteQueue`, existing
+  `JobDispatchError` variants, or any 5.2.2 job struct field.
+- Dependencies: the exact Apalis pins (D10) and `googletest`
+  (dev-dependency) are pre-authorized. Stop and escalate for anything else,
+  including any temptation to add the `apalis` facade crate.
+- Upstream surprises: if AXIOM-PIN, AXIOM-DURABLE, or AXIOM-ACK fails its
+  probe or canary, or the Apalis rc APIs otherwise differ materially from
+  "Context and orientation" (for example, `TaskId` or `WorkerContext` cannot be
+  extracted in a handler), stop. Record the discovery and escalate with options
+  rather than changing pins or reaching for the retry layer.
+- Iterations: if a red test still fails after three green attempts, or a
+  gate fails three consecutive runs on the same cause, stop and escalate.
+- Ambiguity: if retry semantics interact with idempotency in a way not
+  settled here, stop and present options.
+
+## Risks
+
+- Risk: release-candidate APIs drift. Severity: medium. Likelihood: low
+  after D10. Mitigation: exact pins (AXIOM-PIN), the V8 canaries, and issue
+  #550 for the deliberate 1.0.0 move. Apalis 1.0.0's `get_jobs` still filters on
+  `run_at`, so D11 is expected to carry over; #550 re-verifies it.
+- Risk: a worker crash between the tracker's increment and the ack loses
+  that one attempt's count. A handler that crashes the whole process (for
+  example, out-of-memory) is therefore never acked and can loop without
+  dead-lettering once 5.3.1 configures orphan recovery. Severity: medium.
+  Likelihood: low. Mitigation: per-attempt structured logging (job id, attempt
+  number) survives the crash, and the EP-M4 runbook includes the crash-loop
+  detection query. D11 narrows this from the earlier per-lease loss of a whole
+  retry chain to a single in-flight attempt.
+- Risk: a scheduling update fails (database error or lost lock). Severity:
+  low. Likelihood: low. Effect: for a retryable error, the ack still records
+  `Failed`, but with an unchanged, past `run_at`, so the job is redelivered on
+  the next poll without backoff. It remains bounded by `max_attempts`. For a
+  terminal error, a second guarded write lowers `max_attempts` to the
+  terminating attempt, so the acknowledged `Failed` row is not fetched again.
+  If that fallback also fails, the row stays re-fetchable and the handler
+  repeats its decision on redelivery, still bounded by `max_attempts`.
+  Mitigation: a `warn`-level log for each outcome, the `schedule_failure` label
+  on `route_queue_retry_total`, and the `terminal_write_failure` counter
+  `route_queue_terminal_write_failure_total`. Retry no further; do not escalate
+  the failure into a panic.
+- Risk: backoff precision is bounded below by the storage poll interval,
+  because failed rows are rediscovered only by polling (the notify trigger
+  fires on insert only). Severity: low. Likelihood: certain. Mitigation:
+  documented in ADR-004; production delays are seconds or longer, and tests
+  configure a short poll interval.
+- Risk: behavioural tests need test-only job consumption, which could drift
+  into building 5.3.1's worker early, or diverge from what 5.3.1 builds.
+  Severity: low. Likelihood: medium. Mitigation: the harness lives under
+  `backend/tests/support/` and is not part of the production binary. The
+  handler wrapper itself is production adapter code, so 5.3.1 reuses it rather
+  than reinventing it, and the harness's worker-construction function is named
+  as the reference wiring 5.3.1 must promote or consciously diverge from.
+- Risk: `rstest-bdd` scenarios with embedded PostgreSQL and real polling
+  could be slow or flaky. Severity: medium. Likelihood: medium. Mitigation:
+  millisecond delays, a short poll interval, assertions on counts, orderings,
+  and terminal states only, hard iteration and deadline caps, and reuse of
+  `backend/tests/support/embedded_postgres.rs`.
+- Risk: `apalis.jobs` grows without bound (`Done`, `Killed`, and dead
+  `Failed` rows are never pruned upstream), degrading the dead-letter listing
+  over time. Severity: low now, medium later. Likelihood: high eventually.
+  Mitigation: `list_dead` is ordered and limited, and the `EXPLAIN` check and
+  optional partial index (D6) keep the query plan honest. Row retention is
+  explicitly unowned here and proposed for roadmap section 6.
+
+## Skills and reference documents
+
+Skills to load when implementing: `leta`, `rust-router` (then `rust-errors` for
+the error taxonomy, `rust-async-and-concurrency` for the handler wrapper, and
+`rust-types-and-apis` for the newtypes), `hexagonal-architecture`, `proptest`,
+`rust-unit-testing`, `rust-unused-code` (for the pre-5.3.1 public factory seam),
+`nextest`, `arch-decision-records` (for the ADRs), `commit-message`,
+`pr-creation`, and `en-gb-oxendict`.
+
+Repository documents to read first:
+
+- `docs/wildside-backend-architecture.md` — "Background Job Execution
+  (Apalis Workers)" section (retry/dead-letter design intent, scope split
+  between 5.2.1–5.2.4 and 5.3.1, the `decode_job` seam, and the promise of
+  per-job-type queues that shapes the policy-per-adapter decision D7).
+- `docs/backend-roadmap.md` — sections 5.2 and 5.3 (scope overlap with
+  5.3.1's "bounded retries, and dead-letter handling").
+- `docs/developers-guide.md` — "Apalis queue adapter boundaries",
+  "Background job payloads", "Queue build requirements", and "Queue test
+  infrastructure".
+- `docs/rstest-bdd-users-guide.md` and
+  `docs/pg-embed-setup-unpriv-users-guide.md` — behavioural-test and
+  embedded-PostgreSQL conventions.
+- `docs/rust-testing-with-rstest-fixtures.md`,
+  `docs/rust-doctest-dry-guide.md`, and
+  `docs/complexity-antipatterns-and-refactoring-strategies.md` — testing and
+  structure conventions.
+- `docs/documentation-style-guide.md` — ADR template ("an ADR captures one
+  accepted decision") and style rules.
+- This plan's `Surprises & discoveries` section, entries dated 2026-10-14,
+  for the evidence behind D9–D11.
+
+## Conformance basis
+
+Upstream artefacts (no Terms of Reference document exists for this repository;
+the roadmap and architecture document are the governing artefacts):
+
+- `docs/backend-roadmap.md` item 5.2.3 (identifier ROAD-5.2.3) and the
+  section 5 preamble constraint that workers interact with the domain only via
+  ports (ROAD-5-PORTS).
+- `docs/wildside-backend-architecture.md`, "Background Job Execution
+  (Apalis Workers)" (identifier ARCH-JOBS): bounded retries with exponential
+  backoff, dead-letter after max attempts, per-job-type queue configuration,
+  and the 5.2.3/5.3.1 scope split.
+- `docs/execplans/backend-5-2-2-job-structs-for-generate-route-and-enrichment.md`
+  scope reservations (EP-522-SCOPE): job envelope stability and deferred
+  retry/dead-letter ownership.
+- New ADRs produced by this plan:
+  `docs/adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md` (ADR-004,
+  the retry mechanism: durable `run_at` scheduling by a handler wrapper, the
+  ban on in-process retry middleware at the rc pins, fatal dead-lettering by
+  shrinking `max_attempts`, and the exact-pin policy) and
+  `docs/adrs/adr-0005-dead-letters-as-apalis-rows-behind-a-domain-port.md`
+  (ADR-005, the dead-letter representation, guarded transitions, budget
+  restoration, requeue provenance, and the no-automated-requeue rule). The
+  split follows the style guide's one-decision-per-ADR rule. ADR-002 already
+  records the environment-seam taxonomy and is not renumbered.
+
+Trace links:
+
+```plaintext
+ROAD-5.2.3 -> ARCH-JOBS -> EP-M1 -> backend/src/domain/jobs/retry.rs (policy + proptest invariants V1-V3)
+ROAD-5.2.3 -> ARCH-JOBS -> EP-M2 -> handler wrapper + retry scheduling (BDD: queue_retry_policy.feature, V3b-V5, V9)
+ROAD-5.2.3 -> ARCH-JOBS -> EP-M3 -> DeadLetterQueue port + PostgreSQL adapter (BDD: queue_dead_letter.feature, V6)
+ROAD-5-PORTS -> EP-M1..M3 -> domain imports audit (no adapter types in domain)
+EP-522-SCOPE -> EP-M2 -> insta snapshots unchanged for V1 envelopes (V7)
+AXIOM-PIN/AXIOM-DURABLE/AXIOM-ACK -> EP-M0 pin + runtime probe -> EP-M2 V8 rc-canary tests
+ADR-004/ADR-005 -> EP-M4 -> docs updates + contents.md registration
+```
+
+## Interfaces and dependencies
+
+Domain layer (new module `backend/src/domain/jobs/retry.rs`, re-exported from
+`backend/src/domain/jobs/mod.rs`, whose module documentation is updated to
+cover policy as well as payloads). Names are indicative; refine them during
+implementation without changing intent:
+
+```rust
+/// Why a job execution attempt failed, as classified by the handler.
+pub enum JobErrorKind {
+    /// Transient failure; retrying with backoff may succeed.
+    Retryable,
+    /// Permanent failure; retrying cannot succeed.
+    Fatal,
+}
+
+/// Maximum UTF-8 byte length retained in a job failure message.
+pub const MAX_JOB_FAILURE_MESSAGE_BYTES: usize = 1024;
+
+/// A classified, payload-free job execution failure returned by handlers.
+pub struct JobFailure {
+    kind: JobErrorKind,
+    message: String, // at most MAX_JOB_FAILURE_MESSAGE_BYTES, on a character boundary
+}
+
+impl JobFailure {
+    /// Construct a payload-free failure, truncating at a UTF-8 character boundary.
+    pub fn new(kind: JobErrorKind, message: impl Into<String>) -> Self;
+    pub fn kind(&self) -> JobErrorKind;
+    pub fn message(&self) -> &str;
+}
+
+/// A jitter sample in the unit interval, validated at construction.
+pub struct JitterSample(f64); // JitterSample::new(x) errors unless 0.0 <= x <= 1.0
+
+/// Upper bound on any single backoff delay (Decision D13).
+pub const MAX_BACKOFF_DELAY: Duration = Duration::from_secs(60 * 60);
+
+/// Configuration values validated when building a [`JobRetryPolicy`].
+pub struct JobRetryPolicyConfig {
+    pub max_attempts: NonZeroU32,
+    pub base_delay: Duration,
+    pub multiplier: f64,
+    pub max_delay: Duration,
+    pub jitter_fraction: f64,
+}
+
+/// Bounded exponential backoff policy for background jobs.
+pub struct JobRetryPolicy {
+    max_attempts: NonZeroU32,
+    base_delay: Duration,
+    multiplier: f64,       // >= 1.0, validated
+    max_delay: Duration,   // <= MAX_BACKOFF_DELAY, validated
+    jitter_fraction: f64,  // 0.0..=1.0, validated; delay varies +/- this fraction
+}
+
+pub enum RetryDecision {
+    /// Retry no earlier than the given delay from now.
+    Retry { delay: Duration },
+    /// Stop retrying; the job is dead-lettered for the given reason.
+    DeadLetter { reason: DeadReason },
+}
+
+impl JobRetryPolicy {
+    /// Errors unless multiplier >= 1.0, jitter is in [0, 1], and the capped
+    /// delay (including jitter) fits MAX_BACKOFF_DELAY. `max_attempts` is a
+    /// `NonZeroU32`, so zero attempts cannot be configured.
+    pub fn new(config: JobRetryPolicyConfig) -> Result<Self, JobRetryPolicyBuildError>;
+    pub fn decide(&self, attempt: BoundedAttempt, kind: JobErrorKind, jitter: JitterSample) -> RetryDecision;
+    pub fn backoff_delay(&self, attempt: NonZeroU32, jitter: JitterSample) -> Duration;
+    pub fn max_attempts(&self) -> NonZeroU32;
+}
+```
+
+The jitter sample maps linearly onto `[-jitter_fraction, +jitter_fraction]`
+around the nominal delay (0.5 is the midpoint, meaning no jitter). The policy
+stays pure and deterministic under test, and the adapter supplies the
+randomness. `JobRetryPolicyBuildError` follows the style of
+`EnrichmentJobBuildError`. Handlers map source errors through a stated
+convention, `impl From<&EnrichmentSourceError> for JobErrorKind` honouring
+`is_retryable()`, so 5.3.1's handlers inherit the bridge rather than inventing
+it. A `decode_job` failure maps to `JobErrorKind::Fatal`.
+
+Domain port (new file `backend/src/domain/ports/dead_letter_queue.rs`, with its
+error defined via `define_port_error!`):
+
+```rust
+/// Opaque identifier for a dead job; the storage representation is an
+/// adapter detail.
+pub struct DeadJobId(String);
+
+/// Why a job is dead.
+#[non_exhaustive]
+pub enum DeadReason {
+    /// A retryable failure reached this queue's retry-policy limit.
+    Exhausted,
+    /// A fatal error short-circuited retries.
+    Fatal,
+    /// A legacy row has no persisted reason, and its status cannot identify it.
+    Unclassified,
+}
+
+/// A job parked after a terminal outcome.
+#[non_exhaustive]
+pub struct DeadJob {
+    pub id: DeadJobId,
+    pub job_type: String,
+    pub reason: DeadReason,
+    pub attempts: u32,
+    /// Size-bounded, payload-free description of the last failure.
+    pub last_error: Option<String>,
+    /// Number of times an operator has requeued this job before.
+    pub requeue_count: u32,
+    pub dead_at: Option<DateTime<Utc>>,
+}
+
+#[async_trait]
+pub trait DeadLetterQueue: Send + Sync {
+    /// Newest-dead first. `limit` is a page size; pagination is an
+    /// additive future evolution of this pre-1.0 internal port.
+    /// Rows storage holds that the domain cannot represent come back as
+    /// skipped entries rather than being dropped.
+    async fn list_dead(&self, limit: u32) -> Result<DeadLetterListing, DeadLetterError>;
+    /// Guarded: fails with `DeadLetterError::NotDead` if the row does not
+    /// currently satisfy the dead predicate (absent, live, or running).
+    /// Restores the queue's configured retry budget (Decision D12).
+    async fn requeue(&self, id: &DeadJobId) -> Result<(), DeadLetterError>;
+    /// Guarded like `requeue`; deletes the row (Decision D5).
+    async fn discard(&self, id: &DeadJobId) -> Result<(), DeadLetterError>;
+}
+```
+
+`DeadLetterError` variants:
+
+- `NotDead { message }`: the guard failed, because the row is absent or not
+  currently dead.
+- `UnknownQueue { message }`: `requeue` found a dead row whose `job_type` has
+  no configured retry budget, so it refuses to guess one.
+- `InvalidJobData { message }`: a row has a negative attempt count or a
+  malformed requeue counter.
+- `Unavailable { message }`: a storage failure.
+
+The expected eventual driver of this port is an operator or admin surface in
+roadmap section 6 (and possibly 5.3.1 worker-side tooling). Until then its only
+callers are behavioural tests. This is an accepted, documented gap: the 03:00
+operator interface is SQL, and EP-M4's runbook provides it.
+
+Outbound dead-letter adapter (new file
+`backend/src/outbound/queue/postgres_dead_letter.rs`):
+`PostgresDeadLetterQueue` holds an `sqlx::PgPool` and a `RequeueBudgets` map
+from Apalis queue name (the `job_type` column) to `NonZeroU32`. It is built
+from the same per-queue `JobRetryPolicy` instances as the enqueue adapters (D7,
+D12).
+
+- The dead predicate is:
+
+  ```sql
+  status = 'Killed'
+  OR (status = 'Failed' AND (max_attempts IS NULL OR attempts >= max_attempts))
+  ```
+
+- For wrapper-originated terminal failures, `DeadReason` comes from the
+  namespaced JSONB metadata key authorized by D15. Legacy dead rows without a
+  recognized key map to `Unclassified`; this includes nullable legacy `Failed`
+  rows, which Apalis cannot fetch because its SQL comparison with a null limit
+  is not true. Neither `Killed` nor `Failed` alone distinguishes fatal failure
+  from retry exhaustion.
+- `list_dead` orders by `done_at DESC` and applies `LIMIT`.
+- `requeue` reads the row's `job_type` to look up its budget (returning
+  `UnknownQueue` if none is configured), then executes one guarded update. The
+  update sets `status = 'Pending'`, `attempts = 0`, `max_attempts = $budget`,
+  `run_at = now()`, `lock_by = NULL`, and `lock_at = NULL`, with
+  `WHERE id = $1 AND job_type = $2 AND (<dead predicate>)`. Under accepted D15,
+  the same guarded update atomically increments
+  `metadata['wildside.retry.requeue_count']`. The counter starts at zero when
+  absent, is bounded to `u32`, and preserves all other metadata keys. The
+  update also removes `metadata['wildside.retry.dead_reason']` so a requeued
+  row cannot expose a stale terminal reason. The terminal handler writes
+  `fatal` or `exhausted` to that key before the ack. Never store either value in
+  `last_result`: Apalis replaces that field on the next acknowledgement. Zero
+  rows affected maps to `NotDead`.
+- `discard` is a guarded `DELETE ... RETURNING`, logging the returned row
+  (without payload) for forensics.
+
+Outbound retry wiring (new files under `backend/src/outbound/queue/`, for
+example `retry_schedule.rs` for the SQL and `retrying_handler.rs` for the
+wrapper):
+
+- `PostgresRetryScheduler` (holding the Apalis `PgPool`) exposes two guarded
+  statements, both
+  `WHERE id = $task_id AND lock_by = $worker AND status = 'Running'`:
+  - `schedule_retry(task_id, worker, delay)` computes one absolute deadline
+    from an injected `ClockSource` (`SystemClock` in production) and binds it:
+    `UPDATE apalis.jobs SET run_at = $deadline`.
+  - `record_terminal_failure(task_id, worker, attempt, reason, shrink_limit)`:
+    conditionally sets `max_attempts = $attempt` and writes the reason to
+    `metadata['wildside.retry.dead_reason']` in one guarded statement under
+    accepted D15.
+  Each returns whether exactly one row was updated.
+- The handler wrapper is a `tower::Service<PgTask<Value>>` passed to
+  `WorkerBuilder::build`. A plain service is accepted through the blanket
+  `impl IntoWorkerService<B, S, Args, Ctx> for S` (`apalis-core`
+  `src/task_fn/mod.rs:239`). Because it receives the whole task, it reads
+  `parts.attempt`, `parts.task_id`, the in-memory `parts.ctx.max_attempts()`,
+  and the `WorkerContext` from `parts.data` without needing extractors. It
+  decodes the payload with `decode_job` (a decode failure is `Fatal`) and calls
+  the job-specific handler, which returns `Result<_, JobFailure>`. On
+  `Err(failure)` it:
+  1. Converts `Attempt::current()` into `NonZeroU32` (zero is a wiring bug:
+     log at `error` level and treat as attempt 1).
+  2. Calls `policy.decide(attempt, failure.kind, jitter)`, drawing the jitter
+     from `rand`.
+  3. On `Retry { delay }`: calls `schedule_retry` and records the retry
+     counter.
+  4. On `DeadLetter`, chooses reason `Fatal` for a fatal failure and
+     `Exhausted` for a retryable failure at the policy limit. Every terminal
+     failure takes the guarded terminal-update path. If
+     `attempt < context max_attempts`, it shrinks the persisted limit to the
+     current attempt so the ack writes an unfetchable `Failed` row; otherwise
+     no shrink is needed because the ack writes `Killed`. The update also
+     writes the namespaced reason key before the ack, independently of whether
+     the limit needs shrinking. The wrapper records the matching metric label
+     and returns the bounded plain failure message. Apalis serializes that returned
+     error into `last_result` during acknowledgement, replacing its previous
+     value; the library's existing JSON representation is unchanged.
+  5. Emits one structured log line (job id, job type, attempt, error kind,
+     decision; never the payload).
+- Enqueue side: `ApalisPostgresProvider::push_job` switches from
+  `push(payload)` to `push_task` with a `PgContext` built via
+  `with_max_attempts(policy.max_attempts())`. One `JobRetryPolicy` is carried
+  per queue-adapter instance (that is, per job family or queue), matching the
+  architecture document's per-job-type queue configuration. There is no global
+  constant (Decision D7).
+- Metrics: dedicated `RouteQueueMetrics` methods (Decision D8):
+  - `observe_retry` → `route_queue_retry_total`, labelled `scheduled` or
+    `schedule_failure`.
+  - `observe_dead_letter`, labelled `exhausted` or `fatal`.
+  - `observe_terminal_write_failure` →
+    `route_queue_terminal_write_failure_total`, labelled with the same
+    `exhausted` or `fatal` reason, for a terminal write that stored nothing.
+
+The wrapper factory and `PostgresRetryScheduler` are public items consumed,
+until 5.3.1, only by the integration-test harness. That public export is the
+deliberate 5.3.1 seam (handle it per the `rust-unused-code` skill). The
+harness's worker-construction function (storage + wrapper, no retry layer) is
+the reference wiring 5.3.1 must promote into `backend/src/outbound/queue/` or
+record why it diverged.
+
+Dependency changes (EP-M0 and EP-M1):
+
+```toml
+# backend/Cargo.toml — exact pins (Decision D10); no other production change.
+apalis-core = "=1.0.0-rc.9"
+apalis-postgres = "=1.0.0-rc.8"
+
+# [dev-dependencies]
+googletest = "0.14" # resolved to 0.14.3 in Cargo.lock
+```
+
+## Verification plan
+
+External axioms: AXIOM-PIN, AXIOM-DURABLE, and AXIOM-ACK, as defined in
+"Context and orientation". In addition, embedded PostgreSQL is assumed to
+behave like production PostgreSQL for the SQL used. Third-party internals are
+not verified. Repository-owned logic that builds on these interfaces is
+verified against the real interface (embedded PostgreSQL, real Apalis storage
+and worker) at the behavioural tier, and the rc-coupling canaries (V8) turn
+silent upstream drift into test failures.
+
+Obligations:
+
+- Obligation V1 (backoff bounded above and below): for every attempt `a`
+  in `1..=max_attempts` and jitter sample `j`,
+  `min(nominal(a), max_delay) * (1 - jitter_fraction) <= backoff_delay(a, j) <=
+  min(nominal(a), max_delay) * (1 + jitter_fraction)`,
+  where `nominal(a)` is the uncapped exponential curve. The lower bound is
+  material: `>= 0` alone would be vacuous for an unsigned `Duration`. Method:
+  property test (`proptest`) over generated policies, attempts, and jitter
+  samples. Rationale: the invariant spans a continuous input domain that
+  examples cannot cover. Artefact:
+  `backend/src/domain/jobs/retry_tests/properties.rs`. Evidence:
+  `cargo test -p backend retry --lib` fails before implementation (red) and
+  passes after. Non-vacuity: generators emit policies across base delays from 1
+  ms to minutes, multipliers 1.0–10.0, and jitter 0.0–1.0; a seeded fault
+  (temporarily removing the cap clamp) must make the property fail.
+- Obligation V1b (delay ceiling): construction fails whenever
+  `max_delay * (1 + jitter_fraction)` exceeds `MAX_BACKOFF_DELAY`, and for
+  every successfully constructed policy,
+  `backoff_delay(a, j) <= MAX_BACKOFF_DELAY` for all `a` and `j`. Method:
+  property test plus parameterized boundary cases just under and just over the
+  ceiling. Non-vacuity: the generator must produce both accepted and rejected
+  configurations (classification recorded), and weakening the constructor check
+  must fail the over-ceiling cases.
+- Obligation V2 (monotone growth pre-cap): with jitter fixed at the
+  midpoint, `backoff_delay(a+1) >= backoff_delay(a)` until the cap is reached.
+  Method: property test plus parameterized `rstest` cases at the boundary (the
+  attempt where the cap first binds). Non-vacuity: generator classification
+  records the fraction of cases where the cap binds, and both classes (capped
+  and uncapped) must be exercised. The final 128-case run recorded 58 uncapped
+  and 70 capped cases; the test asserts both counts are non-zero. As a negative
+  control, inverting the multiplier failed the property, and the restored
+  implementation passed it.
+- Obligation V3 (decision totality and bounds): `decide` returns
+  `DeadLetter` whenever `kind == Fatal` or `attempt >= max_attempts`, and
+  `Retry` otherwise; no path yields a retry beyond `max_attempts`. Method:
+  exhaustive parameterized tests over the finite classification
+  (`Fatal`/`Retryable` × attempt below, at, and above the bound) plus a
+  property test over attempt ranges, using `googletest` matchers for the
+  decision shape and `pretty_assertions` for equality. Rationale: the decision
+  function is a small finite state map, so exhaustive partitioning plus
+  properties is proportionate. No bounded model checking (`kani`) or proof
+  (`verus`) is warranted: the logic has no unsafe code, no unbounded state, and
+  no lemma beyond the enumerated partitions. This is the explicit justification
+  required when declining heavier rigour. Non-vacuity: each partition has a
+  witness case, and a seeded off-by-one fault in the bound comparison must be
+  rejected.
+- Obligation V3b (wrapper decision table): the handler wrapper maps every
+  combination of (classification, `Attempt::current()` relative to the policy
+  bound, `Attempt::current()` relative to the in-memory context `max_attempts`)
+  to exactly one action: `schedule_retry` or `record_terminal_outcome`, which
+  shrinks the persisted attempt limit only when required. Successful handlers
+  make no scheduling write. The wrapper records the matching retry/dead-letter
+  metric label and a terminal reason (`Fatal` for fatal failures, `Exhausted`
+  for retryable failures at the policy bound). Every terminal outcome persists
+  that reason in the namespaced metadata key, including when the ack will write
+  `Killed` because the attempt limit is already reached. Method: `rstest`
+  parameterized unit tests of the wrapper's decision function (factored out as
+  a pure adapter-local function), with the scheduler behind a test double.
+  Rationale: an off-by-one here silently grants or steals an attempt, mislabels
+  the dead reason, or leaves a fatal row re-fetchable. Non-vacuity: shifting
+  either comparison by one must fail at least one case.
+- Obligation V4 (lifetime retry bound with durable backoff): a job enqueued
+  through the adapter carries the policy's `max_attempts` in
+  `apalis.jobs.max_attempts`. A handler that always fails retryably runs exactly
+  `max_attempts` times in total across storage redeliveries, after which the
+  row is `Killed` with `attempts = max_attempts` and is never redelivered by
+  further polling. Each redelivery begins no earlier than the `run_at` that the
+  previous failure persisted (an ordering between recorded timestamps, not a
+  magnitude). Method: behavioural test (`rstest-bdd`) against embedded
+  PostgreSQL with the capped harness, asserting the observed run count, per-run
+  `Attempt::current()` values (1, 2, …), the row's `attempts` and `status`, the
+  `run_at` ordering, and that continued polling delivers nothing. It also
+  verifies the persisted D15 reason is `exhausted` when a pre-existing row's
+  stored `max_attempts` exceeds the current policy limit and a retryable
+  failure reaches that policy limit. EP-M3's V6 checks that the dead-letter
+  port maps this stored reason to `DeadReason::Exhausted`. The guarded terminal
+  update shrinks the stored limit to the current attempt; the ack may store
+  `Failed` because its in-memory limit is still higher, while the dead
+  predicate prevents another fetch. Non-vacuity: the scenarios assert that the
+  handler ran more than once (a policy that never retries fails) and that extra
+  polling after death yields no runs (an unbounded loop fails). A control
+  scenario with a succeeding handler must end `Done` with one attempt.
+- Obligation V5 (fatal short-circuit is storage-dead): a handler returning
+  a fatal failure runs exactly once. The resulting row satisfies the dead
+  predicate and is never redelivered by continued polling, which is a stronger
+  claim than "the harness stopped polling". The D15 metadata contains `fatal`
+  even when Apalis status and attempts alone would imply exhaustion. Include a
+  one-attempt policy case at the in-memory Apalis attempt limit: the ack writes
+  `Killed`, no limit shrink is needed, and the metadata reports `fatal`.
+  Method: behavioural test as V4 with a fatal-classified failure, including a
+  post-failure polling phase and a raw metadata assertion. EP-M3's V6 verifies
+  that the dead-letter listing maps that value to `DeadReason::Fatal`.
+  Non-vacuity: with spare attempts, misclassifying fatal as retryable fails the
+  post-failure run-count assertion; incorrect reason persistence fails the
+  reason assertion. Omitting the terminal limit update when required fails the
+  redelivery assertion.
+- Obligation V6 (dead-letter round trip, guards, and budget restoration): a
+  dead job appears in `DeadLetterQueue::list_dead` with its reason, attempt
+  count, bounded last error, and requeue count. A compatibility test inserts a
+  failed legacy row with a null `max_attempts` and fewer than 25 attempts into
+  a disposable schema that permits nulls. It verifies that Apalis cannot fetch
+  the row, while `list_dead` includes it as `Unclassified` for operator
+  inspection. The hydration fallback of 25 does not apply because the fetch
+  query rejects the null comparison before hydration. Unit tests cover the
+  metadata reason key and verify that legacy `Killed` and `Failed` rows without
+  a reason key map to `Unclassified`. `requeue` makes it run again and succeed
+  (proven by observing execution, not a status flip) and restores
+  `max_attempts` to the queue's configured budget. Requeue also increments its
+  provenance count, and after the successful acknowledgement a job-row query
+  verifies the metadata count because a `Done` row is excluded from
+  `list_dead`. A requeued *fatal* job that then fails retryably must get the
+  full budget again, and its dead listing must retain the requeue count across
+  the later acknowledgement. Requeue clears the prior dead-reason key and the
+  next terminal failure sets it again. `discard` removes the row. Requeuing a
+  live or absent job returns `NotDead` and changes nothing, and requeuing a
+  dead row from an unconfigured queue returns `UnknownQueue`. Listing ignores
+  live jobs. Discarding a live row is also rejected with `NotDead` and a full
+  row snapshot proves that its state is unchanged. An unclassified legacy row
+  exposes no `last_error`, because its `last_result` has no trusted failure
+  provenance (D18). Method: behavioural test (`rstest-bdd`) with embedded
+  PostgreSQL. Non-vacuity: listing before any failure must be empty (a witness
+  that the query filters live jobs), the guard scenarios are negative controls
+  by construction, and omitting the `max_attempts` restoration fails the
+  requeued-fatal scenario. Malformed rows are omitted individually, and
+  pagination continues until the requested number of valid jobs is collected or
+  no raw rows remain. The BDD regression places more malformed rows than one
+  SQL batch ahead of a valid row and requests a limit of one.
+- Obligation V7 (snapshot stability): V1 job envelope snapshots from 5.2.2
+  are byte-identical after this plan, and any new operator-facing rendering of
+  dead jobs is snapshot-pinned with `insta`. Method: re-run the existing
+  `insta` suites, and add new snapshots only for new multivariant output.
+  Non-vacuity: `cargo insta test` fails on any drift by construction.
+- Obligation V8 (rc-coupling canaries): the facts behind AXIOM-DURABLE and
+  AXIOM-ACK hold at the pinned versions. Specifically: the `apalis.jobs`
+  columns used exist; a `Failed` row with spare attempts and a past `run_at` is
+  fetched; the same row with a future `run_at` is not; a `Killed` row and a
+  `Failed` row with `attempts >= max_attempts` are not; the ack leaves `run_at`,
+  `max_attempts`, and `metadata` untouched; and a fetched task's `Attempt`
+  starts at the persisted `attempts`. Method: cheap embedded-PostgreSQL
+  integration tests that promote EP-M0's probe assertions into permanent tests.
+  They also assert that a terminal reason written to `metadata` survives the
+  Apalis acknowledgement and that requeue clears that key while preserving all
+  unrelated metadata. The ack continues to store the plain bounded error string
+  in `last_result`. Rationale: issue #550 or any other pin change must fail
+  tests rather than silently corrupt retry or dead-letter behaviour, and
+  ADR-004 and ADR-005 list these assumptions with an "on 1.0 upgrade,
+  re-verify" note. Non-vacuity: each canary asserts a positive and a negative
+  case (fetchable versus not fetchable), so a vacuously green canary would
+  require both sides to break in tandem.
+- Obligation V9 (no in-process retry middleware): no production or test
+  code installs a retry layer on an Apalis worker, and `backend/Cargo.toml` has
+  no `apalis` facade dependency. Method: a conformance check recorded at each
+  milestone boundary, `rg -n '\.retry\(|RetryLayer|apalis::layers' backend/`
+  returning no matches and `grep -n '^apalis\s*=' backend/Cargo.toml` returning
+  nothing, plus the V4 run-count assertion, which a duplicating retry layer
+  would break. Non-vacuity: the check is a plain text search, so any
+  reintroduction is visible to it.
+
+If implementation reveals an invariant not listed here (for example, an
+ordering constraint between requeue and concurrent fetch beyond the
+guarded-update design), return to this section and extend it before continuing.
+
+## Plan of work
+
+### Milestone EP-M0 — pin, baseline audit, and runtime probe
+
+The user approved D10 and D11 on 2026-10-17. Steps:
+
+1. Run `scrutineer` for a baseline gate run on the branch as it stands, and
+   record the results in `Progress`. Known issue: an orphaned postmaster can
+   hold the shared embedded-PostgreSQL lock and make local `make test` time
+   out; record it if it occurs, rather than chasing it. The 2026-10-19 baseline
+   completed without that timeout. Its two unrelated blockers were repaired
+   narrowly in the M0 candidate: `mbake validate Makefile` rejected the six-line
+   `fmt` recipe, and the temporary TypeDoc fixture inherited ambient type
+   discovery and failed with TS2688 for `minimatch`. The fixture now disables
+   ambient `@types`; main’s `fmt-python` target keeps the `fmt` recipe within
+   the validator limit.
+2. Pin `apalis-core = "=1.0.0-rc.9"` and `apalis-postgres = "=1.0.0-rc.8"`
+   in `backend/Cargo.toml`. These are the versions already in `Cargo.lock`, so
+   no code change is expected. Run
+   `cargo tree -p backend -e normal | grep -E 'apalis-(core|postgres|sql)'` and
+   confirm only rc.9/rc.8/rc.9 appear (AXIOM-PIN). Update the "Queue / Apalis
+   dependencies" note in `docs/developers-guide.md` with one sentence on the
+   exact-pin policy and a link to issue #550. Run gates and commit.
+3. Run the AXIOM-DURABLE runtime probe as a scratch integration test against
+   embedded PostgreSQL. Build a `WorkerBuilder` over `PostgresStorage` with a
+   short poll interval and no retry layer. Enqueue one job with
+   `max_attempts = 2` and attach a handler that records each invocation's
+   `Attempt::current()`. On the first invocation, before returning `Err`, the
+   handler runs the guarded
+   `UPDATE apalis.jobs SET run_at = now() + interval '2 seconds'` (with `id`,
+   `lock_by`, and `status = 'Running'` guards). Predictions, each of which
+   falsifies the axiom if it fails:
+   1. The handler sees `Attempt::current() == 1` on the first run and `== 2`
+      on the redelivered run.
+   2. No poll fetches the row during the 2-second window (no second
+      invocation within 1.5 seconds).
+   3. The row is redelivered after the delay.
+   4. The second failure persists `status = 'Killed'` and `attempts = 2`, and
+      no third invocation occurs within a further 3 seconds.
+   5. In a second job (`max_attempts = 3`), a first-run failure that runs the
+      guarded `UPDATE ... SET max_attempts = 1` persists `status = 'Failed'`,
+      `attempts = 1`, and `max_attempts = 1`, and the row is never redelivered.
+
+   The probe may use wall-clock waits because it is a scratch experiment, not a
+   committed test. Record the verdict, with evidence, in
+   `Surprises & discoveries`, then drop the scratch test (EP-M2 re-creates the
+   assertions as V8 canaries without timing magnitudes). If any prediction
+   fails, stop and escalate per the upstream-surprises tolerance.
+
+Plateau: exact pins committed, baseline recorded, and AXIOM-PIN, AXIOM-DURABLE,
+and AXIOM-ACK confirmed (or escalated). Recovery: revert the pin commit, or
+drop the scratch test.
+
+### Milestone EP-M1 — domain retry policy and classification (red-green)
+
+Red: add failing `rstest` unit tests, `googletest`/`pretty_assertions`
+assertions, and `proptest` properties for `JobRetryPolicy`, `RetryDecision`,
+`JobErrorKind`, `JobFailure`, and `JitterSample` (obligations V1, V1b, V2, V3).
+Add `googletest` to `[dev-dependencies]`.
+
+Green: implement `backend/src/domain/jobs/retry.rs` (pure; no adapter imports)
+with constructor validation per the interface section, including the
+`MAX_BACKOFF_DELAY` check. Add the
+`From<&EnrichmentSourceError> for JobErrorKind` bridge, and give `JobFailure` a
+message constructor capped at `MAX_JOB_FAILURE_MESSAGE_BYTES` UTF-8 bytes,
+truncated only at a character boundary. Update the
+`backend/src/domain/jobs/mod.rs` module documentation to cover policy as well
+as payloads.
+
+Refactor: add documentation comments with examples per house style, and keep
+files under 400 lines.
+
+Plateau: domain policy fully tested and inert. Nothing consumes it yet, which
+is coherent because it is a pure library addition. Gates via `scrutineer`;
+commit.
+
+### Milestone EP-M2 — durable retry wiring, bounded attempts, terminal dead-lettering
+
+Red: add the BDD feature `backend/tests/features/queue_retry_policy.feature`
+(embedded below) and step bindings in
+`backend/tests/queue_retry_policy_bdd.rs`. Add the test-only consumption
+harness under `backend/tests/support/`: a worker built from `PostgresStorage`
+and the production handler wrapper, with no retry layer, a short poll interval,
+and hard iteration and deadline caps. Add the V8 canaries (promoting the EP-M0
+probe assertions, with no timing magnitudes) and the V3b decision-table unit
+tests. The scenarios fail because no wiring exists.
+
+Green, in this order:
+
+  1. `PostgresRetryScheduler` with the two guarded statements.
+  2. The wrapper's pure decision function (V3b) and the async wrapper around it,
+  including jitter sampling, payload-free structured logging, and the bounded
+  plain error message returned to the ack when a job is dead.
+  3. Enqueue-side `max_attempts` persistence through `push_task` with a
+   `PgContext` built from the adapter's policy (D7).
+  4. `observe_retry` and `observe_dead_letter` on `RouteQueueMetrics`, with
+   Prometheus adapter counters, keeping `observe_enqueue` and its latency
+   labels restricted to enqueue outcomes (D8).
+
+Refactor: shape the harness's worker-construction function as the named 5.3.1
+promotion candidate, and run the V9 conformance check.
+
+Feature specification (keep it in sync with the implementation):
+
+```gherkin
+Feature: Queue retry policy with durable exponential backoff
+
+  Scenario: A transiently failing job is retried before it succeeds
+    Given a queue with a retry policy of 4 attempts and millisecond backoff
+    And a job whose handler fails twice then succeeds
+    When the worker processes the queue
+    Then the handler runs three times with attempts 1, 2 and 3
+    And each rerun starts no earlier than its persisted retry time
+    And the job completes with status "Done"
+    And the acknowledgement preserves the final attempt state
+    And retry metrics contain 2 scheduled, 0 exhausted and 0 fatal outcomes
+
+  Scenario: A retryable failure is dead-lettered after exhausting attempts
+    Given a queue with a retry policy of 3 attempts and millisecond backoff
+    And a job whose handler always fails with a retryable error
+    When the worker processes the queue
+    Then the handler runs exactly 3 times
+    And the row is stored as Killed and satisfies the dead predicate
+    And the persisted terminal reason is "exhausted"
+    And the acknowledgement preserves the final attempt state
+    And further polling delivers no more runs
+    And retry metrics contain 2 scheduled, 1 exhausted and 0 fatal outcomes
+
+  Scenario: A fatal failure is dead-lettered immediately
+    Given a queue with a retry policy of 3 attempts and millisecond backoff
+    And a job whose handler fails with a fatal error
+    And the job has an unrelated metadata marker
+    When the worker processes the queue
+    Then the handler runs exactly once
+    And the row is stored as Failed and satisfies the dead predicate
+    And the persisted terminal reason is fatal
+    And the acknowledgement preserves the final attempt state
+    And unrelated metadata survives acknowledgement
+    And further polling delivers no more runs
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
+
+  Scenario: A fatal failure at the attempt limit stores Killed
+    Given a queue with a retry policy of one attempt and millisecond backoff
+    And a job whose handler fails with a fatal error
+    When the worker processes the queue
+    Then the handler runs exactly once
+    And the row is stored as Killed and satisfies the dead predicate
+    And the persisted terminal reason is fatal
+    And the acknowledgement preserves the final attempt state
+    And further polling delivers no more runs
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
+
+  Scenario: A lower policy limit dead-letters a pre-existing job
+    Given a queue with a retry policy of 3 attempts and millisecond backoff
+    And a pre-existing job permits 25 attempts
+    And its handler always fails with a retryable error
+    When the worker processes the queue
+    Then the handler runs exactly 3 times
+    And the row is stored as Failed and satisfies the dead predicate
+    And the persisted terminal reason is "exhausted"
+    And the acknowledgement preserves the final attempt state
+    And further polling delivers no more runs
+    And retry metrics contain 2 scheduled, 1 exhausted and 0 fatal outcomes
+
+  Scenario: An enqueued job carries the queue retry budget
+    Given a queue with a retry policy of 5 attempts and millisecond backoff
+    When a job is enqueued through the route queue adapter
+    Then the stored job allows at most 5 attempts
+
+  Scenario: A malformed stored job is dead-lettered without invoking the handler
+    Given a queue with a retry policy of 4 attempts and millisecond backoff
+    And a stored job whose body is malformed
+    When the worker polls the queue for a bounded window
+    Then the handler never runs
+    And the latest job row satisfies the dead predicate
+    And the latest job row records the terminal reason "fatal"
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
+
+  Scenario: An unsupported envelope version is dead-lettered without invoking the handler
+    Given a queue with a retry policy of 4 attempts and millisecond backoff
+    And a stored job whose envelope version is unsupported
+    When the worker polls the queue for a bounded window
+    Then the handler never runs
+    And the latest job row satisfies the dead predicate
+    And the latest job row records the terminal reason "fatal"
+    And retry metrics contain 0 scheduled, 0 exhausted and 1 fatal outcomes
+```
+
+Plateau: the retry policy is enforced end to end under test. Production
+behaviour is unchanged except that enqueued rows now carry the bounded
+`max_attempts`. Persisted-format note: this only tightens the existing column's
+per-row value, and deployed rows with the default 25 remain valid; the
+wrapper's terminal path also dead-letters such rows once the policy bound is
+reached and stores the reason in the namespaced metadata key. On failure,
+Apalis continues to serialize the returned error into `last_result`; the
+wrapper supplies its bounded message, replacing the prior value without
+changing Apalis's JSON representation. D15 stores the terminal reason
+separately in `metadata`. Gates; commit.
+
+### Milestone EP-M3 — dead-letter port and PostgreSQL adapter
+
+Red: add `backend/tests/features/queue_dead_letter.feature` (embedded below)
+and step bindings in `backend/tests/queue_dead_letter_bdd.rs`. Add failing unit
+tests for `DeadJobId`, `DeadReason` mapping, the port error type, and the guard
+semantics.
+
+Green: define the `DeadLetterQueue` port, then implement
+`PostgresDeadLetterQueue` with:
+
+- the guarded compare-and-swap updates;
+- budget restoration from `RequeueBudgets` (D12);
+- durable requeue provenance and terminal reasons in namespaced JSONB
+  metadata keys, which survive Apalis acknowledgements;
+- discard-as-delete (D5);
+- ordered and limited listing;
+- a size-bounded, payload-free `last_error`.
+
+Run the `EXPLAIN` check against a seeded table (a few thousand rows). Create
+the partial index through the adapter setup path only if a sequential scan
+appears (D6), and record the outcome either way.
+
+Feature specification:
+
+```gherkin
+Feature: Dead-letter listing, requeue, and discard
+
+  Scenario: Dead jobs are listed with their failure context
+    Given a job has been dead-lettered after exhausting its retries
+    When the operator lists dead jobs
+    Then the listing contains the job with its reason, attempt count and last error
+
+  Scenario: A requeued dead job runs again and can succeed
+    Given a job has been dead-lettered after exhausting its retries
+    And the underlying fault has been fixed
+    When the operator requeues the dead job
+    And the worker processes the queue
+    Then the job completes with status "Done"
+    And the job retains one requeue in its metadata
+
+  Scenario: A legacy failed row with a null attempt limit is listed
+    Given a disposable legacy schema permits a null max_attempts value
+    And a failed row has 3 attempts, below Apalis's null fallback of 25
+    And a pending control row exists
+    When the worker polls the queue for a bounded period
+    Then the pending control row is processed
+    And Apalis does not fetch the legacy row
+    When the operator lists dead jobs
+    Then the dead listing contains the legacy row as Unclassified
+
+  Scenario: A requeued fatal job regains its full retry budget
+    Given a job has been dead-lettered by a fatal error
+    And the dead job has an existing requeue count and operator metadata
+    And the job now fails with a retryable error
+    When the operator requeues the dead job
+    Then the requeue restores its budget and preserves unrelated metadata
+    When the worker processes the queue
+    Then the job is dead because its retries were exhausted
+    And the requeue counter advances to five
+    And the fatal reason has been replaced with exhausted
+    And the handler runs the queue's full number of attempts
+
+  Scenario: Discard rejects a live job without changing it
+    Given a pending job exists
+    When the operator discards that job
+    Then the operation fails because the job is not dead
+    And the job's state is unchanged
+
+  Scenario: Requeuing a live job is rejected
+    Given a pending job exists
+    When the operator requeues that job
+    Then the operation fails because the job is not dead
+    And the job's state is unchanged
+
+  Scenario: A discarded dead job is gone
+    Given a job has been dead-lettered after exhausting its retries
+    When the operator discards the dead job
+    Then the listing is empty
+    And the dead job row is gone
+
+  Scenario: Listing dead jobs ignores live jobs
+    Given a pending job and a running job exist
+    When the operator lists dead jobs
+    Then the listing is empty
+
+  Scenario: A legacy or malformed terminal reason is unclassified
+    Given a failed dead row has no recognized terminal reason
+    When the operator lists dead jobs
+    Then the dead listing contains the legacy row as Unclassified
+
+  Scenario: A malformed requeue count does not hide valid dead jobs
+    Given malformed requeue counts and another dead job exist
+    When the operator lists dead jobs with a limit of 1
+    Then the listing contains only the valid dead job
+
+  Scenario: A negative attempt count does not fail the dead-job listing
+    Given a dead row has a negative attempt count
+    When the operator lists dead jobs
+    Then the listing is empty
+
+  Scenario: Requeue rejects malformed counter metadata without changing the row
+    Given a dead job has a malformed requeue count
+    When the operator requeues the invalid dead job
+    Then the operation fails because the dead job data is invalid
+    And the job's state is unchanged
+
+  Scenario: Requeue rejects negative attempts without changing the row
+    Given a dead row has a negative attempt count
+    When the operator requeues the invalid dead job
+    Then the operation fails because the dead job data is invalid
+    And the job's state is unchanged
+
+  Scenario: Dead-job listing is newest first and respects its limit
+    Given two dead jobs exist
+    When the operator lists dead jobs with a limit of 1
+    Then only the newest dead job is listed
+
+  Scenario: Requeue rejects a dead job from an unknown queue
+    Given a dead job belongs to an unconfigured queue
+    When the operator requeues the dead job
+    Then the operation fails because its queue has no retry budget
+```
+
+The successful requeue scenario also asserts that the job row retains one prior
+requeue in its metadata after acknowledgement.
+
+Plateau: dead-letter handling is usable by future operators and workers through
+a domain port. Gates; commit.
+
+### Milestone EP-M4 — documentation, ADRs, runbook, roadmap closure
+
+Write ADR-004 and ADR-005 (named under "Conformance basis") per the style-guide
+template and the `arch-decision-records` skill. ADR-004 records D10, D11, D13,
+and D14, including the 2026-10-14 race evidence that ruled out in-process retry
+at the rc pins. ADR-005 records D3–D6 and D12. Both list the rc-coupled
+assumptions with an "on 1.0 upgrade (#550), re-verify" note naming the V8
+canaries.
+
+Update `docs/wildside-backend-architecture.md` ("Background Job Execution")
+from aspiration to implemented reality, covering:
+
+- durable `run_at` scheduling;
+- lifetime attempt semantics, with the single in-flight-attempt crash
+  exception;
+- the fact that backoff no longer occupies worker slots;
+- the poll-interval precision floor;
+- the reminder that 5.3.1 must not install a retry layer at the rc pins.
+
+Update `docs/developers-guide.md` ("Apalis queue adapter boundaries" and the
+test-infrastructure sections) with the new symbols, the exact-pin convention,
+and the no-retry-layer rule. Add an operator runbook section with the SQL to:
+
+- list dead jobs;
+- requeue one, restoring `max_attempts`;
+- discard one;
+- detect the crash-loop signature (rows repeatedly returning to
+  `Pending`/`Running` with stale `attempts`).
+
+The runbook should also name the roadmap item expected to deliver a proper
+operator surface.
+
+Register both ADRs in `docs/contents.md`. `docs/users-guide.md` is expected to
+need no change, because queue internals are not client-visible; confirm this
+and record it in the Decision log. Propose a roadmap note for row retention and
+pruning ownership under section 6. Mark roadmap item 5.2.3 done with an
+execution note. Run the full gates via `scrutineer`, including Markdown lint
+and Mermaid validation; commit; and open the implementation pull request.
+
+Plateau: feature complete, documented, and the roadmap item closed.
+
+## Milestones and plateaus — conformance checks
+
+At each milestone boundary, check that:
+
+- ROAD-5-PORTS holds (no adapter imports in `backend/src/domain/`);
+- the ARCH-JOBS scope split is intact (no production worker loop and no
+  orphan-recovery configuration);
+- V9 holds (no retry layer and no `apalis` facade dependency);
+- AXIOM-PIN holds (`cargo tree` shows only the pinned Apalis versions);
+- there is no unapproved dependency, public-interface, or persisted-format
+  change beyond the `max_attempts` tightening, the guarded scheduling writes,
+  D15's two namespaced metadata keys, and (if triggered) the D6 partial index
+  named in this plan;
+- the V1 envelope snapshots are unchanged;
+- the trace links in `Conformance basis` are current.
+
+Compatibility decision: no public API compatibility change is required. All
+touched APIs are pre-1.0 and application-internal; no aliases, shims, or dual
+implementations are permitted. Accepted D15 adds only the two namespaced values
+to the existing `metadata` JSON object; it adds no schema object or separate
+table. The optional additive partial index is separately pre-authorized by D6.
+
+## Concrete steps
+
+Work from the repository root. Representative commands (adjust test names as
+they land):
+
+```bash
+set -o pipefail   # without it, `tee` alone decides the exit status of each command below
+git branch --show-current   # expect 5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling
+cargo tree -p backend -e normal | grep -E 'apalis-(core|postgres|sql)'
+make prepare-pg-worker      # once per checkout; the BDD targets below need it
+# Keep the cluster under this checkout. The default `/var/tmp/pg-embed-<uid>`
+# is shared across projects, and its repair removes a stopped cluster that
+# fails the reuse test even when another project created it.
+PG_ENV=(PG_PASSWORD="${PG_PASSWORD:-wildside_embedded_test}"
+        PG_EMBEDDED_WORKER="$PWD/target/pg_worker"
+        PG_DATA_DIR="$PWD/target/pg-embed/data"
+        PG_RUNTIME_DIR="$PWD/target/pg-embed/run")
+env "${PG_ENV[@]}" cargo test -p backend retry \
+  2>&1 | tee /tmp/test-wildside-$(git branch --show-current).out
+env "${PG_ENV[@]}" cargo test -p backend --test queue_retry_policy_bdd \
+  2>&1 | tee /tmp/bdd-wildside-$(git branch --show-current).out
+env "${PG_ENV[@]}" cargo test -p backend --test queue_dead_letter_bdd \
+  2>&1 | tee /tmp/dlq-wildside-$(git branch --show-current).out
+rg -n '\.retry\(|RetryLayer|apalis::layers' backend/ ; grep -n '^apalis\s*=' backend/Cargo.toml
+```
+
+Full gates (delegated to `scrutineer` and run sequentially) are
+`make check-fmt`, `make typecheck`, `make lint`, and `make test`, plus
+`make markdownlint` and `make nixie` for documentation milestones.
+
+## Validation and acceptance
+
+Record Red-Green-Refactor evidence per milestone: the red command and its
+expected failure (missing symbol or failing scenario), the green command
+passing, and the refactor re-run. The BDD scenarios above are the acceptance
+behaviour. Unit and property tests discharge V1–V3b, behavioural tests
+discharge V4–V6 and V8, `insta` re-runs discharge V7, and the boundary
+conformance check discharges V9.
+
+Quality criteria:
+
+- all four Makefile gates pass;
+- obligations V1–V9 are discharged, with non-vacuity evidence recorded in
+  `Artefacts and notes`;
+- a CodeRabbit review, if requested, has no unresolved in-scope findings;
+- roadmap item 5.2.3 is ticked with an execution note.
+
+## Idempotence and recovery
+
+Milestone changes and validation steps are additive and re-runnable. Embedded
+PostgreSQL tests provision throwaway clusters; re-running is safe. If a
+milestone fails mid-way, `git status` and the committed plateau of the previous
+milestone define the recovery point; revert uncommitted changes rather than
+patching forward. The only destructive operation introduced is `discard` (a
+guarded delete of a dead row), which exists solely behind the port and its
+tests. The scheduling writes (`run_at`, `max_attempts`) are guarded to the row
+the worker holds. Shrinking `max_attempts` is idempotent for a given attempt.
+`run_at` is written as an absolute deadline computed from the scheduler's
+injected clock, and every call recomputes it from that clock's current value.
+Re-issuing `schedule_retry` with the same delay later in time therefore stores
+a later deadline rather than the original instant. Repeating the guarded update
+is safe because it rewrites the same worker-owned row, but it is not idempotent
+in the value written, so a recovery retry after an ambiguous failure extends
+the delay by however much time has passed. The deadline follows the application
+clock while Apalis still compares it with the database's own `now()`, so
+deployment clock skew shifts scheduled retries by the skew; keep hosts
+synchronized. An earlier revision of this paragraph described a relative
+`now() + $delay` update that rewrote the same instant when re-issued; that is
+historical, because the implemented write is an absolute deadline. The
+scheduling-error recovery behaviour is recorded under Risks. The EP-M0 pin
+change is reverted by restoring the two caret requirements.
+
+## Progress
+
+- [x] (2026-08-16) Reconnaissance completed: code recon, documentation
+  recon, and Apalis 1.0-rc capability research recorded in this plan.
+- [x] (2026-08-16) Plan drafted.
+- [x] (2026-08-16) Expert-panel design review completed (structural,
+  contract, scaling, operational, alternative-futures, and viability lenses);
+  all findings folded into this revision.
+- [x] (2026-10-13) User explicitly authorized execution by invoking
+  `/sdlc-implementation` for this plan.
+- [x] (2026-10-13) EP-M0 paused: a Firecrawl source inspection reported
+  that AXIOM-ATTEMPT was false and proposed a policy-owned increment.
+- [x] (2026-10-14) Planning review of the 2026-10-13 finding: the
+  policy-owned increment is rejected (D9); D10 (exact Apalis pins) and D11
+  (durable `run_at` backoff) are proposed.
+- [x] (2026-10-17) The user accepted D10 and D11. The plan was rewritten
+  around durable scheduling (see `Read this first`), and issue
+  [#550](https://github.com/leynos/wildside/issues/550) was opened for the
+  Apalis 1.0.0 upgrade.
+- [x] (2026-10-19) Baseline `scrutineer` gates completed at `dfe1b55`:
+  `check-fmt`, `typecheck`, `markdownlint`, `nixie`, and `spelling` passed;
+  `lint` stopped at the `fmt` recipe line-count check; `test` passed 1,788 Rust
+  tests (four skipped), the trybuild case, and frontend tests, then had 21
+  workflow-contract failures caused by the same TypeDoc TS2688 `minimatch`
+  ambient-type error (585 passed, one skipped). Baseline logs are under
+  `/tmp/check-fmt-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/lint-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/typecheck-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/test-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/markdownlint-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/nixie-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/spelling-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-19) The corrected M0 candidate passed all seven full gates:
+  `check-fmt` (2s), `lint` (221s), `typecheck` (7s), `test` (489s),
+  `markdownlint` (20s), `nixie` (1s), and `spelling` (12s). `make test`
+  included 1,788 passing Rust tests (four skipped), trybuild, frontend tests,
+  606 workflow-contract tests (one skipped), and 115 Python tests (13 skipped).
+  Logs use the `-3.out` suffix under `/tmp` with the same branch-specific names
+  as the baseline logs above. The fixture isolation fix and Makefile recipe
+  adjustment resolve the two baseline gate failures. The exact pins resolve
+  only Apalis core rc.9, postgres rc.8, and SQL rc.9 as required by AXIOM-PIN.
+  The runtime probe remains.
+- [x] (2026-10-19) The initial M0 runtime probe was inconclusive: the scratch
+  test failed before invoking its handler on two runs because embedded
+  PostgreSQL could not connect to its admin database. The cause was diagnosed
+  on 2026-10-20 and the five predictions were exercised successfully on
+  2026-10-23; see the later entries below.
+- [x] (2026-10-20) Diagnosed the probe setup failure with a controlled password
+  comparison: missing `PG_PASSWORD` produces SQLSTATE `28P01` and the original
+  five-attempt provisioning failure; the Makefile default makes both admin
+  connection and template provisioning succeed. At that point the five Apalis
+  predictions still required a fresh probe run with the documented environment.
+- [x] (2026-10-23) Prevent recurrence of the provisioning launch error with
+  non-forcing Cargo PostgreSQL defaults and regression coverage. Both new
+  environment-policy cases failed before the fix because Cargo supplied no
+  defaults (`/tmp/wildside-pg-defaults-red.out`). After adding the defaults, a
+  direct `cargo test -p backend --test route_queue_apalis_bdd` run passed all
+  14 cases with `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` removed from the
+  parent environment (`/tmp/wildside-pg-defaults-runtime.out`). `force = false`
+  preserves explicit caller settings. All eight candidate gates passed:
+  `make fmt`, `check-fmt`, `lint`, `typecheck`, `test`, `markdownlint`,
+  `nixie`, and `spelling`; logs use the `/tmp/wildside-pg-defaults-*` prefix.
+  The five AXIOM-DURABLE predictions remained untested at this checkpoint; the
+  later runtime result is recorded below.
+- [x] (2026-10-23) Rebased the branch onto `origin/main` at
+  `380e7e8ec87892a34ab9a37c499762e83e95cf48`. Resolved the Makefile and
+  TypeDoc-fixture conflict by keeping main's dedicated `fmt-python` target and
+  its `types: []` fixture rationale while retaining the exact Apalis pins and
+  issue #550 documentation. The rebased candidate passed `make check-fmt`,
+  `make test` (1,851 passed, four skipped, including compile-fail, frontend,
+  workflow-contract, and Python suites), `make typecheck`, and `make lint`.
+  Logs: `/tmp/wildside-post-rebase-check-fmt-20261023.out`,
+  `/tmp/wildside-post-rebase-test-20261023.out`,
+  `/tmp/wildside-post-rebase-typecheck-20261023.out`, and
+  `/tmp/wildside-post-rebase-lint-20261023.out`.
+- [x] (2026-10-23) The five-part AXIOM-DURABLE scratch probe passed against
+  embedded PostgreSQL and the pinned Apalis worker/storage. It observed attempt
+  values 1 and 2; no retry within 1.5 seconds and redelivery after the full
+  two-second `run_at` delay; `Killed`, `attempts = 2`, `max_attempts = 2` after
+  the second failure with no third invocation for three seconds; and, for a
+  second job, `Failed`, `attempts = 1`, `max_attempts = 1` after shrinking a
+  three-attempt budget, with no redelivery for three seconds. The temporary
+  test source was removed after the run. Evidence:
+  `/tmp/axiom-durable-probe-wildside-20261023-final-2.out`.
+- [x] (2026-10-23) Confirmed AXIOM-PIN with `cargo tree -p backend -e normal`:
+  core rc.9, postgres rc.8, and SQL rc.9 are the only Apalis releases.
+  Confirmed AXIOM-ACK against the same pinned source: `ack.sql` updates only
+  `status`, `attempts`, `last_result`, and `done_at`, guarded by both `id` and
+  `lock_by`; `calculate_status` derives `Done`, `Failed`, or `Killed` from the
+  result and the in-memory attempt and max-attempt values. The runtime probe
+  observed the resulting persisted states. Tree evidence:
+  `/tmp/wildside-epm0-apalis-tree-20261023.out`.
+- [x] (2026-10-23) Final M0 candidate passed all seven gates sequentially:
+  `check-fmt`, `lint`, `typecheck`, `test`, `markdownlint`, `nixie`, and
+  `spelling`. `make test` passed 1,851 Nextest cases (four skipped), both
+  compile-fail suites, frontend tests, workflow contracts (606 passed, one
+  skipped), and Python tests. Logs are under
+  `/tmp/wildside-epm0-*-20261023-1.out`. EP-M0's baseline, exact pins, and all
+  three axioms are confirmed. The required M0 CLI review is complete, but its
+  valid provenance finding exposed a proposed storage deviation; EP-M1 remains
+  paused while that decision awaits the user's approval.
+- [x] (2026-10-23) The local CodeRabbit CLI review completed at version
+  0.9.1 against `origin/main` (`380e7e8`) through `bff8ada`, covering all seven
+  changed paths. The five findings comprised one style issue, one stale date
+  concern, and three substantive findings (including two duplicates). The date
+  concern compared its UTC date (2026-10-22) with this plan's Europe/Berlin
+  date (2026-10-23); the M0 gates completed by 01:03+02 and the review began at
+  01:08+02. The `list_dead` scenario could not observe a `Done` row and now
+  checks the row's metadata after acknowledgement; two duplicate findings
+  correctly identified that Apalis overwrites `last_result` on acknowledgement.
+  A namespaced JSONB metadata counter survives that ack, but writing `metadata`
+  exceeds the approved column allow-list. Proposed D15 records that deviation,
+  and the plan is `BLOCKED` pending the user's decision. The second-person
+  style finding is also corrected. Review evidence:
+  `/tmp/wildside-epm0-coderabbit-20261023-JRwEDL/review.out`.
+- [x] (2026-10-23) The D15 reassessment completed at CodeRabbit CLI 0.9.1
+  against `origin/main` (`380e7e8`) through `096c679`, reviewing all seven
+  changed paths. It found that the Apalis-version paragraph still described the
+  historical caret requirements; that text now distinguishes the exact current
+  pins from the earlier requirements. Its date concern has the same timezone
+  cause: the review ran at 01:25–01:28+02 on 2026-10-23, while the UTC date was
+  still 2026-10-22; the reviewed commit predates it at 01:23+02. Review
+  evidence: `/tmp/wildside-epm0-d15-reassessment-p6Rhb8/review.out`.
+- [x] (2026-10-23) The final status-only ExecPlan update was formatted with
+  `make fmt` and passed `check-fmt`, `markdownlint`, `nixie`, and `spelling`.
+  Logs: `/tmp/wildside-epm0-plan-format-20261023.out` and
+  `/tmp/wildside-epm0-finaldoc-{check-fmt,markdownlint,nixie,spelling}.out`.
+- [x] (2026-10-23 Europe/Berlin) The final M0 CodeRabbit review at CLI 0.9.1
+  covered the committed range from `origin/main` (`380e7e8`) through `2be12e4`
+  and all seven changed paths. Its major finding was valid: a retryable failure
+  at a lower current policy bound can become an unfetchable `Failed` row and
+  must not be reported as `Fatal`. The proposed D15 metadata key now preserves
+  that reason alongside the requeue counter; V4–V6 and V8 specify the related
+  assertions if approved. The date finding is a UTC/local date boundary: the
+  review ran 01:32–01:37+02 on October 23, while its UTC date was October 22,
+  after commit `2be12e4` at 01:31+02. Review evidence:
+  `/tmp/wildside-epm0-d15-final-review-a3rPku/review.out`. EP-M1 remains
+  blocked pending approval of the two D15 metadata writes. The raw
+  `last_result` format remains unchanged.
+- [x] EP-M0 baseline gates, exact pins (AXIOM-PIN), AXIOM-DURABLE runtime
+  probe, and AXIOM-ACK source contract.
+- [x] (2026-10-25 Europe/Berlin) The user accepted D15's recommendation,
+  authorizing guarded writes to the two namespaced Apalis `metadata` keys for
+  bounded requeue provenance and terminal failure reason. This resolves the
+  approval gate; EP-M1 is now active.
+- [x] (2026-10-26) EP-M2 implementation completed. The red integration
+  test first failed on the missing retry APIs
+  (`/tmp/test-wildside-epm2-red-5.out`). The provider now persists each queue's
+  attempt cap, the wrapper makes the V3b decision and guarded PostgreSQL
+  updates, and bounded retry/dead-letter metrics are wired. The focused BDD run
+  passed all six scenarios (19 tests including support linkage), the
+  decision-table run passed nine cases, and the all-features Prometheus counter
+  test passed. BDD assertions cover stored attempt/run time after
+  acknowledgement, unrelated JSONB metadata survival, and metric outcomes. The
+  first run queued behind a long-lived PostgreSQL process holding the shared
+  test lock; no external process was disturbed. The focused run passed using an
+  owned `/var/tmp` data root. At that checkpoint, full gates and V9 conformance
+  remained pending; later V9 and gate results are recorded below. The first
+  frozen full gate run passed six gates; Clippy alone found an unnecessary
+  suppression and excessive positional arguments in the wrapper and scheduler.
+  The candidate now groups retry inputs, queue dependencies, failure context,
+  and terminal update values in named structs. The focused retry decision tests
+  passed (9), and the database-backed BDD target passed (19, including
+  test-support linkage). The second full sequence passed six gates, but Clippy
+  found five test-only issues: excessive nesting in the decision oracle and BDD
+  handler, missing `Default` on the BDD world, and long rstest/worker argument
+  lists. The final focused run passes nine decision tests and all 19 BDD tests.
+  The probe handler now lives in its own module, named case and worker
+  configuration structs replace positional test inputs, and the BDD world
+  implements `Default`. V9 and the exact Apalis pins were rechecked
+  successfully. The third full sequence passed six gates; Whitaker alone
+  required inner module documentation in the new configuration and decision
+  modules. Those comments were added, then the following full sequence passed
+  `check-fmt`, `typecheck`, `test` (1,930 passed, four skipped; both
+  compile-fail checks, 614 workflow contracts with one skipped, and 115 script
+  doctests with 13 skipped), `markdownlint`, `nixie`, and `spelling`. `lint`
+  found three more missing inner docs in the retry BDD fixture module, its
+  handler module, and the retry wrapper's unit-test module. The disk has been
+  recovered; no space or PostgreSQL provisioning failures occurred. Added the
+  three inner module comments. The final4 sequential gate run passed all seven
+  gates on the unchanged implementation candidate: `check-fmt` (2s), `lint`
+  (289s), `typecheck` (1s), `test` (443s), `markdownlint` (16s), `nixie` (4s),
+  and `spelling` (12s). Tests passed 1,930 Nextest cases (four skipped), both
+  compile-fail checks, 614 workflow contracts (one skipped), 115 script
+  doctests (13 skipped), and all 14 lint-action checks. The embedded PostgreSQL
+  retry scenarios passed. Final4 logs use the `/tmp/wildside-epm2-final4-`
+  prefix. The post-run documentation gates passed, and the milestone was
+  committed as `c0a66b6`. CodeRabbit then recommended splitting the failure
+  orchestration helpers and time-qualifying an earlier pending-status sentence;
+  the first follow-up full run found a missing `Duration` import in the new
+  scheduler helper (`make lint` and `make test` failed during compilation;
+  `typecheck`, formatting, and the documentation gates passed). The import has
+  been added. The next run passed six gates, including all 1,930 Nextest cases,
+  both compile-fail checks, the workflow contracts, and the script doctests;
+  Clippy found that the terminal helper still accepted five parameters. Grouped
+  its related terminal fields in `TerminalRetryPlan`. The final7 full
+  sequential run passed all seven gates: `check-fmt`, `lint`, `typecheck`,
+  `test` (1,930 passed, four skipped; both compile-fail checks, 614 workflow
+  contracts with one skipped, 115 script doctests with 13 skipped, 14
+  lint-action tests, and three frontend Node tests), `markdownlint`, `nixie`,
+  and `spelling`. The refactor and its plan record were committed as `00f415e`.
+  CodeRabbit's first review of the milestone found two items: split the failure
+  orchestration and time-qualify an earlier pending checkpoint. The follow-up
+  committed-diff review from `c0a66b6` to `00f415e` returned zero findings.
+  Evidence:
+  `/tmp/wildside-epm2-coderabbit-c0a66b62382ab046191f120920e1103c6f8f723c.out`
+  and `/tmp/wildside-epm2-coderabbit-followup-00f415e.out`. EP-M2 is complete;
+  EP-M3 is active. Evidence is in
+  `/tmp/wildside-epm2-final7-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  and the corresponding `-final7-` gate logs. Earlier evidence is in
+  `/tmp/wildside-epm2-final4-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  and the corresponding `-final4-` gate logs; final3 logs are preserved under
+  the corresponding `-final3-` prefix.
+- [x] (2026-10-25 Europe/Berlin) EP-M1 red test captured: the focused test
+  command failed to compile on the intentionally absent retry API (`E0432` for
+  both the unit and property modules), as expected. Cargo added `googletest`
+  0.14.3 to `Cargo.lock` and resolved compatible dependencies. Log:
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-25 Europe/Berlin) Implement the pure EP-M1 policy and
+  classification API, including the 1,024-byte UTF-8 failure bound. The refined
+  focused suite passed 50 tests, including the property tests, with 824
+  filtered out. Evidence:
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-green-2.out`.
+- [x] (2026-10-25 Europe/Berlin) Run the EP-M1 negative controls. Removing the
+  configured delay clamp failed V1 on the saved cap-shrink witness; restoring
+  it passed that property. Inverting the multiplier failed V2; restoring it
+  passed with both saved property seeds. Changing `attempt >= max_attempts` to
+  `>` failed the retryable-at-bound table case, and weakening the constructor's
+  jittered ceiling failed the above-ceiling case. The restored decision table
+  passed six cases and the restored constructor boundary passed three. Logs:
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-fault-cap-clamp.out`,
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-cap-restored.out`,
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-fault-inverted-multiplier.out`,
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-multiplier-restored.out`,
+  `/tmp/test-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-fault-attempt-bound.out`,
+  `/tmp/epm1-attempt-bound-restored.out`,
+  `/tmp/epm1-fault-constructor-ceiling.out`, and
+  `/tmp/epm1-constructor-ceiling-restored.out`.
+- [x] (2026-10-25 Europe/Berlin) The focused EP-M1 suite passed 51 tests with
+  824 filtered out. A 128-case generated midpoint run included 58 uncapped and
+  70 capped curves; a later run included 53 uncapped and 75 capped curves. The
+  test asserts both classes occur rather than fixing the random distribution. A
+  first attempt to add this classification check failed to compile with E0689
+  because the generated multiplier needed an explicit `f64` type; after that
+  annotation the focused suite passed. Evidence:
+  `/tmp/epm1-focused-generated-coverage-typefix.out`.
+- [x] (2026-10-25 Europe/Berlin) The first full-gate attempt passed
+  `check-fmt` and `typecheck`, but `lint` identified that the five-parameter
+  constructor exceeded the repository's four-parameter Clippy limit. A named
+  `JobRetryPolicyConfig` value now keeps settings explicit at call sites and
+  reduces the constructor to one argument (D17). The started test gate stopped
+  before compilation because the gate runner's `PATH` omitted the installed
+  `pg_worker`; the next run explicitly supplies the shared Cargo bin directory.
+  Logs: `/tmp/epm1-final-lint.out`, `/tmp/epm1-final-typecheck.out`, and
+  `/tmp/epm1-final-test.out`.
+- [x] (2026-10-25 Europe/Berlin) After changing the constructor to accept
+  `JobRetryPolicyConfig`, the focused retry suite passed again: 51 passed, 824
+  filtered out. This run recorded 53 uncapped and 75 capped generated curves.
+  Evidence: `/tmp/epm1-config-focused.out`.
+- [x] (2026-10-25 Europe/Berlin) The next full-gate attempt passed
+  `check-fmt` and stopped at `lint`: Clippy also flags the parameterized
+  invalid-configuration test's five separate inputs. The test now accepts one
+  `JobRetryPolicyConfig` plus the expected error, with a four-parameter helper
+  constructing named configurations. This keeps the test readable without a
+  lint suppression. The focused suite then passed all 51 tests (824 filtered;
+  this run generated 66 uncapped and 62 capped curves). Evidence:
+  `/tmp/epm1-final-env-lint.out` and `/tmp/epm1-test-arity-focused.out`.
+- [x] (2026-10-25 Europe/Berlin) The next sequential gate run passed
+  `check-fmt`, `lint`, and `typecheck`, then `make test` reached 1,017 of 1,899
+  Nextest cases before interruption. Database-backed tests repeatedly failed at
+  setup with `invalid value for parameter "TimeZone": "UTC"`. Inspection found
+  that wildcard resolution selected embedded PostgreSQL 18.6.1, whose installed
+  timezone directory contains `UCT` but no `UTC`; SQLx 0.8.6 sends
+  `TimeZone=UTC` during connection startup. The repository's cache warm-up
+  already pins 16.10.0, but direct Cargo test processes had no `PG_VERSION_REQ`
+  default. `.cargo/config.toml` now supplies non-forcing `PG_VERSION_REQ` at
+  `=16.10.0`, and the environment policy contract guards that default. The
+  interrupted log was briefly shared by a duplicate gate invocation and is
+  treated only as failure evidence. Evidence: `/tmp/epm1-arity-check-fmt.out`,
+  `/tmp/epm1-arity-lint.out`, `/tmp/epm1-arity-typecheck.out`, and
+  `/tmp/epm1-arity-test.out`.
+- [x] (2026-10-25 Europe/Berlin) The PostgreSQL version-default contract passed
+  all seven tests, including the non-forcing `PG_VERSION_REQ` case. The first
+  focused Apalis run waited on the shared cluster lock retained by the orphaned
+  PostgreSQL 18 process from the interrupted full suite. A retry with isolated
+  `TMPDIR` and `PG_DATA_DIR` then exposed a missing `target/pg_worker`; after
+  `make prepare-pg-worker`, the fresh-cluster Apalis BDD target passed all 14
+  tests, including SQLx connection startup with `TimeZone=UTC`. The orphaned
+  server was left untouched. Logs:
+  `/tmp/test-epm1-environment-policy-contract.out`,
+  `/tmp/test-epm1-pg16-apalis-bdd.out`,
+  `/tmp/test-epm1-pg16-apalis-bdd-isolated-lock.out`,
+  `/tmp/prepare-pg-worker-epm1.out`, and
+  `/tmp/test-epm1-pg16-apalis-bdd-ready.out`.
+- [x] (2026-10-25 Europe/Berlin) Rebase the branch onto the refreshed PR target
+  `origin/main` at `e7ab91e`, preserving the exact 25-commit series from its
+  verified base `380e7e8`. The PR base SHA and the first branch commit's parent
+  both identified that base; all commits were single-parent and the range
+  contained no merges. The rebase used Git's built-in `zdiff3` machinery
+  because Weave was selected only by the user-wide attributes file. It
+  completed without conflicts, and `git range-diff` matched all 25 old/new
+  commits. The staged EP-M1 candidate was saved and restored with its index.
+  The current target's `Cargo.lock` was used as the starting point, then
+  `cargo update --workspace` rebuilt the lock for `googletest` 0.14.3 and its
+  compatible dependency graph. The developers' guide retains both upstream
+  runner guidance and the PostgreSQL runner contract. Rebase receipt and
+  recovery materials are under `/tmp/rebase-epm1-20261025-*`.
+- [x] (2026-10-25 Europe/Berlin) The complete EP-M1 deterministic gate sequence
+  passed on staged candidate tree `2be4cfa` at rebased `HEAD` `1811f516`. The
+  test gate passed 1,900 Nextest cases (four skipped), both compile-fail
+  checks, 614 workflow-contract tests (one skipped), 115 script doctests (13
+  skipped), 14 action tests, and frontend tests. `typecheck`, `lint`, Markdown
+  lint, Mermaid validation, and spelling also passed. Lint emitted only
+  non-fatal existing Dependabot YAML and OpenAPI unused-schema warnings.
+  Evidence: `/tmp/epm1-rebased-check-fmt.out`, `/tmp/epm1-rebased-test.out`,
+  `/tmp/epm1-rebased-typecheck.out`, `/tmp/epm1-rebased-lint.out`,
+  `/tmp/epm1-rebased-markdownlint.out`, `/tmp/epm1-rebased-nixie.out`, and
+  `/tmp/epm1-rebased-spelling.out`.
+- [x] (2026-10-25 Europe/Berlin) The first EP-M1 CodeRabbit CLI review
+  completed on commit `17e3ea8` against `origin/main` at `e7ab91e`. It reported
+  three overlapping trivial/minor style findings: tests and doctests used
+  `.unwrap()`, and three plan passages used first-person possessives. The
+  findings are addressed in the current candidate; the duplicate optional
+  diagnostic finding is covered by the same `.expect(...)` edits. Evidence:
+  `/tmp/coderabbit-393f0df6-4a19-41c6-a76a-35fb9e814fa0--5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-.out`.
+- [x] (2026-10-25 Europe/Berlin, historical) CodeRabbit reassessed commit
+  `3bcf1b0` against `origin/main` at `e7ab91e` and identified two minor issues:
+  the plan overstated relative `run_at` idempotence, and Cargo's global
+  environment exposed the test password to non-test commands. The environment
+  finding was repaired then and is still in force: Cargo no longer supplies the
+  password globally, and the test recipe provides it only to its Rust test
+  processes. The idempotence finding was answered at the time by prohibiting
+  blind retries after ambiguous writes, but the implemented scheduler later
+  replaced the relative `now() + $delay` update with an absolute deadline from
+  its injected clock, so that answer is superseded: a repeated call now
+  recomputes the deadline from the current clock and moves it forward by the
+  elapsed time. The Idempotence and recovery section records the current
+  behaviour. Evidence:
+  `/tmp/coderabbit-393f0df6-4a19-41c6-a76a-35fb9e814fa0-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) All seven sequential gates passed on the
+  frozen fix6 candidate: check-fmt, test, typecheck, lint, markdownlint, nixie,
+  and spelling. The tree SHA was `7c8e701`; the diff SHA was
+  `1507c4d30763cd6c3df0ea71287531757358da3cf67917268ee7c618d6b160c1`. Evidence:
+  `/tmp/epm1-review-fix6-check-fmt.out`, `/tmp/epm1-review-fix6-test.out`,
+  `/tmp/epm1-review-fix6-typecheck.out`, `/tmp/epm1-review-fix6-lint.out`,
+  `/tmp/epm1-review-fix6-markdownlint.out`, `/tmp/epm1-review-fix6-nixie.out`,
+  and `/tmp/epm1-review-fix6-spelling.out`.
+- [x] (2026-10-26 Europe/Berlin) CodeRabbit CLI 0.9.1 reviewed `fe1ca1d`
+  against `origin/main` and found four valid issues: clarify the uncapped
+  `base_delay`, scope the Make export assertion to the `test-rust` recipe,
+  recognize `=` as an export-name boundary, and use the implemented
+  `backoff_delay` API in D11. The current stop-hook run then failed because the
+  filesystem ran out of space while Cargo wrote a rustdoc fingerprint and Nixie
+  created its temporary directory. The user confirmed that disk capacity has
+  since been recovered; rerun all gates on the corrected candidate.
+- [x] (2026-10-26 Europe/Berlin) The first attempt to add a synthetic Make
+  export regression exposed an `E0061` helper-signature mismatch during
+  `make test`; the helper now accepts the Makefile source used by both the real
+  contract and synthetic boundary cases. `check-fmt` passed before the compile
+  failure. Evidence: `/tmp/epm1-coderabbit-fix1-check-fmt.out` and
+  `/tmp/epm1-coderabbit-fix1-test.out`. The full sequence must be rerun.
+- [x] (2026-10-26 Europe/Berlin) Fixed the four CodeRabbit findings on the
+  current candidate: clarified the uncapped `base_delay`, scoped the Make
+  export contract to the `test-rust` recipe, recognized `=` as an export-name
+  boundary, and corrected D11 to call `backoff_delay`. All seven sequential
+  gates then passed: `check-fmt` (3s), `test` (610s), `typecheck` (7s), `lint`
+  (233s), `markdownlint` (28s), `nixie` (5s), and `spelling` (18s). The test
+  run used `/var/tmp/wildside-epm1-full-igo1j3xy` for isolated PostgreSQL
+  state; it passed 1,901 Nextest cases (four skipped), both trybuild checks,
+  614 workflow doctests (one skipped), 115 script doctests (13 skipped), and
+  the frontend and lint-actions suites. Candidate HEAD/tree/diff were
+  `fe1ca1dcfdc65677c6acd9e92f052c4fc4e17333`,
+  `cb016e25228e20b8d4e9c77df7ed33f7ab93d36c`, and
+  `92fb496de77d660549f3e37826bf97629f438136031525d74c36ea1a86b2bbe6`. Evidence:
+  `/tmp/epm1-full2-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-full2-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/epm1-full2-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) Committed the gated M1 candidate as `1c329be`
+  and completed CodeRabbit CLI 0.9.1 review against `origin/main` at `e7ab91e`.
+  The committed review covered all 14 paths and reported the same
+  Makefile-contract gap twice: a bare `export` directive globally exports all
+  Make variables, but the helper only recognized named exports. The current
+  Makefile has no bare directive; this is a missing regression guard. Review
+  log: `/tmp/coderabbit-epm1-1c329be-3ShJIM-review.out`.
+- [x] (2026-10-26 Europe/Berlin) Added detection and synthetic cases for bare
+  global `export`, including a trailing comment and named exports that list the
+  sensitive variable after another name. The focused test failed against the
+  previous helper exactly at the bare-export assertion. Replacing the helper
+  with the corrected implementation then passed. All seven sequential gates
+  passed: `check-fmt` (4s), `test` (715s), `typecheck` (7s), `lint` (180s),
+  `markdownlint` (26s), `nixie` (6s), and `spelling` (16s). The test run used
+  `/var/tmp/wildside-epm1-cr-fix-81leewbf`; all 1,901 Nextest cases passed
+  (four skipped), as did both trybuild checks, workflow and script doctests,
+  frontend tests, and lint-actions tests. Candidate HEAD/tree/diff were
+  `1c329be4243a7992a6f1777734de9e5d72d90839`,
+  `a2313f1f3413a62f5d5f5933ce30842095725f53`, and
+  `9de37767b7788940919e0c38182cd26d5a520235fdb848b327386fa9d97d0b8e`. Evidence:
+  `/tmp/epm1-coderabbit-fix3-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-coderabbit-fix3-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/epm1-coderabbit-fix3-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) Committed the bare-export guard as `20c72d2`.
+  The first reassessment attempt returned a 403 ownership error before review
+  began. CLI health and identity checks confirmed the signed-in `leynos`
+  account and organization; a fresh committed review then completed against
+  `origin/main` at `e7ab91e`, covering all 14 paths. It reported two trivial
+  variants of one remaining gap: the matcher did not recognize Make assignment
+  operators `:=`, `::=`, `:::=`, `?=`, `+=`, and `!=`, and the synthetic cases
+  should cover both protected variables. Review log:
+  `/tmp/coderabbit-epm1-20c72d2-fresh-fnsZNP-review.out`.
+- [x] (2026-10-26 Europe/Berlin) Expanded the synthetic cases to cover every
+  supported assignment operator for both protected variables, alongside
+  negative checks for longer variable names. The focused test failed against
+  the previous matcher at `export PG_PASSWORD:=secret`; the matcher now checks
+  explicit Make assignment operators. Red-test evidence:
+  `/tmp/epm1-make-operators-red.out`.
+- [x] (2026-10-26 Europe/Berlin) The expanded focused test passed. All seven
+  sequential gates passed: `check-fmt` (4s), `test` (573s), `typecheck` (7s),
+  `lint` (320s), `markdownlint` (22s), `nixie` (6s), and `spelling` (16s). The
+  test run used `/var/tmp/wildside-epm1-opfix-ffk23reg`; it passed 1,901
+  Nextest cases (four skipped), both trybuild checks, 614 workflow doctests
+  (one skipped), 115 script doctests (13 skipped), and the frontend and
+  lint-actions suites. Candidate HEAD/tree/diff were
+  `20c72d2c201496216cea93d77d6459802c58e0fa`,
+  `d69af07c9e83e3331444a8b3be5cbf87e49a3386`, and
+  `6399975b6ab05ac94f82aa54ade71e6b59df05a176f4f23e5aa7e1613888a944`. Evidence:
+  `/tmp/epm1-assignment-fix-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm1-assignment-fix-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/epm1-assignment-fix-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) Committed the gated matcher update as
+  `d1f57de`. Fresh CodeRabbit CLI 0.9.1 review against `origin/main` at
+  `e7ab91e` completed with zero findings and covered all 14 PR paths. Evidence:
+  `/tmp/coderabbit-epm1-d1f57de-BYpnlQ-review.out`.
+- [x] EP-M1 domain retry policy and classification.
+- [x] EP-M2 durable retry wiring, bounded attempts, terminal dead-lettering.
+- [x] (2026-10-26 Europe/Berlin) EP-M3 red tests were captured: unit and BDD
+  compile attempts failed on the intentionally absent port and adapter exports.
+  Evidence:
+  `/tmp/test-epm3-dead-letter-port-red-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  and
+  `/tmp/test-epm3-dead-letter-bdd-red-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) The focused EP-M3 port and adapter tests
+  passed (14 tests). The first database-backed target reported 15 Rust tests,
+  but its single `#[scenario(path = ...)]` binding ran only the first of the 11
+  feature scenarios; the earlier claim that all scenarios ran was incorrect.
+  The corrected binding coverage and complete run are recorded below. The
+  5,000-pending/50-dead-row `EXPLAIN` run used the existing `sidx` bitmap path
+  with no sequential scan, so D6 did not trigger index creation. Logs:
+  `/tmp/wildside-epm3-dead-letter-unit-1.out` and
+  `/tmp/wildside-epm3-dead-letter-bdd-1.out`.
+- [x] (2026-10-26 Europe/Berlin) The first full gate run passed `check-fmt`
+  and `typecheck`; lint found that the BDD `insert_job` seed helper exceeded
+  Clippy's argument limit. The full test target then stalled on the unrelated
+  shared PostgreSQL lock after 991 passes, one failure, and four timeouts; it
+  was stopped with 963 cases not run. No foreign process was signalled.
+  `insert_job` now accepts a named `JobSeed` value, and the formatter passed.
+  Evidence:
+  `/tmp/lint-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-epm3.out`
+  and
+  `/tmp/test-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-epm3.out`.
+- [x] (2026-10-26 Europe/Berlin) The next lint pass cleared Clippy and found
+  Whitaker's required inner documentation on the new dead-letter BDD module.
+  The module now documents its purpose. The following full sequential rerun
+  passed all seven gates on base HEAD `05b89ad`; its tracked diff SHA was
+  `9088cea3e143ced7093e50ec351ac4abbb4510c2210967bd4e82037ee87e15a7` and
+  untracked-content SHA was
+  `f794478b1aa0de968f7f263dc4727af80c2a4cf275a965b10a04e29e857f719a`. Nextest
+  passed 1,959 cases (four skipped); trybuild passed both targets, workflow
+  contracts passed 614 (one skipped), scripts doctests passed 115 (13 skipped),
+  and action-lint tests passed 14. Markdown lint and Nixie also passed. Fresh
+  `TMPDIR` and `PG_DATA_DIR` roots under `/var/tmp` avoided the unrelated
+  shared PostgreSQL lock. Logs:
+  `/tmp/epm3-retry2-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-retry2-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) Rebased onto live `origin/main`
+  `9d899f2`. The exclusive replay boundary was `e7ab91e`, the parent of the
+  branch's first commit and the target recorded by the previous rebase. All 38
+  linear commits matched one-for-one in `range-diff`; no conflicts or patch
+  changes occurred. M3 was replayed as `e910c53`. The only target-only change
+  was the Rust toolchain bump; no branch commit modified `rust-toolchain.toml`.
+  The tracked Weave attribute was bypassed with the scoped built-in `zdiff3`
+  merge driver for this unattended replay. Receipt:
+  `/tmp/rebase-epm3-20261026.md`.
+- [x] (2026-10-26 Europe/Berlin) All seven gates passed on the rebased
+  candidate using isolated PostgreSQL roots: `check-fmt` 2.2s, `lint` 54.7s,
+  `typecheck` 4.1s, `test` 400.1s, `markdownlint` 17.4s, `nixie` 8.7s, and
+  `spelling` 12.8s. Test counts: 1,959 Nextest passed (four skipped), both
+  trybuild targets passed, 614 workflow contracts passed (one skipped), 115
+  scripts doctests passed (13 skipped), and 14 lint-actions tests passed. The
+  committed test source exposed PostgreSQL's required `ANALYZE` spelling; two
+  SQL-fragment-specific exceptions were added to `typos.local.toml`, and
+  `make spelling` regenerated `typos.toml`. The spelling fix is commit
+  `31a03c2`. Logs:
+  `/tmp/epm3-rebased-fix1-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/epm3-rebased-fix1-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] EP-M3 dead-letter port and PostgreSQL adapter; implementation commit
+  `e910c53` and spelling repair `31a03c2` are gated.
+- [x] (2026-10-26 Europe/Berlin) Initial EP-M3 CodeRabbit CLI review completed
+  at 0.9.1 against M2 boundary `425b018` through `284e25d`. It covered all 16
+  expected paths and returned six findings. Review evidence:
+  `/tmp/wildside-epm3-coderabbit-284e25d.out`.
+- [x] (2026-10-26 Europe/Berlin, historical record) Strengthened the
+  legacy-null-limit BDD case with a bounded worker poll, a registered-worker
+  check, and a successfully handled control row. Initial verification of this
+  edit was superseded after discovering that `#[scenario(path = ...)]` defaults
+  to feature scenario 0. The entry is retained as history; the scenario
+  bindings recorded in the following entry are the current evidence.
+- [x] (2026-10-26 Europe/Berlin) Added one named `#[scenario]` binding for each
+  of the 15 dead-letter feature scenarios. Seed rows now use Apalis ULIDs and
+  valid V1 envelopes. The expanded red run exposed the malformed-metadata
+  listing failures, an invalid worker control row, and an inconsistent requeue
+  counter expectation. The corrected full target passed all 29 tests (15 BDD
+  scenarios, the EXPLAIN canary, and 13 support tests). The three repaired
+  scenarios also passed independently. Evidence:
+  `/tmp/test-wildside-epm3-bdd-scenario-coverage-red-serial-isolated.out`,
+  `/tmp/test-wildside-epm3-review-repairs-targeted-red.out`,
+  `/tmp/test-wildside-epm3-review-repairs-bdd-green.out`.
+- [x] (2026-10-26 Europe/Berlin) The first full gate pass on the M3 review
+  repairs found two deterministic issues: Whitaker rejected the 453-line BDD
+  world module, and spelling found one `behavior` in this plan. The dead-row
+  fixture methods now live in `world/dead_job_fixtures.rs`, leaving the world
+  module at 362 lines; the plan uses Oxford spelling. The corrected candidate
+  passed all seven gates at `HEAD 284e25d` plus worktree fingerprint
+  `beb59610bbbecc2deacfebe8ab808be234fc862d784fae2081c9251683b2d73b`:
+  `check-fmt`, `lint`, `typecheck`, `test`, `markdownlint`, `nixie`, and
+  `spelling`. Tests passed 1,974 Nextest cases (four skipped), both
+  compile-fail checks, Vitest (90), workspace JavaScript (43), tokens (3),
+  workflow contracts (614, one skipped), and script tests (115, 13 skipped).
+  Logs use the `/tmp/epm3-gate-fixes-*` prefix. The earlier red logs are
+  `/tmp/epm3-review-repairs-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  and
+  `/tmp/epm3-review-repairs-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-26 Europe/Berlin) Implemented the three distinct findings from
+  the committed M3 CodeRabbit review: `list_dead` now pages through raw rows
+  until it collects the requested number of valid jobs; the unauthorized `ulid`
+  development dependency is removed in favour of a tested encoder using the
+  existing `uuid` dependency; and the embedded requeue example now expects a
+  count of five. The focused regression first passed with the valid row
+  accidentally seeded newest; after correcting ordering, the isolated red run
+  failed as expected (`left: 0`, `right: 1`) and the 101-malformed-row green
+  run passed (1 passed, 29 skipped). The identifier-shape unit test also passed
+  (1 passed, 29 skipped). Cargo regenerated the backend lock entry to remove
+  only its direct `ulid` edge. Evidence:
+  `/tmp/epm3-pagination-red-isolated.out`,
+  `/tmp/epm3-pagination-green-101.out`, and `/tmp/epm3-ulid-shape-unit.out`.
+  Full gates and committed CLI reassessment remain pending.
+- [x] (2026-10-28 Europe/Berlin) The M3 review-repair candidate passed all
+  seven gates: `check-fmt`, `test` (1,975 passed, four skipped, both
+  compile-fail checks and the Python suites), `typecheck`, `lint`,
+  `markdownlint`, `nixie`, and `spelling`. Logs use the `/tmp/epm3-rerun2-`
+  prefix. The committed CodeRabbit review of `425b018..a5d4172` found one valid
+  documentation issue: this plan's embedded feature wording had diverged from
+  the executable BDD bindings. The feature example now matches the executable
+  file, including the additional malformed row and negative-control scenarios.
+  Review evidence:
+  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-28 Europe/Berlin) The final committed EP-M3 CLI reassessment
+  reviewed `425b018..d05ac43` across 20 files and returned zero findings.
+  Evidence:
+  `/tmp/coderabbit-wildside-epm3-d05ac43-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+  Publication remains pending the final implementation and rebase.
+- [x] (2026-11-06 Europe/Berlin) Published the completed implementation at
+  `6208d77` after the 70-commit replay onto `origin/main` `4fd681e` (the
+  DF12-110 build standard) and a full sequential nine-gate run on the replayed
+  candidate: `check-fmt`, `spelling`, `markdownlint`, `nixie`, `lint`,
+  `typecheck`, `test`, `audit`, and `openapi`, all exiting zero. `test` ran
+  2,061 Nextest cases (four skipped), both compile-fail suites, the frontend
+  and workspace suites, and the workflow-contract and script suites; `openapi`
+  left `spec/openapi.json` unchanged. Logs use the `/tmp/<gate>-457-final.out`
+  prefix. The replay resolved the two additive conflicts in
+  `.cargo/config.toml` and the `Makefile` by keeping both sides. The push was a
+  force-with-lease against the previously published head `a47ac8a`; the
+  refreshed tracking ref and `git ls-remote` both report `6208d77`.
+- [x] (2026-10-28 Europe/Berlin) Rebased the 45-commit topic from exclusive
+  boundary `9d899f2` onto fetched `origin/main` `ede1a2b`, with recovery refs
+  for the old head `83f9f98`, boundary, and target. The rebase completed
+  without conflicts. `git range-diff` paired every old commit with an unchanged
+  patch, and the only tree difference from the old head is the target's
+  `rust-toolchain.toml` update. Evidence:
+  `/tmp/wildside-523-rebase-range-diff-20261028.out`. The rebased candidate
+  still requires its full gates and publication.
+- [x] (2026-10-28 Europe/Berlin) The rebased candidate at `b212dc13`, with
+  the rebase evidence above, passed `check-fmt`, `test`, `typecheck`, `lint`,
+  `markdownlint`, `nixie`, and `spelling` on the target's updated nightly.
+  Tests included 1,975 Nextest cases (four skipped), both compile-fail checks,
+  614 workflow contracts (one skipped), and 115 Python tests (13 skipped). Logs
+  use the `/tmp/rebase-final-b212dc13-` prefix. Lint reported existing
+  non-fatal OpenAPI and workflow warnings. The implementation is locally
+  validated; publication and hosted review remain pending.
+- [x] (2026-10-28 Europe/Berlin; closed 2026-11-13) The published head
+  `186b80c` received one critical CodeScene finding in the shared BDD worker
+  and advisory findings in the retry constructor, dead-letter scenario state,
+  and environment-policy contract. The candidate separates bounded worker
+  observation, groups manifest inputs, shares repeated scenario operations, and
+  splits constructor validation while preserving error precedence. Focused
+  local CodeScene review reports no findings in those files. The first focused
+  test build failed with `E0583` because the moved integration-test module
+  needed an explicit path; that path is now specified. The focused rerun passed
+  all 108 selected policy, environment-contract, and PostgreSQL BDD tests (887
+  unselected). Evidence:
+  `/tmp/test-codescene-focused2-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+  Closed later: the full gates, the complete delta review and the hosted
+  reassessment this entry left pending all happened, and every gate is green on
+  the current head. The audit work it named as blocked on prerequisite #567
+  landed: #567 merged as `9206b8f` on 2026-10-31, #600/#603 cleared the two
+  `main` advisories, and #615 re-pinned `basic-ftp` to 6.2.6 for
+  `GHSA-5pm8-86m8-9m6r`. The entry stays as the historical record of the
+  CodeScene repair; it is not outstanding work.
+- [x] (2026-10-28 Europe/Berlin) Drafted ADRs 003 and 004, updated the queue
+  architecture, developer guidance, roadmap, and documentation index, and added
+  an operator runbook. Its four SQL blocks were exercised against an isolated
+  PostgreSQL 18.3 cluster: listing, orphan marker, guarded requeue, counter
+  saturation, malformed and negative rows, unknown queue, and guarded discard
+  all behaved as documented. The cluster was stopped and its task-owned
+  directory removed. The pinned-version integration canaries remain part of the
+  full milestone gates and cover Apalis's actual schema and worker behaviour.
+  EP-M4 gates and committed review remain pending.
+- [x] (2026-10-28 Europe/Berlin) EP-M4 passed all seven gates on the
+  candidate committed as `ae58fe2`: `check-fmt`, `test` (1,975 passed, four
+  skipped, both compile-fail checks and the Python suites), `typecheck`, `lint`,
+  `markdownlint`, `nixie`, and `spelling`. Logs use the `/tmp/epm4-` prefix.
+  The committed CodeRabbit review of `d05ac43..ae58fe2` reported two minor
+  concerns, both contradicted by the reviewed commit: the provider builds a
+  task with `with_max_attempts` and calls `push_task`, and the queue module
+  contains and exports the retry scheduler, service, and dead-letter adapter.
+  The architecture also explicitly defers request-path dispatch and worker
+  consumption. No change is warranted for those concerns. Review log:
+  `/tmp/coderabbit-wildside-epm4-ae58fe2-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- [x] (2026-10-30 Europe/Berlin) The user approved the plan for this
+  publication run and requested a rebase onto the PR's remote target
+  (`origin/main`), the four implementation gates, and a force-push with lease.
+  The branch's first commit (`2066701`) has parent `ede1a2b`, which is the live
+  `origin/main` head, so the branch already directly follows the target and no
+  commit replay or conflict resolution was required.
+- [x] (2026-10-30 Europe/Berlin) All seven gates passed sequentially on
+  `d37db0f` through the exclusive scrutineer: `check-fmt`, `test`, `typecheck`,
+  `lint`, `markdownlint`, `nixie`, and `spelling`. `make test` reported 1,978
+  Nextest cases passed (four skipped), both compile-fail suites, 90 frontend
+  tests, 614 workflow contracts passed (one skipped), 115 Python tests passed
+  (13 skipped), and 14 action-lint cases. `make lint` reported clean Clippy
+  under `-D warnings`, a clean whitaker and `cargo doc` run, and pylint
+  10.00/10; one pre-existing advisory (`dependabot-automerge.yml` truthy
+  warning) is outside this change surface and non-fatal. The gate logs use the
+  `/tmp/<gate>-393f0df6-2-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`
+  naming, with the exact paths recorded in the delivery ledger. This
+  plan-record edit is documentation-only, so the final publication candidate
+  was rechecked with the Markdown gates.
+- [x] (2026-11-02 Europe/Berlin) Repaired the hosted CI failures on the
+  published head `a81c9b7` and pushed the result as `d755954`. The hosted
+  `build` and `coverage` jobs failed at compile time with `E0432` because the
+  queue BDD worlds still imported the removed `shared_cluster_handle`; they now
+  call `bootstrap_shared_cluster`. `make lint-whitaker` then rejected the
+  470-line `queue_retry_policy_bdd/world.rs`, so the stored-row inspection and
+  assertion helpers moved to `world/state.rs` (201 lines, parent 282). Two
+  `#[allow(dead_code)]` attributes became `#[expect(dead_code, reason = ...)]`
+  to satisfy the workspace's `allow_attributes` deny, and the format gates now
+  honour the pinned Biome version. The commits are `b0ce938`, `38ad355`,
+  `208baa8`, `dad906c`, `1154a63`, and `d755954`.
+- [x] (2026-11-02 Europe/Berlin) Corrected the Apalis fetch canary. The
+  `failed_row_with_spare_attempts_is_fetched_when_due` case asserted
+  `status = 'Running'`, but `apalis-postgres 1.0.0-rc.8`'s newest
+  `apalis.get_jobs` migration sets `'Queued'`; only the worker pipeline's
+  separate `lock_by_id` step promotes the row. The canary now asserts the queue
+  step, which still proves the fetch claimed the row, and the `RowState` doc
+  comment describes the two-step split. The suite passed 21 of 21 cases
+  (`/tmp/gate9-canary-retry.out`).
+- [x] (2026-11-02 Europe/Berlin) Local gates on the repaired tree:
+  `make check-fmt`, `make spelling`, `make lint-clippy`, and
+  `make lint-whitaker` all exited 0 (`/tmp/gate10-*`). `make test-rust` ran
+  2,036 Nextest cases with 2,036 passed and four skipped
+  (`/tmp/gate11-test-rust-*.out`); the two trybuild compile-fail invocations
+  that follow were still queued for compile slots when the background wrapper
+  reached its own limit, and are covered by hosted CI. The earlier full-lint
+  evidence on the same source tree is recorded in the delivery ledger.
+- [x] (2026-11-02 Europe/Berlin) Repaired the second hosted CI failure, in
+  `test_lint_frontend_runs_biome_before_the_package_linter`. The pinned-Biome
+  change made the Makefile probe `biome --version` before choosing a runner, so
+  the command double logged an extra `bun` invocation. The double now answers
+  the probe with the version the Makefile pins, without logging it, and a new
+  contract covers the mismatched-PATH fallback to
+  `bun x --package=@biomejs/biome@<pin>`. The added contract pushed
+  `makefile_tooling_test.py` past pylint's 400-line limit, so the command
+  doubles and their helpers moved to `tooling_doubles.py` (commit `d03f46a`).
+  `make lint-python` now rates 10.00/10, the workflow contracts pass 622 cases
+  with one skipped, and `make check-fmt`, `make spelling`, `make typecheck`,
+  `make markdownlint`, and `make nixie` all exited 0 (`/tmp/gate14c-*`,
+  `/tmp/gate15-*`, `/tmp/gate17-*`).
+- [x] (2026-11-04 Europe/Berlin) Replayed the branch onto the `main` that now
+  carries the audit remediation. PR #583 (squash `b3e37d1`) upgraded `utoipa`
+  to 6 and `utoipa-swagger-ui` to 10.0.2, which resolves `zip` 9.2.2 and lets
+  the repository drop the three `zip` ignores; this supersedes the earlier
+  expectation that PR #567's `fix-zstd-audit` branch would carry the audit fix.
+  The exclusive boundary was the old target `f682d1e`, and the old head was
+  `94ac912`. All 68 commits replayed with no conflicts and no merge commits
+  using `--merge`, `--no-fork-point`, `--no-update-refs`, `--no-autostash`,
+  `--reapply-cherry-picks`, `--keep-empty`, `--empty=stop`, `zdiff3`, and the
+  explicit Weave bypass `-c core.attributesFile=/dev/null`. Recovery refs are
+  `refs/backup/457-{old-head,base,target,remote-head}`. The new head is
+  `01973bc`. `git range-diff` pairs all 68 commits; 67 are identical and the
+  only difference is `Add pure queue retry policy`, whose `Cargo.lock` hunk
+  lifting `regex` to 1.13.1 no longer applies because the new target already
+  resolves it. `git diff --check` is clean and `cargo metadata --locked` exits
+  0, so the lockfile still matches the combined manifests. The sequential
+  commit gates and publication for this candidate remain pending.
+- [x] (2026-11-06 Europe/Berlin) Repaired the three `clippy::too_many_arguments`
+  failures that `01973bc` introduced, without weakening the lint policy: the
+  scheduler canary helper takes a `SchedulerRow`, the fetch helper took the
+  whole `CanaryEnvironment`, and the task double takes a `DeliveryIdentity`.
+  Commit `38b673c` carries the repair together with the scheduler guard tests
+  described under *Scheduler guard coverage of 2026-11-05*. All nine gates
+  passed on that content: `check-fmt`, `spelling`, `markdownlint`, `nixie`,
+  `lint`, `typecheck`, `test` (2,061 Nextest cases, 2,061 passed and four
+  skipped, both compile-fail suites, the browser and workspace suites, 623
+  workflow contracts, 115 script tests, and 14 lint-action tests), `audit`, and
+  `openapi`. Logs use the `/tmp/<gate>-457-repair.out` prefix.
+- [x] (2026-11-06 Europe/Berlin) Replayed the branch onto `origin/main`
+  `4fd681e` (*Apply the build standard and footprint*, DF12-110), whose build
+  standard adds `-Zthreads=8` and the Linux `mold` linker to every gate. The
+  last inherited commit is `b3e37d1`, so the 70 branch-owned commits replayed
+  from `b3e37d1..38b673c` with `--merge`, `--no-fork-point`, `--no-update-refs`,
+  `--no-autostash`, `--reapply-cherry-picks`, `--keep-empty`, `--empty=stop`,
+  `zdiff3`, and the explicit Weave bypass `-c core.attributesFile=/dev/null`.
+  Recovery refs are
+  `refs/backup/457-2-{old-head,base,target,old-target,remote-head}`. Two
+  commits conflicted, both additively, and both were resolved by keeping both
+  sides: `.cargo/config.toml` keeps the target's `[unstable]`, `[build]`, and
+  `[target.'cfg(target_os = "linux")']` tables alongside this branch's `[env]`
+  pins, and `Makefile` keeps the target's `GATE_RUST_FLAGS_ENV` plumbing
+  alongside this branch's `biome_cmd`, `shell_quote`, and scoped PostgreSQL
+  exports. `git range-diff` pairs all 70 commits and differs only in expected
+  context at four of them. `git diff --check` is clean and
+  `cargo metadata --locked` exits 0. The replay produced `490f004`; gates on
+  the replayed candidate and publication remain pending.
+- [x] (2026-11-06 Europe/Berlin) Replayed the 74-commit series onto
+  `origin/main` `bcba8b1` (*Deny missing_docs in backend and
+  architecture-lint*, PR #587) after the hosted `build` and `coverage` jobs
+  failed on six `missing documentation for a struct field` diagnostics. The six
+  sites were documented in `89567f9` first, then the series replayed with the
+  explicit Weave bypass. `range-diff` pairs all 74 commits, `git diff --check`
+  is clean, and recovery refs are
+  `refs/recovery/457-20261106-{old-head,old-base,target}`. The replay produced
+  `148a547`.
+- [x] (2026-11-06 Europe/Berlin) Cleared the second, previously invisible class
+  of the same defect: `missing_docs = "deny"` also covers integration-test
+  targets, so 65 public helpers in the `queue_dead_letter_bdd` and
+  `queue_retry_policy_bdd` world modules were undocumented. Commit `c64d1f1`
+  reduces them to `pub(crate)`, matching the convention already used by
+  `offline_bundle_walk_session_bdd` on main, rather than documenting test
+  plumbing. `cargo check --locked --all-targets --all-features` and
+  `cargo clippy` under the CI deny flags both exit 0. The nine sequential gates
+  passed on `c64d1f1` and on `b90a6ca`, which only committed this plan's
+  Progress entries.
+- [x] (2026-11-06 Europe/Berlin) Split the classified failure types out of
+  `backend/src/domain/jobs/retry.rs`. The `89567f9` documentation additions
+  pushed that module to 402 lines, over the 400-line `module-max-lines` ceiling
+  enforced by Whitaker. Commit `6f80639` moves `JobErrorKind`, `JobFailure`, and
+  `MAX_JOB_FAILURE_MESSAGE_BYTES` into `retry/failure.rs` and re-exports them,
+  so no call path changes while the module returns to 314 lines. The split is
+  semantic rather than mechanical: `retry.rs` now owns policy and decision, and
+  `failure.rs` owns classification and the bounded payload-free message.
+- [x] (2026-11-06 Europe/Berlin) Cleared the audit block that appeared when
+  RustSec published four advisories against the pinned `actix-web` and
+  `actix-http` releases. `make audit` failed on RUSTSEC-2026-0446, -0447,
+  -0448, and -0455. Commit `09e07c6` is a lockfile-only bump to `actix-web`
+  4.18.2 and `actix-http` 3.20.3, which also advances `actix-server` to 2.8.0
+  and `actix-web-codegen` to 4.5.0 and drops `socket2` 0.5.10. No manifest,
+  source, or test changed, and `make audit` then exited 0 with 16 allowed
+  warnings.
+- [x] (2026-11-06 Europe/Berlin) Published `09e07c6` over SSH with an explicit
+  lease and confirmed the remote head matches the local commit. All nine gates
+  passed on that content and the hosted run for the same commit reported
+  `coverage`, the CodeScene review, and the Gecko security review green, with
+  the `build` job still running when this entry was written.
+- [x] (2026-11-07 Europe/Berlin) Replayed the 82-commit series onto
+  `origin/main` `9799286` (*Read the whole interrogate report so pipefail
+  cannot hide a MISSED row*, PR #593) after the pull request became
+  `CONFLICTING`. The replay used `--merge`, `--no-fork-point`,
+  `--no-update-refs`, `--no-autostash`, `--reapply-cherry-picks`,
+  `--keep-empty`, `--empty=stop`, `zdiff3`, and the command-scoped Weave driver
+  override, because `tests/workflow_contracts/makefile_tooling_test.py` carries
+  a `merge=weave` attribute. One commit conflicted, additively, and keeping
+  both sides resolved it: the `test-rust` recipe now runs the target's
+  `cargo fetch --locked` alongside this branch's scoped `PG_PASSWORD` and
+  `POSTGRESQL_RELEASES_URL` exports. That took the recipe to six lines, over
+  `checkmake`'s five-line body budget, so the two `cargo test --test`
+  compile-fail invocations became one command selecting both targets; the
+  `export` line stays verbatim because the environment contract matches it
+  whole. One commit became empty and was skipped: `09e07c6` is the same
+  `actix-web` 4.18.2 and `actix-http` 3.20.3 lockfile bump that landed on main
+  as `18db61f` (#589). `git range-diff` pairs the remaining 81 commits,
+  `git diff --check` is clean, and there are no merge commits. The replay
+  produced `b6956c6`, and the recovery ref is
+  `refs/heads/recovery/457-pre-rebase-push` at `b3531ad`.
+- [x] (2026-11-07 Europe/Berlin) Validated and published the replayed series.
+  The tip commit was amended to `877c09b` so its message and this plan record
+  the replay onto `9799286`, the additive `test-rust` conflict and its
+  `checkmake`-driven compaction, and the skipped duplicate `actix-web` commit.
+  All nine gates then passed sequentially on `877c09b`: `check-fmt`, `spelling`,
+  `markdownlint`, `nixie`, `lint`, `typecheck`, `test` (`2413` tests run,
+  `2413` passed, `4` skipped), `audit`, and `openapi`. The push used an
+  explicit force-with-lease against the previous head `b3531ad`, the tracking
+  ref was refreshed, and both `HEAD` and `refs/remotes/origin/…` resolve to
+  `877c09b`. On that head the hosted `build` and `coverage` jobs succeed, the
+  CodeScene review approves, the Gecko security review passes, and
+  `mergeStateStatus` is `CLEAN`. CodeRabbit's automatic review is paused after
+  its review of `09e07c6`, so one formal review was queued through `comenq` (id
+  `ec6335ce`) to cover the published head.
+- [x] (2026-11-07 Europe/Berlin) Corrected this plan's own status record and
+  republished it as `6299c28`. All nine gates passed again on that head and the
+  hosted checks stayed green with `mergeStateStatus: CLEAN`.
+- [x] (2026-11-08 Europe/Berlin) The queued review posted and CodeRabbit
+  reviewed `09e07c6..6299c28`, returning ten inline findings and a failed
+  pre-merge table. All ten were verified against the tree and repaired: the
+  metric module now names `outcome` for `route_queue_retry_total` and `reason`
+  for `route_queue_dead_letter_total`; the `make` probes drop inherited
+  `MAKEFLAGS`/`MFLAGS`/`MAKELEVEL`; `major_version` treats only exact pins as
+  pins, so a range requirement no longer deletes a directory it accepts; the
+  shared-data-directory repair skips a directory held by a live
+  `postmaster.pid`; the representative test commands prepare `pg_worker` and
+  export `PG_PASSWORD`/`PG_EMBEDDED_WORKER`; and the user guide's constructor,
+  counter, runbook, requeue, and delay-bound claims now match the code.
+  `current_attempt` gained boundary tests for a zero counter and one above
+  `u32::MAX`, and the wrapper gained a test proving two injected jitter samples
+  produce different persisted delays. The developers' guide gained the pinned
+  Biome selection and the scheduler clock seam; this plan's clock paragraph was
+  corrected, because the deadline is bound from the injected `ClockSource`
+  rather than SQL `now()`.
+- [x] (2026-11-08 Europe/Berlin) The repair round then failed the `lint` gate on
+  its own line-count check: `password_state_tests.rs` had grown to 411 lines
+  against the 400-line module limit. The shared fixture moved to
+  `backend/tests/support/password_state_fixture.rs` behind its own `#[path]`
+  module, leaving the test module at 286 lines, and all 38
+  `atexit_cleanup_tests` cases still pass. The rerun then exposed a base
+  condition rather than a defect in this branch: `make audit` aborts because
+  `ZOD_ARRAY_MEMORY_EXHAUSTION_2026_10` expired on 2026-11-07, and `main` had
+  already renewed it to 2026-12-08 in `c5bd108` (#595). That renewal is the
+  only commit `main` carries beyond this branch, so the repair was replayed
+  onto it rather than committed against a stale base. The replay produced
+  `f3dfc38`, and all nine gates passed on that head, including `audit`, which
+  fails on the pre-renewal base.
+- [x] (2026-11-08 Europe/Berlin) CodeScene then reported two new code-health
+  issues against `password_state.rs`: a cyclomatic complexity of 9 in
+  `repair_unusable_data_directory` and a module mean of 4.11 against a
+  threshold of 4. The directory decision moved into
+  `data_directory_is_reusable`, the pid liveness check into `pid_is_live`, and
+  the three duplicated optional-read matches into `read_optional_text`.
+  Behaviour is unchanged — all 38 `atexit_cleanup_tests` cases still pass — and
+  `cs review` scores the file 10.0 with no findings.
+- [x] (2026-11-08 Europe/Berlin) The pre-merge "Testing (Unit And Behavioural)"
+  row asked for the actual `test-rust` target rather than probes alone. Two
+  cases now run that recipe with a `cargo` double that records the environment
+  it receives: a command-line `PATH` assignment replaces the Makefile's own
+  `export PATH :=`, and `-o` marks the workspace-sync and worker prerequisites
+  up to date. They prove the documented defaults and a caller override carrying
+  spaces, quotes, a dollar sign, `&`, and `?` reach the compile commands
+  verbatim, and the unrelated-target probe now checks both settings.
+
+- [x] (2026-11-08 Europe/Berlin) The capability-based filesystem lint rejected
+  the first version of those `test-rust` cases: `std::fs::create_dir`, `write`,
+  `metadata`, `set_permissions` and `read_to_string` all bypass the policy. The
+  fixture now opens the sandbox once with `Dir::open_ambient_dir` and writes,
+  chmods, and reads the `cargo` double and its log through that capability
+  handle, so the tests keep their behaviour and the lint passes.
+- [x] (2026-11-08 Europe/Berlin) The "Unit Architecture" row asked for evidence
+  that an injected clock reaches the persisted deadline. The existing canary
+  compares against SQL `now()`, which a scheduler ignoring its `ClockSource`
+  would also satisfy. A second canary fixes the instant and asserts the stored
+  deadline equals that instant plus the delay in microseconds.
+- [x] (2026-11-08 Europe/Berlin) The warning rows were closed on their evidence
+  rather than by restating them. "Testing (Property / Proof)" gained a
+  generated test that seeds a random mixture of malformed and valid dead rows,
+  lists them with a random limit, and compares the result with the valid
+  prefix. "Observability" gained `err` on the three dead-letter spans, an
+  `INFO` event on a successful requeue, and a runbook section describing the
+  spans, the requeue and skipped-row events, the warning-only terminal-write
+  signal, and the backlog count query.
+- [x] (2026-11-08 Europe/Berlin) `main` at `c5bd108` is red: the pinned
+  `whitaker-installer` 0.2.11 stages `libwhitaker_suite` beside the constituent
+  `libstring_continuation_style`, and `cargo dylint --all` loads both, so rustc
+  aborts with "duplicate specification of lint string_continuation_style".
+  `lint-whitaker` now names the aggregated library explicitly
+  (`--lib whitaker_suite`), which loads one copy. Verified locally with both
+  libraries staged: the `--all` form panics and the `--lib` form passes. The
+  same suite also flagged four backslash-continued cooked strings in the
+  environment-policy probes; those messages now use `concat!()`, which
+  satisfies both the pinned and the newer suite. The redundant host library was
+  quarantined under `~/.local/share/whitaker-bootstrap/quarantine/`.
+- [x] (2026-11-08 Europe/Berlin) Hosted CI on `ba9bafd` is green (`build` and
+  `coverage`), which confirms the `--lib whitaker_suite` selection works on the
+  pinned runner install as well as locally.
+- [x] (2026-11-08 Europe/Berlin) Three CodeRabbit follow-ups needed more work.
+  The review guide still reported the first retry delay as raw `base_delay`; it
+  now says `min(base_delay, max_delay)` and carries the `10s`/`1s` example. The
+  dead-letter section still described operators driving the port and called the
+  SQL runbook a fallback; it now presents the port as the deferred command's
+  contract and the runbook as the current procedure. The shared data-directory
+  repair only inspected `postmaster.pid` at the top level, so a layout that
+  nests clusters in subdirectories would have hidden a running cluster; it now
+  inspects the first level down, sits immediately before the removal to narrow
+  the check-then-delete window, and has tests for a nested live cluster and a
+  nested stale pid file. All nine gates pass on the combined tree (`854bf27`,
+  `a82e169`).
+
+## Surprises & discoveries
+
+- Observation (2026-11-06): a `pull_request` workflow checks out the PR **merge
+  ref**, not the branch head. Main's `bcba8b1` added `missing_docs = "deny"` to
+  `backend/Cargo.toml` and documented 548 items; because this branch was still
+  based on `4fd681e`, the hosted build saw main's documentation while the local
+  tree did not, so the same six diagnostics appeared only in CI. A local
+  reproduction on the stale base reported 587 errors instead of six, which
+  looked like a tooling discrepancy but was simply the pre-#587 tree. Replaying
+  onto `bcba8b1` made the local gates cover the failure class, and immediately
+  exposed a second one: the deny also applies to integration-test targets, so 65
+  `pub` helpers in the queue BDD world modules needed either documentation or
+  crate-scoped visibility. `pub(crate)` was chosen, matching main's
+  `offline_bundle_walk_session_bdd` convention.
+
+- Observation (2026-10-26 EP-M2 focused run): the shared test lock remains
+  held by an older PostgreSQL process under the user systemd manager, so the
+  first focused invocation waited before test setup. A run using owned `TMPDIR`
+  and `PG_DATA_DIR` at `/var/tmp/wildside-epm2-393f0df6-pg` exercised the same
+  embedded PostgreSQL code path and passed all six retry scenarios. This
+  preserved the lock owner's process and data. The isolated root is not a Cargo
+  target or cache. Logs: `/tmp/test-wildside-epm2-bdd-isolated-2.out`,
+  `/tmp/test-wildside-epm2-retry-wrapper-unit.out`, and
+  `/tmp/test-wildside-epm2-retry-metrics-unit-all-features.out`.
+
+- Observation (2026-10-26 EP-M3 focused run): the original shared PostgreSQL
+  test lock was held by a long-lived server from another run. No process was
+  signalled. The BDD target passed with an owned `PG_DATA_DIR` and `TMPDIR`
+  under `/var/tmp`. It also showed why `last_error` must be gated by D15's
+  recognized reason: a legacy or malformed `last_result` is not guaranteed to
+  contain only the wrapper's bounded, payload-free message. The unclassified
+  row scenario now asserts that no error string is exposed.
+
+- Observation (2026-10-26 EP-M3 full gate run): another long-lived PostgreSQL
+  process owned the default shared-cluster lock. A read-model integration test
+  waited on that lock, so the test run was interrupted after it stopped making
+  progress. The next full gate run will use fresh, task-owned `TMPDIR` and
+  `PG_DATA_DIR` paths under `/var/tmp`; Cargo will continue using its shared
+  default cache. The rerun with isolated roots completed successfully, with no
+  PostgreSQL timeout or foreign process intervention.
+
+- Observation (2026-10-26 EP-M3 spelling gate): the first green spelling pass
+  happened while the new BDD source was untracked, so it was not included in
+  the tracked-file scope. After commit, Typos correctly flagged PostgreSQL's
+  `ANALYZE` keyword. Two exact SQL-fragment patterns in `typos.local.toml`
+  preserve the required SQL spelling without accepting the word generally;
+  `make spelling` regenerated the corresponding `typos.toml` entries, and the
+  complete rebased gate sequence then passed.
+
+- Observation (2026-10-26 EP-M3 CodeRabbit review): the review found that the
+  nullable-attempt legacy scenario asserted a zero handler count without ever
+  running a worker. It also found that malformed numeric row data could abort
+  an entire listing, the discard log decoded returned columns after deletion,
+  and the EXPLAIN canary duplicated the production SQL. These findings require
+  a bounded worker-poll witness, per-row malformed-data handling, a decode-free
+  discard path, and one shared SQL source for the adapter and canary.
+
+- Observation (2026-10-26 EP-M3 final review regression): the first limit-one
+  test edit remained green because the valid row sorted ahead of the malformed
+  row. A corrected row age made the malformed row sort first; the first
+  isolated-cluster attempt then failed during PostgreSQL startup before the
+  assertion. Running with task-owned `PG_DATA_DIR`, `PG_RUNTIME_DIR`, and
+  `TMPDIR` reached the expected red assertion. The final fixture places 101
+  malformed rows before the valid row so it also proves the adapter advances
+  beyond a full raw-row page.
+
+- Observation (2026-10-26 EP-M3 scenario coverage repair):
+  `#[scenario(path = "...")]` in rstest-bdd selects only feature scenario 0
+  unless a name or index is supplied. The previous target count of 15 included
+  only one BDD scenario, so its other feature cases had not run. Explicit named
+  bindings now cover all 15 scenarios. Compile-time step validation also found
+  two stale step phrases; runtime execution found that Apalis worker fixtures
+  must use ULID identifiers and a valid V1 envelope. Those corrected tests
+  exposed and now verify per-row malformed-data handling.
+
+- Observation (2026-10-26 EP-M4 preparation): the planned ADR-002 filename
+  collides with the existing environment-seam ADR-002. The sequential ADR
+  convention forbids renumbering it, so retry scheduling and dead-letter
+  representation will be recorded as ADR-003 and ADR-004. (Renumbered to
+  ADR-004 and ADR-005 on 2026-11-01; see that observation.) The Apalis rc.8
+  orphan query also increments `attempts` and writes a stable heartbeat-timeout
+  error marker; the runbook must describe that observable signature instead of
+  calling attempts stale.
+
+- Observation (2026-10-26, stop-hook validation): `make lint` could not write
+  `target/.rustdoc_fingerprint.json`, and Nixie could not create a temporary
+  directory because the filesystem was full. These infrastructure errors did
+  not establish source failures. After the user reported recovery, `df` showed
+  184 GB free; all seven sequential gates subsequently passed, including
+  rustdoc and Nixie, with 175 GB still free after validation. The first test
+  rerun had also exposed contention with an unrelated shared PostgreSQL lock;
+  using an owned temporary root under `/var/tmp` let the complete suite pass
+  without disturbing the lock owner.
+- Observation (2026-10-26, post-hook recovery rerun): the stop hook again
+  reported ENOSPC while Rustdoc wrote its target fingerprint and Nixie created
+  a temporary directory. After the user reported that storage had been
+  recovered, the complete sequential gate suite passed on clean HEAD
+  `b0df3de0251b63a3717ea1e72cdfc8de1a16a88c` (tree
+  `43510ecd4554890c722fc5cecc162e85ca0467a9`). Free space was 147 GiB at both
+  the beginning and end. `make test` passed 1,901 Nextest tests (four skipped),
+  both compile-fail checks, 614 workflow doctests (one skipped), 115 script
+  doctests (13 skipped), and the frontend and lint-actions suites. The test
+  used the owned PostgreSQL root `/var/tmp/wildside-b0df3de-thqa6ctq`; compiler
+  admission remained healthy. Evidence:
+  `/tmp/wildside-b0df3de-check-fmt-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-test-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-typecheck-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-lint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-markdownlint-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  `/tmp/wildside-b0df3de-nixie-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`,
+  and
+  `/tmp/wildside-b0df3de-spelling-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling.out`.
+- Observation (2026-10-25 Makefile validation): `mbake validate Makefile`
+  rejects repeated declarations of `test-rust`, including target-specific
+  variable assignments. The test-only PostgreSQL settings therefore belong in
+  the single `test-rust` recipe. Its shell-quoted exports use `.ONESHELL` so
+  they reach all three Cargo test commands while preserving values containing
+  whitespace, quotes, dollar signs, or shell metacharacters. The environment
+  contract test guards the one target declaration, both recipe exports, and the
+  absence of global Make exports. One lint run found the duplicate target
+  declarations. The corrected-candidate test run then found that the contract
+  helper stripped trailing whitespace but not recipe indentation; 1,899 other
+  Nextest cases passed and four were skipped. The helper now trims indentation
+  too. The preceding candidate's complete test and typecheck gates passed. The
+  next lint run found the recipe body exceeded `mbake`'s five-line limit; its
+  two exports are now one shell command. The fix6 candidate passed all seven
+  sequential gates; the available space remained above 200 GB. Evidence:
+  `/tmp/epm1-review-fix3-lint.out`, `/tmp/epm1-review-fix4-test.out`,
+  `/tmp/epm1-review-fix5-lint.out`, and the fix6 logs above.
+
+- Observation (2026-10-25 initial Make target-scope experiment): GNU Make
+  parsed a target-specific `export NAME` without an assignment as a
+  prerequisite named `export`; the first candidate therefore stopped at
+  `make test` before any tests or builds ran. The valid form is
+  `target: export NAME := $(NAME)`. An isolated Make check verified that this
+  passes the default only into the Rust test target's scope, keeps unrelated
+  targets unset, and preserves a caller override. `mbake` later rejected the
+  resulting repeated target declarations, so the final recipe uses the
+  single-rule `.ONESHELL` approach described above. Evidence:
+  `/tmp/epm1-review-fix-test.out` and `/tmp/epm1-review-fix3-lint.out`.
+
+- Observation (2026-10-20 provisioning diagnosis): the direct Cargo launch
+  omitted `PG_PASSWORD`, which Make exports for its tests. The setup helper
+  repairs password state but does not export the resolved default. A minimal
+  scratch diagnostic reproduced SQLSTATE `28P01` and the five-attempt admin
+  failure without the variable (3.70 seconds); the same executable and worker
+  succeeded with the Makefile password (1.23 seconds). The dependency's
+  `connect_admin` formats its error with Display, hiding the SQLSTATE behind
+  `db error`. This was a probe-launch error, not evidence against durable
+  scheduling. No shared-service repair or dependency change is required.
+  Evidence and experiment boundaries are recorded in
+  [the debugging plan](../debugging/debugging-plan-2026-10-20-probe-provisioning.md).
+  The scratch diagnostic was removed. The five Apalis predictions were still
+  untested at that checkpoint; the later probe result supersedes that status.
+
+- Observation (2026-10-19 baseline): the branch's unchanged full gate run
+  found two gate-harness issues unrelated to retry implementation.
+  `mbake validate Makefile` rejects `fmt` because it had six recipe lines; the
+  workflow-contract TypeDoc fixtures all failed before evaluating their
+  contracts because TypeScript tried to load implicit `minimatch` types. The
+  temporary fixture has no ambient-type dependency, so it now sets `types: []`;
+  main’s existing `fmt-python` target superseded the one-line workaround while
+  preserving the line-count fix. Evidence: the baseline `lint` and `test` logs
+  named above. Impact: these minimal repairs unblock a clean full gate run
+  without changing runtime behaviour.
+
+- Observation (2026-10-19 corrected M0 candidate): all seven sequential gates
+  passed after the two baseline gate-harness repairs. The workflow-contract
+  suite completed with 606 passed and one skipped; the full Rust, frontend, and
+  Python test suites also passed. Candidate logs are the corresponding
+  branch-specific `/tmp/*-3.out` files. Impact: the pins and narrowly scoped
+  harness repairs are ready for the M0 commit; AXIOM-DURABLE still requires its
+  runtime probe before the milestone is complete.
+
+- Observation (2026-10-19 AXIOM-DURABLE probe): both runtime attempts failed
+  before the handler ran. `provision_template_database` exhausted its five
+  built-in attempts with `failed to connect to admin database: db error` from
+  `pg-embed-setup-unpriv`'s `cluster/connection.rs`; the test binary's 13
+  support-module tests passed in each run. Evidence:
+  `/tmp/probe-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-2.out`
+  and
+  `/tmp/probe-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-3.out`.
+  None of the five predictions was exercised in those two attempts. The
+  missing-password cause was confirmed on 2026-10-20, and the successful
+  replacement probe is recorded below. This historical setup failure does not
+  count as evidence against AXIOM-DURABLE.
+
+- Observation (2026-10-23 AXIOM-DURABLE probe): all five predictions passed
+  against the pinned Apalis PostgreSQL worker. The Cargo configuration supplied
+  the stable non-forcing `PG_PASSWORD` and `POSTGRESQL_RELEASES_URL` defaults;
+  the test command supplied the worker path from `make test`. The handler
+  recorded attempts 1 then 2, and the second invocation began at least two
+  seconds after the first. The row then persisted `Killed` with `attempts = 2`
+  and `max_attempts = 2`; no third invocation arrived in the following three
+  seconds. A second job started with `max_attempts = 3`, changed its guarded
+  running row to `max_attempts = 1`, and persisted `Failed`, `attempts = 1`,
+  `max_attempts = 1`, without another invocation during the next three seconds.
+  The scratch harness waited for Apalis's ack to persist after observing the
+  handler event, and queried by the Apalis task ID because this schema stores
+  the encoded job payload as `bytea`. Evidence:
+  `/tmp/axiom-durable-probe-wildside-20261023-final-2.out`; the scratch source
+  was deleted. Impact: AXIOM-DURABLE is confirmed for the pinned versions and
+  EP-M1 is no longer blocked by this external assumption.
+
+- Observation (2026-10-23 AXIOM-ACK source check): at pinned rc.8,
+  `PgAck::ack` computes result status from `parts.attempt.current()` and
+  `parts.ctx.max_attempts()`. `queries/task/ack.sql` writes only the result
+  status, attempt count, last result, and completion timestamp, and matches
+  both the task ID and worker lock. The durable probe separately observed the
+  terminal rows produced by these rules. Impact: AXIOM-ACK is confirmed at the
+  pinned version; the V8 canaries will preserve this contract in EP-M2.
+
+- Observation (2026-10-23 CodeRabbit review): when an existing row's stored
+  attempt limit exceeds the current queue policy, a retryable failure at the
+  policy limit is made unfetchable by shrinking the stored limit, but the ack
+  can persist it as `Failed` because the hydrated in-memory limit is still
+  higher. Status-based mapping then labels it `Fatal`. This is distinct from a
+  fatal failure at the same attempt and cannot always be recovered from status
+  or attempts. Proposed D15 adds a namespaced metadata reason key alongside
+  requeue count; until approved, the plan remains blocked. Evidence:
+  `/tmp/wildside-epm0-d15-final-review-a3rPku/review.out`.
+
+- Observation (2026-10-23 follow-up CodeRabbit review): V6 required a requeue
+  count even though D15's JSONB writes remain unapproved. The V6 and feature
+  specification now make that assertion conditional on D15. The dead-row
+  predicate now includes nullable `Failed` rows: pinned rc.9's fetch query
+  compares attempts directly with `max_attempts`, so a null limit prevents
+  fetch before the hydrator's fallback of 25 can apply. Such legacy rows are
+  listed as `Unclassified`; V6 tests one below 25 attempts. The canonical rc.8
+  schema declares the column `NOT NULL`. Evidence:
+  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-2.out`.
+
+- Observation (2026-10-23 final plan review): the prior null-limit compatibility
+  predicate incorrectly relied on the hydrator's fallback of 25. Source review
+  confirmed that `get_jobs` applies `attempts < max_attempts` first, so a null
+  limit makes a failed row invisible to both retries and the old dead listing.
+  The selected policy lists every nullable failed row as `Unclassified` and
+  tests one below 25 attempts. The review also found that the wrapper's bounded
+  error is serialized into `last_result` by every acknowledgement; the plan now
+  states that this replaces the previous result while preserving Apalis's JSON
+  representation. Evidence:
+
+  ```plaintext
+  /tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-7.out
+  ```
+
+- Observation (2026-10-23 final review correction): the policy-exhaustion
+  feature scenario asserted an `Exhausted` reason while proposed D15 remains
+  unapproved. It now expects `Exhausted` if D15 is approved and `Unclassified`
+  otherwise. Evidence:
+
+  ```plaintext
+  /tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-8.out
+  ```
+
+- Observation (2026-10-23 final plan review): terminal metadata must be written
+  even when the current attempt already reaches Apalis's limit and the ack will
+  store `Killed`; only the persisted limit shrink is conditional. Otherwise, a
+  fatal one-attempt job loses its `Fatal` reason. The D15 wrapper contract and
+  V3b/V5 now require the reason update on every terminal outcome. Evidence:
+  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-3.out`.
+
+- Observation (2026-10-23 follow-up plan review): a retryable failure at the
+  policy limit also needs a guarded limit shrink when a pre-existing row's
+  stored limit is higher than the current queue policy. D15 reason persistence
+  is independent of that conditional shrink. V4/V5 now require reason-specific
+  assertions only when D15 is approved and use `Unclassified` otherwise.
+  Evidence:
+  `/tmp/coderabbit-wildside-5-2-3-retry-policies-with-exponential-backoff-and-dead-letter-handling-6.out`.
+
+- Observation (2026-10-23 post-rebase validation): `make check-fmt`,
+  `make typecheck`, `make lint`, `make markdownlint`, `make nixie`, and
+  `make spelling` passed on HEAD `736c298f`. `make test` exited 1 after 1,085
+  seconds because
+  `backend::diesel_offline_bundle_repository::offline_repository_maps_missing_schema_to_query_error`
+  failed at case 995/1,851. The captured nested output contains no underlying
+  diagnostic. This candidate changes only this ExecPlan, and the same test
+  passed in earlier runs, so the failure's cause remains unknown. No retry was
+  made. Evidence: `/tmp/wildside-pg-defaults-last-test-20261023.out`.
+
+- Observation: apalis-postgres 1.0.0-rc.6 does not persist abort errors as
+  `Killed` (the `calculate_status` arm is commented out upstream), so a fatal
+  failure acked with spare attempts becomes a re-deliverable `Failed` row.
+  Evidence: published crate source for rc.6 (`ack.rs`), and the `get_jobs`
+  predicate re-fetching `Failed` rows with `attempts < max_attempts`. Impact:
+  fatal dead-lettering requires an explicit storage-level action by the adapter
+  wiring; the dead predicate alone cannot see an early fatal failure (Decisions
+  D4; obligation V5).
+- Observation: the Apalis retry layer performs backoff in-process while
+  the job row stays locked; `run_at` is not rescheduled on failure, and
+  attempts persist only at final acknowledgement. Evidence: `ack.sql` in the
+  published rc.6 crate updates only status/attempts/last_result/done_at; tower
+  `Retry` awaits the backoff future within the same execution. Impact: delays
+  must fit a total budget below any future orphan-recovery threshold;
+  `max_attempts` is a per-lease bound; per-attempt logging is the only
+  crash-surviving artefact (Decisions D2; obligations V1b, V4).
+- Observation: nothing in this repository configures Apalis orphan
+  recovery today. Evidence: `reenqueue_orphaned_after` appears nowhere in
+  `backend/src`. Impact: until 5.3.1, a dead worker leaves its job `Running`
+  indefinitely; recorded in "Context and orientation" and in ADR-004 rather
+  than assumed away.
+- Observation: the pinned Apalis worker tracker increments a task's shared
+  `Attempt` once around the complete user-middleware future. Its retry policy
+  reads `Attempt.current()` but does not increment it. A retry policy that
+  relies on that count therefore cannot enforce the planned per-lease limit.
+  Evidence: `AttemptOnPollFuture::poll` and `TrackerService::call` in the
+  [apalis-core worker source](https://docs.rs/crate/apalis-core/1.0.0-rc.7/source/src/worker/mod.rs),
+  the
+  [Attempt type](https://docs.rs/crate/apalis-core/1.0.0-rc.7/source/src/task/attempt.rs),
+  and `RetryPolicy::retry` in the
+  [apalis retry source](https://docs.rs/crate/apalis/1.0.0-rc.7/source/src/layers/retry/mod.rs)
+  (retrieved 2026-10-13). `WorkerBuilderExt::retry` installs a retry layer in
+  user middleware, which the tracker wraps once. Impact: AXIOM-ATTEMPT is false
+  as written; EP-M1–M4 must not proceed until a revised mechanism passes a
+  bounded runtime probe and the user approves the plan revision. Superseded
+  2026-10-14: the layer order is inverted. See the next entries.
+- Proposed correction, not yet adopted: increment the shared `Attempt` in
+  the custom retry policy immediately before it returns a retry future. Then
+  verify that the next handler invocation observes the increment and that final
+  acknowledgement persists the same total. This retains the facade retry layer
+  while making attempt accounting explicit in the adapter policy. Rejected
+  2026-10-14 (Decision D9).
+- Observation (2026-10-14 review): the tracker is the innermost worker layer,
+  so `Attempt` advances once per in-process attempt. Evidence: the worker's
+  local `ServiceBuilder::layer` builds `Stack::new(layer, self.layer)`; tower's
+  `Stack::new(inner, outer)` layers `inner` first and `outer` around it; the
+  stack adds `self.middleware` first and `TrackerLayer` last, with the comment
+  "pass the user defined middleware first" (identical in
+  [apalis-core rc.7](https://docs.rs/crate/apalis-core/1.0.0-rc.7/source/src/worker/mod.rs)
+  and the cached rc.9 source,
+  [tower-layer `Stack`](https://docs.rs/tower-layer/latest/src/tower_layer/stack.rs.html)).
+  Corroboration: upstream's own `basic_worker_retries` test in
+  [apalis rc.7 retry](https://docs.rs/crate/apalis/1.0.0-rc.7/source/src/layers/retry/mod.rs)
+  asserts that `Attempt::current()` reaches 4 under `RetryPolicy::retries(3)`,
+  which is only possible if it advances per retry. Impact: the 2026-10-13
+  conclusion is inverted, and a policy-owned increment would double-count.
+- Observation (2026-10-14 review): the backend middleware (Ack wrapping
+  LockTask) sits inside user middleware, so every failed in-process attempt is
+  acked separately. Evidence: rc.8 `PostgresStorage::middleware` returns
+  `Stack::new(LockTaskLayer, AcknowledgeLayer<PgAck>)`; rc.8 `ack.sql` sets
+  `status`, `attempts`, `last_result`, and `done_at`, but not `run_at` or
+  `lock_by`; the `get_jobs` predicate (migration `20251018165056_queue_jobs`)
+  selects `Failed AND attempts < max_attempts AND run_at < now()` without
+  regard to `lock_by`; `lock_by_id.sql` relocks `Pending`, `Queued`, or
+  re-fetchable `Failed` rows. Impact: while the tower retry layer sleeps, the
+  job is a re-fetchable `Failed` row, so a second worker can run it
+  concurrently and the two can take the lock from each other. This is a
+  duplicate-execution hazard that the original D2 did not foresee, and it
+  invalidates in-process backoff over `PostgresStorage` at these pins.
+- Observation (2026-10-14 review): `Cargo.lock` resolves
+  `apalis-core 1.0.0-rc.9` and `apalis-postgres 1.0.0-rc.8`, not the rc.7/rc.6
+  that the manifest and this plan name. The caret requirements also admit
+  `1.0.0` final (published 2026-10-12). That release is a breaking rewrite:
+  `Task<Args>` loses its `Ctx` and `IdType` parameters, results persist in
+  batches through `handle_result.sql`, and backend middleware moves *outside*
+  user middleware, so a retry layer there would be acked once. Evidence:
+  crates.io version listing and the 1.0.0 crate sources
+  (`apalis-core/src/worker/mod.rs`, `src/worker/lifecycle.rs`,
+  `apalis-postgres/src/queries/handle_result.rs`). Impact: an unrelated
+  `cargo update` would silently replace every axiom in this plan (Decision D10).
+- Observation (2026-10-17, while folding in D10/D11): the facts D11 needs
+  hold at rc.9/rc.8. Every fetch path filters `run_at < now()`: `get_jobs`,
+  `lock_by_id.sql`, and `queue_by_id.sql` all do, and the notify trigger fires
+  only on `INSERT`. `TaskRow::try_into_task` (`apalis-sql`) rehydrates both
+  `Attempt` and the context `max_attempts` from the row. `WorkerBuilder::build`
+  accepts any `Service<Task<..>>` through a blanket `IntoWorkerService` impl
+  (`apalis-core` `src/task_fn/mod.rs:239`), so the wrapper can read `parts.ctx`
+  directly. `PgContext::with_max_attempts` exists for the enqueue side, and
+  `rand` 0.8 is already a dependency for jitter. One gap needed closing: the
+  terminal path may shrink `max_attempts`, so `requeue` must restore it
+  (Decision D12). Apalis 1.0.0's `get_jobs` also still filters on `run_at`, so
+  D11 is expected to survive issue #550. Note, however, that 1.0.0 requires
+  `sqlx` 0.9, and the backend is on 0.8. Evidence: cached rc sources under
+  `~/.cargo/registry/src/` and the 1.0.0 crate tarballs.
+
+## Decision log
+
+- M3 review repair decision (2026-10-26): a nullable legacy `max_attempts`
+  scenario must run an Apalis worker for a bounded polling interval, verify
+  worker registration, and then assert that the handler was not called. For
+  malformed numeric Apalis state, `list_dead` will warn and omit only the bad
+  row; `requeue` will return a typed invalid-row error without modifying it.
+  Coercing corrupt attempts or provenance to zero would misstate history.
+  `discard` will log the caller-supplied opaque id after a guarded delete
+  without decoding values returned after the mutation. The EXPLAIN canary and
+  adapter will include the same SQL file so their predicate and ordering cannot
+  drift independently.
+
+- M3 final review repair (2026-10-26): fetch dead rows in bounded batches of
+  100, advance the SQL offset by the raw row count, and filter each row before
+  counting it toward the caller's valid-result limit. Keep the batch query in
+  `dead_listing.sql` so the EXPLAIN canary exercises the production statement.
+  A SQL-only malformed-metadata predicate was rejected because it would need to
+  duplicate Rust's numeric parsing and bounds. Preserve the plan's single
+  permitted development-dependency addition by encoding fixture IDs with the
+  already-present `uuid` crate; a focused test checks canonical ULID syntax.
+  The regression includes more than one raw page of malformed rows to exercise
+  offset advancement.
+
+- BDD coverage decision (2026-10-26): every scenario in the dead-letter feature
+  file receives an explicit named `#[scenario]` binding. A default path-only
+  binding runs only the first scenario and is insufficient evidence for the
+  feature contract.
+
+- ADR numbering decision (2026-10-26): preserve existing ADR-002 and allocate
+  ADR-003 to durable retry scheduling and ADR-004 to dead-letter rows. This
+  corrects the earlier plan filenames without changing either accepted
+  mechanism or its requirements.
+
+- ADR renumbering (2026-11-01): main allocated ADR-003 to the front-end
+  linting strategy, which collides with the allocation recorded above. Durable
+  retry scheduling is now ADR-004 and dead letters are now ADR-005.
+  `docs/contents.md`, the developer guide, the backend architecture document,
+  and this plan's ADR links use the new numbers. Neither mechanism nor its
+  requirements changed.
+
+- Verification refinement (2026-10-26): EP-M2 introduces the retry wrapper but
+  EP-M3 introduces `DeadLetterQueue::list_dead`. The M2 feature therefore
+  asserts the guarded row state and D15's persisted terminal reason directly;
+  V6 verifies that the later listing maps the reason to the domain enum. This
+  keeps M2 test-first without duplicating the dead-letter adapter early or
+  weakening either acceptance check.
+
+- Operational decision (2026-10-20): run the replacement scratch probe with
+  the Makefile-equivalent PostgreSQL environment documented in the developer
+  guide. The controlled authentication comparison resolves the setup blocker;
+  at that checkpoint it did not discharge AXIOM-DURABLE or change D9–D14. EP-M1
+  remained gated on the five-prediction runtime probe until the successful
+  2026-10-23 result below.
+
+- Operational decision (2026-10-23): AXIOM-DURABLE is confirmed at the exact
+  Apalis pins, including the persisted delay and both terminal-state paths.
+  AXIOM-PIN and AXIOM-ACK are also confirmed. The complete M0 gate sequence is
+  green. The milestone CLI review identified a provenance and terminal-reason
+  storage deviation, which D15 addressed. Implementation remained paused until
+  the user accepted that decision on 2026-10-25.
+
+- D1 — *Superseded on 2026-10-17 by D11 and D14.* Adopt the upstream Apalis
+  tower retry machinery, with a custom `tower::retry::Policy` that delegates to
+  the domain `JobRetryPolicy`. Rationale: the facade layer is the supported
+  mechanism at these pins and integrates with the worker builder 5.3.1 will
+  use; delegating keeps the verified domain function authoritative instead of
+  maintaining a parallel spec in tower's backoff maker. Depending on tower
+  directly would mean reimplementing the apalis-aware glue (request cloning,
+  attempt bookkeeping) — exactly the brittle rc-coupled code this choice
+  avoids. Date/author: 2026-08-16, planning agent (subject to user approval of
+  this plan).
+- D2 — *Superseded on 2026-10-17 by D11 and D13.* Accept in-process backoff
+  under a hard total budget; defer persisted (`run_at`-based) backoff.
+  Rationale: the honest constraint is that rc.6 exposes no failure-time hook
+  with which to reschedule `run_at` (the operator-path SQL in D3 already writes
+  to the library-managed table, so schema purity is not the argument). Building
+  the hook means owning custom ack-path middleware that 5.3.1 will restructure.
+  The strongest alternative — durable graphile-worker-style rescheduling — buys
+  crash-durable backoff and freed worker slots at that cost; at the mandated
+  small delay caps the durability delta is marginal. Revisit trigger, recorded
+  in ADR-004: revisit if any production policy's worst-case total in-process
+  wait approaches `TOTAL_BACKOFF_BUDGET`, or if 5.3.1 load tests observe
+  worker-slot exhaustion during backoff. Date/author: 2026-08-16, planning
+  agent.
+- D3 — Dead letters are rows in `apalis.jobs` (`Killed`, `Failed` with a null
+  `max_attempts`, or `Failed` with `attempts >= max_attempts`), surfaced
+  through a domain `DeadLetterQueue` port; no separate table. Dead-letter
+  surfaces never expose raw payloads (privacy stance inherited from
+  `decode_job`); operators correlate via job id, job type, and the bounded
+  last-error text. Rationale: matches Apalis's model and graphile-worker prior
+  art; avoids schema divergence from library-managed tables; the port isolates
+  the representation so a future table swap stays adapter-local. Date/author:
+  2026-08-16, planning agent.
+- D4 — Terminal errors are made dead at the storage level by adapter wiring, not
+  by relying on Apalis abort persistence. *Mechanism settled on 2026-10-17
+  under D11: before the ack, the handler wrapper shrinks the locked row's
+  `max_attempts` to the current attempt when its in-memory limit has not
+  already been reached, so the ack's `Failed` row satisfies
+  `attempts >= max_attempts` and is never fetched. The alternatives sketched
+  below (setting `Killed` directly, or driving the attempt counter) are
+  rejected: the ack overwrites `status`, and inflating `attempts` would
+  misreport how often the job ran.* Original rationale: the abort-to-`Killed`
+  path is incomplete at rc.6, and a terminal `Failed` row with spare attempts
+  would be re-delivered by the storage fetcher. The wiring must perform a
+  guarded retry-limit shrink (or drive the attempt counter to exhaustion, per
+  the AXIOM-ATTEMPT probe); either way the dead predicate holds and re-delivery
+  is impossible. This also keeps behaviour stable if 1.0-final restores the
+  abort arm. Date/author: 2026-08-16, planning agent.
+- D5 — `discard` deletes the dead row (guarded, `RETURNING`, logged
+  without payload). Rationale: the earlier marker-based sketch was
+  self-contradictory — a discarded-but-`Killed` row would still match the dead
+  predicate unless the listing grew a stringly-typed filter. Deletion is honest
+  and bounds table growth; if retention of discarded jobs becomes a requirement
+  it deserves its own decision, not a marker hack. Date/author: 2026-08-16,
+  planning agent (panel finding).
+- D6 — An additive partial index on the dead predicate is pre-authorized,
+  created through the adapter setup path, applied only if EP-M3's `EXPLAIN`
+  check shows a sequential scan. Rationale: `apalis.jobs` retains all history
+  at these pins; an OR-predicate scan degrades with table growth. Conditional
+  application keeps the footprint minimal and the evidence recorded.
+  Date/author: 2026-08-16, planning agent (panel finding).
+- D7 — One `JobRetryPolicy` per queue-adapter instance (per job family),
+  no global constant. Rationale: the architecture document promises
+  per-job-type queue configuration; per-instance policy state gives 5.3.1's
+  per-queue workers a coherent shape without touching the `RouteQueue` port
+  signature. Date/author: 2026-08-16, planning agent (panel finding).
+- D8 — Keep `RouteQueueOutcome` and enqueue latency metrics restricted to
+  enqueue operations. Add dedicated `observe_retry` and `observe_dead_letter`
+  methods for the two new event counters. Rationale: `observe_enqueue` records
+  an enqueue outcome and latency; using retry or dead-letter events as its
+  outcome would mislabel queue processing as enqueue activity and pollute the
+  enqueue latency histogram. Date/author: 2026-10-13, execution refinement.
+- D9 — Reject the policy-owned `Attempt` increment. Rationale: the tracker
+  is the innermost layer and already increments once per in-process attempt, so
+  an extra increment in the retry policy would advance the count twice per
+  retry. That halves the effective budget and persists `attempts` values that
+  skip. Date/author: 2026-10-14, planning review.
+- D10 (accepted by the user on 2026-10-17) — Pin Apalis exactly to the
+  resolved versions: `apalis-core = "=1.0.0-rc.9"` and
+  `apalis-postgres = "=1.0.0-rc.8"`. Rationale: caret requirements on
+  prerelease versions admit `1.0.0` final, a breaking rewrite whose layer order
+  and persistence path differ from everything this plan verifies. The upgrade
+  to 1.0.0 should be its own roadmap item: it changes the enqueue adapter and
+  the `Task` API, and once 1.0.0 is in place the V8 canaries are the
+  re-verification checklist. Alternative: perform that upgrade first as a
+  precursor, then re-plan 5.2.3 against 1.0.0. That would mean building worker
+  code only once, on the final API, at the cost of delaying 5.2.3. Date/author:
+  2026-10-14, planning review. The 1.0.0 upgrade is tracked as
+  [#550](https://github.com/leynos/wildside/issues/550).
+- D11 (accepted by the user on 2026-10-17) — Replace in-process tower
+  retry with durable, storage-scheduled backoff. Supersedes D1 and D2 if
+  approved. Mechanism: no retry layer is installed. A handler wrapper (the
+  service passed to `WorkerBuilder::build`, so it runs inside the tracker and
+  before the ack) classifies the error through `JobErrorKind`. It reads the
+  current attempt from the extracted `Attempt` and the task id. Before it
+  returns `Err`, it issues one guarded update while the row is still `Running`
+  and locked by this worker
+  (`WHERE id = $1 AND lock_by = $2 AND status = 'Running'`). For a retryable
+  error below the policy limit, it sets `run_at` to the injected clock's
+  instant plus `JobRetryPolicy::backoff_delay(attempt, jitter)`. A fatal error
+  or a retryable error at the policy limit takes the terminal path. If
+  `Attempt::current() < context max_attempts`, the guarded update sets the
+  persisted `max_attempts` to `Attempt::current()`, exactly the `attempts`
+  value the ack will persist. This also handles a pre-existing row whose stored
+  limit exceeds the current policy: the retryable failure at the policy limit
+  must become unfetchable even though the in-memory limit still permits another
+  attempt. When `Attempt::current() >= context max_attempts`, no limit shrink
+  is needed because the ack already writes `Killed`. Under accepted D15, the
+  terminal update also writes the namespaced reason key before the ack, whether
+  or not a limit shrink is needed. Rows without that key remain `Unclassified`
+  because status and attempt fields cannot identify the cause of legacy
+  failures. The ack does not touch `run_at` or `max_attempts`; after a terminal
+  shrink, the row may be `Failed` but is permanently dead under the existing
+  dead predicate. Otherwise the ack writes `Killed` at the in-memory attempt
+  limit. The fetch path rehydrates `Attempt` from persisted `attempts`.
+  Rationale: at rc.7–rc.9 the in-process alternative is racy (see
+  `Surprises & discoveries`). The durable form closes the race, because the row
+  is never fetchable during the delay. It also frees worker slots during
+  backoff, survives worker crashes with attempt history intact, makes
+  `max_attempts` a lifetime bound rather than a per-lease bound, and removes the
+  `apalis` facade dependency, AXIOM-FACADE, the `TOTAL_BACKOFF_BUDGET`
+  coupling to orphan recovery, and the custom `tower::retry::Policy`. The cost
+  is one extra SQL statement per failure, and backoff precision bounded below
+  by the poll interval. Panel prior art (graphile-worker, sidekiq) uses this
+  model. The domain `JobRetryPolicy` remains the executed policy. Consequences
+  to apply before EP-M1 if approved: rewrite D1, D2, D4, the "Interfaces and
+  dependencies" adapter section, obligations V1b, V4, and V8, the EP-M2 green
+  step, and the Risks entries tied to in-process backoff. Replace AXIOM-ATTEMPT
+  with AXIOM-DURABLE, the five-part runtime probe in EP-M0. Date/author:
+  2026-10-14, planning review. These consequences were applied on 2026-10-17.
+  The wrapper is a `tower::Service` over the task, so it reads the in-memory
+  `max_attempts` from `parts.ctx` rather than an extractor.
+- D12 — `requeue` restores the queue's configured retry budget. Rationale:
+  under D4 and D11, a fatally dead row has `max_attempts` equal to its attempt
+  count. Resetting only `attempts = 0` would leave a requeued job with a budget
+  of one. `PostgresDeadLetterQueue` is therefore built with a `RequeueBudgets`
+  map from Apalis queue name (`job_type`) to the `max_attempts` of that queue's
+  `JobRetryPolicy`, and it refuses with `UnknownQueue` rather than guess. A
+  budget lookup keeps the port signature operator-friendly. Keep the queue's
+  original budget out of metadata: the column is Apalis-managed and its shape
+  may change in 1.0.0. Accepted D15 records the distinct requeue count and
+  terminal reason in namespaced metadata; V8 must verify both keys before the
+  1.0.0 upgrade. Date/author: 2026-10-17, planning agent; clarified 2026-10-23.
+- D13 — Replace `TOTAL_BACKOFF_BUDGET` with a per-delay ceiling,
+  `MAX_BACKOFF_DELAY` (one hour). Rationale: the total budget existed to bound
+  worker-slot occupancy and to stay below the orphan-recovery threshold. Under
+  D11, no worker holds a job during backoff, so neither concern applies. A
+  ceiling still guards against misconfiguration (for example, a large
+  multiplier) parking jobs for days. Date/author: 2026-10-17, planning agent.
+- D14 — Forbid in-process retry middleware on Apalis workers at the rc
+  pins. Rationale: the 2026-10-14 evidence shows it races with the storage
+  fetcher. The V9 conformance check enforces this rule, and ADR-004 records it.
+  Issue #550 may revisit it under 1.0.0's changed middleware order, but only
+  with evidence. Date/author: 2026-10-17, planning agent.
+- D15 — Use the existing Apalis JSONB `metadata` field for two namespaced
+  keys: `wildside.retry.requeue_count` and `wildside.retry.dead_reason`. A
+  guarded requeue increments the bounded counter, preserves unrelated metadata,
+  and removes the prior dead reason. A guarded terminal-failure update writes
+  `fatal` or `exhausted` to the reason key and, when needed, shrinks
+  `max_attempts` in the same statement. This lets `list_dead` distinguish a
+  fatal failure from policy exhaustion even when both become an unfetchable
+  row. Rows without the key are `Unclassified` because status and attempts
+  cannot identify their terminal cause. Rationale: Apalis replaces
+  `last_result` on every acknowledgement, so requeue provenance there
+  disappears after the next run; status and attempt counts alone cannot
+  distinguish all terminal reasons. Keeping both values in namespaced metadata
+  preserves the existing bounded plain error string in `last_result`. The
+  pinned rc.8 hydrator carries metadata into `PgContext`, and its ack leaves
+  the column untouched. This adds no schema object and preserves the ban on a
+  separate dead-letter table (D3). The retry budget remains sourced from
+  `RequeueBudgets` (D12), never metadata. Preserve all unrelated keys,
+  initialize an absent counter to zero, validate it as `u32`, and treat both
+  keys as rc-coupled contracts covered by V8 before the 1.0.0 upgrade (#550).
+  An application-owned envelope in `last_result` was considered and rejected
+  because it would change Apalis's serialized error representation. The user
+  accepted the two metadata writes on 2026-10-25 Europe/Berlin. Date/author:
+  2026-10-23 Europe/Berlin, implementation review; acceptance: user. Amended
+  2026-11-21: one further key, `wildside.retry.claim_token`, is authorized by
+  the replacement-delivery guard recorded under "D15 scope amendment of
+  2026-11-21"; no other metadata write is authorized.
+- D16 — Cap `JobFailure` messages at 1,024 UTF-8 bytes and truncate only at a
+  character boundary. Rationale: the failure is payload-free and later becomes
+  the bounded plain Apalis `last_result`; a byte cap gives that boundary an
+  exact, reusable contract without producing invalid UTF-8. Date/author:
+  2026-10-25 Europe/Berlin, implementation refinement.
+- D17 — Group retry-policy constructor values in `JobRetryPolicyConfig` and
+  accept that value from `JobRetryPolicy::new`. Rationale: Clippy's configured
+  argument limit is four; named fields keep each policy setting clear at the
+  call site while preserving constructor validation and policy behaviour. The
+  invalid-configuration rstest cases also pass that value as a unit to keep the
+  test helper within the same limit. Date/author: 2026-10-25 Europe/Berlin,
+  implementation refinement.
+- D18 — `list_dead` exposes `last_error` only when the row also carries a
+  recognized D15 terminal reason (`fatal` or `exhausted`) and Apalis's
+  `last_result.Err` is a JSON string. Legacy and malformed rows without that
+  provenance remain visible as `Unclassified` with `last_error = None`.
+  Rationale: status, attempts, and an arbitrary legacy `last_result` do not
+  prove that its contents are a payload-free `JobFailure` message; applying the
+  D16 byte bound alone would not make such data safe to expose. This is a
+  read-side filter and adds no metadata key or schema object. Date/author:
+  2026-10-26 Europe/Berlin, implementation refinement.
+- Documentation scope (2026-10-28): the users' guide needs no change because
+  retry scheduling and dead-letter operations are internal queue and operator
+  interfaces. ADRs 003 and 004, the backend architecture, developers' guide,
+  and operator runbook describe those interfaces and the deferred worker
+  composition instead.
+
+## Outcomes & retrospective
+
+EP-M0 implementation and deterministic gates completed on the 2026-10-23
+Europe/Berlin candidate: the pinned dependency graph, acknowledgement source
+contract, and durable scheduling probe are confirmed. The local M0 CLI review
+exposed two persistence needs. `list_dead` cannot contain a job after its
+successful acknowledgement, and `last_result` cannot preserve a requeue marker
+across another acknowledgement. Apalis status and attempt counts also cannot
+distinguish a fatal error from policy exhaustion when the stored attempt limit
+exceeds the current policy. The user accepted D15 on 2026-10-25, authorizing
+the two namespaced JSONB metadata keys while preserving the existing
+`last_result` format. EP-M1 through EP-M4 are complete. EP-M3's port, adapter,
+BDD scenarios, EXPLAIN canary, and all seven gates passed; its committed CLI
+reassessment returned zero findings. EP-M4's documentation and gates are
+complete, and its two CLI concerns were checked against the reviewed commit and
+found inconsistent with the source. The requested rebase and subsequent full
+gates passed. The pin, durable scheduling, and acknowledgement assumptions were
+exercised by the M0 probe and V8 canaries; none was falsified. V1–V6 and V9 are
+covered by policy, behavioural, negative-control, and boundary checks, and the
+V1 job snapshots remain unchanged (V7). No formal proof artefact was introduced
+or materially changed. The implementation is complete and published as the pull
+request `leynos/wildside#457`. The head `d821d3d` passes the nine repository
+gates and the hosted `build`, `coverage`, CodeScene, and Gecko checks. The D15
+claim-token amendment remains pending explicit user approval; the CodeRabbit
+review of 2026-11-22 requires that approval before it will treat the finding as
+addressed.
+
+## Revision note
+
+2026-10-25 Europe/Berlin: the user accepted D15's recommendation to persist
+requeue provenance and terminal failure reasons in the two namespaced Apalis
+`metadata` keys. The approval gate is resolved and EP-M1 begins. All D15
+requirements and verification obligations are now unconditional; dated
+pre-acceptance checkpoints below remain historical.
+
+2026-10-23: recorded the missing-`PG_PASSWORD` diagnosis and the successful
+five-prediction AXIOM-DURABLE probe after the non-forcing Cargo defaults were
+added. The branch was rebased onto `origin/main`, preserving main's formatter
+target and TypeDoc fixture improvements; the four requested post-rebase gates
+passed. The scratch probe was removed. A final M0 sequence passed all seven
+gates, and source inspection plus the resolved tree confirm AXIOM-ACK and
+AXIOM-PIN. EP-M0 implementation is complete; its CLI review precedes EP-M1.
+
+2026-08-16: revised after the expert-panel design review. Material changes:
+fatal dead-lettering is now an explicit storage-level action (D4 rewritten; V5
+strengthened to assert non-re-delivery); the two retry loops (tower in-process
+versus storage refetch) are reconciled through the named axiom AXIOM-ATTEMPT,
+an EP-M0 compile probe, and V4's total-executions assertion; the domain policy
+is now the executed policy via a delegating `tower::retry::Policy` (D1
+rewritten); a `TOTAL_BACKOFF_BUDGET` constructor constraint and obligation V1b
+bound worker-slot occupancy and pin the orphan-recovery inequality; per-lease
+attempt semantics, crash-loop risk, per-attempt logging, and the
+unconfigured-orphan-recovery fact are documented; requeue and discard are
+guarded compare-and-swap operations with provenance, `NotDead` errors, and
+settled discard-as-delete semantics (D5); dead-letter and retry metrics are
+named deliverables; `DeadJobId` newtype, `dead_at` naming, `#[non_exhaustive]`,
+ordering, and payload-privacy contracts added to the port; rc-coupling canaries
+(V8), attempt-mapping tests (V3b), the optional partial index (D6),
+per-instance policy (D7), the operator runbook, the harness promotion path, and
+the ADR split (ADR-002/ADR-003) were added. Remaining work is unchanged in
+structure: EP-M0 through EP-M4 pending approval.
+
+2026-10-13: execution began under explicit user authorization. Firecrawl
+inspection of the pinned Apalis sources disproved AXIOM-ATTEMPT: the worker
+tracker increments once around the complete user-middleware call, and the retry
+policy only reads that count. EP-M1–M4 are paused pending review of the
+proposed policy-owned attempt increment and a bounded runtime probe. D8 keeps
+retry/dead-letter event counters separate from enqueue outcome and latency
+metrics.
+
+2026-10-14: planning review of the 2026-10-13 finding. That finding inverted
+tower's layer order: the tracker is innermost and already counts every
+in-process attempt, so the proposed policy-owned increment is rejected (D9).
+The review instead found that every in-process attempt is acked separately,
+leaving a re-fetchable `Failed` row during each backoff sleep. That is a
+duplicate-execution hazard, and it invalidates in-process backoff at these
+pins. The review also found that the build resolves rc.9/rc.8, not the
+rc.7/rc.6 named here, and that the caret requirements admit the breaking
+`1.0.0` final release. Two proposals await the user's ruling: D10 (exact pins;
+the 1.0.0 upgrade becomes a separate item) and D11 (durable `run_at` backoff in
+place of the tower retry layer). EP-M0 now carries a falsifiable,
+five-prediction runtime probe (AXIOM-DURABLE). EP-M1 onward stays paused.
+
+2026-10-17: the user accepted D10 (exact Apalis pins) and D11 (durable,
+storage-scheduled backoff). The plan is rewritten around them, and a
+`Read this first` section summarizes the delta for implementers. Changes:
+
+- AXIOM-FACADE and AXIOM-ATTEMPT are retired in favour of AXIOM-PIN,
+  AXIOM-DURABLE, and AXIOM-ACK, discharged by EP-M0's pin step and five-part
+  runtime probe.
+- D1 and D2 are superseded, D4's mechanism is settled, and D12 (requeue
+  restores the budget), D13 (`MAX_BACKOFF_DELAY` replaces
+  `TOTAL_BACKOFF_BUDGET`), and D14 (no in-process retry middleware) are added.
+- Interfaces gain `JobFailure`, `DeadReason`, `DeadLetterError::UnknownQueue`,
+  `PostgresRetryScheduler`, and the service-shaped handler wrapper. The
+  `apalis` facade dependency is dropped.
+- Obligations V1b, V3b, V4, V5, V6, and V8 are rewritten, and V9 (no retry
+  layer) is added.
+- EP-M2 is rewritten, EP-M3 gains budget restoration, and EP-M4 names the
+  renamed ADR-002 (`adr-002-durable-retry-scheduling-for-apalis-jobs.md`).
+- Issue [#550](https://github.com/leynos/wildside/issues/550) tracks the
+  Apalis 1.0.0 upgrade.
+
+This paragraph records the plan state before D15 was accepted. The user's
+2026-10-25 acceptance resolved that approval gate; EP-M1 is now active.
+
+2026-10-23 Europe/Berlin: reconciled the M0 local CodeRabbit findings.
+Corrected the post-acknowledgement provenance assertion, clarified that the
+review's October 22 UTC date and the plan's October 23 Europe/Berlin date refer
+to the same period, and fixed the style finding. Apalis metadata is a
+technically viable location for the requeue counter and dead reason, but its
+write is outside the approved column allow-list. Proposed D15 is explicitly
+pending user approval, the accepted invariant remains unchanged, and the plan
+is blocked before EP-M1.
+
+2026-10-23 Europe/Berlin: the D15 reassessment corrected the stale
+current-version paragraph to state the exact rc.9/rc.8 manifest pins and
+identify the caret requirements as historical. Its October 22 UTC date and the
+plan's October 23 local date are consistent; the review completed after the
+commit it assessed. The candidate awaits refreshed documentation gates and CLI
+reassessment.
+
+2026-10-23 Europe/Berlin: the final D15 reassessment found that status alone
+cannot distinguish policy exhaustion from a fatal error when the stored Apalis
+limit exceeds the current policy. Proposed D15 now records the reason in
+`wildside.retry.dead_reason` alongside the requeue counter. Apalis's
+`last_result` JSON representation remains unchanged; acknowledgements replace
+its value with the bounded error string returned by the wrapper. The requested
+PR #457 rebase onto `origin/main` was an up-to-date no-op: the branch's first
+commit already directly followed the target, so no commits replayed and no
+conflicts arose. The post-rebase candidate passed `make check-fmt`, `make test`
+(1,851 Nextest passed, four skipped, plus the compile-fail, frontend,
+workflow-contract, and Python suites), `make typecheck`, `make lint`,
+`make markdownlint`, `make nixie`, and `make spelling`. The local CLI
+reassessment remains pending. D15 requires explicit user approval before any
+implementation milestone begins. Its October 22 review date is UTC; the
+recorded commits and review use Europe/Berlin (`+02:00`) and are ordered by
+their exact timestamps.
+
+2026-10-26 Europe/Berlin: the M3 CodeRabbit review found a vacuous legacy-null
+attempt scenario and malformed-row, post-delete decoding, and duplicated-SQL
+gaps. The M3 repairs now require bounded worker polling, conservative handling
+of corrupt persisted counters, and a shared production/test SQL source. ADRs
+were renumbered to preserve existing ADR-002. These findings extend M3
+verification and do not change accepted retry or D15 behaviour.
+
+2026-10-30 Europe/Berlin: the user approved the plan for publication and
+requested a rebase onto `origin/main`, the four implementation gates, and a
+force-push with lease. The target was already an ancestor of the branch head,
+so the rebase was an up-to-date no-op; no commits replayed and no conflicts
+arose. All seven repository gates then passed on `d37db0f`, and only the
+Markdown gates were repeated for this documentation-only record edit before
+publication.
+
+2026-10-31 Europe/Berlin: the hosted `build` job on `391ac22` failed at the
+audit step on advisories inherited from `main`, so the user directed a restack
+onto PR [#567](https://github.com/leynos/wildside/pull/567) instead of a
+separate prerequisite pull request. #567's branch `fix-zstd-audit` already
+carries both audit fixes and is green. The exclusive replay boundary was the
+old target `ede1a2b5523e7d179ac8fde62f284e93cf0e0ccc` and the new target was
+the PR #567 head `3125fa569ad17de04a0ee4d3b640922a0d7c9cd9`; the old head was
+`391ac22c244a3bf368c24f4f5318bc5b77e2a18d`. Replay used the explicit boundary
+with `--merge`, `--no-fork-point`, `--no-update-refs`, `--no-autostash`,
+`--reapply-cherry-picks`, `--keep-empty`, and `--empty=stop`, together with
+`zdiff3` and an explicit Weave driver bypass
+(`-c core.attributesFile=/dev/null`), because `~/.config/git/attributes`
+selects Weave ambiently and the repository does not opt in. All 49 commits
+replayed with no conflicts and no merge commits, producing the new head
+`1cdff78659ed5f3d96bc3d962312207b9a3587ef`; recovery refs are
+`refs/codex/rebase/wildside-523-restack-567-1793405621/{old-head,old-base,target}`.
+`git diff --check 3125fa5 HEAD` is clean, and `git range-diff` compares 40
+patch-distinct entries with 39 identical. The single difference is
+`Add pure queue retry policy`, whose `Cargo.lock` hunks that moved
+`windows-sys` from 0.60.2 to 0.61.2 no longer apply because the new base
+already resolves 0.61.2.
+
+The lockfile follows the standing instruction to take target packaging changes
+and rebuild: the branch's series carries the target's `Cargo.lock` plus only
+what the branch itself adds. Against the new target the delta is `googletest`
+0.14.3 and `googletest_macro` 0.14.3, together with the version lifts those
+crates require (`regex` 1.13.1, `regex-automata` 0.4.18, `regex-syntax` 0.8.11,
+`proc-macro2` 1.0.107, `quote` 1.0.47). No stale `windows-sys` or `socket2`
+entries remain, and `cargo metadata --locked` exits 0. The full sequential
+commit gates and the force-with-lease publication over SSH against this
+candidate remain to be run and recorded.
+
+2026-10-31 Europe/Berlin, later the same day: PR #567 was merged into `main` at
+05:08 UTC as squash commit `9206b8f099328bc6994a109a0a573201c1a7505b`, and its
+`fix-zstd-audit` branch was deleted. The attempted retarget of PR #457 to that
+branch was therefore rejected with "Proposed base branch 'fix-zstd-audit' was
+not found", and the pull request still targets `main`. Because the merged
+squash is not an ancestor of the superseded restack head, the branch was
+rebased again, this time from `OLD_BASE` `3125fa5` (the old PR #567 head) onto
+`origin/main` `9206b8f`, with `OLD_HEAD`
+`fe8a61fe629973324ce3233189f05b79fa209485`. The same replay options and Weave
+bypass were used; recovery refs are
+`refs/codex/rebase/wildside-523-ontomain-1793435700/{old-head,old-base,target}`.
+
+Of the 52 replayed commits, 51 applied with no conflicts and one became empty.
+The empty commit is `Regenerate typos.toml from the shared dictionary`: `main`
+now carries the same regenerated policy because #567 refreshed it, so the
+change was skipped rather than kept as an empty commit. `git range-diff`
+compares all 52 entries: 51 are identical and the 52nd is the dropped
+regeneration. The new head is `e74d4416d21982a43baf711319783d4591fc4ecd`;
+`git diff --check` is clean and there are no merge commits. The `Cargo.lock`
+delta against `main` is unchanged in content from the target-first rebuild:
+`googletest` and `googletest_macro` 0.14.3 plus the version lifts they require,
+and `cargo metadata --locked` exits 0.
+
+The merged prerequisite also closes the audit gap that appeared while this
+branch was in flight. Two advisories published at 2026-10-30 23:09 UTC,
+GHSA-g3hv-75wg-m249 (`minimatch` below 11.0.1) and GHSA-3g3m-2fjr-6pw4 (`glob`
+9.0.0 through 14.0.1), had made the earlier stack red. `main` now carries
+ledger entries and removal-invariant tests for both, tracked in issue
+[#576](https://github.com/leynos/wildside/issues/576), so `make audit` on this
+candidate exits 0 with 15 allowed warnings and no vulnerabilities, and
+`make spelling` reports `typos.toml` current.
+
+`make test` cannot complete in this environment: the shared embedded-PostgreSQL
+cluster lock is held through an orphaned postmaster on behalf of a dead PID, so
+four shared-cluster tests time out deterministically. The run reached 1,000 of
+1,981 cases with 995 passed, four timeouts, and no assertion failures before it
+was stopped. Hosted `coverage` on the published head is the authoritative test
+evidence; the remaining local gates are recorded separately.
+
+2026-11-01 Europe/Berlin: CodeRabbit's completeness assessment
+`WILDSIDE-457-COMPLETENESS-20261031-1` (assessed base `9206b8f`, assessed head
+`bf10e54`) raised four findings against the published candidate. All four were
+addressed on the same branch before the next gate run.
+
+The first finding asked for decoding into the queue's concrete job type before
+the handler runs. This was already the production behaviour:
+`RetryingJobService <J, F>` calls `decode_job::<J>` and converts a decode error
+into a `Fatal` `JobFailure`, so the handler is never invoked. What was missing
+was evidence.
+`backend/src/outbound/queue/retrying_handler/tests/service_decode.rs` now adds
+service-level cases for a malformed v1 body (`{"v":"v1"}`) and an unsupported
+version (`{"v":"v2",...}`), each asserting that the handler did not run and
+that exactly one terminal write was attempted. The doubles those tests share
+live in the sibling `tests/doubles.rs`, which keeps every file in the module
+under the repository's 400-line limit.
+`backend/tests/features/ queue_retry_policy.feature` gained the matching
+scenarios, which assert the row reaches the storage-dead predicate and records
+the terminal reason `fatal`.
+
+The second finding asked for non-vacuous durable-backoff evidence and the
+remaining V3b side-effect checks. The BDD world now records each invocation's
+`run_at`, and the scenario asserts that the stored deadline advances by at
+least the configured base delay between every adjacent pair of observations,
+including the final pair: the last attempt schedules nothing itself, but it
+still observes the deadline the previous failure wrote. A `#[should_panic]`
+negative control suppresses the second advance and proves the check fails on a
+scheduler that advances once and then stops. That assertion fails if a
+scheduling write is swallowed or skipped, which the earlier
+`started_at >= run_at` check alone could not detect. V3b's side-effect checks
+are covered by a `RecordingPersistence` double that records every port call:
+exactly one scheduling write per retryable failure, exactly one terminal write
+per fatal or exhausted failure, no write after a successful handler, and no
+second write after a scheduling failure, together with the `schedule_failure`
+metric outcome and its warning (`decision = "schedule_failure"`, asserted with
+`tracing_test`). The rc-owned parts of the contract are pinned separately by
+`backend/tests/apalis_retry_canaries.rs` and its `apalis_retry_canaries/ack.rs`
+submodule, which exercise the real `apalis.get_jobs` predicate and the real
+`PgAck`: due, future, `Killed`, and attempt-capped rows, attempt-count
+preservation across fetch, and acknowledgement leaving `run_at`,
+`max_attempts`, and `metadata` intact. Each negative case also asserts the row
+was never claimed, so it cannot pass on a fetch that simply did not run.
+
+The third finding asked for the new PostgreSQL test binaries to join the shared
+cluster group. `.config/nextest.toml` now lists `apalis_retry_canaries`,
+`queue_retry_policy_bdd`, and `queue_dead_letter_bdd` in the `pg-embed`
+override, so each runs with `max-threads = 1` and a 300 s slow-timeout like the
+other shared-cluster binaries. The reported orphaned-postmaster incident is not
+attributed to this omission; it is an environment defect that predates the
+change.
+
+The fourth finding asked for the harness deadline to be enforced inside the
+harness. `backend/tests/support/queue_retry_worker.rs` now wraps the complete
+worker run, observation phase included, in `tokio::time::timeout`, keeps the
+poll-iteration cap as a second bound, and rejects a zero deadline. A dedicated
+`worker_deadline_bounds_a_non_completing_handler` test drives a handler that
+never completes and asserts the run fails with a deadline error instead of
+hanging.
+
+The candidate still needs the sequential repository gates and publication.
+`cargo check -p backend --tests` was started once and is queued behind the
+shared compile-admission pool; per the standing instruction it is left to queue
+rather than restarted.
+
+### Assessment findings of 2026-11-02
+
+The ExecPlan completeness assessment
+(`Assessment-ID: EP-5.2.3-20261102-2630209`) returned four findings, all
+accepted and repaired on this branch.
+
+1. The deadline-advance loop excluded the final observation. It now checks
+   every adjacent pair through a pure `assert_deadlines_advance` helper in
+   `backend/tests/queue_retry_policy_bdd/world/state.rs`, with a negative
+   control that fails when the second advance is suppressed.
+2. The acknowledgement canary proved only that `run_at` remained in the future.
+   `backend/tests/apalis_retry_canaries/ack.rs` now reads the exact persisted
+   microsecond deadline before acknowledgement and asserts exact equality
+   afterwards, so a rewrite to any other future value fails.
+3. Dead-letter coverage lacked two cases. `queue_dead_letter.feature` now
+   covers requeuing an identifier with no persisted row (`NotDead`) and listing
+   a fatally dead job (`DeadReason::Fatal`, one attempt, its own last error).
+4. The plan's dependency policy permits only the exact Apalis pins and
+   `googletest`. The direct `ulid` dev-dependency contradicted that, so it is
+   removed. Seeded row identifiers now come from a shared, unit-tested
+   Crockford Base32 encoder in `backend/tests/support/apalis_job_id.rs` built
+   on the existing `uuid` dependency, and the retry-wrapper unit double parses
+   its existing `TASK_ID` constant instead of generating a ULID. Cargo removed
+   only the backend's direct `ulid` lock edge.
+
+### Scheduler guard coverage of 2026-11-05
+
+CodeRabbit's pre-merge `Testing (Overall)` row asked for evidence that the
+retry scheduler refuses persistence for rows it does not own and for values
+PostgreSQL cannot store. The wrapper's own precondition already had recording
+doubles and PostgreSQL canaries; the guarded `UPDATE` statements did not.
+
+Two layers were added. `backend/src/outbound/queue/postgres_retry_scheduler.rs`
+now has unit tests for both range guards: a retry delay beyond the
+microseconds-`i64` range, and a terminal attempt beyond the `i32` column range,
+each asserting the `Protocol` error without contacting a server. They use a
+lazily connected pool, so the guard runs before any connection is attempted.
+
+`backend/tests/apalis_retry_canaries/scheduler.rs` drives
+`PostgresRetryScheduler` against a real `apalis.jobs` row for the ownership
+predicate: a completed row, a row locked by another worker, and an owned
+running row. The refusal cases assert the exact persisted deadline is
+unchanged. The acceptance case runs the scheduler on its default `SystemClock`
+and compares `run_at - now()` with the requested delay under a five-second
+tolerance. That comparison relates the application clock that produced `run_at`
+to the database clock that evaluates `now()`, so its value carries any skew
+between the two clocks and the time elapsed between the write and the read. The
+canary therefore proves the stored delay is the requested one to within that
+tolerance, not exactly.
+
+The scheduler's `run_at` origin is the injected `ClockSource`, not SQL `now()`.
+`retry_deadline` adds the policy delay to `ClockSource::now()` and binds the
+result as a literal, so a test that installs a fixed clock through
+`PostgresRetryScheduler::with_clock` can predict the stored deadline exactly;
+that is the case that asserts microsecond equality. The two clocks keep
+distinct jobs: the application clock chooses the deadline and makes scheduling
+reproducible, while Apalis still compares `run_at` with the database's own
+`now()` when it polls, so eligibility is evaluated on the database clock.
+Reading `run_at - now()` in one statement removes the drift between two
+separate database samples, but it cannot remove the application-to-database
+skew, which is why the production-clock assertion is tolerance-based.
+
+Clippy denies `too_many_arguments` at five under `-D warnings`, so the test
+helpers take a small row or identity struct rather than a positional list of
+the columns that describe one delivery.
+
+### Pre-merge reconciliation of 2026-11-07
+
+The re-posted pre-merge table still carried rows from the `553277a` review.
+Each row was re-checked against the current tree; three were genuinely open and
+were repaired, and the rest were already satisfied.
+
+The terminal-write ownership guard had no canary of its own.
+`backend/tests/apalis_retry_canaries/scheduler.rs` now drives
+`record_terminal_failure` against a real row for the three cases the row named:
+an owned running row (asserting the return value, the shrunk cap, and the
+preserved unrelated metadata), a row owned by another worker, and a completed
+row. The refusal cases compare the whole persisted state before and after.
+
+The Prometheus adapter's module documentation still described enqueue metrics
+only; it now names both durable-retry counters and says what each outcome label
+separates. The Makefile environment assertions were text matches, so a new
+`backend/tests/environment_policy_contract/make_boundary_tests.rs` runs `make`
+as a child process against probe targets: it proves the defaults, that a caller
+override containing spaces, a dollar sign, quotes, and an apostrophe
+round-trips through `shell_quote` unchanged, and that an unrelated recipe does
+not inherit the password.
+
+The compile-time row asked for const-context usage of the new public
+`const fn`s, exercised through a UI-test harness. The trybuild binary
+`backend/tests/retry_const_api_ui.rs` compiles
+`backend/tests/support/ui/retry_const_api_const_context.rs`, which evaluates
+`JitterSample::midpoint` and the four `as_label` methods in `const` items, so
+losing a `const` qualifier is a compile failure rather than a silent change.
+(The label methods later moved out of the domain into the adapters, so the
+fixture now covers the domain's remaining `const` surface and the label strings
+are pinned by adapter unit tests.) The same harness compiles the negative
+fixture `backend/tests/support/ui/jitter_sample_private_constructor.rs`, which
+pins that a `JitterSample` can only be built through its validating
+constructor. The runtime values those methods return stay pinned separately in
+`backend/tests/retry_api_values.rs`. The harness is gated behind
+`trybuild-tests`, excluded from the nextest suite, and named in both the
+`test-rust` recipe and the CI `Compile-fail tests` step.
+
+The user-facing row asked for a versioned migration guide. The backend crate is
+`0.1.0`; there is no 0.2.0 release to migrate from, so the user guide carries
+the migration instead. It now shows the old and new constructor calls alongside
+the no-shims policy and the stored-budget behaviour.
+
+### Pre-merge reconciliation of 2026-11-08
+
+The refreshed table raised three errors and five warnings against `0659a3d`.
+Two errors were accurate and are repaired here.
+
+The `RetryingJobService::call` path had no jitter coverage: the distinct-sample
+test drove `handle_failure` directly, so the wiring from
+`RetryingJobServiceConfig::with_jitter` to the persisted delay was assumed
+rather than observed. `configured_jitter_source_shapes_the_delivered_delay` now
+builds the service through `with_jitter` with a non-zero jitter fraction and
+asserts the persisted delay at the low, middle, and high sample.
+
+Two module docstrings claimed every failed delivery performs one guarded write.
+They now say the wrapper attempts one write only when it can prove ownership,
+and writes nothing when the proof is missing or the database guard refuses the
+update. The users guide already documented that behaviour.
+
+The Unit Architecture row repeated a request to move listing diagnostics behind
+an explicit side-effect boundary and to inject a clock into `requeue`. The
+first is rebutted: `tracing` is this adapter's observability boundary, as it is
+for `requeue` and `discard`, and the warning is how an operator learns that a
+stored row could not be represented. The second is rebutted: `requeue` sets
+`run_at = now()` inside its SQL so the row is immediately eligible on the
+database clock, and binding an application timestamp would introduce skew. The
+testable half was implemented: the generated listing scenario now mixes both
+rejection branches, interleaves them between valid rows, and asserts that
+listing leaves every skipped row byte-for-byte unchanged.
+
+Two documentation rows were also accurate. This plan described
+`run_at = now() + $delay` in three places; the scheduler binds an absolute
+deadline from its injected `ClockSource`, so those passages now describe the
+implemented clock and the superseded relative-update advice is marked
+historical. The 0.2.0 migration request remains inapplicable for the reason
+recorded above.
+
+The same review left eight inline findings, seven of which were valid.
+
+`list_dead` paged with `OFFSET` across separate pool queries, so a row that
+became dead, or left the queue, between two batches shifted every later row and
+duplicated or skipped an entry. It now reads every batch inside one
+`REPEATABLE READ`, read-only transaction, which removes both defects without
+blocking writers.
+
+Four documentation findings were accurate. The users guide and the runbook
+described the missing-identity refusal as a warning; the wrapper logs it at
+`ERROR` and reserves `WARN` for a refused or failed terminal write. The
+developers guide's clock section claimed a single-statement `run_at - now()`
+avoided skew; it only avoids comparing two separately sampled instants, so the
+section now names the skew and pool-wait limits, and ADR-004 records the
+accepted risk. The cluster-state section now says the default data directory is
+a per-user shared path that the repair can remove even when another project
+created it, and that direct test runs should use isolated paths. The
+concrete-steps block now sets `PG_DATA_DIR` and `PG_RUNTIME_DIR` under this
+checkout for that reason. `with_data_entry_as_file` no longer fails in
+`remove_dir_all`; its doc comment and the matching test comment now name the
+in-use probe, which is the call that actually fails first. The concrete-steps
+command block gained `set -o pipefail`, without which `tee` alone decided each
+command's exit status.
+
+The remaining finding asked for the production deadline to be computed in SQL
+instead of from `ClockSource`. That mechanism was chosen for determinism and is
+recorded in D11 and ADR-004; documenting the skew consequence, as above, is the
+accepted resolution.
+
+The hosted CodeScene check then reported one advisory rule against
+`dead_job_fixtures.rs`: `insert_unclassified_dead_row` and
+`insert_unconfigured_dead_job` built the same exhausted-shaped seed twice. The
+shared `insert_current_failed_dead_row` helper now takes the queue name, the
+dead reason, and the stored failure, so each scenario is a one-line call.
+`cs review` scores the file 10.0 with no findings, and the dead-letter
+scenarios are unchanged.
+
+### Pre-merge reconciliation of 2026-11-12
+
+Review `5828058526` on `51278ea` posted two inline findings and nine failed
+pre-merge rows. Both inline findings were accurate and are repaired here.
+
+`list_dead` opened its snapshot with `begin()` and a separate
+`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY` query. It now uses
+`Pool::begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")`, which
+sets the isolation level on the `BEGIN` statement itself. The existing
+`unavailable("begin dead-list snapshot", ...)` mapping is unchanged.
+
+The users guide now separates the two refusal paths. A missing or mismatched
+delivery identity attempts no write, so it increments none of the counters and
+logs at `ERROR`. A write the database refuses or fails increments the retry
+scheduling-failure counter when it was a retry, and the new terminal-write
+counter when it was terminal, and logs at `WARN` with the matching `decision`.
+
+Three rows were accurate and are repaired.
+
+The observability row asked for a bounded signal for terminal writes that never
+applied. `RouteQueueMetrics::observe_terminal_write_failure` is new, and the
+Prometheus adapter registers `route_queue_terminal_write_failure_total`
+labelled by the bounded `reason` values `fatal` and `exhausted`. The wrapper
+calls it on both the refused and the failed terminal-write branches, and the
+recording doubles in `test_helpers.rs`, the retrying-handler unit tests, the
+retry-policy BDD world, and the identity canary implement it. Job identifiers
+stay in logs and spans, never in labels. Dead-letter backlog remains the
+runbook's count query, which the runbook now names alongside the three counters.
+
+The property row asked for interleaved rows on both sides of multiple batch
+boundaries with an independently built reference. The generator now places up
+to 280 malformed rows, which spans more than two listing batches, spaces the
+valid rows by the average malformed run so boundaries fall between them, and
+sorts the reference by stored age instead of relying on insertion order. It
+still asserts that every skipped row keeps every column the snapshot query
+reads; the comparison is over those columns, not over a byte image of the row.
+The single case completes in about 50 seconds against embedded PostgreSQL.
+
+The developer-documentation row asked for two corrections. The canary
+description now says the production-clock acceptance case compares
+`run_at - now()` under a five-second tolerance, so its result carries
+application-to-database clock skew and the time between the write and the read;
+the exact assertion is the `FixedClock` case. The idempotence paragraph now
+says a repeated `schedule_retry` recomputes the deadline from the current clock
+and therefore moves it forward by the elapsed time, rather than rewriting the
+same instant. The 2026-10-25 progress entry that recorded the older relative
+`run_at` idempotence answer is marked historical, and its outcome is recorded:
+the environment fix stayed, while the idempotence answer was superseded by the
+absolute-deadline design.
+
+The remaining rows were re-checked and rebutted on evidence.
+
+- Docstring Coverage: the workspace denies missing documentation
+  (`missing_docs = "deny"` in `Cargo.toml` and `backend/Cargo.toml`), and
+  `make interrogate` reports 100%.
+- User-Facing Documentation (versioned migration): the backend crate is
+  `0.1.0`; there is no `0.2.0` release to migrate from. The users guide carries
+  the constructor migration with the old and new calls.
+- Testing (Overall): a deterministic between-batch mutation test has no seam to
+  drive. Every batch runs inside one transaction that exposes no boundary, so
+  an external lock strong enough to order a mutation after the first batch
+  (`ACCESS EXCLUSIVE`) also blocks the first batch, while share and row locks
+  do not pause a reader, and polling `pg_stat_activity` for an idle-in-
+  transaction window is timing-based rather than deterministic. The multi-
+  boundary property test above is the deterministic coverage this design
+  admits; distinguishing isolation levels would require the production seam the
+  adapter deliberately does not expose.
+- Unit Architecture: `tracing` is this adapter's observability boundary, as it
+  is for `requeue` and `discard`, and `requeue` writes `run_at = now()` in SQL
+  so the row is immediately eligible on the database clock.
+- Domain Architecture: the effective budget is decided once, by
+  `JobRetryPolicy::decide`, from the policy limit and the fetched task's stored
+  limit; the Apalis conversion and the storage update stay in the adapter as
+  the row asks. An earlier revision of this bullet credited that decision to
+  `decide_retry_wrapper_action`; the reconciliation of 2026-11-15 moved the
+  comparison into the domain and left the wrapper reporting only whether the
+  stored limit already forbids the attempt.
+
+Verification for this round: `cargo check -p backend --tests --all-features`
+succeeds, the 41 focused retrying-handler and metrics unit tests pass, the
+strengthened property test passes, and `cs review` scores every changed Rust
+file 10.0 after `persist_terminal_failure` was split so it stays inside the
+CodeScene length and argument thresholds.
+
+### Full gate run of 2026-11-13
+
+The candidate gated here is `f281de7`, which merges `origin/main` at `0e2dadf`
+(the `basic-ftp` 6.2.6 pin, delivered as #615) into `39f7ad0` and therefore
+carries the 2026-11-12 repairs from `8f4deaf`. The merge itself resolved only
+`bun.lock`, `package.json` and `pnpm-lock.yaml`, nine insertions against nine
+deletions, so the Rust and documentation content is the tree that `8f4deaf`
+produced.
+
+All nine gates were run once each, in the repository's order, on that head.
+Each gate's make exit status was captured to a sidecar rather than taken from
+the log tail. Every gate exited 0.
+
+- `check-fmt`, 3s: Biome 2.3.1 from `node_modules/.bin`, the repo pin;
+  `mdtablefix` left 132 files unchanged.
+- `spelling`, 12s: the `typos-config-builder` gate was clean.
+- `markdownlint`, 14s: 133 files, no errors.
+- `nixie`, 3s: every diagram validated.
+- `lint`, 4863s: all sub-targets ran, including `interrogate` at
+  `--fail-under 100` and `checkmake Makefile`.
+- `typecheck`, 10s: `ty` and the three `tsc --noEmit` projects were clean.
+- `test`, 2946s: backend nextest 2672 passed and 4 skipped, both trybuild
+  suites passed, vitest 92 passed, Bun 170 passed, workflow contracts 658
+  passed, scripts 115 passed, lint-actions 14 passed.
+- `audit`, 20s: 17 allowed advisory warnings, all covered by the exception
+  ledger; the `basic-ftp` advisory is clear at 6.2.6, so no entry was added.
+- `openapi`, 869s: `openapi-dump` regenerated `spec/openapi.json` byte for
+  byte, leaving the tree clean.
+
+`check-fmt` and `lint` needed the local Biome override described in the
+repository notes, because `Makefile:29` exports a `PATH` that puts a
+developer-installed Biome ahead of the pinned one. The override is a make
+command-line variable, so it re-exports the pin unchanged; CI has no global
+`biome` and falls through to `bun x --package=@biomejs/biome@2.3.1`.
+
+The dependency-pin prerequisite merged as `0e2dadf`, and its post-merge `main`
+runs both concluded `success` on that exact SHA: `ci` run 43370215638 and
+`Coverage (main)` run 43370215579.
+
+### Reconciliation of the 2026-11-13 review reply
+
+CodeRabbit answered the row reconciliation against `2280231` with nine
+re-assessments: three concrete documentation defects, two partial test and
+observability gaps, two accepted design decisions, and one request for a fresh
+docstring-coverage result. The concrete defects were real and are repaired here.
+
+- User-facing documentation. The guide said `exhausted` means the delivery
+  count reached the policy's `max_attempts`. `decide_retry_wrapper_action` also
+  terminates a retryable failure once the attempt reaches the `max_attempts`
+  stored on the job, so the guide now names both limits and the lower one wins.
+  The paragraph on changing the policy gained the matching case: a row whose
+  stored cap is below the current policy limit dead-letters at its own cap, so
+  raising the policy does not revive it.
+- Module-level documentation. `retry_persistence.rs` claimed a metric and a log
+  line for every decision. `record_missing_retry_metadata` records no metric
+  when the decision is terminal and the delivery identity is missing or
+  disagrees, because no write was attempted; the module doc now says exactly
+  that and keeps the schedule-failure metric it does record.
+- Developer documentation. The unchecked 2026-10-28 progress entry still
+  reported gates, a delta review and a hosted reassessment as pending. It is
+  marked closed with its outcome recorded, including that prerequisite #567
+  merged as `9206b8f` and that #600/#603 and #615 cleared the advisories it was
+  waiting on.
+- Property coverage. The generated case can shrink to a mixture with no listed
+  row above a batch boundary, so a new deterministic case,
+  `listing_crosses_two_batch_boundaries`, fixes the shape: 250 malformed rows
+  across three 100-row batches with four valid rows at positions 90, 131, 182
+  and 233, so the boundaries at 100 and 200 each fall between listed rows. It
+  checks the full listing and a truncated limit against an independently
+  ordered reference. The plan's claim that the skipped rows are byte-identical
+  is corrected: the assertion compares every column the snapshot query reads.
+- Observability. The runbook now states that the backlog count is collected by
+  the monitoring system's scheduled query rather than exported by the process,
+  and why: the crate has no background sampler, and serving the aggregate from
+  the metrics registry would run it on every scrape. The three counters remain
+  the scraped application signals, and the runbook names the collection step as
+  part of deploying the runbook.
+
+Two requests are rebutted rather than actioned.
+
+- Docstring Coverage asks for a fresh diff-scoped result from CodeRabbit's own
+  check. That check is not one of this repository's gates. The enforced
+  contract is `missing_docs = "deny"` for Rust plus
+  `interrogate --fail-under 100` for the Python under `scripts` and `tests`,
+  both inside `make lint`, which has passed on this head. There is no local
+  equivalent of the saved check to run, so the row cannot be closed locally;
+  the disposition is the repository policy plus its passing gate, and it is
+  recorded here as an explicit exception rather than as a current percentage.
+  The reviewer confirmed the two contracts differ and asked for either a fresh
+  result or such an exception; a fresh result needs a review pass, and review
+  has been paused since `2280231`.
+- Testing (Overall) asked for a negative control built from separate
+  read-committed snapshots. That request is now actioned by
+  `page_walk_is_skip_free_only_under_one_snapshot`; see the section below.
+
+The Unit Architecture and Domain Architecture rows are recorded as accepted
+design decisions by the reviewer, so they need no change: the database clock
+preserves immediate requeue eligibility, and the effective budget is decided
+once in the adapter's pure decision function.
+
+### Reconciliation of the 2026-11-13 follow-up reply
+
+The reviewer re-inspected `7c8c9d9`, marked four rows addressed and both
+architecture rows accepted, and raised one new documentation defect plus three
+verification requests. Each is actioned here.
+
+- Runbook metric description, a real defect. The runbook said a missing or
+  mismatched delivery identity "increments none of the three counters".
+  `record_missing_retry_metadata` increments the retry scheduling-failure
+  counter when the decision is `Schedule`, because the retry the policy asked
+  for will not happen, and records no metric when the decision is terminal,
+  because the row was never classified as dead. Both log at `ERROR`. The
+  runbook now distinguishes the two cases; the users guide already did.
+- Concurrent-listing control. `page_walk_is_skip_free_only_under_one_snapshot`
+  now drives the adapter itself. The follow-up confirmed that a test-only seam
+  would satisfy the request, and this repository already owns the seam it needs:
+  `test-support` is a non-default feature that the integration tests switch on
+  through the crate's self dev-dependency, and it already carries
+  `queue::test_helpers`. Two additions sit behind the same
+  `cfg(any(test, feature = "test-support"))` gate. `with_listing_page_probe`
+  runs a hook after every full page of the real `list_dead` loop, and
+  `with_listing_isolation` replaces the snapshot isolation for the negative
+  control. Production construction installs neither, so the shipped path still
+  reads one `REPEATABLE READ` snapshot and `DEAD_LISTING_ISOLATION` remains a
+  constant.
+- What the control observes. The world seeds 150 dead rows, installs a probe
+  that deletes the eleventh newest row from a second pooled connection after
+  page one, and lists with a limit high enough to walk both pages. Under
+  `READ COMMITTED` — the negative control, and the direction that must fail —
+  the listing returns 149 rows and drops the row that slid into page two. Under
+  the adapter's own isolation it returns all 150, including the row deleted
+  mid-walk. The failing direction is asserted first, so the snapshot claim
+  cannot hold vacuously.
+- Why the gate is `test-support` rather than `cfg(test)`. `backend/tests/`
+  binaries link the library compiled without `cfg(test)`, so an item gated on
+  `cfg(test)` alone does not exist for them. The `test-support` feature is the
+  repository's existing answer to that boundary: it is off in production,
+  enabled for integration tests by the self dev-dependency, and already the
+  home of `queue::test_helpers`.
+- Backlog collection. The runbook now records the deployment action explicitly
+  and the evidence for its absence from this repository:
+  `deploy/charts/wildside` declares no scrape configuration, `ServiceMonitor`
+  or alerting rule, and its only metrics block is the horizontal pod
+  autoscaler. Until the monitoring system's scheduled query exists, the count
+  has no collected signal.
+
+### Gate runs of the 2026-11-13 repairs
+
+Two runs cover this repair set, both against `2280231` plus the five modified
+files. Every gate was started once per run and each make exit status was read
+from a sidecar rather than from the log tail.
+
+The first run started at 09:47:13 and covered all nine gates in repository
+order. Eight were green. `check-fmt` exited 2 because `mdtablefix --check`
+wanted the paragraph wrapping of the two documents this repair edits
+(`docs/users-guide.md` `+3 -3`, this plan `+7 -8`), and the failure occurred
+inside `check-fmt-markdown`, so that target's `cargo fmt`, Biome and Ruff
+stages had not run.
+
+- `spelling`, 16s; `markdownlint`, 19s, 133 files and no errors; `nixie`, 3s.
+- `lint`, 2496s, including `interrogate` at `--fail-under 100` and
+  `checkmake Makefile`.
+- `typecheck`, 5s: `ty` and the three `tsc --noEmit` projects were clean.
+- `test`, 2604s: nextest ran 2673 tests, 2673 passed and 4 were skipped, so the
+  new case is in the suite; `listing_crosses_two_batch_boundaries` passed in
+  6.5s and `listing_is_the_valid_prefix_of_generated_rows` in 48.7s. Both
+  trybuild suites passed (1134s and 33s), vitest 92 tests, Bun 170, the token
+  package 3, workflow contracts 658 with 1 skipped, scripts 115 with 13
+  skipped, and the action linter 14.
+- `audit`, 6s, 17 allowed advisory warnings and no vulnerability; `openapi`,
+  709s, regenerating the specification identically and leaving the tree clean.
+
+`mdtablefix --in-place` then applied exactly that reflow, and a second run at
+11:31 re-gated the four Markdown-scoped targets:
+
+- `check-fmt`, 3s: `check-fmt-markdown` left 132 files unchanged and all three
+  `CHECK_FMT_CMD` stages then ran and passed — `cargo fmt --all -- --check`,
+  `biome ci` under the pinned 2.3.1, and `ruff format --check`.
+- `spelling`, 15s; `markdownlint`, 15s over 133 files with no errors; `nixie`,
+  6s.
+
+`lint` began 84 seconds before the reflow and the reflow touched only those two
+Markdown files, which no `lint` sub-target reads, so its result stands for the
+same Rust tree. `test`, `audit` and `openapi` all started after the reflow and
+therefore ran on the final content.
+
+### Gate run of the concurrent-listing control (2026-11-13)
+
+Three runs covered this change set. The first two are recorded for what they
+caught, because each found a defect the run before it could not see.
+
+- The first run found two defects in the new control: `check-fmt` exited 2 on
+  the test module's formatting, and `lint` exited 2 on two
+  `clippy::excessive_nesting` sites in the same file.
+- The second run, against the rewritten control, found three more.
+  `check-fmt` exited 2 because `mdtablefix --check` wanted this plan reflowed
+  `+13 -13`, and that failure stops `check-fmt-markdown` before its
+  `cargo fmt`, Biome and Ruff stages run. `lint` exited 2 because whitaker
+  measured the `postgres_dead_letter` module at 420 lines against its 400-line
+  cap; the seam moved into `postgres_dead_letter/listing_controls.rs`, which
+  whitaker counts as a module of its own, leaving the adapter at 374 lines.
+  `audit` exited 2 on `RUSTSEC-2026-0538`, "Receive loop can spin after a
+  truncated datagram" (`quinn-udp` 0.5.14), published after the previous run;
+  the lockfile now pins 0.5.16, the advisory's first fixed release.
+  `cargo tree -i quinn-udp --workspace --all-features` prints nothing for both
+  the host target and `--target all`, so the crate is absent from the resolved
+  graph and the bump changes only the lockfile entry that the audit scans.
+
+The final run began at 14:12 on the settled tree — `7c8c9d9` plus all seven
+candidate paths — and started each of the nine gates once. A
+`git status --porcelain` comparison before and after shows no gate mutated a
+tracked file.
+
+- `check-fmt`, 2s: `check-fmt-markdown` left 132 files unchanged, `cargo fmt`
+  found all 120 Rust files already formatted, and the Biome and Ruff stages
+  passed.
+- `spelling`, 11s, leaving `typos.toml` unchanged; `markdownlint`, 15s over
+  133 files with no errors; `nixie`, 3s, all diagrams validated.
+- `lint`, 551s, including `cargo doc`, clippy under `-D warnings`, whitaker,
+  `interrogate` at `--fail-under 100`, `checkmake`, `mbake` and the action
+  linter.
+- `typecheck`, 4s: `ty` and the three `tsc --noEmit` projects were clean.
+- `test`, 1282s: nextest ran 2674 tests, 2674 passed and 4 were skipped.
+  `page_walk_is_skip_free_only_under_one_snapshot` passed in 7.3s, and the two
+  sibling listing tests in the same binary passed in 51.2s. Both trybuild
+  suites, vitest, Bun, the token package, the workflow contracts and the
+  scripts suites passed.
+- `audit`, 38s, 17 allowed advisory warnings and no vulnerability; `openapi`,
+  95s, regenerating the specification identically and leaving the tree clean.
+
+Compile admission reported a full pool (`capacity 4, held 4`) and queued
+compilers behind it for the whole run. Nothing was killed, retried or
+duplicated, and no gate was started twice.
+
+### Review findings of 2026-11-15
+
+The fourth review round raised four findings on `85cae55`: two Major
+correctness and data-integrity findings about the guarded writes, and two Minor
+documentation findings about this plan. All four were verified against the
+pinned `apalis-postgres` 1.0.0-rc.8 source before any repair, and all four are
+actioned.
+
+**A fatal failure can be redelivered when its terminal write fails** (comment
+4576778093). Apalis's `ack.rs` classifies a failed delivery as `Failed`, and
+its fetch selects `Failed` rows whose `attempts` are still below
+`max_attempts`, so a terminal write that fails leaves a row that will run
+again. The repair adds one bounded fallback: after a terminal write returns
+`Err`, the wrapper lowers the row's cap to the attempt that just terminated
+(`clamp_terminal_cap`). The fallback carries the same four-condition guard, uses
+`LEAST(COALESCE(max_attempts, $4), $4)` so it can only lower a cap, and is
+called from no other path. A write the guard refuses (`Ok(false)`) is not
+followed by a fallback, because the guards would refuse that too and the row is
+not this delivery's. The order is deliberate: the fallback runs after the
+reason write so it can never shorten a row whose terminal reason was stored.
+
+**Bind the retry and terminal writes to the delivery, not only to the worker
+name** (comment 4576778094). `id`, `lock_by`, and `status = 'Running'` cannot
+separate a stale handler from the delivery that replaced it: orphan recovery
+re-enqueues with the same worker name and increments `attempts`, so a stale
+handler's write would match the new delivery's row. Both prepared statements
+now also match `attempts`, bound from the attempt the handler believes it is
+serving. Defence in depth was kept where it is cheap: the wrapper still proves
+the identity precondition before it asks for any write.
+
+**Align the policy constraint with the accepted decision** (comment 4576778096)
+and **Name the terminal-write failure metric** (comment 4576778101). The
+constraint bullet in the plan now states the four-condition guard, and the
+metrics list names `observe_terminal_write_failure` alongside the risk note it
+already carried for `route_queue_terminal_write_failure_total`.
+
+Two consequences of the repair needed documentation of their own, and were
+recorded in the ADR, the developers' guide, the runbook, and the users' guide:
+the guard now includes the inherited attempt count, and a terminal write has a
+bounded fallback whose three original log decisions were later replaced by the
+sequence described in
+[Cap-fallback resilience of 2026-11-15](#cap-fallback-resilience-of-2026-11-15).
+
+The `apalis-postgres` source settled the question the second finding turned on,
+and it is worth recording because the numbers are easy to get wrong. `sink.sql`
+inserts `attempts = 0`; `lock_by_id.sql` does not change it; a handler
+therefore sees `stored + 1`; and `reenqueue_orphaned.sql` sets
+`attempts = attempts + 1`. The guarded statements bind the stored value
+(`attempt - 1`) and the terminal cap binds the acknowledged value (`attempt`).
+
+Whitaker's 400-line module cap applies to every `mod` item, including file
+modules, so four modules had to be split before this change could pass `lint`.
+The crate roots that main already carries above the cap (`lib.rs` of
+`architecture-lint`, `ingest_osm.rs`, and two integration-test roots) are not
+`mod` items and are therefore not measured. The splits keep each seam where the
+behaviour already divides:
+
+- `retrying_handler/failure.rs` (413) keeps classification, the retry schedule,
+  identity, and the error type; terminal persistence and its outcome recording
+  moved to `failure/terminal.rs` (162).
+- `retrying_handler/tests/service_effects.rs` (422) keeps the scheduling
+  effects; the terminal effects moved to `tests/service_terminal.rs` (104), and
+  the shared `FailureRun` harness to `tests/failure_run.rs` (94).
+- `apalis_retry_canaries/scheduler.rs` (498) keeps the applied-write canaries;
+  the refusal matrix and the two cap-fallback canaries moved to
+  `scheduler/guards.rs` (196). That parent is loaded through `#[path]`, which
+  suppresses Rust's nested-directory rule for its children, so the child
+  carries its own explicit `#[path = "scheduler/guards.rs"]`.
+- `postgres_retry_scheduler.rs` (386) and its `tests.rs` (172) were already
+  split in this round for the same reason.
+
+Evidence for this repair set, against the modified tree:
+`cargo check -p backend --all-targets --all-features` exits 0; `make fmt` exits
+0; the focused `outbound::queue` unit suite runs 89 tests with 89 passed; and
+the canary binary runs 60 tests with 60 passed, of which 11 are the moved and
+new guard canaries.
+
+### Pre-merge reconciliation of 2026-11-15
+
+The walkthrough for `85cae55` reports one error and three warnings. Each row
+was checked against the tree it names, and each now has either a repair or an
+evidence-backed rebuttal. The repair set is `a596298` (domain attempt budget),
+`47bbfa5` (delivery-bound guarded writes), and `d8434b1` (explicit listing
+skips).
+
+**Unit Architecture (error), claim 1 — the listing hid parse failures.**
+`DeadLetterQueue::list_dead` now returns a `DeadLetterListing`: the jobs, plus a
+`SkippedDeadJob` for every row the domain cannot represent, carrying the row's
+identifier and a `DeadJobSkip` (`negative-attempts` or
+`invalid-requeue-count`). The fields are private and `into_parts` is the only
+way to separate the two halves, so a caller cannot take the jobs and silently
+drop the skips. Conversion is pure again: `row_decoding::dead_job_from_row`
+returns `Result<DeadJob, SkippedDeadJob>` and logs nothing, and the adapter
+logs one summary line plus one line per skipped row after it closes the
+snapshot. The contract is asserted through the value rather than through logs:
+the adapter tests check the skipped identifier and its cause, and the BDD
+scenario asserts that the malformed row is reported instead of listed. The
+generated property test asserts that every skip a listing reports names a
+genuinely malformed row and the field that made it unreadable, which is subset
+semantics rather than equality because a truncated listing only reads part of
+the table.
+
+**Unit Architecture (error), claim 2 — requeue hard-coded the clock.** The
+choice to write `run_at` from the database clock is now named at the write site
+as `IMMEDIATELY_ELIGIBLE_RUN_AT`, with the reasoning beside it: Apalis decides
+eligibility by comparing `run_at` with PostgreSQL's `now()`, so writing from
+the same clock removes any dependence on process/database skew. The clock is
+not injected, and that is deliberate rather than an omission. Injecting a
+`ClockSource` would reintroduce the skew the choice avoids, and a test that
+injected the process clock would stop exercising the property that matters —
+that a restored row is eligible on the clock the fetch predicate uses. A seam
+that accepted a SQL expression instead would let a caller write an arbitrary
+`run_at`, which is a wider contract than the one operation needs. The behaviour
+is pinned by a BDD assertion that bounds the restored row by the *application*
+clock, so only a database-side timestamp can satisfy it.
+
+**Domain Architecture (warning) — repaired.** `JobRetryPolicy::decide` now
+takes the attempt paired with its job's limit as a `BoundedAttempt` and returns
+the whole decision, so the domain weighs the policy ceiling and the job's stored
+`max_attempts` together. Pairing the two keeps the four-argument signature
+clippy allows without bundling unrelated values: the attempt and its budget are
+the two halves of one question, while the cycle's configuration stays on the
+policy. The adapter no longer applies a second comparison; it converts the
+Apalis context into a bounded attempt and reports only whether the stored limit
+already forbids the attempt, which is the scheduler's cue to lower the cap. A
+zero budget maps to the smallest positive count, which no delivery can satisfy,
+so "no retry allowance" needs no separate branch. Evidence is behavioural, not
+structural: a table test covers the four combinations of policy ceiling and job
+budget, and the property test's oracle states the budget rule independently of
+`JobAttemptBudget::permits`, so the check cannot drift with the helper it
+checks.
+
+**Observability (warning) — rebutted.** The row asks for a bounded dead-letter
+backlog gauge, either sampled on an interval or refreshed at a bounded rate.
+The PR does introduce the state whose depth that gauge would measure, so the
+row is not stale. It is nonetheless declined, on a recorded decision rather
+than an oversight: `docs/runbooks/queue-retry-and-dead-letter-operations.md`
+states that the backlog is a database fact, that serving it from the registry
+would run an aggregate over `apalis.jobs` on every scrape so the scan cost
+would follow the scrape interval rather than the change rate, and that the
+process has no background sampler to bound it. The same section names the
+collection point — the monitoring system's own scheduled query — and states
+plainly that nothing in this repository creates that schedule. What this PR
+does add is the outcome signal: retry scheduling failures, terminal-write
+failures labelled by the reason the write would have stored, and dead letters,
+all with bounded labels, plus a `WARN` per skipped row and one summary line per
+listing so a sampled log still shows a gap. The gap the row identifies is a
+deployment action against the monitoring system, documented in the runbook, not
+code this PR withholds.
+
+**User-Facing Documentation (warning) — rebutted.** The row asks for a 0.2.0
+migration document covering the `ApalisPostgresProvider::new` signature change.
+`backend/Cargo.toml` declares version `0.1.0`, so there is no released version
+a caller could be migrating from and no 0.2.0 to migrate to; the document would
+describe a migration that cannot exist. The change is instead documented where
+a reader of the current API meets it: `docs/users-guide.md`, under "Configuring
+the Apalis provider", carries the before and after of the constructor call and
+states that there are no compatibility shims or deprecated overloads because
+the crate is pre-1.0. The `list_dead` contract change is documented in the same
+guide's port list, which now says a listing reports unreadable rows with their
+identifier and the field that made them unreadable.
+
+### Gate runs of the 2026-11-15 repair set
+
+Run r11 covered the four reorganized commits at `c383132`. Every gate was
+started once, in repository order, and each exit status was recorded in a
+sidecar ledger rather than read from the log tail. Seven of the nine were green:
+
+- `check-fmt`, 1s; `spelling`, 12s; `markdownlint`, 15s over 133 files;
+  `nixie`, 1s.
+- `typecheck`, 6s: `ty` and the three `tsc --noEmit` projects were clean.
+- `test`, 1542s: nextest ran 2692 tests with 4 skipped and no failure, both
+  compile-fail suites passed, vitest 92, the Bun workspaces 3, workflow
+  contracts 658 with 1 skipped, scripts 115 with 13 skipped, and the action
+  linter 14.
+- `openapi`, 541s, regenerating the specification identically.
+
+`lint` exited 2 at `lint-whitaker`, after rustdoc and clippy had both passed.
+Two separate causes were behind that, and only one of them was this branch's.
+
+The branch's own row was `conditional_max_n_branches` on the three-way
+condition in `JobRetryPolicy::decide`. The policy now answers both attempt
+limits through one helper, `permits_another_attempt`, so the decision site
+compares only the failure class against a single answer:
+
+```rust
+if kind == JobErrorKind::Fatal || !self.permits_another_attempt(delivery) {
+    RetryDecision::DeadLetter
+} else {
+    RetryDecision::Retry { delay: self.backoff_delay(attempt, jitter) }
+}
+```
+
+The rule counts two branches there, and a local re-run of the backend
+`whitaker` command reported no diagnostic against `retry.rs` or `budget.rs`.
+
+The remaining three rows are `bumpy_road_function` findings in
+`route_submission.rs`, `overpass/http_source.rs`, and
+`diesel_catalogue_repository.rs`. All three files are byte-identical to
+`origin/main` (`git diff --quiet origin/main -- <path>` is clean, and none
+appears in `git diff --name-only origin/main...HEAD`), so the branch neither
+introduces nor edits them. They do not reproduce either: run r13 in the same
+worktree ran the same two `whitaker` commands and reported no finding at all.
+
+What changed between the runs was the suite, not the tree. The local wrapper
+builds its suite from the shared checkout at `~/.local/share/whitaker`, which
+is not this branch's to pin: it held `880939d1` (2026-11-15) when r11 ran and
+`00186d43` (2026-11-01) when r13 did, as its reflog records. CI pins
+`WHITAKER_INSTALLER_VERSION: '0.2.12'` (2026-11-09), and the hosted `build`
+check, which runs `make lint-whitaker` under that pin, was green on `85cae55`,
+whose tree contains all three functions unchanged.
+
+The three rows are therefore a property of the shared suite revision, not of
+this branch, and the branch does not refactor three untouched files to satisfy
+a revision CI does not run. Recorded so a later red `make lint` in this
+worktree is not misread as this change's; if the pinned suite starts reporting
+them, the fix belongs to that pin's change or to a base pull request.
+
+Because `make lint` stops inside `lint-rust`, six sub-targets never ran in r11.
+Each was run separately afterwards and all six exited 0: `lint-architecture`,
+`lint-frontend`, `lint-specs`, `lint-python`, `lint-makefile`, and
+`lint-actions`. r13 then ran the whole `lint` target, which exercised all six
+inside the gate.
+
+`audit` exited 2 for a second, unrelated reason: the two `extract-zip`
+exceptions in `security/audit-exceptions.json` expired on 2026-11-14, one day
+before this run, so a clean checkout of `origin/main` fails the same gate. Both
+advisories are still unpatched (`extract-zip` 2.0.1 remains the latest release)
+and both are still reachable only through `@puppeteer/browsers` 2.6.1 via
+`puppeteer` 23.11.1, so the entries' reasoning still holds. They were renewed
+to 2026-12-14 with the re-check recorded in each reason, and `make audit` then
+exited 0 with 17 allowed advisory warnings and no vulnerability. `audit-node`
+runs first, so `rust-audit`, `audit:validate`, and `audit:bun` were hidden in
+r11; the renewed run exercised all of them.
+
+`origin/main` had advanced four commits while the branch was open, including a
+rewritten documentation style guide that moved the ADRs to
+`docs/adrs/adr-nnnn-title-slug.md` and required `Status`, `Date`, `Context`, and
+`Decision` sections. Merging `794cb91` therefore came with a reconciliation:
+ADR-004 and ADR-005 moved into `docs/adrs` as `adr-0004` and `adr-0005`, their
+headings restyled, and every reference updated across `docs/contents.md`,
+`docs/developers-guide.md`, `docs/wildside-backend-architecture.md`, and this
+plan. `Cargo.lock` auto-merged against main's `quinn-udp` bump and was
+validated with `cargo metadata --locked`.
+
+#### Final run r13 (2026-11-15)
+
+Run r13 re-gated the merged, reconciled head `4b3a164` and all nine gates
+exited 0:
+
+- `check-fmt`, 3s, 132 files unchanged and 120 already formatted; `spelling`,
+  14s; `markdownlint`, 17s over 133 files with no error; `nixie`, 2s.
+- `lint`, 388s, the whole target: rustdoc, clippy, both `whitaker`
+  invocations against the workspace and `backend`, then architecture, frontend,
+  specs, Python, Makefile, and action lint. No diagnostic was emitted, so the
+  `conditional_max_n_branches` row is closed and the three
+  `bumpy_road_function` rows did not reproduce.
+- `typecheck`, 5s; `test`, 992s, with 2692 nextest tests passed and 4 skipped,
+  workflow contracts 658 passed with 1 skipped, scripts 115 passed with 13
+  skipped, and the action-linter tests 14 passed; `audit`, 6s, "Audit
+  exceptions valid and vulnerabilities accounted for" with 17 allowed warning;
+  `openapi`, 24s, regenerating the specification identically.
+
+Two Markdown corrections followed that run — the suite-revision paragraph above
+and the realignment of the Domain Architecture row with
+`JobRetryPolicy::decide` — so the four Markdown-scoped targets were re-run
+after they were committed and exited 0. Neither correction touches Rust,
+`security/audit-exceptions.json`, or `spec/openapi.json`, so the `lint`,
+`typecheck`, `test`, `audit`, and `openapi` results stand for the final content.
+
+### Cap-fallback resilience of 2026-11-15
+
+The fourth review round's finding in comment 4576778093 was reopened after the
+fallback landed. The objection was specific and correct: the fallback handles a
+terminal write that fails, but if the fallback write *also* fails the wrapper
+only logs and returns, so the acknowledgement that follows can still leave a
+`Failed` row below its cap that the fetcher claims.
+
+The pinned `apalis-postgres` 1.0.0-rc.8 source settles what a handler can do
+about that. `ack.rs` binds `attempts = parts.attempt.current()` and derives the
+status from the same `parts` it cloned before the service ran, so a handler
+cannot change the acknowledged attempt or make the status `Killed`. `ack.sql`
+writes only `status`, `attempts`, `last_result`, and `done_at`, so nothing the
+handler writes after the decision can reach the acknowledgement. Returning `Ok`
+would store `Done` and hide the failure from both the retry and dead-letter
+paths. A row can therefore only be protected by a write that lands, and a
+database that refuses every write leaves no way to protect it.
+
+The repair keeps the write and makes it survive the ordinary transient failure:
+
+- The fallback is attempted three times, with waits of 25 ms and 150 ms before
+  the later attempts. Those sleeps total 175 ms; the database calls and pool
+  acquisition each attempt needs are additional, so 175 ms is the added wait
+  rather than the elapsed time.
+- A refused guard (`Ok(false)`) still ends the sequence immediately: the row is
+  another actor's, so retrying would only repeat a decision someone else now
+  owns.
+- The applied case logs `terminal_cap_clamped` with `tries`, so a recovered
+  failure is visible rather than silent. Exhaustion logs at `ERROR` with
+  `terminal_cap_clamp_exhausted`; this is the event that says a retired job may
+  run again, and it joins the terminal-write-failure counter as the alerting
+  signal.
+
+Parking `run_at` far in the future alongside the cap was considered and
+rejected. `apalis.get_jobs` treats every `Pending` row as eligible whatever its
+attempts, and `reenqueue_orphaned.sql` rewrites `status` to `Pending` and
+increments `attempts` without touching `run_at`. A parked row that is orphaned
+between the fallback and the acknowledgement would therefore never be fetched
+again and would never satisfy the dead-letter predicate either, replacing a
+bounded re-run with an invisible row. The cap alone is exact: the fallback
+binds the same `parts.attempt.current()` value the acknowledgement stores, so
+`attempts < max_attempts` is false for the row it protects.
+
+Evidence, against the modified tree and with the gate `RUSTFLAGS`:
+
+- `backend::apalis_retry_canaries::scheduler::terminated` drives the real
+  `PgAck` and the real `fetch_one_task`.
+  `a_terminated_delivery_is_not_fetched_after_acknowledgement` asserts the
+  acknowledged row is `Failed` at the lowered cap, is not fetched, and is still
+  selected by the dead-letter predicate.
+  `without_the_fallback_the_acknowledged_row_is_fetched_again` acknowledges the
+  same delivery without the fallback and asserts the fetcher claims it, so the
+  canary fails if the fallback stops protecting the row.
+- `a_fallback_that_never_lands_leaves_the_row_fetchable` runs the fallback
+  against a pool whose database refuses every connection, so the write fails
+  rather than being skipped, then acknowledges and fetches. It pins the
+  residual window that `terminal_cap_clamp_exhausted` reports, which keeps the
+  alarm honest: the wrapper cannot protect a row whose writes the database
+  refuses.
+- `service_terminal` gains `a_transient_cap_fallback_failure_is_retried`,
+  `a_refused_cap_fallback_is_not_retried`, and
+  `cap_fallback_exhaustion_retries_a_bounded_number_of_times`, and
+  `exhausted_cap_fallback_raises_the_alarm` replaces the
+  `terminal_cap_clamp_failed` log check.
+- The focused run over `binary(apalis_retry_canaries) | test(retrying_handler)`
+  executed 103 tests with 103 passed.
+
+The residual window is stated rather than hidden: a database that refuses all
+three fallback writes still leaves the row fetchable, and the runbook now pages
+on `terminal_cap_clamp_exhausted` for exactly that case.
+
+### Gate run r15 and the whitaker suite roll-out of 2026-11-15
+
+Run r15 re-ran all nine gates over the cap-fallback repair, once each and in
+repository order. Eight were green: `check-fmt`, `spelling`, `markdownlint`,
+`nixie`, `typecheck`, `audit`, `openapi`, and `test`, which ran 2695 tests with
+4 skipped and no failure, 92 vitest cases, the Bun workspaces, the workflow
+contracts, the script suites, and the action linter. The focused run recorded
+above is therefore consistent with the full suite.
+
+`lint` exited 2 at `lint-whitaker` for the same three `bumpy_road_function`
+rows the r11 note above describes, in the same three files, none of which this
+branch touches. The prediction that note makes has now come true: the hosted
+`build` check for head `16e7980` failed at 09:47 with those three rows and the
+same `Compilation failed with toolchain 'nightly-2026-05-28'` message, so the
+suite CI installs now reports them and no longer just the local wrapper.
+
+The suite moved, not the tree. The shared checkout at `~/.local/share/whitaker`
+took `880939d1`, "Implement the macro-aware cognitive complexity rule", on
+2026-11-15, and the local dylint library was rebuilt from it at 09:36. Run r14
+finished at 09:13, green, on the older library; r15 and the hosted run both
+started afterwards and both fail identically. Every file the rule flags is
+byte-identical to `origin/main`.
+
+Following the r11 note, the repair belongs in a base pull request rather than
+in this feature diff: three refactors, one per flagged function, delivered
+separately from the retry work.
+
+### Main merge of 2026-11-16: the base repair lands
+
+The base pull request the r15 note called for is merged. PR #622, "Fix the
+three bumpy-road findings and renew the expired audit exceptions", landed on
+`main` as `aa0532b`. It carries the three behaviour-preserving extractions, one
+per function the macro-aware rule flags, direct unit coverage for each
+extracted helper, and the renewed `extract-zip` audit exceptions.
+
+`main` was merged into this branch at `e07d2fc` rather than replayed, so no
+retry commit was rewritten. Both sides had touched five files and none of them
+conflicted: `security/audit-exceptions.json` is byte-identical to the landed
+renewal, `typos.toml` and `typos.local.toml` keep both branches' allowlist
+entries, and the two environment-policy contract tests kept both sides' changes.
+
+The merge cleared the three files the r15 `lint-whitaker` failure named,
+because they now arrive from `main` already refactored, but it did not leave
+the gate green: combining both sides' assertions in
+`the_makefile_composes_the_embedded_postgres_environment` gave that test a
+second cluster of nested conditionals that neither side had on its own. Runs
+r16 to r18, below, record the repair and its confirmation.
+
+### Gate runs r16 to r18: the merged test and the CodeScene advisory
+
+Run r16 started at `78d0c26` and re-ran all nine gates in repository order.
+Three passed before `lint`: `spelling`, `markdownlint`, and `nixie`.
+`check-fmt` failed, asking for a `+1 -2` rewrap of the merge paragraph above.
+`lint` failed after 2039 s at `lint-whitaker`, in the same place the merge was
+meant to clear but for a different function: `bumpy_road_function` reported
+`Multiple clusters of nested conditional logic in
+the_makefile_composes_the_embedded_postgres_environment`
+(`backend/tests/environment_policy_contract.rs`). `typecheck` passed. The run
+was then stopped before `test`, so that a repair made during it could not be
+attributed to `78d0c26`.
+
+An offline probe put the assembled test's shape against both parents: `main`'s
+version has one loop containing one assertion, and this branch's version added
+a recipe-containment assertion plus a second loop, which is what makes two
+clusters. The repair in `75c653c` removed the loops rather than the assertions.
+`first_missing_directive` and `first_global_export` return the first offender,
+so the test states the same contract with flat assertions, and the recipe
+assertion gained the diagnostic message it had been missing. `dd3eaa1` carries
+the Markdown rewrap. A focused run over the `environment_policy_contract`
+binary passed 13 of 13, the Whitaker backend pass reported no findings, and
+`cargo fmt --all -- --check` was clean.
+
+Run r17, over `dd3eaa1`, passed all nine gates: `test` ran 2720 tests with 2720
+passed and 4 skipped. The hosted `build` and `coverage` checks also passed. The
+hosted `CodeScene Code Health Review` check failed, however, on one advisory
+rule in the same file: "String Heavy Function Arguments", which took its code
+health from 10.00 to 9.69 because both new predicates accepted a slice of
+string slices.
+
+`ed1b960` answers that advisory by giving each predicate no arguments at all:
+they read the constant they are paired with, so `first_missing_directive()`
+reports the first of `EMBEDDED_CLUSTER_DIRECTIVES` the Makefile lacks and
+`first_global_export()` the first of `TEST_ONLY_EXPORTS` it exports outside a
+recipe. `cs delta main` reports no issues, and the focused binary still passes
+13 of 13.
+
+Run r18, over `ed1b960`, passed all nine gates again: `test` ran 2720 tests
+with 2720 passed and 4 skipped, and `audit`, `openapi`, `lint`, `typecheck`,
+`check-fmt`, `spelling`, `markdownlint`, and `nixie` all exited 0. Every hosted
+check the head reports passed as well: `build`, `coverage`, the CodeScene
+review, and the Gecko security review. That is the candidate offered for review.
+
+### The n+1 migration document and gate runs r19 to r20
+
+CodeRabbit's pre-merge table for this PR was saved at an older head (`85cae55`,
+base `0e2dadf`) and reports one error and three warnings. Two of the four rows
+describe defects that later commits had already repaired, and the table itself
+says as much only for the Unit Architecture row it repeats. The error asked for
+skipped-row reporting from `list_dead` and a documented requeue clock boundary;
+`backend/src/domain/ports/dead_letter_queue.rs` now returns `DeadLetterListing`
+with `skipped()`, and `IMMEDIATELY_ELIGIBLE_RUN_AT` documents the `now()`
+choice that the requeue behavioural test asserts. The Domain Architecture
+warning asked for the effective attempt budget to move into the domain, which
+`2472e09` ("Let the domain own the effective attempt budget") did. The
+Observability warning is argued rather than implemented: the
+terminal-write-failure counter exists and is described in the runbook, while
+the dead-letter backlog stays a database fact that the runbook queries, because
+nothing in this repository schedules a collection point.
+
+The User-Facing Documentation warning was the one still open. The users' guide
+already described the retry, dead-letter, and counter behaviour and carried a
+before/after snippet for the constructor, but no migration document existed and
+nothing linked one. `docs/backend-v0-2-0-migration-guide.md` now supplies it:
+the constructor's queue name and policy arguments, the handler contract
+`Fn(J, NonZeroU32) -> Fut` resolving to `Result<(), JobFailure>`, the stored
+attempt budget's effect on older rows, the retry wrapper's composition, the
+dead-letter port with `RequeueBudgets`, the three counters to alert on, and
+verification steps. It is linked from "Configuring the Apalis provider" in the
+users' guide and indexed in `docs/contents.md`.
+
+Run r19-docs covered only the four Markdown gates, because the Rust and
+frontend surfaces are unchanged from the green r18 head. It failed twice on the
+new guide: `mdtablefix --check` wanted a `+31 -32` rewrap, and `markdownlint`
+reported four MD060 table-alignment errors and one MD047 missing trailing
+newline. `mdtablefix --in-place` over that file plus an EOF normalization
+repaired both, and r20-docs passed all four gates: `check-fmt` (mdtablefix 133
+files unchanged, `cargo fmt --all -- --check` clean, Biome 2.3.1 clean, Ruff
+120 files already formatted), `spelling`, `markdownlint` (134 files, 0 errors),
+and `nixie`.
+
+Run r21 started over `9216b28` and was stopped after `spelling`: the shared
+dictionary only accepts the -ization form of that word, and `markdownlint` runs
+the same spelling prerequisite, so both failed while `check-fmt` and `nixie`
+passed. `8c89bd3` carries that one-word repair. Run r22 then passed all nine
+gates over `8c89bd3`: `test` ran 2720 with 2720 passed and 4 skipped, `openapi`
+regenerated a byte-identical specification, and `check-fmt` and `lint` were
+read stage by stage rather than trusted through their exit status. The hosted
+checks for that head pass as well: `build`, `coverage`, the CodeScene review,
+and the Gecko review.
+
+The pre-merge reconciliation was posted as PR comment 6932389421 and names, for
+each row of the saved table, the commit or file that answers it. The queued
+full review (`comenq` request `67de92d9`) had not run at the time of writing;
+the `CodeRabbit` commit status for `8c89bd3` reads SKIPPED, which is the
+incremental review being skipped rather than a completed review.
+
+### Requeue-clock and spent-attempt rounds of 2026-11-18 to 2026-11-19
+
+The review that completed afterwards asked for two behavioural repairs and left
+one warning open. `33bd605` carries the repairs:
+
+- **Spent-attempt guard.** Orphan recovery returns a retired row to `Pending`
+  without consulting its cap, and `apalis-postgres`'s fetch will hand it out
+  again. `RetryingJobService::call` now refuses a delivery whose attempt number
+  is strictly greater than the stored budget before the handler runs, and the
+  acknowledgement records the refusal. The guard uses `>` rather than
+  `JobRetryPolicy::permits`, because `permits` answers whether another retry
+  may follow and would refuse the legal final delivery at the cap.
+- **Requeue clock.** The behavioural assertion compares the stored `run_at` with
+  `SELECT now()` read through the same pool, and a negative control stages
+  `run_at = now() + interval '1 hour'` in a rolled-back transaction and
+  requires the eligibility predicate to reject it.
+
+The dead-letter backlog gauge stays out of this PR. The chart declares no
+metrics port, scrape annotation, `ServiceMonitor`, or alerting rule for any
+workload, so a gauge added here would have no verified collection path, and
+`docs/backend-roadmap.md` already scopes operator surfaces to 5.3.1. The design
+is filed as issue #630 and linked from the runbook's backlog section.
+
+Runs r23 and r24 were started and stopped rather than allowed to verify a tree
+that was still changing. Run r25 then passed all nine gates over `33bd605`:
+`check-fmt`, `spelling`, `markdownlint` (134 files, 0 errors), `nixie`, `lint`
+(rustdoc, Clippy, Whitaker on both manifests, architecture-lint, AsyncAPI and
+Redocly, Ruff, `interrogate` 100%, Pylint 10.00, checkmake, mbake), `typecheck`,
+`test` (nextest 2726 passed / 4 skipped, both compile-fail suites, Vitest 92,
+workflow contracts 658, script suites, action-lint), `audit`, and `openapi`
+(byte-identical spec). Hosted CI run 44053867645 is green for `33bd605`.
+
+### Closing the requeue `run_at` test gap
+
+The next pre-merge table kept one Testing (Overall) error open: every requeue
+test would still pass if the `run_at = now()` write were removed, because the
+seed already stored a due deadline. The scenario
+`Requeue makes a dead job with a future deadline immediately eligible` closes
+it:
+
+- the seed moves the dead row's deadline an hour past the database clock and
+  records that reading as a pair with the clock, so the row is provably
+  ineligible before the requeue;
+- `requeue` runs through the `DeadLetterQueue` port as an operator would;
+- the assertion first requires the recorded deadline to be ineligible — the
+  negative control — and then requires the stored deadline to be eligible
+  against a fresh `SELECT now()` from the same pool.
+
+The control was exercised against the implementation, not asserted on paper:
+setting `IMMEDIATELY_ELIGIBLE_RUN_AT` to `run_at` (a stale-value mutation of
+the same write) makes the scenario fail with the stored deadline an hour ahead
+of the database clock, and restoring `now()` makes it pass.
+
+### Rebase onto the actix-http advisory fix of 2026-11-20
+
+Run r26 failed only the `audit` gate: three RustSec advisories published on
+2026-11-16 flag `actix-http` 3.20.3, which `main` pins through `actix-web`. The
+failure reproduced on `origin/main` itself, so it was repository-wide rather
+than caused by this branch. The remediation went into a separate prerequisite
+PR, #633, whose lockfile-only change resolves `actix-http` 3.22.0 and clears
+all three advisories; it merged as `f37928e`.
+
+The branch was then replayed from `aa0532b` onto `f37928e` with the native
+merge backend and `zdiff3`, and with `core.attributesFile` pointed at
+`/dev/null` because the repository has no tracked attributes opting in to
+Weave. Two of the 132 replay steps landed empty because their content had
+already reached `main`, and both were checked rather than assumed redundant:
+
+- `33fc2ae` bumps `quinn-udp` for RUSTSEC-2026-0538; `f37928e` already pins
+  0.5.16.
+- `5896967` renews the extract-zip audit exceptions to 2026-12-14; `main`
+  carries the same renewal with the same wording.
+
+`git range-diff` over `aa0532b..58e4895` against the rebased series reports 125
+identical patches, the two skips above, and five whose patch differs. Four of
+the five follow `main`'s newer content: the `std::env::set_current_dir`
+prohibition added to the environment policy tests, and the relocation and
+renumbering of the ADRs under `docs/adrs/`. Every ADR link in
+`docs/contents.md` resolves in the result. The fifth is the driver artefact
+described next.
+
+Weave participated despite the attribute override, through the global
+`merge.weave.driver` registration, in the replay of `5085a6c`; it separated the
+`const ... include_str!` items in
+`backend/tests/environment_policy_contract.rs` with blank lines that neither
+parent carries. Commit `bfa7c51` deletes them, and this record follows it. The
+rebased tree is now byte-identical to `git merge-tree --write-tree` of the old
+head over `f37928e`, which is the acceptance evidence for the replay: no branch
+work was dropped, no parent work was resurrected, and no artefact remains.
+
+### Run r27 over the rebased candidate
+
+All nine gates passed over `f7ed88e`, once each and in repository order, in
+43m08s (2026-11-20T14:19:24Z to 15:02:32Z), with compile admission healthy
+throughout. The ledger is `/tmp/gates-wildside-457-r27.status` and each gate's
+log is `/tmp/<gate>-wildside-457-r27.out`.
+
+- `check-fmt`: mdtablefix 133 files unchanged, cargo fmt 120 files formatted,
+  pinned Biome 2.3.1 and Ruff clean.
+- `spelling`: `typos.toml` regenerated to the same hash.
+- `markdownlint`: 134 files, 0 errors.
+- `nixie`: every diagram validated.
+- `lint`: rustdoc, Clippy `-D warnings`, Whitaker on both manifests,
+  architecture-lint, AsyncAPI, Redocly, Ruff, `interrogate` 100%, Pylint 10.00,
+  checkmake, mbake, actionlint.
+- `typecheck`: `ty` and `tsc --noEmit` clean across the three TypeScript
+  packages.
+- `test`: nextest 2727 passed / 4 skipped, both compile-fail suites, Vitest 92,
+  bun workspaces 170 and 3, workflow contracts 658 passed / 1 skipped, script
+  suites 115 passed / 13 skipped, action-lint 14.
+- `audit`: no vulnerabilities; 45 ignored advisories remain covered by
+  `CARGO_AUDIT_IGNORES`. This gate was the only red one at r26, and it is green
+  now that `f37928e` pins `actix-http` 3.22.0, which discharges the
+  prerequisite.
+- `openapi`: the regenerated specification is byte-identical.
+
+Three warnings remain and none fails a gate: actionlint's `truthy` warning in
+`.github/workflows/dependabot-automerge.yml`, Redocly's two
+`no-unused-components` warnings, and the audit ledger's allowed advisories.
+
+### The same-instance acknowledgement window of 2026-11-20
+
+CodeRabbit raised two linked findings against `02eaed6`. The first asked for
+the recovered-terminal-row window to be exercised through a real worker
+pipeline, asserting that the recovered delivery never reaches the handler while
+retaining the legal delivery at the cap. The second asked for a same-name
+negative control with different attempt counts, a check that deployment
+enforces distinct names, and an additional guard if the same instance can
+reacquire its own delivery.
+
+The same instance can reacquire its own delivery. Orphan recovery returns a
+stale `Running` row to `Pending` without excluding its former owner, and a
+worker re-registers under the same name while its original handler is still
+active. The pinned `ack.sql` matches on `id` and `lock_by` alone, so the stale
+acknowledgement could rewrite the row the replacement delivery now holds.
+`AcknowledgementExt::ack_with` cannot close this: it layers outside the pinned
+acknowledgement rather than replacing it.
+
+The guard is therefore the new `AttemptBoundStorage`, a `Backend` newtype over
+`PostgresStorage<Value>` whose middleware stack keeps `LockTaskLayer` and
+substitutes `AttemptBoundAck` for `PgAck`. The acknowledgement binds
+`status = 'Running'` and the attempt count the row stored during the delivery
+(`attempt - 1`, since Apalis increments the in-memory attempt on first poll),
+and returns `RowNotFound` with an `acknowledgement_refused` warning instead of
+writing when no row matches. Recovery increments the stored count, so a
+predecessor's acknowledgement no longer matches the row that replaced it. The
+queue module documents that workers must be built over `AttemptBoundStorage`,
+and the BDD worker harness now does so.
+
+Deployment currently starts no worker, so the distinct-name requirement is a
+rollout precondition rather than something this PR can enforce. It is recorded
+in ADR 0004, in roadmap item 5.3.1, and in the retry runbook; a deployment that
+shares a name across instances would rely on the attempt predicate alone.
+
+New canaries:
+
+- `apalis_retry_canaries/pipeline.rs` runs a real `WorkerBuilder` worker over
+  `AttemptBoundStorage`. The refused case seeds the row recovery actually leaves
+  (`Pending`, `attempts = max_attempts = 5`, terminal reason in metadata) and
+  asserts `runs_at_terminal == 0`, status `Killed`, and `attempts == 6`. The
+  positive control seeds one below the cap and asserts the delivery reaches the
+  handler once, status `Done`, `attempts == 5`. These replace the earlier
+  direct-delivery model of the single-recovery row, which had to seed a count
+  past the cap because `fetch_task` skips the poll increment.
+- `apalis_retry_canaries/ack_guard.rs` holds the worker name equal across
+  generations. A stale delivery reporting the pre-recovery count is refused with
+  `RowNotFound` and the `Running` row is unchanged; the owning delivery at the
+  recovered count is acknowledged as `Failed` with `attempts` stored.
+- `recovery.rs`'s cross-instance canary now uses `AttemptBoundAck`, asserts
+  `RowNotFound` specifically, and gives the stale delivery its own attempt
+  count rather than the replacement's.
+
+### Run r28 over the attempt-bound guard
+
+Run r28 started at 18:13 and finished at 19:21 CET over `da41574`, once each
+and in repository order. Eight of the nine gates passed:
+
+- `spelling`: the regenerated `typos.toml` is unchanged.
+- `markdownlint`: 134 files, 0 errors.
+- `nixie`: every diagram validated.
+- `lint`: all eight sub-stages, 755s.
+- `typecheck`: clean.
+- `test`: 2176s. Nextest ran 2731 passed and 4 skipped, which includes the four
+  new canaries; both compile-fail suites, Vitest 92, bun 170 and 3, workflow
+  contracts 658 passed and 1 skipped, the script suites 115 passed and 13
+  skipped, and action-lint 14 also passed.
+- `audit`: 0 vulnerabilities, 45 allowed warnings.
+- `openapi`: the specification blob is unchanged (`658590a7`).
+
+`check-fmt` failed at its first stage: `mdtablefix --check --wrap` would
+reformat the two Markdown files this change appends to, so the recipe stopped
+before `cargo fmt`, Biome and Ruff ran. `make fmt` applied that rewrap, 12
+additions and 13 deletions of whitespace only, and it is committed as
+`3cec366`. The r28b re-run at `3cec366` passed `check-fmt` with all four stages
+exercised: mdtablefix reports 133 files unchanged, `cargo fmt` is clean, and
+pinned Biome 2.3.1 and Ruff 0.16.8 are clean.
+
+One evidence gap remained after r28b: `markdownlint` and `nixie` were measured
+at `da41574`, before the rewrap, and nothing outside the two rewrapped files
+changed between the two commits. Run r28c closed it over the four Markdown
+targets at `075111c`. `check-fmt` passed with mdtablefix reporting 133 files
+unchanged and `cargo fmt`, Biome 2.3.1 and Ruff 0.16.8 clean; `spelling`
+regenerated `typos.toml` to the same hash; `markdownlint` linted 134 files with
+0 errors; and `nixie` validated all 28 diagram blocks.
+
+The ledger is `/tmp/gates-wildside-457-r28.status`; each gate's log is
+`/tmp/<gate>-wildside-457-r28.out`, the check-fmt re-run is at
+`/tmp/check-fmt-wildside-457-r28b.out`, and the docs-scoped run is at
+`/tmp/<target>-wildside-457-r28c.out`.
+
+### The claim-token guard
+
+CodeRabbit's second review accepted neither earlier disposition. It showed that
+the attempt count is not a delivery generation:
+`PostgresDeadLetterQueue::requeue` resets `attempts` to zero, so a stale
+delivery that reported attempt 1 and its successor, delivered after the
+requeue, agree on the identifier, the worker name, the `Running` status, and
+the stored attempt count. It also asked for the terminal-write window to be
+driven end to end through the real worker rather than seeded.
+
+The guard now uses a claim token. `AttemptBoundLock`, a new layer in
+`backend/src/outbound/queue/attempt_bound_lock.rs`, runs the pinned
+`lock_by_id.sql` predicate and additionally writes a fresh ULID into the row's
+metadata under `wildside.retry.claim_token`; the same token is carried in the
+task's `PgContext`. `AttemptBoundAck` requires
+`metadata->>'wildside.retry.claim_token'` to equal the delivery's token as well
+as `id`, `lock_by`, `status = 'Running'`, and the stored attempt count.
+Recovery, `schedule_retry`, `record_terminal_failure`, `clamp_terminal_cap`,
+and the requeue all preserve unrelated metadata keys, so only a new claim
+changes the token. A delivery whose claim token no longer matches is refused
+with `RowNotFound` and an `acknowledgement_refused` warning that records
+whether the delivery carried a token at all.
+
+`AttemptBoundStorage` composes the two layers with the lock outside the
+acknowledgement. `tower_layer::Stack::new` takes the inner layer first, and the
+first composition had them the other way round: the pipeline canaries failed
+because `AcknowledgeService` clones the parts before the lock stamped them, so
+the acknowledgement carried `token = None`. The probe that established this was
+temporary and is not in the change; the canaries remain as the regression
+evidence, because a future ordering change reproduces exactly that failure.
+
+New and extended canaries:
+
+- `apalis_retry_canaries/ack_guard.rs` adds
+  `a_requeued_row_cannot_be_overwritten_by_its_previous_delivery`: it inserts
+  the terminal row a replacement delivery leaves behind, requeues it through
+  `PostgresDeadLetterQueue::requeue`, and asserts the requeue reset the attempt
+  count to zero while preserving the replaced generation's token. It then
+  claims the row through `AttemptBoundLock` and asserts the row carries the
+  fresh token that claim stamped, which never repeats. The stale delivery
+  reports attempt 1 under its old token and is refused with `RowNotFound`,
+  leaving the `Running` row unchanged, and the generation that claimed it
+  acknowledges the same attempt count successfully. Every other discriminator
+  is equal, so only the token separates the two. The claim is driven directly
+  rather than through a worker: a worker would acknowledge before the stale
+  delivery could be replayed, and the stored status would then differ for a
+  reason unrelated to the token.
+- `apalis_retry_canaries/pipeline.rs` adds
+  `the_worker_pipeline_refuses_a_row_recovered_from_a_terminal_write`: it
+  registers a worker under the queue, seeds a `Running` row one attempt below
+  the cap, drives the real `RetryPersistence::record_terminal_failure`, checks
+  the write preserved the claim token beside the reason, backdates and recovers
+  the row through Apalis's own heartbeat, then runs a real worker. It asserts
+  the recovered count, `runs_at_terminal == 0`, status `Killed`, and
+  `attempts == cap + 1`. The positive control for the final permitted attempt
+  is retained.
+- The fixtures now carry a `Delivery` value object for the worker, cap,
+  attempt, and claim token, because the fifth positional argument tripped
+  `clippy::too_many_arguments`; `recover_orphaned_row` registers its sweeper
+  under the queue first, since `keep_alive` matches on the worker type and
+  otherwise fails with `WORKER_DOES_NOT_EXIST`.
+- The fixture file outgrew Whitaker's 400-line limit once the new helpers
+  arrived, so it is now a module directory: `fixtures/environment.rs` owns the
+  embedded cluster, pool, and worker registration, and `fixtures/rows.rs` owns
+  the row, delivery, and fetch helpers. `fixtures.rs` re-exports both. The
+  children are declared with explicit `#[path]` attributes because the parent
+  is itself loaded through `#[path]`, which stops Rust deriving a nested
+  directory for it.
+
+ADR 0004 now records the requeue window and why the token is the generation;
+the retry runbook and the backend architecture document describe the token, the
+`acknowledgement_refused` warning, and the storage-type deployment contract.
+The runbook already states the paging contract CodeRabbit asked to verify:
+alert on `route_queue_terminal_write_failure_total` and both terminal-write log
+events, and page on `terminal_cap_clamp_exhausted` together with that counter.
+
+The canary binary passes in full: 71 tests, 71 passed, in 247s.
+
+The r29 run is green across all nine gates. `check-fmt` passed all four stages:
+mdtablefix reports 133 files unchanged, `cargo fmt` is clean, and pinned Biome
+2.3.1 and Ruff 0.16.8 are clean. `spelling` regenerated `typos.toml` to the
+same hash, `markdownlint` linted 134 files with 0 errors, and `nixie` validated
+every diagram block. `lint` passed all eight stages, including `lint-rust` —
+rustdoc, Clippy with `-D warnings`, and Whitaker on both manifests — which
+clears the `module-max-lines` finding that stopped the first r29 attempt on the
+451-line `fixtures.rs`; that attempt's lint log is preserved at
+`/tmp/lint-wildside-457-r29.prior-lint-rust-red.out`. `typecheck`, `test` (five
+sub-suites, 1064s), `audit`, and `openapi` (regenerated spec byte-identical to
+the tree) all passed. Each gate's log is `/tmp/<gate>-wildside-457-r29.out`.
+
+The r29 logs were captured before these notes were added, so the Markdown gates
+were re-run over the final tree. `check-fmt` reports mdtablefix unchanged
+across 133 files with `cargo fmt`, Biome 2.3.1, and Ruff 0.16.8 clean;
+`markdownlint` linted 134 files with 0 errors; `spelling` regenerated
+`typos.toml` to the same hash; and `nixie` validated every diagram block. Those
+logs are `/tmp/<target>-wildside-457-r29e.out`.
+
+### Clearing the CodeScene findings
+
+The hosted `CodeScene Code Health Review (main)` check failed on the r29 head
+at three changed files, under the `Pay Down Tech Debt` profile's advisory
+rules. Every finding is a real complexity signal, so the code changed rather
+than the gate's configuration.
+
+- `ack_guard.rs` (9.10) reported `Code Duplication` between its two insert
+  helpers and `String Heavy Function Arguments`. The two helpers are gone: a
+  `locked_row` and a `dead_row` builder now describe the two rows, and one
+  `insert_row` inserts either, so the shared worker registration and insert run
+  once.
+- `fixtures/environment.rs` (9.10) reported the same two rules;
+  `register_worker` and `register_queue_worker` duplicated the insert, and 53
+  percent of arguments were strings. One `register_typed_worker` now owns the
+  insert, with a `WorkerType` enum naming the two registration scopes.
+- `pipeline.rs` (9.57) reported `Large Method` for
+  `the_worker_pipeline_refuses_a_row_recovered_from_a_terminal_write` at 78
+  lines against a 70-line recommendation. Seeding, the terminal write, and
+  recovery are now `seed_crashed_delivery`, `retire_delivery`, and
+  `recover_retired_row`; the test body reads as assertions over their results.
+
+The string-argument findings are answered with the identifier newtypes the
+repository's style already asks for. `fixtures/ids.rs` defines `QueueName`,
+`WorkerName`, `JobId`, and `ClaimToken`; a caller can no longer pass a queue
+where a worker name belongs, and the fixture signatures are no longer
+string-heavy. `cs review` now scores all three files at 10.0, and
+`fixtures/ids.rs` at 10.0 as well.
+
+The r30 suite is green over the new tree, across all nine gates. `check-fmt`
+reports mdtablefix unchanged across 133 files with Biome 2.3.1 and Ruff 0.16.8
+clean; `lint` passed all its stages, including Clippy with `-D warnings` and
+Whitaker on both manifests; `typecheck`, `spelling`, `markdownlint`, and
+`nixie` passed; the canary binary passes 71 of 71 tests and the full `test`
+target exits 0; `audit` reports only the repository's accepted warnings; and
+`openapi` regenerates the committed spec unchanged. Logs are
+`/tmp/<target>-wildside-457-r30.out` and `/tmp/test-457-csfix.out`.
+
+### Review findings of 2026-11-21
+
+The review of the r30 head raised five actionable findings. Four are repaired
+here. The fifth, the claim-token metadata key, is retained and is covered by
+the dated, scoped amendment recorded below rather than by a fresh user
+authorization.
+
+**The `ulid` dependency deviation.** The attempt-bound acknowledgement had added
+`ulid = "1"` to name the backend's identifier type. The plan's hard constraint
+says no production dependency may be added, and `ulid` was not otherwise part
+of the backend's dependency set. The adapter now names the type through the
+wrapped storage,
+`type DeliveryId = <PostgresStorage<Value> as Backend>::IdType`, so the pinned
+release continues to own the key. The claim token is minted with
+`uuid::Uuid::new_v4()`, already a production dependency, and `ulid` disappears
+from the manifest; `Cargo.lock` retains it only as an `apalis-postgres`
+transitive dependency. Behaviour is unchanged.
+
+**The discard scenario proved too little.** "A discarded dead job is gone"
+asserted an empty listing, which cannot distinguish deleting the target from
+deleting every dead row, and could not see a live row caught in the same
+delete. The scenario now seeds a live `Pending` row and an unrelated dead row
+beside the target (`insert_discard_controls`). The listing assertion requires
+exactly the unrelated dead row to remain, and a further assertion compares the
+live row's whole stored state with the seed. A discard that dropped its
+identifier predicate now fails the listing assertion; one that treated a live
+row as dead fails the state comparison.
+
+**The architecture note overstated the guards.** The design document said the
+guards keep a delivery that no longer owns its row from running a handler or
+rewriting the replacement's row. The two guards act at different points: the
+spent-attempt check refuses a delivery before its handler starts, and the
+acknowledgement refuses the stale write. Neither stops a handler that is
+already running, whose side effects can overlap with a replacement delivery's
+work. The paragraph now says so and states the consequence: handlers must
+remain idempotent.
+
+**Const-context coverage became a UI test.** The compile-time row asked for
+const-context usage, and the previous target mixed that with runtime value
+assertions in one file. The const items moved to the trybuild compile-pass
+fixture `backend/tests/support/ui/retry_const_api_const_context.rs`, driven by
+`backend/tests/retry_const_api_ui.rs` behind the `trybuild-tests` feature. The
+same harness compiles the negative fixture
+`backend/tests/support/ui/jitter_sample_private_constructor.rs`, whose committed
+`.stderr` is fixture-local (it names no standard-library source), and pins
+that a jitter sample can only be built through its validating constructor. The
+documented values stay pinned at run time in
+`backend/tests/retry_api_values.rs`. The harness is excluded from nextest and
+named in both the `test-rust` recipe and the CI `Compile-fail tests` step; the
+workflow-contract constants pin the exclusion expression and the step's whole
+script.
+
+**The claim is now bound to the fetched delivery.** One finding of the same
+round observes that a delivery which stalled after its fetch can still claim a
+row that orphan recovery or a requeue has moved on, because its in-memory
+attempt count can equal the row's again. `AttemptBoundLock` now reads the
+worker name, task identifier, and fetched attempt count from the delivery and
+requires the row to still name that worker in `lock_by` and to still hold that
+attempt count. Both predicates hold for a fresh delivery, because
+`apalis.get_jobs` recorded the worker during the fetch and nothing changes the
+count before the claim. A delivery that lost its row is refused with
+`RowNotFound` before its handler is polled. Two canaries in
+`apalis_retry_canaries/claim_guard.rs` pin the recovery window and the requeue
+window, each ending with the replacement delivery's claim succeeding; the
+`ack_guard` requeue canary now performs the pinned fetch before its claim so
+that its attempt count matches what a real delivery carries.
+
+**The third metadata key is authorized by amendment.** The same round observes
+that `wildside.retry.claim_token` is a third Apalis metadata key, beyond the
+two values D15 authorizes. The `ulid` production dependency named in the same
+finding was removed outright, so only the key remains. It is authorized by the
+dated, scoped amendment in the next section, which also records its provenance:
+the decision is the agent's, taken under the user's standing instruction to
+bring this PR to equilibrium and merge it.
+
+### D15 scope amendment of 2026-11-21
+
+D15's user acceptance of 2026-10-25 covers two namespaced metadata keys. The
+claim-token guard adds a third, `wildside.retry.claim_token`, because the
+review's other findings require a delivery generation that a requeue does not
+repeat. Removing the token is not available: it is the discriminator the review
+asked for, and without it a requeued row can be overwritten by the delivery the
+requeue replaced. The token is also already part of the accepted design:
+ADR-0004 records the claim step and the token under Decision and Consequences,
+and the runbook, the backend architecture document, and the review replies of
+2026-11-20 describe it as the deployment contract.
+
+This amendment extends D15 by exactly one key, dated 2026-11-21:
+
+- **Scope.** Guarded writes to `metadata->'wildside.retry.claim_token'` from the
+  claim step in `backend/src/outbound/queue/attempt_bound_lock.rs`, and reads
+  of the same key by the acknowledgement. No other Apalis metadata write is
+  authorized, and every adapter continues to preserve unrelated keys.
+- **Provenance.** The decision is the implementation agent's, taken under the
+  user's standing instruction to bring this PR to equilibrium and merge it. It
+  is not a fresh user authorization. It is recorded here, with its date and
+  scope, so that the plan and the code agree. The user can reverse it by
+  directing the token's removal, which also removes the guard the review
+  requested and returns the finding to the review.
+
+The amendment adds no schema object, no column, and no dependency. It changes
+which keys the existing guarded `jsonb_set` writes, and the key remains
+namespaced and covered by the rc-coupled canaries listed above.
+
+### Second review of 2026-11-21: observability and developer documentation
+
+The review of the `1a82dad` head raised no new inline findings and two failed
+pre-merge rows, both warnings.
+
+**Observability.** Two log changes are made. A refused claim in
+`attempt_bound_lock.rs` now logs at `WARN` with decision `claim_refused` and
+the delivery's `task_id` and `attempt`; previously the only evidence was the
+`RowNotFound` its caller received. The successful scheduled-retry log in
+`retrying_handler/failure.rs` moves from `WARN` to `INFO`, so a warning from
+the wrapper means a refused or failed write rather than a job that is retrying.
+The runbook's "Signals and alerting" section records both, and its backlog
+section names the planned collected series, `route_queue_dead_jobs`, labelled
+only by `queue`, with the threshold and paging route set by the worker
+rollout's alerting owner. The collector itself stays out of this PR: the
+roadmap scopes queue observability to the worker rollout, the chart declares no
+scrape configuration for any workload, and the reply of 2026-11-20 on this PR
+instructed that #630's collector not be added here without a scope change.
+
+**Developer documentation.** The guide now documents
+`ApalisPostgresProvider::new(pool, queue_name, policy)` and its rejection of
+attempt limits outside Apalis's signed range; a `JitterSource` seam subsection
+covering `ThreadRngJitter`, the midpoint fallback, `with_jitter`, and when a
+test must inject a fixed sample; the `lint-whitaker` invocation and
+`--fail-on-no-libraries`; the `retry_const_api_ui` lane's exclusion from
+nextest and its single execution point in the compile-fail step; and the
+`apalis_retry_canaries` and `queue_retry_worker` harnesses, with the rule that
+a canary exists only for behaviour an upgrade can change underneath the wrapper.
+
+**Open decision.** The reply of 2026-11-20 on the claim-token thread requires
+explicit user approval of the D15 amendment before it treats that finding as
+addressed. That decision is the user's: the plan's Constraints reserve further
+mechanism changes to the user. It is recorded as pending here rather than
+assumed.
+
+### Third review of 2026-11-22: domain terminal reason and guarded-write tokens
+
+The review of the `d821d3d` head (review `6010796810`) raised one inline
+finding and four failed pre-merge rows. All five are implemented in this round.
+
+**Guarded writes carry the claim token (Testing).** The reviewer asked for
+canaries that model the replacement generation rather than an attempt-count
+mismatch, and named the remedy if the current SQL failed them. It does fail
+them: `schedule_retry`, `record_terminal_failure`, and `clamp_terminal_cap`
+matched `id`, `lock_by`, `status = 'Running'`, and `attempts` only, so a
+requeue that resets `attempts` to zero let a stale delivery's write match the
+row its own instance had just re-claimed. The three updates now bind
+`metadata->>'wildside.retry.claim_token'`, exactly as the acknowledgement does,
+and a tokenless delivery binds the empty string so it matches no row.
+`apalis_retry_canaries/scheduler/guards.rs` drives the production requeue, the
+production claim, and each stale write, leaving every non-token discriminator
+equal.
+
+**Domain terminal reason (Domain Architecture).** `RetryDecision::DeadLetter`
+now carries a `DeadReason` that `JobRetryPolicy::decide` derives from the
+`JobErrorKind`; the adapter's duplicate `TerminalRetryReason` is gone, and only
+the adapter maps the reason to the stored `fatal` / `exhausted` label. The
+wrapper passes the domain reason through and no longer re-derives it. Domain
+tests pin the reason for each kind, and adapter tests pin the storage label.
+
+**Documentation (Developer Documentation).** The guide names
+`AttemptBoundLock`/`AttemptBoundLockService` and the token predicate in both
+the acknowledgement and the guarded writes, documents `JobAttemptBudget` and
+`BoundedAttempt` as the domain's budget, names the `test-support` listing
+seams, and lists `tooling_doubles.py`. The plan's `Outcomes & retrospective`
+section now states the current position.
+
+**Dead-job backlog (Observability, inline finding).** The runbook's backlog
+query now returns one row per configured queue, so it can produce the
+`route_queue_dead_jobs{queue=...}` series, and it states that a configured
+queue with no dead jobs reports zero. The `claim_refused` warning carries the
+`queue` field. The gauge itself remains issue #630's, on the disposition of
+2026-11-20.
+
+**Amendment scope.** The claim-token amendment of 2026-11-21 described reads of
+the key by the acknowledgement. This round adds reads by the wrapper's three
+guarded writes, which is the reviewer's own instructed remedy for the Testing
+row. The provenance is unchanged and still one decision: the implementation
+agent's, under the user's standing instruction to bring this PR to equilibrium
+and merge it, reversible by directing the token's removal. That removal now
+also withdraws the guarded-write refusals recorded here.
+
+### Fourth review of 2026-11-22: the fetch-bound claim and domain vocabulary
+
+The review of `8a0e63e` (review `6014779923`) raised one outside-diff finding,
+one inline finding, and one failed pre-merge row. All three are implemented.
+
+**Fetch-bound claim (outside diff).** The claim matched `lock_by` and
+`attempts` but not the fetch that produced the delivery. A delivery fetched
+before a dead-letter requeue could therefore claim the row its own instance
+fetched afterwards, mint a token, and acknowledge it: the requeue resets
+`attempts` and the re-fetch restores `lock_by`, so the two deliveries agreed on
+every earlier predicate. The claim now also requires the
+`wildside.retry.requeue_count` the fetch captured in the delivery context, and
+a requeue increments that counter. The pinned fetch cannot be changed, and its
+context exposes `lock_at` only at whole-second precision, so the captured
+counter is the precise fetch-time generation available; the module doc, ADR
+0004, the architecture document, and the developers guide state the resulting
+guard. `a_delivery_fetched_before_a_requeue_cannot_claim_the_replacement`
+drives the pinned fetch, the production requeue, and the production claim with
+the same identifier, worker, and attempt count.
+
+**Test-double fidelity (inline).** `PersistenceCall` records each request's
+claim token for schedule, terminal, and clamp writes, including clamp retries.
+The wrapper tests use a non-empty token in claimed-delivery fixtures and assert
+it is preserved, and a separate tokenless case pins the empty binding.
+
+**Domain vocabulary (Domain Architecture).** `DeadJobSkip`'s label moved to the
+dead-letter row decoder, the three route-queue outcome labels moved to the
+Prometheus adapter, and the two domain doc comments that named a database and
+its task library were reworded. The label strings are unchanged and pinned in
+the adapters. The domain grep for `sqlx`, `apalis`, `postgres`, `tracing`, and
+`as_label` now reports only plain-English uses of "tracing", one deliberate
+port that emits its own structured log, and three pre-existing illustrative
+mentions of the database in port docs.
+
+**Decision note.** The claim's requeue-generation predicate reads a key the
+user accepted on 2026-10-25; it adds no key, column, or dependency. The claim
+token itself remains the single pending user decision recorded above.
+
+### Gate round of 2026-11-23 to 2026-11-24: advisories and the ledger
+
+Three newly published RustSec advisories landed while this branch was under
+review, and each was handled on its merits rather than ignored:
+
+- RUSTSEC-2026-0592 (`url` 2.5.8) was fixed by moving the lockfile to the
+  patched 2.5.9.
+- RUSTSEC-2026-0386 (`tokio` 1.50.0) was fixed by moving the lockfile to
+  1.54.1. `backend/Cargo.toml` requires `tokio = "1"`, so this is a
+  within-caret lockfile update; the full suite was re-run against it and
+  nextest, Clippy, rustdoc, Whitaker, and the timer and embedded-PostgreSQL
+  suites all pass.
+- RUSTSEC-2026-0594 (`cookie` 0.16.2) has no compatible fix: every actix-web
+  4.x release through 4.20.0 requires `cookie ^0.16`, and 0.16.2 is the last
+  0.16 release, so the patched 0.18.3 cannot be selected. The Makefile audit
+  ledger therefore gains a dated entry recording the upstream block, why the
+  advisory's precondition (a forked child inheriting the nonce generator) is
+  absent from this deployment, and a review date. This follows the ledger
+  pattern the repository already uses for RUSTSEC-2026-0258 and
+  RUSTSEC-2026-0459; it is a recorded, reviewable acceptance, not a silent
+  suppression.
+
+The `normalise`/`normalize` spellings the spelling gate flagged in the claim
+module were corrected to the shared en-US policy.
+
+### Fifth review of 2026-11-24: generation exhaustion and cookie integrity
+
+The review of `39a2d71` (review 6038700352) raised two inline findings, and
+CodeScene raised one advisory against the new canary module.
+
+**Requeue generation exhaustion.** The requeue counter saturated at `u32::MAX`,
+so a requeue at the ceiling left the generation unchanged and a delivery
+fetched before it could still match the claim predicate. The adapter now
+refuses a requeue whose counter has reached its maximum rather than writing the
+value the row already holds: `next_requeue_count` reports a distinct
+`Exhausted` fault, the requeue returns `InvalidJobData` with a message naming
+the exhausted counter, and the runbook's operator SQL applies the same bound.
+Ordinary requeues still advance, and the unit tests pin both the advance and
+the refusal.
+
+**Cookie integrity rationale.** The audit ledger's first wording said the
+session key, rather than a nonce counter, protected cookie integrity. The
+session does use a private (AES-256-GCM) cookie, whose integrity does depend on
+nonce uniqueness. The entry now states that dependence, the exact fork
+condition the deployment does not meet, and that the exception must be reviewed
+if the backend ever forks after the generator is seeded.
+
+**CodeScene.** The new canary module took several `&str` parameters in a row,
+which the String Heavy Function Arguments rule charges against a changed file.
+Its helpers now take the existing `QueueName` and `JobId` newtypes, and the
+file scores 10.00. No rule exemption was widened.
+
+### Replay of 2026-11-25 and the sixth review
+
+`main` advanced to `1e9dfc9` while this branch was under review, bringing the
+same `url` advisory fix this branch had made independently, a reviewed
+`RUSTSEC-2026-0594` ledger entry, the CI concurrency change from #636, and a
+documentation-style refresh. The branch therefore replayed onto `main`: 152
+commits were unchanged, the duplicate `url` commit was dropped as already
+upstream, and the two ledger commits were replayed onto main's entry, keeping
+main's review date and the nonce-integrity rationale the review had asked for.
+One further commit resolves the regenerated lockfile, where `dirs` moves to
+`windows-sys 0.60.2` because tokio 1.54.1 no longer pulls `0.59.0`. The full
+nine-gate set was re-run on the rebased head and passes.
+
+The review of the rebased head raised two documentation findings, both applied:
+the retry API sketch now shows `decide` taking a `BoundedAttempt` and
+`DeadLetter { reason: DeadReason }`, matching the code; and the runbook's
+backlog section now describes issue #630's actual contract — a deployment-owned
+collector refreshing an unlabelled `IntGauge`, no queue label, no recorded
+threshold — instead of presenting the per-queue diagnostic query as the planned
+series.

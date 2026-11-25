@@ -24,8 +24,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use apalis_core::backend::TaskSink;
+use apalis_core::task::Task;
+use apalis_postgres::{Config, PgContext, PostgresStorage};
 use tracing::{instrument, warn};
 
+use crate::domain::jobs::retry::JobRetryPolicy;
 use crate::domain::ports::{JobDispatchError, RouteQueue, RouteQueueMetrics, RouteQueueOutcome};
 
 /// Abstracts the queue storage backend for testability.
@@ -112,7 +115,16 @@ pub(crate) trait QueueProvider: Send + Sync {
 /// # }
 /// #
 /// # async fn example(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
-/// let provider = ApalisPostgresProvider::new(pool).await?;
+/// # use std::{num::NonZeroU32, time::Duration};
+/// # use backend::domain::jobs::retry::{JobRetryPolicy, JobRetryPolicyConfig};
+/// let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
+///     max_attempts: NonZeroU32::new(5).expect("positive limit"),
+///     base_delay: Duration::from_secs(1),
+///     multiplier: 2.0,
+///     max_delay: Duration::from_secs(60),
+///     jitter_fraction: 0.2,
+/// })?;
+/// let provider = ApalisPostgresProvider::new(pool, "route-planning", policy).await?;
 /// let queue: GenericApalisRouteQueue<MyPlan, _> =
 ///     GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
 ///
@@ -152,7 +164,16 @@ impl<P, Q> GenericApalisRouteQueue<P, Q> {
     /// # struct MyPlan;
     /// #
     /// # async fn example(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
-    /// let provider = ApalisPostgresProvider::new(pool).await?;
+    /// # use std::{num::NonZeroU32, time::Duration};
+    /// # use backend::domain::jobs::retry::{JobRetryPolicy, JobRetryPolicyConfig};
+    /// let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
+    ///     max_attempts: NonZeroU32::new(5).expect("positive limit"),
+    ///     base_delay: Duration::from_secs(1),
+    ///     multiplier: 2.0,
+    ///     max_delay: Duration::from_secs(60),
+    ///     jitter_fraction: 0.2,
+    /// })?;
+    /// let provider = ApalisPostgresProvider::new(pool, "route-planning", policy).await?;
     /// let queue: GenericApalisRouteQueue<MyPlan, _> =
     ///     GenericApalisRouteQueue::new(provider, Arc::new(NoOpRouteQueueMetrics));
     /// # Ok(())
@@ -228,7 +249,8 @@ where
 /// to `JobDispatchError` variants.
 #[derive(Clone)]
 pub struct ApalisPostgresProvider {
-    storage: apalis_postgres::PostgresStorage<serde_json::Value>,
+    storage: PostgresStorage<serde_json::Value>,
+    max_attempts: i32,
 }
 
 impl ApalisPostgresProvider {
@@ -239,22 +261,39 @@ impl ApalisPostgresProvider {
     ///
     /// # Errors
     ///
-    /// Returns `JobDispatchError::Unavailable` if the database connection fails
-    /// or if table creation fails.
+    /// Returns `JobDispatchError::Rejected` if the policy cannot fit Apalis's
+    /// signed attempt column. Returns `JobDispatchError::Unavailable` if the
+    /// database connection fails or if table creation fails.
     ///
     /// # Example
     ///
     /// ```rust,no_run
+    /// # use backend::domain::jobs::retry::{JobRetryPolicy, JobRetryPolicyConfig};
     /// # use backend::outbound::queue::ApalisPostgresProvider;
+    /// # use std::{num::NonZeroU32, time::Duration};
     /// # use sqlx::PgPool;
     /// #
     /// # async fn example(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
-    /// let provider = ApalisPostgresProvider::new(pool).await?;
+    /// let policy = JobRetryPolicy::new(JobRetryPolicyConfig {
+    ///     max_attempts: NonZeroU32::new(5).expect("positive limit"),
+    ///     base_delay: Duration::from_secs(1),
+    ///     multiplier: 2.0,
+    ///     max_delay: Duration::from_secs(60),
+    ///     jitter_fraction: 0.2,
+    /// })?;
+    /// let provider = ApalisPostgresProvider::new(pool, "route-planning", policy).await?;
     /// # Ok(())
     /// # }
     /// ```
-    #[instrument(skip(pool))]
-    pub async fn new(pool: sqlx::PgPool) -> Result<Self, JobDispatchError> {
+    #[instrument(skip(pool, queue_name, policy))]
+    pub async fn new(
+        pool: sqlx::PgPool,
+        queue_name: impl Into<String>,
+        policy: JobRetryPolicy,
+    ) -> Result<Self, JobDispatchError> {
+        let max_attempts = i32::try_from(policy.max_attempts().get()).map_err(|_| {
+            JobDispatchError::rejected("retry attempt limit exceeds Apalis storage range")
+        })?;
         // `setup()` is defined exclusively on `impl PostgresStorage<(), (), ()>`
         // by the apalis-postgres library (see `impl PostgresStorage<(), (), ()>`
         // in apalis-sql/src/postgres.rs). It is not available on any other type
@@ -273,10 +312,15 @@ impl ApalisPostgresProvider {
                 JobDispatchError::unavailable(format!("Failed to setup Apalis tables: {error}"))
             })?;
 
-        // Create the storage instance
-        let storage = apalis_postgres::PostgresStorage::new(&pool);
+        // Queue name and attempt budget are paired per job family.
+        let queue_name = queue_name.into();
+        let config = Config::new(&queue_name);
+        let storage = PostgresStorage::new_with_config(&pool, &config);
 
-        Ok(Self { storage })
+        Ok(Self {
+            storage,
+            max_attempts,
+        })
     }
 }
 
@@ -286,7 +330,10 @@ impl QueueProvider for ApalisPostgresProvider {
     async fn push_job(&self, payload: Value) -> Result<(), JobDispatchError> {
         let mut storage = self.storage.clone();
         let started = Instant::now();
-        storage.push(payload).await.map_err(|error| {
+        let task = Task::builder(payload)
+            .with_ctx(PgContext::new().with_max_attempts(self.max_attempts))
+            .build();
+        storage.push_task(task).await.map_err(|error| {
             warn!(
                 error = %error,
                 elapsed_ms = started.elapsed().as_millis(),

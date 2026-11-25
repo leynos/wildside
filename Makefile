@@ -50,10 +50,14 @@ export PATH := $(HOME)/.cargo/bin:$(HOME)/.bun/bin:$(HOME)/.local/bin:$(HOME)/go
 # RUSTSEC-2026-0594 (cookie private-jar nonces can repeat in processes that
 # fork) is fixed in cookie 0.18.3, but actix-web 4.20.0 and awc 3.11.0, the
 # latest releases, still depend on cookie ^0.16, so no patched version is
-# reachable. The server runs one process with worker threads and never forks
-# after startup, which is the condition the advisory needs. Review by
-# 2026-12-23, and end this ignore when actix-web moves to cookie 0.18.3 or
-# later.
+# reachable. The session cookie is a private (AES-256-GCM) cookie under the
+# configured session key, so its integrity depends on nonce uniqueness: a
+# nonce repeated under the same key would let an attacker forge cookies. The
+# advisory needs a forked child to inherit the nonce generator. The server runs
+# one process with worker threads and never forks after startup, so that
+# condition does not hold here; review this exception if the process ever forks
+# after the generator is seeded. Review by 2026-12-23, and end this ignore when
+# actix-web moves to cookie 0.18.3 or later.
 CARGO_AUDIT_IGNORES := --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0258 --ignore RUSTSEC-2026-0459 --ignore RUSTSEC-2026-0594
 
 define ensure_tool
@@ -74,6 +78,23 @@ define exec_or_bunx
 	  $(1) $(2); \
 	else \
 	  bun x $(if $(3),--package=$(3) ,)$(1) $(2); \
+	fi
+endef
+
+# Run Biome through $(BIOME_VERSION), whatever the PATH happens to hold.
+#
+# Formatter output differs between Biome releases, and the differences are
+# not upward-compatible: code shaped by 2.4.13 is reported as unformatted by
+# 2.3.1 and vice versa. Preferring a PATH binary therefore makes `check-fmt`
+# fail on files that CI, which resolves the pin through `bun x`, accepts.
+#
+# Parameters:
+#   $(1) - arguments passed to Biome
+define biome_cmd
+	if biome --version 2>/dev/null | grep -qxF 'Version: $(BIOME_VERSION)'; then \
+	  biome $(1); \
+	else \
+	  bun x --package=@biomejs/biome@$(BIOME_VERSION) biome $(1); \
 	fi
 endef
 
@@ -246,7 +267,7 @@ local-k8s-logs:
 
 fmt: workspace-sync
 	cargo fmt --all
-	$(call exec_or_bunx,biome,format --write frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+	$(call biome_cmd,format --write frontend-pwa packages)
 	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 	$(MDLINT) --fix "**/*.md"
 	$(MAKE) fmt-python
@@ -282,12 +303,20 @@ lint-clippy:
 # WHITAKER_INSTALLER_VERSION). Runs under RUSTFLAGS="-D warnings" so a
 # workspace warning fails the lint, matching the clippy gate. CI invokes
 # this target so both surfaces stay in lockstep.
+#
+# `--lib whitaker_suite` selects the aggregated library explicitly. The
+# installer's prebuilt archive can stage the suite beside the constituent
+# libraries it already contains; `--all` would load both copies of the same
+# lint and rustc aborts with "duplicate specification of lint". The pinned
+# installer (0.2.11) predates the pruning fix, so name the suite instead.
+# `--fail-on-no-libraries` keeps the gate honest: an install that does not
+# stage the named library fails instead of running no lints at all.
 lint-whitaker:
-	$(RUST_FLAGS_ENV) $(WHITAKER) --all -- --manifest-path Cargo.toml --workspace --all-targets --all-features
-	$(RUST_FLAGS_ENV) $(WHITAKER) --all -- --manifest-path backend/Cargo.toml --all-targets --all-features
+	$(RUST_FLAGS_ENV) $(WHITAKER) --lib whitaker_suite --fail-on-no-libraries -- --manifest-path Cargo.toml --workspace --all-targets --all-features
+	$(RUST_FLAGS_ENV) $(WHITAKER) --lib whitaker_suite --fail-on-no-libraries -- --manifest-path backend/Cargo.toml --all-targets --all-features
 
 lint-frontend:
-	$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+	$(call biome_cmd,ci --formatter-enabled=true --reporter=github frontend-pwa packages)
 	pnpm --filter frontend-pwa lint
 
 
@@ -356,24 +385,25 @@ PG_EMBED_SETUP_UNPRIV_VERSION ?= 0.5.2
 NEXTEST_TEST_THREADS ?= 1
 
 # Embedded PostgreSQL configuration is composed by the runner, not mutated
-# in-process by test support (issue #464). `?=` leaves a value already present
-# in the environment untouched, so a developer or CI job can still override
-# either variable; Make supplies the stable default otherwise.
+# in-process by test support (issue #464). Make supplies the stable test
+# password only to `test-rust`; Cargo supplies the non-secret version and
+# release-mirror defaults from `.cargo/config.toml`. Caller-provided values
+# remain intact in both cases.
 #
 # PG_PASSWORD must be stable across test binaries:
 # `postgresql_embedded::Settings::default()` generates a random password on each
 # call, and `setup()` skips `initdb` when the data directory already exists, so
 # a random password makes later binaries fail with `28P01 password
-# authentication failed`. POSTGRESQL_RELEASES_URL is pinned to the Theseus
+# authentication failed`. Cargo pins POSTGRESQL_RELEASES_URL to the Theseus
 # binaries mirror so the download source cannot drift with crate defaults.
 #
-# Both are exported rather than assigned on the recipe's command line so a
-# value containing whitespace or shell metacharacters reaches the child
-# verbatim instead of being re-parsed by the shell.
+# The test recipe exports both settings once in its `.ONESHELL` script, keeping
+# Make's target namespace unique and the default password out of unrelated
+# recipes. `shell_quote` preserves caller values containing spaces, quotes,
+# dollar signs, or shell metacharacters.
 PG_PASSWORD ?= wildside_embedded_test
 POSTGRESQL_RELEASES_URL ?= https://github.com/theseus-rs/postgresql-binaries
-export PG_PASSWORD
-export POSTGRESQL_RELEASES_URL
+shell_quote = '$(subst ','"'"',$(value $(1)))'
 
 
 # Zero-tolerance documentation gate: TypeDoc's notDocumented validation over
@@ -389,11 +419,11 @@ docs-check: deps
 test: test-rust test-frontend test-workflow-contracts test-scripts test-lint-actions
 
 test-rust: workspace-sync prepare-pg-worker
+	export PG_PASSWORD=$(call shell_quote,PG_PASSWORD) POSTGRESQL_RELEASES_URL=$(call shell_quote,POSTGRESQL_RELEASES_URL)
 	cargo fetch --locked
 	PG_EMBEDDED_WORKER=$(PG_WORKER_PATH) NEXTEST_TEST_THREADS=$(NEXTEST_TEST_THREADS) $(GATE_RUST_FLAGS_ENV) cargo nextest run --workspace --all-targets --all-features --no-fail-fast \
-		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail))'
-	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --test declare_test_support_compile_fail --all-features
-	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --test sha2_digest_formatting_compile_fail --all-features
+		-E 'not (binary(declare_test_support_compile_fail) | binary(compile_fail_tests) | binary(sha2_digest_formatting_compile_fail) | binary(retry_const_api_ui))'
+	$(GATE_RUST_FLAGS_ENV) cargo test -p backend --all-features --test declare_test_support_compile_fail --test sha2_digest_formatting_compile_fail --test retry_const_api_ui
 
 test-frontend: deps typecheck
 	pnpm run test
@@ -558,7 +588,7 @@ define CHECK_FMT_CMD
 else \
 	cargo fmt --all -- --check; \
 fi
-$(call exec_or_bunx,biome,ci --formatter-enabled=true --reporter=github frontend-pwa packages,@biomejs/biome@$(BIOME_VERSION))
+$(call biome_cmd,ci --formatter-enabled=true --reporter=github frontend-pwa packages)
 $(RUFF) format --check
 endef
 

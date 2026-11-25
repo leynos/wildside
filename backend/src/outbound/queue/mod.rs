@@ -19,13 +19,16 @@
 //! receives them. This keeps version rejection and domain validation at the
 //! queue boundary rather than duplicating it in each handler.
 //!
-//! # Future Implementation
+//! A worker must be built over [`AttemptBoundStorage`], not
+//! `apalis_postgres::PostgresStorage` directly: the pinned acknowledgement
+//! matches a delivery on `id` and `lock_by` alone, and the attempt-bound
+//! replacement keeps a stale delivery from rewriting the row that replaced it.
 //!
-//! The full queue system will include:
-//! - Worker consumption of enqueued jobs
-//! - Retry policies with exponential backoff
-//! - Dead-letter handling for failed jobs
-//! - Trace ID propagation through job metadata
+//! # Delivery scope
+//!
+//! Durable retry scheduling and dead-letter operations are implemented here.
+//! Worker deployment and request-path dispatch remain roadmap work, as does
+//! trace ID propagation through job metadata.
 //!
 //! See `docs/backend-roadmap.md` section 5.2 for the implementation roadmap.
 
@@ -34,6 +37,28 @@ pub use stub_route_queue::StubRouteQueue;
 
 mod apalis_route_queue;
 pub use apalis_route_queue::{ApalisPostgresProvider, ApalisRouteQueue, GenericApalisRouteQueue};
+
+mod attempt_bound_ack;
+mod attempt_bound_lock;
+pub use attempt_bound_ack::{AttemptBoundAck, AttemptBoundStorage};
+pub use attempt_bound_lock::{AttemptBoundLock, AttemptBoundLockService};
+
+mod postgres_dead_letter;
+pub use postgres_dead_letter::{PostgresDeadLetterQueue, RequeueBudgets};
+
+mod postgres_retry_scheduler;
+pub use postgres_retry_scheduler::{
+    ClockSource, PostgresRetryScheduler, RetryScheduleUpdate, SystemClock, TerminalCapClamp,
+    TerminalRetryUpdate,
+};
+
+mod retry_persistence;
+pub use retry_persistence::RetryPersistence;
+
+mod retrying_handler;
+pub use retrying_handler::{
+    JitterSource, RetryingJobService, RetryingJobServiceConfig, ThreadRngJitter,
+};
 
 mod job_decode;
 pub use job_decode::decode_job;

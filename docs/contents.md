@@ -36,6 +36,15 @@
 - [Architecture Decision Record (ADR) 003: Front-end linting strategy](adrs/adr-0003-linting-strategy.md)
   – how Biome, Oxlint, TypeScript, and TypeDoc divide front-end quality checks.
   _Audience: front-end developers and tooling maintainers._
+- [Architecture Decision Record (ADR) 004: Durable retry scheduling for Apalis
+  jobs](adrs/adr-0004-durable-retry-scheduling-for-apalis-jobs.md) – durable
+  backoff and the pinned worker contract. _Audience: backend developers and
+  operators._
+- [Architecture Decision Record (ADR) 005: Dead letters as Apalis rows behind a
+  domain
+  port](adrs/adr-0005-dead-letters-as-apalis-rows-behind-a-domain-port.md) –
+  terminal jobs, guarded transitions, and requeue provenance. _Audience:
+  backend developers and operators._
 
 ## Frontend development
 
@@ -122,12 +131,18 @@
 - [Wildside server users guide](users-guide.md) – user-visible backend API
   behaviour, including users list pagination errors. _Audience: API consumers
   and backend developers._
+- [Backend v0.2.0 migration guide](backend-v0-2-0-migration-guide.md) – upgrades
+  the provider constructor, retry wrapper, and dead-letter port from v0.1.0.
+  _Audience: backend developers and consumers of the `backend` crate._
 - [OSM ingestion end-to-end runbook](runbooks/osm-ingestion-e2e.md) – operator
   procedure for executing and verifying `ingest-osm` runs, including
   deterministic reruns. _Audience: backend operators and developers._
 - [Session signing key rotation](runbooks/session-key-rotation.md) – procedure
   for rotating backend session signing keys in Kubernetes. _Audience: platform
   engineers and operators._
+- [Queue retry and dead-letter operations](runbooks/queue-retry-and-dead-letter-operations.md)
+  – inspect, requeue, and discard terminal jobs and diagnose worker crash
+  loops. _Audience: backend operators and developers._
 
 ## Developer guidelines and tooling
 
