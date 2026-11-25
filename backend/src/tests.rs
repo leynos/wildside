@@ -12,6 +12,8 @@ use actix_web::web;
 use actix_web_prom::PrometheusMetricsBuilder;
 use backend::domain::ports::HealthObserver;
 use rstest::{fixture, rstest};
+#[cfg(feature = "metrics")]
+use std::error::Error;
 use std::net::SocketAddr;
 use tokio::time::{Duration, timeout};
 
@@ -173,6 +175,129 @@ async fn create_server_marks_ready_with_optional_metrics(
         server_config.with_metrics(None)
     };
     assert_server_marks_ready(health_state, config).await;
+}
+
+/// Verify the ordinary server composition path records and exposes a user page.
+#[cfg(feature = "metrics")]
+#[actix_rt::test]
+async fn create_server_scrape_contains_pagination_metrics_for_delivered_page() {
+    let prometheus = match PrometheusMetricsBuilder::new("test")
+        .endpoint("/metrics")
+        .build()
+    {
+        Ok(metrics) => metrics,
+        Err(error) => panic!("Prometheus middleware should build in tests: {error}"),
+    };
+    let config = ServerConfig::new(
+        Key::generate(),
+        false,
+        SameSite::Lax,
+        SocketAddr::from(([127, 0, 0, 1], 0)),
+    )
+    .with_metrics(Some(prometheus));
+    let health_state = web::Data::new(HealthState::new());
+    let (server, server_address) =
+        match crate::server::create_server_with_address(health_state, config) {
+            Ok(server) => server,
+            Err(error) => panic!("server should build from metrics configuration: {error}"),
+        };
+    let server_handle = server.handle();
+    let server_join = actix_rt::spawn(server);
+    let base_url = format!("http://{server_address}");
+    let client = reqwest::Client::new();
+
+    let requests = async {
+        let login_response = client
+            .post(format!("{base_url}/api/v1/login"))
+            .json(&serde_json::json!({
+                "username": "admin",
+                "password": "password",
+            }))
+            .send()
+            .await?;
+        let login_status = login_response.status();
+        let session_cookie = login_response
+            .headers()
+            .get(reqwest::header::SET_COOKIE)
+            .ok_or_else(|| std::io::Error::other("login response omitted its session cookie"))?
+            .to_str()?
+            .split(';')
+            .next()
+            .ok_or_else(|| std::io::Error::other("session cookie had no cookie pair"))?
+            .to_owned();
+
+        let users_response = client
+            .get(format!("{base_url}/api/v1/users"))
+            .header(reqwest::header::COOKIE, session_cookie)
+            .send()
+            .await?;
+        let users_status = users_response.status();
+        let users_body: serde_json::Value = users_response.json().await?;
+        let returned_rows = users_body
+            .get("data")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len)
+            .ok_or_else(|| std::io::Error::other("users response omitted its data array"))?;
+
+        let metrics_response = client.get(format!("{base_url}/metrics")).send().await?;
+        let metrics_status = metrics_response.status();
+        let metrics_body = metrics_response.text().await?;
+
+        Ok::<_, Box<dyn Error>>((
+            login_status,
+            users_status,
+            returned_rows,
+            metrics_status,
+            metrics_body,
+        ))
+    }
+    .await;
+
+    assert!(
+        timeout(Duration::from_secs(5), server_handle.stop(true))
+            .await
+            .is_ok(),
+        "server shutdown should complete within five seconds"
+    );
+    let join_result = match timeout(Duration::from_secs(5), server_join).await {
+        Ok(join_result) => join_result,
+        Err(error) => panic!("timed out waiting for pagination metrics server: {error}"),
+    };
+    match join_result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => panic!("pagination metrics server should stop cleanly: {error}"),
+        Err(error) => panic!("pagination metrics server task should not panic: {error}"),
+    }
+
+    let (login_status, users_status, returned_rows, metrics_status, metrics_body) =
+        requests.expect("login, page request, and metrics scrape should complete");
+    assert_eq!(login_status.as_u16(), 200, "fixture login should succeed");
+    assert_eq!(
+        users_status.as_u16(),
+        200,
+        "users page request should succeed"
+    );
+    assert_eq!(
+        returned_rows, 1,
+        "fixture users response should return one row"
+    );
+    assert_eq!(
+        metrics_status.as_u16(),
+        200,
+        "Prometheus scrape should succeed"
+    );
+    assert!(
+        metrics_body.contains(
+            "wildside_pagination_pages_total{endpoint=\"users\",limit_source=\"default\",outcome=\"terminal\",traversal=\"first\"} 1"
+        ),
+        "scrape should include one terminal first page with the default limit"
+    );
+    assert!(
+        metrics_body.contains(
+            "wildside_pagination_rows_returned_total{endpoint=\"users\",traversal=\"first\"} 1"
+        ),
+        "scrape should count the row returned by the fixture users page"
+    );
 }
 
 #[cfg(not(feature = "metrics"))]

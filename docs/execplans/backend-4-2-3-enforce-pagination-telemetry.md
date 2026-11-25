@@ -318,6 +318,27 @@ which satisfies the roadmap wording without touching a shared wire format.
   compile-fail targets passed; workflow, script, frontend, token, and
   lint-actions suites passed. Exact logs use the `-rebased-f996.out` suffix
   under `/tmp`. M4 is complete on the latest base.
+- [x] (2026-11-25) EP-M5 wired the configured Prometheus registry into
+  production HTTP state and keeps the no-feature path on the no-op recorder.
+  Registration conflicts fail startup with an explicit policy comment. The
+  live-server scrape test observes both page and returned-row counters after
+  login and a real users-page response; the startup composition BDD test checks
+  the database-present path. The configured-registry test records one page and
+  one row. All focused tests passed. The V-WIRED deletion mutation caused the
+  live scrape assertion to fail as required:
+  `/tmp/test-27cb0c3f-4b57-47b1-80aa-abdfa4947e44-backend-4-2-3-enforce-pagination-telemetry-vwired-mutation-binary.out`.
+  Focused passing logs use `m5-focused-1.out`, `m5-focused-2.out`, and
+  `startup-db-present-pgdir.out` under `/tmp`. Full gates passed sequentially
+  on candidate tree `b1445e67` plus working-tree patch SHA-256
+  `87fa24bcc38d6cf1bc14272ab1b874f4b881087f5f6853c118cc3ea7fdcf78db`:
+  `make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `cargo check -p backend --no-default-features`, `make markdownlint`, and
+  `make nixie`. The full test passed 1,922 nextest cases (4 skipped), both
+  compile-fail targets, 92 Vitest cases, 170 Bun cases, 632 workflow-contract
+  tests (1 skipped), 115 script tests (13 skipped), and 14 lint-actions tests.
+  `make lint` retains only the pre-existing Dependabot workflow truthy-value
+  warning. Logs use the `m5-retry1`, `m5-final`, and `m5-test-restart` suffixes
+  under `/tmp`.
 - [x] EP-M1: `PaginationPageMetrics` port, label enums, observation type,
   and `NoOp` implementation (red tests first).
 - [x] EP-M2: `PrometheusPaginationPageMetrics` adapter.
@@ -325,7 +346,7 @@ which satisfies the roadmap wording without touching a shared wire format.
   `UsersPageDirection`.
 - [x] EP-M4: inbound emission from the users endpoint via a parameter
   object.
-- [ ] EP-M5: composition-root wiring, registration-failure policy, and the
+- [x] EP-M5: composition-root wiring, registration-failure policy, and the
   wiring-assertion tests.
 - [ ] EP-M6: deployment change, documentation, and roadmap tick.
 

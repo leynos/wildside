@@ -11,7 +11,7 @@ use backend::domain::ports::{
     FixtureCatalogueRepository, FixtureDescriptorRepository, FixtureEnrichmentProvenanceRepository,
     FixtureOfflineBundleCommand, FixtureOfflineBundleQuery, FixtureWalkSessionCommand,
     FixtureWalkSessionQuery, OfflineBundleCommand, OfflineBundleQuery, PaginationErrorMetrics,
-    RouteSubmissionService, WalkSessionCommand, WalkSessionQuery,
+    PaginationPageMetrics, RouteSubmissionService, WalkSessionCommand, WalkSessionQuery,
 };
 use backend::domain::{
     OfflineBundleCommandService, OfflineBundleQueryService, WalkSessionCommandService,
@@ -101,6 +101,7 @@ pub(crate) fn build_http_state_with_metrics(
     config: &ServerConfig,
     route_submission: Arc<dyn RouteSubmissionService>,
     pagination_error_metrics: Arc<dyn PaginationErrorMetrics>,
+    pagination_page_metrics: Arc<dyn PaginationPageMetrics>,
 ) -> web::Data<HttpState> {
     let UserStatePortsBundle {
         login,
@@ -132,12 +133,12 @@ pub(crate) fn build_http_state_with_metrics(
             descriptors,
         },
         HttpStateExtraPorts {
+            pagination_page_metrics,
             offline_bundles,
             offline_bundles_query,
             enrichment_provenance,
             walk_sessions,
             walk_sessions_query,
-            ..HttpStateExtraPorts::default()
         },
         pagination_error_metrics,
     ))

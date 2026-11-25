@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use actix_web::cookie::{Cookie, Key, SameSite};
 use actix_web::{App, test as actix_test, web};
+#[cfg(feature = "metrics")]
+use actix_web_prom::PrometheusMetricsBuilder;
 use backend::domain::TRACE_ID_HEADER;
 use backend::inbound::http::admin_enrichment::list_enrichment_provenance;
 use backend::inbound::http::annotations::get_annotations;
@@ -21,7 +23,11 @@ use backend::inbound::http::users::{
     LoginRequest, current_user, list_users, login, update_interests,
 };
 use backend::inbound::http::walk_sessions::create_walk_session;
+#[cfg(feature = "metrics")]
+use backend::test_support::server::build_http_state_with_page_metrics;
 use backend::test_support::server::build_route_submission_service;
+#[cfg(feature = "metrics")]
+use prometheus::Encoder;
 use uuid::Uuid;
 
 use super::flow_support::{Snapshot, World, is_skipped};
@@ -205,9 +211,23 @@ async fn run_comprehensive_flow_async(world: &mut World) {
         return;
     }
 
+    #[cfg(feature = "metrics")]
+    let prometheus = PrometheusMetricsBuilder::new("test")
+        .endpoint("/metrics")
+        .build()
+        .expect("test Prometheus middleware should build");
+    #[cfg(feature = "metrics")]
+    let registry = prometheus.registry.clone();
+    #[cfg(feature = "metrics")]
+    let config = build_server_config(world).with_metrics(Some(prometheus));
+    #[cfg(not(feature = "metrics"))]
     let config = build_server_config(world);
     let route_submission =
         build_route_submission_service(&config).expect("build route submission service");
+    #[cfg(feature = "metrics")]
+    let state = build_http_state_with_page_metrics(&config, route_submission)
+        .expect("configured page metrics should register during state composition");
+    #[cfg(not(feature = "metrics"))]
     let state = build_http_state(&config, route_submission);
 
     let app = actix_test::init_service(
@@ -239,11 +259,42 @@ async fn run_comprehensive_flow_async(world: &mut World) {
         return;
     };
 
-    // Exercise all major port groups (GET endpoints)
     call_read_endpoints(&app, world, &cookie).await;
+    #[cfg(feature = "metrics")]
+    let returned_rows = world
+        .users_list
+        .as_ref()
+        .and_then(|snapshot| snapshot.body.as_ref())
+        .and_then(|body| body.get("data")?.as_array())
+        .map(Vec::len)
+        .expect("users response should contain its data array");
+    #[cfg(feature = "metrics")]
+    assert_pagination_metrics_recorded(&registry, returned_rows);
 
     // Exercise write-path and remaining endpoints.
     call_write_endpoints(&app, world, cookie).await;
+}
+
+#[cfg(feature = "metrics")]
+fn assert_pagination_metrics_recorded(registry: &prometheus::Registry, expected_rows: usize) {
+    let mut exposition = Vec::new();
+    prometheus::TextEncoder::new()
+        .encode(&registry.gather(), &mut exposition)
+        .expect("test registry should encode its metrics");
+    let exposition = String::from_utf8(exposition).expect("Prometheus exposition should be UTF-8");
+
+    assert!(
+        exposition.contains(
+            "wildside_pagination_pages_total{endpoint=\"users\",limit_source=\"default\",outcome=\"terminal\",traversal=\"first\"} 1"
+        ),
+        "composition should record exactly one terminal first page"
+    );
+    assert!(
+        exposition.contains(&format!(
+            "wildside_pagination_rows_returned_total{{endpoint=\"users\",traversal=\"first\"}} {expected_rows}"
+        )),
+        "composition should record the rows returned by the users response"
+    );
 }
 
 /// Log in, record the snapshot on the world, and return the session cookie.

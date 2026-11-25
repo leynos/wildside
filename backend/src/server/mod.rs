@@ -25,8 +25,8 @@ use backend::doc::ApiDoc;
 #[cfg(feature = "metrics")]
 use backend::domain::ports::NoOpIdempotencyMetrics;
 use backend::domain::ports::{
-    FixtureRouteSubmissionService, NoOpPaginationErrorMetrics, PaginationErrorMetrics,
-    RouteSubmissionService,
+    FixtureRouteSubmissionService, NoOpPaginationErrorMetrics, NoOpPaginationPageMetrics,
+    PaginationErrorMetrics, PaginationPageMetrics, RouteSubmissionService,
 };
 use backend::domain::{RouteSubmissionServiceImpl, UserOnboardingService};
 use backend::inbound::http::admin_enrichment::list_enrichment_provenance;
@@ -44,13 +44,16 @@ use backend::inbound::http::walk_sessions::create_walk_session;
 use backend::inbound::ws;
 use backend::inbound::ws::state::WsState;
 #[cfg(feature = "metrics")]
-use backend::outbound::metrics::{PrometheusIdempotencyMetrics, PrometheusPaginationErrorMetrics};
+use backend::outbound::metrics::{
+    PrometheusIdempotencyMetrics, PrometheusPaginationErrorMetrics, PrometheusPaginationPageMetrics,
+};
 use backend::outbound::persistence::DieselIdempotencyRepository;
 #[cfg(debug_assertions)]
 use utoipa::OpenApi;
 #[cfg(debug_assertions)]
 use utoipa_swagger_ui::SwaggerUi;
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// Build the route submission service based on configuration.
@@ -157,6 +160,29 @@ fn build_pagination_error_metrics(
     }
 
     Ok(Arc::new(NoOpPaginationErrorMetrics))
+}
+
+/// Build the successful-page recorder selected for this server.
+pub(crate) fn build_pagination_page_metrics(
+    config: &ServerConfig,
+) -> std::io::Result<Arc<dyn PaginationPageMetrics>> {
+    #[cfg(not(feature = "metrics"))]
+    let _ = config;
+
+    #[cfg(feature = "metrics")]
+    if let Some(prometheus) = config.metrics() {
+        // Registration conflicts are deterministic configuration failures. Fail
+        // startup instead of silently dropping page telemetry.
+        let metrics =
+            PrometheusPaginationPageMetrics::new(&prometheus.registry).map_err(|error| {
+                std::io::Error::other(format!(
+                    "pagination page metrics registration failed: {error}"
+                ))
+            })?;
+        return Ok(Arc::new(metrics));
+    }
+
+    Ok(Arc::new(NoOpPaginationPageMetrics))
 }
 
 #[derive(Clone)]
@@ -278,13 +304,23 @@ pub fn create_server(
     health_state: web::Data<HealthState>,
     config: ServerConfig,
 ) -> std::io::Result<Server> {
+    let (server, _) = create_server_with_address(health_state, config)?;
+    Ok(server)
+}
+
+pub(crate) fn create_server_with_address(
+    health_state: web::Data<HealthState>,
+    config: ServerConfig,
+) -> std::io::Result<(Server, SocketAddr)> {
     let server_health_state = health_state.clone();
     let route_submission = build_route_submission_service(&config)?;
     let pagination_error_metrics = build_pagination_error_metrics(&config)?;
+    let pagination_page_metrics = build_pagination_page_metrics(&config)?;
     let http_state = state_builders::build_http_state_with_metrics(
         &config,
         route_submission,
         pagination_error_metrics,
+        pagination_page_metrics,
     );
     let ws_state = web::Data::new(WsState::new(Arc::new(UserOnboardingService)));
     let ServerConfig {
@@ -300,7 +336,7 @@ pub fn create_server(
     #[cfg(feature = "metrics")]
     let metrics_layer = MetricsLayer::from_option(prometheus);
 
-    let server = HttpServer::new(move || {
+    let http_server = HttpServer::new(move || {
         let app = build_app(AppDependencies {
             health_state: server_health_state.clone(),
             http_state: http_state.clone(),
@@ -315,9 +351,12 @@ pub fn create_server(
 
         app
     })
-    .bind(bind_addr)?
-    .run();
+    .bind(bind_addr)?;
+    let server_address = http_server.addrs().into_iter().next().ok_or_else(|| {
+        std::io::Error::other("HTTP server binding did not produce a listener address")
+    })?;
+    let server = http_server.run();
 
     health_state.mark_ready();
-    Ok(server)
+    Ok((server, server_address))
 }

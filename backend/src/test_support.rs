@@ -10,9 +10,11 @@ pub mod server {
 
     use std::sync::Arc;
 
-    use crate::domain::ports::{NoOpPaginationErrorMetrics, RouteSubmissionService};
+    use crate::domain::ports::{
+        NoOpPaginationErrorMetrics, NoOpPaginationPageMetrics, RouteSubmissionService,
+    };
     use crate::inbound::http::state::HttpState;
-    use crate::server::state_builders;
+    use crate::server::{build_pagination_page_metrics, state_builders};
     use actix_web::web;
 
     pub use crate::server::ServerConfig;
@@ -55,7 +57,45 @@ pub mod server {
             config,
             route_submission,
             Arc::new(NoOpPaginationErrorMetrics),
+            Arc::new(NoOpPaginationPageMetrics),
         )
+    }
+
+    /// Build HTTP state with the page recorder selected from server configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::net::SocketAddr;
+    /// use std::sync::Arc;
+    ///
+    /// use actix_web::cookie::{Key, SameSite};
+    /// use backend::domain::ports::{FixtureRouteSubmissionService, RouteSubmissionService};
+    /// use backend::test_support::server::{ServerConfig, build_http_state_with_page_metrics};
+    ///
+    /// let config = ServerConfig::new(
+    ///     Key::generate(),
+    ///     false,
+    ///     SameSite::Lax,
+    ///     SocketAddr::from(([127, 0, 0, 1], 0)),
+    /// );
+    /// let route_submission: Arc<dyn RouteSubmissionService> =
+    ///     Arc::new(FixtureRouteSubmissionService);
+    /// let state = build_http_state_with_page_metrics(&config, route_submission)?;
+    /// let _recorder = state.pagination_page_metrics.clone();
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
+    pub fn build_http_state_with_page_metrics(
+        config: &ServerConfig,
+        route_submission: Arc<dyn RouteSubmissionService>,
+    ) -> std::io::Result<web::Data<HttpState>> {
+        let pagination_page_metrics = build_pagination_page_metrics(config)?;
+        Ok(state_builders::build_http_state_with_metrics(
+            config,
+            route_submission,
+            Arc::new(NoOpPaginationErrorMetrics),
+            pagination_page_metrics,
+        ))
     }
 
     /// Build the route submission service using the same selector as production.
