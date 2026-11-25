@@ -21,16 +21,14 @@ BINSTALL_FAIL_CLOSED = "--strategies crate-meta-data,quick-install"
 #: Non-build jobs. Scheduled, API-bound, and administrative work sits off the
 #: developer feedback path, so the queue contention that motivates the managed
 #: runners does not apply to it.
-GITHUB_HOSTED_JOBS = (
-    ("audit.yml", "audit"),
-    ("delayed-pr-comment.yml", "delay_and_comment"),
-)
+GITHUB_HOSTED_JOBS = (("audit.yml", "audit"),)
 
 #: Callers of externally owned reusable workflows choose no runner; the callee
-#: does. Both callees already run on GitHub-hosted runners.
+#: does. All callees already run on GitHub-hosted runners.
 REUSABLE_CALLER_JOBS = (
     ("mutation-testing.yml", "mutation"),
     ("dependabot-automerge.yml", "automerge"),
+    ("delayed-pr-comment.yml", "delayed-comment"),
 )
 
 #: Each pair names an installing step and the first step that needs what it
@@ -141,16 +139,23 @@ def test_the_estate_calls_one_shared_actions_commit() -> None:
     """One commit supplies the shared actions, and one the coverage trio.
 
     Asserts agreement rather than a SHA, which Dependabot moves. The coverage
-    actions move ahead of the rest, so they agree among themselves.
+    actions and the delayed comment workflow move ahead of the rest, so each
+    set agrees among itself.
     """
     trio = (
         "generate-coverage",
         "upload-codescene-coverage",
         "publish-coverage-baseline",
     )
-    groups: dict[bool, set[str]] = {True: set(), False: set()}
+    groups: dict[str, set[str]] = {"coverage": set(), "delayed": set(), "rest": set()}
     for _, path, ref in _shared_action_references():
-        groups[path.rsplit("/", 1)[-1] in trio].add(ref)
+        name = path.rsplit("/", 1)[-1]
+        if name in trio:
+            groups["coverage"].add(ref)
+        elif name == "delayed-pr-comment.yml":
+            groups["delayed"].add(ref)
+        else:
+            groups["rest"].add(ref)
     assert all(len(refs) <= 1 for refs in groups.values()), (
         f"the shared actions span several commits within a group: {groups}"
     )
