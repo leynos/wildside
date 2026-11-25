@@ -23,24 +23,17 @@ use super::ServerConfig;
 
 /// Build a command/query service pair using real services when a pool is
 /// available, otherwise using fixture implementations.
-fn build_service_pair<Pool, S, Cmd, Query, MakeService, Cast>(
+fn build_service_pair<Pool, Cmd, Query>(
     pool: &Option<Pool>,
-    make_service: MakeService,
+    make_pair: impl FnOnce(&Pool) -> (Arc<Cmd>, Arc<Query>),
     fixtures: (Arc<Cmd>, Arc<Query>),
-    cast: Cast,
 ) -> (Arc<Cmd>, Arc<Query>)
 where
-    S: 'static,
     Cmd: ?Sized + 'static,
     Query: ?Sized + 'static,
-    MakeService: FnOnce(&Pool) -> S,
-    Cast: FnOnce(Arc<S>) -> (Arc<Cmd>, Arc<Query>),
 {
     match pool {
-        Some(pool) => {
-            let service = Arc::new(make_service(pool));
-            cast(service)
-        }
+        Some(pool) => make_pair(pool),
         None => fixtures,
     }
 }
@@ -86,67 +79,55 @@ pub(super) struct UserStatePortsBundle {
     pub(super) route_annotations_query: Arc<dyn RouteAnnotationsQuery>,
 }
 
-fn build_login_users_pair_with_pool<Pool>(
-    pool: &Option<Pool>,
-    make_pair: impl FnOnce(&Pool) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>),
-) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>) {
-    match pool {
-        Some(pool) => make_pair(pool),
-        None => (
-            Arc::new(FixtureLoginService) as Arc<dyn LoginService>,
-            Arc::new(FixtureUsersQuery) as Arc<dyn UsersQuery>,
-        ),
-    }
-}
-
-fn build_profile_interests_pair_with_pool<Pool>(
-    pool: &Option<Pool>,
-    make_pair: impl FnOnce(&Pool) -> (Arc<dyn UserProfileQuery>, Arc<dyn UserInterestsCommand>),
-) -> (Arc<dyn UserProfileQuery>, Arc<dyn UserInterestsCommand>) {
-    match pool {
-        Some(pool) => make_pair(pool),
-        None => (
-            Arc::new(FixtureUserProfileQuery) as Arc<dyn UserProfileQuery>,
-            Arc::new(FixtureUserInterestsCommand) as Arc<dyn UserInterestsCommand>,
-        ),
-    }
-}
-
 /// Build the login and users-query pair, injecting the pagination-error
 /// recorder into both Diesel adapters.
 fn build_login_users_pair(
     config: &ServerConfig,
     pagination_error_metrics: &Arc<dyn PaginationErrorMetrics>,
 ) -> (Arc<dyn LoginService>, Arc<dyn UsersQuery>) {
-    build_login_users_pair_with_pool(&config.db_pool, |pool| {
+    build_service_pair(
+        &config.db_pool,
+        |pool| {
+            (
+                Arc::new(DieselLoginService::new(
+                    DieselUserRepository::new(pool.clone()),
+                    pagination_error_metrics.clone(),
+                )) as Arc<dyn LoginService>,
+                Arc::new(DieselUsersQuery::new(
+                    DieselUserRepository::new(pool.clone()),
+                    pagination_error_metrics.clone(),
+                )) as Arc<dyn UsersQuery>,
+            )
+        },
         (
-            Arc::new(DieselLoginService::new(
-                DieselUserRepository::new(pool.clone()),
-                pagination_error_metrics.clone(),
-            )) as Arc<dyn LoginService>,
-            Arc::new(DieselUsersQuery::new(
-                DieselUserRepository::new(pool.clone()),
-                pagination_error_metrics.clone(),
-            )) as Arc<dyn UsersQuery>,
-        )
-    })
+            Arc::new(FixtureLoginService) as Arc<dyn LoginService>,
+            Arc::new(FixtureUsersQuery) as Arc<dyn UsersQuery>,
+        ),
+    )
 }
 
 fn build_profile_interests_pair(
     config: &ServerConfig,
     pagination_error_metrics: &Arc<dyn PaginationErrorMetrics>,
 ) -> (Arc<dyn UserProfileQuery>, Arc<dyn UserInterestsCommand>) {
-    build_profile_interests_pair_with_pool(&config.db_pool, |pool| {
+    build_service_pair(
+        &config.db_pool,
+        |pool| {
+            (
+                Arc::new(DieselUserProfileQuery::new(
+                    Arc::new(DieselUserRepository::new(pool.clone())),
+                    pagination_error_metrics.clone(),
+                )) as Arc<dyn UserProfileQuery>,
+                Arc::new(DieselUserInterestsCommand::new(Arc::new(
+                    DieselUserPreferencesRepository::new(pool.clone()),
+                ))) as Arc<dyn UserInterestsCommand>,
+            )
+        },
         (
-            Arc::new(DieselUserProfileQuery::new(
-                Arc::new(DieselUserRepository::new(pool.clone())),
-                pagination_error_metrics.clone(),
-            )) as Arc<dyn UserProfileQuery>,
-            Arc::new(DieselUserInterestsCommand::new(Arc::new(
-                DieselUserPreferencesRepository::new(pool.clone()),
-            ))) as Arc<dyn UserInterestsCommand>,
-        )
-    })
+            Arc::new(FixtureUserProfileQuery) as Arc<dyn UserProfileQuery>,
+            Arc::new(FixtureUserInterestsCommand) as Arc<dyn UserInterestsCommand>,
+        ),
+    )
 }
 
 macro_rules! build_idempotent_pair {
@@ -198,11 +179,14 @@ where
     Cmd: ?Sized + 'static,
     Query: ?Sized + 'static,
 {
+    let ServicePairFactory { fixtures, cast } = pair_factory;
     build_service_pair(
         &config.db_pool,
-        |pool| build_idempotent_service(pool, make_repo, make_service),
-        pair_factory.fixtures,
-        pair_factory.cast,
+        |pool| {
+            let service = Arc::new(build_idempotent_service(pool, make_repo, make_service));
+            cast(service)
+        },
+        fixtures,
     )
 }
 
