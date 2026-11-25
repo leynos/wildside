@@ -139,23 +139,18 @@ def test_the_estate_calls_one_shared_actions_commit() -> None:
     """One commit supplies the shared actions, and one the coverage trio.
 
     Asserts agreement rather than a SHA, which Dependabot moves. The coverage
-    actions and the delayed comment workflow move ahead of the rest, so each
-    set agrees among itself.
+    actions and the delayed comment workflow move ahead, each agreeing alone.
     """
     trio = (
         "generate-coverage",
         "upload-codescene-coverage",
         "publish-coverage-baseline",
     )
-    groups: dict[str, set[str]] = {"coverage": set(), "delayed": set(), "rest": set()}
+    groups: dict[str, set[str]] = {}
     for _, path, ref in _shared_action_references():
         name = path.rsplit("/", 1)[-1]
-        if name in trio:
-            groups["coverage"].add(ref)
-        elif name == "delayed-pr-comment.yml":
-            groups["delayed"].add(ref)
-        else:
-            groups["rest"].add(ref)
+        kind = "delayed" if name == "delayed-pr-comment.yml" else name in trio
+        groups.setdefault(str(kind), set()).add(ref)
     assert all(len(refs) <= 1 for refs in groups.values()), (
         f"the shared actions span several commits within a group: {groups}"
     )
