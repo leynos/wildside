@@ -234,38 +234,60 @@ async fn run_comprehensive_flow_async(world: &mut World) {
     )
     .await;
 
-    // Login to establish session
-    let login_snapshot = perform_login(&app).await;
-    let cookie = match login_snapshot.session_cookie.as_ref() {
-        Some(c) => c.clone(),
-        None => {
-            world.login = Some(login_snapshot);
-            return; // Login failed, can't continue
-        }
+    // Login to establish session; without a cookie the flow cannot continue.
+    let Some(cookie) = login_for_cookie(&app, world).await else {
+        return;
     };
-    world.login = Some(login_snapshot);
 
     // Exercise all major port groups (GET endpoints)
-    world.profile = Some(call_get(&app, "/api/v1/users/me", cookie.clone()).await);
-    world.users_list = Some(call_get(&app, "/api/v1/users", cookie.clone()).await);
-    world.preferences = Some(call_get(&app, "/api/v1/users/me/preferences", cookie.clone()).await);
+    call_read_endpoints(&app, world, &cookie).await;
+
+    // Exercise write-path and remaining endpoints.
+    call_write_endpoints(&app, world, cookie).await;
+}
+
+/// Log in, record the snapshot on the world, and return the session cookie.
+async fn login_for_cookie(
+    app: &impl actix_web::dev::Service<
+        actix_http::Request,
+        Response = actix_web::dev::ServiceResponse,
+        Error = actix_web::Error,
+    >,
+    world: &mut World,
+) -> Option<Cookie<'static>> {
+    let login_snapshot = perform_login(app).await;
+    let cookie = login_snapshot.session_cookie.clone();
+    world.login = Some(login_snapshot);
+    cookie
+}
+
+/// Call every read-only endpoint and record each snapshot on the world.
+async fn call_read_endpoints(
+    app: &impl actix_web::dev::Service<
+        actix_http::Request,
+        Response = actix_web::dev::ServiceResponse,
+        Error = actix_web::Error,
+    >,
+    world: &mut World,
+    cookie: &Cookie<'static>,
+) {
+    world.profile = Some(call_get(app, "/api/v1/users/me", cookie.clone()).await);
+    world.users_list = Some(call_get(app, "/api/v1/users", cookie.clone()).await);
+    world.preferences = Some(call_get(app, "/api/v1/users/me/preferences", cookie.clone()).await);
     world.catalogue_explore =
-        Some(call_get(&app, "/api/v1/catalogue/explore", cookie.clone()).await);
+        Some(call_get(app, "/api/v1/catalogue/explore", cookie.clone()).await);
     world.catalogue_descriptors =
-        Some(call_get(&app, "/api/v1/catalogue/descriptors", cookie.clone()).await);
+        Some(call_get(app, "/api/v1/catalogue/descriptors", cookie.clone()).await);
     world.offline_bundles = Some(
         call_get(
-            &app,
+            app,
             "/api/v1/offline/bundles?deviceId=test-device",
             cookie.clone(),
         )
         .await,
     );
     world.enrichment_provenance =
-        Some(call_get(&app, "/api/v1/admin/enrichment/provenance", cookie.clone()).await);
-
-    // Exercise write-path and remaining endpoints.
-    call_write_endpoints(&app, world, cookie).await;
+        Some(call_get(app, "/api/v1/admin/enrichment/provenance", cookie.clone()).await);
 }
 
 /// Execute flow with invalid input to test validation error stability.
