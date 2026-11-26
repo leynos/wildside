@@ -9,7 +9,8 @@ use uuid::Uuid;
 use crate::domain::er_diagram::{SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable};
 use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
 use crate::er_snapshots::{
-    CommandMermaidRenderer, SnapshotGenerationError, SnapshotRequest, generate_from_repository,
+    CommandMermaidRenderer, MermaidRenderer, SnapshotGenerationError, SnapshotRequest,
+    generate_from_repository,
 };
 use crate::test_support::cap_fs::{path_exists, read_file_to_string, remove_directory, write_file};
 use crate::test_support::er_snapshots::FixtureMermaidRenderer;
@@ -214,4 +215,51 @@ fn the_default_renderer_runs_the_browser_free_merman_cli() {
         "merman-cli",
         "the default renderer must not invoke a browser-backed Mermaid CLI"
     );
+}
+
+/// Report whether a renderer failure only says its program is not installed.
+///
+/// `merman-cli` is a repository tool, not a Rust dependency, and the Rust test
+/// lane does not install it. Treating a missing program as a skip keeps
+/// `make test` working on a machine without it while still failing on any
+/// other renderer error, including a command that exists but cannot render.
+fn renderer_is_missing(error: &SnapshotGenerationError) -> bool {
+    matches!(
+        error,
+        SnapshotGenerationError::RendererUnavailable { message, .. }
+            if message.contains("No such file") || message.contains("not found")
+    )
+}
+
+#[test]
+fn the_default_renderer_renders_an_er_diagram_to_svg() -> TestResult {
+    let directory = temp_output_dir("default-renderer")?;
+    let input = directory.join("diagram.mmd");
+    let output = directory.join("diagram.svg");
+    write_file(&input, b"erDiagram\n    users ||--o{ routes : owns\n")?;
+
+    match CommandMermaidRenderer::default().render_svg(&input, &output) {
+        Ok(()) => {}
+        Err(error) if renderer_is_missing(&error) => {
+            eprintln!("SKIP-TEST-RENDERER: merman-cli is not installed");
+            cleanup(directory);
+            return Ok(());
+        }
+        Err(error) => {
+            cleanup(directory);
+            return Err(error.into());
+        }
+    }
+
+    assert!(
+        path_exists(output.as_path()),
+        "the default renderer must write the SVG it was asked for"
+    );
+    let svg = read_file_to_string(output.as_path())?;
+    assert!(
+        svg.contains("<svg"),
+        "a successful render must produce SVG markup"
+    );
+    cleanup(directory);
+    Ok(())
 }
