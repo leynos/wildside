@@ -1094,6 +1094,18 @@ command invokes it directly, so the pinned `merman-cli` installation above is
 the only prerequisite. No Puppeteer cache is primed and no browser download is
 attempted; the repository resolves neither Puppeteer nor Mermaid CLI.
 
+The Rust suite needs the same tool.
+`the_default_renderer_renders_an_er_diagram_to_svg` in
+`backend/src/er_snapshots_tests.rs` renders a two-table `erDiagram` through
+`CommandMermaidRenderer::default()`, so the lane that runs the Rust tests must
+install `merman-cli`. Continuous integration's `coverage` job does that with
+the same pinned `install-nixie` action the build job uses, and
+`tests/workflow_contracts/nixie_toolchain_test.py` holds the installer, its
+pinned versions, and its position before the suite. The test fails rather than
+skips when `CI` is set and the tool is missing, so a dropped install is a red
+build instead of a silent loss of coverage; on a developer machine without
+`merman-cli` it prints `SKIP-TEST-RENDERER` and passes.
+
 Code changes under `frontend-pwa/` or `packages/tokens/` must pass the relevant
 front-end gates plus the repository-wide commit gates:
 
