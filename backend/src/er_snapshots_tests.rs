@@ -219,16 +219,33 @@ fn the_default_renderer_runs_the_browser_free_merman_cli() {
 
 /// Report whether a renderer failure only says its program is not installed.
 ///
-/// `merman-cli` is a repository tool, not a Rust dependency, and the Rust test
-/// lane does not install it. Treating a missing program as a skip keeps
-/// `make test` working on a machine without it while still failing on any
-/// other renderer error, including a command that exists but cannot render.
+/// `merman-cli` is a repository tool, not a Rust dependency. Treating a
+/// missing program as a skip keeps `make test` working on a developer machine
+/// that has not installed it, while still failing on any other renderer error,
+/// including a command that exists but cannot render. Continuous integration
+/// installs the pinned tool, so a skip there would hide a broken default
+/// renderer; the caller turns the skip into a failure when `CI` is set.
 fn renderer_is_missing(error: &SnapshotGenerationError) -> bool {
     matches!(
         error,
         SnapshotGenerationError::RendererUnavailable { message, .. }
             if message.contains("No such file") || message.contains("not found")
     )
+}
+
+/// Report whether this run must render rather than skip a missing tool.
+///
+/// The `CI` variable is the only signal available to the test process, and it
+/// is the one continuous integration sets for every step. Reading it is
+/// scoped to this probe rather than a crate-wide suppression, so the
+/// environment-seam policy still reports any other ambient read.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "test probe: CI is the suite's own environment signal, read once \
+              to turn a missing renderer from a skip into a failure"
+)]
+fn renders_must_not_be_skipped() -> bool {
+    env::var_os("CI").is_some()
 }
 
 #[test]
@@ -241,8 +258,13 @@ fn the_default_renderer_renders_an_er_diagram_to_svg() -> TestResult {
     match CommandMermaidRenderer::default().render_svg(&input, &output) {
         Ok(()) => {}
         Err(error) if renderer_is_missing(&error) => {
-            eprintln!("SKIP-TEST-RENDERER: merman-cli is not installed");
             cleanup(directory);
+            assert!(
+                !renders_must_not_be_skipped(),
+                "merman-cli is missing in CI, where the Rust lane installs it; \
+                 the default renderer test must not be skipped there"
+            );
+            eprintln!("SKIP-TEST-RENDERER: merman-cli is not installed");
             return Ok(());
         }
         Err(error) => {

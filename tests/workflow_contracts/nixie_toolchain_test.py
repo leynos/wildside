@@ -14,8 +14,8 @@ WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml"
 MAKEFILE_PATH = REPOSITORY_ROOT / "Makefile"
 
 
-def _build_steps() -> list[dict[str, object]]:
-    """Return the steps from the CI build job."""
+def _job_steps(job_name: str) -> list[dict[str, object]]:
+    """Return the steps declared by the named CI job."""
     workflow = typ.cast(
         "object", strict_yaml.load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     )
@@ -24,20 +24,23 @@ def _build_steps() -> list[dict[str, object]]:
             pass
         case _:
             pytest.fail("the CI workflow must declare jobs")
-    match jobs:
-        case {"build": dict() as build}:
-            pass
-        case _:
-            pytest.fail("the CI workflow must declare the build job")
-    match build:
+    job = jobs.get(job_name)
+    if not isinstance(job, dict):
+        pytest.fail(f"the CI workflow must declare the {job_name} job")
+    match job:
         case {"steps": list() as steps}:
             pass
         case _:
-            pytest.fail("the CI build job must declare steps")
+            pytest.fail(f"the CI {job_name} job must declare steps")
     assert all(isinstance(step, dict) for step in steps), (
-        "every CI build step must be a mapping"
+        f"every CI {job_name} step must be a mapping"
     )
     return typ.cast("list[dict[str, object]]", steps)
+
+
+def _build_steps() -> list[dict[str, object]]:
+    """Return the steps from the CI build job."""
+    return _job_steps("build")
 
 
 def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
@@ -109,3 +112,24 @@ def test_makefile_nixie_requires_both_installed_commands() -> None:
         "$(call ensure_tool,merman-cli)",
         "nixie --renderer merman",
     ], "the Nixie recipe must require both tools before validation"
+
+
+def test_the_coverage_lane_installs_the_renderers_the_rust_suite_needs() -> None:
+    """The lane that runs the Rust suite supplies the pinned renderers.
+
+    The ER snapshot test renders through `merman-cli` and fails rather than
+    skips when `CI` is set, so the lane running it must install the tool
+    before the suite starts.
+    """
+    steps = _job_steps("coverage")
+    installation = _find_step(steps, "Install Nixie and Merman")
+    suite = _find_step(steps, "Generate Rust coverage")
+
+    _assert_pinned_to_full_sha(installation.get("uses"), INSTALL_NIXIE_PATH)
+    assert installation.get("with") == {
+        "nixie-version": "${{ env.NIXIE_VERSION }}",
+        "merman-version": "${{ env.MERMAN_VERSION }}",
+    }, "the coverage lane must pin both renderer versions"
+    assert steps.index(installation) < steps.index(suite), (
+        "the coverage lane must install the renderers before the Rust suite"
+    )
