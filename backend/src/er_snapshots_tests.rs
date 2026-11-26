@@ -223,7 +223,7 @@ fn the_default_renderer_runs_the_browser_free_merman_cli() {
 /// missing program as a skip keeps `make test` working on a developer machine
 /// that has not installed it, while still failing on any other renderer error,
 /// including a command that exists but cannot render. The condition comes from
-/// the spawn error's kind rather than its display text, which is localised and
+/// the spawn error's kind rather than its display text, which is localized and
 /// differs by platform. Continuous integration installs the pinned tool, so a
 /// skip there would hide a broken default renderer; the caller turns the skip
 /// into a failure when `CI` is set.

@@ -87,8 +87,8 @@ pub enum SnapshotGenerationError {
         /// Whether the failure was "no such program".
         ///
         /// The operating system reports a missing executable as
-        /// [`std::io::ErrorKind::NotFound`], but its display text is localised
-        /// and differs by platform, so it cannot be recognised reliably from
+        /// [`std::io::ErrorKind::NotFound`], but its display text is localized
+        /// and differs by platform, so it cannot be recognized reliably from
         /// `message`. Callers that treat a missing tool as a skip read this
         /// flag instead.
         missing_program: bool,
