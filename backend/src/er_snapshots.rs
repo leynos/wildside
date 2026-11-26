@@ -11,6 +11,7 @@ use diesel::pg::PgConnection;
 use diesel_migrations::{FileBasedMigrations, MigrationHarness};
 use pg_embedded_setup_unpriv::TestCluster;
 use std::ffi::OsString;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use thiserror::Error;
@@ -83,6 +84,14 @@ pub enum SnapshotGenerationError {
         command: String,
         /// Reason the renderer process could not be spawned.
         message: String,
+        /// Whether the failure was "no such program".
+        ///
+        /// The operating system reports a missing executable as
+        /// [`std::io::ErrorKind::NotFound`], but its display text is localised
+        /// and differs by platform, so it cannot be recognised reliably from
+        /// `message`. Callers that treat a missing tool as a skip read this
+        /// flag instead.
+        missing_program: bool,
     },
     /// The renderer ran but exited without success.
     #[error("renderer command '{command}' failed (status {status:?}): {stderr}")]
@@ -170,6 +179,7 @@ impl MermaidRenderer for CommandMermaidRenderer {
             return Err(SnapshotGenerationError::RendererUnavailable {
                 command: "<empty>".to_owned(),
                 message: "renderer command is empty".to_owned(),
+                missing_program: false,
             });
         };
 
@@ -191,6 +201,7 @@ impl MermaidRenderer for CommandMermaidRenderer {
                 .output()
                 .map_err(|error| SnapshotGenerationError::RendererUnavailable {
                     command: self.command_label(),
+                    missing_program: error.kind() == ErrorKind::NotFound,
                     message: error.to_string(),
                 })?;
 

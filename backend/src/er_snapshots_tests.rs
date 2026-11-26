@@ -217,19 +217,23 @@ fn the_default_renderer_runs_the_browser_free_merman_cli() {
     );
 }
 
-/// Report whether a renderer failure only says its program is not installed.
+/// Report whether a renderer failure is only "no such program".
 ///
 /// `merman-cli` is a repository tool, not a Rust dependency. Treating a
 /// missing program as a skip keeps `make test` working on a developer machine
 /// that has not installed it, while still failing on any other renderer error,
-/// including a command that exists but cannot render. Continuous integration
-/// installs the pinned tool, so a skip there would hide a broken default
-/// renderer; the caller turns the skip into a failure when `CI` is set.
+/// including a command that exists but cannot render. The condition comes from
+/// the spawn error's kind rather than its display text, which is localised and
+/// differs by platform. Continuous integration installs the pinned tool, so a
+/// skip there would hide a broken default renderer; the caller turns the skip
+/// into a failure when `CI` is set.
 fn renderer_is_missing(error: &SnapshotGenerationError) -> bool {
     matches!(
         error,
-        SnapshotGenerationError::RendererUnavailable { message, .. }
-            if message.contains("No such file") || message.contains("not found")
+        SnapshotGenerationError::RendererUnavailable {
+            missing_program: true,
+            ..
+        }
     )
 }
 
@@ -282,6 +286,39 @@ fn the_default_renderer_renders_an_er_diagram_to_svg() -> TestResult {
         svg.contains("<svg"),
         "a successful render must produce SVG markup"
     );
+    cleanup(directory);
+    Ok(())
+}
+
+#[test]
+fn a_program_that_does_not_exist_is_reported_as_missing() -> TestResult {
+    let directory = temp_output_dir("missing-program")?;
+    let input = directory.join("diagram.mmd");
+    let output = directory.join("diagram.svg");
+    write_file(&input, b"erDiagram\n")?;
+
+    let program = format!("merman-cli-does-not-exist-{}", Uuid::new_v4().simple());
+    let error = CommandMermaidRenderer::new(program, std::iter::empty::<&str>())
+        .render_svg(&input, &output)
+        .expect_err("a spelling that is not on PATH must fail to spawn");
+
+    assert!(
+        renderer_is_missing(&error),
+        "a spawn failure for an absent program must be classified as missing, \
+         whatever the platform's message says: {error}"
+    );
+    match error {
+        SnapshotGenerationError::RendererUnavailable {
+            missing_program,
+            message,
+            ..
+        } => {
+            assert!(missing_program, "the flag must carry the classification");
+            assert!(!message.is_empty(), "the message must stay for diagnostics");
+        }
+        other => panic!("expected RendererUnavailable, got {other:?}"),
+    }
+
     cleanup(directory);
     Ok(())
 }
