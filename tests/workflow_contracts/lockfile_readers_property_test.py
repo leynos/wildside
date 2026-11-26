@@ -13,13 +13,16 @@ spent on the separator boundary rather than on discarding generated text.
 
 from __future__ import annotations
 
-import collections.abc as cabc
+import typing as typ
 
 import bun_lockfile as bun
 import pnpm_lockfile as pnpm
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 #: Characters that may follow the first one in a generated package name.
 _NAME_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789._-"
