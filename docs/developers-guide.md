@@ -1112,7 +1112,7 @@ gate, update this guide and the corresponding phase ExecPlan under
 ### Pinned front-end tool versions
 
 `make check-fmt` and `make lint` run Biome through `BIOME_VERSION` (currently
-`2.3.1`), not through whatever `biome` the `PATH` happens to hold. Formatter
+`2.4.13`), not through whatever `biome` the `PATH` happens to hold. Formatter
 output is not upward-compatible across Biome releases: code shaped by `2.4.13`
 is reported as unformatted by `2.3.1` and vice versa, so preferring a `PATH`
 binary makes local checks fail on files that CI, which resolves the pin,
