@@ -1099,7 +1099,9 @@ The Rust suite needs the same tool.
 `backend/src/er_snapshots_tests.rs` renders a two-table `erDiagram` through
 `CommandMermaidRenderer::default()`, so the lane that runs the Rust tests must
 install `merman-cli`. Continuous integration's `coverage` job does that with
-the same pinned `install-nixie` action the build job uses, and
+the same pinned `install-nixie` action the build job uses, and the
+`coverage-upload` job in `coverage-main.yml`, which repeats the suite on a push
+to `main`, installs it too, and
 `tests/workflow_contracts/nixie_toolchain_test.py` holds the installer, its
 pinned versions, and its position before the suite. The test fails rather than
 skips when `CI` is set and the tool is missing, so a dropped install is a red
