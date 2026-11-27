@@ -7,7 +7,7 @@
 //! PUT /api/v1/users/me/interests
 //! ```
 
-use crate::domain::ports::UpdateUserInterestsRequest;
+use crate::domain::ports::{LimitSource, UpdateUserInterestsRequest};
 use crate::domain::{
     Error, InterestThemeId, InterestThemeIdValidationError, LoginCredentials, LoginValidationError,
     User, UserInterests,
@@ -17,7 +17,7 @@ use crate::inbound::http::schemas::{ErrorSchema, UserInterestsSchema, UserSchema
 use crate::inbound::http::session::SessionContext;
 use crate::inbound::http::state::HttpState;
 use crate::inbound::http::users_pagination::{
-    PaginatedUsersResponse, UsersListQueryParams, build_users_page_response,
+    PaginatedUsersResponse, UsersListQueryParams, UsersPageResponse, build_users_page_response,
     parse_users_page_params,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, put, web};
@@ -227,10 +227,24 @@ pub async fn list_users(
     params: web::Query<UsersListQueryParams>,
 ) -> ApiResult<web::Json<Paginated<User>>> {
     let user_id = session.require_user_id()?;
-    let (page_params, page_request, direction) =
-        parse_users_page_params(params.into_inner(), state.pagination_error_metrics.as_ref())?;
+    let params = params.into_inner();
+    let limit_source = if params.limit.is_some() {
+        LimitSource::Explicit
+    } else {
+        LimitSource::Default
+    };
+    let (page_params, page_request, traversal, page_limit) =
+        parse_users_page_params(params, state.pagination_error_metrics.as_ref())?;
     let page = state.users.list_users_page(&user_id, page_request).await?;
-    let response = build_users_page_response(&request, &page_params, page, direction)?;
+    let response = build_users_page_response(UsersPageResponse {
+        request: &request,
+        params: &page_params,
+        page,
+        traversal,
+        limit_source,
+        page_limit,
+        metrics: state.pagination_page_metrics.as_ref(),
+    })?;
     Ok(web::Json(response))
 }
 

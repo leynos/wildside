@@ -26,6 +26,7 @@ mod osm_ingestion_provenance_repository;
 mod osm_poi_repository;
 mod osm_source_repository;
 mod pagination_error_metrics;
+mod pagination_page_metrics;
 mod route_annotation_repository;
 mod route_annotations_command;
 mod route_annotations_query;
@@ -159,6 +160,12 @@ pub use osm_source_repository::{
 };
 pub use pagination_error_metrics::{
     NoOpPaginationErrorMetrics, PaginationErrorMetrics, PaginationErrorSource,
+};
+#[cfg(test)]
+pub use pagination_page_metrics::MockPaginationPageMetrics;
+pub use pagination_page_metrics::{
+    LimitSource, NoOpPaginationPageMetrics, PageOutcome, PageTraversal, PaginatedEndpoint,
+    PaginationPageDelivery, PaginationPageMetrics, PaginationPageObservation,
 };
 #[cfg(test)]
 pub use route_annotation_repository::MockRouteAnnotationRepository;

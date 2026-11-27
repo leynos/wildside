@@ -20,6 +20,7 @@ use serde_json::Value;
 use url::Url;
 use uuid::Uuid;
 
+use super::page_metrics::RecordingPageMetrics;
 use super::support::atexit_cleanup::{bootstrap_shared_cluster, ensure_stable_cluster_environment};
 use super::support::embedded_postgres::provision_template_database;
 use super::support::format_postgres_error;
@@ -43,6 +44,7 @@ pub(crate) struct DbContext {
 #[derive(Default)]
 pub(crate) struct World {
     db: Option<DbContext>,
+    pub(crate) page_metrics: Arc<RecordingPageMetrics>,
     last_response: Option<Snapshot>,
     traversal_ids: Vec<String>,
     skip_reason: Option<String>,
@@ -115,14 +117,17 @@ pub(crate) fn skip(world: &mut World, reason: String) {
     world.skip_reason = Some(reason);
 }
 
-fn build_state(pool: DbPool) -> web::Data<HttpState> {
+fn build_state(pool: DbPool, page_metrics: Arc<RecordingPageMetrics>) -> web::Data<HttpState> {
     let bind_addr = SocketAddr::from(([127, 0, 0, 1], 0));
     let config =
         ServerConfig::new(Key::generate(), false, SameSite::Lax, bind_addr).with_db_pool(pool);
-    build_http_state(
+    let state = build_http_state(
         &config,
         Arc::new(FixtureRouteSubmissionService) as Arc<dyn RouteSubmissionService>,
-    )
+    );
+    let mut state = state.get_ref().clone();
+    state.pagination_page_metrics = page_metrics;
+    web::Data::new(state)
 }
 
 async fn build_app(
@@ -252,7 +257,7 @@ fn run_request(world: &mut World, path: &'static str, authenticated: bool) {
     with_world(world, |world| {
         let db = world.db.as_ref().expect("db context");
         world.last_response = Some(run_async(async {
-            let app = build_app(build_state(db.pool.clone())).await;
+            let app = build_app(build_state(db.pool.clone(), world.page_metrics.clone())).await;
             let cookie = if authenticated {
                 Some(login_cookie(&app).await)
             } else {
@@ -271,7 +276,7 @@ pub(crate) fn run_follow_next_to_final(world: &mut World) {
     with_world(world, |world| {
         let db = world.db.as_ref().expect("db context");
         let (last_response, traversal_ids) = run_async(async {
-            let app = build_app(build_state(db.pool.clone())).await;
+            let app = build_app(build_state(db.pool.clone(), world.page_metrics.clone())).await;
             let cookie = login_cookie(&app).await;
             collect_pages_until_final(&app, cookie).await
         });
@@ -284,7 +289,7 @@ pub(crate) fn run_next_then_prev(world: &mut World) {
     with_world(world, |world| {
         let db = world.db.as_ref().expect("db context");
         world.last_response = Some(run_async(async {
-            let app = build_app(build_state(db.pool.clone())).await;
+            let app = build_app(build_state(db.pool.clone(), world.page_metrics.clone())).await;
             let cookie = login_cookie(&app).await;
             let first = get_users(&app, "/api/v1/users?limit=2", Some(cookie.clone())).await;
             let middle_path =
@@ -296,6 +301,18 @@ pub(crate) fn run_next_then_prev(world: &mut World) {
             let prev_path =
                 build_path_from_link(&link(&final_page, "prev").expect("final page prev link"));
             get_users(&app, &prev_path, Some(cookie)).await
+        }));
+    });
+}
+
+pub(crate) fn run_default_and_explicit_limits(world: &mut World) {
+    with_world(world, |world| {
+        let db = world.db.as_ref().expect("db context");
+        world.last_response = Some(run_async(async {
+            let app = build_app(build_state(db.pool.clone(), world.page_metrics.clone())).await;
+            let cookie = login_cookie(&app).await;
+            get_users(&app, "/api/v1/users", Some(cookie.clone())).await;
+            get_users(&app, "/api/v1/users?limit=5", Some(cookie)).await
         }));
     });
 }

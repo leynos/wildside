@@ -11,7 +11,19 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "metrics")]
+use std::num::NonZeroUsize;
+
 use actix_web::web;
+#[cfg(feature = "metrics")]
+use actix_web_prom::PrometheusMetricsBuilder;
+#[cfg(feature = "metrics")]
+use backend::domain::ports::{
+    LimitSource, PageTraversal, PaginatedEndpoint, PaginationPageDelivery,
+    PaginationPageObservation,
+};
+#[cfg(feature = "metrics")]
+use backend::test_support::server::build_http_state_with_page_metrics;
 use backend::test_support::server::{ServerConfig, build_http_state};
 use backend::{
     domain::ports::{
@@ -310,4 +322,60 @@ async fn fixture_mode_wires_fixture_adapters(fixture_config: ServerConfig) {
     offline_bundles_flow(&state, &user_id, route_id).await;
     enrichment_provenance_ok(&state).await;
     walk_sessions_flow(&state, &user_id, route_id).await;
+}
+
+/// Verify configured HTTP state uses the registry-backed page recorder.
+#[cfg(feature = "metrics")]
+#[rstest]
+fn configured_registry_selects_prometheus_page_recorder(fixture_config: ServerConfig) {
+    let prometheus = match PrometheusMetricsBuilder::new("test")
+        .endpoint("/metrics")
+        .build()
+    {
+        Ok(prometheus) => prometheus,
+        Err(error) => panic!("Prometheus middleware should build in tests: {error}"),
+    };
+    let registry = prometheus.registry.clone();
+    let config = fixture_config.with_metrics(Some(prometheus));
+    let route_submission: Arc<dyn RouteSubmissionService> = Arc::new(FixtureRouteSubmissionService);
+    let state = build_http_state_with_page_metrics(&config, route_submission)
+        .expect("configured page recorder should register with the test registry");
+    let observation = PaginationPageObservation::new(
+        PaginatedEndpoint::Users,
+        PageTraversal::First,
+        PaginationPageDelivery {
+            limit_source: LimitSource::Default,
+            page_limit: NonZeroUsize::new(2).expect("test page limit is non-zero"),
+            returned_rows: 1,
+            has_more: false,
+        },
+    );
+
+    state.pagination_page_metrics.record(observation);
+
+    let families = registry.gather();
+    let pages = families
+        .iter()
+        .find(|family| family.name() == "wildside_pagination_pages_total")
+        .expect("page counter should be registered in the configured registry");
+    let rows = families
+        .iter()
+        .find(|family| family.name() == "wildside_pagination_rows_returned_total")
+        .expect("row counter should be registered in the configured registry");
+    let page_total: f64 = pages
+        .get_metric()
+        .iter()
+        .map(|metric| metric.get_counter().value())
+        .sum();
+    let rows_total: f64 = rows
+        .get_metric()
+        .iter()
+        .map(|metric| metric.get_counter().value())
+        .sum();
+
+    assert_eq!(page_total, 1.0, "configured state should record one page");
+    assert_eq!(
+        rows_total, 1.0,
+        "configured state should record one returned row"
+    );
 }

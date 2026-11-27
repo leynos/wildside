@@ -13,12 +13,20 @@ Feature: Users list pagination
     And the users page contains user 5 only
     And the users page includes a prev link and omits the next link
     And forward traversal returned every seeded user once
+    And page telemetry records three forward pages and five rows
 
   Scenario: Following prev from the final users page returns the prior page
     Given db-present startup mode with five ordered users
     When the client follows next then prev users links with limit 2
     Then the users response is ok
     And the users page contains users 3 through 4
+    And page telemetry records the backward page after the forward traversal
+
+  Scenario: Page telemetry distinguishes default and explicit limits
+    Given db-present startup mode with five ordered users
+    When the client requests the users list with default then explicit limits
+    Then the users response is ok
+    And page telemetry distinguishes default and explicit limits
 
   Scenario: Oversized users page limit is rejected
     Given db-present startup mode with five ordered users
