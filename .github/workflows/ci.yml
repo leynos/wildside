@@ -839,7 +839,7 @@ jobs:
           merman-version: ${{ env.MERMAN_VERSION }}
 
       - name: Generate Rust coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@f84a7def5646a6fc7ba77c1f486906f66a0fed96
+        uses: leynos/shared-actions/.github/actions/generate-coverage@cbc5d33fe54bbde50f5eee818d5a8113866a8730
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           POSTGRESQL_VERSION: =${{ env.PG_VERSION }}
