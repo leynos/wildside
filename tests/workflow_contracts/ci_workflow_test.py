@@ -232,6 +232,7 @@ def test_coverage_generation_forces_rust_only_ratcheted_lcov() -> None:
         "use-cargo-nextest": "true",
         "features": "example-data metrics test-support",
         "with-ratchet": "true",
+        "publish-artefact": "false",
         "cache-provider": "external",
     }, "coverage generation must force Rust-only ratcheted LCOV"
 
