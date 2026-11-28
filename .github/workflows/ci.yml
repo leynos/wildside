@@ -860,6 +860,7 @@ jobs:
           # would be killed. The compile-fail tests add no line coverage.
           features: example-data metrics test-support
           with-ratchet: 'true'
+          publish-artefact: 'false'
           # This job owns ~/.cargo/registry, ~/.cargo/bin, and the uv layers.
           cache-provider: external
       # Zero compile requests means the wrapper never engaged, which is a
