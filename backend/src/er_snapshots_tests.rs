@@ -8,7 +8,10 @@ use uuid::Uuid;
 
 use crate::domain::er_diagram::{SchemaColumn, SchemaDiagram, SchemaRelationship, SchemaTable};
 use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
-use crate::er_snapshots::{SnapshotGenerationError, SnapshotRequest, generate_from_repository};
+use crate::er_snapshots::{
+    CommandMermaidRenderer, MermaidRenderer, SnapshotGenerationError, SnapshotRequest,
+    generate_from_repository,
+};
 use crate::test_support::cap_fs::{path_exists, read_file_to_string, remove_directory, write_file};
 use crate::test_support::er_snapshots::FixtureMermaidRenderer;
 
@@ -201,4 +204,121 @@ fn temp_output_dir(prefix: &str) -> TestResult<PathBuf> {
 
 fn cleanup(path: PathBuf) {
     let _cleanup_result = remove_directory(path.as_path());
+}
+
+#[test]
+fn the_default_renderer_runs_the_browser_free_merman_cli() {
+    let renderer = CommandMermaidRenderer::default();
+
+    assert_eq!(
+        renderer.command_label(),
+        "merman-cli",
+        "the default renderer must not invoke a browser-backed Mermaid CLI"
+    );
+}
+
+/// Report whether a renderer failure is only "no such program".
+///
+/// `merman-cli` is a repository tool, not a Rust dependency. Treating a
+/// missing program as a skip keeps `make test` working on a developer machine
+/// that has not installed it, while still failing on any other renderer error,
+/// including a command that exists but cannot render. The condition comes from
+/// the spawn error's kind rather than its display text, which is localized and
+/// differs by platform. Continuous integration installs the pinned tool, so a
+/// skip there would hide a broken default renderer; the caller turns the skip
+/// into a failure when `CI` is set.
+fn renderer_is_missing(error: &SnapshotGenerationError) -> bool {
+    matches!(
+        error,
+        SnapshotGenerationError::RendererUnavailable {
+            missing_program: true,
+            ..
+        }
+    )
+}
+
+/// Report whether this run must render rather than skip a missing tool.
+///
+/// The `CI` variable is the only signal available to the test process, and it
+/// is the one continuous integration sets for every step. Reading it is
+/// scoped to this probe rather than a crate-wide suppression, so the
+/// environment-seam policy still reports any other ambient read.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "test probe: CI is the suite's own environment signal, read once \
+              to turn a missing renderer from a skip into a failure"
+)]
+fn renders_must_not_be_skipped() -> bool {
+    env::var_os("CI").is_some()
+}
+
+#[test]
+fn the_default_renderer_renders_an_er_diagram_to_svg() -> TestResult {
+    let directory = temp_output_dir("default-renderer")?;
+    let input = directory.join("diagram.mmd");
+    let output = directory.join("diagram.svg");
+    write_file(&input, b"erDiagram\n    users ||--o{ routes : owns\n")?;
+
+    match CommandMermaidRenderer::default().render_svg(&input, &output) {
+        Ok(()) => {}
+        Err(error) if renderer_is_missing(&error) => {
+            cleanup(directory);
+            assert!(
+                !renders_must_not_be_skipped(),
+                "merman-cli is missing in CI, where the Rust lane installs it; \
+                 the default renderer test must not be skipped there"
+            );
+            eprintln!("SKIP-TEST-RENDERER: merman-cli is not installed");
+            return Ok(());
+        }
+        Err(error) => {
+            cleanup(directory);
+            return Err(error.into());
+        }
+    }
+
+    assert!(
+        path_exists(output.as_path()),
+        "the default renderer must write the SVG it was asked for"
+    );
+    let svg = read_file_to_string(output.as_path())?;
+    assert!(
+        svg.contains("<svg"),
+        "a successful render must produce SVG markup"
+    );
+    cleanup(directory);
+    Ok(())
+}
+
+#[test]
+fn a_program_that_does_not_exist_is_reported_as_missing() -> TestResult {
+    let directory = temp_output_dir("missing-program")?;
+    let input = directory.join("diagram.mmd");
+    let output = directory.join("diagram.svg");
+    write_file(&input, b"erDiagram\n")?;
+
+    let program = format!("merman-cli-does-not-exist-{}", Uuid::new_v4().simple());
+    let error = CommandMermaidRenderer::new(program, std::iter::empty::<&str>())
+        .render_svg(&input, &output)
+        .expect_err("a spelling that is not on PATH must fail to spawn");
+
+    assert!(
+        renderer_is_missing(&error),
+        "a spawn failure for an absent program must be classified as missing, \
+         whatever the platform's message says: {error}"
+    );
+    match error {
+        SnapshotGenerationError::RendererUnavailable {
+            missing_program,
+            message,
+            ..
+        } => {
+            assert!(missing_program, "the flag must carry the classification");
+            assert!(!message.is_empty(), "the message must stay for diagnostics");
+        }
+        other => panic!("expected RendererUnavailable, got {other:?}"),
+    }
+
+    cleanup(directory);
+    Ok(())
 }

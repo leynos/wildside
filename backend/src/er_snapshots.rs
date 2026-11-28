@@ -6,12 +6,12 @@
 use crate::domain::ports::{SchemaSnapshotRepository, SchemaSnapshotRepositoryError};
 use crate::domain::render_mermaid_er_diagram;
 use crate::outbound::persistence::PostgresSchemaSnapshotRepository;
-use cap_std::{ambient_authority, fs::Dir};
 use diesel::Connection;
 use diesel::pg::PgConnection;
 use diesel_migrations::{FileBasedMigrations, MigrationHarness};
 use pg_embedded_setup_unpriv::TestCluster;
 use std::ffi::OsString;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use thiserror::Error;
@@ -84,6 +84,14 @@ pub enum SnapshotGenerationError {
         command: String,
         /// Reason the renderer process could not be spawned.
         message: String,
+        /// Whether the failure was "no such program".
+        ///
+        /// The operating system reports a missing executable as
+        /// [`std::io::ErrorKind::NotFound`], but its display text is localized
+        /// and differs by platform, so it cannot be recognized reliably from
+        /// `message`. Callers that treat a missing tool as a skip read this
+        /// flag instead.
+        missing_program: bool,
     },
     /// The renderer ran but exited without success.
     #[error("renderer command '{command}' failed (status {status:?}): {stderr}")]
@@ -123,11 +131,15 @@ pub trait MermaidRenderer: Send + Sync {
     ) -> Result<(), SnapshotGenerationError>;
 }
 
-/// Renderer backed by `mmdc` (Mermaid CLI).
+/// Renderer backed by an external Mermaid command.
+///
+/// The default command is `merman-cli`, the browser-free renderer that
+/// `make nixie` already requires. Rendering through a browser would make the
+/// snapshot depend on a downloaded Chromium build, which the repository no
+/// longer installs.
 #[derive(Debug, Clone)]
 pub struct CommandMermaidRenderer {
     command: Vec<OsString>,
-    puppeteer_config: Option<PathBuf>,
 }
 
 impl CommandMermaidRenderer {
@@ -139,10 +151,7 @@ impl CommandMermaidRenderer {
         let mut command = vec![program.into()];
         command.extend(args.into_iter().map(Into::into));
 
-        Self {
-            command,
-            puppeteer_config: default_puppeteer_config(),
-        }
+        Self { command }
     }
 
     fn command_label(&self) -> String {
@@ -156,7 +165,7 @@ impl CommandMermaidRenderer {
 
 impl Default for CommandMermaidRenderer {
     fn default() -> Self {
-        Self::new("pnpm", ["exec", "mmdc"])
+        Self::new("merman-cli", std::iter::empty::<&str>())
     }
 }
 
@@ -170,6 +179,7 @@ impl MermaidRenderer for CommandMermaidRenderer {
             return Err(SnapshotGenerationError::RendererUnavailable {
                 command: "<empty>".to_owned(),
                 message: "renderer command is empty".to_owned(),
+                missing_program: false,
             });
         };
 
@@ -186,15 +196,12 @@ impl MermaidRenderer for CommandMermaidRenderer {
             .arg("--outputFormat")
             .arg("svg");
 
-        if let Some(config) = &self.puppeteer_config {
-            command.arg("--puppeteerConfigFile").arg(config);
-        }
-
         let output =
             command
                 .output()
                 .map_err(|error| SnapshotGenerationError::RendererUnavailable {
                     command: self.command_label(),
+                    missing_program: error.kind() == ErrorKind::NotFound,
                     message: error.to_string(),
                 })?;
 
@@ -360,16 +367,6 @@ pub fn apply_migrations(
 
 fn migrations_directory() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
-}
-
-fn default_puppeteer_config() -> Option<PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("mmdc-puppeteer.json");
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let file_name = path.file_name()?;
-    let directory = Dir::open_ambient_dir(parent, ambient_authority()).ok()?;
-    directory.is_file(file_name).then_some(path)
 }
 
 #[cfg(test)]

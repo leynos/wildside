@@ -11,33 +11,43 @@ from ci_workflow_test import _assert_pinned_to_full_sha
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml"
+COVERAGE_MAIN_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "coverage-main.yml"
 MAKEFILE_PATH = REPOSITORY_ROOT / "Makefile"
 
 
-def _build_steps() -> list[dict[str, object]]:
-    """Return the steps from the CI build job."""
+def _job_steps(job_name: str, path: Path | None = None) -> list[dict[str, object]]:
+    """Return the steps declared by the named job of a workflow file.
+
+    The path is resolved at call time rather than bound as a default, because
+    `strict_loader_entry_points_test` monkeypatches `WORKFLOW_PATH` to prove
+    this reader refuses a repeated key.
+    """
+    workflow_path = WORKFLOW_PATH if path is None else path
     workflow = typ.cast(
-        "object", strict_yaml.load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+        "object", strict_yaml.load(workflow_path.read_text(encoding="utf-8"))
     )
     match workflow:
         case {"jobs": dict() as jobs}:
             pass
         case _:
             pytest.fail("the CI workflow must declare jobs")
-    match jobs:
-        case {"build": dict() as build}:
-            pass
-        case _:
-            pytest.fail("the CI workflow must declare the build job")
-    match build:
+    job = jobs.get(job_name)
+    if not isinstance(job, dict):
+        pytest.fail(f"the CI workflow must declare the {job_name} job")
+    match job:
         case {"steps": list() as steps}:
             pass
         case _:
-            pytest.fail("the CI build job must declare steps")
+            pytest.fail(f"the CI {job_name} job must declare steps")
     assert all(isinstance(step, dict) for step in steps), (
-        "every CI build step must be a mapping"
+        f"every CI {job_name} step must be a mapping"
     )
     return typ.cast("list[dict[str, object]]", steps)
+
+
+def _build_steps() -> list[dict[str, object]]:
+    """Return the steps from the CI build job."""
+    return _job_steps("build")
 
 
 def _find_step(steps: list[dict[str, object]], name: str) -> dict[str, object]:
@@ -109,3 +119,67 @@ def test_makefile_nixie_requires_both_installed_commands() -> None:
         "$(call ensure_tool,merman-cli)",
         "nixie --renderer merman",
     ], "the Nixie recipe must require both tools before validation"
+
+
+def test_the_coverage_lane_installs_the_renderers_the_rust_suite_needs() -> None:
+    """The lane that runs the Rust suite supplies the pinned renderers.
+
+    The ER snapshot test renders through `merman-cli` and fails rather than
+    skips when `CI` is set, so the lane running it must install the tool
+    before the suite starts.
+    """
+    steps = _job_steps("coverage")
+    installation = _find_step(steps, "Install Nixie and Merman")
+    suite = _find_step(steps, "Generate Rust coverage")
+
+    _assert_pinned_to_full_sha(installation.get("uses"), INSTALL_NIXIE_PATH)
+    assert installation.get("with") == {
+        "nixie-version": "${{ env.NIXIE_VERSION }}",
+        "merman-version": "${{ env.MERMAN_VERSION }}",
+    }, "the coverage lane must pin both renderer versions"
+    assert steps.index(installation) < steps.index(suite), (
+        "the coverage lane must install the renderers before the Rust suite"
+    )
+
+
+def test_the_main_coverage_lane_installs_the_renderers() -> None:
+    """The trunk coverage upload runs the same suite, so it needs the tool.
+
+    `coverage-main.yml`'s `coverage-upload` job repeats the Rust suite on a
+    push to `main`. A missing renderer there would turn trunk red after this
+    change merged, so the lane must install the pinned tool, and its versions
+    must match the ones `ci.yml` pins.
+    """
+    steps = _job_steps("coverage-upload", COVERAGE_MAIN_PATH)
+    installation = _find_step(steps, "Install Nixie and Merman")
+    suite = _find_step(steps, "Generate Rust coverage")
+
+    _assert_pinned_to_full_sha(installation.get("uses"), INSTALL_NIXIE_PATH)
+    assert installation.get("with") == {
+        "nixie-version": "${{ env.NIXIE_VERSION }}",
+        "merman-version": "${{ env.MERMAN_VERSION }}",
+    }, "the trunk lane must pin both renderer versions"
+    assert steps.index(installation) < steps.index(suite), (
+        "the trunk lane must install the renderers before the Rust suite"
+    )
+
+    workflow = typ.cast(
+        "object", strict_yaml.load(COVERAGE_MAIN_PATH.read_text(encoding="utf-8"))
+    )
+    match workflow:
+        case {"env": dict() as environment}:
+            pass
+        case _:
+            pytest.fail("the coverage workflow must declare workflow-level env")
+    ci_workflow = typ.cast(
+        "object", strict_yaml.load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    )
+    match ci_workflow:
+        case {"env": dict() as ci_environment}:
+            pass
+        case _:
+            pytest.fail("the CI workflow must declare workflow-level env")
+    for name in ("NIXIE_VERSION", "MERMAN_VERSION"):
+        assert environment.get(name) == ci_environment.get(name), (
+            f"{name} must match the version ci.yml pins"
+        )
